@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload and Analyze CSV File</title>
+</head>
+<body>
+    <h1>Upload and Analyze CSV File</h1>
+    <form id="uploadForm" method="post" enctype="multipart/form-data">
+        <label for="file">Choose a CSV file:</label>
+        <input type="file" name="file" accept=".csv" required>
+
+        <p>Select analysis options:</p>
+
+        <input type="checkbox" name="completeness" value="yes"> Check completeness<br>
+        <input type="checkbox" name="outliers" value="yes"> Check outliers<br>
+        <input type="checkbox" name="duplicity" value="yes"> Check duplicity<br>
+        <input type="checkbox" name="representation rate" value="yes"> Check representation rate<br>
+        
+        <label for="features for representation rate">Features for representation rate:</label>
+        <input type="text" name="features for representation rate"><br>
+
+        <input type="checkbox" name="statistical rate" value="yes"> Check statistical rate<br>
+        <label for="features for statistical rate">Features for statistical rate:</label>
+        <input type="text" name="features for statistical rate">
+        <label for="target for statitical rate">Target for statistical rate:</label>
+        <input type="text" name="target for statitical rate"><br>
+
+        <input type="checkbox" name="real representation rate" value="yes"> Check real representation rate<br>
+        <label for="real column1">Real column:</label>
+        <input type="text" name="real column1">
+        <label for="real attributes1">Real attributes:</label>
+        <input type="text" name="real attributes1">
+        <label for="real values1">Real values:</label>
+        <input type="text" name="real values1"><br>
+
+        <input type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br>
+        <input type="checkbox" name="correlations" value="yes"> Check correlations<br>
+        <label for="correlation columns">Correlation columns:</label>
+        <input type="text" name="correlation columns">
+        <label for="categorical features for feature relevancy">Categorical features:</label>
+        <input type="text" name="categorical features for feature relevancy">
+        <label for="numerical features for feature relevancy">Numerical features:</label>
+        <input type="text" name="numerical features for feature relevancy">
+        <label for="target for feature relevance">Target for feature relevance:</label>
+        <input type="text" name="target for feature relevance"><br>
+
+        <input type="checkbox" name="top 3 features" value="yes"> Check top 3 features<br>
+
+        <input type="checkbox" name="privacy preservation" value="yes"> Check privacy preservation<br>
+        <label for="numerical features to add noise">Numerical features to add noise:</label>
+        <input type="text" name="numerical features to add noise">
+
+        <label for="privacy budget">Privacy budget (epsilon):</label>
+        <input type="text" name="privacy budget"><br>
+
+        <button type="button" onclick="submitForm()">Submit</button>
+    </form>
+
+    <div id="resultContainer"></div>
+
+    <script>
+        function submitForm() {
+            var form = document.getElementById('uploadForm');
+            var formData = new FormData(form);
+
+            fetch('/upload_file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                var resultContainer = document.getElementById('resultContainer');
+                resultContainer.innerHTML = '<h2>Result</h2><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>

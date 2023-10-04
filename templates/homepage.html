@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homepage</title>
+    <style>
+        body {
+            text-align: center;
+            background-image: url("/images/homepage_bg2.png"); /* Replace with your image path */
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: white; /* Set text color to white for better visibility on dark background */
+        }
+
+        h1 {
+            margin-top: 50px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); /* Add a text shadow for better visibility */
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .button-container a {
+            margin: 0 10px;
+            text-decoration: none;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to AIDRIn</h1>
+    <h3>Step into the future with AIDRIn, your indispensable AI Data Readiness Inspector. Uncover the true potential of your data as AIDRIn ensures it's primed and polished for seamless integration with artificial intelligence.</h4>
+    <div class="button-container">
+        <a href="{{ url_for('upload_file_form') }}">
+            <button>Upload and Analyze CSV File</button>
+        </a>
+
+        <a href="{{ url_for('FAIRness') }}">
+            <button>Calculate FAIRness</button>
+        </a>
+    </div>
+</body>
+</html>

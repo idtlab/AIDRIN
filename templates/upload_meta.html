@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload JSON File</title>
+</head>
+<body>
+    <h1>Upload JSON File</h1>
+    <form id="uploadForm" method="post" enctype="multipart/form-data">
+        <input type="file" name="metadata" accept=".json" required>
+
+        <label for="metadata type">Enter the metadata type(DCAT, Datacite):</label>
+        <input type="text" name="metadata type" required>
+        <button type="button" onclick="submitForm()">Submit</button>
+    </form>
+
+    <div id="resultContainer"></div>
+
+    <script>
+        function submitForm() {
+            var form = document.getElementById('uploadForm');
+            var formData = new FormData(form);
+
+            fetch('/FAIRness', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                var resultContainer = document.getElementById('resultContainer');
+                resultContainer.innerHTML = '<h2>Result</h2><pre>' + formatJson(data) + '</pre>';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        function formatJson(jsonData) {
+            return JSON.stringify(jsonData, null, 2);
+        }
+    </script>
+</body>
+</html>
+
