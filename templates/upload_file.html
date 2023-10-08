@@ -61,23 +61,69 @@
     <div id="resultContainer"></div>
 
     <script>
-        function submitForm() {
-            var form = document.getElementById('uploadForm');
-            var formData = new FormData(form);
+    function submitForm() {
+        var form = document.getElementById('uploadForm');
+        var formData = new FormData(form);
 
-            fetch('/upload_file', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                var resultContainer = document.getElementById('resultContainer');
-                resultContainer.innerHTML = '<h2>Result</h2><pre>' + JSON.stringify(data, null, 2) + '</pre>';
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-        }
-    </script>
+        fetch('/upload_file', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            var resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = '<h2>Result</h2>';
+
+            // Function to check if a key is present and not undefined
+            function isKeyPresentAndDefined(obj, key) {
+                return obj && obj[key] !== undefined;
+            }
+
+            // Check if "Completeness Visualization" key is present
+            if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
+                // Display the completeness chart image
+                console.log('Completeness Visualization data:', data['Completeness']['Completeness Visualization']);
+                resultContainer.innerHTML += '<h3>Completeness Visualization</h3>';
+                resultContainer.innerHTML += '<img src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">';
+            }
+
+            // Check if "Outliers Visualization" key is present
+            if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
+                // Display the completeness chart image
+                console.log('Outliers Visualization data:', data['Outliers']['Outliers Visualization']);
+                resultContainer.innerHTML += '<h3>Outliers Visualization</h3>';
+                resultContainer.innerHTML += '<img src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">';
+            }
+
+            if (
+                isKeyPresentAndDefined(data, 'Representation Rate') &&
+                isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Chart')
+            ) {
+                // Display the completeness chart image
+                console.log('Representation Rate Visualizations data:', data['Representation Rate']['Representation Rate Chart']);
+                resultContainer.innerHTML += '<h3>Representation Rate Visualization</h3>';
+                resultContainer.innerHTML += '<img src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">';
+            }
+
+            // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
+            if (
+                isKeyPresentAndDefined(data, 'Representation Rate Comparison with Real World') &&
+                isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
+            ) {
+                // Display the completeness chart image
+                console.log('Comparison Visualization data:', data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization']);
+                resultContainer.innerHTML += '<h3>Comparison Visualization</h3>';
+                resultContainer.innerHTML += '<img src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">';
+            }
+
+            // Display other result information
+            resultContainer.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }
+</script>
+
 </body>
 </html>

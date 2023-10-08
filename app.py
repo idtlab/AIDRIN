@@ -90,10 +90,7 @@ def upload_csv():
                 compl_dict = completeness(file)
                 compl_dict['Description'] = 'These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness.'
                 final_dict['Completeness'] = compl_dict
-
-                #visualization
-                visualize("Completeness",compl_dict['Completeness scores'])
-                # return send_file("Completeness_chart.png",mimetype='image/png')
+                
 
             #Outliers    
             if request.form.get('outliers') == 'yes':
@@ -112,7 +109,7 @@ def upload_csv():
                 #convert the string values a list
                 rep_dict = {}
                 list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
-                rep_dict["Probability ratios"] = calculate_representation_rate(file,list_of_cols)
+                rep_dict = calculate_representation_rate(file,list_of_cols)
                 rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
                 final_dict['Representation Rate'] = rep_dict
             #statistical rate
@@ -136,7 +133,6 @@ def upload_csv():
                 comp_dict = compare_rep_rates(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
                 comp_dict["Description"] = "These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness"
                 final_dict['Representation Rate Comparison with Real World'] = comp_dict
-                visualize("Real World vs Dataset's Representation Rate Comparisons",comp_dict["Comparisons"])
 
             if request.form.get('correlations') == 'yes':
                 columns = request.form.get('correlation columns').split(",")
@@ -159,13 +155,14 @@ def upload_csv():
                 final_dict['Privacy preservation statistics'] = noisy_stat
             
             formated_final_dict = format_dict_values(final_dict)
+            
             return jsonify(formated_final_dict)
 
         
         else:
             return jsonify({'error': 'No file uploaded'})
     except Exception as e:
-        return jsonify({"Error":"Error occured"})
+        return jsonify({"Error":e})
     
 @app.route('/FAIRness', methods=['GET', 'POST'])
 def cal_FAIRness():

@@ -1,4 +1,6 @@
-import pandas as pd
+import base64
+import io
+import matplotlib.pyplot as plt
 import numpy as np
 
 def outliers(file):
@@ -26,6 +28,31 @@ def outliers(file):
         proportions_dict['Overall outlier score'] = average_value
         #add the average to dictionary
         out_dict['Outlier scores'] = proportions_dict
+
+        # Create a bar chart for outlier scores
+        plt.figure(figsize=(10, 6))
+        plt.bar(proportions_dict.keys(), proportions_dict.values(), color='red')
+        plt.title('Proportion of Outliers for Numerical Columns')
+        plt.xlabel('Columns')
+        plt.ylabel('Proportion of Outliers')
+        plt.ylim(0, 1)  # Setting y-axis limit between 0 and 1
+
+        # Rotate x-axis tick labels
+        plt.xticks(rotation=45, ha='right')
+
+        # Increase bottom margin
+        plt.subplots_adjust(bottom=0.5)
+
+        # Save the chart to BytesIO and encode as base64
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format='png')
+        img_buf.seek(0)
+        img_base64 = base64.b64encode(img_buf.read()).decode('utf-8')
+
+        # Add the base64-encoded image to the dictionary under a separate key
+        out_dict["Outliers Visualization"] = img_base64
+
+        plt.close()  # Close the plot to free up resources
 
         return out_dict
     except Exception as e:
