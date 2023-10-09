@@ -79,95 +79,100 @@ def upload_file_form():
 def upload_csv():
 
     try: 
-        final_dict = {}
-        uploaded_file = request.files['file']
-        
-        if uploaded_file.filename != '':
-            final_dict['message']="File uploaded successfully"
-            file = pd.read_csv(uploaded_file,index_col=False)
-         
-            #Completeness
-            if request.form.get('completeness') == "yes":
-                
-                compl_dict = completeness(file)
-                compl_dict['Description'] = 'These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness.'
-                final_dict['Completeness'] = compl_dict
-                
-
-            #Outliers    
-            if request.form.get('outliers') == 'yes':
-                out_dict = outliers(file)
-                out_dict['Description'] = "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
-                final_dict['Outliers'] = out_dict
-
-                visualize('Outliers',out_dict['Outlier scores'])
-            #Duplicity
-            if request.form.get('duplicity') == 'yes':
-                dup_dict = duplicity(file)
-                dup_dict['Description'] = "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
-                final_dict['Duplicity'] = dup_dict    
-            #Representation Rate
-            if request.form.get('representation rate') == "yes" and request.form.get('features for representation rate') != None:
-                #convert the string values a list
-                rep_dict = {}
-                list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
-                rep_dict = calculate_representation_rate(file,list_of_cols)
-                rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
-                final_dict['Representation Rate'] = rep_dict
-            #statistical rate
-            if request.form.get('statistical rate') == "yes" and request.form.get('features for statistical rate') != None and request.form.get('target for statitical rate') != None:
-                y_true = request.form.get('target for statitical rate')
-                sensitive_attribute_column = request.form.get('features for statistical rate')
-                sr_dict = calculate_statistical_rates(file,y_true,sensitive_attribute_column)
-                sr_dict['Description'] = 'Represent probability ratios that quantify the likelihood of an association between specific categories within a sensitive feature and a target variable, where smaller values indicate a lower likelihood, and higher values indicate a higher likelihood of association'
-                final_dict["Statistical Rate"] = sr_dict
-
-            if request.form.get('real representation rate') == 'yes':
-                rrr_dict = {}
-                real_col = request.form.get('real column1')
-                real_attr = [item.strip() for item in request.form.get('real attributes1').split(",")]
-                real_val = [item.strip() for item in request.form.get("real values1").split(",")]
-                rrr_dict["Probability ratios"] = calculate_real_representation_rates(real_col,real_attr,real_val)
-                rrr_dict['Description'] = 'Represent probability ratios that quantify the relative representation of different categories within the sensitive features in the actual world, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another'
-                final_dict['Real Representation Rate'] = rrr_dict
-
-            if request.form.get('compare real to dataset') == 'yes':
-                comp_dict = compare_rep_rates(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
-                comp_dict["Description"] = "These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness"
-                final_dict['Representation Rate Comparison with Real World'] = comp_dict
-
-            if request.form.get('correlations') == 'yes':
-                columns = request.form.get('correlation columns').split(",")
-                corr_dict = calc_correlations(file,columns)
-                corr_dict['Description'] = "Categorical correlations are assessed using Theil's U statistic, while numerical feature correlations are determined using Pearson correlation. The resulting values fall within the range of 0 to 1, with a value of 1 indicating a strong correlation with the target variable"
-                final_dict['Correlation Scores'] = corr_dict
-
-            if request.form.get("top 3 features") == "yes":
-                cat_cols = request.form.get("categorical features for feature relevancy").split(",")
-                num_cols = request.form.get("numerical features for feature relevancy").split(",")
-                target = request.form.get("target for feature relevance")
-                f_dict =  calc_shapely(file,cat_cols,num_cols,target)
-                f_dict['Description'] = "The top 3 dataset features are identified through Shapley values computed with a Random Forest classifier. Additionally, categorical features have been one-hot encoded, which might lead to certain feature names appearing in this encoded representation."
-                final_dict['Top 3 features based on shapley values'] = f_dict
-            #differential privacy
-            if request.form.get("privacy preservation") == "yes":
-                feature_to_add_noise = request.form.get("numerical features to add noise").split(",")
-                epsilon = request.form.get("privacy budget")
-                noisy_stat = return_noisy_stats(file,feature_to_add_noise,float(epsilon))
-                final_dict['Privacy preservation statistics'] = noisy_stat
+        if request.method == 'GET':
+            # Render the form for a GET request
+            return render_template('upload_file.html')
+        elif request.method == "POST":
+            final_dict = {}
+            uploaded_file = request.files['file']
             
-            formated_final_dict = format_dict_values(final_dict)
+            if uploaded_file.filename != '':
+                final_dict['message']="File uploaded successfully"
+                file = pd.read_csv(uploaded_file,index_col=False)
             
-            return jsonify(formated_final_dict)
+                #Completeness
+                if request.form.get('completeness') == "yes":
+                    
+                    compl_dict = completeness(file)
+                    compl_dict['Description'] = 'These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness.'
+                    final_dict['Completeness'] = compl_dict
+                    
 
-        
-        else:
-            return jsonify({'error': 'No file uploaded'})
+                #Outliers    
+                if request.form.get('outliers') == 'yes':
+                    out_dict = outliers(file)
+                    out_dict['Description'] = "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
+                    final_dict['Outliers'] = out_dict
+
+                    visualize('Outliers',out_dict['Outlier scores'])
+                #Duplicity
+                if request.form.get('duplicity') == 'yes':
+                    dup_dict = duplicity(file)
+                    dup_dict['Description'] = "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
+                    final_dict['Duplicity'] = dup_dict    
+                #Representation Rate
+                if request.form.get('representation rate') == "yes" and request.form.get('features for representation rate') != None:
+                    #convert the string values a list
+                    rep_dict = {}
+                    list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
+                    rep_dict = calculate_representation_rate(file,list_of_cols)
+                    rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
+                    final_dict['Representation Rate'] = rep_dict
+                #statistical rate
+                if request.form.get('statistical rate') == "yes" and request.form.get('features for statistical rate') != None and request.form.get('target for statitical rate') != None:
+                    y_true = request.form.get('target for statitical rate')
+                    sensitive_attribute_column = request.form.get('features for statistical rate')
+                    sr_dict = calculate_statistical_rates(file,y_true,sensitive_attribute_column)
+                    sr_dict['Description'] = 'Represent probability ratios that quantify the likelihood of an association between specific categories within a sensitive feature and a target variable, where smaller values indicate a lower likelihood, and higher values indicate a higher likelihood of association'
+                    final_dict["Statistical Rate"] = sr_dict
+
+                if request.form.get('real representation rate') == 'yes':
+                    rrr_dict = {}
+                    real_col = request.form.get('real column1')
+                    real_attr = [item.strip() for item in request.form.get('real attributes1').split(",")]
+                    real_val = [item.strip() for item in request.form.get("real values1").split(",")]
+                    rrr_dict["Probability ratios"] = calculate_real_representation_rates(real_col,real_attr,real_val)
+                    rrr_dict['Description'] = 'Represent probability ratios that quantify the relative representation of different categories within the sensitive features in the actual world, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another'
+                    final_dict['Real Representation Rate'] = rrr_dict
+
+                if request.form.get('compare real to dataset') == 'yes':
+                    comp_dict = compare_rep_rates(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
+                    comp_dict["Description"] = "These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness"
+                    final_dict['Representation Rate Comparison with Real World'] = comp_dict
+
+                if request.form.get('correlations') == 'yes':
+                    columns = request.form.get('correlation columns').split(",")
+                    corr_dict = calc_correlations(file,columns)
+                    corr_dict['Description'] = "Categorical correlations are assessed using Theil's U statistic, while numerical feature correlations are determined using Pearson correlation. The resulting values fall within the range of 0 to 1, with a value of 1 indicating a strong correlation with the target variable"
+                    final_dict['Correlation Scores'] = corr_dict
+
+                if request.form.get("top 3 features") == "yes":
+                    cat_cols = request.form.get("categorical features for feature relevancy").split(",")
+                    num_cols = request.form.get("numerical features for feature relevancy").split(",")
+                    target = request.form.get("target for feature relevance")
+                    f_dict =  calc_shapely(file,cat_cols,num_cols,target)
+                    f_dict['Description'] = "The top 3 dataset features are identified through Shapley values computed with a Random Forest classifier. Additionally, categorical features have been one-hot encoded, which might lead to certain feature names appearing in this encoded representation."
+                    final_dict['Top 3 features based on shapley values'] = f_dict
+                #differential privacy
+                if request.form.get("privacy preservation") == "yes":
+                    feature_to_add_noise = request.form.get("numerical features to add noise").split(",")
+                    epsilon = request.form.get("privacy budget")
+                    noisy_stat = return_noisy_stats(file,feature_to_add_noise,float(epsilon))
+                    final_dict['Privacy preservation statistics'] = noisy_stat
+                
+                formated_final_dict = format_dict_values(final_dict)
+                
+                return jsonify(formated_final_dict)
+
+            else:
+                return jsonify({'error': 'No file uploaded'})
     except Exception as e:
         return jsonify({"Error":e})
     
+    
+    
 @app.route('/FAIRness', methods=['GET', 'POST'])
-def cal_FAIRness():
+def FAIRness():
     try:
         if request.method == 'POST':
             # Check if the 'metadata' field exists in the form data
@@ -210,9 +215,9 @@ def cal_FAIRness():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route('/FAIRness', methods=['GET', 'POST'])
-def FAIRness():
-    return cal_FAIRness()
+# @app.route('/FAIRness', methods=['GET', 'POST'])
+# def FAIRness():
+#     return cal_FAIRness()
 
 @app.route('/medical_image_readiness',methods=['GET','POST'])
 def med_img_readiness():
@@ -237,17 +242,13 @@ def med_img_readiness():
             metadata_dcm = gather_image_quality_info(dicom_data)
             #choose the threshold
             artifact = detect_and_visualize_artifacts(dicom_data,threshold=0.95)
-            combined_dict = {**cnr_data, **spatial_res_data, **metadata_dcm,**artifact}
+            combined_dict = {**cnr_data, **spatial_res_data}
             formatted_combined_dict = format_dict_values(combined_dict)
             final_dict['Image Readiness Scores'] = formatted_combined_dict
+            final_dict['DCM Image Quality Metadata'] = metadata_dcm
 
             return jsonify(final_dict),200
     return render_template('medical_image.html')
-            
-
-
-
-
-            
+                        
 if __name__ == '__main__':
     app.run(debug=True)

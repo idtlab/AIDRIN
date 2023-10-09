@@ -2,6 +2,7 @@ import io
 import base64
 import matplotlib.pyplot as plt
 import numpy as np
+import re
 
 def calculate_cnr_from_dicom(dicom_data):
     
@@ -30,7 +31,7 @@ def calculate_cnr_from_dicom(dicom_data):
     # Calculate CNR for the entire image
     cnr = (image_mean - 0) / image_std  # Assuming 0 as background intensity
 
-    cnr_dict = {'Mean Intensity': image_mean, 'Standard Deviation (Quantum Noise)': image_std, 'CNR': cnr,"Intensity Distribution":encoded_image}
+    cnr_dict = {'Mean Intensity': image_mean, 'Standard Deviation (Quantum Noise)': image_std, 'Contrast to Noise Raio(CNR)': cnr,"Intensity Distribution Visualization":encoded_image}
     return cnr_dict
 
 def calculate_spatial_resolution(dicom_dataset):
@@ -129,5 +130,8 @@ def gather_image_quality_info(dicom_data):
     image_quality_info['Study Description'] = get_value((0x0008, 0x1030))
     image_quality_info['Study Date'] = get_value((0x0008, 0x0020))
     image_quality_info['Study Time'] = get_value((0x0008, 0x0030))
+
+    for key, value in image_quality_info.items():
+        image_quality_info[key] = re.sub(r' {3,}', ' ', value)
 
     return image_quality_info

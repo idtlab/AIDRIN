@@ -56,9 +56,16 @@
         <input type="text" name="privacy budget"><br>
 
         <button type="button" onclick="submitForm()">Submit</button>
+
+        <div id="buttonsContainer" style="display:none;">
+            <button type="button" id="visualizationBtn" onclick="showVisualization()">Show Visualization</button>
+            <button type="button" id="jsonBtn" onclick="showJSON()">Show JSON</button>
+            <button type="button" id="jsonBtn" onclick="downloadJSON()">Download JSON</button>
+
+        </div>
     </form>
 
-    <div id="resultContainer"></div>
+    <div id="resultContainer" style="display:none;"></div>
 
     <script>
     function submitForm() {
@@ -72,7 +79,8 @@
         .then(response => response.json())
         .then(data => {
             var resultContainer = document.getElementById('resultContainer');
-            resultContainer.innerHTML = '<h2>Result</h2>';
+
+            resp_data = data;
 
             // Function to check if a key is present and not undefined
             function isKeyPresentAndDefined(obj, key) {
@@ -83,16 +91,14 @@
             if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
                 // Display the completeness chart image
                 console.log('Completeness Visualization data:', data['Completeness']['Completeness Visualization']);
-                resultContainer.innerHTML += '<h3>Completeness Visualization</h3>';
-                resultContainer.innerHTML += '<img src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">';
+                resultContainer.innerHTML += '<img id="complVis" style="display:none;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">';
             }
 
             // Check if "Outliers Visualization" key is present
             if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
                 // Display the completeness chart image
                 console.log('Outliers Visualization data:', data['Outliers']['Outliers Visualization']);
-                resultContainer.innerHTML += '<h3>Outliers Visualization</h3>';
-                resultContainer.innerHTML += '<img src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">';
+                resultContainer.innerHTML += '<img id="outVis" style="display:none;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">';
             }
 
             if (
@@ -101,8 +107,7 @@
             ) {
                 // Display the completeness chart image
                 console.log('Representation Rate Visualizations data:', data['Representation Rate']['Representation Rate Chart']);
-                resultContainer.innerHTML += '<h3>Representation Rate Visualization</h3>';
-                resultContainer.innerHTML += '<img src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">';
+                resultContainer.innerHTML += '<img id="repVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">';
             }
 
             // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
@@ -112,16 +117,89 @@
             ) {
                 // Display the completeness chart image
                 console.log('Comparison Visualization data:', data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization']);
-                resultContainer.innerHTML += '<h3>Comparison Visualization</h3>';
-                resultContainer.innerHTML += '<img src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">';
+                resultContainer.innerHTML += '<img id="compVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">';
             }
 
-            // Display other result information
-            resultContainer.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            //Display other result information as JSON
+            resultContainer.innerHTML += '<pre id="jsonResult" style="display:none;">' + JSON.stringify(data, null, 2) + '</pre>';
+
+            // Show the result container after the response is generated
+            resultContainer.style.display = 'block';
+
+            // Show the buttons after the response is generated
+            document.getElementById('buttonsContainer').style.display = 'block';
         })
         .catch(error => {
             console.error('Error:', error);
         });
+    }
+
+    function showVisualization() {
+        // Show Completeness Visualization content if it exists
+        var completenessContent = document.getElementById('complVis');
+        if (completenessContent) {
+            completenessContent.style.display = 'block';
+        }
+
+        // Show Outliers Visualization content if it exists
+        var outliersContent = document.getElementById('outVis');
+        if (outliersContent) {
+            outliersContent.style.display = 'block';
+        }
+
+        // Show Representation Rate Visualization content if it exists
+        var representationRateContent = document.getElementById('repVis');
+        if (representationRateContent) {
+            representationRateContent.style.display = 'block';
+        }
+
+        // Show Comparison Visualization content if it exists
+        var comparisonContent = document.getElementById('compVis');
+        if (comparisonContent) {
+            comparisonContent.style.display = 'block';
+        }
+
+        // ... (Add similar logic for other visualizations)
+
+        // Hide JSON content
+        var jsonResultContainer = document.getElementById('jsonResult');
+        if (jsonResultContainer) {
+            jsonResultContainer.style.display = 'none';
+        }
+    }
+
+    function downloadJSON() {
+        // Get the JSON data
+        var jsonData = JSON.stringify(resp_data, null, 2);
+
+        // Create a Blob with the JSON data
+        var blob = new Blob([jsonData], { type: 'application/json' });
+
+        // Create a link element
+        var link = document.createElement('a');
+
+        // Set the link's href attribute to a data URL containing the Blob
+        link.href = window.URL.createObjectURL(blob);
+
+        // Set the link's download attribute to specify the file name
+        link.download = 'result.json';
+
+        // Append the link to the document
+        document.body.appendChild(link);
+
+        // Trigger a click on the link to start the download
+        link.click();
+
+        // Remove the link from the document
+        document.body.removeChild(link);
+    }
+
+    function showJSON() {
+        // Show Completeness Visualization content if it exists
+        var jsonResult = document.getElementById('jsonResult');
+        if (jsonResult) {
+            jsonResult.style.display = 'block';
+        }
     }
 </script>
 
