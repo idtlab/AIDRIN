@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Image Readiness</title>
+</head>
+<body>
+    <h1>Medical Image Readiness</h1>
+    
+    <form action="/medical_image_readiness" method="post" enctype="multipart/form-data">
+        <label for="dicomFile">Upload DICOM File:</label>
+        <input type="file" name="dicom" id="dicomFile" accept=".dcm">
+        <br>
+        <input type="submit" value="Submit">
+    </form>
+
+    <div id="resultContainer"></div>
+
+    <script>
+        // Optionally, you can use JavaScript to handle the form submission asynchronously and update the result container.
+        const form = document.querySelector('form');
+        const resultContainer = document.getElementById('resultContainer');
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/medical_image_readiness', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                // Update the result container with the received data
+                resultContainer.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
+    </script>
+</body>
+</html>

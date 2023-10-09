@@ -1,11 +1,11 @@
-import pydicom
-import numpy as np
+import io
+import base64
 import matplotlib.pyplot as plt
+import numpy as np
 
-def calculate_cnr_from_dicom(dicom_path):
+def calculate_cnr_from_dicom(dicom_data):
     
     # Read DICOM file
-    dicom_data = pydicom.dcmread(dicom_path)
 
     # Extract pixel array
     pixel_array = dicom_data.pixel_array
@@ -13,18 +13,29 @@ def calculate_cnr_from_dicom(dicom_path):
     # Calculate mean and standard deviation for the entire image
     image_mean, image_std = np.mean(pixel_array), np.std(pixel_array)
 
-    # Optionally, display the histogram
-    hist = plt.hist(pixel_array.flatten(), bins=256, range=[0,256], density=True)
-
+    hist, bins, _ = plt.hist(pixel_array.flatten(), bins=256, range=[0, 256], density=True)
+    
+    # Create a plot and save it to a BytesIO object
+    fig, ax = plt.subplots()
+    ax.bar(bins[:-1], hist, width=1, color='blue', alpha=0.7)
+    
+    # Save the plot to a BytesIO object
+    image_stream = io.BytesIO()
+    plt.savefig(image_stream, format='png')
+    plt.close(fig)
+    
+    # Encode the BytesIO content as base64
+    encoded_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
+    
     # Calculate CNR for the entire image
     cnr = (image_mean - 0) / image_std  # Assuming 0 as background intensity
 
-    cnr_dict = {'Mean Intensity': image_mean, 'Standard Deviation (Quantum Noise)': image_std, 'CNR': cnr}
+    cnr_dict = {'Mean Intensity': image_mean, 'Standard Deviation (Quantum Noise)': image_std, 'CNR': cnr,"Intensity Distribution":encoded_image}
     return cnr_dict
 
-def calculate_spatial_resolution(file_path):
+def calculate_spatial_resolution(dicom_dataset):
     # Read the DICOM file
-    dicom_dataset = pydicom.dcmread(file_path)
+    # dicom_dataset = pydicom.dcmread(file_path,force=True)
 
     # Extract pixel spacing
     pixel_spacing = dicom_dataset.get('PixelSpacing', None)
@@ -35,12 +46,13 @@ def calculate_spatial_resolution(file_path):
         spatial_resolution_y = 1 / float(pixel_spacing[1])
         return {"Spatial Resolution X":spatial_resolution_x,"Spatial Resolution Y": spatial_resolution_y}
     else:
-        return None
+        return {"Spatial Resolution X":"Unavailable","Spatial Resolution Y": "Unavailable"}
 
 
-def detect_and_visualize_artifacts(dicom_file_path, threshold=0.95):
+def detect_and_visualize_artifacts(dicom_data, threshold=0.95):
     # Load DICOM image
-    dicom_data = pydicom.dcmread(dicom_file_path)
+    # dicom_data = pydicom.dcmread(dicom_file_path,force=True)
+
     image_array = dicom_data.pixel_array
 
     # Visualize the original image
@@ -65,9 +77,9 @@ def detect_and_visualize_artifacts(dicom_file_path, threshold=0.95):
     # Return the image array with artifacts for further analysis if needed
     return image_with_artifacts
 
-def gather_image_quality_info(dicom_file_path):
+def gather_image_quality_info(dicom_data):
     # Read the DICOM file
-    dicom_data = pydicom.dcmread(dicom_file_path)
+    # dicom_data = pydicom.dcmread(dicom_file_path)
 
     # Initialize the dictionary to store image quality information
     image_quality_info = {}

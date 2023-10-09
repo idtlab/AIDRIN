@@ -12,11 +12,13 @@ from structured_data_metrics.FAIRness_dcat import categorize_metadata,extract_ke
 from structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from structured_data_metrics.add_noise import return_noisy_stats
 
+from unstructured_data_metrics.chest_xray_image_readiness import *
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import json
+import pydicom
 
 app = Flask(__name__)
 
@@ -211,6 +213,39 @@ def cal_FAIRness():
 @app.route('/FAIRness', methods=['GET', 'POST'])
 def FAIRness():
     return cal_FAIRness()
+
+@app.route('/medical_image_readiness',methods=['GET','POST'])
+def med_img_readiness():
+    final_dict = {}
+    if request.method == 'POST':
+        if "dicom" not in request.files:
+            return jsonify({"error": "No 'dicom' field found in form data"}), 400
+        
+        # Get the uploaded file
+        file = request.files['dicom']
+
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        if file.filename.endswith('.dcm'):
+            dicom_data = pydicom.dcmread(file,force=True)
+
+            final_dict['Message'] = "File uploaded successfully"
+
+            cnr_data = calculate_cnr_from_dicom(dicom_data)
+            spatial_res_data = calculate_spatial_resolution(dicom_data)
+            metadata_dcm = gather_image_quality_info(dicom_data)
+            # artifact = detect_and_visualize_artifacts(dicom_data,threshold=0.95)
+            combined_dict = {**cnr_data, **spatial_res_data, **metadata_dcm}
+            formatted_combined_dict = format_dict_values(combined_dict)
+            final_dict['Image Readiness Scores'] = formatted_combined_dict
+
+            return jsonify(final_dict),200
+    return render_template('medical_image.html')
+            
+
+
+
 
             
 if __name__ == '__main__':
