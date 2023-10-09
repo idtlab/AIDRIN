@@ -51,31 +51,37 @@ def calculate_spatial_resolution(dicom_dataset):
 
 def detect_and_visualize_artifacts(dicom_data, threshold=0.95):
     # Load DICOM image
-    # dicom_data = pydicom.dcmread(dicom_file_path,force=True)
+    # dicom_data = pydicom.dcmread(dicom_file_path, force=True)
 
     image_array = dicom_data.pixel_array
-
-    # Visualize the original image
-    plt.figure(figsize=(8, 8))
-    plt.imshow(image_array, cmap='gray')
-    plt.title('Original DICOM Image')
-    plt.axis('off')
-    plt.show()
 
     # Detect and visualize artifacts based on user-defined threshold
     artifact_pixels = np.where(image_array >= np.max(image_array) * threshold)
     image_with_artifacts = np.copy(image_array)
     image_with_artifacts[artifact_pixels] = np.max(image_array)  # Set artifact pixels to the maximum
 
-    # Visualize the image with artifacts
-    plt.figure(figsize=(8, 8))
-    plt.imshow(image_with_artifacts, cmap='gray')
-    plt.title('DICOM Image with Artifacts Highlighted')
-    plt.axis('off')
-    plt.show()
+    # Encode images to base64
+    def plot_to_base64(image_array):
+        # Create a plot
+        plt.figure(figsize=(8, 8))
+        plt.imshow(image_array, cmap='gray')
+        plt.axis('off')
 
-    # Return the image array with artifacts for further analysis if needed
-    return image_with_artifacts
+        # Save the plot to a BytesIO object
+        image_stream = io.BytesIO()
+        plt.savefig(image_stream, format='png')
+        plt.close()
+
+        # Encode the BytesIO content as base64
+        encoded_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
+
+        return encoded_image
+
+    # Return the base64-encoded images
+    original_image_base64 = plot_to_base64(image_array)
+    image_with_artifacts_base64 = plot_to_base64(image_with_artifacts)
+
+    return {"Original Image":original_image_base64, "Image with Artifacts":image_with_artifacts_base64}
 
 def gather_image_quality_info(dicom_data):
     # Read the DICOM file

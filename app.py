@@ -235,8 +235,9 @@ def med_img_readiness():
             cnr_data = calculate_cnr_from_dicom(dicom_data)
             spatial_res_data = calculate_spatial_resolution(dicom_data)
             metadata_dcm = gather_image_quality_info(dicom_data)
-            # artifact = detect_and_visualize_artifacts(dicom_data,threshold=0.95)
-            combined_dict = {**cnr_data, **spatial_res_data, **metadata_dcm}
+            #choose the threshold
+            artifact = detect_and_visualize_artifacts(dicom_data,threshold=0.95)
+            combined_dict = {**cnr_data, **spatial_res_data, **metadata_dcm,**artifact}
             formatted_combined_dict = format_dict_values(combined_dict)
             final_dict['Image Readiness Scores'] = formatted_combined_dict
 
