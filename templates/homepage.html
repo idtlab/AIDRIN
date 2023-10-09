@@ -7,38 +7,74 @@
     <style>
         body {
             text-align: center;
-            background-image: url("/images/homepage_bg2.png"); /* Replace with your image path */
+            background-image: url("/images/homepage_bg2.png");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
-            color: white; /* Set text color to white for better visibility on dark background */
+            color: white;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
         }
 
         h1 {
-            margin-top: 50px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); /* Add a text shadow for better visibility */
+            margin-top: 100px;
+            font-size: 3em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        h3 {
+            font-size: 1.5em;
+            line-height: 1.6;
+            margin: 20px 0;
         }
 
         .button-container {
             display: flex;
             justify-content: center;
-            margin-top: 20px;
+            margin-top: 30px;
+            flex-wrap: wrap;
         }
 
         .button-container a {
-            margin: 0 10px;
+            margin: 10px;
             text-decoration: none;
+            display: inline-block;
         }
 
         button {
-            padding: 10px 20px;
-            font-size: 16px;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        /* Optional: Add animation */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .animated {
+            animation: fadeIn 1.5s ease-out;
         }
     </style>
 </head>
-<body>
+<body class="animated">
     <h1>Welcome to AIDRIn</h1>
-    <h3>Step into the future with AIDRIn, your indispensable AI Data Readiness Inspector. Uncover the true potential of your data as AIDRIn ensures it's primed and polished for seamless integration with artificial intelligence.</h4>
+    <h3>Step into the future with AIDRIn, your indispensable AI Data Readiness Inspector. Uncover the true potential of your data as AIDRIn ensures it's primed and polished for seamless integration with artificial intelligence.</h3>
     <div class="button-container">
         <a href="{{ url_for('upload_file_form') }}">
             <button>Structured Data Readiness</button>
