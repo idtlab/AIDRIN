@@ -122,12 +122,14 @@
 
             //Display other result information as JSON
             resultContainer.innerHTML += '<pre id="jsonResult" style="display:none;">' + JSON.stringify(data, null, 2) + '</pre>';
-
+            
             // Show the result container after the response is generated
             resultContainer.style.display = 'block';
 
             // Show the buttons after the response is generated
             document.getElementById('buttonsContainer').style.display = 'block';
+
+            
         })
         .catch(error => {
             console.error('Error:', error);

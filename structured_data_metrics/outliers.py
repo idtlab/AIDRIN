@@ -35,7 +35,7 @@ def outliers(file):
         plt.title('Proportion of Outliers for Numerical Columns')
         plt.xlabel('Columns')
         plt.ylabel('Proportion of Outliers')
-        plt.ylim(0, 1)  # Setting y-axis limit between 0 and 1
+        # plt.ylim(0, 1)  # Setting y-axis limit between 0 and 1
 
         # Rotate x-axis tick labels
         plt.xticks(rotation=45, ha='right')
