@@ -96,15 +96,11 @@ def upload_csv():
                     compl_dict = completeness(file)
                     compl_dict['Description'] = 'These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness.'
                     final_dict['Completeness'] = compl_dict
-                    
-
                 #Outliers    
                 if request.form.get('outliers') == 'yes':
                     out_dict = outliers(file)
                     out_dict['Description'] = "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
                     final_dict['Outliers'] = out_dict
-
-                    visualize('Outliers',out_dict['Outlier scores'])
                 #Duplicity
                 if request.form.get('duplicity') == 'yes':
                     dup_dict = duplicity(file)
