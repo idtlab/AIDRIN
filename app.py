@@ -2,12 +2,12 @@ from flask import Flask, request, jsonify, send_file, Response,render_template,s
 from structured_data_metrics.completeness import completeness
 from structured_data_metrics.outliers import outliers
 from structured_data_metrics.duplicity import duplicity
-from structured_data_metrics.representation_rate import calculate_representation_rate
+from structured_data_metrics.representation_rate import calculate_representation_rate, create_representation_rate_vis
 from structured_data_metrics.statistical_rate import calculate_statistical_rates
 from structured_data_metrics.real_repreentation_rate import calculate_real_representation_rates
 from structured_data_metrics.compare_representation_rate import compare_rep_rates
 from structured_data_metrics.correlation_score import calc_correlations
-from structured_data_metrics.feature_relevance import calc_shapely
+from structured_data_metrics.feature_relevance import calc_shapley
 from structured_data_metrics.FAIRness_dcat import categorize_metadata,extract_keys_and_values
 from structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from structured_data_metrics.add_noise import return_noisy_stats
@@ -71,11 +71,7 @@ def serve_image(filename):
 def homepage():
     return render_template('homepage.html')
 
-@app.route('/upload_file', methods=['GET'])
-def upload_file_form():
-    return render_template('upload_file.html')
-
-@app.route('/upload_file', methods=['POST'])
+@app.route('/upload_file', methods=['POST','GET'])
 def upload_csv():
 
     try: 
@@ -111,7 +107,8 @@ def upload_csv():
                     #convert the string values a list
                     rep_dict = {}
                     list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
-                    rep_dict = calculate_representation_rate(file,list_of_cols)
+                    rep_dict['Probability ratios'] = calculate_representation_rate(file,list_of_cols)
+                    rep_dict['Representation Rate Chart'] = create_representation_rate_vis(file,list_of_cols)
                     rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
                     final_dict['Representation Rate'] = rep_dict
                 #statistical rate
@@ -124,9 +121,9 @@ def upload_csv():
 
                 if request.form.get('real representation rate') == 'yes':
                     rrr_dict = {}
-                    real_col = request.form.get('real column1')
-                    real_attr = [item.strip() for item in request.form.get('real attributes1').split(",")]
-                    real_val = [item.strip() for item in request.form.get("real values1").split(",")]
+                    real_col = request.form.get('real column')
+                    real_attr = [item.strip() for item in request.form.get('real attributes').split(",")]
+                    real_val = [item.strip() for item in request.form.get("real values").split(",")]
                     rrr_dict["Probability ratios"] = calculate_real_representation_rates(real_col,real_attr,real_val)
                     rrr_dict['Description'] = 'Represent probability ratios that quantify the relative representation of different categories within the sensitive features in the actual world, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another'
                     final_dict['Real Representation Rate'] = rrr_dict
@@ -140,13 +137,13 @@ def upload_csv():
                     columns = request.form.get('correlation columns').split(",")
                     corr_dict = calc_correlations(file,columns)
                     corr_dict['Description'] = "Categorical correlations are assessed using Theil's U statistic, while numerical feature correlations are determined using Pearson correlation. The resulting values fall within the range of 0 to 1, with a value of 1 indicating a strong correlation with the target variable"
-                    final_dict['Correlation Scores'] = corr_dict
+                    final_dict['Correlations Analysis'] = corr_dict
 
                 if request.form.get("top 3 features") == "yes":
                     cat_cols = request.form.get("categorical features for feature relevancy").split(",")
                     num_cols = request.form.get("numerical features for feature relevancy").split(",")
                     target = request.form.get("target for feature relevance")
-                    f_dict =  calc_shapely(file,cat_cols,num_cols,target)
+                    f_dict =  calc_shapley(file,cat_cols,num_cols,target)
                     f_dict['Description'] = "The top 3 dataset features are identified through Shapley values computed with a Random Forest classifier. Additionally, categorical features have been one-hot encoded, which might lead to certain feature names appearing in this encoded representation."
                     final_dict['Top 3 features based on shapley values'] = f_dict
                 #differential privacy

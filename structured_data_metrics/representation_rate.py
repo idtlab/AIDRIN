@@ -27,19 +27,36 @@ def calculate_representation_rate(dataframe, columns):
                         x_tick_keys.append(f"{attribute_value1} vs {attribute_value2}")
                         processed_keys.add(pair)  # Mark the pair as processed
                         representation_rate_info[key] = probability_ratio
-    
+
+        return representation_rate_info
+    except Exception as e:
+        return {"Error": f"Error calculating representation rate: {str(e)}"}
+
+
+def create_representation_rate_vis(dataframe, columns):
+    x_tick_keys = []
+    try:
+        for column in columns:
+            column_series = dataframe[column].dropna()  # Drop rows with NaN values
+            total_count = len(column_series)
+            value_counts = column_series.value_counts(normalize=True)
+
+            for attribute_value in value_counts.index:
+                proportion = value_counts[attribute_value] * 100  # Calculate the proportion as a percentage
+                x_tick_keys.append(f"{attribute_value}")
+
         # Create a bar chart
         plt.figure(figsize=(12, 6))
-        values = list(representation_rate_info.values())
-        
+        values = [value_counts[attribute_value] * 100 for attribute_value in value_counts.index]
+
         # Plot the bar chart
         plt.bar(x_tick_keys, values, color='blue')
-        plt.title('Representation Rate Ratios for Attribute Pairs')
-        plt.xlabel('Attribute Value Pairs')
-        plt.ylabel('Probability Ratio')
+        plt.title('Proportion of Attribute Values Against Total')
+        plt.xlabel('Attribute Values')
+        plt.ylabel('Proportion (%)')
         plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels by 45 degrees for better readability
 
-        plt.subplots_adjust(bottom=0.5,left=0.2)
+        plt.subplots_adjust(bottom=0.5, left=0.2)
 
         # Save the chart to a BytesIO object
         img_buf = io.BytesIO()
@@ -51,11 +68,6 @@ def calculate_representation_rate(dataframe, columns):
 
         plt.close()  # Close the plot to free up resources
 
-        return {"Representation Rate Chart": img_base64,"Probability ratios":representation_rate_info}
+        return img_base64
     except Exception as e:
-        return {"Error": "Error calculating representation rate, check column name"}
-
-
-# Example usage:
-# result = create_representation_rate_chart(your_dataframe, your_columns)
-# The result will contain a base64-encoded representation rate chart image.
+        return {"Error": f"Error calculating representation rate: {str(e)}"}

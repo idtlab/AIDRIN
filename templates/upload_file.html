@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <title>Structured Data Readiness</title>
 </head>
 <body>
@@ -18,8 +19,11 @@
         <input type="checkbox" name="duplicity" value="yes"> Check duplicity<br>
         <input type="checkbox" name="representation rate" value="yes"> Check representation rate<br>
         
-        <label for="features for representation rate">Features for representation rate:</label>
-        <input type="text" name="features for representation rate"><br>
+        <label for="features for representation rate">Sensitive feature to measure representation rate:</label>
+        <select name="features for representation rate" required>
+            <option value="" disabled selected>Select a feature</option>
+            <!-- Options will be added dynamically using JavaScript -->
+        </select><br>
 
         <input type="checkbox" name="statistical rate" value="yes"> Check statistical rate<br>
         <label for="features for statistical rate">Features for statistical rate:</label>
@@ -28,25 +32,30 @@
         <input type="text" name="target for statitical rate"><br>
 
         <input type="checkbox" name="real representation rate" value="yes"> Check real representation rate<br>
-        <label for="real column1">Real column:</label>
-        <input type="text" name="real column1">
-        <label for="real attributes1">Real attributes:</label>
-        <input type="text" name="real attributes1">
-        <label for="real values1">Real values:</label>
-        <input type="text" name="real values1"><br>
+        
+        <label for="real column">Real Column:</label>
+        <select name="real column" required>
+            <option value="" disabled selected>Select a feature</option>
+            <!-- Options will be added dynamically using JavaScript -->
+        </select><br>
+        
+        <label for="real attributes">Real attributes:</label>
+        <input type="text" name="real attributes">
+        <label for="real values">Real values:</label>
+        <input type="text" name="real values"><br>
 
         <input type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br>
         <input type="checkbox" name="correlations" value="yes"> Check correlations<br>
         <label for="correlation columns">Correlation columns:</label>
-        <input type="text" name="correlation columns">
-        <label for="categorical features for feature relevancy">Categorical features:</label>
-        <input type="text" name="categorical features for feature relevancy">
-        <label for="numerical features for feature relevancy">Numerical features:</label>
-        <input type="text" name="numerical features for feature relevancy">
-        <label for="target for feature relevance">Target for feature relevance:</label>
-        <input type="text" name="target for feature relevance"><br>
+        <input type="text" name="correlation columns"> <br>
 
         <input type="checkbox" name="top 3 features" value="yes"> Check top 3 features<br>
+        <label for="categorical features for feature relevancy">Categorical features to measure top 3 features:</label>
+        <input type="text" name="categorical features for feature relevancy">
+        <label for="numerical features for feature relevancy">Numerical features to measure top 3 features:</label>
+        <input type="text" name="numerical features for feature relevancy">
+        <label for="target for feature relevance">Target feature to measure top 3 features:</label>
+        <input type="text" name="target for feature relevance"><br>
 
         <input type="checkbox" name="privacy preservation" value="yes"> Check privacy preservation<br>
         <label for="numerical features to add noise">Numerical features to add noise:</label>
@@ -66,75 +75,130 @@
     </form>
 
     <div id="resultContainer" style="display:none;"></div>
+    
 
     <script>
-    function submitForm() {
-        var form = document.getElementById('uploadForm');
-        var formData = new FormData(form);
 
-        fetch('/upload_file', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            var resultContainer = document.getElementById('resultContainer');
+$(document).ready(function() {
+            $('input[type="file"]').change(function(e) {
+                var fileInput = $(this);
+                var file = fileInput.prop('files')[0];
 
-            resp_data = data;
+                if (file) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        var content = e.target.result;
+                        var lines = content.split('\n');
+                        if (lines.length > 0) {
+                            var columns = lines[0].split(',');
+                            displayColumns(columns);
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            });
 
-            // Function to check if a key is present and not undefined
-            function isKeyPresentAndDefined(obj, key) {
-                return obj && obj[key] !== undefined;
+            var columnsLoaded = {
+                'features for representation rate': false,
+                'real column': false
+            };
+
+            function displayColumns(columns) {
+                for (var dropdownName in columnsLoaded) {
+                    var selectedColumnDropdown = $('select[name="' + dropdownName + '"]');
+
+                    if (!columnsLoaded[dropdownName]) {
+                        // Adding the default option only if columns haven't been loaded yet
+                        selectedColumnDropdown.append($('<option value="" disabled>Select a ' + dropdownName + '</option>'));
+                        columnsLoaded[dropdownName] = true;
+                    }
+
+                    selectedColumnDropdown.empty();
+
+                    if (columns.length > 0) {
+                        columns.forEach(function(column) {
+                            selectedColumnDropdown.append($('<option>').text(column));
+                        });
+                    } else {
+                        selectedColumnDropdown.append($('<option>').text('No columns found in the CSV file.').attr('disabled', 'disabled'));
+                    }
+                }
             }
-
-            // Check if "Completeness Visualization" key is present
-            if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
-                // Display the completeness chart image
-                console.log('Completeness Visualization data:', data['Completeness']['Completeness Visualization']);
-                resultContainer.innerHTML += '<img id="complVis" style="display:none;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">';
-            }
-
-            // Check if "Outliers Visualization" key is present
-            if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
-                // Display the completeness chart image
-                console.log('Outliers Visualization data:', data['Outliers']['Outliers Visualization']);
-                resultContainer.innerHTML += '<img id="outVis" style="display:none;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">';
-            }
-
-            if (
-                isKeyPresentAndDefined(data, 'Representation Rate') &&
-                isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Chart')
-            ) {
-                // Display the completeness chart image
-                console.log('Representation Rate Visualizations data:', data['Representation Rate']['Representation Rate Chart']);
-                resultContainer.innerHTML += '<img id="repVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">';
-            }
-
-            // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
-            if (
-                isKeyPresentAndDefined(data, 'Representation Rate Comparison with Real World') &&
-                isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
-            ) {
-                // Display the completeness chart image
-                console.log('Comparison Visualization data:', data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization']);
-                resultContainer.innerHTML += '<img id="compVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">';
-            }
-
-            //Display other result information as JSON
-            resultContainer.innerHTML += '<pre id="jsonResult" style="display:none;">' + JSON.stringify(data, null, 2) + '</pre>';
-            
-            // Show the result container after the response is generated
-            resultContainer.style.display = 'block';
-
-            // Show the buttons after the response is generated
-            document.getElementById('buttonsContainer').style.display = 'block';
-
-            
-        })
-        .catch(error => {
-            console.error('Error:', error);
         });
-    }
+        
+        function submitForm() {
+            var form = document.getElementById('uploadForm');
+            var formData = new FormData(form);
+
+            fetch('/upload_file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                var resultContainer = document.getElementById('resultContainer');
+
+                resp_data = data;
+
+                // Function to check if a key is present and not undefined
+                function isKeyPresentAndDefined(obj, key) {
+                    return obj && obj[key] !== undefined;
+                }
+
+                // Check if "Completeness Visualization" key is present
+                if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
+                    // Display the chart image
+                    console.log('Completeness Visualization data:', data['Completeness']['Completeness Visualization']);
+                    resultContainer.innerHTML += '<img id="complVis" style="display:none;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">';
+                }
+
+                // Check if "Outliers Visualization" key is present
+                if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
+                    // Display the chart image
+                    console.log('Outliers Visualization data:', data['Outliers']['Outliers Visualization']);
+                    resultContainer.innerHTML += '<img id="outVis" style="display:none;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">';
+                }
+
+                if (
+                    isKeyPresentAndDefined(data, 'Representation Rate') &&
+                    isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Chart')
+                ) {
+                    // Display the chart image
+                    console.log('Representation Rate Visualizations data:', data['Representation Rate']['Representation Rate Chart']);
+                    resultContainer.innerHTML += '<img id="repVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">';
+                }
+
+                // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
+                if (
+                    isKeyPresentAndDefined(data, 'Representation Rate Comparison with Real World') &&
+                    isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
+                ) {
+                    // Display the chart image
+                    console.log('Comparison Visualization data:', data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization']);
+                    resultContainer.innerHTML += '<img id="compVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">';
+                }
+
+                if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Correlation Matrix')) {
+                    // Display the completeness chart image
+                    console.log('Correlation Matrix data:', data['Correlations Analysis']['Correlation Matrix']);
+                    resultContainer.innerHTML += '<img id="corrVis" style="display:none;" src="data:image/png;base64,' + data['Correlations Analysis']['Correlation Matrix'] + '" alt="Correlation Matrix">';
+                }
+
+                //Display other result information as JSON
+                resultContainer.innerHTML += '<pre id="jsonResult" style="display:none;">' + JSON.stringify(data, null, 2) + '</pre>';
+                
+                // Show the result container after the response is generated
+                resultContainer.style.display = 'block';
+
+                // Show the buttons after the response is generated
+                document.getElementById('buttonsContainer').style.display = 'block';
+
+                
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
 
     function showVisualization() {
         // Show Completeness Visualization content if it exists
@@ -159,6 +223,12 @@
         var comparisonContent = document.getElementById('compVis');
         if (comparisonContent) {
             comparisonContent.style.display = 'block';
+        }
+
+        // Show Correlation Visualization content if it exists
+        var corrContent = document.getElementById('corrVis');
+        if (corrContent) {
+            corrContent.style.display = 'block';
         }
 
         // ... (Add similar logic for other visualizations)
