@@ -10,7 +10,10 @@
     <h1>Structured Data Readiness</h1>
     <form id="uploadForm" method="post" enctype="multipart/form-data">
         <label for="file">Choose a CSV file:</label>
-        <input type="file" name="file" accept=".csv" required>
+        <input type="file" name="file" id="file" accept=".csv" required>
+
+        <!-- summary statistics -->
+        <div id="summary"></div>
 
         <p>Select analysis options:</p>
 
@@ -74,12 +77,53 @@
         </div>
     </form>
 
+    
     <div id="resultContainer" style="display:none;"></div>
     
 
     <script>
 
-$(document).ready(function() {
+        $(document).ready(function () {
+            $('#file').change(function (e) {
+                // Get the selected file
+                var fileInput = $(this);
+                var file = fileInput.prop('files')[0];
+
+                if (file) {
+                    // Read the file content
+                    var reader = new FileReader();
+
+                    reader.onload = function (e) {
+                        var content = e.target.result;
+                        // Call the function to generate the summary
+                        var summary = generateSummary(content);
+                        // Display the summary
+                        $('#summary').html(summary);
+                    };
+
+                    reader.readAsText(file);
+                }
+            });
+
+            function generateSummary(content) {
+                // Parse CSV content
+                var rows = content.split('\n');
+                var columns = rows[0].split(',');
+
+                var numColumns = columns.length;
+                var numRows = rows.length - 1; // Subtract 1 for header row
+
+                // Build the summary
+                var summary = `
+                    <p><strong>Number of Features:</strong> ${numColumns}</p>
+                    <p><strong>Number of Data Points:</strong> ${numRows}</p>
+                    <p><strong>Features:</strong> ${columns.join(', ')}</p>
+                `;
+
+                return summary;
+            }
+        });
+        $(document).ready(function() {
             $('input[type="file"]').change(function(e) {
                 var fileInput = $(this);
                 var file = fileInput.prop('files')[0];
