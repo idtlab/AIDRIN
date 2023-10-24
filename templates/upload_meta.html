@@ -10,8 +10,12 @@
     <form id="uploadForm" method="post" enctype="multipart/form-data">
         <input type="file" name="metadata" accept=".json" required>
 
-        <label for="metadata type">Enter the metadata type(DCAT, Datacite):</label>
-        <input type="text" name="metadata type" required>
+        <label for="metadata type">Select the metadata type:</label>
+        <select name="metadata type" id="metadata type" required>
+            <option value="DCAT">DCAT</option>
+            <option value="Datacite">Datacite</option>
+            <!-- Add more options as needed -->
+        </select>
         <button type="button" onclick="submitForm()">Submit</button>
     </form>
 
@@ -29,17 +33,46 @@
             .then(response => response.json())
             .then(data => {
                 var resultContainer = document.getElementById('resultContainer');
-                resultContainer.innerHTML = '<h2>Result</h2><pre>' + formatJson(data) + '</pre>';
+
+                // Check if there is an image data
+                if (data && data["Pie chart"]) {
+                    var imageContainer = document.createElement('div');
+                    imageContainer.innerHTML = '<img src="data:image/png;base64,' + data["Pie chart"] + '" alt="Pie Chart">';
+                    resultContainer.appendChild(imageContainer);
+                }
+
+                resultContainer.innerHTML += '<h2>Result</h2>' + displayKeyValuePairs(data);
             })
             .catch(error => {
                 console.error('Error:', error);
             });
         }
 
-        function formatJson(jsonData) {
-            return JSON.stringify(jsonData, null, 2);
+        function displayKeyValuePairs(obj) {
+            var result = '<ul>';
+
+            for (var key in obj) {
+                if (obj.hasOwnProperty(key)) {
+
+                    if (key === "Pie chart") {
+                        continue;
+                    }   
+                    var value = obj[key];
+                    result += '<li><strong>' + key + ':</strong> ';
+
+                    if (typeof value === 'object') {
+                        result += displayKeyValuePairs(value);
+                    } else {
+                        result += value;
+                    }
+
+                    result += '</li>';
+                }
+            }
+
+            result += '</ul>';
+            return result;
         }
     </script>
 </body>
 </html>
-

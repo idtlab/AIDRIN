@@ -3,6 +3,8 @@ import base64
 import matplotlib.pyplot as plt
 import numpy as np
 import re
+from io import BytesIO
+import cv2
 
 def calculate_cnr_from_dicom(dicom_data):
     
@@ -14,24 +16,45 @@ def calculate_cnr_from_dicom(dicom_data):
     # Calculate mean and standard deviation for the entire image
     image_mean, image_std = np.mean(pixel_array), np.std(pixel_array)
 
-    hist, bins, _ = plt.hist(pixel_array.flatten(), bins=256, range=[0, 256], density=True)
+    hist, bins, _ = plt.hist(pixel_array.flatten(), bins=256, range=[0, 256], density=False)
     
-    # Create a plot and save it to a BytesIO object
-    fig, ax = plt.subplots()
-    ax.bar(bins[:-1], hist, width=1, color='blue', alpha=0.7)
-    
+    # Create a figure with two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+    # Plot the intensity distribution
+    ax1.bar(bins[:-1], hist, width=1, color='blue', alpha=0.7)
+    ax1.set_title('Intensity Distribution')
+    ax1.set_xlabel('Intensity')
+    ax1.set_ylabel('Frequency')
+
+    # Plot the original image
+    ax2.imshow(pixel_array, cmap='gray')
+    ax2.set_title('Original Image')
+    ax2.axis('off')  # Turn off axis labels and ticks
+
     # Save the plot to a BytesIO object
     image_stream = io.BytesIO()
     plt.savefig(image_stream, format='png')
     plt.close(fig)
-    
-    # Encode the BytesIO content as base64
-    encoded_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
-    
+
+    # Move the "cursor" to the beginning of the BytesIO stream
+    image_stream.seek(0)
+
+    # Read the binary data from the stream
+    binary_data = image_stream.read()
+
+    # Encode the binary data to Base64
+    base64_encoded = base64.b64encode(binary_data).decode('utf-8')
+
     # Calculate CNR for the entire image
     cnr = (image_mean - 0) / image_std  # Assuming 0 as background intensity
 
-    cnr_dict = {'Mean Intensity': image_mean, 'Standard Deviation (Quantum Noise)': image_std, 'Contrast to Noise Raio(CNR)': cnr,"Intensity Distribution Visualization":encoded_image}
+    cnr_dict = {
+        'Mean Intensity': image_mean,
+        'Standard Deviation (Quantum Noise)': image_std,
+        'Contrast to Noise Ratio (CNR)': cnr,
+        "Intensity Distribution Visualization": base64_encoded
+    }
     return cnr_dict
 
 def calculate_spatial_resolution(dicom_dataset):
@@ -50,39 +73,61 @@ def calculate_spatial_resolution(dicom_dataset):
         return {"Spatial Resolution X":"Unavailable","Spatial Resolution Y": "Unavailable"}
 
 
-def detect_and_visualize_artifacts(dicom_data, threshold=0.95):
+def detect_and_visualize_artifacts(dicom_data):
     # Load DICOM image
     # dicom_data = pydicom.dcmread(dicom_file_path, force=True)
 
     image_array = dicom_data.pixel_array
 
-    # Detect and visualize artifacts based on user-defined threshold
-    artifact_pixels = np.where(image_array >= np.max(image_array) * threshold)
+    # Apply GaussianBlur to reduce noise and improve thresholding
+    blurred = cv2.GaussianBlur(image_array, (5, 5), 0)
+
+    # Apply adaptive thresholding
+    artifact_mask = cv2.adaptiveThreshold(
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+    )
+
+    # Create a plot
+    plt.figure(figsize=(14, 8))
+
+    # Plot the original image
+    plt.subplot(1, 3, 1)
+    plt.imshow(image_array, cmap='gray')
+    plt.axis('off')
+    plt.title('Original Image')
+
+    # Plot the adaptive thresholded image
+    plt.subplot(1, 3, 2)
+    plt.imshow(artifact_mask, cmap='gray')
+    plt.axis('off')
+    plt.title('Artifact Mask')
+
+    # Plot the image with artifacts
     image_with_artifacts = np.copy(image_array)
-    image_with_artifacts[artifact_pixels] = np.max(image_array)  # Set artifact pixels to the maximum
+    image_with_artifacts[artifact_mask == 255] = np.max(image_array)  # Set artifact pixels to the maximum
+    plt.subplot(1, 3, 3)
+    plt.imshow(image_with_artifacts, cmap='gray')
+    plt.axis('off')
+    plt.title(f'Image with Artifacts usign adaptive thresholding')
 
-    # Encode images to base64
-    def plot_to_base64(image_array):
-        # Create a plot
-        plt.figure(figsize=(8, 8))
-        plt.imshow(image_array, cmap='gray')
-        plt.axis('off')
+    # Save the plot to a BytesIO object
+    image_stream = io.BytesIO()
+    plt.savefig(image_stream, format='png')
+    plt.close()
 
-        # Save the plot to a BytesIO object
-        image_stream = io.BytesIO()
-        plt.savefig(image_stream, format='png')
-        plt.close()
+    # Encode the BytesIO content as base64
+    encoded_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
 
-        # Encode the BytesIO content as base64
-        encoded_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
+    return {
+        "Image with Artifacts": encoded_image,
+        "Description": "Identifies artifact pixels using adaptive thresholding.",
+    }
 
-        return encoded_image
+    # # Return the base64-encoded images
+    # original_image_base64 = plot_to_base64(image_array)
+    # image_with_artifacts_base64 = plot_to_base64(image_with_artifacts)
 
-    # Return the base64-encoded images
-    original_image_base64 = plot_to_base64(image_array)
-    image_with_artifacts_base64 = plot_to_base64(image_with_artifacts)
-
-    return {"Original Image":original_image_base64, "Image with Artifacts":image_with_artifacts_base64}
+    # return {"Image with Artifacts":image_with_artifacts_base64, "Description":"Identifies artifact pixels by locating those with intensity values surpassing a user-defined threshold, set as a percentage of the maximum intensity in the image","threshold":threshold}
 
 def gather_image_quality_info(dicom_data):
     # Read the DICOM file

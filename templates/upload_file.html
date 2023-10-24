@@ -4,18 +4,80 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
     <title>Structured Data Readiness</title>
+
+    <style>
+        body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        #fileInput {
+            margin-bottom: 20px;
+        }
+
+        #summaryStatistics {
+            margin-top: 20px;
+            
+        }
+
+        #summaryStatistics h3{
+            text-align: center;            
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        #Statresult {
+            margin-bottom: 10px;
+        }
+
+        strong {
+            color: #333;
+        }
+
+        span {
+            color: #666;
+        }
+
+        .plot-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        img {
+            max-width: 100%;
+        }
+    </style>
 </head>
 <body>
     <h1>Structured Data Readiness</h1>
     <form id="uploadForm" method="post" enctype="multipart/form-data">
         <label for="file">Choose a CSV file:</label>
-        <input type="file" name="file" id="file" accept=".csv" required>
+        <input type="file" name = 'file' id="file" accept=".csv" required>
 
-        <!-- summary statistics -->
-        <div id="summary"></div>
+        <div id="summaryStatistics"></div>
+        <div class="plot-container" id="histogramsContainer"></div>
 
-        <p>Select analysis options:</p>
+        <h3>Select analysis options:</h3>
 
         <input type="checkbox" name="completeness" value="yes"> Check completeness<br>
         <input type="checkbox" name="outliers" value="yes"> Check outliers<br>
@@ -48,9 +110,12 @@
         <input type="text" name="real values"><br>
 
         <input type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br>
-        <input type="checkbox" name="correlations" value="yes"> Check correlations<br>
-        <label for="correlation columns">Correlation columns:</label>
-        <input type="text" name="correlation columns"> <br>
+
+        <input type="checkbox" name="correlations" value="yes"> Perform Correlation Analysis<br>
+        <label for="correlationColumns">Choose the columns for correlation analysis:</label>
+        <!-- Checkboxes for correlations -->
+        <div id="checkboxContainer"></div>
+        <br>
 
         <input type="checkbox" name="top 3 features" value="yes"> Check top 3 features<br>
         <label for="categorical features for feature relevancy">Categorical features to measure top 3 features:</label>
@@ -68,11 +133,15 @@
         <input type="text" name="privacy budget"><br>
 
         <button type="button" onclick="submitForm()">Submit</button>
+        
+        <!-- Reset button with event listener -->
+        <input type="reset" value="Reset" id="resetButton">
 
         <div id="buttonsContainer" style="display:none;">
             <button type="button" id="visualizationBtn" onclick="showVisualization()">Show Visualization</button>
             <button type="button" id="jsonBtn" onclick="showJSON()">Show JSON</button>
             <button type="button" id="jsonBtn" onclick="downloadJSON()">Download JSON</button>
+            
 
         </div>
     </form>
@@ -83,46 +152,85 @@
 
     <script>
 
+        //generate summary statistics
         $(document).ready(function () {
-            $('#file').change(function (e) {
-                // Get the selected file
-                var fileInput = $(this);
-                var file = fileInput.prop('files')[0];
+            $('#file').on('change', function () {
+                var fileInput = document.getElementById('file');
+                var file = fileInput.files[0];
+                
 
-                if (file) {
-                    // Read the file content
-                    var reader = new FileReader();
+                var formData = new FormData();
+                formData.append('file', file);
+               
+                $.ajax({
+                    url: '/summary_statistics',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function (response) {
+                        if (response.success) {
+                            
+                            $('#recordsCount').text(response.records_count);
+                            $('#catFeatures').text(response.categorical_features);
+                            $('#numFeatures').text(response.numerical_features);
+                           
 
-                    reader.onload = function (e) {
-                        var content = e.target.result;
-                        // Call the function to generate the summary
-                        var summary = generateSummary(content);
-                        // Display the summary
-                        $('#summary').html(summary);
-                    };
+                            // Display additional summary statistics
+                            
+                            var statisticsHTML = '<p id="Statresult"><strong>Number of Features:</strong> <span id="featuresCount">' + response.features_count + '</span></p>';
+                            statisticsHTML += '<p id="Statresult"><strong>Number of Data Points:</strong> <span id="recordsCount">' + response.records_count + '</span></p>';
+                            statisticsHTML += '<p id="Statresult"><strong>Categorical Features:</strong> <span id="catFeatures">' + response.categorical_features + '</span></p>';
+                            statisticsHTML += '<p id="Statresult"><strong>Numerical Features:</strong> <span id="numFeatures">' + response.numerical_features + '</span></p><br>';
+                            statisticsHTML += '<h3>Summary Statistics Table</h3><table>';
+                            statisticsHTML += '<tr><th><strong>Statistic</strong></th>'; // Bold header for the "Statistic" column
 
-                    reader.readAsText(file);
-                }
+                            // Iterate over the keys to create columns (excluding the first key)
+                            for (var key in response.summary_statistics) {
+                                statisticsHTML += '<th>' + key + '</th>';
+                            }
+                            statisticsHTML += '</tr>'; // End of the header row
+
+                            // Iterate over the statistics for each key
+                            for (var statKey in response.summary_statistics[key]) {
+                                statisticsHTML += '<tr><td><strong>' + statKey + '</strong></td>'; // Bold row for the "Feature" column
+
+                                // Iterate over the keys to get values for each column
+                                for (var key in response.summary_statistics) {
+                                    var statValue = response.summary_statistics[key][statKey];
+
+                                    statisticsHTML += '<td>' + statValue + '</td>';
+                                }
+                                statisticsHTML += '</tr>'; // End of the row
+                            }
+
+                            statisticsHTML += '</table>';
+                            $('#summaryStatistics').html(statisticsHTML);
+
+                            // Display histograms
+                            var histogramsContainer = $('#histogramsContainer');
+                            histogramsContainer.empty();
+                            histogramsContainer.append('<br><h3>Summary Statistic Plots</h3>'); // Add heading for histograms
+
+                            for (var feature in response.histograms) {
+                                var base64Image = response.histograms[feature];
+                                var img = document.createElement('img');
+                                img.src = 'data:image/png;base64,' + base64Image;
+                                img.alt = feature + ' Histogram';
+                                histogramsContainer.append(img);
+                            }
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function (error) {
+                        console.log(error);
+                    }
+                });
             });
-
-            function generateSummary(content) {
-                // Parse CSV content
-                var rows = content.split('\n');
-                var columns = rows[0].split(',');
-
-                var numColumns = columns.length;
-                var numRows = rows.length - 1; // Subtract 1 for header row
-
-                // Build the summary
-                var summary = `
-                    <p><strong>Number of Features:</strong> ${numColumns}</p>
-                    <p><strong>Number of Data Points:</strong> ${numRows}</p>
-                    <p><strong>Features:</strong> ${columns.join(', ')}</p>
-                `;
-
-                return summary;
-            }
         });
+
+        //generate dropdown when features of the dataset are required to select
         $(document).ready(function() {
             $('input[type="file"]').change(function(e) {
                 var fileInput = $(this);
@@ -147,6 +255,8 @@
                 'real column': false
             };
 
+            var checkboxesLoaded = false;
+
             function displayColumns(columns) {
                 for (var dropdownName in columnsLoaded) {
                     var selectedColumnDropdown = $('select[name="' + dropdownName + '"]');
@@ -167,12 +277,56 @@
                         selectedColumnDropdown.append($('<option>').text('No columns found in the CSV file.').attr('disabled', 'disabled'));
                     }
                 }
+
+                // Checkboxes
+                if (!checkboxesLoaded) {
+                    var checkboxContainer = $('#checkboxContainer');
+                    var table = $('<table>').appendTo(checkboxContainer);
+                    var row, cell;
+
+                    for (var i = 0; i < columns.length; i++) {
+                        if (i % 4 === 0) {
+                            // Start a new row for every 4 columns
+                            row = $('<tr>').appendTo(table);
+                        }
+
+                        cell = $('<td>').appendTo(row);
+                        var checkbox = $('<input type="checkbox" class="columnCheckbox">')
+                            .attr('id', 'checkbox_' + columns[i])
+                            .attr('value', columns[i])
+                            .attr('name', 'checkboxValues');
+
+                        var label = $('<label>')
+                            .attr('for', 'checkbox_' + columns[i])
+                            .text(columns[i]);
+
+                        cell.append(checkbox);
+                        cell.append(label);
+                    }
+
+                    checkboxesLoaded = true;
+                }
             }
+        });
+
+        document.getElementById('resetButton').addEventListener('click', function() {
+            // Reload the page when the reset button is clicked
+            location.reload();
         });
         
         function submitForm() {
             var form = document.getElementById('uploadForm');
             var formData = new FormData(form);
+
+            // Get the values of the checkboxes and concatenate them with a comma
+            var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
+
+            // Add the concatenated checkbox values to the form data
+            formData.set('correlation columns', checkboxValues);
+
+            for (var pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
 
             fetch('/upload_file', {
                 method: 'POST',
@@ -192,14 +346,12 @@
                 // Check if "Completeness Visualization" key is present
                 if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
                     // Display the chart image
-                    console.log('Completeness Visualization data:', data['Completeness']['Completeness Visualization']);
                     resultContainer.innerHTML += '<img id="complVis" style="display:none;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">';
                 }
 
                 // Check if "Outliers Visualization" key is present
                 if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
                     // Display the chart image
-                    console.log('Outliers Visualization data:', data['Outliers']['Outliers Visualization']);
                     resultContainer.innerHTML += '<img id="outVis" style="display:none;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">';
                 }
 
@@ -208,7 +360,6 @@
                     isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Chart')
                 ) {
                     // Display the chart image
-                    console.log('Representation Rate Visualizations data:', data['Representation Rate']['Representation Rate Chart']);
                     resultContainer.innerHTML += '<img id="repVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">';
                 }
 
@@ -218,14 +369,18 @@
                     isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
                 ) {
                     // Display the chart image
-                    console.log('Comparison Visualization data:', data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization']);
                     resultContainer.innerHTML += '<img id="compVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">';
                 }
 
                 if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Correlation Matrix')) {
-                    // Display the completeness chart image
-                    console.log('Correlation Matrix data:', data['Correlations Analysis']['Correlation Matrix']);
+                    // Display the correlations chart image
                     resultContainer.innerHTML += '<img id="corrVis" style="display:none;" src="data:image/png;base64,' + data['Correlations Analysis']['Correlation Matrix'] + '" alt="Correlation Matrix">';
+                }
+
+                if (isKeyPresentAndDefined(data, 'Privacy preservation statistics') && isKeyPresentAndDefined(data['Privacy preservation statistics'], 'Combined Plots')) {
+                    // Display the noisy vs normal feature chart image
+                    resultContainer.innerHTML += '<img id="noisyVis" style="display:none;" src="data:image/png;base64,' + data['Privacy preservation statistics']['Combined Plots'] + '" alt="Normal vs Noisy Feature Box Plots">';
+          
                 }
 
                 //Display other result information as JSON
@@ -271,6 +426,12 @@
 
         // Show Correlation Visualization content if it exists
         var corrContent = document.getElementById('corrVis');
+        if (corrContent) {
+            corrContent.style.display = 'block';
+        }
+
+        // Show Normal vs Noisy Feature Visualization content if it exists
+        var corrContent = document.getElementById('noisyVis');
         if (corrContent) {
             corrContent.style.display = 'block';
         }

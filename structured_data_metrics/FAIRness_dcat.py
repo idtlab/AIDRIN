@@ -1,5 +1,7 @@
 import re
-
+import matplotlib.pyplot as plt
+import base64
+import io
 
 # Function to extract keys and values and create a dictionary
 def extract_keys_and_values(data, parent_key='', separator='_'):
@@ -109,6 +111,31 @@ def categorize_metadata(metadata_dict,original_metadata):
         "Other": other,  # All other keys
         "Original Metadata":original_metadata
     }
+
+    #create the pie chart
+    # Extract FAIRness Score data
+    fairness_score = categorized_metadata.get("FAIRness Score", {})
+    labels = ['Findability Checks','Accessibility Checks',"Interoperability Checks","Reusability Checks"]
+    sizes = [find_c,acc_c,inter_c,reu_c]
+
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(10,4))
+    ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
+    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    
+
+    plt.title("FAIRness Score")
+
+    # Save the plot to a BytesIO object
+    image_stream = io.BytesIO()
+    plt.savefig(image_stream, format='png')
+    plt.close()
+
+    # Encode the BytesIO content as base64
+    encoded_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
+
+    categorized_metadata['Pie chart'] = encoded_image
 
     return categorized_metadata
 

@@ -11,16 +11,24 @@
     <form action="/medical_image_readiness" method="post" enctype="multipart/form-data">
         <label for="dicomFile">Upload DICOM File:</label>
         <input type="file" name="dicom" id="dicomFile" accept=".dcm">
-        <br>
         <input type="submit" value="Submit">
     </form>
+
+    <!-- Images container -->
+    <div id="imageContainer" style="display: none;">
+        <!-- This contain both intensity distribution and the original image -->
+        <img id="intensityImage" alt="Intensity Image">
+        <img id="artifactImage" alt="artifactImage">
+    </div>
 
     <div id="resultContainer"></div>
 
     <script>
-        // Optionally, you can use JavaScript to handle the form submission asynchronously and update the result container.
         const form = document.querySelector('form');
         const resultContainer = document.getElementById('resultContainer');
+        const imageContainer = document.getElementById('imageContainer');
+        const intensityImage = document.getElementById('intensityImage');
+        const artifactImage = document.getElementById('artifactImage');
 
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -35,13 +43,49 @@
 
                 const data = await response.json();
 
-                // Update the result container with the received data
-                resultContainer.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                // Clear previous results
+                resultContainer.innerHTML = '';
+
+                // Display key-value pairs in a better way
+                displayData(data, resultContainer);
+
+                // Show the image container
+                imageContainer.style.display = 'block';
 
             } catch (error) {
                 console.error('Error:', error);
             }
         });
+
+        function displayData(data, container) {
+            const resultList = document.createElement('ul');
+
+            Object.entries(data).forEach(([key, value]) => {
+                const listItem = document.createElement('li');
+
+                if (typeof value === 'object') {
+                    listItem.innerHTML = `<strong>${key}:</strong>`;
+                    const nestedList = document.createElement('ul');
+                    displayData(value, nestedList);
+                    listItem.appendChild(nestedList);
+                } else {
+                    listItem.innerHTML = `<strong>${key}:</strong> ${value}`;
+                }
+
+                if (key === 'Intensity Distribution Visualization' && typeof value === 'string') {
+                    // Display the intensity image from the Base64 string
+                    intensityImage.src = `data:image/png;base64, ${value}`;
+                }else if (key === 'Image with Artifacts' && typeof value === 'string'){
+                    // Display the intensity image from the Base64 string
+                    artifactImage.src = `data:image/png;base64, ${value}`;
+                
+                } else {
+                    resultList.appendChild(listItem);
+                }
+            });
+
+            container.appendChild(resultList);
+        }
     </script>
 </body>
 </html>

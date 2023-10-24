@@ -22,32 +22,6 @@ import pydicom
 
 app = Flask(__name__)
 
-def visualize(name,dict):
-
-    # Extract labels and completeness values
-    labels = list(dict.keys())
-    values = list(dict.values())
-
-    # Create a bar chart
-    plt.figure(figsize=(20, 10))
-    plt.bar(labels, values)
-    plt.xlabel("Categories")
-    plt.ylabel("Metric Value")
-    plt.title(f"{name} Data Visualization")
-    plt.xticks(rotation=90)  # Rotate x-axis labels for better readability
-    
-    # Specify the folder name
-    folder_name = "Visualizations"
-
-    # Ensure that the folder exists, or create it if it doesn't
-    if not os.path.exists(folder_name):
-        os.makedirs(folder_name)
-
-    # Save the chart inside the "Visualizations" folder
-    plt.savefig(os.path.join(folder_name, f"{name}_chart.png"))
-
-    # plt.show()
-
 
 def format_dict_values(d):
     formatted_dict = {}
@@ -62,6 +36,30 @@ def format_dict_values(d):
     
     return formatted_dict
 
+def summary_histograms(df):
+    histograms = {}
+    for column in df.select_dtypes(include='number').columns:
+        plt.figure(figsize=(6, 4))
+        plt.hist(df[column], bins=20)
+
+        # Set a smaller font size for the title
+        plt.title(f'Histogram for {column}', fontsize=8)
+
+        # Add labels to the axes
+        plt.xlabel('Values', fontsize=8)
+        plt.ylabel('Frequency', fontsize=8)
+
+        # Encode the plot as base64
+        img_buffer = io.BytesIO()
+        plt.savefig(img_buffer, format='png')
+        img_buffer.seek(0)
+        encoded_img = base64.b64encode(img_buffer.read()).decode('utf-8')
+
+        histograms[column] = encoded_img
+        plt.close()
+
+    return histograms
+
 @app.route('/images/<path:filename>')
 def serve_image(filename):
     root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -70,6 +68,58 @@ def serve_image(filename):
 @app.route('/')
 def homepage():
     return render_template('homepage.html')
+
+@app.route('/summary_statistics', methods=['POST'])
+def handle_summary_statistics():
+    try:
+        # Get the uploaded file
+        file = request.files['file']
+
+        # Read the CSV file
+        csv_content = file.read().decode('utf-8')
+        csv_data = io.StringIO(csv_content)
+        
+        # Load CSV data into a Pandas DataFrame
+        df = pd.read_csv(csv_data)
+
+        # Extract summary statistics
+        summary_statistics = df.describe().to_dict()
+
+        # Calculate probability distributions
+        histograms = summary_histograms(df)
+
+        # Separate numerical and categorical columns
+        numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
+        categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
+
+        for v in summary_statistics.values():
+            for old_key in v:
+                if old_key in ['25%','50%','75%']:
+                    new_key = old_key.replace("%","th percentile")
+                    v[new_key] = v.pop(old_key)
+
+        # Count the number of records
+        records_count = len(df)
+
+        #count the number of features
+        feature_count = len(df.columns)
+
+        response_data = {
+            'success': True,
+            'message': 'File uploaded successfully',
+            'records_count': records_count,
+            'features_count': feature_count,
+            'categorical_features': list(categorical_columns),
+            'numerical_features': list(numerical_columns),
+            'summary_statistics': summary_statistics,
+            'histograms': histograms
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
 
 @app.route('/upload_file', methods=['POST','GET'])
 def upload_csv():
@@ -80,12 +130,13 @@ def upload_csv():
             return render_template('upload_file.html')
         elif request.method == "POST":
             final_dict = {}
+           
             uploaded_file = request.files['file']
             
             if uploaded_file.filename != '':
                 final_dict['message']="File uploaded successfully"
                 file = pd.read_csv(uploaded_file,index_col=False)
-            
+
                 #Completeness
                 if request.form.get('completeness') == "yes":
                     
@@ -233,12 +284,12 @@ def med_img_readiness():
             cnr_data = calculate_cnr_from_dicom(dicom_data)
             spatial_res_data = calculate_spatial_resolution(dicom_data)
             metadata_dcm = gather_image_quality_info(dicom_data)
-            #choose the threshold
-            artifact = detect_and_visualize_artifacts(dicom_data,threshold=0.95)
+            artifact = detect_and_visualize_artifacts(dicom_data)
             combined_dict = {**cnr_data, **spatial_res_data}
             formatted_combined_dict = format_dict_values(combined_dict)
             final_dict['Image Readiness Scores'] = formatted_combined_dict
             final_dict['DCM Image Quality Metadata'] = metadata_dcm
+            final_dict['Artifacts'] = artifact
 
             return jsonify(final_dict),200
     return render_template('medical_image.html')
