@@ -57,6 +57,7 @@ def summary_histograms(df):
 
         histograms[column] = encoded_img
         plt.close()
+        img_buffer.close()
 
     return histograms
 
@@ -91,6 +92,7 @@ def handle_summary_statistics():
         # Separate numerical and categorical columns
         numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
         categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
+        all_features = numerical_columns + categorical_columns
 
         for v in summary_statistics.values():
             for old_key in v:
@@ -111,6 +113,7 @@ def handle_summary_statistics():
             'features_count': feature_count,
             'categorical_features': list(categorical_columns),
             'numerical_features': list(numerical_columns),
+            'all_features':all_features,
             'summary_statistics': summary_statistics,
             'histograms': histograms
         }
@@ -163,8 +166,8 @@ def upload_csv():
                     rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
                     final_dict['Representation Rate'] = rep_dict
                 #statistical rate
-                if request.form.get('statistical rate') == "yes" and request.form.get('features for statistical rate') != None and request.form.get('target for statitical rate') != None:
-                    y_true = request.form.get('target for statitical rate')
+                if request.form.get('statistical rate') == "yes" and request.form.get('features for statistical rate') != None and request.form.get('target for statistical rate') != None:
+                    y_true = request.form.get('target for statistical rate')
                     sensitive_attribute_column = request.form.get('features for statistical rate')
                     sr_dict = calculate_statistical_rates(file,y_true,sensitive_attribute_column)
                     sr_dict['Description'] = 'Represent probability ratios that quantify the likelihood of an association between specific categories within a sensitive feature and a target variable, where smaller values indicate a lower likelihood, and higher values indicate a higher likelihood of association'
@@ -190,7 +193,7 @@ def upload_csv():
                     corr_dict['Description'] = "Categorical correlations are assessed using Theil's U statistic, while numerical feature correlations are determined using Pearson correlation. The resulting values fall within the range of 0 to 1, with a value of 1 indicating a strong correlation with the target variable"
                     final_dict['Correlations Analysis'] = corr_dict
 
-                if request.form.get("top 3 features") == "yes":
+                if request.form.get("feature relevancy") == "yes":
                     cat_cols = request.form.get("categorical features for feature relevancy").split(",")
                     num_cols = request.form.get("numerical features for feature relevancy").split(",")
                     target = request.form.get("target for feature relevance")

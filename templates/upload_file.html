@@ -10,11 +10,23 @@
 
     <style>
         body {
-        font-family: Arial, sans-serif;
-        margin: 20px;
+            font-family: 'Arial', sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 2000px; /* Increase the max-width as needed */
+            width: 100%;
+            box-sizing: border-box;
         }
 
         h1 {
+            text-align: center;
             color: #333;
         }
 
@@ -24,11 +36,12 @@
 
         #summaryStatistics {
             margin-top: 20px;
-            
+            max-width: 100%;
+            overflow: auto; /* Change to 'auto' for scrolling */
         }
 
-        #summaryStatistics h3{
-            text-align: center;            
+        #summaryStatistics h3 {
+            text-align: center;
         }
 
         table {
@@ -63,9 +76,80 @@
             text-align: center;
         }
 
-        img {
-            max-width: 100%;
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
         }
+
+        input[type="checkbox"] {
+            width: auto;
+        }
+
+        button {
+            background-color: #4caf50;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        input[type="reset"] {
+            background-color: #f44336;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        input[type="reset"]:hover {
+            background-color: #d32f2f;
+        }
+
+        
+
+        #formbuttonsContainer {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        button,
+        input[type="reset"] {
+            width: 48%; /* Set the width for each button */
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        #buttonsContainer {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px; /* Optional: Add margin between buttons and other elements */
+        }
+
+        #buttonsContainer button {
+            width: 30%; /* Set the width for each button */
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 767px) {
+            #buttonsContainer {
+                flex-direction: column; /* Stack buttons vertically on smaller screens */
+                align-items: center;
+            }
+
+            #buttonsContainer button {
+                width: 100%; /* Full width for buttons on smaller screens */
+                margin-bottom: 10px; /* Optional: Add margin between buttons */
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -77,80 +161,167 @@
         <div id="summaryStatistics"></div>
         <div class="plot-container" id="histogramsContainer"></div>
 
-        <h3>Select analysis options:</h3>
-
+        <h3>Data Quality Metrics</h3>
         <input type="checkbox" name="completeness" value="yes"> Check completeness<br>
         <input type="checkbox" name="outliers" value="yes"> Check outliers<br>
         <input type="checkbox" name="duplicity" value="yes"> Check duplicity<br>
+
+        <h3>Fairness Metrics</h3>
         <input type="checkbox" name="representation rate" value="yes"> Check representation rate<br>
-        
         <label for="features for representation rate">Sensitive feature to measure representation rate:</label>
-        <select name="features for representation rate" required>
+        <select name="features for representation rate" id = "allFeaturesDropdownRepRate" required>
             <option value="" disabled selected>Select a feature</option>
             <!-- Options will be added dynamically using JavaScript -->
         </select><br>
-
+        <br>
         <input type="checkbox" name="statistical rate" value="yes"> Check statistical rate<br>
         <label for="features for statistical rate">Features for statistical rate:</label>
-        <input type="text" name="features for statistical rate">
-        <label for="target for statitical rate">Target for statistical rate:</label>
-        <input type="text" name="target for statitical rate"><br>
-
-        <input type="checkbox" name="real representation rate" value="yes"> Check real representation rate<br>
-        
-        <label for="real column">Real Column:</label>
-        <select name="real column" required>
+        <select name="features for statistical rate" id = "allFeaturesDropdownStatRate1" required>
+            <option value="" disabled selected>Select a feature</option>
+            <!-- Options will be added dynamically using JavaScript -->
+        </select>
+        <label for="target for statistical rate">Target for statistical rate:</label>
+        <select name="target for statistical rate" id = "allFeaturesDropdownStatRate2" required>
             <option value="" disabled selected>Select a feature</option>
             <!-- Options will be added dynamically using JavaScript -->
         </select><br>
-        
+        <br>
+        <input type="checkbox" name="real representation rate" value="yes"> Check real representation rate<br>
+        <label for="real column">Real Column:</label>
+        <select name="real column" id = "allFeaturesDropdownRealRep" required>
+            <option value="" disabled selected>Select a feature</option>
+            <!-- Options will be added dynamically using JavaScript -->
+        </select><br>
         <label for="real attributes">Real attributes:</label>
         <input type="text" name="real attributes">
         <label for="real values">Real values:</label>
         <input type="text" name="real values"><br>
-
+        <br>
+        
         <input type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br>
 
+        <h3>Correlation Analysis</h3>
         <input type="checkbox" name="correlations" value="yes"> Perform Correlation Analysis<br>
         <label for="correlationColumns">Choose the columns for correlation analysis:</label>
         <!-- Checkboxes for correlations -->
-        <div id="checkboxContainer"></div>
+        <div id="correlationCheckboxContainer"></div>
         <br>
 
-        <input type="checkbox" name="top 3 features" value="yes"> Check top 3 features<br>
-        <label for="categorical features for feature relevancy">Categorical features to measure top 3 features:</label>
-        <input type="text" name="categorical features for feature relevancy">
-        <label for="numerical features for feature relevancy">Numerical features to measure top 3 features:</label>
-        <input type="text" name="numerical features for feature relevancy">
-        <label for="target for feature relevance">Target feature to measure top 3 features:</label>
-        <input type="text" name="target for feature relevance"><br>
+        <h3>Feature Relevance</h3>
+        <input type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy(Shapley)<br>
+        
+        <label for="categorical features for feature relevancy">Categorical features to measure feature relevancy:</label>
+        <select id="catFeaturesDropdown" name="categorical features for feature relevancy">
+            <option value="" disabled selected>Select a feature</option>
+            <!-- Options will be added dynamically using JavaScript -->
+        </select>
+        <br>
 
+        <label for="numerical features for feature relevancy">Numerical features to measure feature relevancy:</label>
+        <select id="numFeaturesDropdownFeaRel" name="numerical features for feature relevancy">
+            <option value="" disabled selected>Select a feature</option>
+            <!-- Options will be added dynamically using JavaScript -->
+        </select>
+        <br>
+        <label for="target for feature relevance">Target feature to measure feature relevancy:</label>
+        <select name="target for feature relevance" id = "allFeaturesDropdownFeaRel" required>
+            <option value="" disabled selected>Select a feature</option>
+            <!-- Options will be added dynamically using JavaScript -->
+        </select><br>
+
+        <h3>Privacy Preservation</h3>
         <input type="checkbox" name="privacy preservation" value="yes"> Check privacy preservation<br>
         <label for="numerical features to add noise">Numerical features to add noise:</label>
-        <input type="text" name="numerical features to add noise">
-
+        <select name="numerical features to add noise" id = "numFeaturesDropdownPriv" required>
+            <option value="" disabled selected>Select a feature</option>
+            <!-- Options will be added dynamically using JavaScript -->
+        </select><br>
         <label for="privacy budget">Privacy budget (epsilon):</label>
         <input type="text" name="privacy budget"><br>
-
-        <button type="button" onclick="submitForm()">Submit</button>
+        <div id = "formbuttonsContainer">
+            <button type="button" onclick="submitForm()">Submit</button>
+    
+            <!-- Reset button with event listener -->
+            <input type="reset" value="Reset" id="resetButton">
+        </div>
         
-        <!-- Reset button with event listener -->
-        <input type="reset" value="Reset" id="resetButton">
-
         <div id="buttonsContainer" style="display:none;">
             <button type="button" id="visualizationBtn" onclick="showVisualization()">Show Visualization</button>
             <button type="button" id="jsonBtn" onclick="showJSON()">Show JSON</button>
-            <button type="button" id="jsonBtn" onclick="downloadJSON()">Download JSON</button>
+            <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
+        </div>
+        
+    </form>
+    
             
 
         </div>
-    </form>
 
     
     <div id="resultContainer" style="display:none;"></div>
     
 
     <script>
+
+        $(document).ready(function () {
+            $('#file').on('change', function () {
+                var fileInput = document.getElementById('file');
+                var file = fileInput.files[0];
+
+                var formData = new FormData();
+                formData.append('file', file);
+
+                $.ajax({
+                    url: '/summary_statistics',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function (response) {
+                        if (response.success) {
+
+                            // Check if either categorical or numerical features exist in the response
+                            if ('categorical_features' in response) {
+                                createDropdown(response.categorical_features, 'catFeaturesDropdown');
+                            }
+
+                            if ('numerical_features' in response) {
+                                createDropdown(response.numerical_features, 'numFeaturesDropdownFeaRel');
+                                createDropdown(response.numerical_features, 'numFeaturesDropdownPriv');
+                            }
+
+                            if ('all_features' in response){
+                                createDropdown(response.all_features,'allFeaturesDropdownRepRate');
+                                createDropdown(response.all_features,'allFeaturesDropdownStatRate1');
+                                createDropdown(response.all_features,'allFeaturesDropdownStatRate2');
+                                createDropdown(response.all_features,'allFeaturesDropdownRealRep')
+                                createDropdown(response.all_features,'allFeaturesDropdownFeaRel')
+                            }
+
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function (error) {
+                        console.log(error);
+                    }
+                });
+            });
+
+            function createDropdown(features, dropdownId) {
+                var dropdown = $('#' + dropdownId);
+                dropdown.empty(); // Clear previous options
+
+                // Add default options
+                dropdown.append($('<option value="" disabled>Select a feature</option>'));
+
+                // Populate the dropdown with options from the response
+                for (var i = 0; i < features.length; i++) {
+                    dropdown.append($('<option>').text(features[i]));
+                }
+            }
+        });
+
 
         //generate summary statistics
         $(document).ready(function () {
@@ -250,37 +421,13 @@
                 }
             });
 
-            var columnsLoaded = {
-                'features for representation rate': false,
-                'real column': false
-            };
-
             var checkboxesLoaded = false;
 
             function displayColumns(columns) {
-                for (var dropdownName in columnsLoaded) {
-                    var selectedColumnDropdown = $('select[name="' + dropdownName + '"]');
-
-                    if (!columnsLoaded[dropdownName]) {
-                        // Adding the default option only if columns haven't been loaded yet
-                        selectedColumnDropdown.append($('<option value="" disabled>Select a ' + dropdownName + '</option>'));
-                        columnsLoaded[dropdownName] = true;
-                    }
-
-                    selectedColumnDropdown.empty();
-
-                    if (columns.length > 0) {
-                        columns.forEach(function(column) {
-                            selectedColumnDropdown.append($('<option>').text(column));
-                        });
-                    } else {
-                        selectedColumnDropdown.append($('<option>').text('No columns found in the CSV file.').attr('disabled', 'disabled'));
-                    }
-                }
 
                 // Checkboxes
                 if (!checkboxesLoaded) {
-                    var checkboxContainer = $('#checkboxContainer');
+                    var checkboxContainer = $('#correlationCheckboxContainer');
                     var table = $('<table>').appendTo(checkboxContainer);
                     var row, cell;
 
@@ -310,9 +457,38 @@
         });
 
         document.getElementById('resetButton').addEventListener('click', function() {
-            // Reload the page when the reset button is clicked
-            location.reload();
+            // Clear form fields
+            document.getElementById('uploadForm').reset();
+
+            // Clear dropdowns
+            clearDropdown('allFeaturesDropdownRepRate');
+            clearDropdown('allFeaturesDropdownStatRate1');
+            clearDropdown('allFeaturesDropdownStatRate2');
+            clearDropdown('allFeaturesDropdownRealRep');
+            clearDropdown('catFeaturesDropdown');
+            clearDropdown('numFeaturesDropdownFeaRel');
+            clearDropdown('allFeaturesDropdownFeaRel');
+            clearDropdown('numFeaturesDropdownPriv');
+            
+            // Clear text inputs
+            document.getElementsByName('real attributes')[0].value = '';
+            document.getElementsByName('real values')[0].value = '';
+            document.getElementsByName('privacy budget')[0].value = '';
+
+            // Clear summary statistics and histograms
+            $('#summaryStatistics').empty();
+            $('#histogramsContainer').empty();
+
+            // Simulate a page reload including cache clearing
+            location.reload(true); // Pass true to force a reload from the server and not from the cache
         });
+
+        function clearDropdown(dropdownId) {
+            var dropdown = document.getElementById(dropdownId);
+            dropdown.selectedIndex = 0;
+            // Additional logic to clear dynamically added options if needed
+        }
+
         
         function submitForm() {
             var form = document.getElementById('uploadForm');
@@ -342,7 +518,7 @@
                 function isKeyPresentAndDefined(obj, key) {
                     return obj && obj[key] !== undefined;
                 }
-
+                
                 // Check if "Completeness Visualization" key is present
                 if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
                     // Display the chart image
@@ -377,11 +553,25 @@
                     resultContainer.innerHTML += '<img id="corrVis" style="display:none;" src="data:image/png;base64,' + data['Correlations Analysis']['Correlation Matrix'] + '" alt="Correlation Matrix">';
                 }
 
+                
+                if (isKeyPresentAndDefined(data, 'Statistical Rate') && isKeyPresentAndDefined(data['Statistical Rate'], 'class_proportions_plot')) {
+                    // Display the noisy vs normal feature chart image
+                    resultContainer.innerHTML += '<img id="statRateVis" style="display:none;" src="data:image/png;base64,' + data['Statistical Rate']['class_proportions_plot'] + '" alt="Statistical rate bar plot">';
+          
+                }
+                
+                if (isKeyPresentAndDefined(data, 'Top 3 features based on shapley values') && isKeyPresentAndDefined(data['Top 3 features based on shapley values'], 'summary plot')) {
+                    // Display the noisy vs normal feature chart image
+                    resultContainer.innerHTML += '<img id="featureRelVis" style="display:none;" src="data:image/png;base64,' + data['Top 3 features based on shapley values']['summary plot'] + '" alt="Shapley value plot">';
+          
+                }
                 if (isKeyPresentAndDefined(data, 'Privacy preservation statistics') && isKeyPresentAndDefined(data['Privacy preservation statistics'], 'Combined Plots')) {
                     // Display the noisy vs normal feature chart image
                     resultContainer.innerHTML += '<img id="noisyVis" style="display:none;" src="data:image/png;base64,' + data['Privacy preservation statistics']['Combined Plots'] + '" alt="Normal vs Noisy Feature Box Plots">';
           
                 }
+                
+                
 
                 //Display other result information as JSON
                 resultContainer.innerHTML += '<pre id="jsonResult" style="display:none;">' + JSON.stringify(data, null, 2) + '</pre>';
@@ -424,6 +614,11 @@
             comparisonContent.style.display = 'block';
         }
 
+        // Statistical Rate Visualization content if it exists
+        var stateRateVis = document.getElementById('statRateVis');
+        if (stateRateVis) {
+            stateRateVis.style.display = 'block';
+        }
         // Show Correlation Visualization content if it exists
         var corrContent = document.getElementById('corrVis');
         if (corrContent) {
@@ -435,6 +630,12 @@
         if (corrContent) {
             corrContent.style.display = 'block';
         }
+        var featureRelContent = document.getElementById('featureRelVis');
+        if (featureRelContent) {
+            featureRelContent.style.display = 'block';
+        }
+
+        
 
         // ... (Add similar logic for other visualizations)
 

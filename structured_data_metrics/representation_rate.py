@@ -46,7 +46,7 @@ def create_representation_rate_vis(dataframe, columns):
                 x_tick_keys.append(f"{attribute_value}")
 
         # Create a bar chart
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(8, 8))
         values = [value_counts[attribute_value] * 100 for attribute_value in value_counts.index]
 
         # Plot the bar chart
@@ -57,6 +57,7 @@ def create_representation_rate_vis(dataframe, columns):
         plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels by 45 degrees for better readability
 
         plt.subplots_adjust(bottom=0.5, left=0.2)
+        plt.tight_layout()
 
         # Save the chart to a BytesIO object
         img_buf = io.BytesIO()
@@ -65,6 +66,7 @@ def create_representation_rate_vis(dataframe, columns):
 
         # Encode the image as base64
         img_base64 = base64.b64encode(img_buf.read()).decode('utf-8')
+        img_buf.close()
 
         plt.close()  # Close the plot to free up resources
 

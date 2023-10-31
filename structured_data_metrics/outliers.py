@@ -30,7 +30,7 @@ def outliers(file):
         out_dict['Outlier scores'] = proportions_dict
 
         # Create a bar chart for outlier scores
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(8, 8))
         plt.bar(proportions_dict.keys(), proportions_dict.values(), color='red')
         plt.title('Proportion of Outliers for Numerical Columns')
         plt.xlabel('Columns')
@@ -42,6 +42,7 @@ def outliers(file):
 
         # Increase bottom margin
         plt.subplots_adjust(bottom=0.5)
+        plt.tight_layout()
 
         # Save the chart to BytesIO and encode as base64
         img_buf = io.BytesIO()

@@ -26,7 +26,7 @@ def return_noisy_stats(df, add_noise_columns, epsilon):
     num_cols = min(num_columns, max_columns_per_row)
 
     # Create subplots for the box plots
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(5, 5))
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(8, 8))
 
     for i, column in enumerate(add_noise_columns):
         if num_rows == 1 and num_cols == 1:
@@ -56,13 +56,13 @@ def return_noisy_stats(df, add_noise_columns, epsilon):
 
         # Box plot for the normal feature
         current_ax.boxplot(df_drop_na[column], positions=[0], widths=0.6, showfliers=False)
-        current_ax.set_title(f'Box Plot for Normal vs Noisy representations: Feature {column}')
+        current_ax.set_title(f'Normal vs Noisy representations: Feature {column}')
         current_ax.set_ylabel('Value')
 
         # Box plot for the noisy feature
         current_ax.boxplot(noisy_feature, positions=[1], widths=0.6, showfliers=False)
         current_ax.set_ylabel('Value')
-
+    
     # Adjust the spacing between subplots
     plt.tight_layout()
 
@@ -73,6 +73,7 @@ def return_noisy_stats(df, add_noise_columns, epsilon):
 
     # Encode the combined image as base64
     combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode('utf-8')
+    img_buf.close()
 
     try:
         # Create the new directory

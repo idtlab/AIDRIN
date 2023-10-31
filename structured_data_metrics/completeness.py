@@ -17,7 +17,7 @@ def completeness(file):
         result_dict["Completeness scores"] = completeness_scores
 
         # Create a bar chart
-        plt.figure(figsize=(10, 8))
+        plt.figure(figsize=(8, 8))
         plt.bar(completeness_scores.keys(), completeness_scores.values(), color='blue')
         plt.title('Completeness Scores for Each Column')
         plt.xlabel('Columns')
@@ -28,6 +28,7 @@ def completeness(file):
         plt.xticks(rotation=45, ha='right')
 
         plt.subplots_adjust(bottom=0.5)
+        plt.tight_layout()
 
         # Save the chart to a BytesIO object
         img_buf = io.BytesIO()

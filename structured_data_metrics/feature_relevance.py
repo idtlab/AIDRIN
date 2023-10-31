@@ -4,6 +4,9 @@ import shap
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+import io
+import base64
 
 def calc_shapley(df, cat_cols, num_cols, target_col):
     """
@@ -32,6 +35,7 @@ def calc_shapley(df, cat_cols, num_cols, target_col):
         if not set(cat_cols).issubset(df.columns) or not set(num_cols).issubset(df.columns):
             raise ValueError("Specified columns not found in the DataFrame.")
 
+
         # Convert categorical columns to dummy variables
         data = pd.get_dummies(df[cat_cols], drop_first=True)
         data = pd.concat([df[num_cols], data], axis=1)
@@ -57,17 +61,70 @@ def calc_shapley(df, cat_cols, num_cols, target_col):
         # Create an explainer for the model
         explainer = shap.Explainer(model, X_test)
 
-        # Calculate Shapley values for a single instance (e.g., the first test sample)
-        shap_values = explainer.shap_values(X_test.iloc[0])
+        # Convert DataFrame to NumPy array for indexing
+        X_test_np = X_test.values
 
-        # Get feature importance based on mean absolute Shapley values
-        mean_abs_shap_values = np.abs(shap_values).mean(axis=0)
-        top_3_feature_indices = mean_abs_shap_values.argsort()[-3:][::-1]
-        top_3_features = X_test.columns[top_3_feature_indices]
+        # Calculate Shapley values for all instances in the test set
+        shap_values = explainer.shap_values(X_test_np)
 
+        class_names = y_test.columns
+
+       # Calculate the mean absolute Shapley values for each feature across instances
+        mean_shap_values = np.abs(shap_values).mean(axis=(0, 1))  # Assuming shap_values is a 3D array
+
+        # Get feature names
+        feature_names = X_test.columns
+
+        # Sort features by mean absolute Shapley values in descending order
+        sorted_indices = np.argsort(mean_shap_values)[::-1]
+
+        # Plot the bar chart
+        plt.figure(figsize=(8, 8))
+        plt.bar(range(len(mean_shap_values)), mean_shap_values[sorted_indices], align="center")
+        plt.xticks(range(len(mean_shap_values)), feature_names[sorted_indices], rotation=45, ha="right")
+        plt.xlabel("Feature")
+        plt.ylabel("Mean Absolute Shapley Value")
+        plt.title("Feature Importances")
+        plt.tight_layout()  # Adjust layout
+        
+        
+        # Save the plot to a file
+        image_stream = io.BytesIO()
+        plt.savefig(image_stream, format='png')
+        plt.close()
+
+        
+
+        # Convert the image to a base64-encoded string
+        base64_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
+        # Close the BytesIO stream
+        image_stream.close()
+
+        # Convert shap_values to a numpy array
+        shap_values = np.array(shap_values)
+
+        # Get feature names
+        feature_names = X_test.columns.tolist()
+
+        # Create a summary dictionary
+        summary_dict = {}
+
+        # Loop through each class
+        for class_index, class_name in enumerate(class_names):
+            class_shap_values = shap_values[class_index]
+            
+            # Compute the mean of the absolute values of SHAP values for each feature
+            class_summary = {feature: np.mean(np.abs(shap_values[:, feature_index]))
+                            for feature_index, feature in enumerate(feature_names)}
+            
+            # Add the class dictionary to the summary dictionary
+            summary_dict["{} {}".format(target_col,class_name)] = class_summary
+            
         final_dict["RMSE"] = rmse
-        final_dict["Top 3 features"] = top_3_features.to_list()
+        final_dict['Summary of Shapley Values'] = summary_dict
+        final_dict['summary plot'] = base64_image
 
+ 
     except Exception as e:
         final_dict["Error"] = f"An error occurred: {str(e)}"
 

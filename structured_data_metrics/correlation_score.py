@@ -35,18 +35,26 @@ def calc_correlations(df: pd.DataFrame, columns: List[str]) -> Dict:
                     correlation_dict[key] = complete_correlation['corr'].loc[col1, col2]
 
         # Create a correlation matrix heatmap
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(8, 8))
         sns.heatmap(complete_correlation['corr'], annot=True, cmap='coolwarm', fmt='.2f')
         plt.title('Correlation Matrix')
+
+        plt.xticks(rotation=45, fontsize=8)
+        plt.yticks(rotation=0, fontsize=8)
+
+        plt.tight_layout()
         
         # Save the plot to a BytesIO object
         image_stream = BytesIO()
         plt.savefig(image_stream, format='png')
         plt.close()
 
+        
         # Convert the plot to base64
         base64_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
 
+        # Close the BytesIO stream
+        image_stream.close()
 
         return {"Correlation Scores": correlation_dict, "Correlation Matrix":base64_image}
     except Exception as e:
