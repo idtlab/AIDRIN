@@ -37,17 +37,17 @@ def calc_shapley(df, cat_cols, num_cols, target_col):
 
 
         # Convert categorical columns to dummy variables
-        data = pd.get_dummies(df[cat_cols], drop_first=True)
+        data = pd.get_dummies(df[cat_cols], drop_first=False)
         data = pd.concat([df[num_cols], data], axis=1)
 
         # Convert target column to numerical
         target = pd.get_dummies(df[target_col]).astype(float)
 
         data = data.astype(float)
-
+        
         # Split the dataset into train and test sets
         X_train, X_test, y_train, y_test = train_test_split(data, target, test_size=0.2, random_state=0)
-
+        
         # Create a regressor model
         model = RandomForestRegressor(n_estimators=100, random_state=0)
         model.fit(X_train, y_train)
@@ -109,6 +109,7 @@ def calc_shapley(df, cat_cols, num_cols, target_col):
         # Create a summary dictionary
         summary_dict = {}
 
+        
         # Loop through each class
         for class_index, class_name in enumerate(class_names):
             class_shap_values = shap_values[class_index]

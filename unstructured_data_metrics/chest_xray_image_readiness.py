@@ -129,54 +129,53 @@ def detect_and_visualize_artifacts(dicom_data):
 
     # return {"Image with Artifacts":image_with_artifacts_base64, "Description":"Identifies artifact pixels by locating those with intensity values surpassing a user-defined threshold, set as a percentage of the maximum intensity in the image","threshold":threshold}
 
-def gather_image_quality_info(dicom_data):
-    # Read the DICOM file
-    # dicom_data = pydicom.dcmread(dicom_file_path)
+def gather_image_quality_info(ds):
+    # Initialize an empty dictionary to store metadata
+    metadata_dict = {
+        'PatientInformation': {},
+        'StudyInformation': {},
+        'SeriesInformation': {},
+        'ImageInformation': {},
+        'PixelData': {}
+    }
 
-    # Initialize the dictionary to store image quality information
-    image_quality_info = {}
+    try:
 
-    # Function to handle missing values
-    def get_value(tag, default="N/A"):
-        value = dicom_data.get(tag, default)
-        return str(value).strip() if value is not None else default
+        # Patient Information
+        metadata_dict['Patient Information']['Patient Name'] = str(ds.get('PatientName', ''))
+        metadata_dict['Patient Information']['Patient ID'] = str(ds.get('PatientID', ''))
+        metadata_dict['Patient Information']['Patient Birth Date'] = str(ds.get('PatientBirthDate', ''))
+        metadata_dict['Patient Information']['Patient Sex'] = str(ds.get('PatientSex', ''))
 
-    # Gather image quality information
-    image_quality_info['Modality'] = get_value((0x0008, 0x0060))
-    image_quality_info['Manufacturer'] = get_value((0x0008, 0x0070))
+        # Study Information
+        metadata_dict['Study Information']['Study Instance UID'] = str(ds.get('StudyInstanceUID', ''))
+        metadata_dict['Study Information']['Study Date'] = str(ds.get('StudyDate', ''))
+        metadata_dict['Study Information']['Study Time'] = str(ds.get('StudyTime', ''))
+        metadata_dict['Study Information']['Accession Number'] = str(ds.get('AccessionNumber', ''))
+        metadata_dict['Study Information']['Body Part Examined'] = ds.get('BodyPartExamined​', [])
 
-    image_quality_info['Row Dimension'] = get_value((0x0028, 0x0010))
-    image_quality_info['Column Dimension'] = get_value((0x0028, 0x0011))
-    image_quality_info['Bits Allocated'] = get_value((0x0028, 0x0100))
-    image_quality_info['Bits Stored'] = get_value((0x0028, 0x0101))
-    image_quality_info['Pixel Representation'] = get_value((0x0028, 0x0103))
+        # Series Information
+        metadata_dict['Series Information']['Series Instance UID'] = str(ds.get('SeriesInstanceUID', ''))
+        metadata_dict['Series Information']['Modality'] = str(ds.get('Modality', ''))
+        metadata_dict['Series Information']['Series Description'] = str(ds.get('SeriesDescription', ''))
 
-    image_quality_info['Pixel Spacing'] = get_value((0x0028, 0x0030))
+        # Image Information
+        metadata_dict['Image Information']['Image Type'] = ds.get('ImageType', [])
+        metadata_dict['Image Information']['Instance Number'] = str(ds.get('InstanceNumber', ''))
+        metadata_dict['Image Information']['Image Position'] = ds.get('ImagePositionPatient', [])
+        metadata_dict['Image Information']['Image Orientation'] = ds.get('ImageOrientationPatient', [])
+        metadata_dict['Image Information']['Pixel Spacing'] = ds.get('PixelSpacing', [])
+        metadata_dict['Image Information']['View Position'] = ds.get('ViewPosition', [])
+        metadata_dict['Image Information']['Photometric Interpretation'] = ds.get('PhotometricInterpretation', [])
+        
 
-    image_quality_info['Window Center'] = get_value((0x0028, 0x1050))
-    image_quality_info['Window Width'] = get_value((0x0028, 0x1051))
-    image_quality_info['Rescale Intercept'] = get_value((0x0028, 0x1052))
-    image_quality_info['Rescale Slope'] = get_value((0x0028, 0x1053))
+        # Pixel Data
+        metadata_dict['Pixel Data']['Bits Allocated'] = int(ds.get('BitsAllocated', 0))
+        metadata_dict['Pixel Data']['Bits Stored'] = int(ds.get('BitsStored', 0))
+        metadata_dict['Pixel Data']['High Bit'] = int(ds.get('HighBit', 0))
+        metadata_dict['Pixel Data']['Pixel Representation'] = int(ds.get('PixelRepresentation', 0))
 
-    image_quality_info['Patient Position'] = get_value((0x0018, 0x5100))
+    except Exception as e:
+        print(f"Error processing DICOM file: {e}")
 
-    image_quality_info['Exposure Time'] = get_value((0x0018, 0x1150))
-    image_quality_info['X-Ray Tube Current'] = get_value((0x0018, 0x1151))
-    image_quality_info['Exposure In uAs'] = get_value((0x0018, 0x1152))
-
-    image_quality_info['Contrast Bolus Agent'] = get_value((0x0018, 0x0010))
-    image_quality_info['Contrast Bolus Start Time'] = get_value((0x0018, 0x1042))
-
-    image_quality_info['Image Orientation Patient'] = get_value((0x0020, 0x0037))
-
-    image_quality_info['Slice Thickness'] = get_value((0x0018, 0x0050))
-    image_quality_info['Spacing Between Slices'] = get_value((0x0018, 0x0088))
-
-    image_quality_info['Study Description'] = get_value((0x0008, 0x1030))
-    image_quality_info['Study Date'] = get_value((0x0008, 0x0020))
-    image_quality_info['Study Time'] = get_value((0x0008, 0x0030))
-
-    for key, value in image_quality_info.items():
-        image_quality_info[key] = re.sub(r' {3,}', ' ', value)
-
-    return image_quality_info
+    return metadata_dict

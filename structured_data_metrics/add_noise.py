@@ -51,7 +51,7 @@ def return_noisy_stats(df, add_noise_columns, epsilon):
         stat_dict[f"Variance of feature {column}(before noise)"] = variance_norm
         stat_dict[f"Mean of feature {column}(after noise)"] = mean_noisy
         stat_dict[f"Variance of feature {column}(after noise)"] = variance_noisy
-        stat_dict['Description'] = "Random Laplacian noise added to the provided numerical feature to generate privacy-preserving data with differential privacy guarantees."
+        stat_dict['Description'] = "The numerical features have been augmented with privacy-preserving measures through the addition of random Laplacian noise. This intentional introduction of noise ensures differential privacy guarantees. The accompanying box plots visually compare the distributions of the original and privacy-enhanced data"
         df_drop_na[f'noisy_{column}'] = noisy_feature
 
         # Box plot for the normal feature

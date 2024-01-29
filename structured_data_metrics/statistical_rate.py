@@ -36,7 +36,7 @@ def calculate_statistical_rates(dataframe, y_true_column, sensitive_attribute_co
         unique_class_labels = sorted(dataframe_cleaned[y_true_column].unique())
 
         # Set up the plot
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(8, 8))
 
         # Iterate through each unique class label
         for i, class_label in enumerate(unique_class_labels):
@@ -44,19 +44,17 @@ def calculate_statistical_rates(dataframe, y_true_column, sensitive_attribute_co
             proportions = [class_proportions[sensitive_value].get(class_label, 0) for sensitive_value in unique_sensitive_values]
             
             # Plot the bars for each sensitive attribute value
-            bar_width = 0.2
+            bar_width = 0.1
             bar_positions = np.arange(len(unique_sensitive_values)) + i * bar_width
             ax.bar(bar_positions, proportions, width=bar_width, label=f'Class: {class_label}')
 
         # Set up labels and title
-        plt.figure(figsize=(8,8))
         ax.set_xticks(np.arange(len(unique_sensitive_values)) + (len(unique_class_labels) - 1) * bar_width / 2)
         ax.set_xticklabels(unique_sensitive_values, rotation=30, ha="right", fontsize=8)  # Adjust fontsize and rotation
         ax.set_xlabel('Sensitive Attribute')
         ax.set_ylabel('Proportion')
         ax.set_title('Class Proportions for Each Sensitive Attribute')
         ax.legend()
-        plt.tight_layout()
 
         # Adjust the bottom margin to avoid xticks being cropped
         plt.subplots_adjust(bottom=0.25)

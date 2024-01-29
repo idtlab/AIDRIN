@@ -76,8 +76,6 @@
             text-align: center;
         }
 
-        input,
-        select,
         button {
             width: 100%;
             padding: 10px;
@@ -149,6 +147,10 @@
                 margin-bottom: 10px; /* Optional: Add margin between buttons */
             }
         }
+        .checkboxContainer {
+            display: none;
+            
+        }
 
     </style>
 </head>
@@ -161,93 +163,227 @@
         <div id="summaryStatistics"></div>
         <div class="plot-container" id="histogramsContainer"></div>
 
-        <h3>Data Quality Metrics</h3>
-        <input type="checkbox" name="completeness" value="yes"> Check completeness<br>
-        <input type="checkbox" name="outliers" value="yes"> Check outliers<br>
-        <input type="checkbox" name="duplicity" value="yes"> Check duplicity<br>
+        <strong id="toggleButton_quality" onclick="toggleCheckboxes('checkboxContainer_quality','quality')"> + </strong>
+        <strong>Data Quality Metrics</strong> <br>
+        <div id="checkboxContainer_quality" class="checkboxContainer"><br>
+            <div style="margin-left: 40px;">
+                <input type="checkbox" name="completeness" value="yes"> Check completeness
+                <input type="checkbox" name="outliers" value="yes" style="margin-left: 40px;"> Check outliers
+                <input type="checkbox" name="duplicity" value="yes" style="margin-left: 40px;"> Check duplicity
+            </div>
+             
+        </div>
+        <br>
 
-        <h3>Fairness Metrics</h3>
-        <input type="checkbox" name="representation rate" value="yes"> Check representation rate<br>
-        <label for="features for representation rate">Sensitive feature to measure representation rate:</label>
-        <select name="features for representation rate" id = "allFeaturesDropdownRepRate" required>
-            <option value="" disabled selected>Select a feature</option>
-            <!-- Options will be added dynamically using JavaScript -->
-        </select><br>
+        <strong id="toggleButton_fairness" onclick="toggleCheckboxes('checkboxContainer_fairness','fairness')"> + </strong>
+        <strong>Fairness Metrics</strong> <br>
+        <div id="checkboxContainer_fairness" class="checkboxContainer"><br>
+            <input style="margin-left: 40px;" type="checkbox" name="representation rate" value="yes"> Check representation rate<br>
+
+            <ul>
+                <li style="margin-left: 40px;" >
+                    <label for="features for representation rate">Sensitive feature:</label>
+                    <select name="features for representation rate" id = "allFeaturesDropdownRepRate" required>
+                        <option value="" disabled selected>Select a feature</option>
+                        <!-- Options will be added dynamically using JavaScript -->
+                    </select>
+            
+                </li>
+            </ul>
+
+            
+            <input style="margin-left: 40px;" type="checkbox" name="statistical rate" value="yes"> Check statistical rate<br>
+            <ul>
+                <li style="margin-left: 40px;">
+                    <label for="features for statistical rate">Feature:</label>
+                    <select name="features for statistical rate" id = "allFeaturesDropdownStatRate1" required>
+                        <option value="" disabled selected>Select a feature</option>
+                    </select>
+                </li>
+                <li style="margin-left: 40px;">
+                    <label for="target for statistical rate">Target:</label>
+                    <select name="target for statistical rate" id = "allFeaturesDropdownStatRate2" required>
+                        <option value="" disabled selected>Select a feature</option>
+                    </select><br>
+                </li>
+                
+            </ul>
+            
+            <!-- <input style="margin-left: 40px;" type="checkbox" name="real representation rate" value="yes"> Check real world representation rate<br> -->
+            
+            <!-- <ul>
+                <li style="margin-left: 40px;">
+                    <label for="real column">Sensitive Feature:</label>
+                    <select name="real column" id = "allFeaturesDropdownRealRep" required>
+                        <option value="" disabled selected>Select a feature</option>
+                    </select><br>
+                </li>
+
+                <li style="margin-left: 40px;">
+                    <label for="real attributes">Sensitive groups:</label>
+                    <input type="text" name="real attributes">
+                </li>
+
+                <li style="margin-left: 40px;">
+                    <label for="real values">Values of Sensitive groups:</label>
+                    <input type="text" name="real values"><br>
+                </li>
+            </ul> -->
+
+            
+            
+            
+            
+            <!-- <input style="margin-left: 40px;" type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br> -->
+        </div>        
         <br>
-        <input type="checkbox" name="statistical rate" value="yes"> Check statistical rate<br>
-        <label for="features for statistical rate">Features for statistical rate:</label>
-        <select name="features for statistical rate" id = "allFeaturesDropdownStatRate1" required>
-            <option value="" disabled selected>Select a feature</option>
-            <!-- Options will be added dynamically using JavaScript -->
-        </select>
-        <label for="target for statistical rate">Target for statistical rate:</label>
-        <select name="target for statistical rate" id = "allFeaturesDropdownStatRate2" required>
-            <option value="" disabled selected>Select a feature</option>
-            <!-- Options will be added dynamically using JavaScript -->
-        </select><br>
+
+        <strong id="toggleButton_correlation" onclick="toggleCheckboxes('checkboxContainer_correlation','correlation')"> + </strong>
+        <strong>Correlation Analysis</strong> <br>
+        <div id="checkboxContainer_correlation" class="checkboxContainer"><br>
+            <input style="margin-left: 40px;" type="checkbox" name="correlations" value="yes"> Perform Correlation Analysis<br>
+
+            <ul>
+                <li style="margin-left: 40px;">
+                    <label for="correlationColumns">Features:</label>
+                    <!-- Checkboxes for correlations -->
+                    <div style="margin-left: 40px;" id="correlationCheckboxContainer"></div>
+                </li>
+            </ul>
+           
+        </div>
         <br>
-        <input type="checkbox" name="real representation rate" value="yes"> Check real representation rate<br>
-        <label for="real column">Real Column:</label>
-        <select name="real column" id = "allFeaturesDropdownRealRep" required>
-            <option value="" disabled selected>Select a feature</option>
-            <!-- Options will be added dynamically using JavaScript -->
-        </select><br>
-        <label for="real attributes">Real attributes:</label>
-        <input type="text" name="real attributes">
-        <label for="real values">Real values:</label>
-        <input type="text" name="real values"><br>
-        <br>
+
+        <strong id="toggleButton_featureRelevance" onclick="toggleCheckboxes('checkboxContainer_featureRelevance','featureRelevance')"> + </strong>
+        <strong>Feature Relevance</strong> <br>
+        <div id="checkboxContainer_featureRelevance" class="checkboxContainer"><br>
+
+            <input style="margin-left: 40px;" type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy(Shapley)<br>
+
+            <ul>
+                <li style="margin-left: 40px;">
+                    <label  for="categorical features for feature relevancy">Categorical features:</label>
+                    <div id ="catFeaturesCheckbox1"></div><br>
+                </li>
+
+                <li style="margin-left: 40px;">
+                    <label  for="numerical features for feature relevancy">Numerical features:</label>
+                    <div  id ="numFeaturesCheckbox1"></div><br>
+                </li>
+
+                <li style="margin-left: 40px;">
+                    <label  for="target for feature relevance">Target feature:</label>
+                    <select name="target for feature relevance" id = "allFeaturesDropdownFeaRel"required>
+                        <option value="" disabled selected>Select a feature</option>
+                        <!-- Options will be added dynamically using JavaScript -->
+                    </select><br>
+                </li>
+            </ul>
         
-        <input type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br>
+                    
+        </div>
+        <br>      
 
-        <h3>Correlation Analysis</h3>
-        <input type="checkbox" name="correlations" value="yes"> Perform Correlation Analysis<br>
-        <label for="correlationColumns">Choose the columns for correlation analysis:</label>
-        <!-- Checkboxes for correlations -->
-        <div id="correlationCheckboxContainer"></div>
+        <strong id="toggleButton_classImbalance" onclick="toggleCheckboxes('checkboxContainer_classImbalance','classImbalance')"> + </strong>
+        <strong>Class Imbalance</strong> <br>
+        <div id="checkboxContainer_classImbalance" class="checkboxContainer"><br>
+        <input style="margin-left: 40px;" type="checkbox" name="class imbalance" value="yes">Evaluate imbalance degree<br>
+        <ul>
+            <li  style="margin-left: 40px;">
+                <label for="class imbalance">Target: </label>
+                <select name="class feature" id="allFeaturesDropdownClIm" required>
+                    <option value ="" disabled selected>Select a feature</option>
+                </select><br>
+            </li>
+        </ul>
+            
+        </div>
         <br>
 
-        <h3>Feature Relevance</h3>
-        <input type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy(Shapley)<br>
         
-        <label for="categorical features for feature relevancy">Categorical features to measure feature relevancy:</label>
-        <select id="catFeaturesDropdown" name="categorical features for feature relevancy">
-            <option value="" disabled selected>Select a feature</option>
-            <!-- Options will be added dynamically using JavaScript -->
-        </select>
-        <br>
+        
+        <strong id="toggleButton_privacy" onclick="toggleCheckboxes('checkboxContainer_privacy','privacy')"> + </strong>
+        <strong>Privacy Preservation</strong> <br>
+        <div id="checkboxContainer_privacy" class="checkboxContainer"><br> 
+            <input style="margin-left: 40px;" type="checkbox" name="differential privacy" value="yes"> Differential privacy by adding laplacian noise:<br>
+            <ul>
+                <li  style="margin-left: 40px;" >
+                    <label for="numerical features to add noise">Numerical features to add noise:</label>
+                    <div id ="numFeaturesCheckbox2"></div>
+                </li>
 
-        <label for="numerical features for feature relevancy">Numerical features to measure feature relevancy:</label>
-        <select id="numFeaturesDropdownFeaRel" name="numerical features for feature relevancy">
-            <option value="" disabled selected>Select a feature</option>
-            <!-- Options will be added dynamically using JavaScript -->
-        </select>
-        <br>
-        <label for="target for feature relevance">Target feature to measure feature relevancy:</label>
-        <select name="target for feature relevance" id = "allFeaturesDropdownFeaRel" required>
-            <option value="" disabled selected>Select a feature</option>
-            <!-- Options will be added dynamically using JavaScript -->
-        </select><br>
+                <li  style="margin-left: 40px;" >
+                    <label for="privacy budget">Privacy budget (epsilon):</label>
+                    <input type="text" name="privacy budget">
+                </li>
+            </ul>
+            
+            
+            <input style="margin-left: 40px;" type="checkbox" name="single attribute risk score" value="yes"> Evaluate single attribute risks:<br>
+            
+            <ul>
+                <li  style="margin-left: 40px;" >
+                    <label for="id feature to measure single attribute risk score">ID feature: </label>
+                    <select name="id feature to measure single attribute risk score" id="allFeaturesDropdownMMS" required>
+                        <option value ="" disabled selected>Select a feature</option>
+            </select><br>
+                </li>
 
-        <h3>Privacy Preservation</h3>
-        <input type="checkbox" name="privacy preservation" value="yes"> Check privacy preservation<br>
-        <label for="numerical features to add noise">Numerical features to add noise:</label>
-        <select name="numerical features to add noise" id = "numFeaturesDropdownPriv" required>
-            <option value="" disabled selected>Select a feature</option>
-            <!-- Options will be added dynamically using JavaScript -->
-        </select><br>
-        <label for="privacy budget">Privacy budget (epsilon):</label>
-        <input type="text" name="privacy budget"><br>
+                <li  style="margin-left: 40px;" >
+                    <label for="privacy budget">Privacy budget (epsilon):</label>
+                    <input type="text" name="privacy budget">
+                </li>
+
+                <li style="margin-left: 40px;">
+                    <label  for="quasi identifiers to measure single attribute risk score">Quasi identifiers: </label>
+                    <div id ="catFeaturesCheckbox2"></div><br>
+                </li>
+            </ul>
+            
+            
+            
+
+            <input style="margin-left: 40px;" type="checkbox" name="multiple attribute risk score" value="yes"> Evaluate multiple attribute risks:<br>
+            
+            <ul>
+                <li style="margin-left: 40px;">
+                    <label for="id feature to measure multiple attribute risk score">ID feature</label>
+                    <select name="id feature to measure multiple attribute risk score" id="allFeaturesDropdownMMM" required>
+                        <option value ="" disabled selected>Select a feature</option>
+                    </select><br>
+                </li>
+
+                <li style="margin-left: 40px;">
+                    <label for="quasi identifiers to measure multiple attribute risk score">Quasi identifiers: </label>
+                    <div  id ="catFeaturesCheckbox3"></div><br>
+                </li>
+            </ul>
+            
+            
+            
+        </div>
+        <br>        
+
+        <strong id="toggleButton_FAIRness" onclick="toggleCheckboxes('checkboxContainer_FAIRness','FAIRness')"> + </strong>
+        <strong>FAIRness Evaluation</strong> <br>
+        <div id="checkboxContainer_FAIRness" class="checkboxContainer"><br>
+            <input style="margin-left: 40px;" type="checkbox" name="unknown" value="yes"> Check FAIRness scores<br>
+
+        </div> <br>
+
+
+
         <div id = "formbuttonsContainer">
             <button type="button" onclick="submitForm()">Submit</button>
     
             <!-- Reset button with event listener -->
-            <input type="reset" value="Reset" id="resetButton">
+            <button type="reset" value="Reset" id="resetButton" style="background-color: red;">Reset</button>
         </div>
+        
         
         <div id="buttonsContainer" style="display:none;">
             <button type="button" id="visualizationBtn" onclick="showVisualization()">Show Visualization</button>
-            <button type="button" id="jsonBtn" onclick="showJSON()">Show JSON</button>
+            <button type="button" id="jsonBtn" onclick="showResults()">Show Results</button>
             <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
         </div>
         
@@ -283,19 +419,28 @@
                             // Check if either categorical or numerical features exist in the response
                             if ('categorical_features' in response) {
                                 createDropdown(response.categorical_features, 'catFeaturesDropdown');
+                                createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox1','categorical features for feature relevancy')
+                                createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
+                                createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox3','quasi identifiers to measure multiple attribute risk score')
+
                             }
 
                             if ('numerical_features' in response) {
                                 createDropdown(response.numerical_features, 'numFeaturesDropdownFeaRel');
                                 createDropdown(response.numerical_features, 'numFeaturesDropdownPriv');
+                                createCheckboxContainer(response.numerical_features,'numFeaturesCheckbox1','numerical features for feature relevancy')
+                                createCheckboxContainer(response.numerical_features,'numFeaturesCheckbox2',"numerical features to add noise")
                             }
 
                             if ('all_features' in response){
                                 createDropdown(response.all_features,'allFeaturesDropdownRepRate');
                                 createDropdown(response.all_features,'allFeaturesDropdownStatRate1');
                                 createDropdown(response.all_features,'allFeaturesDropdownStatRate2');
-                                createDropdown(response.all_features,'allFeaturesDropdownRealRep')
-                                createDropdown(response.all_features,'allFeaturesDropdownFeaRel')
+                                createDropdown(response.all_features,'allFeaturesDropdownRealRep');
+                                createDropdown(response.all_features,'allFeaturesDropdownFeaRel');
+                                createDropdown(response.all_features,'allFeaturesDropdownClIm');
+                                createDropdown(response.all_features,'allFeaturesDropdownMMS');
+                                createDropdown(response.all_features,'allFeaturesDropdownMMM');
                             }
 
                         } else {
@@ -318,6 +463,33 @@
                 // Populate the dropdown with options from the response
                 for (var i = 0; i < features.length; i++) {
                     dropdown.append($('<option>').text(features[i]));
+                }
+            }
+            function createCheckboxContainer(features, tableId, nameTag) {
+               
+                var table = $('#' + tableId);
+                table.empty(); // Clear previous content
+
+                var columns = 4; // Maximum number of columns
+
+                for (var i = 0; i < features.length; i++) {
+                    if (i % columns === 0) {
+                        var row = $('<tr>');
+                        table.append(row);
+                    }
+
+                    var checkbox = $('<input>').attr({
+                        type: 'checkbox',
+                        id: 'checkbox_' + i, // You may want to generate unique IDs
+                        name: nameTag, // Set the name attribute
+                        value: features[i]
+                    });
+
+                    var label = $('<label>').attr('for', 'checkbox_' + i).text(features[i]);
+
+                    var cell = $('<td>').append(checkbox).append(label);
+
+                    row.append(cell);
                 }
             }
         });
@@ -457,27 +629,27 @@
         });
 
         document.getElementById('resetButton').addEventListener('click', function() {
-            // Clear form fields
-            document.getElementById('uploadForm').reset();
+            // // Clear form fields
+            // document.getElementById('uploadForm').reset();
 
-            // Clear dropdowns
-            clearDropdown('allFeaturesDropdownRepRate');
-            clearDropdown('allFeaturesDropdownStatRate1');
-            clearDropdown('allFeaturesDropdownStatRate2');
-            clearDropdown('allFeaturesDropdownRealRep');
-            clearDropdown('catFeaturesDropdown');
-            clearDropdown('numFeaturesDropdownFeaRel');
-            clearDropdown('allFeaturesDropdownFeaRel');
-            clearDropdown('numFeaturesDropdownPriv');
+            // // Clear dropdowns
+            // clearDropdown('allFeaturesDropdownRepRate');
+            // clearDropdown('allFeaturesDropdownStatRate1');
+            // clearDropdown('allFeaturesDropdownStatRate2');
+            // clearDropdown('allFeaturesDropdownRealRep');
+            // clearDropdown('catFeaturesDropdown');
+            // clearDropdown('numFeaturesDropdownFeaRel');
+            // clearDropdown('allFeaturesDropdownFeaRel');
+            // clearDropdown('numFeaturesDropdownPriv');
             
-            // Clear text inputs
-            document.getElementsByName('real attributes')[0].value = '';
-            document.getElementsByName('real values')[0].value = '';
-            document.getElementsByName('privacy budget')[0].value = '';
+            // // Clear text inputs
+            // document.getElementsByName('real attributes')[0].value = '';
+            // document.getElementsByName('real values')[0].value = '';
+            // document.getElementsByName('privacy budget')[0].value = '';
 
-            // Clear summary statistics and histograms
-            $('#summaryStatistics').empty();
-            $('#histogramsContainer').empty();
+            // // Clear summary statistics and histograms
+            // $('#summaryStatistics').empty();
+            // $('#histogramsContainer').empty();
 
             // Simulate a page reload including cache clearing
             location.reload(true); // Pass true to force a reload from the server and not from the cache
@@ -496,9 +668,17 @@
 
             // Get the values of the checkboxes and concatenate them with a comma
             var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
+            var quasicheckboxValuesS = Array.from(formData.getAll('quasi identifiers to measure single attribute risk score')).join(',');
+            var quasicheckboxValuesM = Array.from(formData.getAll('quasi identifiers to measure multiple attribute risk score')).join(',');
+            var numFeaCheckboxValues = Array.from(formData.getAll('numerical features for feature relevancy')).join(',');
+            var catFeaCheckboxValues = Array.from(formData.getAll('categorical features for feature relevancy')).join(',');
 
             // Add the concatenated checkbox values to the form data
             formData.set('correlation columns', checkboxValues);
+            formData.set("quasi identifiers to measure single attribute risk score",quasicheckboxValuesS)
+            formData.set("quasi identifiers to measure multiple attribute risk score",quasicheckboxValuesM)
+            formData.set("numerical features for feature relevancy",numFeaCheckboxValues)
+            formData.set("categorical features for feature relevancy",catFeaCheckboxValues)
 
             for (var pair of formData.entries()) {
                 console.log(pair[0] + ': ' + pair[1]);
@@ -521,22 +701,39 @@
                 
                 // Check if "Completeness Visualization" key is present
                 if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
-                    // Display the chart image
-                    resultContainer.innerHTML += '<img id="complVis" style="display:none;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">';
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="complVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">' +
+                        '<div style="margin-left: 10px;">' +data['Completeness']['Description'] + '</div>' +
+                        '</div>';
                 }
 
                 // Check if "Outliers Visualization" key is present
                 if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
-                    // Display the chart image
-                    resultContainer.innerHTML += '<img id="outVis" style="display:none;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">';
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="outVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">' +
+                        '<div style="margin-left: 10px;">' +data['Outliers']['Description'] + '</div>' +
+                        '</div>';
                 }
 
                 if (
                     isKeyPresentAndDefined(data, 'Representation Rate') &&
                     isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Chart')
                 ) {
-                    // Display the chart image
-                    resultContainer.innerHTML += '<img id="repVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">';
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="repVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">' +
+                        '<div style="margin-left: 10px;">' +data['Representation Rate']['Description'] + '</div>' +
+                        '</div>';
+                }
+
+                if (isKeyPresentAndDefined(data, 'Statistical Rate') && isKeyPresentAndDefined(data['Statistical Rate'], 'class_proportions_plot')) {
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="statRateVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Statistical Rate']['class_proportions_plot'] + '" alt="Statistical rate bar plot">' +
+                        '<div style="margin-left: 10px;">' +data['Statistical Rate']['Description'] + '</div>' +
+                        '</div>';
                 }
 
                 // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
@@ -544,37 +741,79 @@
                     isKeyPresentAndDefined(data, 'Representation Rate Comparison with Real World') &&
                     isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
                 ) {
-                    // Display the chart image
-                    resultContainer.innerHTML += '<img id="compVis" style="display:none;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">';
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="compVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">' +
+                        '<div style="margin-left: 10px;">' +data['Representation Rate Comparison with Real World']['Description'] + '</div>' +
+                        '</div>';
                 }
 
                 if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Correlation Matrix')) {
-                    // Display the correlations chart image
-                    resultContainer.innerHTML += '<img id="corrVis" style="display:none;" src="data:image/png;base64,' + data['Correlations Analysis']['Correlation Matrix'] + '" alt="Correlation Matrix">';
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="corrVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Correlation Matrix'] + '" alt="Correlation Matrix">' +
+                        '<div style="margin-left: 10px;">' +data['Correlations Analysis']['Description'] + '</div>' +
+                        '</div>';
+                    
                 }
 
-                
-                if (isKeyPresentAndDefined(data, 'Statistical Rate') && isKeyPresentAndDefined(data['Statistical Rate'], 'class_proportions_plot')) {
-                    // Display the noisy vs normal feature chart image
-                    resultContainer.innerHTML += '<img id="statRateVis" style="display:none;" src="data:image/png;base64,' + data['Statistical Rate']['class_proportions_plot'] + '" alt="Statistical rate bar plot">';
-          
+                if (isKeyPresentAndDefined(data, 'Feature relevance') && isKeyPresentAndDefined(data['Feature relevance'], 'summary plot')) {                    
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="featureRelVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Feature relevance']['summary plot'] + '" alt="Shapley value plot">' +
+                        '<div style="margin-left: 10px;">' +data['Feature relevance']['Description'] + '</div>' +
+                        '</div>';
+                }
+                if (isKeyPresentAndDefined(data, 'Class imbalance') && isKeyPresentAndDefined(data['Class imbalance'], 'Class distribution plot')) {                    
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="classDisVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Class imbalance']['Class distribution plot'] + '" alt="Class distribution plot">' +
+                        '<div style="margin-left: 10px;">' +data['Class imbalance']['Description'] + '</div>' +
+                        '</div>';
                 }
                 
-                if (isKeyPresentAndDefined(data, 'Top 3 features based on shapley values') && isKeyPresentAndDefined(data['Top 3 features based on shapley values'], 'summary plot')) {
-                    // Display the noisy vs normal feature chart image
-                    resultContainer.innerHTML += '<img id="featureRelVis" style="display:none;" src="data:image/png;base64,' + data['Top 3 features based on shapley values']['summary plot'] + '" alt="Shapley value plot">';
-          
+                if (isKeyPresentAndDefined(data, 'DP statistics') && isKeyPresentAndDefined(data['DP statistics'], 'Combined Plots')) {
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="noisyVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['DP statistics']['Combined Plots'] + '" alt="Normal vs Noisy Feature Box Plots">' +
+                        '<div style="margin-left: 10px;">' +data['DP statistics']['Description'] + '</div>' +
+                        '</div>';
                 }
-                if (isKeyPresentAndDefined(data, 'Privacy preservation statistics') && isKeyPresentAndDefined(data['Privacy preservation statistics'], 'Combined Plots')) {
-                    // Display the noisy vs normal feature chart image
-                    resultContainer.innerHTML += '<img id="noisyVis" style="display:none;" src="data:image/png;base64,' + data['Privacy preservation statistics']['Combined Plots'] + '" alt="Normal vs Noisy Feature Box Plots">';
-          
+
+                if (isKeyPresentAndDefined(data, 'Single attribute risk scoring') && isKeyPresentAndDefined(data['Single attribute risk scoring'], 'BoxPlot')) {
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="singleRiskVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Single attribute risk scoring']['BoxPlot'] + '" alt="Single attribute risk score box plots">'+
+                        '<div style="margin-left: 10px;">' +data['Single attribute risk scoring']['Description'] + '</div>' +
+                        '</div>' 
+                        
                 }
+                if (isKeyPresentAndDefined(data, 'Multiple attribute risk scoring') && isKeyPresentAndDefined(data['Multiple attribute risk scoring'], 'Box Plot')) {
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="multipleRiskVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Multiple attribute risk scoring']['Box Plot'] + '" alt="Multiple attribute risk score box plots">'+
+                        '<div style="margin-left: 10px;">' +data['Multiple attribute risk scoring']['Description'] + '</div>' +
+                        '</div>' 
+                        
+                }
+                
                 
                 
 
                 //Display other result information as JSON
-                resultContainer.innerHTML += '<pre id="jsonResult" style="display:none;">' + JSON.stringify(data, null, 2) + '</pre>';
+                if (data['Duplicity'] && data['Duplicity']['Duplicity scores'] && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] !== undefined) {
+                    resultContainer.innerHTML += '<div id="duplicityScoreResult" style="display:none"> <h3> Duplicity Scores </h3>'+ 
+                        '<pre> Overall Duplicity: ' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>' +
+                        '</div>';
+                }
+
+                if (data['Class imbalance'] && data['Class imbalance']['Imbalance degree'] && data['Class imbalance']['Imbalance degree']['Imbalance degree score'] !== undefined) {
+                    resultContainer.innerHTML += '<div id="imbalanceScoreResult" style="display:none"> <h3> Class Imbalance Scores </h3>'+ 
+                        '<pre> Imbalance degree: ' + data['Class imbalance']['Imbalance degree']['Imbalance degree score'] + '</pre>' +
+                        '</div>';
+                }
+
+                // resultContainer.innerHTML += '<pre id="scoreResult" style="display:none;">' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>';
                 
                 // Show the result container after the response is generated
                 resultContainer.style.display = 'block';
@@ -592,47 +831,232 @@
     function showVisualization() {
         // Show Completeness Visualization content if it exists
         var completenessContent = document.getElementById('complVis');
+
         if (completenessContent) {
-            completenessContent.style.display = 'block';
+            completenessContent.style.display = 'flex';
+            completenessContent.style.alignItems = 'center';
+            completenessContent.style.border = '1px solid #ddd'; // Add a border
+            completenessContent.style.borderRadius = '8px'; // Add rounded corners
+            completenessContent.style.padding = '10px'; // Add some padding
+            completenessContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            completenessContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            completenessContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            completenessContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            completenessContent.querySelector('div').style.color = '#333'; // Set text color
+            completenessContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            completenessContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
 
         // Show Outliers Visualization content if it exists
         var outliersContent = document.getElementById('outVis');
         if (outliersContent) {
-            outliersContent.style.display = 'block';
+            outliersContent.style.display = 'flex';
+            outliersContent.style.alignItems = 'center';
+            outliersContent.style.border = '1px solid #ddd'; // Add a border
+            outliersContent.style.borderRadius = '8px'; // Add rounded corners
+            outliersContent.style.padding = '10px'; // Add some padding
+            outliersContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            outliersContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            outliersContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            outliersContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            outliersContent.querySelector('div').style.color = '#333'; // Set text color
+            outliersContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            outliersContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
 
         // Show Representation Rate Visualization content if it exists
         var representationRateContent = document.getElementById('repVis');
         if (representationRateContent) {
-            representationRateContent.style.display = 'block';
+            representationRateContent.style.display = 'flex';
+            representationRateContent.style.alignItems = 'center';
+            representationRateContent.style.border = '1px solid #ddd'; // Add a border
+            representationRateContent.style.borderRadius = '8px'; // Add rounded corners
+            representationRateContent.style.padding = '10px'; // Add some padding
+            representationRateContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            representationRateContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            representationRateContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            representationRateContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            representationRateContent.querySelector('div').style.color = '#333'; // Set text color
+            representationRateContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            representationRateContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
 
         // Show Comparison Visualization content if it exists
         var comparisonContent = document.getElementById('compVis');
         if (comparisonContent) {
-            comparisonContent.style.display = 'block';
+            comparisonContent.style.display = 'flex';
+            comparisonContent.style.alignItems = 'center';
+            comparisonContent.style.border = '1px solid #ddd'; // Add a border
+            comparisonContent.style.borderRadius = '8px'; // Add rounded corners
+            comparisonContent.style.padding = '10px'; // Add some padding
+            comparisonContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            comparisonContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            comparisonContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            comparisonContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            comparisonContent.querySelector('div').style.color = '#333'; // Set text color
+            comparisonContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            comparisonContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
 
         // Statistical Rate Visualization content if it exists
         var stateRateVis = document.getElementById('statRateVis');
         if (stateRateVis) {
-            stateRateVis.style.display = 'block';
+            stateRateVis.style.display = 'flex';
+            stateRateVis.style.alignItems = 'center';
+            stateRateVis.style.border = '1px solid #ddd'; // Add a border
+            stateRateVis.style.borderRadius = '8px'; // Add rounded corners
+            stateRateVis.style.padding = '10px'; // Add some padding
+            stateRateVis.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            stateRateVis.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            stateRateVis.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            stateRateVis.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            stateRateVis.querySelector('div').style.color = '#333'; // Set text color
+            stateRateVis.querySelector('div').style.fontSize = '20px'; // Set font size
+            stateRateVis.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
         // Show Correlation Visualization content if it exists
         var corrContent = document.getElementById('corrVis');
         if (corrContent) {
-            corrContent.style.display = 'block';
+            corrContent.style.display = 'flex';
+            corrContent.style.alignItems = 'center';
+            corrContent.style.border = '1px solid #ddd'; // Add a border
+            corrContent.style.borderRadius = '8px'; // Add rounded corners
+            corrContent.style.padding = '10px'; // Add some padding
+            corrContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            corrContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            corrContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            corrContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            corrContent.querySelector('div').style.color = '#333'; // Set text color
+            corrContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            corrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
+        }
+
+        
+        var featureRelContent = document.getElementById('featureRelVis');
+        if (featureRelContent) {
+            featureRelContent.style.display = 'flex';
+            featureRelContent.style.alignItems = 'center';
+            featureRelContent.style.border = '1px solid #ddd'; // Add a border
+            featureRelContent.style.borderRadius = '8px'; // Add rounded corners
+            featureRelContent.style.padding = '10px'; // Add some padding
+            featureRelContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            featureRelContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            featureRelContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            featureRelContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            featureRelContent.querySelector('div').style.color = '#333'; // Set text color
+            featureRelContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            featureRelContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
+        }
+
+        var classImbalanceContent = document.getElementById('classDisVis');
+        if (classImbalanceContent) {
+            classImbalanceContent.style.display = 'flex';
+            classImbalanceContent.style.alignItems = 'center';
+            classImbalanceContent.style.border = '1px solid #ddd'; // Add a border
+            classImbalanceContent.style.borderRadius = '8px'; // Add rounded corners
+            classImbalanceContent.style.padding = '10px'; // Add some padding
+            classImbalanceContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            classImbalanceContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            classImbalanceContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            classImbalanceContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            classImbalanceContent.querySelector('div').style.color = '#333'; // Set text color
+            classImbalanceContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            classImbalanceContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
 
         // Show Normal vs Noisy Feature Visualization content if it exists
-        var corrContent = document.getElementById('noisyVis');
-        if (corrContent) {
-            corrContent.style.display = 'block';
+        var noisyContent = document.getElementById('noisyVis');
+        if (noisyContent) {
+            noisyContent.style.display = 'flex';
+            noisyContent.style.alignItems = 'center';
+            noisyContent.style.border = '1px solid #ddd'; // Add a border
+            noisyContent.style.borderRadius = '8px'; // Add rounded corners
+            noisyContent.style.padding = '10px'; // Add some padding
+            noisyContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            noisyContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            noisyContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            noisyContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            noisyContent.querySelector('div').style.color = '#333'; // Set text color
+            noisyContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            noisyContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
-        var featureRelContent = document.getElementById('featureRelVis');
-        if (featureRelContent) {
-            featureRelContent.style.display = 'block';
+
+         // Show single attribute risk scores
+         var singleRiskContent = document.getElementById('singleRiskVis');
+        if (singleRiskContent) {
+            singleRiskContent.style.display = 'flex';
+            singleRiskContent.style.alignItems = 'center';
+            singleRiskContent.style.border = '1px solid #ddd'; // Add a border
+            singleRiskContent.style.borderRadius = '8px'; // Add rounded corners
+            singleRiskContent.style.padding = '10px'; // Add some padding
+            singleRiskContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            singleRiskContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            singleRiskContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            singleRiskContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            singleRiskContent.querySelector('div').style.color = '#333'; // Set text color
+            singleRiskContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            singleRiskContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
+        }
+
+        // Show multiple attribute risk scores
+        var multipleRiskContent = document.getElementById('multipleRiskVis');
+        if (multipleRiskContent) {
+            multipleRiskContent.style.display = 'flex';
+            multipleRiskContent.style.alignItems = 'center';
+            multipleRiskContent.style.border = '1px solid #ddd'; // Add a border
+            multipleRiskContent.style.borderRadius = '8px'; // Add rounded corners
+            multipleRiskContent.style.padding = '10px'; // Add some padding
+            multipleRiskContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            multipleRiskContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            multipleRiskContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            multipleRiskContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            multipleRiskContent.querySelector('div').style.color = '#333'; // Set text color
+            multipleRiskContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            multipleRiskContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
 
         
@@ -640,9 +1064,9 @@
         // ... (Add similar logic for other visualizations)
 
         // Hide JSON content
-        var jsonResultContainer = document.getElementById('jsonResult');
-        if (jsonResultContainer) {
-            jsonResultContainer.style.display = 'none';
+        var scoreResult = document.getElementById('scoreResult');
+        if (scoreResult) {
+            scoreResult.style.display = 'none';
         }
     }
 
@@ -672,11 +1096,48 @@
         document.body.removeChild(link);
     }
 
-    function showJSON() {
+    function showResults() {
         // Show Completeness Visualization content if it exists
-        var jsonResult = document.getElementById('jsonResult');
-        if (jsonResult) {
-            jsonResult.style.display = 'block';
+        var duplicityScoreResult = document.getElementById('duplicityScoreResult');
+        if (duplicityScoreResult) {
+            duplicityScoreResult.style.display = 'block';
+        }
+        var imbalanceScoreResult = document.getElementById('imbalanceScoreResult');
+        if (imbalanceScoreResult) {
+            imbalanceScoreResult.style.display = 'block';
+        }
+    }
+    function toggleCheckboxes(sectionId, sectionTag) {
+        var checkboxContainer = document.getElementById(sectionId);
+        var toggleButton = document.getElementById("toggleButton_" + sectionTag);
+
+        // Check if the button exists, if not, create it
+        if (!toggleButton) {
+            toggleButton = document.createElement("button");
+            toggleButton.id = "toggleButton_" + sectionTag;
+            toggleButton.innerText = "+";
+            toggleButton.style.cursor = "pointer";
+            toggleButton.addEventListener("click", function() {
+                toggleCheckboxContainer(checkboxContainer, toggleButton); // Pass toggleButton as an argument
+            });
+            // Append the button to the container
+            checkboxContainer.parentNode.insertBefore(toggleButton, checkboxContainer);
+        }
+
+        toggleCheckboxContainer(checkboxContainer, toggleButton); // Pass toggleButton as an argument
+    }
+
+    function toggleCheckboxContainer(checkboxContainer, toggleButton) {
+        var isExpanded = checkboxContainer.style.display === "block";
+
+        if (isExpanded) {
+            checkboxContainer.style.display = "none";
+            toggleButton.innerText = "+";
+            toggleButton.style.cursor = "pointer";
+        } else {
+            checkboxContainer.style.display = "block";
+            toggleButton.innerText = "-";
+            toggleButton.style.cursor = "pointer";
         }
     }
 </script>

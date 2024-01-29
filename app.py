@@ -11,7 +11,9 @@ from structured_data_metrics.feature_relevance import calc_shapley
 from structured_data_metrics.FAIRness_dcat import categorize_metadata,extract_keys_and_values
 from structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from structured_data_metrics.add_noise import return_noisy_stats
-
+from structured_data_metrics.class_imbalance import calc_imbalance_degree,class_distribution_plot
+from structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores
+ 
 from unstructured_data_metrics.chest_xray_image_readiness import *
 
 import pandas as pd
@@ -144,7 +146,7 @@ def upload_csv():
                 if request.form.get('completeness') == "yes":
                     
                     compl_dict = completeness(file)
-                    compl_dict['Description'] = 'These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness.'
+                    compl_dict['Description'] = 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness.'
                     final_dict['Completeness'] = compl_dict
                 #Outliers    
                 if request.form.get('outliers') == 'yes':
@@ -170,7 +172,7 @@ def upload_csv():
                     y_true = request.form.get('target for statistical rate')
                     sensitive_attribute_column = request.form.get('features for statistical rate')
                     sr_dict = calculate_statistical_rates(file,y_true,sensitive_attribute_column)
-                    sr_dict['Description'] = 'Represent probability ratios that quantify the likelihood of an association between specific categories within a sensitive feature and a target variable, where smaller values indicate a lower likelihood, and higher values indicate a higher likelihood of association'
+                    sr_dict['Description'] = 'The graph illustrates the statistical rates of various classes across different sensitive attributes. Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds to a class, with the height indicating the proportion of that sensitive attribute within that particular class'
                     final_dict["Statistical Rate"] = sr_dict
 
                 if request.form.get('real representation rate') == 'yes':
@@ -184,13 +186,13 @@ def upload_csv():
 
                 if request.form.get('compare real to dataset') == 'yes':
                     comp_dict = compare_rep_rates(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
-                    comp_dict["Description"] = "These scores indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness"
+                    comp_dict["Description"] = "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
                     final_dict['Representation Rate Comparison with Real World'] = comp_dict
 
                 if request.form.get('correlations') == 'yes':
-                    columns = request.form.get('correlation columns').split(",")
+                    columns = request.form.get('correlation columns').replace("\r\n", "").split(",")
                     corr_dict = calc_correlations(file,columns)
-                    corr_dict['Description'] = "Categorical correlations are assessed using Theil's U statistic, while numerical feature correlations are determined using Pearson correlation. The resulting values fall within the range of 0 to 1, with a value of 1 indicating a strong correlation with the target variable"
+                    corr_dict['Description'] = "Categorical correlations are assessed using Theil's U statistic, while numerical feature correlations are determined using Pearson correlation. The resulting values fall within the range of 0 to 1, with a value of 1 indicating a strong correlation between the variables"
                     final_dict['Correlations Analysis'] = corr_dict
 
                 if request.form.get("feature relevancy") == "yes":
@@ -198,14 +200,36 @@ def upload_csv():
                     num_cols = request.form.get("numerical features for feature relevancy").split(",")
                     target = request.form.get("target for feature relevance")
                     f_dict =  calc_shapley(file,cat_cols,num_cols,target)
-                    f_dict['Description'] = "The top 3 dataset features are identified through Shapley values computed with a Random Forest classifier. Additionally, categorical features have been one-hot encoded, which might lead to certain feature names appearing in this encoded representation."
-                    final_dict['Top 3 features based on shapley values'] = f_dict
+                    f_dict['Description'] = "Feature valuations are identified through Shapley values computed with a Random Forest classifier. In this analysis, categorical features have been one-hot encoded, which might lead to certain feature names appearing in this encoded representation."
+                    final_dict['Feature relevance'] = f_dict
+
+                #class imbalance
+                if request.form.get("class imbalance") == "yes":
+                    ci_dict = {}
+                    classes = request.form.get("class feature")
+                    ci_dict['Class distribution plot'] = class_distribution_plot(file,classes)
+                    ci_dict['Description'] = "Each class is represented by a bar, and the height of the bar corresponds to the percentage of instances belonging to that class"
+                    ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric="EU")#By default the distance metric is euclidean distance
+                    final_dict['Class imbalance'] = ci_dict
+                    
                 #differential privacy
-                if request.form.get("privacy preservation") == "yes":
+                if request.form.get("differential privacy") == "yes":
                     feature_to_add_noise = request.form.get("numerical features to add noise").split(",")
                     epsilon = request.form.get("privacy budget")
                     noisy_stat = return_noisy_stats(file,feature_to_add_noise,float(epsilon))
-                    final_dict['Privacy preservation statistics'] = noisy_stat
+                    final_dict['DP statistics'] = noisy_stat
+                
+                #single attribute risk scores using markov model
+                if request.form.get("single attribute risk score") == "yes":
+                    id_feature = request.form.get("id feature to measure single attribute risk score")
+                    eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
+                    final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
+                
+                #multpiple attribute risk score using markov model
+                if request.form.get("multiple attribute risk score") == "yes":
+                    id_feature = request.form.get("id feature to measure multiple attribute risk score")
+                    eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
+                    final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
                 
                 formated_final_dict = format_dict_values(final_dict)
                 
@@ -298,4 +322,4 @@ def med_img_readiness():
     return render_template('medical_image.html')
                         
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True,port=5001)

@@ -45,7 +45,7 @@ def compare_rep_rates(rep_dict, rrr_dict):
     percentages1 = [(v1 / total) * 100 for v1, total in zip(real_values, totals)]
     percentages2 = [(v2 / total) * 100 for v2, total in zip(dataset_values, totals)]
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(8, 8))
     plt.subplots_adjust(left=0.2)
 
     # Create an array for the y-axis positions
@@ -72,6 +72,7 @@ def compare_rep_rates(rep_dict, rrr_dict):
     ax.set_ylabel('Categories')
     ax.set_title('Real World vs Dataset Representation Rates')
     ax.legend()
+    plt.tight_layout()
 
 
     # Save the chart to BytesIO and encode as base64

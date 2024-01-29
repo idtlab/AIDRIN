@@ -33,6 +33,10 @@ def calculate_representation_rate(dataframe, columns):
         return {"Error": f"Error calculating representation rate: {str(e)}"}
 
 
+import io
+import base64
+import matplotlib.pyplot as plt
+
 def create_representation_rate_vis(dataframe, columns):
     x_tick_keys = []
     try:
@@ -41,35 +45,39 @@ def create_representation_rate_vis(dataframe, columns):
             total_count = len(column_series)
             value_counts = column_series.value_counts(normalize=True)
 
-            for attribute_value in value_counts.index:
-                proportion = value_counts[attribute_value] * 100  # Calculate the proportion as a percentage
+            # Calculate cumulative proportions
+            cum_proportions = value_counts.sort_index().cumsum()
+
+            for attribute_value in cum_proportions.index:
+                proportion = cum_proportions[attribute_value] * 100  # Calculate the cumulative proportion as a percentage
                 x_tick_keys.append(f"{attribute_value}")
 
-        # Create a bar chart
-        plt.figure(figsize=(8, 8))
-        values = [value_counts[attribute_value] * 100 for attribute_value in value_counts.index]
+            # Create a bar chart for cumulative proportions
+            plt.figure(figsize=(8, 8))
+            values = [cum_proportions[attribute_value] * 100 for attribute_value in cum_proportions.index]
 
-        # Plot the bar chart
-        plt.bar(x_tick_keys, values, color='blue')
-        plt.title('Proportion of Attribute Values Against Total')
-        plt.xlabel('Attribute Values')
-        plt.ylabel('Proportion (%)')
-        plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels by 45 degrees for better readability
+            # Plot the bar chart
+            plt.bar(x_tick_keys, values, color='blue')
+            plt.title('Cumulative Proportion of Attribute Values')
+            plt.xlabel('Attribute Values')
+            plt.ylabel('Cumulative Proportion (%)')
+            plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels by 45 degrees for better readability
 
-        plt.subplots_adjust(bottom=0.5, left=0.2)
-        plt.tight_layout()
+            plt.subplots_adjust(bottom=0.5, left=0.2)
+            plt.tight_layout()
 
-        # Save the chart to a BytesIO object
-        img_buf = io.BytesIO()
-        plt.savefig(img_buf, format='png')
-        img_buf.seek(0)
+            # Save the chart to a BytesIO object
+            img_buf = io.BytesIO()
+            plt.savefig(img_buf, format='png')
+            img_buf.seek(0)
 
-        # Encode the image as base64
-        img_base64 = base64.b64encode(img_buf.read()).decode('utf-8')
-        img_buf.close()
+            # Encode the image as base64
+            img_base64 = base64.b64encode(img_buf.read()).decode('utf-8')
+            img_buf.close()
 
-        plt.close()  # Close the plot to free up resources
+            plt.close()  # Close the plot to free up resources
 
-        return img_base64
+            return img_base64
     except Exception as e:
         return {"Error": f"Error calculating representation rate: {str(e)}"}
+

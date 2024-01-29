@@ -107,7 +107,7 @@ def categorize_metadata(metadata_dict,original_metadata):
         "Accessible": accessible,
         "Interoperable": interoperable,
         "Reusable": reusable,
-        "FAIRness Score": {"Findablity Checks":"{}/{}".format(round(find_c,2),round(find_tot_checks,2)),"Accesseiblity Checks":"{}/{}".format(round(acc_c,2),round(acc_tot_checks,2)),"Interoperability Checks":"{}/{}".format(round(inter_c,2),round(inter_tot_checks,2)),"Reusability Checks":"{}/{}".format(round(reu_c,2),round(reu_tot_checks,2)),"Total Checks":find_c+acc_c+inter_c+reu_c},
+        "FAIRness Score": {"Findablity Checks":"{}/{}".format(round(find_c,2),round(find_tot_checks,2)),"Accesseiblity Checks":"{}/{}".format(round(acc_c,2),round(acc_tot_checks,2)),"Interoperability Checks":"{}/{}".format(round(inter_c,2),round(inter_tot_checks,2)),"Reusability Checks":"{}/{}".format(round(reu_c,2),round(reu_tot_checks,2)),"Total Checks":"{}/{}".format(round((find_c+acc_c+inter_c+reu_c),2),format(round((find_tot_checks+acc_tot_checks+reu_tot_checks+inter_tot_checks),2)))},
         "Other": other,  # All other keys
         "Original Metadata":original_metadata
     }
