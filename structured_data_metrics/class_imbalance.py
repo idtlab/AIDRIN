@@ -116,35 +116,29 @@ def imbalance_degree(classes, distance="EU"):
     dist_ed = dfn(empirical_distribution, e)
     return 0.0 if dist_ed == 00 else (dist_ed / dfn(i_m, e)) + (m - 1)
 
-def class_distribution_plot(df,column):
+def class_distribution_plot(df, column):
     plot_res = {}
     try:
         # Get unique class labels
         class_labels = df[column].dropna().unique()
 
-        # Calculate total count for normalization
-        total_count = len(df[column].dropna())
+        # Calculate class frequencies
+        class_counts = df[column].dropna().value_counts()
 
         # Set the figure size
         plt.figure(figsize=(8, 8))
 
-        # Plotting a grouped bar plot for each class
-        for label in class_labels:
-            class_data = df[df[column] == label][column].dropna()
+        # Plotting a pie chart for each class
+        patches, texts = plt.pie(class_counts, startangle=90)
 
-            # Calculate class frequencies as percentages
-            class_count = len(class_data)
-            class_percentage = class_count / total_count * 100
+ 
 
-            plt.bar(label, class_percentage, alpha=0.7, label=f'{label} ({class_count})')
+        # Add percentages to the legend
+        legend_labels = [f'{label} - {percentage:.1f}%' for label, percentage in zip(class_labels, class_counts / class_counts.sum() * 100)]
+        plt.legend(legend_labels, loc="upper right")
 
-        plt.title(f'Distribution of Each Class in {column} (Percentage)')
-        plt.xlabel(f'{column} Values')
-        plt.ylabel('Frequency (%)')
-        plt.legend()
-        plt.grid(axis='y', linestyle='--', alpha=0.7)
-        plt.xticks(rotation=30,fontsize = 8)
-        
+        plt.title(f'Distribution of Each Class in {column}')
+        plt.axis('equal')
 
         # Save the plot to a BytesIO buffer
         buf = io.BytesIO()
@@ -158,9 +152,7 @@ def class_distribution_plot(df,column):
         plt.close()
         buf.close()
 
-        
         return plot_base64
-
 
     except Exception as e:
         # Handle errors and store the error message in the result

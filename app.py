@@ -7,7 +7,7 @@ from structured_data_metrics.statistical_rate import calculate_statistical_rates
 from structured_data_metrics.real_repreentation_rate import calculate_real_representation_rates
 from structured_data_metrics.compare_representation_rate import compare_rep_rates
 from structured_data_metrics.correlation_score import calc_correlations
-from structured_data_metrics.feature_relevance import calc_shapley
+from structured_data_metrics.feature_relevance import generate_combined_plot_to_base64
 from structured_data_metrics.FAIRness_dcat import categorize_metadata,extract_keys_and_values
 from structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from structured_data_metrics.add_noise import return_noisy_stats
@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import os
 import json
 import pydicom
+import time
 
 app = Flask(__name__)
 
@@ -129,6 +130,9 @@ def handle_summary_statistics():
 @app.route('/upload_file', methods=['POST','GET'])
 def upload_csv():
 
+    start_time = time.time()
+
+
     try: 
         if request.method == 'GET':
             # Render the form for a GET request
@@ -199,8 +203,8 @@ def upload_csv():
                     cat_cols = request.form.get("categorical features for feature relevancy").split(",")
                     num_cols = request.form.get("numerical features for feature relevancy").split(",")
                     target = request.form.get("target for feature relevance")
-                    f_dict =  calc_shapley(file,cat_cols,num_cols,target)
-                    f_dict['Description'] = "Feature valuations are identified through Shapley values computed with a Random Forest classifier. In this analysis, categorical features have been one-hot encoded, which might lead to certain feature names appearing in this encoded representation."
+                    f_dict =  generate_combined_plot_to_base64(file,cat_cols,num_cols,target)
+                    f_dict['Description'] = "For numerical target columns, scatter plots and box plots are generated to visually explore the relationship between numerical features and the target. For categorical target columns, count plots provide insights into the distribution of categorical features across different target categories. Additionally, a chi-squared test for independence is performed for each categorical feature against the target, yielding p-values that quantify the statistical significance of the association. Lower p-values indicate stronger evidence that a categorical feature is relevant for predicting the target."
                     final_dict['Feature relevance'] = f_dict
 
                 #class imbalance
@@ -232,6 +236,12 @@ def upload_csv():
                     final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
                 
                 formated_final_dict = format_dict_values(final_dict)
+
+                end_time = time.time()
+
+                execution_time = end_time - start_time
+                print(f"Execution time: {execution_time} seconds")
+
                 
                 return jsonify(formated_final_dict)
 
@@ -322,4 +332,6 @@ def med_img_readiness():
     return render_template('medical_image.html')
                         
 if __name__ == '__main__':
-    app.run(debug=True,port=5001)
+    app.run(debug=True)
+    
+    

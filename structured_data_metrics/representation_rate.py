@@ -32,7 +32,6 @@ def calculate_representation_rate(dataframe, columns):
     except Exception as e:
         return {"Error": f"Error calculating representation rate: {str(e)}"}
 
-
 import io
 import base64
 import matplotlib.pyplot as plt
@@ -48,22 +47,18 @@ def create_representation_rate_vis(dataframe, columns):
             # Calculate cumulative proportions
             cum_proportions = value_counts.sort_index().cumsum()
 
-            for attribute_value in cum_proportions.index:
-                proportion = cum_proportions[attribute_value] * 100  # Calculate the cumulative proportion as a percentage
-                x_tick_keys.append(f"{attribute_value}")
-
-            # Create a bar chart for cumulative proportions
+            # Create a pie chart for cumulative proportions
             plt.figure(figsize=(8, 8))
             values = [cum_proportions[attribute_value] * 100 for attribute_value in cum_proportions.index]
 
-            # Plot the bar chart
-            plt.bar(x_tick_keys, values, color='blue')
+            # Plot the pie chart
+            plt.pie(values, labels=cum_proportions.index, autopct='%1.1f%%', startangle=140)
             plt.title('Cumulative Proportion of Attribute Values')
-            plt.xlabel('Attribute Values')
-            plt.ylabel('Cumulative Proportion (%)')
-            plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels by 45 degrees for better readability
+            
+            # Add a legend
+            plt.legend(loc='upper right', bbox_to_anchor=(1, 1))
 
-            plt.subplots_adjust(bottom=0.5, left=0.2)
+            plt.subplots_adjust(left=0.2)
             plt.tight_layout()
 
             # Save the chart to a BytesIO object
@@ -80,4 +75,5 @@ def create_representation_rate_vis(dataframe, columns):
             return img_base64
     except Exception as e:
         return {"Error": f"Error calculating representation rate: {str(e)}"}
+
 

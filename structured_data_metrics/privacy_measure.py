@@ -168,14 +168,14 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
                 risk_scores[j] = worst_case_MM_risk_score
 
         # calculate the entire dataset privacy level
-        min_risk_scores = np.zeros(len(res_dict['Risk Scores']))
+        min_risk_scores = np.zeros(len(risk_scores))
         # Calculate the Euclidean distance
         euclidean_distance = np.linalg.norm(risk_scores - min_risk_scores)
         
         max_risk_scores = np.ones(len(risk_scores))
 
         #max euclidean distance
-        max_euclidean_distance = np.linalg.norm(max_risk_scores - zero_risk_scores)
+        max_euclidean_distance = np.linalg.norm(max_risk_scores - min_risk_scores)
         normalized_distance = euclidean_distance/max_euclidean_distance
                 
         #descriptive statistics

@@ -8,11 +8,12 @@ def completeness(file):
     completeness_scores = (1 - file.isnull().mean()).to_dict()
 
     # Calculate overall completeness metric for the dataset
+
     overall_completeness = file.isnull().any(axis=1).mean()
 
     result_dict = {}
 
-    if overall_completeness:
+    if overall_completeness != 0:
         # Add completeness scores to the dictionary
         result_dict["Completeness scores"] = completeness_scores
 
@@ -45,6 +46,8 @@ def completeness(file):
 
         # Add overall completeness to the dictionary
         result_dict['Overall Completeness'] = overall_completeness
+    elif overall_completeness == 0:
+        result_dict["Overall Completeness of Dataset"] = 1
     else:
         result_dict["Overall Completeness of Dataset"] = "Error"
 

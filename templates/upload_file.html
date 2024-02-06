@@ -258,7 +258,7 @@
         <strong>Feature Relevance</strong> <br>
         <div id="checkboxContainer_featureRelevance" class="checkboxContainer"><br>
 
-            <input style="margin-left: 40px;" type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy(Shapley)<br>
+            <input style="margin-left: 40px;" type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy against target<br>
 
             <ul>
                 <li style="margin-left: 40px;">
@@ -367,7 +367,7 @@
         <strong id="toggleButton_FAIRness" onclick="toggleCheckboxes('checkboxContainer_FAIRness','FAIRness')"> + </strong>
         <strong>FAIRness Evaluation</strong> <br>
         <div id="checkboxContainer_FAIRness" class="checkboxContainer"><br>
-            <input style="margin-left: 40px;" type="checkbox" name="unknown" value="yes"> Check FAIRness scores<br>
+            <button type="button" onclick="window.location.href='/FAIRness'">Check FAIRness scores</button><br>
 
         </div> <br>
 
@@ -748,10 +748,19 @@
                         '</div>';
                 }
 
-                if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Correlation Matrix')) {
+                if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Categorical-Categorical Correlation Matrix')) {
                     // Display the chart image and description in a single div
-                    resultContainer.innerHTML += '<div id="corrVis" style="display:none; text-align: left;">' +
-                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Correlation Matrix'] + '" alt="Correlation Matrix">' +
+                    resultContainer.innerHTML += '<div id="catCorrVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Categorical-Categorical Correlation Matrix'] + '" alt="Categorical-Categorical Correlation Matrix">' +
+                        '<div style="margin-left: 10px;">' +data['Correlations Analysis']['Description'] + '</div>' +
+                        '</div>';
+                    
+                }
+
+                if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Numerical-Numerical Correlation Matrix')) {
+                    // Display the chart image and description in a single div
+                    resultContainer.innerHTML += '<div id="numCorrVis" style="display:none; text-align: left;">' +
+                        '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Numerical-Numerical Correlation Matrix'] + '" alt="Numerical-Numerical Correlation Matrix">' +
                         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['Description'] + '</div>' +
                         '</div>';
                     
@@ -935,24 +944,44 @@
             stateRateVis.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
         // Show Correlation Visualization content if it exists
-        var corrContent = document.getElementById('corrVis');
-        if (corrContent) {
-            corrContent.style.display = 'flex';
-            corrContent.style.alignItems = 'center';
-            corrContent.style.border = '1px solid #ddd'; // Add a border
-            corrContent.style.borderRadius = '8px'; // Add rounded corners
-            corrContent.style.padding = '10px'; // Add some padding
-            corrContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+        var catCorrContent = document.getElementById('catCorrVis');
+        if (catCorrContent) {
+            catCorrContent.style.display = 'flex';
+            catCorrContent.style.alignItems = 'center';
+            catCorrContent.style.border = '1px solid #ddd'; // Add a border
+            catCorrContent.style.borderRadius = '8px'; // Add rounded corners
+            catCorrContent.style.padding = '10px'; // Add some padding
+            catCorrContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
 
             // Styles for the image
-            corrContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-            corrContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+            catCorrContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            catCorrContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
 
             // Styles for the description
-            corrContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-            corrContent.querySelector('div').style.color = '#333'; // Set text color
-            corrContent.querySelector('div').style.fontSize = '20px'; // Set font size
-            corrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
+            catCorrContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            catCorrContent.querySelector('div').style.color = '#333'; // Set text color
+            catCorrContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            catCorrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
+        }
+
+        var numCorrContent = document.getElementById('numCorrVis');
+        if (numCorrContent) {
+            numCorrContent.style.display = 'flex';
+            numCorrContent.style.alignItems = 'center';
+            numCorrContent.style.border = '1px solid #ddd'; // Add a border
+            numCorrContent.style.borderRadius = '8px'; // Add rounded corners
+            numCorrContent.style.padding = '10px'; // Add some padding
+            numCorrContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
+
+            // Styles for the image
+            numCorrContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
+            numCorrContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
+
+            // Styles for the description
+            numCorrContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
+            numCorrContent.querySelector('div').style.color = '#333'; // Set text color
+            numCorrContent.querySelector('div').style.fontSize = '20px'; // Set font size
+            numCorrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
         }
 
         
