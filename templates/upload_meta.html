@@ -6,13 +6,41 @@
     <title>Upload JSON File</title>
     <style>
         body {
-            font-family: "Arial", sans-serif;
+            font-family: Arial, sans-serif;
+        }
+        #uploadForm {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        #uploadForm label {
+            display: block;
+            margin-bottom: 8px;
+        }
+        #uploadForm input,
+        #uploadForm select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+        #uploadForm button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        #uploadForm button:hover {
+            background-color: #45a049;
         }
     </style>
 </head>
 <body>
-    <h1>Upload Metadata File(JSON)</h1>
+    
     <form id="uploadForm" method="post" enctype="multipart/form-data">
+        <h1>Upload Metadata File(JSON)</h1>
         <input type="file" name="metadata" accept=".json" required>
 
         <label for="metadata type">Select the metadata type:</label>
@@ -21,7 +49,61 @@
             <option value="Datacite">Datacite</option>
             <!-- Add more options as needed -->
         </select>
+        <div style="display: flex;">
         <button type="button" onclick="submitForm()">Submit</button>
+        <button type="reset" style="background-color: red;" onclick="resetPage()">Reset</button>
+        </div>
+    </form>
+
+    <div id="resultContainer"></div>
+
+    <script>
+        function submitForm() {
+            var form = document.getElementById('uploadForm');
+            var formData = new FormData(form);
+
+            fetch('/FAIRness', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                var resultContainer = document.getElementById('resultContainer');
+
+                // Check if there is an image data
+                if (data && data["Pie chart"]) {
+                    var imageContainer = document.createElement('div');
+                    imageContainer.innerHTML = '<img src="data:image/png;base64,' + data["Pie chart"] + '" alt="Pie Chart">';
+                    resultContainer.appendChild(imageContainer);
+                }
+
+                resultContainer.innerHTML += displayKeyValuePairs(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        function getLightColor(key) {
+            switch (key) {
+                case 'Findable':
+                    return '#ADD8E6';  // Light blue
+                case 'Accessible':
+                    return '#98FB98';  // Pale green
+                case 'Interoperable':
+                    return '#FFD700';  // Gold
+                case 'Reusable':
+                    return '#FFA07A';  // Light salmon
+                case 'FAIR Compliance Checks':
+                    return '#DDA0DD';  // Plum
+                case 'Original Metadata':
+                    return '#87CEFA';  // Light sky blue
+                case 'Other':
+                    return '#FFC0CB';  // Pink
+                // Add more cases for other keys as needed
+            }
+        }
+    </script>
     </form>
 
     <div id="resultContainer"></div>
@@ -142,6 +224,10 @@
             });
 
             return result;
+        }
+
+        function resetPage() {
+            location.reload();
         }
     </script>
 </body>
