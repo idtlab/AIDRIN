@@ -1,0 +1,142 @@
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 20px;
+    background-color: #f4f4f4;
+}
+
+form {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    max-width: 2000px; /* Increase the max-width as needed */
+    width: 100%;
+    box-sizing: border-box;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+#fileInput {
+    margin-bottom: 20px;
+}
+
+#summaryStatistics {
+    margin-top: 20px;
+    max-width: 100%;
+    overflow: auto; /* Change to 'auto' for scrolling */
+}
+
+#summaryStatistics h3 {
+    text-align: center;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+th {
+    background-color: #f2f2f2;
+}
+
+#Statresult {
+    margin-bottom: 10px;
+}
+
+strong {
+    color: #333;
+}
+
+span {
+    color: #666;
+}
+
+.plot-container {
+    margin-top: 20px;
+    text-align: center;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+input[type="checkbox"] {
+    width: auto;
+}
+
+button {
+    background-color: #4caf50;
+    color: #fff;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+input[type="reset"] {
+    background-color: #f44336;
+    color: #fff;
+    cursor: pointer;
+}
+
+input[type="reset"]:hover {
+    background-color: #d32f2f;
+}
+
+
+
+#formbuttonsContainer {
+    display: flex;
+    justify-content: space-between;
+}
+
+button,
+input[type="reset"] {
+    width: 48%; /* Set the width for each button */
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+#buttonsContainer {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px; /* Optional: Add margin between buttons and other elements */
+}
+
+#buttonsContainer button {
+    width: 30%; /* Set the width for each button */
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+    #buttonsContainer {
+        flex-direction: column; /* Stack buttons vertically on smaller screens */
+        align-items: center;
+    }
+
+    #buttonsContainer button {
+        width: 100%; /* Full width for buttons on smaller screens */
+        margin-bottom: 10px; /* Optional: Add margin between buttons */
+    }
+}
+.checkboxContainer {
+    display: none;
+    
+}

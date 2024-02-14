@@ -254,6 +254,7 @@ def upload_csv():
     
 @app.route('/FAIRness', methods=['GET', 'POST'])
 def FAIRness():
+    start_tiime = time.time()
     try:
         if request.method == 'POST':
             # Check if the 'metadata' field exists in the form data
@@ -290,6 +291,8 @@ def FAIRness():
             else:
                 return jsonify({"error": "Invalid file format. Please upload a JSON file."}), 400
         else:
+            end_time = time.time()
+            print(f"Execution time: {end_time - start_tiime} seconds")
             # Render the form for a GET request
             return render_template('upload_meta.html')
 

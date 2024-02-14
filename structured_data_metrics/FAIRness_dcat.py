@@ -51,8 +51,6 @@ def categorize_metadata(metadata_dict,original_metadata):
             categorized = True
         elif key.startswith("keyword"):
             if find_iter > 0:
-                find_tot_checks += keyword_weight
-                find_c+=keyword_weight
                 findable[key] = value
                 categorized = True
             else:
@@ -107,7 +105,7 @@ def categorize_metadata(metadata_dict,original_metadata):
         "Accessible": accessible,
         "Interoperable": interoperable,
         "Reusable": reusable,
-        "FAIRness Score": {"Findablity Checks":"{}/{}".format(round(find_c,2),round(find_tot_checks,2)),"Accesseiblity Checks":"{}/{}".format(round(acc_c,2),round(acc_tot_checks,2)),"Interoperability Checks":"{}/{}".format(round(inter_c,2),round(inter_tot_checks,2)),"Reusability Checks":"{}/{}".format(round(reu_c,2),round(reu_tot_checks,2)),"Total Checks":"{}/{}".format(round((find_c+acc_c+inter_c+reu_c),2),format(round((find_tot_checks+acc_tot_checks+reu_tot_checks+inter_tot_checks),2)))},
+        "FAIR Compliance Checks": {"Findablity Checks":"{}/{}".format(round(find_c,2),round(find_tot_checks,2)),"Accesseiblity Checks":"{}/{}".format(round(acc_c,2),round(acc_tot_checks,2)),"Interoperability Checks":"{}/{}".format(round(inter_c,2),round(inter_tot_checks,2)),"Reusability Checks":"{}/{}".format(round(reu_c,2),round(reu_tot_checks,2)),"Total Checks":"{}/{}".format(round((find_c+acc_c+inter_c+reu_c),2),format(round((find_tot_checks+acc_tot_checks+reu_tot_checks+inter_tot_checks),2)))},
         "Other": other,  # All other keys
         "Original Metadata":original_metadata
     }
@@ -115,27 +113,44 @@ def categorize_metadata(metadata_dict,original_metadata):
     #create the pie chart
     # Extract FAIRness Score data
     fairness_score = categorized_metadata.get("FAIRness Score", {})
-    labels = ['Findability Checks','Accessibility Checks',"Interoperability Checks","Reusability Checks"]
-    sizes = [find_c,acc_c,inter_c,reu_c]
+    labels = ['Findability Checks', 'Accessibility Checks', 'Interoperability Checks', 'Reusability Checks']
+    sizes = [find_c, acc_c, inter_c, reu_c]
 
+    # Plot Pie Chart
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 4), gridspec_kw={'width_ratios': [3, 3], 'wspace': 0.8})  # 1 row, 2 columns
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(10,4))
-    ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
     
+    ax1.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
+    ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
 
-    plt.title("FAIRness Score")
+    # Plot Horizontal Bar Chart for Percentage of Completed Checks
+    categories = ["Findability", "Accessibility", "Interoperability", "Reusability"]
+    percentages = [find_c / find_tot_checks * 100,
+                acc_c / acc_tot_checks * 100,
+                inter_c / inter_tot_checks * 100,
+                reu_c / reu_tot_checks * 100]
+
+    bars = ax2.barh(categories, percentages, color='skyblue')
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['bottom'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    ax2.set_xticks([])  # Remove x tick values
+
+    # Display the percentage values on the bars
+    for bar in bars:
+        plt.text(bar.get_width(), bar.get_y() + bar.get_height()/2, f'{bar.get_width():.2f}%', va='center')
 
     # Save the plot to a BytesIO object
-    image_stream = io.BytesIO()
-    plt.savefig(image_stream, format='png')
+    image_stream_combined = io.BytesIO()
+    plt.savefig(image_stream_combined, format='png')
     plt.close()
 
     # Encode the BytesIO content as base64
-    encoded_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
+    encoded_image_combined = base64.b64encode(image_stream_combined.getvalue()).decode('utf-8')
 
-    categorized_metadata['Pie chart'] = encoded_image
+    # Add the combined plot to categorized_metadata
+    categorized_metadata['Pie chart'] = encoded_image_combined
 
     return categorized_metadata
 
