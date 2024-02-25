@@ -63,6 +63,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
                 'max': np.max(value)
             }
             descriptive_stats_dict[key] = stats_dict
+        
 
         # Create a box plot
         plt.figure(figsize=(8,8))
@@ -188,12 +189,14 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
             '75%': np.percentile(risk_scores, 75),
             'max': np.max(risk_scores)
         }
-
+        x_label = ",".join(eval_cols)
         # Create a box plot
         plt.figure(figsize=(8,8))
         plt.boxplot(risk_scores, vert=True)  # vert=False for horizontal box plot
         plt.title('Box Plot of Multiple Attribute Risk Scores')
         plt.ylabel('Risk Score')
+        plt.xlabel('Feature Combination')
+        plt.xticks([1], [x_label])
 
         # Save the plot as a PNG image in memory
         image_stream = io.BytesIO()
