@@ -1,7 +1,9 @@
 [project]
 name = "aidrin"
 version = "0.1"
-description="test"
+readme = "README.md"
+description="A tool to evaluate the readiness of data for AI"
+maintainers = [{name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"}]
 dependencies = [
     "flask",
 ]
