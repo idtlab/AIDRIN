@@ -8,7 +8,7 @@ Install
 -------
 
     # clone the repository
-    $ git clone https://github.com/pallets/flask
+    $ git clone https://github.com/idtlab/AIDRIn.git
     $ cd AIDRIn
 
 Create a virtualenv and activate it::
