@@ -1,0 +1,4 @@
+include aidrin/static/*
+include aidriin/templates/*
+include aidrin/structured_data_metrics/*
+include aidrin/images/*
