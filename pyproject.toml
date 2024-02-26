@@ -1,0 +1,18 @@
+[project]
+name = "aidrin"
+version = "0.1"
+description="test"
+dependencies = [
+    "flask",
+]
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "aidrin"
+
+[tool.coverage.run]
+branch = true
+source = ["aidrin"]
