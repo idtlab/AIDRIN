@@ -14,14 +14,15 @@ from structured_data_metrics.add_noise import return_noisy_stats
 from structured_data_metrics.class_imbalance import calc_imbalance_degree,class_distribution_plot
 from structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores
  
-from unstructured_data_metrics.chest_xray_image_readiness import *
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import json
-import pydicom
 import time
+import io
+import base64
+
 
 app = Flask(__name__)
 
@@ -303,36 +304,36 @@ def FAIRness():
 # def FAIRness():
 #     return cal_FAIRness()
 
-@app.route('/medical_image_readiness',methods=['GET','POST'])
-def med_img_readiness():
-    final_dict = {}
-    if request.method == 'POST':
-        if "dicom" not in request.files:
-            return jsonify({"error": "No 'dicom' field found in form data"}), 400
+# @app.route('/medical_image_readiness',methods=['GET','POST'])
+# def med_img_readiness():
+#     final_dict = {}
+#     if request.method == 'POST':
+#         if "dicom" not in request.files:
+#             return jsonify({"error": "No 'dicom' field found in form data"}), 400
         
-        # Get the uploaded file
-        file = request.files['dicom']
+#         # Get the uploaded file
+#         file = request.files['dicom']
 
-        if file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
+#         if file.filename == '':
+#             return jsonify({"error": "No selected file"}), 400
         
-        if file.filename.endswith('.dcm'):
-            dicom_data = pydicom.dcmread(file,force=True)
+#         if file.filename.endswith('.dcm'):
+#             dicom_data = pydicom.dcmread(file,force=True)
 
-            final_dict['Message'] = "File uploaded successfully"
+#             final_dict['Message'] = "File uploaded successfully"
 
-            cnr_data = calculate_cnr_from_dicom(dicom_data)
-            spatial_res_data = calculate_spatial_resolution(dicom_data)
-            metadata_dcm = gather_image_quality_info(dicom_data)
-            artifact = detect_and_visualize_artifacts(dicom_data)
-            combined_dict = {**cnr_data, **spatial_res_data}
-            formatted_combined_dict = format_dict_values(combined_dict)
-            final_dict['Image Readiness Scores'] = formatted_combined_dict
-            final_dict['DCM Image Quality Metadata'] = metadata_dcm
-            final_dict['Artifacts'] = artifact
+#             cnr_data = calculate_cnr_from_dicom(dicom_data)
+#             spatial_res_data = calculate_spatial_resolution(dicom_data)
+#             metadata_dcm = gather_image_quality_info(dicom_data)
+#             artifact = detect_and_visualize_artifacts(dicom_data)
+#             combined_dict = {**cnr_data, **spatial_res_data}
+#             formatted_combined_dict = format_dict_values(combined_dict)
+#             final_dict['Image Readiness Scores'] = formatted_combined_dict
+#             final_dict['DCM Image Quality Metadata'] = metadata_dcm
+#             final_dict['Artifacts'] = artifact
 
-            return jsonify(final_dict),200
-    return render_template('medical_image.html')
+#             return jsonify(final_dict),200
+#     return render_template('medical_image.html')
                         
 if __name__ == '__main__':
     app.run(debug=True)
