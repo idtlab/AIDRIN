@@ -3,7 +3,7 @@ name = "aidrin"
 version = "0.1"
 readme = "README.md"
 description="A tool to evaluate the readiness of data for AI"
-maintainers = [{name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"}]
+maintainers = [{name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"},{name = "Suren Byna", email = "byna.1@osu.edu"}]
 dependencies = [
     "flask",
 ]
