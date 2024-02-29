@@ -187,6 +187,7 @@ def generate_combined_plot_to_base64(df, cat_cols, num_cols, target_col):
                 sns.boxplot(x=df[target_col], y=df[num_col])
                 plt.title(f'{num_col} vs {target_col} (Box Plot)')
                 plt.xticks(rotation=45)
+                plt.legend().remove()  # Remove legend
 
             # Generate appropriate plots for categorical columns vs target column
             for i, cat_col in enumerate(cat_cols, start=len(num_cols) + 1):
@@ -194,6 +195,7 @@ def generate_combined_plot_to_base64(df, cat_cols, num_cols, target_col):
                 sns.countplot(x=df[cat_col], hue=df[target_col])
                 plt.title(f'{cat_col} vs {target_col} (Count Plot)')
                 plt.xticks(rotation=45)
+                plt.legend().remove()  # Remove legend
             
             # Perform chi-squared test for independence
             chi2_scores = {}
@@ -210,6 +212,7 @@ def generate_combined_plot_to_base64(df, cat_cols, num_cols, target_col):
                 sns.scatterplot(x=df[num_col], y=df[target_col])
                 plt.title(f'{num_col} vs {target_col} (Scatter Plot)')
                 plt.xticks(rotation=45)
+                plt.legend().remove()  # Remove legend
 
             # Generate appropriate plots for categorical columns vs target column
             for i, cat_col in enumerate(cat_cols, start=len(num_cols) + 1):
@@ -217,6 +220,7 @@ def generate_combined_plot_to_base64(df, cat_cols, num_cols, target_col):
                 sns.boxplot(x=df[cat_col], y=df[target_col])
                 plt.title(f'{cat_col} vs {target_col} (Box Plot)')
                 plt.xticks(rotation=45)
+                plt.legend().remove()  # Remove legend
 
             # Perform chi-squared test for independence
             chi2_scores = {}

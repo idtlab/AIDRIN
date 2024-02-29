@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, send_file, Response,render_template,send_from_directory
+from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.outliers import outliers
 from aidrin.structured_data_metrics.duplicity import duplicity
 from aidrin.structured_data_metrics.representation_rate import calculate_representation_rate, create_representation_rate_vis

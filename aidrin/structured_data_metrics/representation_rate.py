@@ -55,9 +55,6 @@ def create_representation_rate_vis(dataframe, columns):
             plt.pie(values, labels=cum_proportions.index, autopct='%1.1f%%', startangle=140)
             plt.title('Cumulative Proportion of Attribute Values')
             
-            # Add a legend
-            plt.legend(loc='upper right', bbox_to_anchor=(1, 1))
-
             plt.subplots_adjust(left=0.2)
             plt.tight_layout()
 
@@ -75,5 +72,3 @@ def create_representation_rate_vis(dataframe, columns):
             return img_base64
     except Exception as e:
         return {"Error": f"Error calculating representation rate: {str(e)}"}
-
-
