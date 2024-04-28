@@ -9,7 +9,7 @@ Install
 
     # clone the repository
     $ git clone https://github.com/idtlab/AIDRIn.git
-    $ cd AIDRIn
+    $ cd aidrin
 
 Create a virtualenv and activate it::
 
