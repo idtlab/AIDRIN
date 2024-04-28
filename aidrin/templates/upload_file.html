@@ -170,7 +170,7 @@
                 </li>
 
                 <li  style="margin-left: 40px;" >
-                    <label for="privacy budget">Privacy budget (epsilon):</label>
+                    <label for="privacy budget">Privacy budget (default epsilon=0.1):</label>
                     <input type="text" name="privacy budget">
                 </li>
             </ul>
@@ -184,11 +184,6 @@
                     <select name="id feature to measure single attribute risk score" id="allFeaturesDropdownMMS" required>
                         <option value ="" disabled selected>Select a feature</option>
             </select><br>
-                </li>
-
-                <li  style="margin-left: 40px;" >
-                    <label for="privacy budget">Privacy budget (epsilon):</label>
-                    <input type="text" name="privacy budget">
                 </li>
 
                 <li style="margin-left: 40px;">
@@ -238,13 +233,13 @@
         </div>
         
         
-        <div id="buttonsContainer" style="display:none;">
-            <button type="button" id="visualizationBtn" onclick="showVisualization()">Show Visualization</button>
-            <button type="button" id="jsonBtn" onclick="showResults()">Show Results</button>
-            <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
-        </div>
-        
     </form>
+
+    <div id="buttonsContainer" style="display:none;">
+        <button type="button" id="visualizationBtn" onclick="showVisualization()">Show Visualization</button>
+        <button type="button" id="jsonBtn" onclick="showResults()">Show Results</button>
+        <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
+    </div>
     
             
 
@@ -255,6 +250,11 @@
     
 
     <script>
+
+        // Call the showLoadingScreen function when the page loads or when needed
+        document.addEventListener("DOMContentLoaded", function () {
+            showLoadingScreen();
+        });
 
         $(document).ready(function () {
             $('#file').on('change', function () {

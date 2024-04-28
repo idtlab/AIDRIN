@@ -145,8 +145,6 @@
                     return '#FFD700';  // Gold
                 case 'Reusable':
                     return '#FFA07A';  // Light salmon
-                case 'FAIR Compliance Checks':
-                    return '#DDA0DD';  // Plum
                 case 'Original Metadata':
                     return '#87CEFA';  // Light sky blue
                 case 'Other':
@@ -169,14 +167,14 @@
         }
 
         function displayKeyValuePairs(obj) {
-            var predefinedOrder = ["FAIR Compliance Checks","Findable", "Accessible", "Interoperable", "Reusable", "Other", "Original Metadata"];
+            var predefinedOrder = ["Findable", "Accessible", "Interoperable", "Reusable", "Other", "Original Metadata"];
             var result = '';
 
             predefinedOrder.forEach(function(key) {
-                if (obj.hasOwnProperty(key) && key !== "Pie chart") {
+                if (obj.hasOwnProperty(key) && key !== "Pie chart" && key !== "FAIR Compliance Checks") {
                     var value = obj[key];
                     
-                    if (key === "Accessible" || key === "Interoperable" || key === "Reusable" || key === "Findable" || key === "FAIR Compliance Checks" || key === "Other" || key === "Original Metadata") {
+                    if (key === "Accessible" || key === "Interoperable" || key === "Reusable" || key === "Findable" || key === "Other" || key === "Original Metadata") {
                         result += "<ul>";
                     } else {
                         result += '<ul><strong>' + key + ':</strong> ';
@@ -204,7 +202,7 @@
 
             // Display remaining keys in alphabetical order
             Object.keys(obj).sort().forEach(function(key) {
-                if (!predefinedOrder.includes(key) && key !== "Pie chart") {
+                if (!predefinedOrder.includes(key) && key !== "Pie chart" && key !== "FAIR Compliance Checks") {
                     var value = obj[key];
 
                     if (typeof value === 'object') {

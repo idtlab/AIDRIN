@@ -219,8 +219,16 @@ def upload_csv():
                     
                 #differential privacy
                 if request.form.get("differential privacy") == "yes":
+                    
                     feature_to_add_noise = request.form.get("numerical features to add noise").split(",")
                     epsilon = request.form.get("privacy budget")
+                    if epsilon is None or epsilon == "":
+                        epsilon = 0.1  # Assign a default value for epsilon
+
+                    noisy_stat = return_noisy_stats(file, feature_to_add_noise, float(epsilon))
+                    final_dict['DP statistics'] = noisy_stat
+                    
+                    # Rest of the code...
                     noisy_stat = return_noisy_stats(file,feature_to_add_noise,float(epsilon))
                     final_dict['DP statistics'] = noisy_stat
                 

@@ -71,9 +71,13 @@ def categorize_keys_fair(json_data):
    # Plot Pie Chart
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 4), gridspec_kw={'width_ratios': [3, 3], 'wspace': 0.8})  # 1 row, 2 columns
 
-    
-    ax1.pie(tot_score_each, labels=labels, autopct='%1.1f%%', startangle=90)
+    plabels = ['Pass', 'Fail']
+    psizes = [sum(tot_score_each), fair_scores['Total Checks'] - sum(tot_score_each)]
+    colors = ['green', 'lightgray']
+    ax1.pie(psizes, labels=plabels, colors=colors, autopct='%1.1f%%', startangle=90)
     ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    ax1.set_title('FAIR compliance')
+    
 
     # Plot Horizontal Bar Chart for Percentage of Completed Checks
     categories = ["Findability", "Accessibility", "Interoperability", "Reusability"]
@@ -81,6 +85,10 @@ def categorize_keys_fair(json_data):
                 fair_scores['Accessibility Checks'] / tot_score_each[1] * 100,
                 fair_scores['Iteroperability Checks'] / tot_score_each[2] * 100,
                 fair_scores['Reusability Checks'] / tot_score_each[3] * 100]
+    
+    # Sort the categories and percentages in the order of appearance in the categories list
+    sorted_data = sorted(zip(categories, percentages), key=lambda x: categories.index(x[0]), reverse=True)
+    categories, percentages = zip(*sorted_data)
 
     bars = ax2.barh(categories, percentages, color='skyblue')
     ax2.spines['top'].set_visible(False)

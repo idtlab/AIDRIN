@@ -33,10 +33,10 @@ def categorize_metadata(metadata_dict,original_metadata):
     reusable = {}
     other = {}
     find_c,acc_c,inter_c,reu_c = 0,0,0,0
-    find_tot_checks = 4
-    acc_tot_checks = 3
+    find_tot_checks = 6
+    acc_tot_checks = 5
     inter_tot_checks = 3
-    reu_tot_checks = 2
+    reu_tot_checks = 6
 
     find_iter,acc_iter,inter_iter,reu_iter = 0,0,0,0
 
@@ -45,12 +45,12 @@ def categorize_metadata(metadata_dict,original_metadata):
         categorized = False  # Flag to track if the key was categorized
         
         # Findable
-        if key in ["identifier", "description","title"]:
+        if key in ["identifier", "description","title","theme","keyword","landingPage"]:
             find_c+=1
             findable[key] = value
-            categorized = True
-        elif key.startswith("keyword"):
-            if find_iter > 0:
+        #     categorized = True
+        elif key.startswith("keyword") or key.startswith("theme"):
+            if find_iter > 1:
                 findable[key] = value
                 categorized = True
             else:
@@ -59,42 +59,39 @@ def categorize_metadata(metadata_dict,original_metadata):
                 categorized = True
                 find_iter+=1
         # Accessible
-        elif key in ['accessLevel']:
+        if key in ['downloadURL','format','accessLevel','publisher']:
             accessible[key] = value
             acc_c+=1
             categorized = True
-        elif key.endswith("fn") or key.endswith("hasEmail"):
-            if acc_iter > 2:
-                acc_tot_checks+=1
-                
-            accessible[key] = value
-            acc_c+=1
-            categorized = True
+        elif key.startswith("distribution") or key.startswith("publisher"):
+            
+            if acc_iter > 1:
+                accessible[key] = value
+                categorized = True
+            else:
+                acc_c+=1
+                accessible[key] = value
+                categorized = True
+                acc_iter+=1
         # Interoperable
-        elif key.endswith("conformsTo"):
-            interoperable[key] = value
-            inter_c+=1
-            categorized = True
-        elif  key.startswith("bureauCode") or key.endswith("programCode"):
-            if inter_iter > 2:
-                inter_tot_checks+=1
+        if key.endswith("conformsTo") or key.endswith("format") or key.endswith("references"):
             interoperable[key] = value
             inter_c+=1
             categorized = True
         
         # Reusable
-        elif key.endswith("modified"):
+        if key.endswith("license") or key.startswith("programCode") or key.startswith("bureauCode") or key.endswith("description") or key.endswith("conformsTo") or key.endswith("format"):
             reusable[key] = value
             reu_c+=1
             categorized = True
         
-        elif re.match(r"publisher_\d+_name", key) or re.match(r"publisher_name", key):
-            if reu_iter > 1:
-                reu_tot_checks+=1
+        # elif re.match(r"publisher_\d+_name", key) or re.match(r"publisher_name", key):
+        #     if reu_iter > 1:
+        #         reu_tot_checks+=1
 
-            reusable[key] = value
-            reu_c+=1
-            categorized = True
+        #     reusable[key] = value
+        #     reu_c+=1
+        #     categorized = True
         # Other (not in predefined categories)
         if not categorized:
             other[key] = value
@@ -119,16 +116,24 @@ def categorize_metadata(metadata_dict,original_metadata):
     # Plot Pie Chart
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 4), gridspec_kw={'width_ratios': [3, 3], 'wspace': 0.8})  # 1 row, 2 columns
 
-    
-    ax1.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
+    plabels = ['Pass', 'Fail']
+    psizes = [sum(sizes), sum([find_tot_checks, acc_tot_checks, inter_tot_checks, reu_tot_checks]) - sum(sizes)]
+    colors = ['green', 'lightgray']
+    ax1.pie(psizes, labels=plabels, colors=colors, autopct='%1.1f%%', startangle=90)
     ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    ax1.set_title('FAIR compliance checks')
 
     # Plot Horizontal Bar Chart for Percentage of Completed Checks
     categories = ["Findability", "Accessibility", "Interoperability", "Reusability"]
     percentages = [find_c / find_tot_checks * 100,
-                acc_c / acc_tot_checks * 100,
-                inter_c / inter_tot_checks * 100,
-                reu_c / reu_tot_checks * 100]
+                   acc_c / acc_tot_checks * 100,
+                   inter_c / inter_tot_checks * 100,
+                   reu_c / reu_tot_checks * 100]
+
+    # Sort the categories and percentages in the order of appearance in the categories list
+    sorted_data = sorted(zip(categories, percentages), key=lambda x: categories.index(x[0]), reverse=True)
+    categories, percentages = zip(*reversed(sorted_data))
+
 
     bars = ax2.barh(categories, percentages, color='skyblue')
     ax2.spines['top'].set_visible(False)
@@ -138,8 +143,12 @@ def categorize_metadata(metadata_dict,original_metadata):
     ax2.set_xticks([])  # Remove x tick values
 
     # Display the percentage values on the bars
+    total_checks = [find_tot_checks, acc_tot_checks, inter_tot_checks, reu_tot_checks]
+    count = 0
     for bar in bars:
-        plt.text(bar.get_width(), bar.get_y() + bar.get_height()/2, f'{bar.get_width():.2f}%', va='center')
+
+        plt.text(bar.get_width(), bar.get_y() + bar.get_height()/2, f'{sizes[count]}/{total_checks[count]}', va='center')
+        count += 1
 
     # Save the plot to a BytesIO object
     image_stream_combined = io.BytesIO()

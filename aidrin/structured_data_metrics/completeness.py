@@ -41,13 +41,38 @@ def completeness(file):
 
         # Add the base64-encoded image to the dictionary under a separate key
         result_dict["Completeness Visualization"] = img_base64
+        
 
         plt.close()  # Close the plot to free up resources
 
         # Add overall completeness to the dictionary
         result_dict['Overall Completeness'] = overall_completeness
     elif overall_completeness == 0:
-        result_dict["Overall Completeness of Dataset"] = 1
+        # Create a bar chart for 0 completeness
+        plt.figure(figsize=(8, 4))
+        plt.bar(['Overall Completeness'], [0], color='red')
+        plt.title('Completeness Score for the Dataset')
+        plt.xlabel('Dataset')
+        plt.ylabel('Completeness Score')
+        plt.ylim(0, 1)  # Setting y-axis limit between 0 and 1 for completeness scores
+
+        plt.tight_layout()
+
+        # Save the chart to a BytesIO object
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format='png')
+        img_buf.seek(0)
+
+        # Encode the image as base64
+        img_base64 = base64.b64encode(img_buf.read()).decode('utf-8')
+
+        # Add the base64-encoded image to the dictionary under a separate key
+        result_dict["Completeness Visualization"] = img_base64
+
+        plt.close()  # Close the plot to free up resources
+
+        # Add overall completeness to the dictionary
+        result_dict['Overall Completeness'] = 0
     else:
         result_dict["Overall Completeness of Dataset"] = "Error"
 

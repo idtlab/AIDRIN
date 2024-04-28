@@ -506,3 +506,4 @@ function toggleCheckboxContainer(checkboxContainer, toggleButton) {
         toggleButton.style.cursor = "pointer";
     }
 }
+
