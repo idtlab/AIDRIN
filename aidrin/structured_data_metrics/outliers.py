@@ -10,7 +10,8 @@ def outliers(file):
         numerical_columns = file.select_dtypes(include=[np.number])
         #drop nan
         numerical_columns_dropna = numerical_columns.dropna()
-
+        
+        print(numerical_columns_dropna)
         #IQR method
         q1=numerical_columns_dropna.quantile(0.25)
         q3=numerical_columns_dropna.quantile(0.75)
@@ -32,13 +33,13 @@ def outliers(file):
         # Create a bar chart for outlier scores
         plt.figure(figsize=(8, 8))
         plt.bar(proportions_dict.keys(), proportions_dict.values(), color='red')
-        plt.title('Proportion of Outliers for Numerical Columns')
-        plt.xlabel('Columns')
-        plt.ylabel('Proportion of Outliers')
+        plt.title('Proportion of Outliers for Numerical Columns',fontsize=14)
+        plt.xlabel('Columns',fontsize=14)
+        plt.ylabel('Proportion of Outliers',fontsize=14)
         # plt.ylim(0, 1)  # Setting y-axis limit between 0 and 1
 
         # Rotate x-axis tick labels
-        plt.xticks(rotation=45, ha='right')
+        plt.xticks(rotation=45, ha='right', fontsize=12)
 
         # Increase bottom margin
         plt.subplots_adjust(bottom=0.5)

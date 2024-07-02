@@ -129,13 +129,12 @@ def class_distribution_plot(df, column):
         plt.figure(figsize=(8, 8))
 
         # Plotting a pie chart for each class
-        patches, texts = plt.pie(class_counts, startangle=90)
+        class_labels_modified = [label[:9] + '...' if len(label) > 8 else label for label in class_labels]
+        patches, texts, _ = plt.pie(class_counts, labels=class_labels_modified, startangle=90, autopct=lambda p: f'{p:.1f}%' if p >= 10 else None)
 
- 
-
-        # Add percentages to the legend
-        legend_labels = [f'{label} - {percentage:.1f}%' for label, percentage in zip(class_labels, class_counts / class_counts.sum() * 100)]
-        plt.legend(legend_labels, loc="upper right")
+        # Add labels to sections with percentages above 10%
+        for text in texts:
+            text.set_fontsize(12)
 
         plt.title(f'Distribution of Each Class in {column}')
         plt.axis('equal')

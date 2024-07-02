@@ -7,12 +7,13 @@ from aidrin.structured_data_metrics.statistical_rate import calculate_statistica
 from aidrin.structured_data_metrics.real_repreentation_rate import calculate_real_representation_rates
 from aidrin.structured_data_metrics.compare_representation_rate import compare_rep_rates
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
-from aidrin.structured_data_metrics.feature_relevance import generate_combined_plot_to_base64
+from aidrin.structured_data_metrics.feature_relevance import data_cleaning, pearson_correlation, plot_features
 from aidrin.structured_data_metrics.FAIRness_dcat import categorize_metadata,extract_keys_and_values
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree,class_distribution_plot
 from aidrin.structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores
+from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
  
 
 import pandas as pd
@@ -22,6 +23,7 @@ import json
 import time
 import io
 import base64
+import seaborn as sns
 
 
 app = Flask(__name__)
@@ -41,17 +43,19 @@ def format_dict_values(d):
     return formatted_dict
 
 def summary_histograms(df):
-    histograms = {}
+    line_graphs = {}
     for column in df.select_dtypes(include='number').columns:
-        plt.figure(figsize=(6, 4))
-        plt.hist(df[column], bins=20)
+        plt.figure(figsize=(6, 6))
 
-        # Set a smaller font size for the title
-        plt.title(f'Histogram for {column}', fontsize=8)
+        # Using seaborn's kdeplot to estimate the distribution
+        sns.kdeplot(df[column], bw_adjust=0.5)
+
+        # Set a larger font size for the title
+        plt.title(f'Distribution Estimate for {column}', fontsize=14)
 
         # Add labels to the axes
-        plt.xlabel('Values', fontsize=8)
-        plt.ylabel('Frequency', fontsize=8)
+        plt.xlabel('Values', fontsize=12)
+        plt.ylabel('Density', fontsize=12)
 
         # Encode the plot as base64
         img_buffer = io.BytesIO()
@@ -59,11 +63,11 @@ def summary_histograms(df):
         img_buffer.seek(0)
         encoded_img = base64.b64encode(img_buffer.read()).decode('utf-8')
 
-        histograms[column] = encoded_img
+        line_graphs[column] = encoded_img
         plt.close()
         img_buffer.close()
 
-    return histograms
+    return line_graphs
 
 @app.route('/images/<path:filename>')
 def serve_image(filename):
@@ -88,8 +92,8 @@ def handle_summary_statistics():
         df = pd.read_csv(csv_data)
 
         # Extract summary statistics
-        summary_statistics = df.describe().to_dict()
-
+        summary_statistics = df.describe().round(2).to_dict()
+        
         # Calculate probability distributions
         histograms = summary_histograms(df)
 
@@ -126,6 +130,48 @@ def handle_summary_statistics():
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
+    
+
+@app.route('/feature_set', methods=['POST'])
+def extract_features():
+    try:
+        # Get the uploaded file
+        file = request.files['file']
+
+        # Read the CSV file
+        csv_content = file.read().decode('utf-8')
+        csv_data = io.StringIO(csv_content)
+        
+        # Load CSV data into a Pandas DataFrame
+        df = pd.read_csv(csv_data)
+
+
+
+        # Separate numerical and categorical columns
+        numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
+        categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
+        all_features = numerical_columns + categorical_columns
+
+        # Count the number of records
+        records_count = len(df)
+
+        #count the number of features
+        feature_count = len(df.columns)
+
+        response_data = {
+            'success': True,
+            'message': 'File uploaded successfully',
+            'records_count': records_count,
+            'features_count': feature_count,
+            'categorical_features': list(categorical_columns),
+            'numerical_features': list(numerical_columns),
+            'all_features':all_features,
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 
 @app.route('/upload_file', methods=['POST','GET'])
@@ -151,7 +197,7 @@ def upload_csv():
                 if request.form.get('completeness') == "yes":
                     
                     compl_dict = completeness(file)
-                    compl_dict['Description'] = 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness.'
+                    compl_dict['Description'] = 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete.'
                     final_dict['Completeness'] = compl_dict
                 #Outliers    
                 if request.form.get('outliers') == 'yes':
@@ -169,7 +215,7 @@ def upload_csv():
                     rep_dict = {}
                     list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
                     rep_dict['Probability ratios'] = calculate_representation_rate(file,list_of_cols)
-                    rep_dict['Representation Rate Chart'] = create_representation_rate_vis(file,list_of_cols)
+                    rep_dict['Representation Rate Visualization'] = create_representation_rate_vis(file,list_of_cols)
                     rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
                     final_dict['Representation Rate'] = rep_dict
                 #statistical rate
@@ -189,33 +235,49 @@ def upload_csv():
                     rrr_dict['Description'] = 'Represent probability ratios that quantify the relative representation of different categories within the sensitive features in the actual world, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another'
                     final_dict['Real Representation Rate'] = rrr_dict
 
+                if request.form.get('conditional demographic disparity') == 'yes':
+                    cdd_dict = {}
+                    target = request.form.get('target for conditional demographic disparity')
+                    sensitive = request.form.get('sensitive for conditional demographic disparity')
+                    accepted_value = request.form.get('target value for conditional demographic disparity')
+                    cdd_dict = conditional_demographic_disparity(file[target].to_list(),file[sensitive].to_list(),accepted_value)
+                    cdd_dict['Description'] = 'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'                 
+                    final_dict['Conditional Demographic Disparity'] = cdd_dict
+
                 if request.form.get('compare real to dataset') == 'yes':
                     comp_dict = compare_rep_rates(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
                     comp_dict["Description"] = "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
                     final_dict['Representation Rate Comparison with Real World'] = comp_dict
 
                 if request.form.get('correlations') == 'yes':
-                    columns = request.form.get('correlation columns').replace("\r\n", "").split(",")
+                    columns = request.form.get('correlation columns').replace("\r\n", "").replace('"', '').split(",")
                     corr_dict = calc_correlations(file,columns)
-                    corr_dict['Description'] = "Categorical correlations are assessed using Theil's U statistic, while numerical feature correlations are determined using Pearson correlation. The resulting values fall within the range of 0 to 1, with a value of 1 indicating a strong correlation between the variables"
-                    final_dict['Correlations Analysis'] = corr_dict
+                    final_dict['Correlations Analysis Categorical'] = corr_dict['Correlations Analysis Categorical']
+                    final_dict['Correlations Analysis Numerical'] = corr_dict['Correlations Analysis Numerical']
 
                 if request.form.get("feature relevancy") == "yes":
                     cat_cols = request.form.get("categorical features for feature relevancy").split(",")
                     num_cols = request.form.get("numerical features for feature relevancy").split(",")
                     target = request.form.get("target for feature relevance")
-                    f_dict =  generate_combined_plot_to_base64(file,cat_cols,num_cols,target)
-                    f_dict['Description'] = "For numerical target columns, scatter plots and box plots are generated to visually explore the relationship between numerical features and the target. For categorical target columns, count plots provide insights into the distribution of categorical features across different target categories. Additionally, a chi-squared test for independence is performed for each categorical feature against the target, yielding p-values that quantify the statistical significance of the association. Lower p-values indicate stronger evidence that a categorical feature is relevant for predicting the target."
-                    final_dict['Feature relevance'] = f_dict
+                    df = data_cleaning(file,cat_cols,num_cols,target)
+                    # Generate Pearson correlation
+                    correlations = pearson_correlation(df, df.columns.difference([target]), target)
+                    f_plot = plot_features(correlations,target)
+                    f_dict = {}
+                    
+                    f_dict['Pearson Correlation to Target'] = correlations
+                    f_dict['Feature Relevance Visualization'] = f_plot
+                    f_dict['Description'] = "With minimum data cleaning (drop missing values, onehot encode categorical features, labelencode target feature), the Pearson correlation coefficient is calculated for each feature against the target variable. A value of 1 indicates a perfect positive correlation, while a value of -1 indicates a perfect negative correlation."
+                    final_dict['Feature Relevance'] = f_dict
 
                 #class imbalance
                 if request.form.get("class imbalance") == "yes":
                     ci_dict = {}
                     classes = request.form.get("class feature")
-                    ci_dict['Class distribution plot'] = class_distribution_plot(file,classes)
-                    ci_dict['Description'] = "Each class is represented by a bar, and the height of the bar corresponds to the percentage of instances belonging to that class"
+                    ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file,classes)
+                    ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
                     ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric="EU")#By default the distance metric is euclidean distance
-                    final_dict['Class imbalance'] = ci_dict
+                    final_dict['Class Imbalance'] = ci_dict
                     
                 #differential privacy
                 if request.form.get("differential privacy") == "yes":
@@ -226,11 +288,11 @@ def upload_csv():
                         epsilon = 0.1  # Assign a default value for epsilon
 
                     noisy_stat = return_noisy_stats(file, feature_to_add_noise, float(epsilon))
-                    final_dict['DP statistics'] = noisy_stat
+                    final_dict['DP Statistics'] = noisy_stat
                     
                     # Rest of the code...
                     noisy_stat = return_noisy_stats(file,feature_to_add_noise,float(epsilon))
-                    final_dict['DP statistics'] = noisy_stat
+                    final_dict['DP Statistics'] = noisy_stat
                 
                 #single attribute risk scores using markov model
                 if request.form.get("single attribute risk score") == "yes":

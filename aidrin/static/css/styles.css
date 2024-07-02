@@ -1,7 +1,8 @@
 body {
-    font-family: 'Arial', sans-serif;
+    font-family: 'Roboto', sans-serif;
     margin: 20px;
     background-color: #f4f4f4;
+    font-size: 20px;
 }
 
 form {
@@ -9,10 +10,29 @@ form {
     padding: 20px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    max-width: 2000px; /* Increase the max-width as needed */
+    max-width: 2000px; 
     width: 100%;
     box-sizing: border-box;
 }
+
+/* Style for the select element */
+select {
+    font-family: 'Roboto', sans-serif;
+    font-size: 20px; /* Increase font size */
+    padding: 10px 15px; /* Add padding */
+    border: 1px solid #ccc; /* Border style */
+    border-radius: 4px; /* Rounded corners */
+    background-color: #fff; /* Background color */
+    color: #333; /* Text color */
+    cursor: pointer; /* Pointer cursor */
+    width: 100%; /* Full width */
+    max-width: 400px; /* Maximum width */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+
+
+
 
 h1 {
     text-align: center;
@@ -66,17 +86,19 @@ span {
 }
 
 button {
-    width: 100%;
+    width: 50%;
     padding: 10px;
     margin-bottom: 15px;
     box-sizing: border-box;
     border: 1px solid #ccc;
     border-radius: 5px;
-    font-size: 16px;
+    font-size: 20px;
 }
 
+
 input[type="checkbox"] {
-    width: auto;
+    width: 20px;
+    height: 20px;
 }
 
 button {
@@ -101,14 +123,14 @@ input[type="reset"]:hover {
 
 
 
-#formbuttonsContainer {
+/* #formbuttonsContainer {
     display: flex;
     justify-content: space-between;
-}
+} */
 
 button,
 input[type="reset"] {
-    width: 48%; /* Set the width for each button */
+    width: 10%; 
     padding: 10px;
     box-sizing: border-box;
 }
@@ -116,11 +138,11 @@ input[type="reset"] {
 #buttonsContainer {
     display: flex;
     justify-content: center;
-    margin-top: 20px; /* Optional: Add margin between buttons and other elements */
+    margin-top: 20px; 
 }
 
 #buttonsContainer button {
-    width: 30%; /* Set the width for each button */
+    width: 30%;
     padding: 10px;
     box-sizing: border-box;
 }
@@ -132,11 +154,51 @@ input[type="reset"] {
     }
 
     #buttonsContainer button {
-        width: 100%; /* Full width for buttons on smaller screens */
-        margin-bottom: 10px; /* Optional: Add margin between buttons */
+        width: 100%; 
+        margin-bottom: 10px;
     }
 }
 .checkboxContainer {
     display: none;
     
 }
+
+.info-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background-color: #007BFF;
+    color: white;
+    text-align: center;
+    border-radius: 50%;
+    font-size: 12px;
+    line-height: 16px;
+    cursor: pointer;
+    margin-left: 8px;
+    position: relative;
+}
+
+.info-icon:hover .info-text {
+    display: block;
+}
+
+.info-text {
+    display: none;
+    position: absolute;
+    top: 20px;
+    left: 0;
+    background-color: #333;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+    white-space: normal; /* Allow text to wrap */
+    width: 400px; /* Set a maximum width */
+    z-index: 1;
+}
+
+.hint {
+    font-size: 12px;
+    color: #666;
+}
+
+

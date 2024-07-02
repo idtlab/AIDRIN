@@ -1,12 +1,12 @@
-# import pandas as pd
-# import numpy as np
-# import shap
-# from sklearn.model_selection import train_test_split
-# from sklearn.ensemble import RandomForestRegressor
-# from sklearn.metrics import mean_squared_error
-# import matplotlib.pyplot as plt
-# import io
-# import base64
+import pandas as pd
+import numpy as np
+import shap
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+import io
+import base64
 
 # def calc_shapley(df, cat_cols, num_cols, target_col):
 #     """
@@ -145,97 +145,174 @@
 
 #     return final_dict
 
-
-import io
-import base64
-from scipy.stats import chi2_contingency
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import LabelEncoder
 
-def plot_to_base64(plt):
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format='png')
-    buffer.seek(0)
-    image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
-    plt.close()
-    return image_base64
-
-def generate_combined_plot_to_base64(df, cat_cols, num_cols, target_col):
-
+def data_cleaning(df, cat_cols, num_cols, target_col):
     try:
-        # Check if the DataFrame is empty
-        if df.empty:
-            raise ValueError("Input DataFrame is empty.")
-
-        # Check if the target column is present in the DataFrame
-        if target_col not in df.columns:
-            raise ValueError(f"Target column '{target_col}' not found in the DataFrame.")
-
-        if cat_cols == [""]:
-            cat_cols = []
-        if num_cols == [""]:
-            num_cols = []
-
-        plt.figure(figsize=(10, 10))
-
-        # Check if the target column is categorical or numerical
-        if df[target_col].dtype == 'O':  # 'O' stands for Object (categorical)
-            # Generate box plots for numerical columns vs target column
-            for i, num_col in enumerate(num_cols, start=1):
-                plt.subplot(2, len(num_cols), i)
-                sns.boxplot(x=df[target_col], y=df[num_col])
-                plt.title(f'{num_col} vs {target_col} (Box Plot)')
-                plt.xticks(rotation=45)
-                plt.legend().remove()  # Remove legend
-
-            # Generate appropriate plots for categorical columns vs target column
-            for i, cat_col in enumerate(cat_cols, start=len(num_cols) + 1):
-                plt.subplot(2, len(cat_cols), i)
-                sns.countplot(x=df[cat_col], hue=df[target_col])
-                plt.title(f'{cat_col} vs {target_col} (Count Plot)')
-                plt.xticks(rotation=45)
-                plt.legend().remove()  # Remove legend
-            
-            # Perform chi-squared test for independence
-            chi2_scores = {}
-            for cat_col in cat_cols:
-                contingency_table = pd.crosstab(df[cat_col], df[target_col])
-                _, p_value, _, _ = chi2_contingency(contingency_table)
-                chi2_scores[cat_col] = p_value
-
-
-        else:  # Target column is numerical
-            # Generate scatter plots for numerical columns vs target column
-            for i, num_col in enumerate(num_cols, start=1):
-                plt.subplot(2, len(num_cols), i)
-                sns.scatterplot(x=df[num_col], y=df[target_col])
-                plt.title(f'{num_col} vs {target_col} (Scatter Plot)')
-                plt.xticks(rotation=45)
-                plt.legend().remove()  # Remove legend
-
-            # Generate appropriate plots for categorical columns vs target column
-            for i, cat_col in enumerate(cat_cols, start=len(num_cols) + 1):
-                plt.subplot(2, len(cat_cols), i)
-                sns.boxplot(x=df[cat_col], y=df[target_col])
-                plt.title(f'{cat_col} vs {target_col} (Box Plot)')
-                plt.xticks(rotation=45)
-                plt.legend().remove()  # Remove legend
-
-            # Perform chi-squared test for independence
-            chi2_scores = {}
-            for cat_col in cat_cols:
-                contingency_table = pd.crosstab(df[cat_col], df[target_col])
-                _, p_value, _, _ = chi2_contingency(contingency_table)
-                chi2_scores[cat_col] = p_value
-
-        # Adjust layout parameters to avoid overlaps
-        plt.tight_layout()
-
-        combined_plot_base64 = plot_to_base64(plt)
-        return {'summary plot': combined_plot_base64,'chi2_scores': chi2_scores}
+        # Filter DataFrame to include only the specified columns
+        df_filtered = df[[target_col] + cat_cols + num_cols].copy()  # Make a copy to avoid SettingWithCopyWarning
+        # Fill missing values
+        df_filtered.loc[:, cat_cols] = df_filtered[cat_cols].fillna('Missing')  # Use .loc to set values
+        df_filtered.loc[:, num_cols] = df_filtered[num_cols].fillna(df_filtered[num_cols].mean())  # Use .loc to set values
+        
+        # One-hot encode categorical columns
+        df_filtered = pd.get_dummies(df_filtered, columns=cat_cols)
+        
+        # Encode target variable if categorical
+        if df_filtered[target_col].dtype == 'object':
+            le_target = LabelEncoder()
+            df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
+        return df_filtered
     except Exception as e:
-        return {"Error": f"An error occurred: {str(e)}"}
+        print(f"Error occurred during data cleaning: {e}")
+
+def pearson_correlation(df, cols, target_col):
+    correlations = {}
+    for col in cols:
+        if col != target_col:
+            try:
+                # Calculate covariance
+                cov = np.cov(df[col], df[target_col], ddof=0)[0, 1]
+                # Calculate standard deviations
+                std_dev_col = np.std(df[col], ddof=0)
+                std_dev_target = np.std(df[target_col], ddof=0)
+                # Calculate Pearson correlation coefficient
+                corr = cov / (std_dev_col * std_dev_target)
+                correlations[col] = corr
+            except TypeError:
+                print(f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values.")
+    return correlations
+
+def plot_features(correlations, target_col):
+    try:
+        # Extract features and correlation values
+        features = list(correlations.keys())
+        corr_values = list(correlations.values())
+        
+        plt.figure(figsize=(8, 8))
+        plt.bar(features, corr_values, color='skyblue')  # Vertical bar plot
+        plt.axhline(y=0, color='black', linewidth=0.5)  # Add a horizontal line at y=0
+        plt.title(f'Correlation of Features with {target_col}')
+        plt.xlabel('Features')
+        plt.ylabel('Correlation')
+
+        # Angle the xticks
+        plt.xticks(rotation=45, ha='right')
+
+        # Add leading dots to xticks longer than 8 characters
+        formatted_features = [feat if len(feat) <= 8 else feat[:5] + '...' for feat in features]
+        plt.xticks(range(len(features)), formatted_features)
+
+        # Save the plot to a BytesIO object and encode it as base64
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close()
+        buf.seek(0)
+        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        return image_base64
+    except Exception as e:
+        print(f"Error occurred during plotting: {e}")
+        return None
+
+
+
+
+# import io
+# import base64
+# from scipy.stats import chi2_contingency
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import pandas as pd
+
+# def plot_to_base64(plt):
+#     buffer = io.BytesIO()
+#     plt.savefig(buffer, format='png')
+#     buffer.seek(0)
+#     image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+#     plt.close()
+#     return image_base64
+
+# def plot_features(df, cat_cols, num_cols, target_col):
+
+#     # print(calc_shapley(df,cat_cols=cat_cols,num_cols=num_cols,target_col=target_col))
+#     try:
+#         # Check if the DataFrame is empty
+#         if df.empty:
+#             raise ValueError("Input DataFrame is empty.")
+
+#         # Check if the target column is present in the DataFrame
+#         if target_col not in df.columns:
+#             raise ValueError(f"Target column '{target_col}' not found in the DataFrame.")
+
+#         if cat_cols == [""]:
+#             cat_cols = []
+#         if num_cols == [""]:
+#             num_cols = []
+
+#         plt.figure(figsize=(10, 10))
+#         plt.rcParams.update({'font.size': 16})  # Set the font size to 12
+
+#         # Check if the target column is categorical or numerical
+#         if df[target_col].dtype == 'O':  # 'O' stands for Object (categorical)
+#             # Generate box plots for numerical columns vs target column
+#             for i, num_col in enumerate(num_cols, start=1):
+#                 plt.subplot(2, len(num_cols), i)
+#                 sns.boxplot(x=df[target_col], y=df[num_col])
+#                 plt.title(f'{num_col} vs {target_col}')
+#                 plt.xticks(rotation=45)
+#                 plt.legend().remove()  # Remove legend
+
+#             # Generate appropriate plots for categorical columns vs target column
+#             for i, cat_col in enumerate(cat_cols, start=len(num_cols) + 1):
+#                 plt.subplot(2, len(cat_cols), i)
+#                 sns.countplot(x=df[cat_col], hue=df[target_col])
+#                 plt.title(f'{cat_col} vs {target_col}')
+#                 plt.xticks(rotation=45)
+#                 plt.legend().remove()  # Remove legend
+            
+#             # Perform chi-squared test for independence
+#             chi2_scores = {}
+#             for cat_col in cat_cols:
+#                 contingency_table = pd.crosstab(df[cat_col], df[target_col])
+#                 _, p_value, _, _ = chi2_contingency(contingency_table)
+#                 chi2_scores[cat_col] = p_value
+
+
+#         else:  # Target column is numerical
+#             # Generate scatter plots for numerical columns vs target column
+#             for i, num_col in enumerate(num_cols, start=1):
+#                 plt.subplot(2, len(num_cols), i)
+#                 sns.scatterplot(x=df[num_col], y=df[target_col])
+#                 plt.title(f'{num_col} vs {target_col}')
+#                 plt.xticks(rotation=45)
+#                 plt.legend().remove()  # Remove legend
+
+#             # Generate appropriate plots for categorical columns vs target column
+#             for i, cat_col in enumerate(cat_cols, start=len(num_cols) + 1):
+#                 plt.subplot(2, len(cat_cols), i)
+#                 sns.boxplot(x=df[cat_col], y=df[target_col])
+#                 plt.title(f'{cat_col} vs {target_col}')
+#                 plt.xticks(rotation=45)
+#                 plt.legend().remove()  # Remove legend
+
+#             # Perform chi-squared test for independence
+#             chi2_scores = {}
+
+#             for cat_col in cat_cols:
+#                 contingency_table = pd.crosstab(df[cat_col], df[target_col])
+#                 _, p_value, _, _ = chi2_contingency(contingency_table)
+#                 chi2_scores[cat_col] = p_value
+
+#         # Adjust layout parameters to avoid overlaps
+#         plt.tight_layout()
+
+#         combined_plot_base64 = plot_to_base64(plt)
+#         return combined_plot_base64
+#     except Exception as e:
+#         return {"Error": f"An error occurred: {str(e)}"}
 
 # Example usage:
 # combined_plot = generate_combined_plot_to_base64(your_dataframe, ['cat_col1', 'cat_col2'], ['num_col1', 'num_col2'], 'target_col')

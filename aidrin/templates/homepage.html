@@ -6,15 +6,31 @@
     <title>Homepage</title>
     <style>
         body {
-            text-align: center;
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
             background-image: url("/images/homepage_bg2.png");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
+            text-align: center;
             color: white;
-            font-family: 'Arial', sans-serif;
-            margin: 0;
-            padding: 0;
+        }
+        
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75); 
+            z-index: 1;
+        }
+        
+        .content {
+            position: relative;
+            z-index: 2;
+            padding: 20px;
         }
 
         h1 {
@@ -73,16 +89,20 @@
     </style>
 </head>
 <body class="animated">
+    <div class="overlay"></div>
+    <div class="content">
+        
     <h1>Welcome to AIDRIn</h1>
-    <h3>Step into the future with AIDRIn, your indispensable AI Data Readiness Inspector. Uncover the true potential of your data as AIDRIn ensures it's primed and polished for seamless integration with artificial intelligence.</h3>
+    <h3>AIDRIn is a framework that covers a broad range of readiness dimensions that aids in quantitatively and qualitatively evaluating the readiness of data.</h3>
     <div class="button-container">
         <a href="{{ url_for('upload_csv') }}">
-            <button>Structured Data Readiness</button>
+            <button>Assess Data Readiness</button>
         </a>
 
         <a href="{{ url_for('FAIRness') }}">
-            <button>FAIRness Assessment</button>
+            <button>FAIR Compliance Assessment</button>
         </a>
+    </div>
     </div>
 </body>
 </html>

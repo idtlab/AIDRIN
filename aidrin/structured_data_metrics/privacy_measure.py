@@ -83,7 +83,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
         image_stream.close()
 
         result_dict["DescriptiveStatistics"] = descriptive_stats_dict
-        result_dict['BoxPlot'] = base64_image
+        result_dict['Single attribute risk scoring Visualization'] = base64_image
         result_dict["Description"] = "Box plots depict the privacy risk scores associated with each selected features"
         
 
@@ -210,7 +210,7 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
 
         result_dict["Description"] = "Distribution of risk scores derived from user-selected features"
         result_dict["Descriptive statistics of the risk scores"] = stats_dict
-        result_dict["Box Plot"] = base64_image
+        result_dict["Multiple attribute risk scoring Visualization"] = base64_image
         result_dict['Dataset Risk Score'] = normalized_distance
 
         return result_dict

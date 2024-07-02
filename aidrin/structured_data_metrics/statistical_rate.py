@@ -35,21 +35,49 @@ def calculate_statistical_rates(dataframe, y_true_column, sensitive_attribute_co
         # Extract unique class labels
         unique_class_labels = sorted(dataframe_cleaned[y_true_column].unique())
 
+        #TSD calculation
+
+        # Initialize a dictionary to store proportions for each class
+        tsd = {}
+
+        # Extract proportions for each class across all groups
+        for group in class_proportions:
+            for class_label, proportion in class_proportions[group].items():
+                if class_label not in tsd:
+                    tsd[class_label] = []
+                tsd[class_label].append(proportion)
+
+
+        for class_label, proportion in tsd.items():
+            tsd[class_label] = np.std(proportion)
+        
+
+
         # Set up the plot
         fig, ax = plt.subplots(figsize=(8, 8))
+
+        # Calculate the total number of classes and sensitive attribute values
+        num_classes = len(unique_class_labels)
+        num_sensitive_values = len(unique_sensitive_values)
+
+        # Calculate the width of each bar and the total width of each group
+        bar_width = 0.1
+        group_width = bar_width * num_classes
+
+        # Calculate the offset for each bar within a group
+        bar_offset = np.arange(num_sensitive_values) * group_width - (group_width * (num_classes - 1) / 2)
 
         # Iterate through each unique class label
         for i, class_label in enumerate(unique_class_labels):
             # Extract proportions for the current class label
             proportions = [class_proportions[sensitive_value].get(class_label, 0) for sensitive_value in unique_sensitive_values]
             
-            # Plot the bars for each sensitive attribute value
-            bar_width = 0.1
-            bar_positions = np.arange(len(unique_sensitive_values)) + i * bar_width
+            # Plot the bars for each sensitive attribute value with the adjusted position
+            bar_positions = bar_offset + i * bar_width
             ax.bar(bar_positions, proportions, width=bar_width, label=f'Class: {class_label}')
 
         # Set up labels and title
-        ax.set_xticks(np.arange(len(unique_sensitive_values)) + (len(unique_class_labels) - 1) * bar_width / 2)
+        ax.set_xticks(bar_offset + (num_classes - 1) * bar_width / 2)
         ax.set_xticklabels(unique_sensitive_values, rotation=30, ha="right", fontsize=8)  # Adjust fontsize and rotation
         ax.set_xlabel('Sensitive Attribute')
         ax.set_ylabel('Proportion')
@@ -67,7 +95,7 @@ def calculate_statistical_rates(dataframe, y_true_column, sensitive_attribute_co
         # Close the BytesIO stream
         buffer.close()
                 
-        return {"Statistical Rates": class_proportions,"class_proportions_plot":base64_plot }
+        return {"Statistical Rates": class_proportions,"TSD scores": tsd, "Description":"The TSD values are calculated by getting the standard deveiation of the proportions of each group accros the different classes. Lower TSD reflects on a similar treatment across the groups while a higher TSD reflects an unequal treatment accross the sensitive groups","Statistical Rate Visualization":base64_plot }
     
     except Exception as e:
         return {"Error": str(e)}

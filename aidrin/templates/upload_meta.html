@@ -7,6 +7,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
+            font-size: 30px;
         }
         #uploadForm {
             max-width: 400px;
@@ -31,6 +32,7 @@
             border-radius: 4px;
             cursor: pointer;
             width: 100%;
+            font-size: 30px;
         }
         #uploadForm button:hover {
             background-color: #45a049;
@@ -181,7 +183,7 @@
                     }
 
                     if (typeof value === 'object') {
-                        result += '<button onclick="toggleCollapse(this,\'' + key + '\')" style="width: 100%; background-color: ' + getLightColor(key) + '; color: black; padding: 14px 20px; margin: 8px 0; border: none; cursor: pointer; border-radius: 4px; font-size: 16px;">'+key+'</button>';
+                        result += '<button onclick="toggleCollapse(this,\'' + key + '\')" style="width: 100%; background-color: ' + getLightColor(key) + '; color: black; padding: 14px 20px; margin: 8px 0; border: none; cursor: pointer; border-radius: 4px; font-size: 30px;">'+key+'</button>';
 
                         result += '<ul class="nested" style="display: none;">' + displayKeyValuePairs(value) + '</ul>';
                     } else {

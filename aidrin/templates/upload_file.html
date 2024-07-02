@@ -20,23 +20,44 @@
         <div id="summaryStatistics"></div>
         <div class="plot-container" id="histogramsContainer"></div>
 
-        <strong id="toggleButton_quality" onclick="toggleCheckboxes('checkboxContainer_quality','quality')"> + </strong>
-        <strong>Data Quality Metrics</strong> <br>
+        <strong id="toggleButton_quality" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_quality','quality','Data Quality Metrics')"> + Data Quality Metrics</strong><br>
         <div id="checkboxContainer_quality" class="checkboxContainer"><br>
-            <div style="margin-left: 40px;">
-                <input type="checkbox" name="completeness" value="yes"> Check completeness
-                <input type="checkbox" name="outliers" value="yes" style="margin-left: 40px;"> Check outliers
-                <input type="checkbox" name="duplicity" value="yes" style="margin-left: 40px;"> Check duplicity
+            <div style="margin-left: 40px; font-family: Arial, sans-serif; line-height: 1.6;">
+                <label style="display: block; margin-bottom: 8px;">
+                    <input type="checkbox" name="completeness" value="yes" style="margin-right: 10px;">
+                    Check completeness
+                    <span class="info-icon">i
+                        <span class="info-text">This option checks the proportion of NaN values in each feature and displays a bar chart highlighting features with only missing values.</span>
+                    </span>
+                </label>
+
+                <label style="display: block; margin-bottom: 8px;">
+                    <input type="checkbox" name="outliers" value="yes" style="margin-right: 10px;">
+                    Check outliers
+                    <span class="info-icon">i
+                        <span class="info-text">This option checks for outliers in numerical features using the Inter Quartile Range (IQR) method and displays a bar chart highlighting features with outliers.</span>
+                        </span>
+                </label>
+                
+                <label style="display: block; margin-bottom: 8px;">
+                    <input type="checkbox" name="duplicity" value="yes" style="margin-right: 10px;">
+                    Check duplicity
+                    <span class="info-icon">i
+                        <span class="info-text">This option checks for duplicate rows in the dataset and display the proportion of overall duplicates in the dataset.</span>
+                    </span>
+                </label>
+                
             </div>
              
         </div>
         <br>
 
-        <strong id="toggleButton_fairness" onclick="toggleCheckboxes('checkboxContainer_fairness','fairness')"> + </strong>
-        <strong>Fairness Metrics</strong> <br>
+        <strong id="toggleButton_fairness" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_fairness','fairness','Fairness Metrics')"> + Fairness Metrics</strong> <br>
         <div id="checkboxContainer_fairness" class="checkboxContainer"><br>
-            <input style="margin-left: 40px;" type="checkbox" name="representation rate" value="yes"> Check representation rate<br>
-
+            <input style="margin-left: 40px;" type="checkbox" name="representation rate" value="yes"> Check representation rate:
+            <span class="info-icon">i
+                <span class="info-text">This option checks the representation rate of a sensitive feature in the dataset and displays a pie chart highlighting the representation rate of the sensitive feature.</span>
+            </span>
             <ul>
                 <li style="margin-left: 40px;" >
                     <label for="features for representation rate">Sensitive feature:</label>
@@ -49,7 +70,10 @@
             </ul>
 
             
-            <input style="margin-left: 40px;" type="checkbox" name="statistical rate" value="yes"> Check statistical rate<br>
+            <input style="margin-left: 40px;" type="checkbox" name="statistical rate" value="yes"> Check statistical rate
+            <span class="info-icon">i
+                <span class="info-text">This option calculates the proportions of each sensitive attribute within each category of the selected target feature and presents the results as a bar chart. This visual helps identify imbalances or disparities in the data.</span>   
+            </span>
             <ul>
                 <li style="margin-left: 40px;">
                     <label for="features for statistical rate">Feature:</label>
@@ -65,7 +89,8 @@
                 </li>
                 
             </ul>
-            
+
+                        
             <!-- <input style="margin-left: 40px;" type="checkbox" name="real representation rate" value="yes"> Check real world representation rate<br> -->
             
             <!-- <ul>
@@ -92,14 +117,46 @@
             
             
             <!-- <input style="margin-left: 40px;" type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br> -->
+        
+            <input style="margin-left: 40px;" type="checkbox" name="conditional demographic disparity" value="yes"> Conditional Demographic Disparity
+            <span class="info-icon">i
+                <span class="info-text">The conditional demographic disparity metric evaluates the distribution of positive and negative outcomes across sensitive groups. Users specify which outcome is 'positive/target', with others classified as 'negative'. The metric calculates the proportions of positive and negative outcomes within each group. A disparity value of True indicates that a group's negative outcomes exceed its positive ones, highlighting potential disparities in outcome distribution.</span>
+            </span>
+            <ul>
+                <li style="margin-left: 40px;">
+                    <label for="sensitive for conditional demographic disparity">Sensitive feature:</label>
+                    <select name="sensitive for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis1" required>
+                        <option value="" disabled selected>Select a feature</option>
+                    </select><br>
+                </li>
+
+                <li style="margin-left: 40px;">
+                    <label for="target for conditional demographic disparity">Target feature:</label>
+                    
+                    <select name="target for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis2" required>
+                        <option value="" disabled selected>Select a feature</option>
+                    </select><br>
+                </li>
+
+                <li style="margin-left: 40px;">
+                    <label for="target value for conditional demographic disparity">Target value:</label>
+                    <input type="text" name="target value for conditional demographic disparity" required><br>
+                    
+                </li>
+
+                
+
+        
         </div>        
         <br>
 
-        <strong id="toggleButton_correlation" onclick="toggleCheckboxes('checkboxContainer_correlation','correlation')"> + </strong>
-        <strong>Correlation Analysis</strong> <br>
+        <strong id="toggleButton_correlation" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_correlation','correlation','Correlation Analysis')"> + Correlation Analysis</strong> <br>
+        
         <div id="checkboxContainer_correlation" class="checkboxContainer"><br>
-            <input style="margin-left: 40px;" type="checkbox" name="correlations" value="yes"> Perform Correlation Analysis<br>
-
+            <input style="margin-left: 40px;" type="checkbox" name="correlations" value="yes"> Perform Correlation Analysis
+            <span class="info-icon">i
+                <span class="info-text">This option calculates feature correlations using Pearson correlation for numerical features and Theil's U for categorical features. It returns a visualization of the correlation matrix.</span>
+            </span>
             <ul>
                 <li style="margin-left: 40px;">
                     <label for="correlationColumns">Features:</label>
@@ -111,11 +168,15 @@
         </div>
         <br>
 
-        <strong id="toggleButton_featureRelevance" onclick="toggleCheckboxes('checkboxContainer_featureRelevance','featureRelevance')"> + </strong>
-        <strong>Feature Relevance</strong> <br>
+        <strong id="toggleButton_featureRelevance" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_featureRelevance','featureRelevance','Feature Relevance')"> + Feature Relevance</strong>
+        <br>
         <div id="checkboxContainer_featureRelevance" class="checkboxContainer"><br>
 
-            <input style="margin-left: 40px;" type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy against target<br>
+            <input style="margin-left: 40px;" type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy against target
+            <span class="info-icon">i
+                <span class="info-text">
+                    Calculates Pearson correlation coefficients between each feature and the target variable after minimal data cleaning (dropping missing values, one-hot encoding categorical features, and label encoding the target feature). A coefficient of 1 indicates a perfect positive correlation, while -1 indicates a perfect negative correlation.</span>
+            </span>
 
             <ul>
                 <li style="margin-left: 40px;">
@@ -141,10 +202,13 @@
         </div>
         <br>      
 
-        <strong id="toggleButton_classImbalance" onclick="toggleCheckboxes('checkboxContainer_classImbalance','classImbalance')"> + </strong>
-        <strong>Class Imbalance</strong> <br>
+        <strong id="toggleButton_classImbalance" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_classImbalance','classImbalance','Class Imbalance')"> + Class Imbalance</strong>
+        <br>
         <div id="checkboxContainer_classImbalance" class="checkboxContainer"><br>
-        <input style="margin-left: 40px;" type="checkbox" name="class imbalance" value="yes">Evaluate imbalance degree<br>
+        <input style="margin-left: 40px;" type="checkbox" name="class imbalance" value="yes">Evaluate imbalance degree
+        <span class="info-icon">i
+            <span class="info-text">This option calculates the imbalance degree of the target feature and displays a pie chart highlighting the distribution of the target feature.</span>
+        </span>
         <ul>
             <li  style="margin-left: 40px;">
                 <label for="class imbalance">Target: </label>
@@ -159,8 +223,8 @@
 
         
         
-        <strong id="toggleButton_privacy" onclick="toggleCheckboxes('checkboxContainer_privacy','privacy')"> + </strong>
-        <strong>Privacy Preservation</strong> <br>
+        <strong id="toggleButton_privacy" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_privacy','privacy','Privacy Preservation')"> + Privacy Preservation</strong>
+        <br>
         <div id="checkboxContainer_privacy" class="checkboxContainer"><br> 
             <input style="margin-left: 40px;" type="checkbox" name="differential privacy" value="yes"> Differential privacy by adding laplacian noise:<br>
             <ul>
@@ -216,13 +280,9 @@
         </div>
         <br>        
 
-        <strong id="toggleButton_FAIRness" onclick="toggleCheckboxes('checkboxContainer_FAIRness','FAIRness')"> + </strong>
-        <strong>FAIRness Evaluation</strong> <br>
-        <div id="checkboxContainer_FAIRness" class="checkboxContainer"><br>
-            <button type="button" onclick="window.location.href='/FAIRness'">Check FAIRness scores</button><br>
-
-        </div> <br>
-
+        <strong id="toggleButton_FAIRness" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="window.location.href='/FAIRness'"> + FAIR Compliance Evaluation</strong>
+        <br>
+        <br>
 
 
         <div id = "formbuttonsContainer">
@@ -236,25 +296,14 @@
     </form>
 
     <div id="buttonsContainer" style="display:none;">
-        <button type="button" id="visualizationBtn" onclick="showVisualization()">Show Visualization</button>
-        <button type="button" id="jsonBtn" onclick="showResults()">Show Results</button>
         <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
     </div>
     
-            
-
-        </div>
-
     
     <div id="resultContainer" style="display:none;"></div>
     
 
     <script>
-
-        // Call the showLoadingScreen function when the page loads or when needed
-        document.addEventListener("DOMContentLoaded", function () {
-            showLoadingScreen();
-        });
 
         $(document).ready(function () {
             $('#file').on('change', function () {
@@ -265,7 +314,7 @@
                 formData.append('file', file);
 
                 $.ajax({
-                    url: '/summary_statistics',
+                    url: '/feature_set',
                     type: 'POST',
                     data: formData,
                     contentType: false,
@@ -298,6 +347,8 @@
                                 createDropdown(response.all_features,'allFeaturesDropdownClIm');
                                 createDropdown(response.all_features,'allFeaturesDropdownMMS');
                                 createDropdown(response.all_features,'allFeaturesDropdownMMM');
+                                createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis1');
+                                createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis2');
                             }
 
                         } else {

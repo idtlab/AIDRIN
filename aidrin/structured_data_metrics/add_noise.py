@@ -83,6 +83,6 @@ def return_noisy_stats(df, add_noise_columns, epsilon):
     except Exception as e:
         stat_dict['Noisy file saved'] = "Error"
 
-    stat_dict['Combined Plots'] = combined_image_base64
+    stat_dict['DP Statistics Visualization'] = combined_image_base64
 
     return stat_dict

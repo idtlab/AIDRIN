@@ -52,10 +52,11 @@ def create_representation_rate_vis(dataframe, columns):
             values = [cum_proportions[attribute_value] * 100 for attribute_value in cum_proportions.index]
 
             # Plot the pie chart
-            plt.pie(values, labels=cum_proportions.index, autopct='%1.1f%%', startangle=140)
-            plt.title('Cumulative Proportion of Attribute Values')
             
-            plt.subplots_adjust(left=0.2)
+            plt.title('Percentage Distribution of Sensitive Attribute Values', fontsize=16)
+            plt.pie(values, labels=cum_proportions.index, autopct='%1.1f%%', startangle=140,textprops={'fontsize': 14})
+            
+            # plt.subplots_adjust(left=0.2)
             plt.tight_layout()
 
             # Save the chart to a BytesIO object

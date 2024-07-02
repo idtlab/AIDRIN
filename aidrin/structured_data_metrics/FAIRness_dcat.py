@@ -48,7 +48,7 @@ def categorize_metadata(metadata_dict,original_metadata):
         if key in ["identifier", "description","title","theme","keyword","landingPage"]:
             find_c+=1
             findable[key] = value
-        #     categorized = True
+            categorized = True
         elif key.startswith("keyword") or key.startswith("theme"):
             if find_iter > 1:
                 findable[key] = value
@@ -115,6 +115,9 @@ def categorize_metadata(metadata_dict,original_metadata):
 
     # Plot Pie Chart
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 4), gridspec_kw={'width_ratios': [3, 3], 'wspace': 0.8})  # 1 row, 2 columns
+    
+    # Set font size
+    plt.rcParams.update({'font.size': 20})
 
     plabels = ['Pass', 'Fail']
     psizes = [sum(sizes), sum([find_tot_checks, acc_tot_checks, inter_tot_checks, reu_tot_checks]) - sum(sizes)]
