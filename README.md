@@ -8,7 +8,7 @@ Install
 -------
 
     # clone the repository
-    $ git clone https://github.com/idtlab/AIDRIn.git
+    $ git clone https://github.com/idtlab/AIDRIN.git
     $ cd aidrin
 
 Create a virtualenv and activate it::
@@ -21,8 +21,10 @@ Or on Windows cmd::
     $ py -3 -m venv .venv
     $ .venv\Scripts\activate.bat
 
-Install AIDRIn::
+Install AIDRIN::
 
+    # go to the AIDRIN directory
+    $ cd ..
     $ pip install -e .
 
 Run
