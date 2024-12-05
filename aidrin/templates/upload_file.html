@@ -12,35 +12,49 @@
     <title>Structured Data Readiness</title>
 </head>
 <body>
+    <div class="h1-container">
     <h1>Structured Data Readiness</h1>
-    <form id="uploadForm" method="post" enctype="multipart/form-data">
-        <label for="file">Choose a CSV file:</label>
-        <input type="file" name = 'file' id="file" accept=".csv" required>
+    </div>
+    <!-- New upload icon -->
+    <label for="file" class="custum-file-upload">
+        <div class="icon">
+        <!--Credit for the image-->
+        <svg viewBox="0 0 24 24" fill="" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path fill-rule="evenodd" clip-rule="evenodd" d="M10 1C9.73478 1 9.48043 1.10536 9.29289 1.29289L3.29289 7.29289C3.10536 7.48043 3 7.73478 3 8V20C3 21.6569 4.34315 23 6 23H7C7.55228 23 8 22.5523 8 22C8 21.4477 7.55228 21 7 21H6C5.44772 21 5 20.5523 5 20V9H10C10.5523 9 11 8.55228 11 8V3H18C18.5523 3 19 3.44772 19 4V9C19 9.55228 19.4477 10 20 10C20.5523 10 21 9.55228 21 9V4C21 2.34315 19.6569 1 18 1H10ZM9 7H6.41421L9 4.41421V7ZM14 15.5C14 14.1193 15.1193 13 16.5 13C17.8807 13 19 14.1193 19 15.5V16V17H20C21.1046 17 22 17.8954 22 19C22 20.1046 21.1046 21 20 21H13C11.8954 21 11 20.1046 11 19C11 17.8954 11.8954 17 13 17H14V16V15.5ZM16.5 11C14.142 11 12.2076 12.8136 12.0156 15.122C10.2825 15.5606 9 17.1305 9 19C9 21.2091 10.7909 23 13 23H20C22.2091 23 24 21.2091 24 19C24 17.1305 22.7175 15.5606 20.9844 15.122C20.7924 12.8136 18.858 11 16.5 11Z" fill=""></path> </g></svg>
+        </div>
+        <div class="text">
+           <span>Choose a CSV file</span>
+           </div>
+           <input id="file" type="file" accept=".csv" required>
+    </label>
+    <form id="uploadForm" mexthod="post" enctype="multipart/form-data">
 
         <div id="summaryStatistics"></div>
         <div class="plot-container" id="histogramsContainer"></div>
 
-        <strong id="toggleButton_quality" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_quality','quality','Data Quality Metrics')"> + Data Quality Metrics</strong><br>
+        <strong id="toggleButton_quality" class="toggle-button" onclick="toggleCheckboxes('checkboxContainer_quality','quality','Data Quality Metrics')"> + Data Quality Metrics</strong><br>
         <div id="checkboxContainer_quality" class="checkboxContainer"><br>
-            <div style="margin-left: 40px; font-family: Arial, sans-serif; line-height: 1.6;">
-                <label style="display: block; margin-bottom: 8px;">
-                    <input type="checkbox" name="completeness" value="yes" style="margin-right: 10px;">
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <label class="material-checkbox">
+                    <input type="checkbox"  name="completeness" value="yes">
+                    <span class="checkmark"></span>
                     Check completeness
                     <span class="info-icon">i
                         <span class="info-text">This option checks the proportion of NaN values in each feature and displays a bar chart highlighting features with only missing values.</span>
                     </span>
                 </label>
 
-                <label style="display: block; margin-bottom: 8px;">
+                <label class="material-checkbox">
                     <input type="checkbox" name="outliers" value="yes" style="margin-right: 10px;">
+                    <span class="checkmark"></span>
                     Check outliers
                     <span class="info-icon">i
                         <span class="info-text">This option checks for outliers in numerical features using the Inter Quartile Range (IQR) method and displays a bar chart highlighting features with outliers.</span>
                         </span>
                 </label>
                 
-                <label style="display: block; margin-bottom: 8px;">
+                <label class="material-checkbox">
                     <input type="checkbox" name="duplicity" value="yes" style="margin-right: 10px;">
+                    <span class="checkmark"></span>
                     Check duplicity
                     <span class="info-icon">i
                         <span class="info-text">This option checks for duplicate rows in the dataset and display the proportion of overall duplicates in the dataset.</span>
@@ -52,14 +66,18 @@
         </div>
         <br>
 
-        <strong id="toggleButton_fairness" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_fairness','fairness','Fairness Metrics')"> + Fairness Metrics</strong> <br>
+        <strong id="toggleButton_fairness" class="toggle-button" onclick="toggleCheckboxes('checkboxContainer_fairness','fairness','Fairness Metrics')"> + Fairness Metrics</strong> <br>
         <div id="checkboxContainer_fairness" class="checkboxContainer"><br>
-            <input style="margin-left: 40px;" type="checkbox" name="representation rate" value="yes"> Check representation rate:
-            <span class="info-icon">i
-                <span class="info-text">This option checks the representation rate of a sensitive feature in the dataset and displays a pie chart highlighting the representation rate of the sensitive feature.</span>
-            </span>
+            <label class="material-checkbox">
+                    <input type="checkbox" name="representation rate" value="yes">
+                    <span class="checkmark"></span>
+                    Check representation rate
+                    <span class="info-icon">i
+                    <span class="info-text">This option checks the representation rate of a sensitive feature in the dataset and displays a pie chart highlighting the representation rate of the sensitive feature.</span>
+                </span>
+            </label>
             <ul>
-                <li style="margin-left: 40px;" >
+                <li  >
                     <label for="features for representation rate">Sensitive feature:</label>
                     <select name="features for representation rate" id = "allFeaturesDropdownRepRate" required>
                         <option value="" disabled selected>Select a feature</option>
@@ -69,19 +87,22 @@
                 </li>
             </ul>
 
-            
-            <input style="margin-left: 40px;" type="checkbox" name="statistical rate" value="yes"> Check statistical rate
-            <span class="info-icon">i
-                <span class="info-text">This option calculates the proportions of each sensitive attribute within each category of the selected target feature and presents the results as a bar chart. This visual helps identify imbalances or disparities in the data.</span>   
-            </span>
+            <label class="material-checkbox">
+                <input  type="checkbox" name="statistical rate" value="yes"> 
+                <span class="checkmark"></span>
+                Check statistical rate
+                <span class="info-icon">i
+                    <span class="info-text">This option calculates the proportions of each sensitive attribute within each category of the selected target feature and presents the results as a bar chart. This visual helps identify imbalances or disparities in the data.</span>   
+                </span>
+            </label>
             <ul>
-                <li style="margin-left: 40px;">
+                <li >
                     <label for="features for statistical rate">Feature:</label>
                     <select name="features for statistical rate" id = "allFeaturesDropdownStatRate1" required>
                         <option value="" disabled selected>Select a feature</option>
                     </select>
                 </li>
-                <li style="margin-left: 40px;">
+                <li >
                     <label for="target for statistical rate">Target:</label>
                     <select name="target for statistical rate" id = "allFeaturesDropdownStatRate2" required>
                         <option value="" disabled selected>Select a feature</option>
@@ -117,20 +138,23 @@
             
             
             <!-- <input style="margin-left: 40px;" type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br> -->
-        
-            <input style="margin-left: 40px;" type="checkbox" name="conditional demographic disparity" value="yes"> Conditional Demographic Disparity
-            <span class="info-icon">i
-                <span class="info-text">The conditional demographic disparity metric evaluates the distribution of positive and negative outcomes across sensitive groups. Users specify which outcome is 'positive/target', with others classified as 'negative'. The metric calculates the proportions of positive and negative outcomes within each group. A disparity value of True indicates that a group's negative outcomes exceed its positive ones, highlighting potential disparities in outcome distribution.</span>
-            </span>
+            <label class="material-checkbox">
+                <input  type="checkbox" name="conditional demographic disparity" value="yes"> 
+                <span class="checkmark"></span>
+                Conditional Demographic Disparity
+                <span class="info-icon">i
+                    <span class="info-text">The conditional demographic disparity metric evaluates the distribution of positive and negative outcomes across sensitive groups. Users specify which outcome is 'positive/target', with others classified as 'negative'. The metric calculates the proportions of positive and negative outcomes within each group. A disparity value of True indicates that a group's negative outcomes exceed its positive ones, highlighting potential disparities in outcome distribution.</span>
+                </span>
+            </label>
             <ul>
-                <li style="margin-left: 40px;">
+                <li >
                     <label for="sensitive for conditional demographic disparity">Sensitive feature:</label>
                     <select name="sensitive for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis1" required>
                         <option value="" disabled selected>Select a feature</option>
                     </select><br>
                 </li>
 
-                <li style="margin-left: 40px;">
+                <li >
                     <label for="target for conditional demographic disparity">Target feature:</label>
                     
                     <select name="target for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis2" required>
@@ -138,9 +162,9 @@
                     </select><br>
                 </li>
 
-                <li style="margin-left: 40px;">
+                <li >
                     <label for="target value for conditional demographic disparity">Target value:</label>
-                    <input type="text" name="target value for conditional demographic disparity" required><br>
+                    <input class="textWrapper" type="text" name="target value for conditional demographic disparity" required><br>
                     
                 </li>
 
@@ -150,46 +174,53 @@
         </div>        
         <br>
 
-        <strong id="toggleButton_correlation" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_correlation','correlation','Correlation Analysis')"> + Correlation Analysis</strong> <br>
+        <strong id="toggleButton_correlation" class="toggle-button" onclick="toggleCheckboxes('checkboxContainer_correlation','correlation','Correlation Analysis')"> + Correlation Analysis</strong> <br>
         
         <div id="checkboxContainer_correlation" class="checkboxContainer"><br>
-            <input style="margin-left: 40px;" type="checkbox" name="correlations" value="yes"> Perform Correlation Analysis
-            <span class="info-icon">i
-                <span class="info-text">This option calculates feature correlations using Pearson correlation for numerical features and Theil's U for categorical features. It returns a visualization of the correlation matrix.</span>
-            </span>
+            <label class="material-checkbox">
+                <input  type="checkbox" name="correlations" value="yes"> 
+                <span class="checkmark"></span>
+                Perform Correlation Analysis
+                <span class="info-icon">i
+                    <span class="info-text">This option calculates feature correlations using Pearson correlation for numerical features and Theil's U for categorical features. It returns a visualization of the correlation matrix.</span>
+                </span>
+            </label>    
             <ul>
-                <li style="margin-left: 40px;">
+                <li >
                     <label for="correlationColumns">Features:</label>
                     <!-- Checkboxes for correlations -->
-                    <div style="margin-left: 40px;" id="correlationCheckboxContainer"></div>
+                    <div id="correlationCheckboxContainer"></div>
                 </li>
             </ul>
            
         </div>
         <br>
 
-        <strong id="toggleButton_featureRelevance" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_featureRelevance','featureRelevance','Feature Relevance')"> + Feature Relevance</strong>
+        <strong id="toggleButton_featureRelevance" class="toggle-button" onclick="toggleCheckboxes('checkboxContainer_featureRelevance','featureRelevance','Feature Relevance')"> + Feature Relevance</strong>
         <br>
         <div id="checkboxContainer_featureRelevance" class="checkboxContainer"><br>
-
-            <input style="margin-left: 40px;" type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy against target
-            <span class="info-icon">i
-                <span class="info-text">
-                    Calculates Pearson correlation coefficients between each feature and the target variable after minimal data cleaning (dropping missing values, one-hot encoding categorical features, and label encoding the target feature). A coefficient of 1 indicates a perfect positive correlation, while -1 indicates a perfect negative correlation.</span>
-            </span>
+            <label class="material-checkbox">
+                <input  type="checkbox" name="feature relevancy" value="yes">
+                <span class="checkmark"></span>
+                Check feature relavancy against target
+                <span class="info-icon">i
+                    <span class="info-text">
+                        Calculates Pearson correlation coefficients between each feature and the target variable after minimal data cleaning (dropping missing values, one-hot encoding categorical features, and label encoding the target feature). A coefficient of 1 indicates a perfect positive correlation, while -1 indicates a perfect negative correlation.</span>
+                </span>
+            </label>
 
             <ul>
-                <li style="margin-left: 40px;">
+                <li >
                     <label  for="categorical features for feature relevancy">Categorical features:</label>
                     <div id ="catFeaturesCheckbox1"></div><br>
                 </li>
 
-                <li style="margin-left: 40px;">
+                <li >
                     <label  for="numerical features for feature relevancy">Numerical features:</label>
                     <div  id ="numFeaturesCheckbox1"></div><br>
                 </li>
 
-                <li style="margin-left: 40px;">
+                <li >
                     <label  for="target for feature relevance">Target feature:</label>
                     <select name="target for feature relevance" id = "allFeaturesDropdownFeaRel"required>
                         <option value="" disabled selected>Select a feature</option>
@@ -202,15 +233,19 @@
         </div>
         <br>      
 
-        <strong id="toggleButton_classImbalance" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_classImbalance','classImbalance','Class Imbalance')"> + Class Imbalance</strong>
+        <strong id="toggleButton_classImbalance" class="toggle-button" onclick="toggleCheckboxes('checkboxContainer_classImbalance','classImbalance','Class Imbalance')"> + Class Imbalance</strong>
         <br>
         <div id="checkboxContainer_classImbalance" class="checkboxContainer"><br>
-        <input style="margin-left: 40px;" type="checkbox" name="class imbalance" value="yes">Evaluate imbalance degree
-        <span class="info-icon">i
-            <span class="info-text">This option calculates the imbalance degree of the target feature and displays a pie chart highlighting the distribution of the target feature.</span>
-        </span>
+        <label class="material-checkbox">
+            <input  type="checkbox" name="class imbalance" value="yes">
+            <span class="checkmark"></span>
+            Evaluate imbalance degree
+            <span class="info-icon">i
+                <span class="info-text">This option calculates the imbalance degree of the target feature and displays a pie chart highlighting the distribution of the target feature.</span>
+            </span>
+        </label>
         <ul>
-            <li  style="margin-left: 40px;">
+            <li  >
                 <label for="class imbalance">Target: </label>
                 <select name="class feature" id="allFeaturesDropdownClIm" required>
                     <option value ="" disabled selected>Select a feature</option>
@@ -223,34 +258,40 @@
 
         
         
-        <strong id="toggleButton_privacy" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_privacy','privacy','Privacy Preservation')"> + Privacy Preservation</strong>
+        <strong id="toggleButton_privacy" class="toggle-button" onclick="toggleCheckboxes('checkboxContainer_privacy','privacy','Privacy Preservation')"> + Privacy Preservation</strong>
         <br>
         <div id="checkboxContainer_privacy" class="checkboxContainer"><br> 
-            <input style="margin-left: 40px;" type="checkbox" name="differential privacy" value="yes"> Differential privacy by adding laplacian noise:<br>
+            <label class="material-checkbox">
+                <input  type="checkbox" name="differential privacy" value="yes"> 
+                <span class="checkmark"></span>
+                Differential privacy by adding laplacian noise:<br>
+            </label>
             <ul>
-                <li  style="margin-left: 40px;" >
+                <li  >
                     <label for="numerical features to add noise">Numerical features to add noise:</label>
                     <div id ="numFeaturesCheckbox2"></div>
                 </li>
 
-                <li  style="margin-left: 40px;" >
+                <li  >
                     <label for="privacy budget">Privacy budget (default epsilon=0.1):</label>
-                    <input type="text" name="privacy budget">
+                    <input class="textWrapper" type="text" name="privacy budget">
                 </li>
             </ul>
             
-            
-            <input style="margin-left: 40px;" type="checkbox" name="single attribute risk score" value="yes"> Evaluate single attribute risks:<br>
-            
+            <label class="material-checkbox">
+                <input  type="checkbox" name="single attribute risk score" value="yes">
+                <span class="checkmark"></span>
+                Evaluate single attribute risks:<br>
+            </label>
             <ul>
-                <li  style="margin-left: 40px;" >
+                <li>
                     <label for="id feature to measure single attribute risk score">ID feature: </label>
                     <select name="id feature to measure single attribute risk score" id="allFeaturesDropdownMMS" required>
                         <option value ="" disabled selected>Select a feature</option>
             </select><br>
                 </li>
 
-                <li style="margin-left: 40px;">
+                <li >
                     <label  for="quasi identifiers to measure single attribute risk score">Quasi identifiers: </label>
                     <div id ="catFeaturesCheckbox2"></div><br>
                 </li>
@@ -258,18 +299,21 @@
             
             
             
-
-            <input style="margin-left: 40px;" type="checkbox" name="multiple attribute risk score" value="yes"> Evaluate multiple attribute risks:<br>
+            <label class="material-checkbox">
+                <input type="checkbox" name="multiple attribute risk score" value="yes"> 
+                <span class="checkmark"></span>
+                Evaluate multiple attribute risks:<br>
+            </label>
             
             <ul>
-                <li style="margin-left: 40px;">
+                <li >
                     <label for="id feature to measure multiple attribute risk score">ID feature</label>
                     <select name="id feature to measure multiple attribute risk score" id="allFeaturesDropdownMMM" required>
                         <option value ="" disabled selected>Select a feature</option>
                     </select><br>
                 </li>
 
-                <li style="margin-left: 40px;">
+                <li >
                     <label for="quasi identifiers to measure multiple attribute risk score">Quasi identifiers: </label>
                     <div  id ="catFeaturesCheckbox3"></div><br>
                 </li>
@@ -278,22 +322,28 @@
             
             
         </div>
-        <br>        
-
-        <strong id="toggleButton_FAIRness" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="window.location.href='/FAIRness'"> + FAIR Compliance Evaluation</strong>
-        <br>
+        <br>       
         <br>
 
 
         <div id = "formbuttonsContainer">
-            <button type="button" onclick="submitForm()">Submit</button>
+            <button class="animated-button" type="button" onclick="submitForm()">
+                <span>Submit</span>
+                <span></span>
+                </button>
     
             <!-- Reset button with event listener -->
-            <button type="reset" value="Reset" id="resetButton" style="background-color: red;">Reset</button>
+            <button class="animated-button-reset" type="reset" value="Reset" id="resetButton">
+                <span>Reset</span>
+                <span></span>
+                </button>
         </div>
         
         
     </form>
+
+    <strong id="toggleButton_FAIRness" class="Switch-toggle-button" onclick="window.location.href='/FAIRness'"> FAIR Compliance Evaluation</strong>
+        
 
     <div id="buttonsContainer" style="display:none;">
         <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
@@ -388,14 +438,20 @@
 
                     var checkbox = $('<input>').attr({
                         type: 'checkbox',
-                        id: 'checkbox_' + i, // You may want to generate unique IDs
+                        class: 'material-checkbox',
+                        id: tableId+'checkbox_' + i, // Generate unique ids so all buttons work
                         name: nameTag, // Set the name attribute
                         value: features[i]
                     });
 
-                    var label = $('<label>').attr('for', 'checkbox_' + i).text(features[i]);
+                    var span = $('<span>').addClass('checkmark');
 
-                    var cell = $('<td>').append(checkbox).append(label);
+                    var label = $('<label>')
+                        .attr('class','material-checkbox')
+                        .attr('for', tableId+'checkbox_' + i);
+
+                    label.append(checkbox).append(span).append(features[i]);
+                    var cell = $('<td>').append(label);
 
                     row.append(cell);
                 }
@@ -434,7 +490,7 @@
                             statisticsHTML += '<p id="Statresult"><strong>Categorical Features:</strong> <span id="catFeatures">' + response.categorical_features + '</span></p>';
                             statisticsHTML += '<p id="Statresult"><strong>Numerical Features:</strong> <span id="numFeatures">' + response.numerical_features + '</span></p><br>';
                             statisticsHTML += '<h3>Summary Statistics Table</h3><table>';
-                            statisticsHTML += '<tr><th><strong>Statistic</strong></th>'; // Bold header for the "Statistic" column
+                            statisticsHTML += '<tr><th>Statistic</th>'; // Bold header for the "Statistic" column
 
                             // Iterate over the keys to create columns (excluding the first key)
                             for (var key in response.summary_statistics) {
@@ -518,16 +574,20 @@
                         }
 
                         cell = $('<td>').appendTo(row);
-                        var checkbox = $('<input type="checkbox" class="columnCheckbox">')
+
+                        var checkbox = $('<input type="checkbox" class="material-checkbox">')
                             .attr('id', 'checkbox_' + columns[i])
                             .attr('value', columns[i])
                             .attr('name', 'checkboxValues');
 
-                        var label = $('<label>')
-                            .attr('for', 'checkbox_' + columns[i])
-                            .text(columns[i]);
+                        var span = $('<span>').addClass('checkmark');
 
-                        cell.append(checkbox);
+                        var label = $('<label>')
+                            .attr('class','material-checkbox')
+                            .attr('for', 'checkbox_' + columns[i]);
+                           
+
+                        label.append(checkbox).append(span).append(columns[i]);
                         cell.append(label);
                     }
 

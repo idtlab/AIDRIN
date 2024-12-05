@@ -1,44 +1,101 @@
 body {
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+
     font-family: 'Roboto', sans-serif;
+    color: #ffffff; /* Text color */
     margin: 20px;
-    background-color: #f4f4f4;
     font-size: 20px;
+
+    /* Set background to image and fix it while scrolling */
+    background-image: url("/images/homepage_bg2.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
 }
 
 form {
-    background-color: #fff;
+    display:block;
+    /* blur background */
+    background: rgba(0, 0, 0, 0.20);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+
+    margin-bottom: 20px;
     padding: 20px;
     border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
     max-width: 2000px; 
     width: 100%;
     box-sizing: border-box;
+    
 }
 
-/* Style for the select element */
+/* Style for the select element ( DARK MODE ) */
 select {
+    appearance: none;
+    -webkit-appearaance:none;
+
     font-family: 'Roboto', sans-serif;
+    outline:none; /* Undo natural click outline */
     font-size: 20px; /* Increase font size */
-    padding: 10px 15px; /* Add padding */
-    border: 1px solid #ccc; /* Border style */
-    border-radius: 4px; /* Rounded corners */
-    background-color: #fff; /* Background color */
-    color: #333; /* Text color */
+    padding: 5px; /* Add padding */
+    border: 2px solid #b0bd1f; /* Border style */
+    border-radius: 10px; /* Rounded corners */
+    background-color: #4d4d4d71; /* Background color */
+    color: #dedede; /* Text color */
     cursor: pointer; /* Pointer cursor */
     width: 100%; /* Full width */
     max-width: 400px; /* Maximum width */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow */
+    margin:10px; /* Margin so successive selects don't touch */
 }
 
+/* Style for Text Input */
+.textWrapper{
+    font-family: 'Roboto', sans-serif;
+    font-size: 20px; /* Increase font size */
+    padding: 5px; /* Add padding */
+    border: 2px solid #b0bd1f; /* Border style */
+    border-radius: 10px; /* Rounded corners */
+    background-color: #4d4d4d71; /* Background color */
+    color: #dedede; /* Text color */
+    cursor: pointer; /* Pointer cursor */
+    width: 100%; /* Full width */
+    max-width: 400px; /* Maximum width */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow */
+    margin:10px; /* Margin so successive selects don't touch */
+
+}
 
 
 
 
 h1 {
     text-align: center;
-    color: #333;
+    color: #ffffff;
 }
+.h1-container {
+    width: 600px;
+    height: 160px;
+    /* Fit to device independent frame and align items */
+    display: flex;
+    gap: 20px;
+    flex-shrink: 1;
+    justify-content: center;
+    align-items: center; 
 
+    border-radius: 20px;
+    /* blur background */
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.20) 100%);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+
+    margin: 10px;
+}
 #fileInput {
     margin-bottom: 20px;
 }
@@ -59,13 +116,14 @@ table {
 }
 
 th, td {
-    border: 1px solid #ddd;
+    border: 1px solid #dddß;
     padding: 8px;
     text-align: left;
 }
 
 th {
-    background-color: #f2f2f2;
+    background-color: #f2f2f2a3;
+    color: #2f2f2f;
 }
 
 #Statresult {
@@ -73,11 +131,13 @@ th {
 }
 
 strong {
-    color: #333;
+
+    color: #ffffff;
 }
+.strong-mouseover
 
 span {
-    color: #666;
+    color: #ffffff;
 }
 
 .plot-container {
@@ -101,26 +161,28 @@ input[type="checkbox"] {
     height: 20px;
 }
 
-button {
-    background-color: #4caf50;
-    color: #fff;
+/* For Dropdown text toggles */
+.toggle-button {
+    font-size: 30px;
     cursor: pointer;
-}
+    color: rgb(255, 255, 255); /* default */
+    transition: color 0.3s ease /* smooth animation */
 
-button:hover {
-    background-color: #45a049;
 }
-
-input[type="reset"] {
-    background-color: #f44336;
-    color: #fff;
-    cursor: pointer;
+/* change Dropdown color while hovering */
+.toggle-button:hover {
+    color:#ff5b5b;
 }
-
-input[type="reset"]:hover {
-    background-color: #d32f2f;
+/* Make this one special :) (to set it apart as it switches pages) */
+.Switch-toggle-button{
+  font-size: 20px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.8);
+  transition: color 0.3s ease /* smooth animation */
 }
-
+.Switch-toggle-button:hover{
+    color:#ff6262b4;
+   }
 
 
 /* #formbuttonsContainer {
@@ -159,7 +221,7 @@ input[type="reset"] {
     }
 }
 .checkboxContainer {
-    display: none;
+ display:none;
     
 }
 
@@ -200,5 +262,227 @@ input[type="reset"] {
     font-size: 12px;
     color: #666;
 }
+/* Make the bullet points stick w/ the text instead of staying on left of containter */
+ul {
+    list-style-position: inside;
+}
 
 
+
+/* Custom Checkbox from uiVerse */
+  .material-checkbox {
+    display: flex;
+    align-items:center;
+    justify-content:center;
+    gap: 20px;
+    cursor: pointer;
+  }
+  
+  .material-checkbox input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  .checkmark {
+    position: relative;
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    border: 2px solid #b0bd1f;
+    border-radius: 4px;
+    transition: all 0.3s;
+  }
+  
+  .material-checkbox input[type="checkbox"]:checked ~ .checkmark {
+    background-color: #2F3300;
+    border-color: #b0bd1f;
+  }
+  
+  .material-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 6px;
+    width: 4px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  
+  .material-checkbox input[type="checkbox"]:focus ~ .checkmark {
+    box-shadow: 0 0 0 2px #dfec5065;
+  }
+  
+  .material-checkbox:hover input[type="checkbox"] ~ .checkmark {
+    border-color: #eaff00;
+  }
+  s
+  .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .material-checkbox input[type="checkbox"]:disabled ~ .checkmark:hover {
+    border-color: #4d4d4d;
+  }
+
+
+
+  /* Custom animated submit button from uiverse */
+  .animated-button {
+    position: relative;
+    display: inline-block;
+    padding: 12px 24px;
+    border: none;
+    font-size: 16px;
+    background-color: rgba(255,255,255,0.4);
+    border-radius: 100px;
+    font-weight: 600;
+    width:110px;
+    height:42px;
+    color: #ffffff;
+    box-shadow: 0 0 0 2px #ffffff20;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.6s cubic-bezier(0.23, 1, 0.320, 1);
+  }
+  
+  .animated-button span:last-child {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    background-color: #4caf50;
+    border-radius: 50%;
+    opacity: 0;
+    transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
+  }
+  .animated-button span:first-child {
+    position: relative;
+    z-index: 1;
+  }
+  
+  .animated-button:hover {
+    box-shadow: 0 0 0 5px #4caf4f5e;
+    color: #ffffff;
+  }
+  
+  .animated-button:active {
+    scale: 0.95;
+  }
+  
+  .animated-button:hover span:last-child {
+    width: 150px;
+    height: 150px;
+    opacity: 1;
+  }
+
+  /* repeating for reset (gotta be a better way...) */
+  .animated-button-reset {
+    position: relative;
+    display: inline-block;
+    padding: 12px 24px;
+    border: none;
+    font-size: 16px;
+    background-color: rgba(255,255,255,0.4);
+    border-radius: 100px;
+    font-weight: 600;
+    width:110px;
+    height:42px;
+    color: #ffffff;
+    box-shadow: 0 0 0 2px #ffffff20;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.6s cubic-bezier(0.23, 1, 0.320, 1);
+  }
+  
+  .animated-button span:last-child {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    background-color: #4caf50;
+    border-radius: 50%;
+    opacity: 0;
+    transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
+  }
+  .animated-button-reset span:last-child {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    background-color: #f44336;
+    border-radius: 50%;
+    opacity: 0;
+    transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
+  }
+  
+  .animated-button-reset span:first-child {
+    position: relative;
+    z-index: 1;
+  }
+  
+  .animated-button-reset:hover {
+    box-shadow: 0 0 0 5px #f4433676;
+    color: #ffffff;
+  }
+  
+  .animated-button-reset:active {
+    scale: 0.95;
+  }
+  
+  .animated-button-reset:hover span:last-child {
+    width: 150px;
+    height: 150px;
+    opacity: 1;
+  }
+  
+/* Custom File upload from uiverse */ 
+.custum-file-upload {
+    margin: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed #e8e8e8;
+    background-color: #212121;
+    padding: 1.5rem;
+    border-radius: 10px;
+    box-shadow: 0px 48px 35px -48px #e8e8e8;
+  }
+  
+  .custum-file-upload .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .custum-file-upload .icon svg {
+    height: 80px;
+    fill: #e8e8e8;
+  }
+  
+  .custum-file-upload .text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .custum-file-upload .text span {
+    font-weight: 400;
+    color: #e8e8e8;
+  }
+  
+  .custum-file-upload input {
+    display: none;
+  }
