@@ -1,26 +1,34 @@
+
+:root{
+  font-family: 'Roboto', sans-serif;
+  --textColor: #212121;
+  --backgroundColor: #ffffff;
+  --secondaryColor: #cccaca;
+  --tertiaryColor: #8f8f8f;
+  --darkAccent: rgb(71, 71, 71);
+
+}
 body {
     display: flex;
     flex-direction: column;
-    text-align: center;
-    align-items: center;
+    text-align: left;
 
-    font-family: 'Roboto', sans-serif;
-    color: #ffffff; /* Text color */
+    color: var(--textColor);
     margin: 20px;
-    font-size: 20px;
+    font-size: 16px;
 
-    /* Set background to image and fix it while scrolling */
+    /* Set background to image and fix it while scrolling
     background-image: url("/images/homepage_bg2.png");
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    background-attachment: fixed;
+    background-attachment: fixed; */
 }
 
 form {
     display:block;
     /* blur background */
-    background: rgba(0, 0, 0, 0.20);
+    background: var(--secondaryColor);
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
 
@@ -34,19 +42,17 @@ form {
     
 }
 
-/* Style for the select element ( DARK MODE ) */
+/* Style for the select element*/
 select {
     appearance: none;
     -webkit-appearaance:none;
 
-    font-family: 'Roboto', sans-serif;
     outline:none; /* Undo natural click outline */
-    font-size: 20px; /* Increase font size */
     padding: 5px; /* Add padding */
-    border: 2px solid #b0bd1f; /* Border style */
+    border: 2px solid #ffffff; /* Border style */
     border-radius: 10px; /* Rounded corners */
-    background-color: #4d4d4d71; /* Background color */
-    color: #dedede; /* Text color */
+    background-color: #212121; /* Background color */
+    color: #ffffff;
     cursor: pointer; /* Pointer cursor */
     width: 100%; /* Full width */
     max-width: 400px; /* Maximum width */
@@ -56,13 +62,11 @@ select {
 
 /* Style for Text Input */
 .textWrapper{
-    font-family: 'Roboto', sans-serif;
-    font-size: 20px; /* Increase font size */
     padding: 5px; /* Add padding */
-    border: 2px solid #b0bd1f; /* Border style */
+    border: 2px solid #ffffff; /* Border style */
     border-radius: 10px; /* Rounded corners */
-    background-color: #4d4d4d71; /* Background color */
-    color: #dedede; /* Text color */
+    background-color: #212121; /* Background color */
+    color: #ffffff;
     cursor: pointer; /* Pointer cursor */
     width: 100%; /* Full width */
     max-width: 400px; /* Maximum width */
@@ -72,17 +76,24 @@ select {
 }
 
 
-
+p{
+  padding:5px;
+  margin:0px;
+}
 
 h1 {
     text-align: center;
-    color: #ffffff;
+    color: var(--textColor);
+}
+h3 {
+  margin:0px;
 }
 .h1-container {
     width: 600px;
     height: 160px;
     /* Fit to device independent frame and align items */
     display: flex;
+    align-self: center;
     gap: 20px;
     flex-shrink: 1;
     justify-content: center;
@@ -90,7 +101,7 @@ h1 {
 
     border-radius: 20px;
     /* blur background */
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.20) 100%);
+    background: var(--secondaryColor);
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
 
@@ -101,7 +112,6 @@ h1 {
 }
 
 #summaryStatistics {
-    margin-top: 20px;
     max-width: 100%;
     overflow: auto; /* Change to 'auto' for scrolling */
 }
@@ -116,37 +126,40 @@ table {
 }
 
 th, td {
-    border: 1px solid #dddß;
+    border-bottom: 2px solid var(--darkAccent);
     padding: 8px;
     text-align: left;
 }
 
 th {
-    background-color: #f2f2f2a3;
-    color: #2f2f2f;
+    background-color: var(--darkAccent);
+    color: white;
 }
 
 #Statresult {
     margin-bottom: 10px;
 }
 
-strong {
-
-    color: #ffffff;
-}
-.strong-mouseover
-
 span {
-    color: #ffffff;
+    color: #212121;
+    margin:0px;
 }
 
 .plot-container {
-    margin-top: 20px;
+    margin-left: 1%;
+    margin-right:1%;
+    margin-top: 40px;
+    border-radius: 20px;
     text-align: center;
+    width:49%;
+    padding: 20px;
+    background-color:var(--secondaryColor);
+}
+.plot-container img{
+  max-width: 95%;
 }
 
 button {
-    width: 50%;
     padding: 10px;
     margin-bottom: 15px;
     box-sizing: border-box;
@@ -163,21 +176,28 @@ input[type="checkbox"] {
 
 /* For Dropdown text toggles */
 .toggle-button {
-    font-size: 30px;
-    cursor: pointer;
-    color: rgb(255, 255, 255); /* default */
+    min-width: max-content;
+    display: flex;
+    align-items: center;
+    font-size: 22px;
+    color: #212121;
     transition: color 0.3s ease /* smooth animation */
-
 }
 /* change Dropdown color while hovering */
-.toggle-button:hover {
+.clickable:hover {
+    cursor: pointer;
     color:#ff5b5b;
 }
+
 /* Make this one special :) (to set it apart as it switches pages) */
 .Switch-toggle-button{
+  min-width: max-content;
+  display: flex;
+  align-items: center;
+  align-self: center;
   font-size: 20px;
   cursor: pointer;
-  color: rgba(255,255,255,0.8);
+  color: var(--textColor);
   transition: color 0.3s ease /* smooth animation */
 }
 .Switch-toggle-button:hover{
@@ -185,10 +205,11 @@ input[type="checkbox"] {
    }
 
 
-/* #formbuttonsContainer {
+#formbuttonsContainer {
     display: flex;
-    justify-content: space-between;
-} */
+    align-items: center;
+    justify-content: center;
+}
 
 button,
 input[type="reset"] {
@@ -221,7 +242,7 @@ input[type="reset"] {
     }
 }
 .checkboxContainer {
- display:none;
+ display:block;
     
 }
 
@@ -229,7 +250,7 @@ input[type="reset"] {
     display: inline-block;
     width: 16px;
     height: 16px;
-    background-color: #007BFF;
+    background-color: var(--textColor);
     color: white;
     text-align: center;
     border-radius: 50%;
@@ -243,14 +264,28 @@ input[type="reset"] {
 .info-icon:hover .info-text {
     display: block;
 }
-
+.metric-info:hover .metric-info-text {
+    display: block;
+}
+.metric-info-text {
+  font-size: 50%;
+  color: white;
+  display: none;
+  position: absolute;
+  left: 27%;
+  background-color: var(--darkAccent); /* text bubble color*/
+  padding: 5px 10px;
+  border-radius: 3px;
+  white-space: normal; /* Allow text to wrap */
+  z-index: 1;
+}
 .info-text {
     display: none;
     position: absolute;
     top: 20px;
     left: 0;
-    background-color: #333;
-    color: white;
+    background-color: #b3b3b3; /* text bubble color*/
+    color: var(--textColor);
     padding: 5px 10px;
     border-radius: 3px;
     white-space: normal; /* Allow text to wrap */
@@ -273,7 +308,7 @@ ul {
   .material-checkbox {
     display: flex;
     align-items:center;
-    justify-content:center;
+
     gap: 20px;
     cursor: pointer;
   }
@@ -288,24 +323,24 @@ ul {
   .checkmark {
     position: relative;
     display: inline-block;
-    width: 20px;
-    height: 20px;
+    width: 1em;
+    height: 1em;
     margin-right: 12px;
-    border: 2px solid #b0bd1f;
+    border: 2px solid var(--textColor);
     border-radius: 4px;
     transition: all 0.3s;
   }
   
   .material-checkbox input[type="checkbox"]:checked ~ .checkmark {
     background-color: #2F3300;
-    border-color: #b0bd1f;
+    border-color: var(--textColor);
   }
   
   .material-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
     content: "";
     position: absolute;
-    top: 2px;
-    left: 6px;
+    top: 1px;
+    left: 5px;
     width: 4px;
     height: 10px;
     border: solid white;
@@ -314,11 +349,11 @@ ul {
   }
   
   .material-checkbox input[type="checkbox"]:focus ~ .checkmark {
-    box-shadow: 0 0 0 2px #dfec5065;
+    box-shadow: 0 0 0 2px var(--textColor);
   }
   
   .material-checkbox:hover input[type="checkbox"] ~ .checkmark {
-    border-color: #eaff00;
+    border-color: var(--tertiaryColor);
   }
   s
   .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
@@ -327,7 +362,7 @@ ul {
   }
   
   .material-checkbox input[type="checkbox"]:disabled ~ .checkmark:hover {
-    border-color: #4d4d4d;
+    border-color: var(--textColor);
   }
 
 
@@ -339,7 +374,7 @@ ul {
     padding: 12px 24px;
     border: none;
     font-size: 16px;
-    background-color: rgba(255,255,255,0.4);
+    background-color: var(--tertiaryColor);
     border-radius: 100px;
     font-weight: 600;
     width:110px;
@@ -448,19 +483,20 @@ ul {
   }
   
 /* Custom File upload from uiverse */ 
-.custum-file-upload {
-    margin: 20px;
+  .custum-file-upload {
+    
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px dashed #e8e8e8;
+    flex-direction: column;
+    border: 2px  #e8e8e8 solid;
+    border-top:none;
     background-color: #212121;
-    padding: 1.5rem;
-    border-radius: 10px;
+    padding:1.5em;
+    border-radius: 0px 0px 10px 10px;
     box-shadow: 0px 48px 35px -48px #e8e8e8;
   }
-  
   .custum-file-upload .icon {
     display: flex;
     align-items: center;
@@ -468,7 +504,7 @@ ul {
   }
   
   .custum-file-upload .icon svg {
-    height: 80px;
+    height: 160px;
     fill: #e8e8e8;
   }
   
@@ -486,3 +522,221 @@ ul {
   .custum-file-upload input {
     display: none;
   }
+
+  .clear-button{
+    display:flex;
+    width: 100%;
+    font-size: 1em;
+    margin: 0 1.5em 0 1.5em;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+    align-self: center;
+    justify-content: center;
+    background-color: green;
+    color: white;
+    margin-bottom:0px;
+    border-radius: 0px 0px 10px 10px;
+    border:2px white solid;
+    border-top:none;
+  }
+  .redirect-upload-button{
+    display:flex;
+    width: 100%;
+    font-size: 1em;
+    margin: 0 1.5em 0 1.5em;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+    align-self: center;
+    justify-content: center;
+    background-color: var(--tertiaryColor);
+    color: white;
+    margin-bottom:0px;
+    border-radius: 0px 0px 10px 10px;
+    border:2px white solid;
+    border-top:none;
+  }
+
+  .metric-download-gui{
+    position: fixed;
+    top: 10px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    align-self: flex-end;
+    align-items: center;
+    max-width: 80%;
+    z-index: 10;
+
+  }
+  .metric-download-gui-fileName{
+    display:flex;
+    width: 100%;
+    font-size: 1em;
+    margin: 0 1.5em 0 1.5em;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+    align-self: center;
+    justify-content: center;
+    margin-bottom:0px;
+    background-color: var(--secondaryColor);
+    border-radius: 10px 10px 0px 0px;
+  }
+  
+  /* Image Carousel */
+.slideshow-container {
+  max-width: 1000px;
+  position: relative;
+  margin: auto;
+}
+/* Hide the images by default */
+.mySlides {
+  display: none;
+}
+.active{
+  display: block;
+}
+
+
+/* Caption text */
+.text {
+  color: #f2f2f2;
+  font-size: 15px;
+  padding: 8px 12px;
+  position: absolute;
+  bottom: 8px;
+  width: 100%;
+  text-align: center;
+}
+/* Dot switches */
+.dot {
+  cursor: pointer;
+  height: 0px;
+  width: 0px;
+  margin: 10px 2px;
+  padding:10px;
+  background-color: var(--tertiaryColor);
+  border-radius: 50%;
+  display: inline-block;
+  transition: background-color 0.6s ease;
+  z-index: 35;
+}
+.activeDot, .dot:hover {
+  background-color: #535353;
+}
+/* Fading animation */
+.fade {
+  animation-name: fade;
+  animation-duration: 1.5s;
+}
+@keyframes fade {
+  from {opacity: .4}
+  to {opacity: 1}
+}
+
+@keyframes toolTipIn{
+    from{
+        transform: translate(0, 0);
+        opacity: 0;
+    }
+    to{
+        transform: translate(0,30px);
+        opacity: 1;
+    }
+}
+@keyframes toolTipOut{
+    from{
+        transform: translate(0,30px);
+        opacity: 1;
+    }
+    to{
+        transform: translate(0,0);
+        opacity: 0;
+    }
+}
+#navbar a:hover .tooltip{
+
+    animation: toolTipIn .5s ease-in-out forwards;
+}
+#navbar .tooltip{
+    animation: toolTipOut .5s ease-in-out forwards;
+}
+.tooltip{
+    position: absolute;
+    top:50%;
+    background-color: var(--nav-bar);
+    font-family: Arial, Helvetica, sans-serif;
+    color: #ffffff;
+    margin-top: 5px;
+    padding: 5px 10px 5px 10px;
+    font-size: 1.5em;
+    border-radius: .5em;
+    opacity: 0;
+
+    pointer-events: none;
+}
+
+/*********** Taken out of metric data download pop up ********** */
+
+.visualization-container {
+  margin-bottom: 20px;
+}
+.visualization-container img {
+  max-width: 100%;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+.visualization-container div {
+  color: #333;
+  font-size: 20px;
+}
+.download-button {
+  display: inline-block;
+  padding: 10px 20px;
+  margin-bottom: 10px;
+  background-color: #007bff;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.toggle-container {
+  display: flex;
+  justify-content: center;
+}
+.toggle {
+  background-color: gray;
+  color: white;
+  padding: 10px 20px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 25%;
+  text-align: center;
+  font-size: 12px;
+  border: none;
+  transition: background-color 0.3s;
+}
+
+.toggle:hover {
+  background-color: #0056b3;
+}
+.heading {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.back-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  text-decoration: none;
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+.back-button:hover {
+  background-color: #0056b3;
+}

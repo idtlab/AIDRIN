@@ -1,3 +1,23 @@
+//for uploads
+function uploadForm() {
+    const form = document.getElementById('uploadForm');
+    form.submit();  // Submit the form automatically when a file is selected
+}
+//to clear
+function clearFile() {
+    fetch('/clear', {
+        method: 'POST',
+    })
+    .then(response => {
+        if (response.redirected) {
+            // Redirect to the specified location
+            window.location.href = response.url;
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+
 function submitForm() {
     var form = document.getElementById('uploadForm');
     var formData = new FormData(form);
@@ -21,10 +41,21 @@ function submitForm() {
     }
 
     // Open the popup window immediately
+    var metrics = document.getElementById("metrics");
+    if(metrics){
+        metrics.innerHTML = '<p>Loading visualizations, please wait...</p>';
+    } else{
+        console.error("No Element ID");
+        console.log("No Element ID");
+        print("No Element ID");
+    }
+   
+
     var popup = window.open("", "Popup", "width=900,height=700,resizable=yes,scrollbars=yes");
     popup.document.write('<html><head><title>Loading...</title></head><body><p>Loading visualizations, please wait...</p></body></html>');
+    
 
-    fetch('/upload_file', {
+    fetch(window.location.href, {
         method: 'POST',
         body: formData
     })
@@ -63,93 +94,13 @@ function submitForm() {
 
         if (visualizationContent.length > 0) {
             // Update the popup content
-            popup.document.open();
+            popup.document.open("", "Popup", "width=900,height=700,resizable=yes,scrollbars=yes");
             popup.document.write(`
                 <html>
                 <head>
-                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-
-                    <title>Readiness Evaluations</title>
-                    <style>
-                        body {
-                            font-family: Arial, sans-serif;
-                            padding: 20px;
-                            background-color: #f9f9f9;
-                        }
-                        .visualization-container {
-                            margin-bottom: 20px;
-                        }
-                        .visualization-container img {
-                            max-width: 100%;
-                            border-radius: 4px;
-                            margin-bottom: 10px;
-                        }
-                        .visualization-container div {
-                            color: #333;
-                            font-size: 20px;
-                        }
-                        .download-button {
-                            display: inline-block;
-                            padding: 10px 20px;
-                            margin-bottom: 10px;
-                            background-color: #007bff;
-                            color: white;
-                            text-decoration: none;
-                            border-radius: 4px;
-                            font-size: 14px;
-                        }
-                        .toggle-container {
-                            display: flex;
-                            justify-content: center;
-                        }
-                        .toggle {
-                            background-color: gray;
-                            color: white;
-                            padding: 10px 20px;
-                            margin-bottom: 10px;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            width: 25%;
-                            text-align: center;
-                            font-size: 12px;
-                            border: none;
-                            transition: background-color 0.3s;
-                        }
-                        
-                        .toggle:hover {
-                            background-color: #0056b3;
-                        }
-                        .heading {
-                            font-size: 24px;
-                            font-weight: bold;
-                            margin-bottom: 20px;
-                            text-align: center;
-                        }
-                        .back-button {
-                            background-color: #007bff;
-                            color: white;
-                            border: none;
-                            border-radius: 4px;
-                            padding: 10px 20px;
-                            text-decoration: none;
-                            font-size: 14px;
-                            cursor: pointer;
-                            margin-bottom: 20px;
-                        }
-                        .back-button:hover {
-                            background-color: #0056b3;
-                        }
-                    </style>
-
+    
                     <script>
-                    function toggleVisualization(id) {
-                        var element = document.getElementById(id);
-                        if (element.style.display === 'none' || element.style.display === '') {
-                            element.style.display = 'block';
-                        } else {
-                            element.style.display = 'none';
-                        }
-                    }
+                    
 
                     
                     </script>
@@ -158,12 +109,16 @@ function submitForm() {
             `);
 
             // Add back button
+            metrics.innerHTML +=  '<button class="back-button" onclick="window.close()()"><i class="fas fa-arrow-left"></i></button>';
+           
             popup.document.write(`
             <button class="back-button" onclick="window.close()()"><i class="fas fa-arrow-left"></i></button>
             `);
 
             // Add heading if not already added
             if (!headingAdded) {
+                metrics.innerHTML += `<div class="heading">Readiness Report</div>`;
+
                 popup.document.write(`<div class="heading">Readiness Report</div>`);
                 headingAdded = true;
             }
@@ -172,6 +127,18 @@ function submitForm() {
             visualizationContent.forEach(function(content, index) {
                 const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
                 const visualizationId = `visualization_${index}`;
+                metrics.innerHTML += `<div class="visualization-container">
+                        <div class="toggle" onclick="toggleVisualization('${visualizationId}')">${content.title}</div>
+                        <div id="${visualizationId}" style="display: none;">
+                            <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
+                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="download-icon"><i class="fas fa-download"></i></a>
+
+                            <div>${content.description}</div>
+                            
+                        </div>
+                    
+                    </div>`;
+
                 popup.document.write(`
                     <div class="visualization-container">
                         <div class="toggle" onclick="toggleVisualization('${visualizationId}')">${content.title}</div>
@@ -194,6 +161,7 @@ function submitForm() {
             const modifiedData = removeVisualizationKey(data);
             const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
             // Add the "Download JSON" link for the last jsonData outside the loop
+            metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`;
             popup.document.write(`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`);
             
             popup.document.write('</body></html>');
@@ -201,14 +169,14 @@ function submitForm() {
 
             
         } else {
-            
+            metrics.innerHTML='<p>No visualizations available.</p>';
             popup.document.write('<p>No visualizations available.</p>');
             // Assuming 'data' is your dictionary
             const modifiedData = removeVisualizationKey(data);
             const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
             // Add the "Download JSON" link for the last jsonData outside the loop
             popup.document.write(`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`);
-            
+            metrics.innerHTML+=`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`;
             popup.document.write('</body></html>');
             popup.document.close();
             
@@ -216,6 +184,7 @@ function submitForm() {
     })
     .catch(error => {
         console.error('Error:', error);
+        metrics.innerHTML='<p>Error loading visualizations.</p>';
         popup.document.write('<p>Error loading visualizations.</p>');
     
 
@@ -862,5 +831,12 @@ function toggleCheckboxContainer(checkboxContainer, toggleButton, innertext) {
     }
 }
 
-
-
+function toggleValue(checkbox) {
+    // Toggle the value based on the checked state
+    if (checkbox.checked) {
+        checkbox.value = "yes";
+    } else {
+        checkbox.value = "no";
+    }
+    console.log("Checkbox value:", checkbox.value); // For debugging
+}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/metric.js') }}"></script>
+
+    <title>Correlation Analysis</title>
+</head>
+<body>
+    <h1 style="text-align:left">Correlation Analysis</h1>
+    <div id="metric-download-gui" class="metric-download-gui">
+        <div id="metric-download-gui-fileName" class="metric-download-gui-fileName">
+        {% if uploaded_file_path %}
+                    File: {{ uploaded_file_name }}
+                    {% else %}
+                    No File Uploaded
+                    {% endif %}
+        </div>
+        {% if uploaded_file_path %}
+                <!-- clear button: visible when file is uploaded, change form style to match-->
+                <button type="button" class="clear-button" style="border:none" onclick="clearFile()">Clear Submission</button>
+        {%else%}
+                <button type="button" class="redirect-upload-button" style="border:none" onclick="location.href='{{ url_for("upload_file") }}'">Upload a File</button>
+         {% endif %}
+    </div>
+    <div class="metric-page-container">
+        <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('dataQuality') }}">
+            <div id="checkboxContainer_correlation" class="checkboxContainer"><br>
+                <label class="material-checkbox">
+                    <input  type="checkbox" name="correlations" onchange="toggleValue(this)"> 
+                    <span class="checkmark"></span>
+                    Perform Correlation Analysis
+                    <span class="info-icon">i
+                        <span class="info-text">This option calculates feature correlations using Pearson correlation for numerical features and Theil's U for categorical features. It returns a visualization of the correlation matrix.</span>
+                    </span>
+                </label>    
+                <ul>
+                    <li >
+                        <label for="correlationColumns">Features:</label>
+                        <!-- Checkboxes for correlations (yet to be added?) -->
+                        <div id="correlationCheckboxContainer"></div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    <div id = "formbuttonsContainer">
+        <button class="animated-button" type="submit" onclick="submitForm();">
+            <span>Submit</span>
+            <span></span>
+            </button>
+        <button class="animated-button" type="button" onclick="location.href='{{url_for("upload_file")}}'">
+            <span>Return</span>
+            <span></span>
+            </button>
+    </div>
+    </form>
+
+    <div id="resultContainer" style="display:none;"></div>
+    <div id="summaryStatistics"></div>
+    <!-- Container for summary plots and statistics -->
+    <div style="display:flex;">
+        <div class="plot-container" id="histogramsContainer"></div>
+        <div class="plot-container" style="text-align:left" id="metrics">
+
+        <h2 style="text-align:center">Data Quality Metrics</h2>
+        <p>No data available yet.</p>
+        <div id="buttonsContainer" style="display:none;">
+            <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
+        </div>
+            
+    </div> 
+</body>
+</html>
