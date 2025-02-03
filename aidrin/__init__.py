@@ -37,14 +37,18 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 #retrieve-file: for metric pages to retrieve the uploaded file
 
-@app.route('/retrieve_uploaded_file')
+@app.route('/retrieve_uploaded_file', methods=['GET'])
 def retrieve_uploaded_file():
     uploaded_file_path = session.get('uploaded_file_path')
-    print(f"{uploaded_file_path}")
-    if uploaded_file_path:
-        return send_file(uploaded_file_path, as_attachment=True)
     
-    return "No file uploaded yet",404
+    if uploaded_file_path:
+        # Ensure the file exists at the given path
+        if os.path.exists(uploaded_file_path):
+            return send_file(uploaded_file_path, as_attachment=True)
+        else:
+            return jsonify({"error": "File not found"}), 404
+    else:
+        return jsonify({"error": "No file uploaded yet"}), 404
 
 #route to file
 @app.route('/upload_file',methods=['GET','POST'])
@@ -175,6 +179,10 @@ def dataQuality():
         print(f"Execution time: {execution_time} seconds")
         
         formatted_final_dict = format_dict_values(final_dict)
+        
+        if request.args.get('returnType') == 'json': 
+            return jsonify(formatted_final_dict)
+        
         return render_template('metricTemplates/dataQuality.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name, formatted_final_dict=formatted_final_dict)
     
@@ -182,7 +190,7 @@ def dataQuality():
     return render_template('metricTemplates/dataQuality.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name)
    
-@app.route('/fairness')
+@app.route('/fairness', methods=['GET', 'POST'])
 def fairness():
     start_time = time.time()
     
@@ -226,14 +234,19 @@ def fairness():
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
-                
+        
+        formatted_final_dict = format_dict_values(final_dict)
+        
+        if request.args.get('returnType') == 'json': 
+            return jsonify(formatted_final_dict)
+        
         return render_template('metricTemplates/fairness.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name, final_dict=final_dict)
     
     return render_template('metricTemplates/fairness.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name)
    
-@app.route('/correlationAnalysis')
+@app.route('/correlationAnalysis', methods=['GET', 'POST'])
 def correlationAnalysis():
     start_time = time.time()
     
@@ -263,14 +276,18 @@ def correlationAnalysis():
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
-                
+        formatted_final_dict = format_dict_values(final_dict)
+        
+        if request.args.get('returnType') == 'json': 
+            return jsonify(formatted_final_dict)
+              
         return render_template('metricTemplates/correlationAnalysis.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name, final_dict=final_dict)
     
     return render_template('metricTemplates/correlationAnalysis.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name)
 
-@app.route('/featureRelevance')
+@app.route('/featureRelevance', methods=['GET', 'POST'])
 def featureRelevance():
     start_time = time.time()
     
@@ -304,6 +321,11 @@ def featureRelevance():
             end_time = time.time()
             execution_time = end_time - start_time
             print(f"Execution time: {execution_time} seconds")
+        
+        formatted_final_dict = format_dict_values(final_dict)
+        
+        if request.args.get('returnType') == 'json': 
+            return jsonify(formatted_final_dict)
                 
         return render_template('metricTemplates/featureRelevance.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name, final_dict=final_dict)
@@ -311,7 +333,7 @@ def featureRelevance():
     return render_template('metricTemplates/featureRelevance.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name)
                 
-@app.route('/classImbalance')
+@app.route('/classImbalance', methods=['GET', 'POST'])
 def classImbalance():
     start_time = time.time()
     
@@ -337,6 +359,12 @@ def classImbalance():
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
+        
+        formatted_final_dict = format_dict_values(final_dict)
+        
+        if request.args.get('returnType') == 'json': 
+            return jsonify(formatted_final_dict)
+        
                 
         return render_template('metricTemplates/classImbalance.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name, final_dict=final_dict)
@@ -344,7 +372,7 @@ def classImbalance():
     return render_template('metricTemplates/classImbalance.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name)
     
-@app.route('/privacyPreservation')
+@app.route('/privacyPreservation', methods=['GET', 'POST'])
 def privacyPreservation():
     start_time = time.time()
     
@@ -389,7 +417,12 @@ def privacyPreservation():
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
-                
+              
+        formatted_final_dict = format_dict_values(final_dict)
+        
+        if request.args.get('returnType') == 'json': 
+            return jsonify(formatted_final_dict)
+          
         return render_template('metricTemplates/privacyPreservation.html', uploaded_file_path=uploaded_file_path, 
                            uploaded_file_name=uploaded_file_name, final_dict=final_dict)
     

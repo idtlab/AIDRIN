@@ -557,13 +557,15 @@ ul {
   }
 
   .metric-download-gui{
+    
     position: fixed;
     top: 10px;
     right: 20px;
     display: flex;
     flex-direction: column;
     align-self: flex-end;
-    align-items: center;
+    
+    justify-self: center;
     max-width: 80%;
     z-index: 10;
 
@@ -685,10 +687,7 @@ ul {
   border-radius: 4px;
   margin-bottom: 10px;
 }
-.visualization-container div {
-  color: #333;
-  font-size: 20px;
-}
+
 .download-button {
   display: inline-block;
   padding: 10px 20px;
@@ -704,19 +703,25 @@ ul {
   justify-content: center;
 }
 .toggle {
-  background-color: gray;
+  background-color: var(--darkAccent);
+  min-width: fit-content;
   color: white;
   padding: 10px 20px;
   margin-bottom: 10px;
   border-radius: 4px;
   cursor: pointer;
-  width: 25%;
   text-align: center;
-  font-size: 12px;
+  font-size: 20px;
   border: none;
   transition: background-color 0.3s;
+  display:flex;
+  align-items: center;
+  align-self: center;
+  justify-content:center;
 }
-
+.metric-download{
+  background-color: var(--tertiaryColor);
+}
 .toggle:hover {
   background-color: #0056b3;
 }

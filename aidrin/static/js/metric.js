@@ -1,12 +1,32 @@
 /*
 * ************************ FUNCTIONS MOVED FROM HTML PAGE ************************
 */
+//Unsure if this is still needed: a page reload is no longer needed but further testing is required to ensure
+//I don't break anything
 $(document).ready(function () {
     $('#file').on('change', function () {
-        var file = "{{ session['uploaded_file'] }}";
+        fetch("{{ url_for('retrieve_uploaded_file') }}")
+            .then(response => response.blob())  // Convert  to a Blob
+            .then(fileBlob => {
+                //append to form
+                var formData = new FormData();
+                formData.append('file', fileBlob, 'filename'); 
 
+                // Send the FormData via POST request
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => console.log('File uploaded successfully', data))
+                .catch(error => console.error('Error:', error));
+        })
+        .catch(error => console.error('Error fetching file:', error));
+
+        var file = "{{ url_for('retrieve_uploaded_file') }}";
+        var fileBlob = new Blob([file], {type: "application/octet-stream"})
         var formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', fileBlob);
 
         $.ajax({
             url: '/feature_set',
@@ -93,7 +113,8 @@ $(document).ready(function () {
 
             var label = $('<label>')
                 .attr('class','material-checkbox')
-                .attr('for', tableId+'checkbox_' + i);
+                .attr('for', tableId+'checkbox_' + i)
+                .attr('id', tableId+'checkbox_' + i);
 
             label.append(checkbox).append(span).append(features[i]);
             var cell = $('<td>').append(label);
@@ -106,10 +127,12 @@ $(document).ready(function () {
 
 //generate summary statistics
 $(document).ready(function () {
-        
+    document.getElementById('uploadForm').addEventListener('submit', function(event) {
+        event.preventDefault(); // In order to prevent autoreload on sumbit, so that visualization data can be added.
+    });
 
         var formData = new FormData();
-        var file = "{{ session['uploaded_file'] }}";
+        var file = "{{ url_for('retrieve_uploaded_file') }}";
         formData.append('file', file);
        
         $.ajax({
@@ -224,8 +247,13 @@ $(document).ready(function () {
 
 //generate dropdown when features of the dataset are required to select
 $(document).ready(function() {
-  
-        var file = "{{ session['uploaded_file'] }}";
+        //for some reason the jinja path will only work if I add the file to a form?
+        //if this is where the dropdowns are added I think this is the problem
+        var formData = new FormData();
+        var file = "{{ url_for('retrieve_uploaded_file') }}";
+        formData.append('file', file);
+        var file = new Blob([formData.get('file')], { type: file.type });
+        console.log(file);
         if (file) {
             var reader = new FileReader();
             reader.onload = function(e) {
@@ -238,6 +266,8 @@ $(document).ready(function() {
             };
             reader.readAsText(file);
         }
+    
+
     var checkboxesLoaded = false;
 
     function displayColumns(columns) {
@@ -265,7 +295,8 @@ $(document).ready(function() {
 
                 var label = $('<label>')
                     .attr('class','material-checkbox')
-                    .attr('for', 'checkbox_' + columns[i]);
+                    .attr('for', 'checkbox_' + columns[i])
+                    .attr('id', 'checkbox_' + columns[i]);
                    
 
                 label.append(checkbox).append(span).append(columns[i]);
@@ -293,4 +324,5 @@ function toggleVisualization(id) {
         element.style.display = 'none';
     }
 }
+
 

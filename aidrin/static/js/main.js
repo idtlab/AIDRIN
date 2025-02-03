@@ -19,6 +19,7 @@ function clearFile() {
 
 
 function submitForm() {
+    
     var form = document.getElementById('uploadForm');
     var formData = new FormData(form);
 
@@ -40,7 +41,7 @@ function submitForm() {
         console.log(pair[0] + ': ' + pair[1]);
     }
 
-    // Open the popup window immediately
+    // Populate metrics visualizations
     var metrics = document.getElementById("metrics");
     if(metrics){
         metrics.innerHTML = '<p>Loading visualizations, please wait...</p>';
@@ -49,18 +50,22 @@ function submitForm() {
         console.log("No Element ID");
         print("No Element ID");
     }
-   
-
-    var popup = window.open("", "Popup", "width=900,height=700,resizable=yes,scrollbars=yes");
-    popup.document.write('<html><head><title>Loading...</title></head><body><p>Loading visualizations, please wait...</p></body></html>');
-    
-
-    fetch(window.location.href, {
+    const url = new URL(window.location.href);
+    url.searchParams.set('returnType', 'json');
+    const currentURL = url.toString();
+    fetch(currentURL, {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
+            return response.json();
+        } else {
+            throw new Error('Server did not return valid JSON.');
+        }
+    })
     .then(data => {
+        console.log('Server Response:', data);
         var resultContainer = document.getElementById('resultContainer');
 
         resp_data = data;
@@ -79,9 +84,9 @@ function submitForm() {
             'Feature Relevance', 'Class Imbalance', 'DP Statistics', 
             'Single attribute risk scoring', 'Multiple attribute risk scoring'
         ];
-
         visualizationTypes.forEach(function(type) {
             if (isKeyPresentAndDefined(data, type) && isKeyPresentAndDefined(data[type], type + ' Visualization')) {
+                console.log('Adding visualization:', type);
                 var image = data[type][type + ' Visualization'];
                 var description = data[type]['Description'];
                 var title = type;
@@ -93,37 +98,16 @@ function submitForm() {
         var headingAdded = false;
 
         if (visualizationContent.length > 0) {
-            // Update the popup content
-            popup.document.open("", "Popup", "width=900,height=700,resizable=yes,scrollbars=yes");
-            popup.document.write(`
-                <html>
-                <head>
-    
-                    <script>
-                    
 
-                    
-                    </script>
-                </head>
-                <body>
-            `);
-
-            // Add back button
-            metrics.innerHTML +=  '<button class="back-button" onclick="window.close()()"><i class="fas fa-arrow-left"></i></button>';
-           
-            popup.document.write(`
-            <button class="back-button" onclick="window.close()()"><i class="fas fa-arrow-left"></i></button>
-            `);
-
+            
             // Add heading if not already added
             if (!headingAdded) {
-                metrics.innerHTML += `<div class="heading">Readiness Report</div>`;
+                metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
 
-                popup.document.write(`<div class="heading">Readiness Report</div>`);
                 headingAdded = true;
             }
             
-            // Add each visualization to the popup
+            // Add each visualization to the metric visualization section
             visualizationContent.forEach(function(content, index) {
                 const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
                 const visualizationId = `visualization_${index}`;
@@ -131,7 +115,7 @@ function submitForm() {
                         <div class="toggle" onclick="toggleVisualization('${visualizationId}')">${content.title}</div>
                         <div id="${visualizationId}" style="display: none;">
                             <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="download-icon"><i class="fas fa-download"></i></a>
+                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download"><i class="fas fa-download"></i></a>
 
                             <div>${content.description}</div>
                             
@@ -139,19 +123,6 @@ function submitForm() {
                     
                     </div>`;
 
-                popup.document.write(`
-                    <div class="visualization-container">
-                        <div class="toggle" onclick="toggleVisualization('${visualizationId}')">${content.title}</div>
-                        <div id="${visualizationId}" style="display: none;">
-                            <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="download-icon"><i class="fas fa-download"></i></a>
-
-                            <div>${content.description}</div>
-                            
-                        </div>
-                    
-                    </div>
-                `);
             });
 
 
@@ -161,32 +132,24 @@ function submitForm() {
             const modifiedData = removeVisualizationKey(data);
             const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
             // Add the "Download JSON" link for the last jsonData outside the loop
-            metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`;
-            popup.document.write(`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`);
-            
-            popup.document.write('</body></html>');
-            popup.document.close();
+            metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+           
 
             
         } else {
             metrics.innerHTML='<p>No visualizations available.</p>';
-            popup.document.write('<p>No visualizations available.</p>');
+           
             // Assuming 'data' is your dictionary
             const modifiedData = removeVisualizationKey(data);
             const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
             // Add the "Download JSON" link for the last jsonData outside the loop
-            popup.document.write(`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`);
             metrics.innerHTML+=`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`;
-            popup.document.write('</body></html>');
-            popup.document.close();
             
         }
     })
     .catch(error => {
         console.error('Error:', error);
         metrics.innerHTML='<p>Error loading visualizations.</p>';
-        popup.document.write('<p>Error loading visualizations.</p>');
-    
 
         
         // Check if "Completeness Visualization" key is present
@@ -313,13 +276,6 @@ function submitForm() {
         // }
 
         // resultContainer.innerHTML += '<pre id="scoreResult" style="display:none;">' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>';
-        
-        // Show the result container after the response is generated
-        resultContainer.style.display = 'block';
-
-        // Show the buttons after the response is generated
-        document.getElementById('buttonsContainer').style.display = 'block';
-
         
     })
     .catch(error => {
