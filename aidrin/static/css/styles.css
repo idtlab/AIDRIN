@@ -47,6 +47,7 @@ select {
     appearance: none;
     -webkit-appearaance:none;
 
+    box-sizing: border-box;
     outline:none; /* Undo natural click outline */
     padding: 5px; /* Add padding */
     border: 2px solid #ffffff; /* Border style */
@@ -59,7 +60,6 @@ select {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow */
     margin:10px; /* Margin so successive selects don't touch */
 }
-
 /* Style for Text Input */
 .textWrapper{
     padding: 5px; /* Add padding */
@@ -186,7 +186,7 @@ input[type="checkbox"] {
 /* change Dropdown color while hovering */
 .clickable:hover {
     cursor: pointer;
-    color:#ff5b5b;
+    color:#4691ee;
 }
 
 /* Make this one special :) (to set it apart as it switches pages) */
@@ -329,6 +329,7 @@ ul {
     border: 2px solid var(--textColor);
     border-radius: 4px;
     transition: all 0.3s;
+
   }
   
   .material-checkbox input[type="checkbox"]:checked ~ .checkmark {
@@ -383,6 +384,7 @@ ul {
     box-shadow: 0 0 0 2px #ffffff20;
     cursor: pointer;
     overflow: hidden;
+    margin:10px;
     transition: all 0.6s cubic-bezier(0.23, 1, 0.320, 1);
   }
   
@@ -394,6 +396,18 @@ ul {
     width: 20px;
     height: 20px;
     background-color: #4caf50;
+    border-radius: 50%;
+    opacity: 0;
+    transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
+  }
+  .return span:last-child {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    background-color: #4691ee;
     border-radius: 50%;
     opacity: 0;
     transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
@@ -407,7 +421,10 @@ ul {
     box-shadow: 0 0 0 5px #4caf4f5e;
     color: #ffffff;
   }
-  
+  .return:hover {
+    box-shadow: 0 0 0 5px #3958925e;
+    color: #ffffff;
+  }
   .animated-button:active {
     scale: 0.95;
   }
@@ -418,70 +435,6 @@ ul {
     opacity: 1;
   }
 
-  /* repeating for reset (gotta be a better way...) */
-  .animated-button-reset {
-    position: relative;
-    display: inline-block;
-    padding: 12px 24px;
-    border: none;
-    font-size: 16px;
-    background-color: rgba(255,255,255,0.4);
-    border-radius: 100px;
-    font-weight: 600;
-    width:110px;
-    height:42px;
-    color: #ffffff;
-    box-shadow: 0 0 0 2px #ffffff20;
-    cursor: pointer;
-    overflow: hidden;
-    transition: all 0.6s cubic-bezier(0.23, 1, 0.320, 1);
-  }
-  
-  .animated-button span:last-child {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20px;
-    height: 20px;
-    background-color: #4caf50;
-    border-radius: 50%;
-    opacity: 0;
-    transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
-  }
-  .animated-button-reset span:last-child {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20px;
-    height: 20px;
-    background-color: #f44336;
-    border-radius: 50%;
-    opacity: 0;
-    transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
-  }
-  
-  .animated-button-reset span:first-child {
-    position: relative;
-    z-index: 1;
-  }
-  
-  .animated-button-reset:hover {
-    box-shadow: 0 0 0 5px #f4433676;
-    color: #ffffff;
-  }
-  
-  .animated-button-reset:active {
-    scale: 0.95;
-  }
-  
-  .animated-button-reset:hover span:last-child {
-    width: 150px;
-    height: 150px;
-    opacity: 1;
-  }
-  
 /* Custom File upload from uiverse */ 
   .custum-file-upload {
     

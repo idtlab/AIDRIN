@@ -4,8 +4,7 @@
 //Unsure if this is still needed: a page reload is no longer needed but further testing is required to ensure
 //I don't break anything
 $(document).ready(function () {
-    $('#file').on('change', function () {
-        fetch("{{ url_for('retrieve_uploaded_file') }}")
+        fetch(retrieveFileUrl)
             .then(response => response.blob())  // Convert  to a Blob
             .then(fileBlob => {
                 //append to form
@@ -20,13 +19,6 @@ $(document).ready(function () {
                 .then(response => response.json())
                 .then(data => console.log('File uploaded successfully', data))
                 .catch(error => console.error('Error:', error));
-        })
-        .catch(error => console.error('Error fetching file:', error));
-
-        var file = "{{ url_for('retrieve_uploaded_file') }}";
-        var fileBlob = new Blob([file], {type: "application/octet-stream"})
-        var formData = new FormData();
-        formData.append('file', fileBlob);
 
         $.ajax({
             url: '/feature_set',
@@ -73,7 +65,9 @@ $(document).ready(function () {
             error: function (error) {
                 console.log(error);
             }
-        });
+
+        })
+        .catch(error => console.error('Error fetching file:', error));
     });
 
     function createDropdown(features, dropdownId) {
@@ -103,7 +97,7 @@ $(document).ready(function () {
 
             var checkbox = $('<input>').attr({
                 type: 'checkbox',
-                class: 'material-checkbox',
+                onchange: 'toggleValue(this)',
                 id: tableId+'checkbox_' + i, // Generate unique ids so all buttons work
                 name: nameTag, // Set the name attribute
                 value: features[i]
@@ -112,11 +106,12 @@ $(document).ready(function () {
             var span = $('<span>').addClass('checkmark');
 
             var label = $('<label>')
-                .attr('class','material-checkbox')
+                // .attr('class','material-checkbox')
+                
                 .attr('for', tableId+'checkbox_' + i)
                 .attr('id', tableId+'checkbox_' + i);
 
-            label.append(checkbox).append(span).append(features[i]);
+            label.append(checkbox).append(features[i]);
             var cell = $('<td>').append(label);
 
             row.append(cell);
@@ -249,12 +244,14 @@ $(document).ready(function () {
 $(document).ready(function() {
         //for some reason the jinja path will only work if I add the file to a form?
         //if this is where the dropdowns are added I think this is the problem
-        var formData = new FormData();
-        var file = "{{ url_for('retrieve_uploaded_file') }}";
-        formData.append('file', file);
-        var file = new Blob([formData.get('file')], { type: file.type });
-        console.log(file);
-        if (file) {
+        fetch(retrieveFileUrl)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('File not found or server error');
+            }
+            return response.blob();  // Convert response to a Blob
+        })
+        .then(blob => {
             var reader = new FileReader();
             reader.onload = function(e) {
                 var content = e.target.result;
@@ -262,10 +259,11 @@ $(document).ready(function() {
                 if (lines.length > 0) {
                     var columns = lines[0].split(',');
                     displayColumns(columns);
+                    console.log(columns);
                 }
             };
-            reader.readAsText(file);
-        }
+            reader.readAsText(blob);
+        
     
 
     var checkboxesLoaded = false;
@@ -288,24 +286,28 @@ $(document).ready(function() {
 
                 var checkbox = $('<input type="checkbox" class="material-checkbox">')
                     .attr('id', 'checkbox_' + columns[i])
+                    .attr('style','margin-right:10px')
                     .attr('value', columns[i])
                     .attr('name', 'checkboxValues');
 
                 var span = $('<span>').addClass('checkmark');
 
                 var label = $('<label>')
-                    .attr('class','material-checkbox')
+                    //for some reason unclickable...
+                    //.attr('class','material-checkbox')
+                    .attr('style', 'display: flex; ')
                     .attr('for', 'checkbox_' + columns[i])
                     .attr('id', 'checkbox_' + columns[i]);
                    
-
-                label.append(checkbox).append(span).append(columns[i]);
+                //.append(span)
+                label.append(checkbox).append(columns[i]);
                 cell.append(label);
             }
 
             checkboxesLoaded = true;
         }
     }
+    });
 });
 
 

@@ -149,7 +149,7 @@ function submitForm() {
     })
     .catch(error => {
         console.error('Error:', error);
-        metrics.innerHTML='<p>Error loading visualizations.</p>';
+        metrics.innerHTML='<p>Error loading visualizations. '+error+'</p>';
 
         
         // Check if "Completeness Visualization" key is present

@@ -8,6 +8,9 @@
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        var retrieveFileUrl = "{{ url_for('retrieve_uploaded_file') }}";
+    </script>
     <script src="{{ url_for('static', filename='js/metric.js') }}"></script>
 
     <title>Class Imbalance</title>
@@ -56,7 +59,7 @@
             <span>Submit</span>
             <span></span>
             </button>
-        <button class="animated-button" type="button" onclick="location.href='{{url_for("upload_file")}}'">
+        <button class="animated-button return" type="button" onclick="location.href='{{url_for("upload_file")}}'">
             <span>Return</span>
             <span></span>
             </button>
