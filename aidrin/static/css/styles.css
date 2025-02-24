@@ -24,7 +24,15 @@ body {
     background-repeat: no-repeat;
     background-attachment: fixed; */
 }
-
+.listLabel{
+  display:flex;
+  width: 150px;
+  align-items: center;
+}
+li{
+  display:flex; 
+  flex-direction:row;
+}
 form {
     display:block;
     /* blur background */
@@ -50,29 +58,47 @@ select {
     box-sizing: border-box;
     outline:none; /* Undo natural click outline */
     padding: 5px; /* Add padding */
-    border: 2px solid #ffffff; /* Border style */
+    border: 2px solid var(--textColor); /* Border style */
     border-radius: 10px; /* Rounded corners */
-    background-color: #212121; /* Background color */
-    color: #ffffff;
+    background-color: #ffffff; /* Background color */
+    color: var(--textColor);
     cursor: pointer; /* Pointer cursor */
     width: 100%; /* Full width */
     max-width: 400px; /* Maximum width */
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow */
     margin:10px; /* Margin so successive selects don't touch */
 }
+select:disabled {
+  background-color: rgba(0, 0, 0, 0.5); /* Darker overlay */
+  color: gray;
+  border: 1px solid #aaa;
+  cursor: not-allowed;
+}
+.fileType{
+  background-color: #212121;
+  border-color: #ffffff;
+  color: #ffffff;
+}
 /* Style for Text Input */
 .textWrapper{
+    box-sizing: border-box;
     padding: 5px; /* Add padding */
-    border: 2px solid #ffffff; /* Border style */
+    border: 2px solid var(--textColor); /* Border style */
     border-radius: 10px; /* Rounded corners */
-    background-color: #212121; /* Background color */
-    color: #ffffff;
+    background-color: #ffffff; /* Background color */
+    color: var(--textColor);
     cursor: pointer; /* Pointer cursor */
     width: 100%; /* Full width */
     max-width: 400px; /* Maximum width */
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow */
     margin:10px; /* Margin so successive selects don't touch */
 
+}
+.textWrapper:disabled{
+  background-color: rgba(0, 0, 0, 0.3); /* Darker overlay */
+  color: gray;
+  border: 1px solid #aaa;
+  cursor: not-allowed;
 }
 
 
@@ -302,8 +328,6 @@ ul {
     list-style-position: inside;
 }
 
-
-
 /* Custom Checkbox from uiVerse */
   .material-checkbox {
     display: flex;
@@ -311,6 +335,12 @@ ul {
 
     gap: 20px;
     cursor: pointer;
+  }
+  .material-checkbox:disabled{
+    background-color: rgba(0, 0, 0, 0.5); /* Darker overlay */
+    color: gray;
+    border: 1px solid #aaa;
+    cursor: not-allowed;
   }
   
   .material-checkbox input[type="checkbox"] {

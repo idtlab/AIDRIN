@@ -97,17 +97,20 @@ $(document).ready(function () {
 
             var checkbox = $('<input>').attr({
                 type: 'checkbox',
+                class: 'checkbox individual',
+                style: 'margin-right:10px',
                 onchange: 'toggleValue(this)',
                 id: tableId+'checkbox_' + i, // Generate unique ids so all buttons work
                 name: nameTag, // Set the name attribute
-                value: features[i]
+                value: features[i],
+                disabled: true
             });
 
             var span = $('<span>').addClass('checkmark');
 
             var label = $('<label>')
                 // .attr('class','material-checkbox')
-                
+                .attr('style', 'display: flex; flex-direction:row; min-width: 125px; align-items: center;')
                 .attr('for', tableId+'checkbox_' + i)
                 .attr('id', tableId+'checkbox_' + i);
 
@@ -242,8 +245,7 @@ $(document).ready(function () {
 
 //generate dropdown when features of the dataset are required to select
 $(document).ready(function() {
-        //for some reason the jinja path will only work if I add the file to a form?
-        //if this is where the dropdowns are added I think this is the problem
+       
         fetch(retrieveFileUrl)
         .then(response => {
             if (!response.ok) {
@@ -284,17 +286,17 @@ $(document).ready(function() {
 
                 cell = $('<td>').appendTo(row);
 
-                var checkbox = $('<input type="checkbox" class="material-checkbox">')
+                var checkbox = $('<input type="checkbox" class="checkbox individual">')
                     .attr('id', 'checkbox_' + columns[i])
                     .attr('style','margin-right:10px')
                     .attr('value', columns[i])
                     .attr('name', 'checkboxValues');
 
-                var span = $('<span>').addClass('checkmark');
+                var span = $('<span>').addClass('checkmark').addClass('individual');
 
                 var label = $('<label>')
-                    //for some reason unclickable...
-                    //.attr('class','material-checkbox')
+                    
+                    
                     .attr('style', 'display: flex; ')
                     .attr('for', 'checkbox_' + columns[i])
                     .attr('id', 'checkbox_' + columns[i]);

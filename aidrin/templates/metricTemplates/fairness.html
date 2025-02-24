@@ -36,49 +36,51 @@
     <div class="metric-page-container">
         <form id="uploadForm" method="post" action="{{ url_for('dataQuality') }}">
         <div id="checkboxContainer_fairness" class="checkboxContainer"><br>
-            <label class="material-checkbox">
-                    <input type="checkbox" name="representation rate" onchange="toggleValue(this)">
-                    <span class="checkmark"></span>
-                    Check representation rate
-                    <span class="info-icon">i
-                    <span class="info-text">This option checks the representation rate of a sensitive feature in the dataset and displays a pie chart highlighting the representation rate of the sensitive feature.</span>
-                </span>
-            </label>
-            <ul>
-                <li  >
-                    <label for="features for representation rate">Sensitive feature:</label>
-                    <select name="features for representation rate" id = "allFeaturesDropdownRepRate" required>
-                        <option value="" disabled selected>Select a feature</option>
-                        <!-- Options will be added dynamically using JavaScript -->
-                    </select>
-            
-                </li>
-            </ul>
-
-            <label class="material-checkbox">
-                <input  type="checkbox" name="statistical rate" onchange="toggleValue(this)"> 
-                <span class="checkmark"></span>
-                Check statistical rate
-                <span class="info-icon">i
-                    <span class="info-text">This option calculates the proportions of each sensitive attribute within each category of the selected target feature and presents the results as a bar chart. This visual helps identify imbalances or disparities in the data.</span>   
-                </span>
-            </label>
-            <ul>
-                <li >
-                    <label for="features for statistical rate">Feature:</label>
-                    <select name="features for statistical rate" id = "allFeaturesDropdownStatRate1" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select>
-                </li>
-                <li >
-                    <label for="target for statistical rate">Target:</label>
-                    <select name="target for statistical rate" id = "allFeaturesDropdownStatRate2" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select><br>
-                </li>
+            <div class="checkboxContainerIndividual">
+                <label class="material-checkbox">
+                        <input type="checkbox" name="representation rate" onchange="toggleValue(this)">
+                        <span class="checkmark"></span>
+                        Check representation rate
+                        <span class="info-icon">i
+                        <span class="info-text">This option checks the representation rate of a sensitive feature in the dataset and displays a pie chart highlighting the representation rate of the sensitive feature.</span>
+                    </span>
+                </label>
+                <ul>
+                    <li>
+                        <label class="listLabel"for="features for representation rate">Sensitive feature:</label>
+                        <select name="features for representation rate" id = "allFeaturesDropdownRepRate" required>
+                            <option value="" disabled selected>Select a feature</option>
+                            <!-- Options will be added dynamically using JavaScript -->
+                        </select>
                 
-            </ul>
-
+                    </li>
+                </ul>
+            </div>
+            <div class="checkboxContainerIndividual">
+                <label class="material-checkbox">
+                    <input  type="checkbox" name="statistical rate" onchange="toggleValue(this)"> 
+                    <span class="checkmark"></span>
+                    Check statistical rate
+                    <span class="info-icon">i
+                        <span class="info-text">This option calculates the proportions of each sensitive attribute within each category of the selected target feature and presents the results as a bar chart. This visual helps identify imbalances or disparities in the data.</span>   
+                    </span>
+                </label>
+                <ul>
+                    <li >
+                        <label class="listLabel" for="features for statistical rate">Feature:</label>
+                        <select name="features for statistical rate" id = "allFeaturesDropdownStatRate1" required>
+                            <option value="" disabled selected>Select a feature</option>
+                        </select>
+                    </li>
+                    <li >
+                        <label class="listLabel" for="target for statistical rate">Target:</label>
+                        <select name="target for statistical rate" id = "allFeaturesDropdownStatRate2" required>
+                            <option value="" disabled selected>Select a feature</option>
+                        </select><br>
+                    </li>
+                    
+                </ul>
+            </div>
                         
             <!-- <input style="margin-left: 40px;" type="checkbox" name="real representation rate" value="yes"> Check real world representation rate<br> -->
             
@@ -106,36 +108,36 @@
             
             
             <!-- <input style="margin-left: 40px;" type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br> -->
-            <label class="material-checkbox">
-                <input  type="checkbox" name="conditional demographic disparity" onchange="toggleValue(this)"> 
-                <span class="checkmark"></span>
-                Conditional Demographic Disparity
-                <span class="info-icon">i
-                    <span class="info-text">The conditional demographic disparity metric evaluates the distribution of positive and negative outcomes across sensitive groups. Users specify which outcome is 'positive/target', with others classified as 'negative'. The metric calculates the proportions of positive and negative outcomes within each group. A disparity value of True indicates that a group's negative outcomes exceed its positive ones, highlighting potential disparities in outcome distribution.</span>
-                </span>
-            </label>
-            <ul>
-                <li >
-                    <label for="sensitive for conditional demographic disparity">Sensitive feature:</label>
-                    <select name="sensitive for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis1" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select><br>
-                </li>
+            <div class="checkboxContainerIndividual">
+                <label class="material-checkbox">
+                    <input  type="checkbox" name="conditional demographic disparity" onchange="toggleValue(this)"> 
+                    <span class="checkmark"></span>
+                    Conditional Demographic Disparity
+                    <span class="info-icon">i
+                        <span class="info-text">The conditional demographic disparity metric evaluates the distribution of positive and negative outcomes across sensitive groups. Users specify which outcome is 'positive/target', with others classified as 'negative'. The metric calculates the proportions of positive and negative outcomes within each group. A disparity value of True indicates that a group's negative outcomes exceed its positive ones, highlighting potential disparities in outcome distribution.</span>
+                    </span>
+                </label>
+                <ul>
+                    <li >
+                        <label class="listLabel" for="sensitive for conditional demographic disparity">Sensitive feature:</label>
+                        <select name="sensitive for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis1" required>
+                            <option value="" disabled selected>Select a feature</option>
+                        </select><br>
+                    </li>
+                    <li >
+                        <label class="listLabel" for="target for conditional demographic disparity">Target feature:</label>
+                        
+                        <select name="target for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis2" required>
+                            <option value="" disabled selected>Select a feature</option>
+                        </select><br>
+                    </li>
 
-                <li >
-                    <label for="target for conditional demographic disparity">Target feature:</label>
-                    
-                    <select name="target for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis2" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select><br>
-                </li>
-
-                <li >
-                    <label for="target value for conditional demographic disparity">Target value:</label>
-                    <input class="textWrapper" type="text" name="target value for conditional demographic disparity" required><br>
-                    
-                </li>
-
+                    <li >
+                        <label class="listLabel" for="target value for conditional demographic disparity">Target value:</label>
+                        <input class="textWrapper" type="text" name="target value for conditional demographic disparity" required><br>
+                        
+                    </li>
+                </div>
                 
 
         
@@ -162,7 +164,7 @@
         <div class="plot-container" style="text-align:left" id="metrics">
 
         <h2 style="text-align:center">Data Quality Metrics</h2>
-        <p>No data available yet.</p>
+        <p>No data available yet. Please submit a request.</p>
         <div id="buttonsContainer" style="display:none;">
             <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
         </div>

@@ -34,8 +34,9 @@
         </div>
         <div style="display: flex; min-width: 60%; flex-direction:column;">
 
-            <select style="margin:0; align-self:center; text-align:center; border-radius: 10px 10px 0px 0px; width:100%; max-width: none;" name="file type">
-                <option>File Type: CSV</option>
+            <select  class="fileType" style="margin:0; align-self:center; text-align:center; border-radius: 10px 10px 0px 0px; width:100%; max-width: none;" name="file type">
+                <option>File Type: CSV Structured</option>
+                <option>File Type: CSV Unstructured</option>
             </select>
 
             <label id="fileUploadContainer" for="file" class="custum-file-upload" required>
@@ -69,5 +70,6 @@
     </form>
 
     <strong id="toggleButton_FAIRness" class="Switch-toggle-button" onclick="location.href='{{ url_for("FAIRness") }}'"> FAIR Compliance Evaluation <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"/></svg></strong>
-       
+    <strong id="homeButton" class="Switch-toggle-button" onclick="window.location.href='/'"> <svg xmlns="http://www.w3.org/2000/svg" height="48px" viewBox="0 -960 960 960" width="48px" fill="currentColor"><path d="M240-200h120v-240h240v240h120v-360L480-740 240-560v360Zm-80 80v-480l320-240 320 240v480H520v-240h-80v240H160Zm320-350Z"/></svg></strong>
+
 </body>

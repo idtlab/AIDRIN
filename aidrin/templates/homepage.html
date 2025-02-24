@@ -3,84 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Homenaje&display=swap" rel="stylesheet">
     <title>Homepage</title>
     <style>
+    
         body{
+        font-family: 'Homenaje', sans-serif;
+        font-weight: 400;
+        font-style: normal;
+        font-size: 30px;
         margin: 0;
         padding: 20px;
         padding-top: 50px;
 
         display: flex;
-        flex-direction: column;
-        justify-content: center;
-        text-align: center;
-        align-items: center;
-
-        background-image: url("./images/homepage_bg2.png");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        
-
+        flex-direction: row;
+       /*background-color: rgba(255,245,220,255);*/
         }
 
         h1 {
-            color: #FFF;
-            font-family: Roboto;
+            color: #212121;
+            
             font-size: 6em;
             font-style: normal;
-            font-weight: 400;
+            font-weight: 400;           
             line-height: normal;
         }
         .h1-container {
 
-            width: 600px;
-            height: 160px;
             
             display: flex;
             justify-content: center;
             align-items: center;
             flex-shrink: 1; 
 
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.20) 100%);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-
+           
             border-radius: 20px;
             margin: 10px;
         }
 
         h2{
-            color: #FFF;
-            text-align: center;
-            text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
-            font-family: Roboto;
-            font-size: 32px;
+    
+            text-align: left;
+            
+        
+            
             font-style: normal;
             font-weight: 400;
             line-height: normal;
+            text-wrap: wrap;
+            padding:10px;
         }
         .h2-container{
             
 
-            width: 800px;
+            max-width: 800px;
             justify-content: center;
             align-items: center;
             gap: 10px;
 
-            border-radius: 20px;
-
-            background: rgba(0,0,0,0.20);
-
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
        }
 
         button {
             padding: 15px 30px;
             font-size: 1.2em;
             cursor: pointer;
-            color: white;
+           
             border: none;
             border-radius: 5px;
             transition: background-color 0.3s ease;
@@ -89,6 +79,7 @@
         .button-container {
 
             display: flex;
+            flex-direction: row;
             justify-content: center;
             flex-wrap: wrap;
 
@@ -101,27 +92,45 @@
             display: inline-block;
 
         }
-
         button {
-            padding: 50px 50px;
-            font-size: 2em;
             cursor: pointer;
             border-radius: 20px;
-
-            background: rgba(0, 0, 0, 0.20);
-
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-
-            transition: background-color 0.3s ease;
+            font-family: 'Homenaje', sans-serif;
+            position: relative;
+            overflow: hidden;
+            color: black;
+            background: rgba(0, 0, 0, 0.2); /* Initial background */
+            transition: background 0.3s ease-in-out, color 0.3s ease-in-out;
         }
-
+        
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent; /* Start with no background */
+            opacity: 0; /* Initially hidden */
+            transition: opacity 0.3s ease-in-out, background 0.3s ease-in-out;
+            z-index: -1;
+        }
+        
         button:hover {
-            background-color: rgba(0, 0, 0, 0.80);
+            color: white;
+            background: transparent; /* Fade out the initial background */
         }
+        
+        button:hover::before {
+            opacity: 1; /* Fade in the gradient */
+            background: linear-gradient(135deg, rgba(216, 100, 112, 0.7), rgba(68, 133, 244, 0.7));
+        }
+        
+        
+        
 
 
-        /* Optional: Add animation */
+        
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -138,20 +147,22 @@
 </head>
 <body class="animated">
     <div class="h1-container">
-        <h1>AIDRIn</h1>
+        <img src="images/logo.png" alt="AIDRIn Logo" style="max-width: 600px; max-height: 600px; padding-left: 7vw; padding-top:7vh;">
     </div>
-    <div class="h2-container">
-        <h2>A framework that covers a broad range of readiness dimensions that aids in quantitatively and qualitatively evaluating the readiness of data.</h2>
-    </div>
+    <div style="display:flex; flex-direction: column; justify-content: center;">
+        <div class="h2-container">
+            <h2>A framework that covers a broad range of readiness dimensions that aids in quantitatively and qualitatively evaluating the readiness of data.</h2>
+        </div>
 
-    <div class="button-container">
-        <a href="{{ url_for('upload_csv') }}">
-            <button>Assess Data Readiness</button>
-        </a>
+        <div class="button-container">
+            <a href="{{ url_for('upload_csv') }}">
+                <button>Assess Data Readiness</button>
+            </a>
 
-        <a href="{{ url_for('FAIRness') }}">
-            <button>FAIR Compliance Assessment</button>
-        </a>
+            <a href="{{ url_for('FAIRness') }}">
+                <button>FAIR Compliance Assessment</button>
+            </a>
+        </div>
     </div>
     
 </body>

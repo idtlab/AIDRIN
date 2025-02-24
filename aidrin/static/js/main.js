@@ -753,41 +753,64 @@ function showResults() {
     }
 }
 
-function toggleCheckboxes(sectionId, sectionTag, innertext) {
-    var checkboxContainer = document.getElementById(sectionId);
-    var toggleButton = document.getElementById("toggleButton_" + sectionTag);
+// function toggleCheckboxes(sectionId, sectionTag, innertext) {
+//     var checkboxContainer = document.getElementById(sectionId);
+//     var toggleButton = document.getElementById("toggleButton_" + sectionTag);
 
-    // Check if the button exists, if not, create it
-    if (!toggleButton) {
-        toggleButton = document.createElement("button");
-        toggleButton.id = "toggleButton_" + sectionTag;
-        toggleButton.innerText = "+";
-        toggleButton.style.cursor = "pointer";
-        toggleButton.addEventListener("click", function() {
-            toggleCheckboxContainer(checkboxContainer, toggleButton, innertext); // Pass toggleButton as an argument
-        });
-        // Append the button to the container
-        checkboxContainer.parentNode.insertBefore(toggleButton, checkboxContainer);
-    }
+//     // Check if the button exists, if not, create it
+//     if (!toggleButton) {
+//         toggleButton = document.createElement("button");
+//         toggleButton.id = "toggleButton_" + sectionTag;
+//         toggleButton.innerText = "+";
+//         toggleButton.style.cursor = "pointer";
+//         toggleButton.addEventListener("click", function() {
+//             toggleCheckboxContainer(checkboxContainer, toggleButton, innertext); // Pass toggleButton as an argument
+//         });
+//         // Append the button to the container
+//         checkboxContainer.parentNode.insertBefore(toggleButton, checkboxContainer);
+//     }
 
-    toggleCheckboxContainer(checkboxContainer, toggleButton, innertext); // Pass toggleButton as an argument
-}
+//     toggleCheckboxContainer(checkboxContainer, toggleButton, innertext); // Pass toggleButton as an argument
+// }
 
-function toggleCheckboxContainer(checkboxContainer, toggleButton, innertext) {
-    var isExpanded = checkboxContainer.style.display === "block";
+// function toggleCheckboxContainer(checkboxContainer, toggleButton, innertext) {
+//     var isExpanded = checkboxContainer.style.display === "block";
 
-    if (isExpanded) {
-        checkboxContainer.style.display = "none";
-        toggleButton.innerText = "+ "+ innertext;
-        toggleButton.style.cursor = "pointer";
-    } else {
-        checkboxContainer.style.display = "block";
-        toggleButton.innerText = "- " + innertext;
-        toggleButton.style.cursor = "pointer";
-    }
-}
+//     if (isExpanded) {
+//         checkboxContainer.style.display = "none";
+//         toggleButton.innerText = "+ "+ innertext;
+//         toggleButton.style.cursor = "pointer";
+//     } else {
+//         checkboxContainer.style.display = "block";
+//         toggleButton.innerText = "- " + innertext;
+//         toggleButton.style.cursor = "pointer";
+//     }
+// }
 
 function toggleValue(checkbox) {
+    console.log("Checkbox clicked:", checkbox);
+     // Find the closest parent container of the checkbox (checkboxContainer)
+     const container = checkbox.closest(".checkboxContainerIndividual");
+     console.log("Container found:", container);
+
+     if (!container) {
+         console.error("No .checkboxContainerIndividual found!");
+         return;
+     }
+     // Find all select dropdowns within that container
+     const dropdowns = container.querySelectorAll("select");
+     const inputs = container.querySelectorAll("input.textWrapper");
+     const checkboxes = container.querySelectorAll("input.checkbox.individual");
+     // Enable or disable all dropdowns inside the container based on checkbox state
+     dropdowns.forEach(dropdown => {
+         dropdown.disabled = !checkbox.checked; 
+     });
+     inputs.forEach(input => {
+         input.disabled = !checkbox.checked; 
+     });
+     checkboxes.forEach(input => {
+        input.disabled = !checkbox.checked; 
+    });
     // Toggle the value based on the checked state
     if (checkbox.checked) {
         checkbox.value = "yes";
@@ -796,3 +819,15 @@ function toggleValue(checkbox) {
     }
     console.log("Checkbox value:", checkbox.value); // For debugging
 }
+// Ensure proper initial state on page load
+    document.addEventListener("DOMContentLoaded", function() {
+        // Get all checkboxes inside each checkboxContainer
+        document.querySelectorAll(".checkboxContainer").forEach(container => {
+            // For each container, get the checkbox inside and set the initial state
+            const checkboxes = container.querySelectorAll("input[type='checkbox']");
+            checkboxes.forEach(checkbox => {
+                // Set initial state of selects based on checkbox
+                toggleValue(checkbox);
+            });
+        });
+    });

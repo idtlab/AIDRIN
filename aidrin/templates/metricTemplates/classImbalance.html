@@ -35,23 +35,25 @@
     <div class="metric-page-container">
         <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('dataQuality') }}">
             <div id="checkboxContainer_classImbalance" class="checkboxContainer"><br>
-                <label class="material-checkbox">
-                    <input type="checkbox" name="class imbalance" onchange="toggleValue(this)">
-                    <span class="checkmark"></span>
-                    Check class imbalance
-                    <span class="info-icon">i
-                        <span class="info-text">This option checks the distribution of the target feature and displays a pie chart highlighting the class imbalance in the dataset.</span>
-                    </span>
-                </label>
-                <ul>
-                    <li >
-                        <label for="features for class imbalance">Target feature:</label>
-                        <select name="features for class imbalance" id = "allFeaturesDropdownClassImb" required>
-                            <option value="" disabled selected>Select a feature</option>
-                            <!-- Options will be added dynamically using JavaScript -->
-                        </select>
-                    </li>
-                </ul>
+                <div class="checkboxContainerIndividual">
+                    <label class="material-checkbox">
+                        <input type="checkbox" name="class imbalance" onchange="toggleValue(this)">
+                        <span class="checkmark"></span>
+                        Check class imbalance
+                        <span class="info-icon">i
+                            <span class="info-text">This option checks the distribution of the target feature and displays a pie chart highlighting the class imbalance in the dataset.</span>
+                        </span>
+                    </label>
+                    <ul>
+                        <li >
+                            <label for="features for class imbalance" style="padding:10px; padding-left:15px;">Target feature:</label>
+                            <select name="features for class imbalance" id = "allFeaturesDropdownClassImb" required>
+                                <option value="" disabled selected>Select a feature</option>
+                                <!-- Options will be added dynamically using JavaScript -->
+                            </select>
+                        </li>
+                    </ul>
+                </div>
             </div>
     </div>
     <div id = "formbuttonsContainer">
@@ -74,7 +76,7 @@
         <div class="plot-container" style="text-align:left" id="metrics">
 
         <h2 style="text-align:center">Data Quality Metrics</h2>
-        <p>No data available yet.</p>
+        <p>No data available yet. Please submit a request.</p>
         <div id="buttonsContainer" style="display:none;">
             <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
         </div>

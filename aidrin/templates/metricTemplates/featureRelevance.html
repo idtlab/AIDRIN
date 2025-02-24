@@ -35,35 +35,37 @@
     <div class="metric-page-container">
         <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('dataQuality') }}">
             <div id="checkboxContainer_featureRelevance" class="checkboxContainer"><br>
-                <label class="material-checkbox">
-                    <input  type="checkbox" name="feature relevancy" onchange="toggleValue(this)">
-                    <span class="checkmark"></span>
-                    Check feature relavancy against target
-                    <span class="info-icon">i
-                        <span class="info-text">
-                            Calculates Pearson correlation coefficients between each feature and the target variable after minimal data cleaning (dropping missing values, one-hot encoding categorical features, and label encoding the target feature). A coefficient of 1 indicates a perfect positive correlation, while -1 indicates a perfect negative correlation.</span>
-                    </span>
-                </label>
-        
-                <ul>
-                    <li >
-                        <label  for="categorical features for feature relevancy">Categorical features:</label>
-                        <div id ="catFeaturesCheckbox1"></div><br>
-                    </li>
-        
-                    <li >
-                        <label  for="numerical features for feature relevancy">Numerical features:</label>
-                        <div  id ="numFeaturesCheckbox1"></div><br>
-                    </li>
-        
-                    <li >
-                        <label  for="target for feature relevance">Target feature:</label>
-                        <select name="target for feature relevance" id = "allFeaturesDropdownFeaRel"required>
-                            <option value="" disabled selected>Select a feature</option>
-                            <!-- Options will be added dynamically using JavaScript -->
-                        </select><br>
-                    </li>
-                </ul>   
+                <div class="checkboxContainerIndividual">
+                    <label class="material-checkbox">
+                        <input  type="checkbox" name="feature relevancy" onchange="toggleValue(this)">
+                        <span class="checkmark"></span>
+                        Check feature relavancy against target
+                        <span class="info-icon">i
+                            <span class="info-text">
+                                Calculates Pearson correlation coefficients between each feature and the target variable after minimal data cleaning (dropping missing values, one-hot encoding categorical features, and label encoding the target feature). A coefficient of 1 indicates a perfect positive correlation, while -1 indicates a perfect negative correlation.</span>
+                        </span>
+                    </label>
+            
+                    <ul>
+                        <li >
+                            <label  for="categorical features for feature relevancy" style="padding:10px; padding-left:15px; min-width:175px;">Categorical features:</label>
+                            <div id ="catFeaturesCheckbox1"></div><br>
+                        </li>
+            
+                        <li >
+                            <label  for="numerical features for feature relevancy" style="padding:10px; padding-left:15px;  min-width:175px;">Numerical features:</label>
+                            <div  id ="numFeaturesCheckbox1"></div><br>
+                        </li>
+            
+                        <li >
+                            <label  for="target for feature relevance" style="padding:10px; padding-left:15px;  min-width:175px;">Target feature:</label>
+                            <select name="target for feature relevance" id = "allFeaturesDropdownFeaRel"required>
+                                <option value="" disabled selected>Select a feature</option>
+                                <!-- Options will be added dynamically using JavaScript -->
+                            </select><br>
+                        </li>
+                    </ul>  
+                </div>
             </div>
         </div>
         <div id = "formbuttonsContainer">
@@ -87,7 +89,7 @@
             <div class="plot-container" style="text-align:left" id="metrics">
     
             <h2 style="text-align:center">Data Quality Metrics</h2>
-            <p>No data available yet.</p>
+            <p>No data available yet. Please submit a request.</p>
             <div id="buttonsContainer" style="display:none;">
                 <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
             </div>
