@@ -791,12 +791,12 @@ function toggleValue(checkbox) {
     console.log("Checkbox clicked:", checkbox);
      // Find the closest parent container of the checkbox (checkboxContainer)
      const container = checkbox.closest(".checkboxContainerIndividual");
-     console.log("Container found:", container);
+     console.log(container);
 
      if (!container) {
-         console.error("No .checkboxContainerIndividual found!");
          return;
      }
+     console.log("Container found:", container);
      // Find all select dropdowns within that container
      const dropdowns = container.querySelectorAll("select");
      const inputs = container.querySelectorAll("input.textWrapper");
@@ -819,15 +819,53 @@ function toggleValue(checkbox) {
     }
     console.log("Checkbox value:", checkbox.value); // For debugging
 }
+function toggleValueIndividual(checkbox) {
+    console.log("none found ");
+    // Toggle the value based on the checked state
+    if (checkbox.checked) {
+        checkbox.value = "yes";
+    } else {
+        checkbox.value = "no";
+    }
+    console.log("Checkbox value:", checkbox.value); // For debugging
+}
 // Ensure proper initial state on page load
     document.addEventListener("DOMContentLoaded", function() {
         // Get all checkboxes inside each checkboxContainer
         document.querySelectorAll(".checkboxContainer").forEach(container => {
+            
             // For each container, get the checkbox inside and set the initial state
+            
             const checkboxes = container.querySelectorAll("input[type='checkbox']");
             checkboxes.forEach(checkbox => {
+                console.log(checkbox);
                 // Set initial state of selects based on checkbox
                 toggleValue(checkbox);
             });
+            
         });
     });
+    //********** Darkmode Toggle *******
+    let darkmode = localStorage.getItem('darkmode')
+    //add a darkmode class to the body
+    const enableDarkmode = () => {
+        document.body.classList.add('darkmode')
+        localStorage.setItem('darkmode','active')
+    }
+    //remove the darkmode class from the body
+    const disableDarkmode = () => {
+        document.body.classList.remove('darkmode')
+        localStorage.setItem('darkmode',null)
+    }
+    document.addEventListener('DOMContentLoaded', (event) => {
+    
+    const themeSwitch = document.getElementById('theme-switch')
+    //pn document lodad check if darkmode is active
+    if(darkmode === "active") enableDarkmode()
+    //add a click event listener to the theme switch
+    themeSwitch.addEventListener("click", () => {
+        
+        darkmode = localStorage.getItem('darkmode')
+        darkmode !== "active" ? enableDarkmode() : disableDarkmode()
+    }) 
+});

@@ -1,6 +1,26 @@
 /*
 * ************************ FUNCTIONS MOVED FROM HTML PAGE ************************
 */
+// Slideshow control for the histograms
+    // Thumbnail image controls
+    function currentSlide(n) {
+        showSlides(slideIndex = n);
+      }
+      function showSlides(n) {
+        let i;
+        let slides = document.getElementsByClassName("mySlides");
+        let dots = document.getElementsByClassName("dot");
+        if (n > slides.length) {slideIndex = 1}
+        if (n < 1) {slideIndex = slides.length}
+        for (i = 0; i < slides.length; i++) {
+          slides[i].style.display = "none";
+        }
+        for (i = 0; i < dots.length; i++) {
+          dots[i].className = dots[i].className.replace(" activeDot", "");
+        }
+        slides[slideIndex-1].style.display = "block";
+        dots[slideIndex-1].className += " activeDot";
+      }
 //Unsure if this is still needed: a page reload is no longer needed but further testing is required to ensure
 //I don't break anything
 $(document).ready(function () {
@@ -35,7 +55,7 @@ $(document).ready(function () {
                         createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox1','categorical features for feature relevancy')
                         createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
                         createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox3','quasi identifiers to measure multiple attribute risk score')
-
+                        
                     }
 
                     if ('numerical_features' in response) {
@@ -57,7 +77,7 @@ $(document).ready(function () {
                         createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis1');
                         createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis2');
                     }
-
+                    
                 } else {
                     alert('Error: ' + response.message);
                 }
@@ -78,49 +98,12 @@ $(document).ready(function () {
         dropdown.append($('<option value="" disabled>Select a feature</option>'));
 
         // Populate the dropdown with options from the response
-        for (var i = 0; i < features.length; i++) {
+        
+        for (var i = 0; i < features.length && features[0]!="{"; i++) {
             dropdown.append($('<option>').text(features[i]));
         }
     }
-    function createCheckboxContainer(features, tableId, nameTag) {
-       
-        var table = $('#' + tableId);
-        table.empty(); // Clear previous content
-
-        var columns = 4; // Maximum number of columns
-
-        for (var i = 0; i < features.length; i++) {
-            if (i % columns === 0) {
-                var row = $('<tr>');
-                table.append(row);
-            }
-
-            var checkbox = $('<input>').attr({
-                type: 'checkbox',
-                class: 'checkbox individual',
-                style: 'margin-right:10px',
-                onchange: 'toggleValue(this)',
-                id: tableId+'checkbox_' + i, // Generate unique ids so all buttons work
-                name: nameTag, // Set the name attribute
-                value: features[i],
-                disabled: true
-            });
-
-            var span = $('<span>').addClass('checkmark');
-
-            var label = $('<label>')
-                // .attr('class','material-checkbox')
-                .attr('style', 'display: flex; flex-direction:row; min-width: 125px; align-items: center;')
-                .attr('for', tableId+'checkbox_' + i)
-                .attr('id', tableId+'checkbox_' + i);
-
-            label.append(checkbox).append(features[i]);
-            var cell = $('<td>').append(label);
-
-            row.append(cell);
-        }
-    }
-});
+    
 
 
 //generate summary statistics
@@ -221,26 +204,6 @@ $(document).ready(function () {
             }
         });
     });
-    // Slideshow control for the histograms
-    // Thumbnail image controls
-    function currentSlide(n) {
-      showSlides(slideIndex = n);
-    }
-    function showSlides(n) {
-      let i;
-      let slides = document.getElementsByClassName("mySlides");
-      let dots = document.getElementsByClassName("dot");
-      if (n > slides.length) {slideIndex = 1}
-      if (n < 1) {slideIndex = slides.length}
-      for (i = 0; i < slides.length; i++) {
-        slides[i].style.display = "none";
-      }
-      for (i = 0; i < dots.length; i++) {
-        dots[i].className = dots[i].className.replace(" activeDot", "");
-      }
-      slides[slideIndex-1].style.display = "block";
-      dots[slideIndex-1].className += " activeDot";
-    }
 
 
 //generate dropdown when features of the dataset are required to select
@@ -260,56 +223,13 @@ $(document).ready(function() {
                 var lines = content.split('\n');
                 if (lines.length > 0) {
                     var columns = lines[0].split(',');
-                    displayColumns(columns);
                     console.log(columns);
                 }
+                createCheckboxContainer(columns,'correlationCheckboxContainer','all features for data transformation');
             };
             reader.readAsText(blob);
-        
     
-
-    var checkboxesLoaded = false;
-
-    function displayColumns(columns) {
-
-        // Checkboxes
-        if (!checkboxesLoaded) {
-            var checkboxContainer = $('#correlationCheckboxContainer');
-            var table = $('<table>').appendTo(checkboxContainer);
-            var row, cell;
-
-            for (var i = 0; i < columns.length; i++) {
-                if (i % 4 === 0) {
-                    // Start a new row for every 4 columns
-                    row = $('<tr>').appendTo(table);
-                }
-
-                cell = $('<td>').appendTo(row);
-
-                var checkbox = $('<input type="checkbox" class="checkbox individual">')
-                    .attr('id', 'checkbox_' + columns[i])
-                    .attr('style','margin-right:10px')
-                    .attr('value', columns[i])
-                    .attr('name', 'checkboxValues');
-
-                var span = $('<span>').addClass('checkmark').addClass('individual');
-
-                var label = $('<label>')
-                    
-                    
-                    .attr('style', 'display: flex; ')
-                    .attr('for', 'checkbox_' + columns[i])
-                    .attr('id', 'checkbox_' + columns[i]);
-                   
-                //.append(span)
-                label.append(checkbox).append(columns[i]);
-                cell.append(label);
-            }
-
-            checkboxesLoaded = true;
-        }
-    }
-    });
+        });
 });
 
 
@@ -329,4 +249,42 @@ function toggleVisualization(id) {
     }
 }
 
+function createCheckboxContainer(features, tableId, nameTag) {
+       
+    var table = $('#' + tableId);
+    table.empty(); // Clear previous content
+    console.log("features:",features);
+    var columns = 4; // Maximum number of columns
+    for (var i = 0; i < features.length && features[0]!="{"; i++) {
+        if (i % columns === 0) {
+            var row = $('<tr>');
+            table.append(row);
+        }
 
+        var checkbox = $('<input>').attr({
+            type: 'checkbox',
+            class: 'checkbox individual',
+            style: 'margin-right:10px',
+            onchange: 'toggleValueIndividual(this)',
+            id: tableId+'checkbox_' + i, // Generate unique ids so all buttons work
+            name: nameTag, // Set the name attribute
+            value: features[i],
+            disabled: true
+        });
+
+        var span = $('<span>').addClass('checkmark');
+
+        var label = $('<label>')
+            // .attr('class','material-checkbox')
+            .attr('style', 'display: flex; flex-direction:row; min-width: 125px; align-items: center;')
+            //.attr('for', tableId+'checkbox_' + i)
+            .attr('class', 'material-checkbox')
+            .attr('id', tableId+'checkbox_' + i);
+
+        label.append(checkbox).append(span).append(features[i]);
+        var cell = $('<td>').append(label);
+
+        row.append(cell);
+    }
+}
+});
