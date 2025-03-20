@@ -2,24 +2,36 @@
 :root{
   font-family: 'Roboto', sans-serif;
   --textColor: #212121;
-  --backgroundColor: #ffffff;
-  --secondaryColor: #cccaca;
-  --tertiaryColor: #8f8f8f;
+  --backgroundColor: #D9DAD7;
+  --secondaryColor: #FBFBF2;
+  
+  --tertiaryColor: #8F8F8F;
   --darkAccent: rgb(71, 71, 71);
   --nav-bar: #212121;
 
+  --dotColor: #505050;
+  --spanColor: #ffffff;
   --selectColor: #ffffff;
   --shadowColor: rgba(0, 0, 0, 0.2);
   --disabledOverlay: rgba(0, 0, 0, 0.5);
   --disabledOverlayText:rgba(0,0,0,0.3);
 }
 .darkmode{
-  --textColor: #ffffff;
-  --backgroundColor: #212121;
+  /* --textColor: #ffffff;
+  --bacgroundColor: #212121;
   --secondaryColor: #414141;
   --tertiaryColor: #8f8f8f;
   --darkAccent: rgb(198, 198, 198);
+  --nav-bar: #212121; */
+
+  --textColor: #FBFBF2;
+  --backgroundColor: #212529;
+  --secondaryColor: #495057;
+  --tertiaryColor: #c2c4c7;
+  --darkAccent: rgb(198, 198, 198);
   --nav-bar: #212121;
+  --spanColor: #212121;
+  --dotColor: #ffffff;
 }
 body {
     display: flex;
@@ -197,6 +209,8 @@ span {
     background-color:var(--secondaryColor);
 }
 .plot-container img{
+  object-fit:cover;
+  width: fit-content;
   max-width: 95%;
 }
 
@@ -218,6 +232,7 @@ input[type="checkbox"] {
 /* For Dropdown text toggles */
 .toggle-button {
     min-width: max-content;
+    margin-left: 20%;
     display: flex;
     align-items: center;
     font-size: 22px;
@@ -326,7 +341,7 @@ input[type="reset"] {
     top: 20px;
     left: 0;
     background-color: var(--tertiaryColor); /* text bubble color*/
-    color: var(--textColor);
+    color: var(--secondaryColor);
     padding: 5px 10px;
     border-radius: 3px;
     white-space: normal; /* Allow text to wrap */
@@ -435,7 +450,9 @@ ul {
     margin:10px;
     transition: all 0.6s cubic-bezier(0.23, 1, 0.320, 1);
   }
-  
+  .animated-button span {
+    color: var(--spanColor);
+  }
   .animated-button span:last-child {
     position: absolute;
     top: 50%;
@@ -483,21 +500,24 @@ ul {
     opacity: 1;
   }
 
+
 /* Custom File upload from uiverse */ 
   .custum-file-upload {
-    
+    height:80%;
+    max-width:100%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    border: 2px  #e8e8e8 solid;
+    border: 2px  #e8e8e8 dashed;
     border-top:none;
     background-color: #212121;
     padding:1.5em;
     border-radius: 0px 0px 10px 10px;
-   
+    transition: all 0.3s;
   }
+  .custum-file-upload
   .custum-file-upload .icon {
     display: flex;
     align-items: center;
@@ -505,7 +525,7 @@ ul {
   }
   
   .custum-file-upload .icon svg {
-    height: 160px;
+    height: 140px;
     fill: #e8e8e8;
   }
   
@@ -533,12 +553,16 @@ ul {
     padding-bottom: 0.5em;
     align-self: center;
     justify-content: center;
-    background-color: green;
+    background-color: rgb(172, 13, 13);
     color: white;
     margin-bottom:0px;
     border-radius: 0px 0px 10px 10px;
     border:2px white solid;
     border-top:none;
+    transition: all 0.3s;
+  }
+  .clear-button:hover{
+    background-color: rgb(234, 102, 102);
   }
   .redirect-upload-button{
     display:flex;
@@ -624,7 +648,7 @@ ul {
   z-index: 35;
 }
 .activeDot, .dot:hover {
-  background-color: #535353;
+  background-color: var(--dotColor);
 }
 /* Fading animation */
 .fade {
@@ -684,6 +708,7 @@ ul {
   margin-bottom: 20px;
 }
 .visualization-container img {
+  
   max-width: 100%;
   border-radius: 4px;
   margin-bottom: 10px;
@@ -823,6 +848,10 @@ ul {
 }
 #theme-switch svg{
   fill: var(--textColor);
+}
+
+#theme-switch:hover{
+  color: linear-gradient(135deg, rgba(216, 100, 112, 0.7), rgba(68, 133, 244, 0.7));
 }
 #theme-switch svg:last-child{
   display:none;

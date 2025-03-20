@@ -68,7 +68,7 @@
 
         button {
             padding: 15px 30px;
-            font-size: 1.2em;
+            font-size: 1.5em;
             cursor: pointer;
            
             border: none;
@@ -95,11 +95,12 @@
         button {
             cursor: pointer;
             border-radius: 20px;
+            padding: 50px;
             font-family: 'Homenaje', sans-serif;
             position: relative;
             overflow: hidden;
             color: black;
-            background: rgba(0, 0, 0, 0.2); /* Initial background */
+            
             transition: background 0.3s ease-in-out, color 0.3s ease-in-out;
         }
         
@@ -123,7 +124,7 @@
         
         button:hover::before {
             opacity: 1; /* Fade in the gradient */
-            background: linear-gradient(135deg, rgba(216, 100, 112, 0.7), rgba(68, 133, 244, 0.7));
+            background: linear-gradient(135deg, rgba(216, 100, 112, 1), rgba(68, 133, 244, 1));
         }
         
         
@@ -147,6 +148,15 @@
 </head>
 <body class="animated">
     <div class="h1-container">
+        <!-- patterns -->
+        <img src="images/pattern1.png" style="position: absolute; bottom: 13vh; right: -4vw; opacity:0.5; z-index: -1;">
+        <img src="images/pattern2.jpg" style="position: absolute; bottom: 80vh; right: -5vw; opacity:0.3; z-index: -1;">
+        <img src="images/pattern3.png" style="position: absolute; top: 0vh; left: 0vw; opacity:0.3; z-index: -1;">
+        <img src="images/pattern3.png" style="position: absolute; top: 40vh; left: 0vw; opacity:0.3; z-index: -1;">
+        <img src="images/pattern3.png" style="position: absolute; top: 80vh; left: 0vw; opacity:0.3; z-index: -1;">
+        <img src="images/pattern3.png" style="position: absolute; top: 0vh; left: 25vw; opacity:0.3; z-index: -1;">
+
+
         <img src="images/logo.png" alt="AIDRIn Logo" style="max-width: 600px; max-height: 600px; padding-left: 7vw; padding-top:7vh;">
     </div>
     <div style="display:flex; flex-direction: column; justify-content: center;">
@@ -157,10 +167,6 @@
         <div class="button-container">
             <a href="{{ url_for('upload_csv') }}">
                 <button>Assess Data Readiness</button>
-            </a>
-
-            <a href="{{ url_for('FAIRness') }}">
-                <button>FAIR Compliance Assessment</button>
             </a>
         </div>
     </div>

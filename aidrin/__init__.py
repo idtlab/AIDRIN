@@ -106,8 +106,11 @@ def format_dict_values(d):
 def summary_histograms(df):
     line_graphs = {}
     for column in df.select_dtypes(include='number').columns:
-        plt.figure(figsize=(6, 6))
-
+        bg_color = '#FBFBF2'
+        plt.figure(figsize=(6, 6),facecolor=bg_color)
+        ax = plt.gca()
+        ax.set_facecolor(bg_color)
+        
         # Using seaborn's kdeplot to estimate the distribution
         sns.kdeplot(df[column], bw_adjust=0.5)
 

@@ -21,8 +21,22 @@
         slides[slideIndex-1].style.display = "block";
         dots[slideIndex-1].className += " activeDot";
       }
-//Unsure if this is still needed: a page reload is no longer needed but further testing is required to ensure
-//I don't break anything
+      function clearDropdown(dropdownId) {
+        var dropdown = document.getElementById(dropdownId);
+        dropdown.selectedIndex = 0;
+        // Additional logic to clear dynamically added options if needed
+    }
+    
+    /************ Taken out of metric data download pop up *************/
+    function toggleVisualization(id) {
+        var element = document.getElementById(id);
+        if (element.style.display === 'none' || element.style.display === '') {
+            element.style.display = 'block';
+        } else {
+            element.style.display = 'none';
+        }
+    }
+    
 $(document).ready(function () {
         fetch(retrieveFileUrl)
             .then(response => response.blob())  // Convert  to a Blob
@@ -95,7 +109,7 @@ $(document).ready(function () {
         dropdown.empty(); // Clear previous options
 
         // Add default options
-        dropdown.append($('<option value="" disabled>Select a feature</option>'));
+        dropdown.append($('<option value="" disabled>Select a Feature</option>'));
 
         // Populate the dropdown with options from the response
         
@@ -233,21 +247,6 @@ $(document).ready(function() {
 });
 
 
-function clearDropdown(dropdownId) {
-    var dropdown = document.getElementById(dropdownId);
-    dropdown.selectedIndex = 0;
-    // Additional logic to clear dynamically added options if needed
-}
-
-/************ Taken out of metric data download pop up *************/
-function toggleVisualization(id) {
-    var element = document.getElementById(id);
-    if (element.style.display === 'none' || element.style.display === '') {
-        element.style.display = 'block';
-    } else {
-        element.style.display = 'none';
-    }
-}
 
 function createCheckboxContainer(features, tableId, nameTag) {
        
