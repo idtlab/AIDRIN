@@ -1,3 +1,22 @@
+function togglePillarDropdown(id) {
+    const container = document.getElementById(id); //
+    const subElements = container.querySelectorAll('.toggle-button');
+
+    const header = document.querySelector(`h3[onclick*="${id}"]`);
+    const svg = header.querySelector("svg"); 
+    subElements.forEach(element => {
+        if (element.style.display === 'none' || element.style.display === '') {
+            element.style.display = 'flex';
+            svg.innerHTML = '<path d="M480-360 280-559.33h400L480-360Z"/>';
+            
+        } else {
+            element.style.display = 'none';
+            svg.innerHTML = '<path d="M400-280v-400l200 200-200 200Z"/>';
+        }
+    });
+}
+
+
 //for uploads
 function uploadForm() {
     const form = document.getElementById('uploadForm');

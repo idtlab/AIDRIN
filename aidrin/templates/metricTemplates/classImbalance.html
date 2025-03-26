@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
@@ -12,7 +11,7 @@
         var retrieveFileUrl = "{{ url_for('retrieve_uploaded_file') }}";
     </script>
     <script src="{{ url_for('static', filename='js/metric.js') }}"></script>
-
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <title>Class Imbalance</title>
 </head>
 <body>
@@ -51,7 +50,7 @@
          {% endif %}
     </div>
     <div class="metric-page-container">
-        <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('dataQuality') }}">
+        <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('classImbalance') }}">
             <div id="checkboxContainer_classImbalance" class="checkboxContainer"><br>
                 <div class="checkboxContainerIndividual">
                     <label class="material-checkbox">

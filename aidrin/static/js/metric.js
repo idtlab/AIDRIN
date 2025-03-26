@@ -146,27 +146,33 @@ $(document).ready(function () {
 
                     // Display additional summary statistics
                     
-                    var statisticsHTML = '<h2 style="text-align:center">Summary Statistics Table</h2><table>';
-                    statisticsHTML += '<tr><th>Statistic</th>'; // Bold header for the "Statistic" column
+                    var statisticsHTML = '<h2 style="text-align:center">Summary Statistics Table</h2><table border="1">';
+                    statisticsHTML += '<tr><th>Feature</th>'; // First column header
 
-                    // Iterate over the keys to create columns (excluding the first key)
+                    // Get statistic types (mean, median, etc.) from the first feature key
+                    var firstKey = Object.keys(response.summary_statistics)[0]; 
+                    var statKeys = Object.keys(response.summary_statistics[firstKey]);
+
+                    // Create header row with stat names
+                    statKeys.forEach(statKey => {
+                        statisticsHTML += '<td class="statName">' + statKey + '</td>';
+                    });
+                    statisticsHTML += '</tr>'; // End header row
+
+                    // Create rows for each feature (was previously a column)
                     for (var key in response.summary_statistics) {
-                        statisticsHTML += '<th>' + key + '</th>';
+                        statisticsHTML += '<tr><th><strong>' + key + '</strong></th>'; // Feature name as row header
+
+                        // Fill in statistics for this feature
+                        statKeys.forEach(statKey => {
+                            statisticsHTML += '<td>' + response.summary_statistics[key][statKey] + '</td>';
+                        });
+
+                        statisticsHTML += '</tr>'; // End of row
                     }
-                    statisticsHTML += '</tr>'; // End of the header row
 
-                    // Iterate over the statistics for each key
-                    for (var statKey in response.summary_statistics[key]) {
-                        statisticsHTML += '<tr><td><strong>' + statKey + '</strong></td>'; // Bold row for the "Feature" column
+                    statisticsHTML += '</table>';
 
-                        // Iterate over the keys to get values for each column
-                        for (var key in response.summary_statistics) {
-                            var statValue = response.summary_statistics[key][statKey];
-
-                            statisticsHTML += '<td>' + statValue + '</td>';
-                        }
-                        statisticsHTML += '</tr>'; // End of the row
-                    }
 
                     statisticsHTML += '</table>';
                     

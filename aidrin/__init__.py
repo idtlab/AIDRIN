@@ -525,7 +525,12 @@ def extract_features():
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
-    
+
+@app.route('/publications', methods=['GET'])
+def publications():
+    return render_template('publications.html')
+
+
 @app.route('/upload_file', methods=['POST','GET'])
 def upload_csv():
     print("Route accessed")
@@ -715,7 +720,7 @@ def FAIRness():
             end_time = time.time()
             print(f"Execution time: {end_time - start_tiime} seconds")
             # Render the form for a GET request
-            return render_template('upload_meta.html')
+            return render_template('metricTemplates/upload_meta.html')
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400

@@ -2,10 +2,13 @@
 :root{
   font-family: 'Roboto', sans-serif;
   --textColor: #212121;
+  --textColorSecondary: #696868;
   --backgroundColor: #D9DAD7;
   --secondaryColor: #FBFBF2;
+  --secondaryColorHalfOpacity: #fbfbf281;
   
   --tertiaryColor: #8F8F8F;
+
   --darkAccent: rgb(71, 71, 71);
   --nav-bar: #212121;
 
@@ -15,6 +18,9 @@
   --shadowColor: rgba(0, 0, 0, 0.2);
   --disabledOverlay: rgba(0, 0, 0, 0.5);
   --disabledOverlayText:rgba(0,0,0,0.3);
+  --visitedColor: purple;
+
+  transition: all 0.3s ease;
 }
 .darkmode{
   /* --textColor: #ffffff;
@@ -25,13 +31,17 @@
   --nav-bar: #212121; */
 
   --textColor: #FBFBF2;
+  --textColorSecondary: #c8c8c5;
   --backgroundColor: #212529;
   --secondaryColor: #495057;
+  --secondaryColorHalfOpacity: #49505786;
+
   --tertiaryColor: #c2c4c7;
   --darkAccent: rgb(198, 198, 198);
   --nav-bar: #212121;
   --spanColor: #212121;
   --dotColor: #ffffff;
+  --visitedColor: rgb(198, 115, 219);
 }
 body {
     display: flex;
@@ -74,7 +84,9 @@ form {
     box-sizing: border-box;
     
 }
-
+a:visited {
+    color: var(--visitedColor); /* Change the color of visited links */
+}
 /* Style for the select element*/
 select {
     appearance: none;
@@ -139,18 +151,26 @@ h1 {
     color: var(--textColor);
 }
 h3 {
-  margin:0px;
+  margin-left:20%;
+  font-size:1.3em;
+  margin-top: 10px;
+  margin-bottom:10px;
+  min-width:max-content;
+  cursor: pointer;
+  display:flex;
+  align-items: center;
+  white-space: nowrap; /* Prevent text from wrapping */
 }
-.h1-container {
-    width: 600px;
-    height: 160px;
-    /* Fit to device independent frame and align items */
+.noUpload{
+  color:var(--disabledOverlayText);
+}
+.h2-container {
+    
     display: flex;
-    align-self: center;
-    gap: 20px;
+    flex-direction: column;
+   
     flex-shrink: 1;
-    justify-content: center;
-    align-items: center; 
+    padding:20px;
 
     border-radius: 20px;
     /* blur background */
@@ -160,6 +180,7 @@ h3 {
 
     margin: 10px;
 }
+
 #fileInput {
     margin-bottom: 20px;
 }
@@ -178,15 +199,26 @@ table {
     width: 100%;
 }
 
-th, td {
-    border-bottom: 2px solid var(--darkAccent);
+th{
+    border: 1px solid var(--darkAccent);
     padding: 8px;
     text-align: left;
 }
+td{
+  border-bottom: 1px solid var(--darkAccent);
+  padding: 8px;
+  text-align: left;
+}
+.statName{
+    background-color: var(--secondaryColorHalfOpacity);
+
+}
 
 th {
-    background-color: var(--darkAccent);
-    color: var(--backgroundColor);
+    border-bottom: 1px solid var(--darkAccent);
+    background-color: var(--secondaryColor);
+
+    color: var(--textColor)
 }
 
 #Statresult {
@@ -232,12 +264,14 @@ input[type="checkbox"] {
 /* For Dropdown text toggles */
 .toggle-button {
     min-width: max-content;
-    margin-left: 20%;
-    display: flex;
+    margin-left: 25%;
+    margin-bottom: 5px;
+    display: none;
+    
     align-items: center;
-    font-size: 22px;
-    color: var(--textColor);
-    transition: color 0.3s ease; /* smooth animation */
+    font-size: 16px;
+    color: var(--textColorSecondary);
+    transition: all 0.9s ease; /* smooth animation */
 }
 /* change Dropdown color while hovering */
 .clickable:hover {
@@ -328,7 +362,7 @@ input[type="reset"] {
   color: var(--backgroundColor);
   display: none;
   position: absolute;
-  left: 27%;
+  right: 5%;
   background-color: var(--darkAccent); /* text bubble color*/
   padding: 5px 10px;
   border-radius: 3px;
