@@ -32,10 +32,27 @@
             </button>
         </div>
     </div>
-    <h1 style="text-align:center;">Structured Data Readiness</h1>
-
+    <h1 style="text-align:center; margin-bottom:1%;">Structured Data Readiness</h1>
+    <div style="width: 100%; display: block;">
+        <p style="
+          max-width: 700px;
+          margin: 0 auto;
+          padding-bottom:3%;
+          text-align: center;
+          font-size: 1.25rem;
+          line-height: 1.4;
+          white-space: normal;
+          word-break: break-word;
+          overflow-wrap: break-word;
+          display: block;
+        ">
+          Upload a supported structured dataset to evaluate it on the metrics available below
+    </p>
+      </div>
+      
+    
     <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: row; ">
-        <div style="display: flex; width: 55%; flex-direction:column;">
+        <div style="display: flex; width: 35%; flex-direction:column;">
 
             <select  class="fileType" style="margin:0; align-self:center; text-align:center; border-radius: 10px 10px 0px 0px; width:100%; max-width: none;" name="file type">
                 <option>File Type: CSV Structured</option>
@@ -71,7 +88,7 @@
             </label>
             {% if session.get('uploaded_file_path') %}
                 <!-- clear button: visible when file is uploaded, change form style to match-->
-                <button type="button" class="clear-button" onclick="clearFile()">Clear Submission</button>
+                <button type="button" class="clear-button" onclick="clearFile()">Clear Uploaded File</button>
             {% endif %}
         
         </div>

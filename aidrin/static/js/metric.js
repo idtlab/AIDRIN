@@ -36,6 +36,16 @@
             element.style.display = 'none';
         }
     }
+    let errorPopup;
+    document.addEventListener("DOMContentLoaded", function () {
+        errorPopup = document.getElementById("error-popup");
+    });
+    function openErrorPopup(){
+        errorPopup.classList.add("open-popup");
+    }
+    function closeErrorPopup(){
+        errorPopup.classList.remove("open-popup");
+    }
     
 $(document).ready(function () {
         fetch(retrieveFileUrl)

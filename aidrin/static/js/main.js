@@ -84,6 +84,12 @@ function submitForm() {
         }
     })
     .then(data => {
+        
+        if (data.trigger === "correlationError") {
+            openErrorPopup(); // call your JS error popup
+        } else {
+            // continue handling the successful case
+        }
         console.log('Server Response:', data);
         var resultContainer = document.getElementById('resultContainer');
 
@@ -839,10 +845,12 @@ function toggleValue(checkbox) {
     console.log("Checkbox value:", checkbox.value); // For debugging
 }
 function toggleValueIndividual(checkbox) {
-    console.log("none found ");
     // Toggle the value based on the checked state
     if (checkbox.checked) {
-        checkbox.value = "yes";
+        const label = checkbox.closest("label");
+        const text = label.textContent.trim();
+        checkbox.value = text;
+        
     } else {
         checkbox.value = "no";
     }

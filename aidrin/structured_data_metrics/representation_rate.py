@@ -12,9 +12,14 @@ def calculate_representation_rate(dataframe, columns):
             column_series = dataframe[column].dropna()  # Drop rows with NaN values
             value_counts = column_series.value_counts(normalize=True)
             
+           
+
+            
             for attribute_value1 in value_counts.index:
                 for attribute_value2 in value_counts.index:
                     if attribute_value1 != attribute_value2:
+                        
+
                         # Check if the pair has been processed or its reverse
                         pair = f"{attribute_value1} vs {attribute_value2}"
                         reverse_pair = f"{attribute_value2} vs {attribute_value1}"

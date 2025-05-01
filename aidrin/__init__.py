@@ -209,6 +209,7 @@ def fairness():
         #check for parameters
         #Representation Rate
         if request.form.get('representation rate') == "yes" and request.form.get('features for representation rate') != None:
+            print("Running Representation Rate anaylsis")
             #convert the string values a list
             rep_dict = {}
             list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
@@ -218,13 +219,27 @@ def fairness():
             final_dict['Representation Rate'] = rep_dict
         #statistical rate
         if request.form.get('statistical rate') == "yes" and request.form.get('features for statistical rate') != None and request.form.get('target for statistical rate') != None:
-            y_true = request.form.get('target for statistical rate')
-            sensitive_attribute_column = request.form.get('features for statistical rate')
-            sr_dict = calculate_statistical_rates(file,y_true,sensitive_attribute_column)
-            sr_dict['Description'] = 'The graph illustrates the statistical rates of various classes across different sensitive attributes. Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds to a class, with the height indicating the proportion of that sensitive attribute within that particular class'
-            final_dict["Statistical Rate"] = sr_dict
+            try:
+                y_true = request.form.get('target for statistical rate')
+                sensitive_attribute_column = request.form.get('features for statistical rate')
+
+                print("Inputs:", y_true, sensitive_attribute_column)
+                # This function never completes?
+                sr_dict = calculate_statistical_rates(file, y_true, sensitive_attribute_column)
+
+                sr_dict['Description'] = (
+                    'The graph illustrates the statistical rates of various classes across different sensitive attributes. '
+                    'Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds '
+                    'to a class, with the height indicating the proportion of that sensitive attribute within that particular class'
+                )
+                final_dict["Statistical Rate"] = sr_dict
+                print("Statistical Rate analysis complete")
+
+            except Exception as e:
+                print("Error during Statistical Rate analysis:", e)
         #conditional demographic disparity
         if request.form.get('conditional demographic disparity') == 'yes':
+            print("Running Conditional demograpic disparity anaylsis")
             cdd_dict = {}
             target = request.form.get('target for conditional demographic disparity')
             sensitive = request.form.get('sensitive for conditional demographic disparity')
@@ -270,10 +285,16 @@ def correlationAnalysis():
             final_dict['Representation Rate Comparison with Real World'] = comp_dict
 
         if request.form.get('correlations') == 'yes':
-            columns = request.form.get('correlation columns').replace("\r\n", "").replace('"', '').split(",")
+            columns = request.form.get('all features for data transformation').replace("\r\n", "").replace('"', '').split(",")
             corr_dict = calc_correlations(file,columns)
-            final_dict['Correlations Analysis Categorical'] = corr_dict['Correlations Analysis Categorical']
-            final_dict['Correlations Analysis Numerical'] = corr_dict['Correlations Analysis Numerical']
+            #catch potential errors
+            if 'Message' in corr_dict:
+                print("Correlation analysis failed:", corr_dict['Message'])
+                final_dict['Error'] = corr_dict['Message']
+            else:
+                
+                final_dict['Correlations Analysis Categorical'] = corr_dict['Correlations Analysis Categorical']
+                final_dict['Correlations Analysis Numerical'] = corr_dict['Correlations Analysis Numerical']
 
         end_time = time.time()
         execution_time = end_time - start_time
@@ -306,12 +327,39 @@ def featureRelevance():
         #check for parameters
         #feature relevancy
         if request.form.get("feature relevancy") == "yes":
-            cat_cols = request.form.get("categorical features for feature relevancy").split(",")
-            num_cols = request.form.get("numerical features for feature relevancy").split(",")
+           # Get raw input from form and sanitize
+            raw_cat_cols = request.form.get("categorical features for feature relevancy", "")
+            raw_num_cols = request.form.get("numerical features for feature relevancy", "")
+
+            # Clean each list by removing empty strings and whitespace-only entries
+            cat_cols = [col.strip() for col in raw_cat_cols.split(",") if col.strip()]
+            num_cols = [col.strip() for col in raw_num_cols.split(",") if col.strip()]
+
+            print(cat_cols)
+            print(num_cols)
+
             target = request.form.get("target for feature relevance")
-            df = data_cleaning(file,cat_cols,num_cols,target)
+            
+            try:
+                print("Calling data_cleaning with:", cat_cols, num_cols, target)
+                if target in cat_cols or target in num_cols:
+                    print("Error: Target is same as feature")
+                    return jsonify({"trigger": "correlationError"}), 200
+                df = data_cleaning(file, cat_cols, num_cols, target)
+                print("Data cleaning returned df with shape:", df.shape if df is not None else "None")
+            except Exception as e:
+                print("Error occurred during data cleaning:", e)
+                df = None
+
+            
+            
             # Generate Pearson correlation
             correlations = pearson_correlation(df, df.columns.difference([target]), target)
+            #don't let the user check the same target and feature
+            if correlations is None:
+                print("Error: Correlations is None")
+                return jsonify({"trigger": "correlationError"}), 200
+            
             f_plot = plot_features(correlations,target)
             f_dict = {}
             
