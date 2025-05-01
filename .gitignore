@@ -163,6 +163,7 @@ cython_debug/
 #.idea/
 
 # datasets
+!datasets/
 metadata/
 noisy/
 
