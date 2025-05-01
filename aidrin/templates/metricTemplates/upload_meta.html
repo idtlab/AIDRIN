@@ -44,16 +44,20 @@
     </div>
     <h1 style="text-align:center;">FAIR Compliance Evaluation</h1>
     <form id="uploadForm" style="align-self:center; margin-top:0px;" method="post" enctype="multipart/form-data">
-        <label for="file" class="custum-file-upload" style="border-radius:10px;">
+        <label id="fileUploadContainer" for="file" class="custum-file-upload" style="border-radius:10px;">
             <div class="icon" style="display: flex; justify-content: center; align-items: center;">
-            <!--Credit for the image-->
-            <svg viewBox="0 0 24 24" fill="" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path fill-rule="evenodd" clip-rule="evenodd" d="M10 1C9.73478 1 9.48043 1.10536 9.29289 1.29289L3.29289 7.29289C3.10536 7.48043 3 7.73478 3 8V20C3 21.6569 4.34315 23 6 23H7C7.55228 23 8 22.5523 8 22C8 21.4477 7.55228 21 7 21H6C5.44772 21 5 20.5523 5 20V9H10C10.5523 9 11 8.55228 11 8V3H18C18.5523 3 19 3.44772 19 4V9C19 9.55228 19.4477 10 20 10C20.5523 10 21 9.55228 21 9V4C21 2.34315 19.6569 1 18 1H10ZM9 7H6.41421L9 4.41421V7ZM14 15.5C14 14.1193 15.1193 13 16.5 13C17.8807 13 19 14.1193 19 15.5V16V17H20C21.1046 17 22 17.8954 22 19C22 20.1046 21.1046 21 20 21H13C11.8954 21 11 20.1046 11 19C11 17.8954 11.8954 17 13 17H14V16V15.5ZM16.5 11C14.142 11 12.2076 12.8136 12.0156 15.122C10.2825 15.5606 9 17.1305 9 19C9 21.2091 10.7909 23 13 23H20C22.2091 23 24 21.2091 24 19C24 17.1305 22.7175 15.5606 20.9844 15.122C20.7924 12.8136 18.858 11 16.5 11Z" fill=""></path> </g></svg>
+                <!-- hide the second image until a file is chosen -->
+                 <svg id="uploadIcon"  xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"  fill="#212121"><path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg>
+                 <svg id="uploadedIcon" style="display:none" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#212121"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
             </div>
             <div class="text" style="position:relative; padding-top:10%;">
-               <span>Upload Metadata File(JSON)</span>
+               <span>Upload Metadata File (JSON)</span>
                </div>
-               <input id="file" type="file" accept=".json" required>
+               <input id="file" type="file" name="metadata" accept=".json" required>
         </label>
+        <!--clear button for file (initially hidden)-->
+        <button type="button" id="clearButton" class="clear-button" style="margin:0px; margin-bottom:5px;display:none" onclick="clearFile()">Clear Uploaded File</button>
+       
 
         <label for="metadata type">Select the metadata type:</label>
         <select name="metadata type" style="margin:0px;" id="metadata type" required>
@@ -66,42 +70,16 @@
                 <span>Submit</span>
                 <span></span>
                 </button>
-                <button class="animated-button return" type="button" onclick="location.href='{{url_for("upload_file")}}'">
-                    <span>Return</span>
-                    <span></span>
-                    </button>
+            <button class="animated-button return" type="button" onclick="location.href='{{url_for("upload_file")}}'">
+                <span>Return</span>
+                <span></span>
+            </button>
         </div>
     </form>
 
     <div id="resultContainer"></div>
 
     <script>
-        function submitForm() {
-            var form = document.getElementById('uploadForm');
-            var formData = new FormData(form);
-
-            fetch('/FAIRness', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                var resultContainer = document.getElementById('resultContainer');
-
-                // Check if there is an image data
-                if (data && data["Pie chart"]) {
-                    var imageContainer = document.createElement('div');
-                    imageContainer.innerHTML = '<img src="data:image/png;base64,' + data["Pie chart"] + '" alt="Pie Chart">';
-                    resultContainer.appendChild(imageContainer);
-                }
-
-                resultContainer.innerHTML += displayKeyValuePairs(data);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-        }
-
         function getLightColor(key) {
             switch (key) {
                 case 'Findable':
@@ -131,7 +109,7 @@
             var form = document.getElementById('uploadForm');
             var formData = new FormData(form);
 
-            fetch('/FAIRness', {
+            fetch('/FAIR', {
                 method: 'POST',
                 body: formData
             })
@@ -153,6 +131,40 @@
             });
         }
 
+        //handle input file ui
+        const fileInput   = document.getElementById('file');
+        const clearBtn    = document.getElementById('clearButton');
+        const uploadIcon  = document.getElementById('uploadIcon');
+        const uploadedIcon    = document.getElementById('uploadedIcon');
+        const container   = document.getElementById('fileUploadContainer');
+        const fileLabel   = document.getElementById('fileLabel');
+        fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {           // a file is chosen
+            container.style.borderRadius = '10px 10px 0 0';
+            container.style.border       = '2px solid #e8e8e8';
+            container.style.borderBottom = 'none';
+            container.style.marginBottom = '0px';
+            uploadIcon.style.display     = 'none';
+            uploadedIcon.style.display       = 'block';
+            clearBtn.style.display       = 'inline-block';
+            fileLabel.textContent        = fileInput.files[0].name;
+        } else {                                // cleared / no file
+            resetUI();
+        }
+        });
+        
+        function clearFile() {
+        //clear file input and reset box 
+        fileInput.value = '';      
+        container.style.border       = '';
+        container.style.borderRadius = '10px';
+        uploadIcon.style.display     = 'block';
+        uploadedIcon.style.display       = 'none';
+        clearBtn.style.display       = 'none';
+        fileLabel.textContent        = 'Upload Metadata File (JSON)';
+        }
+        
+       
         function getLightColor(key) {
             switch (key) {
                 case 'Findable':
