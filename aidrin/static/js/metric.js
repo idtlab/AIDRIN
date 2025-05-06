@@ -1,6 +1,4 @@
-/*
-* ************************ FUNCTIONS MOVED FROM HTML PAGE ************************
-*/
+
 // Slideshow control for the histograms
     // Thumbnail image controls
     function currentSlide(n) {

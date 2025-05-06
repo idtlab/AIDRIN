@@ -11,4 +11,4 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 #link to main after app is created
-from . import app   
+from . import main

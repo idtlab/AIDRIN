@@ -48,18 +48,13 @@ function submitForm() {
     var quasicheckboxValuesM = Array.from(formData.getAll('quasi identifiers to measure multiple attribute risk score')).join(',');
     var numFeaCheckboxValues = Array.from(formData.getAll('numerical features for feature relevancy')).join(',');
     var catFeaCheckboxValues = Array.from(formData.getAll('categorical features for feature relevancy')).join(',');
-
+    
     // Add the concatenated checkbox values to the form data
     formData.set('correlation columns', checkboxValues);
     formData.set("quasi identifiers to measure single attribute risk score", quasicheckboxValuesS);
     formData.set("quasi identifiers to measure multiple attribute risk score", quasicheckboxValuesM);
     formData.set("numerical features for feature relevancy", numFeaCheckboxValues);
     formData.set("categorical features for feature relevancy", catFeaCheckboxValues);
-
-    for (var pair of formData.entries()) {
-        console.log(pair[0] + ': ' + pair[1]);
-    }
-
     // Populate metrics visualizations
     var metrics = document.getElementById("metrics");
     if(metrics){
@@ -86,9 +81,9 @@ function submitForm() {
     .then(data => {
         
         if (data.trigger === "correlationError") {
-            openErrorPopup(); // call your JS error popup
+            openErrorPopup(); // call error popup
         } else {
-            // continue handling the successful case
+            // continue handling successful case
         }
         console.log('Server Response:', data);
         var resultContainer = document.getElementById('resultContainer');
@@ -134,22 +129,32 @@ function submitForm() {
             
             // Add each visualization to the metric visualization section
             visualizationContent.forEach(function(content, index) {
+                //check if vizualization is duplicity with score=0 (no dublicates)
+              
                 const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
                 const visualizationId = `visualization_${index}`;
                 metrics.innerHTML += `<div class="visualization-container">
                         <div class="toggle" onclick="toggleVisualization('${visualizationId}')">${content.title}</div>
                         <div id="${visualizationId}" style="display: none;">
                             <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download"><i class="fas fa-download"></i></a>
+                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>
 
                             <div>${content.description}</div>
                             
                         </div>
                     
                     </div>`;
-
             });
-
+            
+            //check if duplicity is present and 0 (no duplicity)
+            if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
+                metrics.innerHTML += `<div class="visualization-container">
+                    <div class="toggle" onclick="toggleVisualization('duplicity')">Duplicity</div>
+                    <div id="duplicity" style="display: none; text-align: center;">
+                        No duplicates found 
+                    </div>      
+                </div>`;
+            }
 
             
             
@@ -162,13 +167,23 @@ function submitForm() {
 
             
         } else {
-            metrics.innerHTML='<p>No visualizations available.</p>';
-           
+            //check if duplicity is present and 0 (no duplicity)
+            if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
+                metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
+                metrics.innerHTML += `<div class="visualization-container">
+                    <div class="toggle" onclick="toggleVisualization('duplicity')">Duplicity</div>
+                    <div id="duplicity" style="display: none; text-align: center;">
+                        No duplicates found 
+                    </div>      
+                </div>`;
+            } else{
+            metrics.innerHTML='<h3 style="text-align:center;">No visualizations available.</h3>';
+            }
             // Assuming 'data' is your dictionary
             const modifiedData = removeVisualizationKey(data);
             const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
             // Add the "Download JSON" link for the last jsonData outside the loop
-            metrics.innerHTML+=`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`;
+            metrics.innerHTML+=`<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
             
         }
     })

@@ -271,7 +271,7 @@ def correlationAnalysis():
             final_dict['Representation Rate Comparison with Real World'] = comp_dict
 
         if request.form.get('correlations') == 'yes':
-            columns = request.form.get('all features for data transformation').replace("\r\n", "").replace('"', '').split(",")
+            columns = request.form.getlist('all features for data transformation')
             corr_dict = calc_correlations(file,columns)
             #catch potential errors
             if 'Message' in corr_dict:
@@ -391,7 +391,7 @@ def classImbalance():
             ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
             ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric="EU")#By default the distance metric is euclidean distance
             final_dict['Class Imbalance'] = ci_dict
-        
+            
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
@@ -434,22 +434,20 @@ def privacyPreservation():
             noisy_stat = return_noisy_stats(file, feature_to_add_noise, float(epsilon))
             final_dict['DP Statistics'] = noisy_stat
             
-            # Rest of the code...
-            noisy_stat = return_noisy_stats(file,feature_to_add_noise,float(epsilon))
-            final_dict['DP Statistics'] = noisy_stat
-                
-            #single attribute risk scores using markov model
-            if request.form.get("single attribute risk score") == "yes":
-                id_feature = request.form.get("id feature to measure single attribute risk score")
-                eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
-                final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
             
-            #multpiple attribute risk score using markov model
-            if request.form.get("multiple attribute risk score") == "yes":
-                id_feature = request.form.get("id feature to measure multiple attribute risk score")
-                eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
-                final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
+        #single attribute risk scores using markov model
+        if request.form.get("single attribute risk score") == "yes":
+            id_feature = request.form.get("id feature to measure single attribute risk score")
+            eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
+            print("Eval Features:",eval_features)
+            final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
         
+        #multpiple attribute risk score using markov model
+        if request.form.get("multiple attribute risk score") == "yes":
+            id_feature = request.form.get("id feature to measure multiple attribute risk score")
+            eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
+            final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
+    
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
@@ -793,6 +791,6 @@ def FAIR():
 
 #             return jsonify(final_dict),200
 #     return render_template('medical_image.html')
-                        
 if __name__ == '__main__':
     app.run(debug=True)
+    print("Server started")
