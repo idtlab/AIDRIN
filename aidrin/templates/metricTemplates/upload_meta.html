@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/metric.js') }}"></script>
+   
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    
+    <title>Upload JSON File</title>
+    <style>
+       
+        #uploadForm {
+            max-width: 400px;
+            margin-top: 100px;
+            
+        }
+        #uploadForm label {
+            display: block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-left-container">
+       
+        <div id="navbar">
+            <a class="home" href="/">
+                <img style="max-width:48px; max-height:48px;" src="images/logoNoBackground.png" alt="Aidrin Logo">
+            </a>
+            <button id="theme-switch">
+                <svg xmlns="http://www.w3.org/2000/svg" height="48px" viewBox="0 -960 960 960" width="48px" fill="#5f6368">
+                    <path
+                        d="M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Z" />
+                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" height="3em" viewBox="0 -960 960 960" width="3em" fill="#5f6368">
+                    <path
+                        d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Z" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    <h1 style="text-align:center;">FAIR Compliance Evaluation</h1>
+    <form id="uploadForm" style="align-self:center; margin-top:0px;" method="post" enctype="multipart/form-data">
+        <label id="fileUploadContainer" for="file" class="custum-file-upload" style="border-radius:10px;">
+            <div class="icon" style="display: flex; justify-content: center; align-items: center;">
+                <!-- hide the second image until a file is chosen -->
+                 <svg id="uploadIcon"  xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"  fill="#212121"><path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg>
+                 <svg id="uploadedIcon" style="display:none" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#212121"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
+            </div>
+            <div class="text" style="position:relative; padding-top:10%;">
+               <span id="fileLabel">Upload Metadata File (JSON)</span>
+               </div>
+               <input id="file" type="file" name="metadata" accept=".json" required>
+        </label>
+        <!--clear button for file (initially hidden)-->
+        <button type="button" id="clearButton" class="clear-button" style="margin:0px; margin-bottom:5px;display:none" onclick="clearFile()">Clear Uploaded File</button>
+       
+
+        <label for="metadata type">Select the metadata type:</label>
+        <select name="metadata type" style="margin:0px;" id="metadata type" required>
+            <option value="DCAT">DCAT</option>
+            <option value="Datacite">Datacite</option>
+            <!-- Add more options as needed -->
+        </select>
+        <div id = "formbuttonsContainer">
+            <button class="animated-button" type="button" onclick="submitForm()">
+                <span>Submit</span>
+                <span></span>
+                </button>
+            <button class="animated-button return" type="button" onclick="location.href='{{url_for("upload_file")}}'">
+                <span>Return</span>
+                <span></span>
+            </button>
+        </div>
+    </form>
+
+    <div id="resultContainer"></div>
+
+    <script>
+        function getLightColor(key) {
+            switch (key) {
+                case 'Findable':
+                    return '#ADD8E6';  // Light blue
+                case 'Accessible':
+                    return '#98FB98';  // Pale green
+                case 'Interoperable':
+                    return '#FFD700';  // Gold
+                case 'Reusable':
+                    return '#FFA07A';  // Light salmon
+                case 'FAIR Compliance Checks':
+                    return '#DDA0DD';  // Plum
+                case 'Original Metadata':
+                    return '#87CEFA';  // Light sky blue
+                case 'Other':
+                    return '#FFC0CB';  // Pink
+                // Add more cases for other keys as needed
+            }
+        }
+    </script>
+    </form>
+   
+    <div id="resultContainer"></div>
+
+    <script>
+        function submitForm() {
+            var form = document.getElementById('uploadForm');
+            var formData = new FormData(form);
+
+            fetch('/FAIR', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                var resultContainer = document.getElementById('resultContainer');
+
+                // Check if there is an image data
+                if (data && data["Pie chart"]) {
+                    var imageContainer = document.createElement('div');
+                    imageContainer.innerHTML = '<img src="data:image/png;base64,' + data["Pie chart"] + '" alt="Pie Chart">';
+                    resultContainer.appendChild(imageContainer);
+                }
+
+                resultContainer.innerHTML += displayKeyValuePairs(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        //handle input file ui
+        const fileInput   = document.getElementById('file');
+        const clearBtn    = document.getElementById('clearButton');
+        const uploadIcon  = document.getElementById('uploadIcon');
+        const uploadedIcon    = document.getElementById('uploadedIcon');
+        const container   = document.getElementById('fileUploadContainer');
+        const fileLabel   = document.getElementById('fileLabel');
+        fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {           // a file is chosen
+            container.style.borderRadius = '10px 10px 0 0';
+            container.style.border       = '2px solid #e8e8e8';
+            container.style.borderBottom = 'none';
+            container.style.marginBottom = '0px';
+            uploadIcon.style.display     = 'none';
+            uploadedIcon.style.display       = 'block';
+            clearBtn.style.display       = 'inline-block';
+            fileLabel.textContent        = 'File Uploaded: '+fileInput.files[0].name;
+        } else {                                // cleared / no file
+            resetUI();
+        }
+        });
+        
+        function clearFile() {
+        //clear file input and reset box 
+        fileInput.value = '';      
+        container.style.border       = '';
+        container.style.borderRadius = '10px';
+        uploadIcon.style.display     = 'block';
+        uploadedIcon.style.display       = 'none';
+        clearBtn.style.display       = 'none';
+        fileLabel.textContent        = 'Upload Metadata File (JSON)';
+        }
+        
+       
+        function getLightColor(key) {
+            switch (key) {
+                case 'Findable':
+                    return '#ADD8E6';  // Light blue
+                case 'Accessible':
+                    return '#98FB98';  // Pale green
+                case 'Interoperable':
+                    return '#FFD700';  // Gold
+                case 'Reusable':
+                    return '#FFA07A';  // Light salmon
+                case 'Original Metadata':
+                    return '#87CEFA';  // Light sky blue
+                case 'Other':
+                    return '#FFC0CB';  // Pink
+                // Add more cases for other keys as needed
+                default:
+                    return '#FFFFFF';  // White as default
+            }
+        }
+
+        function toggleCollapse(button,key) {
+            var nestedList = button.nextElementSibling;
+            if (nestedList.style.display === "none") {
+                nestedList.style.display = "block";
+                button.innerHTML = key;
+            } else {
+                nestedList.style.display = "none";
+                button.innerHTML = key;
+            }
+        }
+
+        function displayKeyValuePairs(obj) {
+            var predefinedOrder = ["Findable", "Accessible", "Interoperable", "Reusable", "Other", "Original Metadata"];
+            var result = '';
+
+            predefinedOrder.forEach(function(key) {
+                if (obj.hasOwnProperty(key) && key !== "Pie chart" && key !== "FAIR Compliance Checks") {
+                    var value = obj[key];
+                    
+                    if (key === "Accessible" || key === "Interoperable" || key === "Reusable" || key === "Findable" || key === "Other" || key === "Original Metadata") {
+                        result += "<ul>";
+                    } else {
+                        result += '<ul><strong>' + key + ':</strong> ';
+                    }
+
+                    if (typeof value === 'object') {
+                        result += '<button onclick="toggleCollapse(this,\'' + key + '\')" style="width: 100%; background-color: ' + getLightColor(key) + '; color: black; padding: 14px 20px; margin: 8px 0; border: none; cursor: pointer; border-radius: 4px; font-size: 30px;">'+key+'</button>';
+
+                        result += '<ul class="nested" style="display: none;">' + displayKeyValuePairs(value) + '</ul>';
+                    } else {
+                        if (key === "identifier") {
+                            result += '<ul><strong>' + key + ':</strong> <span style="color: red;">' + value + '</span></ul>';
+                            result += '<a href="https://www.google.com/search?q=' + encodeURIComponent(value) + '" target="_blank" style="color: blue; text-decoration: none;"> (Google Search) </a></ul>';
+
+                        } else {
+                            result += value;
+                        }
+                    }
+
+                    result += '</ul>';
+
+                    
+                }
+            });
+
+            // Display remaining keys in alphabetical order
+            Object.keys(obj).sort().forEach(function(key) {
+                if (!predefinedOrder.includes(key) && key !== "Pie chart" && key !== "FAIR Compliance Checks") {
+                    var value = obj[key];
+
+                    if (typeof value === 'object') {
+                        result += '<ul><strong>' + key + ':</strong> ';
+                        result += '<ul class="nested">' + displayKeyValuePairs(value) + '</ul>';
+                        result += '</ul>';
+                    } else {
+                        if (key === "identifier") {
+                            result += '<ul><strong>' + key + ':</strong> <span style="color: red;">' + value + '</span>';
+                            result += '<a href="https://www.google.com/search?q=' + encodeURIComponent(value) + '" target="_blank" style="color: blue; text-decoration: none;"> (Google Search) </a></ul>';
+
+                        } else {
+                            result += '<ul><strong>' + key + ':</strong> ' + value + '</ul>';
+                        }
+                    }
+                }
+            });
+
+            return result;
+        }
+
+        function resetPage() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>

@@ -3,77 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Homenaje&display=swap" rel="stylesheet">
     <title>Homepage</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Arial', sans-serif;
-            background-image: url("/images/homepage_bg2.png");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-            text-align: center;
-            color: white;
-        }
-        
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.75); 
-            z-index: 1;
-        }
-        
-        .content {
-            position: relative;
-            z-index: 2;
-            padding: 20px;
+    
+        body{
+        font-family: 'Homenaje', sans-serif;
+        font-weight: 400;
+        font-style: normal;
+        font-size: 30px;
+        margin: 0;
+        padding: 20px;
+        padding-top: 50px;
+
+        display: flex;
+        flex-direction: row;
+       /*background-color: rgba(255,245,220,255);*/
         }
 
         h1 {
-            margin-top: 100px;
-            font-size: 3em;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            color: #212121;
+            
+            font-size: 6em;
+            font-style: normal;
+            font-weight: 400;           
+            line-height: normal;
         }
+        .h1-container {
 
-        h3 {
-            font-size: 1.5em;
-            line-height: 1.6;
-            margin: 20px 0;
-        }
-
-        .button-container {
+            
             display: flex;
             justify-content: center;
-            margin-top: 30px;
-            flex-wrap: wrap;
+            align-items: center;
+            flex-shrink: 1; 
+
+           
+            border-radius: 20px;
+            margin: 10px;
         }
 
-        .button-container a {
-            margin: 10px;
-            text-decoration: none;
-            display: inline-block;
+        h2{
+    
+            text-align: left;
+            
+        
+            
+            font-style: normal;
+            font-weight: 400;
+            line-height: normal;
+            text-wrap: wrap;
+            padding:10px;
         }
+        .h2-container{
+            
+
+            max-width: 800px;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+
+       }
 
         button {
             padding: 15px 30px;
-            font-size: 1.2em;
+            font-size: 1.5em;
             cursor: pointer;
-            background-color: #3498db;
-            color: white;
+           
             border: none;
             border-radius: 5px;
             transition: background-color 0.3s ease;
         }
 
-        button:hover {
-            background-color: #2980b9;
+        .button-container {
+
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            flex-wrap: wrap;
+
+            margin-top: 30px;
         }
 
-        /* Optional: Add animation */
+        .button-container a {
+            margin: 30px;
+            text-decoration: none;
+            display: inline-block;
+
+        }
+        button {
+            cursor: pointer;
+            border-radius: 20px;
+            padding: 50px;
+            font-family: 'Homenaje', sans-serif;
+            position: relative;
+            overflow: hidden;
+            color: black;
+            
+            transition: background 0.3s ease-in-out, color 0.3s ease-in-out;
+        }
+        
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent; /* Start with no background */
+            opacity: 0; /* Initially hidden */
+            transition: opacity 0.3s ease-in-out, background 0.3s ease-in-out;
+            z-index: -1;
+        }
+        
+        button:hover {
+            color: white;
+            background: transparent; /* Fade out the initial background */
+        }
+        
+        button:hover::before {
+            opacity: 1; /* Fade in the gradient */
+            background: linear-gradient(135deg, rgba(216, 100, 112, 1), rgba(68, 133, 244, 1));
+        }
+        
+        
+        
+
+
+        
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -82,27 +140,37 @@
                 opacity: 1;
             }
         }
-
+        /* I liked the animation */
         .animated {
-            animation: fadeIn 1.5s ease-out;
+            animation: fadeIn 2s ease-out;
         }
     </style>
 </head>
 <body class="animated">
-    <div class="overlay"></div>
-    <div class="content">
-        
-    <h1>Welcome to AIDRIn</h1>
-    <h3>AIDRIn is a framework that covers a broad range of readiness dimensions that aids in quantitatively and qualitatively evaluating the readiness of data.</h3>
-    <div class="button-container">
-        <a href="{{ url_for('upload_csv') }}">
-            <button>Assess Data Readiness</button>
-        </a>
+    <div class="h1-container">
+        <!-- patterns -->
+        <img src="images/pattern1.png" style="position: absolute; bottom: 13vh; right: -4vw; opacity:0.5; z-index: -1;">
+        <img src="images/pattern2.jpg" style="position: absolute; bottom: 80vh; right: -5vw; opacity:0.3; z-index: -1;">
+        <img src="images/pattern3.png" style="position: absolute; top: 0vh; left: 0vw; opacity:0.3; z-index: -1;">
+        <img src="images/pattern3.png" style="position: absolute; top: 40vh; left: 0vw; opacity:0.3; z-index: -1;">
+        <img src="images/pattern3.png" style="position: absolute; top: 80vh; left: 0vw; opacity:0.3; z-index: -1;">
+        <img src="images/pattern3.png" style="position: absolute; top: 0vh; left: 25vw; opacity:0.3; z-index: -1;">
 
-        <a href="{{ url_for('FAIRness') }}">
-            <button>FAIR Compliance Assessment</button>
-        </a>
+
+        <img src="images/logo.png" alt="AIDRIn Logo" style="max-width: 600px; max-height: 600px; padding-left: 7vw; padding-top:7vh;">
     </div>
+    <div style="display:flex; flex-direction: column; justify-content: center;">
+        <div class="h2-container">
+            <h2>A framework that covers a broad range of readiness dimensions that aids in quantitatively and qualitatively evaluating the readiness of data.</h2>
+        </div>
+
+        <div class="button-container">
+            <a href="{{ url_for('upload_csv') }}">
+                <button>Assess Data Readiness</button>
+            </a>
+        </div>
     </div>
+    
 </body>
+
 </html>

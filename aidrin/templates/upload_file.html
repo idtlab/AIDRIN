@@ -3,573 +3,150 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <title>Structured Data Readiness</title>
 </head>
 <body>
-    <h1>Structured Data Readiness</h1>
-    <form id="uploadForm" method="post" enctype="multipart/form-data">
-        <label for="file">Choose a CSV file:</label>
-        <input type="file" name = 'file' id="file" accept=".csv" required>
-
-        <div id="summaryStatistics"></div>
-        <div class="plot-container" id="histogramsContainer"></div>
-
-        <strong id="toggleButton_quality" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_quality','quality','Data Quality Metrics')"> + Data Quality Metrics</strong><br>
-        <div id="checkboxContainer_quality" class="checkboxContainer"><br>
-            <div style="margin-left: 40px; font-family: Arial, sans-serif; line-height: 1.6;">
-                <label style="display: block; margin-bottom: 8px;">
-                    <input type="checkbox" name="completeness" value="yes" style="margin-right: 10px;">
-                    Check completeness
-                    <span class="info-icon">i
-                        <span class="info-text">This option checks the proportion of NaN values in each feature and displays a bar chart highlighting features with only missing values.</span>
-                    </span>
-                </label>
-
-                <label style="display: block; margin-bottom: 8px;">
-                    <input type="checkbox" name="outliers" value="yes" style="margin-right: 10px;">
-                    Check outliers
-                    <span class="info-icon">i
-                        <span class="info-text">This option checks for outliers in numerical features using the Inter Quartile Range (IQR) method and displays a bar chart highlighting features with outliers.</span>
-                        </span>
-                </label>
-                
-                <label style="display: block; margin-bottom: 8px;">
-                    <input type="checkbox" name="duplicity" value="yes" style="margin-right: 10px;">
-                    Check duplicity
-                    <span class="info-icon">i
-                        <span class="info-text">This option checks for duplicate rows in the dataset and display the proportion of overall duplicates in the dataset.</span>
-                    </span>
-                </label>
-                
-            </div>
-             
+    <div class="top-left-container">
+       
+        <div id="navbar">
+            <a class="home" href="/">
+                <img style="max-width:48px; max-height:48px;" src="images/logoNoBackground.png" alt="Aidrin Logo">
+            </a>
+            <button id="theme-switch">
+                <svg xmlns="http://www.w3.org/2000/svg" height="48px" viewBox="0 -960 960 960" width="48px" fill="#5f6368">
+                    <path
+                        d="M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Z" />
+                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" height="3em" viewBox="0 -960 960 960" width="3em" fill="#5f6368">
+                    <path
+                        d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Z" />
+                </svg>
+            </button>
         </div>
-        <br>
-
-        <strong id="toggleButton_fairness" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_fairness','fairness','Fairness Metrics')"> + Fairness Metrics</strong> <br>
-        <div id="checkboxContainer_fairness" class="checkboxContainer"><br>
-            <input style="margin-left: 40px;" type="checkbox" name="representation rate" value="yes"> Check representation rate:
-            <span class="info-icon">i
-                <span class="info-text">This option checks the representation rate of a sensitive feature in the dataset and displays a pie chart highlighting the representation rate of the sensitive feature.</span>
-            </span>
-            <ul>
-                <li style="margin-left: 40px;" >
-                    <label for="features for representation rate">Sensitive feature:</label>
-                    <select name="features for representation rate" id = "allFeaturesDropdownRepRate" required>
-                        <option value="" disabled selected>Select a feature</option>
-                        <!-- Options will be added dynamically using JavaScript -->
-                    </select>
-            
-                </li>
-            </ul>
-
-            
-            <input style="margin-left: 40px;" type="checkbox" name="statistical rate" value="yes"> Check statistical rate
-            <span class="info-icon">i
-                <span class="info-text">This option calculates the proportions of each sensitive attribute within each category of the selected target feature and presents the results as a bar chart. This visual helps identify imbalances or disparities in the data.</span>   
-            </span>
-            <ul>
-                <li style="margin-left: 40px;">
-                    <label for="features for statistical rate">Feature:</label>
-                    <select name="features for statistical rate" id = "allFeaturesDropdownStatRate1" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select>
-                </li>
-                <li style="margin-left: 40px;">
-                    <label for="target for statistical rate">Target:</label>
-                    <select name="target for statistical rate" id = "allFeaturesDropdownStatRate2" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select><br>
-                </li>
-                
-            </ul>
-
-                        
-            <!-- <input style="margin-left: 40px;" type="checkbox" name="real representation rate" value="yes"> Check real world representation rate<br> -->
-            
-            <!-- <ul>
-                <li style="margin-left: 40px;">
-                    <label for="real column">Sensitive Feature:</label>
-                    <select name="real column" id = "allFeaturesDropdownRealRep" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select><br>
-                </li>
-
-                <li style="margin-left: 40px;">
-                    <label for="real attributes">Sensitive groups:</label>
-                    <input type="text" name="real attributes">
-                </li>
-
-                <li style="margin-left: 40px;">
-                    <label for="real values">Values of Sensitive groups:</label>
-                    <input type="text" name="real values"><br>
-                </li>
-            </ul> -->
-
-            
-            
-            
-            
-            <!-- <input style="margin-left: 40px;" type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br> -->
-        
-            <input style="margin-left: 40px;" type="checkbox" name="conditional demographic disparity" value="yes"> Conditional Demographic Disparity
-            <span class="info-icon">i
-                <span class="info-text">The conditional demographic disparity metric evaluates the distribution of positive and negative outcomes across sensitive groups. Users specify which outcome is 'positive/target', with others classified as 'negative'. The metric calculates the proportions of positive and negative outcomes within each group. A disparity value of True indicates that a group's negative outcomes exceed its positive ones, highlighting potential disparities in outcome distribution.</span>
-            </span>
-            <ul>
-                <li style="margin-left: 40px;">
-                    <label for="sensitive for conditional demographic disparity">Sensitive feature:</label>
-                    <select name="sensitive for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis1" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select><br>
-                </li>
-
-                <li style="margin-left: 40px;">
-                    <label for="target for conditional demographic disparity">Target feature:</label>
-                    
-                    <select name="target for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis2" required>
-                        <option value="" disabled selected>Select a feature</option>
-                    </select><br>
-                </li>
-
-                <li style="margin-left: 40px;">
-                    <label for="target value for conditional demographic disparity">Target value:</label>
-                    <input type="text" name="target value for conditional demographic disparity" required><br>
-                    
-                </li>
-
-                
-
-        
-        </div>        
-        <br>
-
-        <strong id="toggleButton_correlation" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_correlation','correlation','Correlation Analysis')"> + Correlation Analysis</strong> <br>
-        
-        <div id="checkboxContainer_correlation" class="checkboxContainer"><br>
-            <input style="margin-left: 40px;" type="checkbox" name="correlations" value="yes"> Perform Correlation Analysis
-            <span class="info-icon">i
-                <span class="info-text">This option calculates feature correlations using Pearson correlation for numerical features and Theil's U for categorical features. It returns a visualization of the correlation matrix.</span>
-            </span>
-            <ul>
-                <li style="margin-left: 40px;">
-                    <label for="correlationColumns">Features:</label>
-                    <!-- Checkboxes for correlations -->
-                    <div style="margin-left: 40px;" id="correlationCheckboxContainer"></div>
-                </li>
-            </ul>
-           
-        </div>
-        <br>
-
-        <strong id="toggleButton_featureRelevance" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_featureRelevance','featureRelevance','Feature Relevance')"> + Feature Relevance</strong>
-        <br>
-        <div id="checkboxContainer_featureRelevance" class="checkboxContainer"><br>
-
-            <input style="margin-left: 40px;" type="checkbox" name="feature relevancy" value="yes"> Check feature relavancy against target
-            <span class="info-icon">i
-                <span class="info-text">
-                    Calculates Pearson correlation coefficients between each feature and the target variable after minimal data cleaning (dropping missing values, one-hot encoding categorical features, and label encoding the target feature). A coefficient of 1 indicates a perfect positive correlation, while -1 indicates a perfect negative correlation.</span>
-            </span>
-
-            <ul>
-                <li style="margin-left: 40px;">
-                    <label  for="categorical features for feature relevancy">Categorical features:</label>
-                    <div id ="catFeaturesCheckbox1"></div><br>
-                </li>
-
-                <li style="margin-left: 40px;">
-                    <label  for="numerical features for feature relevancy">Numerical features:</label>
-                    <div  id ="numFeaturesCheckbox1"></div><br>
-                </li>
-
-                <li style="margin-left: 40px;">
-                    <label  for="target for feature relevance">Target feature:</label>
-                    <select name="target for feature relevance" id = "allFeaturesDropdownFeaRel"required>
-                        <option value="" disabled selected>Select a feature</option>
-                        <!-- Options will be added dynamically using JavaScript -->
-                    </select><br>
-                </li>
-            </ul>
-        
-                    
-        </div>
-        <br>      
-
-        <strong id="toggleButton_classImbalance" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_classImbalance','classImbalance','Class Imbalance')"> + Class Imbalance</strong>
-        <br>
-        <div id="checkboxContainer_classImbalance" class="checkboxContainer"><br>
-        <input style="margin-left: 40px;" type="checkbox" name="class imbalance" value="yes">Evaluate imbalance degree
-        <span class="info-icon">i
-            <span class="info-text">This option calculates the imbalance degree of the target feature and displays a pie chart highlighting the distribution of the target feature.</span>
-        </span>
-        <ul>
-            <li  style="margin-left: 40px;">
-                <label for="class imbalance">Target: </label>
-                <select name="class feature" id="allFeaturesDropdownClIm" required>
-                    <option value ="" disabled selected>Select a feature</option>
-                </select><br>
-            </li>
-        </ul>
-            
-        </div>
-        <br>
-
-        
-        
-        <strong id="toggleButton_privacy" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="toggleCheckboxes('checkboxContainer_privacy','privacy','Privacy Preservation')"> + Privacy Preservation</strong>
-        <br>
-        <div id="checkboxContainer_privacy" class="checkboxContainer"><br> 
-            <input style="margin-left: 40px;" type="checkbox" name="differential privacy" value="yes"> Differential privacy by adding laplacian noise:<br>
-            <ul>
-                <li  style="margin-left: 40px;" >
-                    <label for="numerical features to add noise">Numerical features to add noise:</label>
-                    <div id ="numFeaturesCheckbox2"></div>
-                </li>
-
-                <li  style="margin-left: 40px;" >
-                    <label for="privacy budget">Privacy budget (default epsilon=0.1):</label>
-                    <input type="text" name="privacy budget">
-                </li>
-            </ul>
-            
-            
-            <input style="margin-left: 40px;" type="checkbox" name="single attribute risk score" value="yes"> Evaluate single attribute risks:<br>
-            
-            <ul>
-                <li  style="margin-left: 40px;" >
-                    <label for="id feature to measure single attribute risk score">ID feature: </label>
-                    <select name="id feature to measure single attribute risk score" id="allFeaturesDropdownMMS" required>
-                        <option value ="" disabled selected>Select a feature</option>
-            </select><br>
-                </li>
-
-                <li style="margin-left: 40px;">
-                    <label  for="quasi identifiers to measure single attribute risk score">Quasi identifiers: </label>
-                    <div id ="catFeaturesCheckbox2"></div><br>
-                </li>
-            </ul>
-            
-            
-            
-
-            <input style="margin-left: 40px;" type="checkbox" name="multiple attribute risk score" value="yes"> Evaluate multiple attribute risks:<br>
-            
-            <ul>
-                <li style="margin-left: 40px;">
-                    <label for="id feature to measure multiple attribute risk score">ID feature</label>
-                    <select name="id feature to measure multiple attribute risk score" id="allFeaturesDropdownMMM" required>
-                        <option value ="" disabled selected>Select a feature</option>
-                    </select><br>
-                </li>
-
-                <li style="margin-left: 40px;">
-                    <label for="quasi identifiers to measure multiple attribute risk score">Quasi identifiers: </label>
-                    <div  id ="catFeaturesCheckbox3"></div><br>
-                </li>
-            </ul>
-            
-            
-            
-        </div>
-        <br>        
-
-        <strong id="toggleButton_FAIRness" style="cursor: pointer" onmouseover="this.style.color='#007BFF';" onmouseout="this.style.color='black';" onclick="window.location.href='/FAIRness'"> + FAIR Compliance Evaluation</strong>
-        <br>
-        <br>
-
-
-        <div id = "formbuttonsContainer">
-            <button type="button" onclick="submitForm()">Submit</button>
-    
-            <!-- Reset button with event listener -->
-            <button type="reset" value="Reset" id="resetButton" style="background-color: red;">Reset</button>
-        </div>
-        
-        
-    </form>
-
-    <div id="buttonsContainer" style="display:none;">
-        <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
     </div>
+    <h1 style="text-align:center; margin-bottom:1%;">Structured Data Readiness</h1>
+    <div style="width: 100%; display: block;">
+        <p style="
+          margin: 0 auto;
+          padding-bottom:3%;
+          text-align: center;
+          font-size: 1.25rem;
+          line-height: 1.4;
+          white-space: normal;
+          word-break: break-word;
+          overflow-wrap: break-word;
+          display: block;
+        ">
+          Upload a supported structured dataset to evaluate it on the metrics available below
+    </p>
+      </div>
+      
     
-    
-    <div id="resultContainer" style="display:none;"></div>
-    
+    <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: row; ">
+        <div style="display: flex; width: 35%; flex-direction:column;">
 
-    <script>
+            <select  class="fileType" style="margin:0; align-self:center; text-align:center; border-radius: 10px 10px 0px 0px; width:100%; max-width: none;" name="file type">
+                <option>File Type: CSV Structured</option>
+                <option>File Type: CSV Unstructured</option>
+            </select>
 
-        $(document).ready(function () {
-            $('#file').on('change', function () {
-                var fileInput = document.getElementById('file');
-                var file = fileInput.files[0];
+            <label id="fileUploadContainer" for="file" class="custum-file-upload" required>
+                <div class="icon">
+                <!--Credit for the image-->
+                {% if session.get('uploaded_file_path') %}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#212121"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
+                {% else %}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"  fill="#212121"><path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg>
+                {% endif %}
+                </div>
 
-                var formData = new FormData();
-                formData.append('file', file);
-
-                $.ajax({
-                    url: '/feature_set',
-                    type: 'POST',
-                    data: formData,
-                    contentType: false,
-                    processData: false,
-                    success: function (response) {
-                        if (response.success) {
-
-                            // Check if either categorical or numerical features exist in the response
-                            if ('categorical_features' in response) {
-                                createDropdown(response.categorical_features, 'catFeaturesDropdown');
-                                createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox1','categorical features for feature relevancy')
-                                createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
-                                createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox3','quasi identifiers to measure multiple attribute risk score')
-
-                            }
-
-                            if ('numerical_features' in response) {
-                                createDropdown(response.numerical_features, 'numFeaturesDropdownFeaRel');
-                                createDropdown(response.numerical_features, 'numFeaturesDropdownPriv');
-                                createCheckboxContainer(response.numerical_features,'numFeaturesCheckbox1','numerical features for feature relevancy')
-                                createCheckboxContainer(response.numerical_features,'numFeaturesCheckbox2',"numerical features to add noise")
-                            }
-
-                            if ('all_features' in response){
-                                createDropdown(response.all_features,'allFeaturesDropdownRepRate');
-                                createDropdown(response.all_features,'allFeaturesDropdownStatRate1');
-                                createDropdown(response.all_features,'allFeaturesDropdownStatRate2');
-                                createDropdown(response.all_features,'allFeaturesDropdownRealRep');
-                                createDropdown(response.all_features,'allFeaturesDropdownFeaRel');
-                                createDropdown(response.all_features,'allFeaturesDropdownClIm');
-                                createDropdown(response.all_features,'allFeaturesDropdownMMS');
-                                createDropdown(response.all_features,'allFeaturesDropdownMMM');
-                                createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis1');
-                                createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis2');
-                            }
-
-                        } else {
-                            alert('Error: ' + response.message);
-                        }
-                    },
-                    error: function (error) {
-                        console.log(error);
-                    }
-                });
-            });
-
-            function createDropdown(features, dropdownId) {
-                var dropdown = $('#' + dropdownId);
-                dropdown.empty(); // Clear previous options
-
-                // Add default options
-                dropdown.append($('<option value="" disabled>Select a feature</option>'));
-
-                // Populate the dropdown with options from the response
-                for (var i = 0; i < features.length; i++) {
-                    dropdown.append($('<option>').text(features[i]));
-                }
-            }
-            function createCheckboxContainer(features, tableId, nameTag) {
-               
-                var table = $('#' + tableId);
-                table.empty(); // Clear previous content
-
-                var columns = 4; // Maximum number of columns
-
-                for (var i = 0; i < features.length; i++) {
-                    if (i % columns === 0) {
-                        var row = $('<tr>');
-                        table.append(row);
-                    }
-
-                    var checkbox = $('<input>').attr({
-                        type: 'checkbox',
-                        id: 'checkbox_' + i, // You may want to generate unique IDs
-                        name: nameTag, // Set the name attribute
-                        value: features[i]
-                    });
-
-                    var label = $('<label>').attr('for', 'checkbox_' + i).text(features[i]);
-
-                    var cell = $('<td>').append(checkbox).append(label);
-
-                    row.append(cell);
-                }
-            }
-        });
-
-
-        //generate summary statistics
-        $(document).ready(function () {
-            $('#file').on('change', function () {
-                var fileInput = document.getElementById('file');
-                var file = fileInput.files[0];
+                <input id="file" name="file" type="file" accept=".csv" required onchange="uploadForm();">
+                <br>
+                <div id="fileLabel" style="color:#ffffff">
+                    {% if session.get('uploaded_file_path') %}
+                    <script>
+                        document.getElementById("fileUploadContainer").style.borderRadius = "0px 0px 0px 0px";
+                        document.getElementById("fileUploadContainer").style.border = "2px  #e8e8e8 solid";
+                        document.getElementById("fileUploadContainer").style.borderBottom = "none";
+                        
+                    </script>
+                    <h2>File Uploaded: {{session.get('uploaded_file_name')}}</h2>
+                    {% else %}
+                    <h2>Please Upload a File</h2>
+                    {% endif %}
+                </div>
                 
+            </label>
+            {% if session.get('uploaded_file_path') %}
+                <!-- clear button: visible when file is uploaded, change form style to match-->
+                <button type="button" class="clear-button" onclick="clearFile()">Clear Uploaded File</button>
+            {% endif %}
+        
+        </div>
+        <div style="display: flex; flex-direction: column; margin-top: 10px; align-self: center; width: max-content;">
+        {% if session.get('uploaded_file_path') %}
+            <h3 onclick="togglePillarDropdown('dataQualityDropdown')">Data Quality<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="dataQualityDropdown">
+                    <strong id="toggleButton_quality" class="toggle-button clickable" onclick="location.href='{{url_for("dataQuality")}}'"> Data Quality Metrics<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                </div>
+            <h3 onclick="togglePillarDropdown('AIImpactDropdown')">Impact of Data on AI<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="AIImpactDropdown">
+                    <strong id="toggleButton_featureRelevance" class="toggle-button clickable" onclick="location.href='{{url_for("featureRelevance")}}'"> Feature Relevance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                    <strong id="toggleButton_correlation" class="toggle-button clickable" onclick="location.href='{{url_for("correlationAnalysis")}}'"> Correlation Analysis<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                </div>
+            <h3 onclick="togglePillarDropdown('FairnessDropdown')">Fairness and Bias<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="FairnessDropdown">
+                    <strong id="toggleButton_fairness" class="toggle-button clickable" onclick="location.href='{{url_for("fairness")}}'"> Fairness Metrics<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                    <strong id="toggleButton_classImbalance" class="toggle-button clickable" onclick="location.href='{{url_for("classImbalance")}}'"> Class Imbalance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                </div>
+            <h3 onclick="togglePillarDropdown('DataGovernanceDropdown')">Data Governance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="DataGovernanceDropdown">
+                    <strong id="toggleButton_privacy" class="toggle-button clickable" onclick="location.href='{{url_for("privacyPreservation")}}'"> Privacy Preservation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                </div>
+            <h3 onclick="togglePillarDropdown('UnderstandabilityDropdown')">Understandability and Usability<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="UnderstandabilityDropdown">
+                    <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("FAIR")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                </div>
+            <h3 onclick="togglePillarDropdown('DataStructureDropdown')">Data Structure and Organization<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="DataStructureDropdown">
+                    <strong class="toggle-button">No metrics available for this pillar yet</strong>
+                </div>
 
-                var formData = new FormData();
-                formData.append('file', file);
-               
-                $.ajax({
-                    url: '/summary_statistics',
-                    type: 'POST',
-                    data: formData,
-                    contentType: false,
-                    processData: false,
-                    success: function (response) {
-                        if (response.success) {
-                            
-                            $('#recordsCount').text(response.records_count);
-                            $('#catFeatures').text(response.categorical_features);
-                            $('#numFeatures').text(response.numerical_features);
-                           
-
-                            // Display additional summary statistics
-                            
-                            var statisticsHTML = '<p id="Statresult"><strong>Number of Features:</strong> <span id="featuresCount">' + response.features_count + '</span></p>';
-                            statisticsHTML += '<p id="Statresult"><strong>Number of Data Points:</strong> <span id="recordsCount">' + response.records_count + '</span></p>';
-                            statisticsHTML += '<p id="Statresult"><strong>Categorical Features:</strong> <span id="catFeatures">' + response.categorical_features + '</span></p>';
-                            statisticsHTML += '<p id="Statresult"><strong>Numerical Features:</strong> <span id="numFeatures">' + response.numerical_features + '</span></p><br>';
-                            statisticsHTML += '<h3>Summary Statistics Table</h3><table>';
-                            statisticsHTML += '<tr><th><strong>Statistic</strong></th>'; // Bold header for the "Statistic" column
-
-                            // Iterate over the keys to create columns (excluding the first key)
-                            for (var key in response.summary_statistics) {
-                                statisticsHTML += '<th>' + key + '</th>';
-                            }
-                            statisticsHTML += '</tr>'; // End of the header row
-
-                            // Iterate over the statistics for each key
-                            for (var statKey in response.summary_statistics[key]) {
-                                statisticsHTML += '<tr><td><strong>' + statKey + '</strong></td>'; // Bold row for the "Feature" column
-
-                                // Iterate over the keys to get values for each column
-                                for (var key in response.summary_statistics) {
-                                    var statValue = response.summary_statistics[key][statKey];
-
-                                    statisticsHTML += '<td>' + statValue + '</td>';
-                                }
-                                statisticsHTML += '</tr>'; // End of the row
-                            }
-
-                            statisticsHTML += '</table>';
-                            $('#summaryStatistics').html(statisticsHTML);
-
-                            // Display histograms
-                            var histogramsContainer = $('#histogramsContainer');
-                            histogramsContainer.empty();
-                            histogramsContainer.append('<br><h3>Summary Statistic Plots</h3>'); // Add heading for histograms
-
-                            for (var feature in response.histograms) {
-                                var base64Image = response.histograms[feature];
-                                var img = document.createElement('img');
-                                img.src = 'data:image/png;base64,' + base64Image;
-                                img.alt = feature + ' Histogram';
-                                histogramsContainer.append(img);
-                            }
-                        } else {
-                            alert('Error: ' + response.message);
-                        }
-                    },
-                    error: function (error) {
-                        console.log(error);
-                    }
-                });
-            });
-        });
-
-        //generate dropdown when features of the dataset are required to select
-        $(document).ready(function() {
-            $('input[type="file"]').change(function(e) {
-                var fileInput = $(this);
-                var file = fileInput.prop('files')[0];
-
-                if (file) {
-                    var reader = new FileReader();
-                    reader.onload = function(e) {
-                        var content = e.target.result;
-                        var lines = content.split('\n');
-                        if (lines.length > 0) {
-                            var columns = lines[0].split(',');
-                            displayColumns(columns);
-                        }
-                    };
-                    reader.readAsText(file);
-                }
-            });
-
-            var checkboxesLoaded = false;
-
-            function displayColumns(columns) {
-
-                // Checkboxes
-                if (!checkboxesLoaded) {
-                    var checkboxContainer = $('#correlationCheckboxContainer');
-                    var table = $('<table>').appendTo(checkboxContainer);
-                    var row, cell;
-
-                    for (var i = 0; i < columns.length; i++) {
-                        if (i % 4 === 0) {
-                            // Start a new row for every 4 columns
-                            row = $('<tr>').appendTo(table);
-                        }
-
-                        cell = $('<td>').appendTo(row);
-                        var checkbox = $('<input type="checkbox" class="columnCheckbox">')
-                            .attr('id', 'checkbox_' + columns[i])
-                            .attr('value', columns[i])
-                            .attr('name', 'checkboxValues');
-
-                        var label = $('<label>')
-                            .attr('for', 'checkbox_' + columns[i])
-                            .text(columns[i]);
-
-                        cell.append(checkbox);
-                        cell.append(label);
-                    }
-
-                    checkboxesLoaded = true;
-                }
-            }
-        });
-
-        document.getElementById('resetButton').addEventListener('click', function() {
-            // // Clear form fields
-            // document.getElementById('uploadForm').reset();
-
-            // // Clear dropdowns
-            // clearDropdown('allFeaturesDropdownRepRate');
-            // clearDropdown('allFeaturesDropdownStatRate1');
-            // clearDropdown('allFeaturesDropdownStatRate2');
-            // clearDropdown('allFeaturesDropdownRealRep');
-            // clearDropdown('catFeaturesDropdown');
-            // clearDropdown('numFeaturesDropdownFeaRel');
-            // clearDropdown('allFeaturesDropdownFeaRel');
-            // clearDropdown('numFeaturesDropdownPriv');
-            
-            // // Clear text inputs
-            // document.getElementsByName('real attributes')[0].value = '';
-            // document.getElementsByName('real values')[0].value = '';
-            // document.getElementsByName('privacy budget')[0].value = '';
-
-            // // Clear summary statistics and histograms
-            // $('#summaryStatistics').empty();
-            // $('#histogramsContainer').empty();
-
-            // Simulate a page reload including cache clearing
-            location.reload(true); // Pass true to force a reload from the server and not from the cache
-        });
-
-        function clearDropdown(dropdownId) {
-            var dropdown = document.getElementById(dropdownId);
-            dropdown.selectedIndex = 0;
-            // Additional logic to clear dynamically added options if needed
-        }
-
-</script>
-
+        {% else %}
+            <h3 class="noUpload metric-info">Data Quality<span class="metric-info-text">Please upload a file</span></h3>
+                <div id="dataQualityDropdown">
+                    <strong id="toggleButton_quality" class="toggle-button metric-info"> Data Quality Metrics<span class="metric-info-text">Please upload a file</span></strong>
+                </div>
+            <h3 class="noUpload metric-info">Impact of Data on AI<span class="metric-info-text">Please upload a file</span></h3>
+                <div id="AIImpactDropdown">
+                    <strong id="toggleButton_featureRelevance" class="toggle-button metric-info"> Feature Relevance<span class="metric-info-text">Please upload a file</span></strong>
+                    <strong id="toggleButton_correlation" class="toggle-button metric-info"> Correlation Analysis<span class="metric-info-text">Please upload a file</span></strong>
+                </div>
+            <h3 class="noUpload metric-info">Fairness and Bias<span class="metric-info-text">Please upload a file</span></h3>
+                <div id="FairnessDropdown">
+                    <strong id="toggleButton_fairness" class="toggle-button metric-info"> Fairness Metrics<span class="metric-info-text">Please upload a file</span></strong>
+                    <strong id="toggleButton_classImbalance" class="toggle-button metric-info"> Class Imbalance<span class="metric-info-text">Please upload a file</span></strong>
+                </div>
+            <h3 class="noUpload metric-info">Data Governance<span class="metric-info-text">Please upload a file</span></h3>
+                <div id="DataGovernanceDropdown">
+                    <strong id="toggleButton_privacy" class="toggle-button metric-info"> Privacy Preservation<span class="metric-info-text">Please upload a file</span></strong>
+                </div>
+            <h3 class="noUpload" metric-info>Understandability and Usability<span class="metric-info-text">Please upload a file</span></h3>
+                <div id="UnderstandabilityDropdown">
+                    <strong id="toggleButton_FAIR" class="toggle-button metric-info"> FAIR Compliance Evaluation<span class="metric-info-text">Please upload a file</span></strong>
+                </div>
+            <h3 class="noUpload metric-info">Data Structure and Organization<span class="metric-info-text">Please upload a file</span></h3>
+    {% endif %}
+        </div>
+    </form>
+   <strong onclick="location.href='{{url_for("publications")}}'" class="clickable" style="text-align: center; font-size: 1.5em; display:flex; align-items:center; align-self:center">Publications  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"/></svg></strong>
+           
 </body>
-</html>

@@ -1,4 +1,44 @@
+function togglePillarDropdown(id) {
+    const container = document.getElementById(id); //
+    const subElements = container.querySelectorAll('.toggle-button');
+
+    const header = document.querySelector(`h3[onclick*="${id}"]`);
+    const svg = header.querySelector("svg"); 
+    subElements.forEach(element => {
+        if (element.style.display === 'none' || element.style.display === '') {
+            element.style.display = 'flex';
+            svg.innerHTML = '<path d="M480-360 280-559.33h400L480-360Z"/>';
+            
+        } else {
+            element.style.display = 'none';
+            svg.innerHTML = '<path d="M400-280v-400l200 200-200 200Z"/>';
+        }
+    });
+}
+
+
+//for uploads
+function uploadForm() {
+    const form = document.getElementById('uploadForm');
+    form.submit();  // Submit the form automatically when a file is selected
+}
+//to clear
+function clearFile() {
+    fetch('/clear', {
+        method: 'POST',
+    })
+    .then(response => {
+        if (response.redirected) {
+            // Redirect to the specified location
+            window.location.href = response.url;
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+
 function submitForm() {
+    
     var form = document.getElementById('uploadForm');
     var formData = new FormData(form);
 
@@ -8,28 +48,44 @@ function submitForm() {
     var quasicheckboxValuesM = Array.from(formData.getAll('quasi identifiers to measure multiple attribute risk score')).join(',');
     var numFeaCheckboxValues = Array.from(formData.getAll('numerical features for feature relevancy')).join(',');
     var catFeaCheckboxValues = Array.from(formData.getAll('categorical features for feature relevancy')).join(',');
-
+    
     // Add the concatenated checkbox values to the form data
     formData.set('correlation columns', checkboxValues);
     formData.set("quasi identifiers to measure single attribute risk score", quasicheckboxValuesS);
     formData.set("quasi identifiers to measure multiple attribute risk score", quasicheckboxValuesM);
     formData.set("numerical features for feature relevancy", numFeaCheckboxValues);
     formData.set("categorical features for feature relevancy", catFeaCheckboxValues);
-
-    for (var pair of formData.entries()) {
-        console.log(pair[0] + ': ' + pair[1]);
+    // Populate metrics visualizations
+    var metrics = document.getElementById("metrics");
+    if(metrics){
+        metrics.innerHTML = '<p>Loading visualizations, please wait...</p>';
+    } else{
+        console.error("No Element ID");
+        console.log("No Element ID");
+        print("No Element ID");
     }
-
-    // Open the popup window immediately
-    var popup = window.open("", "Popup", "width=900,height=700,resizable=yes,scrollbars=yes");
-    popup.document.write('<html><head><title>Loading...</title></head><body><p>Loading visualizations, please wait...</p></body></html>');
-
-    fetch('/upload_file', {
+    const url = new URL(window.location.href);
+    url.searchParams.set('returnType', 'json');
+    const currentURL = url.toString();
+    fetch(currentURL, {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
+            return response.json();
+        } else {
+            throw new Error('Server did not return valid JSON.');
+        }
+    })
     .then(data => {
+        
+        if (data.trigger === "correlationError") {
+            openErrorPopup(); // call error popup
+        } else {
+            // continue handling successful case
+        }
+        console.log('Server Response:', data);
         var resultContainer = document.getElementById('resultContainer');
 
         resp_data = data;
@@ -48,9 +104,9 @@ function submitForm() {
             'Feature Relevance', 'Class Imbalance', 'DP Statistics', 
             'Single attribute risk scoring', 'Multiple attribute risk scoring'
         ];
-
         visualizationTypes.forEach(function(type) {
             if (isKeyPresentAndDefined(data, type) && isKeyPresentAndDefined(data[type], type + ' Visualization')) {
+                console.log('Adding visualization:', type);
                 var image = data[type][type + ' Visualization'];
                 var description = data[type]['Description'];
                 var title = type;
@@ -62,131 +118,43 @@ function submitForm() {
         var headingAdded = false;
 
         if (visualizationContent.length > 0) {
-            // Update the popup content
-            popup.document.open();
-            popup.document.write(`
-                <html>
-                <head>
-                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 
-                    <title>Readiness Evaluations</title>
-                    <style>
-                        body {
-                            font-family: Arial, sans-serif;
-                            padding: 20px;
-                            background-color: #f9f9f9;
-                        }
-                        .visualization-container {
-                            margin-bottom: 20px;
-                        }
-                        .visualization-container img {
-                            max-width: 100%;
-                            border-radius: 4px;
-                            margin-bottom: 10px;
-                        }
-                        .visualization-container div {
-                            color: #333;
-                            font-size: 20px;
-                        }
-                        .download-button {
-                            display: inline-block;
-                            padding: 10px 20px;
-                            margin-bottom: 10px;
-                            background-color: #007bff;
-                            color: white;
-                            text-decoration: none;
-                            border-radius: 4px;
-                            font-size: 14px;
-                        }
-                        .toggle-container {
-                            display: flex;
-                            justify-content: center;
-                        }
-                        .toggle {
-                            background-color: gray;
-                            color: white;
-                            padding: 10px 20px;
-                            margin-bottom: 10px;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            width: 25%;
-                            text-align: center;
-                            font-size: 12px;
-                            border: none;
-                            transition: background-color 0.3s;
-                        }
-                        
-                        .toggle:hover {
-                            background-color: #0056b3;
-                        }
-                        .heading {
-                            font-size: 24px;
-                            font-weight: bold;
-                            margin-bottom: 20px;
-                            text-align: center;
-                        }
-                        .back-button {
-                            background-color: #007bff;
-                            color: white;
-                            border: none;
-                            border-radius: 4px;
-                            padding: 10px 20px;
-                            text-decoration: none;
-                            font-size: 14px;
-                            cursor: pointer;
-                            margin-bottom: 20px;
-                        }
-                        .back-button:hover {
-                            background-color: #0056b3;
-                        }
-                    </style>
-
-                    <script>
-                    function toggleVisualization(id) {
-                        var element = document.getElementById(id);
-                        if (element.style.display === 'none' || element.style.display === '') {
-                            element.style.display = 'block';
-                        } else {
-                            element.style.display = 'none';
-                        }
-                    }
-
-                    
-                    </script>
-                </head>
-                <body>
-            `);
-
-            // Add back button
-            popup.document.write(`
-            <button class="back-button" onclick="window.close()()"><i class="fas fa-arrow-left"></i></button>
-            `);
-
+            
             // Add heading if not already added
             if (!headingAdded) {
-                popup.document.write(`<div class="heading">Readiness Report</div>`);
+                metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
+
                 headingAdded = true;
             }
             
-            // Add each visualization to the popup
+            // Add each visualization to the metric visualization section
             visualizationContent.forEach(function(content, index) {
+                //check if vizualization is duplicity with score=0 (no dublicates)
+              
                 const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
                 const visualizationId = `visualization_${index}`;
-                popup.document.write(`
-                    <div class="visualization-container">
+                metrics.innerHTML += `<div class="visualization-container">
                         <div class="toggle" onclick="toggleVisualization('${visualizationId}')">${content.title}</div>
                         <div id="${visualizationId}" style="display: none;">
                             <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="download-icon"><i class="fas fa-download"></i></a>
+                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>
 
                             <div>${content.description}</div>
                             
                         </div>
                     
-                    </div>
-                `);
+                    </div>`;
             });
-
+            
+            //check if duplicity is present and 0 (no duplicity)
+            if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
+                metrics.innerHTML += `<div class="visualization-container">
+                    <div class="toggle" onclick="toggleVisualization('duplicity')">Duplicity</div>
+                    <div id="duplicity" style="display: none; text-align: center;">
+                        No duplicates found 
+                    </div>      
+                </div>`;
+            }
 
             
             
@@ -194,30 +162,34 @@ function submitForm() {
             const modifiedData = removeVisualizationKey(data);
             const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
             // Add the "Download JSON" link for the last jsonData outside the loop
-            popup.document.write(`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`);
-            
-            popup.document.write('</body></html>');
-            popup.document.close();
+            metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+           
 
             
         } else {
-            
-            popup.document.write('<p>No visualizations available.</p>');
+            //check if duplicity is present and 0 (no duplicity)
+            if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
+                metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
+                metrics.innerHTML += `<div class="visualization-container">
+                    <div class="toggle" onclick="toggleVisualization('duplicity')">Duplicity</div>
+                    <div id="duplicity" style="display: none; text-align: center;">
+                        No duplicates found 
+                    </div>      
+                </div>`;
+            } else{
+            metrics.innerHTML='<h3 style="text-align:center;">No visualizations available.</h3>';
+            }
             // Assuming 'data' is your dictionary
             const modifiedData = removeVisualizationKey(data);
             const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
             // Add the "Download JSON" link for the last jsonData outside the loop
-            popup.document.write(`<a href="${jsonBlobUrl}" download="report.json" class="download-icon">Download JSON Report</a>`);
-            
-            popup.document.write('</body></html>');
-            popup.document.close();
+            metrics.innerHTML+=`<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
             
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        popup.document.write('<p>Error loading visualizations.</p>');
-    
+        metrics.innerHTML='<p>Error loading visualizations. '+error+'</p>';
 
         
         // Check if "Completeness Visualization" key is present
@@ -344,13 +316,6 @@ function submitForm() {
         // }
 
         // resultContainer.innerHTML += '<pre id="scoreResult" style="display:none;">' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>';
-        
-        // Show the result container after the response is generated
-        resultContainer.style.display = 'block';
-
-        // Show the buttons after the response is generated
-        document.getElementById('buttonsContainer').style.display = 'block';
-
         
     })
     .catch(error => {
@@ -828,39 +793,121 @@ function showResults() {
     }
 }
 
-function toggleCheckboxes(sectionId, sectionTag, innertext) {
-    var checkboxContainer = document.getElementById(sectionId);
-    var toggleButton = document.getElementById("toggleButton_" + sectionTag);
+// function toggleCheckboxes(sectionId, sectionTag, innertext) {
+//     var checkboxContainer = document.getElementById(sectionId);
+//     var toggleButton = document.getElementById("toggleButton_" + sectionTag);
 
-    // Check if the button exists, if not, create it
-    if (!toggleButton) {
-        toggleButton = document.createElement("button");
-        toggleButton.id = "toggleButton_" + sectionTag;
-        toggleButton.innerText = "+";
-        toggleButton.style.cursor = "pointer";
-        toggleButton.addEventListener("click", function() {
-            toggleCheckboxContainer(checkboxContainer, toggleButton, innertext); // Pass toggleButton as an argument
-        });
-        // Append the button to the container
-        checkboxContainer.parentNode.insertBefore(toggleButton, checkboxContainer);
-    }
+//     // Check if the button exists, if not, create it
+//     if (!toggleButton) {
+//         toggleButton = document.createElement("button");
+//         toggleButton.id = "toggleButton_" + sectionTag;
+//         toggleButton.innerText = "+";
+//         toggleButton.style.cursor = "pointer";
+//         toggleButton.addEventListener("click", function() {
+//             toggleCheckboxContainer(checkboxContainer, toggleButton, innertext); // Pass toggleButton as an argument
+//         });
+//         // Append the button to the container
+//         checkboxContainer.parentNode.insertBefore(toggleButton, checkboxContainer);
+//     }
 
-    toggleCheckboxContainer(checkboxContainer, toggleButton, innertext); // Pass toggleButton as an argument
-}
+//     toggleCheckboxContainer(checkboxContainer, toggleButton, innertext); // Pass toggleButton as an argument
+// }
 
-function toggleCheckboxContainer(checkboxContainer, toggleButton, innertext) {
-    var isExpanded = checkboxContainer.style.display === "block";
+// function toggleCheckboxContainer(checkboxContainer, toggleButton, innertext) {
+//     var isExpanded = checkboxContainer.style.display === "block";
 
-    if (isExpanded) {
-        checkboxContainer.style.display = "none";
-        toggleButton.innerText = "+ "+ innertext;
-        toggleButton.style.cursor = "pointer";
+//     if (isExpanded) {
+//         checkboxContainer.style.display = "none";
+//         toggleButton.innerText = "+ "+ innertext;
+//         toggleButton.style.cursor = "pointer";
+//     } else {
+//         checkboxContainer.style.display = "block";
+//         toggleButton.innerText = "- " + innertext;
+//         toggleButton.style.cursor = "pointer";
+//     }
+// }
+
+function toggleValue(checkbox) {
+    console.log("Checkbox clicked:", checkbox);
+     // Find the closest parent container of the checkbox (checkboxContainer)
+     const container = checkbox.closest(".checkboxContainerIndividual");
+     console.log(container);
+
+     if (!container) {
+         return;
+     }
+     console.log("Container found:", container);
+     // Find all select dropdowns within that container
+     const dropdowns = container.querySelectorAll("select");
+     const inputs = container.querySelectorAll("input.textWrapper");
+     const checkboxes = container.querySelectorAll("input.checkbox.individual");
+     // Enable or disable all dropdowns inside the container based on checkbox state
+     dropdowns.forEach(dropdown => {
+         dropdown.disabled = !checkbox.checked; 
+     });
+     inputs.forEach(input => {
+         input.disabled = !checkbox.checked; 
+     });
+     checkboxes.forEach(input => {
+        input.disabled = !checkbox.checked; 
+    });
+    // Toggle the value based on the checked state
+    if (checkbox.checked) {
+        checkbox.value = "yes";
     } else {
-        checkboxContainer.style.display = "block";
-        toggleButton.innerText = "- " + innertext;
-        toggleButton.style.cursor = "pointer";
+        checkbox.value = "no";
     }
+    console.log("Checkbox value:", checkbox.value); // For debugging
 }
-
-
-
+function toggleValueIndividual(checkbox) {
+    // Toggle the value based on the checked state
+    if (checkbox.checked) {
+        const label = checkbox.closest("label");
+        const text = label.textContent.trim();
+        checkbox.value = text;
+        
+    } else {
+        checkbox.value = "no";
+    }
+    console.log("Checkbox value:", checkbox.value); // For debugging
+}
+// Ensure proper initial state on page load
+    document.addEventListener("DOMContentLoaded", function() {
+        // Get all checkboxes inside each checkboxContainer
+        document.querySelectorAll(".checkboxContainer").forEach(container => {
+            
+            // For each container, get the checkbox inside and set the initial state
+            
+            const checkboxes = container.querySelectorAll("input[type='checkbox']");
+            checkboxes.forEach(checkbox => {
+                console.log(checkbox);
+                // Set initial state of selects based on checkbox
+                toggleValue(checkbox);
+            });
+            
+        });
+    });
+    //********** Darkmode Toggle *******
+    let darkmode = localStorage.getItem('darkmode')
+    //add a darkmode class to the body
+    const enableDarkmode = () => {
+        document.body.classList.add('darkmode')
+        localStorage.setItem('darkmode','active')
+    }
+    //remove the darkmode class from the body
+    const disableDarkmode = () => {
+        document.body.classList.remove('darkmode')
+        localStorage.setItem('darkmode',null)
+    }
+    document.addEventListener('DOMContentLoaded', (event) => {
+    
+    const themeSwitch = document.getElementById('theme-switch')
+    //pn document lodad check if darkmode is active
+    if(darkmode === "active") enableDarkmode()
+    //add a click event listener to the theme switch
+    themeSwitch.addEventListener("click", () => {
+        
+        darkmode = localStorage.getItem('darkmode')
+        darkmode !== "active" ? enableDarkmode() : disableDarkmode()
+    }) 
+});
