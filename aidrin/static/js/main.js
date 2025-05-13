@@ -33,7 +33,10 @@ function clearFile() {
             window.location.href = response.url;
         }
     })
-    .catch(error => console.error('Error:', error));
+    .catch(error => {
+        console.error('Error:', error);
+        openErrorPopup("File Clear", error); // call error popup
+    });
 }
 
 
@@ -81,10 +84,8 @@ function submitForm() {
     .then(data => {
         
         if (data.trigger === "correlationError") {
-            openErrorPopup(); // call error popup
-        } else {
-            // continue handling successful case
-        }
+            openErrorPopup("Invalid Request","Numerical Feature and Target Feature cannot be the same"); // call error popup
+        } 
         console.log('Server Response:', data);
         var resultContainer = document.getElementById('resultContainer');
 
@@ -137,7 +138,7 @@ function submitForm() {
                         <div class="toggle" onclick="toggleVisualization('${visualizationId}')">${content.title}</div>
                         <div id="${visualizationId}" style="display: none;">
                             <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>
+                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>
 
                             <div>${content.description}</div>
                             
@@ -189,8 +190,8 @@ function submitForm() {
     })
     .catch(error => {
         console.error('Error:', error);
-        metrics.innerHTML='<p>Error loading visualizations. '+error+'</p>';
-
+        //call popup
+        openErrorPopup("Visualization Error",error); // call error popup
         
         // Check if "Completeness Visualization" key is present
         // if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
@@ -320,6 +321,7 @@ function submitForm() {
     })
     .catch(error => {
         console.error('Error:', error);
+        openErrorPopup("", error); // call error popup
     });
 }
 
