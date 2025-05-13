@@ -6,6 +6,10 @@ description="A tool to evaluate the readiness of data for AI"
 maintainers = [{name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"},{name = "Suren Byna", email = "byna.1@osu.edu"}]
 dependencies = [
     "flask",
+    "matplotlib",
+    "dython",
+    "pandas",
+    "shap"
 ]
 
 [build-system]
