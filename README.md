@@ -1,6 +1,11 @@
-# AIDRIN
+<p align='center'>
+    <img src="aidrin/images/logo.png" alt="Preview" alt="AIDRIN logo" style="width: 40%; height: auto; align: center"/>
+</p>
 
-**AI Data Readiness Indicator (AIDRIN)** is a tool developed to assess the readiness of datasets for artificial intelligence applications. It helps users quickly evaluate the quality, structure, and completeness of their data to ensure it meets the foundational requirements for machine learning and other AI workflows.
+# AIDRIN - AI Data Readiness Inspector
+
+
+**AIDRIN** is a tool developed to assess the readiness of datasets for artificial intelligence applications. It helps users quickly evaluate the quality, structure, and completeness of their data to ensure it meets the foundational requirements for machine learning and other AI workflows.
 
 ---
 
