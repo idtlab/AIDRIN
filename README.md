@@ -25,7 +25,7 @@ cd AIDRIN
 ### 2. Create and Activate the COnda Environment
 
 ```bash
-conda create -n aidrin-env python 3.10 -y
+conda create -n aidrin-env python==3.10 -y
 conda activate aidrin-env
 pip install -e .
 ```

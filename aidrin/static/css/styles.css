@@ -2,6 +2,7 @@
 :root{
   font-family: 'Roboto', sans-serif;
   --textColor: #212121;
+  --oppositeTextColor: #FBFBF2;
   --textColorSecondary: #696868;
   --backgroundColor: #D9DAD7;
   --secondaryColor: #FBFBF2;
@@ -24,14 +25,8 @@
   transition: all 0.3s ease;
 }
 .darkmode{
-  /* --textColor: #ffffff;
-  --bacgroundColor: #212121;
-  --secondaryColor: #414141;
-  --tertiaryColor: #8f8f8f;
-  --darkAccent: rgb(198, 198, 198);
-  --nav-bar: #212121; */
-
   --textColor: #FBFBF2;
+  --oppositeTextColor: #212121;
   --textColorSecondary: #c8c8c5;
   --backgroundColor: #212529;
   --secondaryColor: #495057;
@@ -766,7 +761,7 @@ ul {
 .toggle {
   background-color: var(--darkAccent);
   min-width: fit-content;
-  color: white;
+  color: var(--oppositeTextColor);
   padding: 10px 20px;
   margin-bottom: 10px;
   border-radius: 4px;
@@ -884,7 +879,7 @@ ul {
 .open-popup{
   visibility: visible;
   transform: translate(-50%, -50%) scale(1);
-  transition: transform 0.3s ease-in-out, visibility 0.3s ease-in-out;
+  transition: transform 0.15s ease-in-out, visibility 0.15s ease-in-out;
 }
 #theme-switch{
   height: 64px;

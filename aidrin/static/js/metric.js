@@ -34,16 +34,34 @@
             element.style.display = 'none';
         }
     }
+
+    /** Error Handling: Creates a popup with error types and server response (details) */
+
     let errorPopup;
-    document.addEventListener("DOMContentLoaded", function () {
+    function openErrorPopup(type,message){
         errorPopup = document.getElementById("error-popup");
-    });
-    function openErrorPopup(){
         errorPopup.classList.add("open-popup");
+
+        errorType = document.getElementById("error-type");
+        errorType.innerHTML = "Error: "+type;
+
+        errorMessage = document.getElementById("error-message");
+        errorMessage.innerHTML = message;
+
+        
     }
     function closeErrorPopup(){
+        //error popup has to be present in the DOM for the function to call already
         errorPopup.classList.remove("open-popup");
     }
+    // Catch resource loading errors by adding an event listener to the window
+    window.addEventListener('error', function (e) {
+        if (e.target && (e.target.tagName === 'IMG' || e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+            console.error("Resource failed to load:", e.target.src || e.target.href);
+            openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
+        }
+    }, true); // useCapture=true is important for resource errors
+    
     
 $(document).ready(function () {
         fetch(retrieveFileUrl)
@@ -53,14 +71,7 @@ $(document).ready(function () {
                 var formData = new FormData();
                 formData.append('file', fileBlob, 'filename'); 
 
-                // Send the FormData via POST request
-                fetch(window.location.href, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => console.log('File uploaded successfully', data))
-                .catch(error => console.error('Error:', error));
+                
 
         $.ajax({
             url: '/feature_set',
@@ -106,10 +117,14 @@ $(document).ready(function () {
             },
             error: function (error) {
                 console.log(error);
+                openErrorPopup("",error);
             }
 
         })
-        .catch(error => console.error('Error fetching file:', error));
+        .catch(error => {
+            console.error('Error fetching file:', error)
+            openErrorPopup("File Retrieval",error);
+        });
     });
 
     function createDropdown(features, dropdownId) {
@@ -229,6 +244,7 @@ $(document).ready(function () {
             },
             error: function (error) {
                 console.log(error);
+                openErrorPopup("",error);
             }
         });
     });
@@ -266,7 +282,6 @@ function createCheckboxContainer(features, tableId, nameTag) {
        
     var table = $('#' + tableId);
     table.empty(); // Clear previous content
-    console.log("features:",features);
     var columns = 4; // Maximum number of columns
     for (var i = 0; i < features.length && features[0]!="{"; i++) {
         if (i % columns === 0) {
