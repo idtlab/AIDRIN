@@ -38,7 +38,7 @@ To start the development server:
 flask --app aidrin run --debug
 ```
 
-Then open your browser and navigate to: http://127.0.0.1:5000
+After the server starts, open your browser and navigate to: http://127.0.0.1:5000
 
 ## Citation
 If you use AIDRIN in your research or publication, please cite as:
