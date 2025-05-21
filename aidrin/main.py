@@ -90,32 +90,49 @@ def format_dict_values(d):
     return formatted_dict
 
 def summary_histograms(df):
+    # background colors for plots (light and dark mode)
+    plot_colors = {
+        'light': { 
+        'bg': '#FBFBF2',     
+        'text': '#212529',
+        'curve': 'blue'
+        },
+        'dark': { 
+        'bg': '#495057',
+        'text': '#F8F9FA',
+        'curve': 'red'
+        }
+    }
+    
     line_graphs = {}
     for column in df.select_dtypes(include='number').columns:
-        bg_color = '#FBFBF2'
-        plt.figure(figsize=(6, 6),facecolor=bg_color)
-        ax = plt.gca()
-        ax.set_facecolor(bg_color)
-        
-        # Using seaborn's kdeplot to estimate the distribution
-        sns.kdeplot(df[column], bw_adjust=0.5)
+        for theme, colors in plot_colors.items():
+            plt.figure(figsize=(6, 6),facecolor=colors['bg'])
+            ax = plt.gca()
+            ax.set_facecolor(colors['bg'])
+            
+            # Using seaborn's kdeplot to estimate the distribution
+            sns.kdeplot(df[column], bw_adjust=0.5,ax=ax,color=colors['curve'])
 
-        # Set a larger font size for the title
-        plt.title(f'Distribution Estimate for {column}', fontsize=14)
+            # Set a larger font size for the title
+            plt.title(f'Distribution Estimate for {column}', fontsize=14, color=colors['text'])
 
-        # Add labels to the axes
-        plt.xlabel('Values', fontsize=12)
-        plt.ylabel('Density', fontsize=12)
+            # Add labels to the axes
+            plt.xlabel('Values', fontsize=12, color=colors['text'])
+            plt.ylabel('Density', fontsize=12, color=colors['text'])
+            # Set axis color
+            ax.tick_params(colors=colors['text'])
+            for spine in ax.spines.values():
+                spine.set_color(colors['text'])
+            # Encode the plot as base64
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png',bbox_inches='tight', pad_inches=0.1)
+            img_buffer.seek(0)
+            encoded_img = base64.b64encode(img_buffer.read()).decode('utf-8')
 
-        # Encode the plot as base64
-        img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png')
-        img_buffer.seek(0)
-        encoded_img = base64.b64encode(img_buffer.read()).decode('utf-8')
-
-        line_graphs[column] = encoded_img
-        plt.close()
-        img_buffer.close()
+            line_graphs[f'{column}_{theme}'] = encoded_img
+            plt.close()
+            img_buffer.close()
 
     return line_graphs
 

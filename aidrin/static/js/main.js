@@ -889,27 +889,45 @@ function toggleValueIndividual(checkbox) {
             
         });
     });
+
     //********** Darkmode Toggle *******
     let darkmode = localStorage.getItem('darkmode')
     //add a darkmode class to the body
     const enableDarkmode = () => {
         document.body.classList.add('darkmode')
         localStorage.setItem('darkmode','active')
+        
     }
     //remove the darkmode class from the body
     const disableDarkmode = () => {
         document.body.classList.remove('darkmode')
         localStorage.setItem('darkmode',null)
+        
+    }
+    const toggleSlidesColor = () => {
+        const slidesLight = document.getElementById("slideshow-container-light");
+        const slidesDark = document.getElementById("slideshow-container-dark");
+        if(darkmode === "null") {
+            slidesLight.style.display = "none";
+            slidesDark.style.display = "block";
+        }
+        else {
+            slidesLight.style.display = "block";
+            slidesDark.style.display = "none";
+        }
+
     }
     document.addEventListener('DOMContentLoaded', (event) => {
-    
-    const themeSwitch = document.getElementById('theme-switch')
-    //pn document lodad check if darkmode is active
-    if(darkmode === "active") enableDarkmode()
-    //add a click event listener to the theme switch
-    themeSwitch.addEventListener("click", () => {
-        
-        darkmode = localStorage.getItem('darkmode')
-        darkmode !== "active" ? enableDarkmode() : disableDarkmode()
-    }) 
-});
+        const themeSwitch = document.getElementById('theme-switch')
+        //on document load check if darkmode is active
+        if(darkmode === "active") enableDarkmode()
+        //add a click event listener to the theme switch
+        themeSwitch.addEventListener("click", () => {
+            
+            darkmode = localStorage.getItem('darkmode')
+            
+            darkmode !== "active" ? enableDarkmode() : disableDarkmode()
+            toggleSlidesColor();
+
+        })
+    });

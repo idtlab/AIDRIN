@@ -1,28 +1,45 @@
 
+
 // Slideshow control for the histograms
+
     // Thumbnail image controls
     function currentSlide(n) {
         showSlides(slideIndex = n);
       }
       function showSlides(n) {
-        let i;
-        let slides = document.getElementsByClassName("mySlides");
+        
+        let lightMode = localStorage.getItem('darkmode') == "null";
+        
+        let slideContainerLight = document.getElementById("slideshow-container-light");
+        let slideContainerDark = document.getElementById("slideshow-container-dark");
+        let slidesLight = slideContainerLight.querySelectorAll(".mySlides");
+        let slidesDark = slideContainerDark.querySelectorAll(".mySlides");
+
         let dots = document.getElementsByClassName("dot");
-        if (n > slides.length) {slideIndex = 1}
-        if (n < 1) {slideIndex = slides.length}
-        for (i = 0; i < slides.length; i++) {
-          slides[i].style.display = "none";
+        if(lightMode){
+            slideContainerLight.style.display = "block";
+            slideContainerDark.style.display = "none";
+        } else{
+            slideContainerLight.style.display = "none";
+            slideContainerDark.style.display = "block";
         }
+        for (i = 0; i < slidesLight.length; i++) {
+            slidesLight[i].style.display = "none";
+            slidesLight[slideIndex-1].style.display = "block";
+            slidesDark[i].style.display = "none";
+            slidesDark[slideIndex-1].style.display = "block";
+        }
+
         for (i = 0; i < dots.length; i++) {
           dots[i].className = dots[i].className.replace(" activeDot", "");
         }
-        slides[slideIndex-1].style.display = "block";
+        
         dots[slideIndex-1].className += " activeDot";
       }
       function clearDropdown(dropdownId) {
         var dropdown = document.getElementById(dropdownId);
         dropdown.selectedIndex = 0;
-        // Additional logic to clear dynamically added options if needed
+    
     }
     
     /************ Taken out of metric data download pop up *************/
@@ -209,35 +226,69 @@ $(document).ready(function () {
                     var histogramsContainer = $('#histogramsContainer');
                     histogramsContainer.empty();
                     histogramsContainer.append('<br><h2 style="margin-top:0px;">Summary Statistic Plots</h2>'); // Add heading for histograms
-                    histogramsContainer.append('<div class="slideshow-container">'); // Add container for the slideshow
-                    var i = 1;
+    
+                    var lightCount= 1;
+                    var darkCount= 1;
+
+                    var slideshow_container_light = $('<div id="slideshow-container-light" class="slideshow-container">');
+                    var slideshow_container_dark = $('<div id="slideshow-container-dark" class="slideshow-container">');
+
                     for (var feature in response.histograms) {
+                        var isLight = feature.includes('_light');
+                
                         var base64Image = response.histograms[feature];
                         var img = document.createElement('img');
                         img.src = 'data:image/png;base64,' + base64Image;
                         img.alt = feature + ' Histogram';
+                        // add theme class to the image
+                        if (isLight) {
+                            img.classList.add('light');
+                        } else {
+                            img.classList.add('dark');
+                        }
                         /* Image carousel wrapper*/
                         let slideDiv = $('<div class="mySlides fade"></div>');
                         //show the first plot by default
-                        if(i==1){
-                            slideDiv.css('display','block');
-                        }
-                        i++;
+                        
+                        
                         slideDiv.append(img);
-                        histogramsContainer.append(slideDiv);
+                        if(isLight){
+                            
+                            if(lightCount==1) slideDiv.css('display','block');
+                            slideshow_container_light.append(slideDiv);
+                            lightCount++;
+                        } else{
+                            if(darkCount==1) slideDiv.css('display','block');
+                            slideshow_container_dark.append(slideDiv);
+                            darkCount++;
+                        }
+
 
                     }
+                    let lightMode = localStorage.getItem('darkmode') == "null";
+                    if(lightMode){
+                        slideshow_container_light.css('display','block');
+                        slideshow_container_dark.css('display','none');
+                    } else{
+                        slideshow_container_light.css('display','none');
+                        slideshow_container_dark.css('display','block');
+                    }
+                    histogramsContainer.append(slideshow_container_light);
+                    histogramsContainer.append(slideshow_container_dark);
                     /* dot switcher */
-
-                    histogramsContainer.append('<div style="text-align:center">');
-                    for(var j=1; j<i; j++){
-                        histogramsContainer.append('<span class="dot" onclick="currentSlide('+j+')"></span>');
+                    var dots = $('<div class="dots"></div>');
+                    
+                    
+                    for(var j=1; j<lightCount; j++){
+                        let dot = $('<span class="dot" onclick="currentSlide('+j+')"></span>');
+                        dots.append(dot);
                         //darken the first by default
                        if(j==1){
-                            $('.dot').addClass('activeDot');
+                            dot.addClass('activeDot');
                         }
                     }
-                    histogramsContainer.append('</div></div>');
+                    histogramsContainer.append(dots);
+                    histogramsContainer.append('</div>');
                 } else {
                     alert('Error: ' + response.message);
                 }
