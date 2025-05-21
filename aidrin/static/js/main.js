@@ -84,7 +84,7 @@ function submitForm() {
     .then(data => {
         
         if (data.trigger === "correlationError") {
-            openErrorPopup("Invalid Request","Numerical Feature and Target Feature cannot be the same"); // call error popup
+            openErrorPopup("Invalid Request","Input Feature and Target Feature cannot be the same"); // call error popup
         } 
         console.log('Server Response:', data);
         var resultContainer = document.getElementById('resultContainer');
