@@ -9,6 +9,7 @@ app.secret_key = "aidrin"
 UPLOAD_FOLDER = os.path.join(app.root_path, "datasets", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.TEMP_RESULTS_CACHE = {}
 
 #link to main after app is created
 from . import main
