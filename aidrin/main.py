@@ -16,6 +16,8 @@ from aidrin.structured_data_metrics.privacy_measure import generate_single_attri
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
 from aidrin import app
 import pandas as pd
+import numpy as np 
+import openpyxl
 import matplotlib.pyplot as plt
 import os
 import json
@@ -25,6 +27,21 @@ import base64
 import seaborn as sns
 import uuid
 
+######## Simple Routes ########
+
+@app.route('/images/<path:filename>')
+def serve_image(filename):
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(os.path.join(root_dir, 'images'), filename)
+
+@app.route('/')
+def homepage():
+    return render_template('homepage.html')
+
+@app.route('/publications', methods=['GET'])
+def publications():
+    return render_template('publications.html')
+
 
 
 ######### Uploading, Retrieving, Clearing File Routes ############
@@ -32,14 +49,14 @@ import uuid
 @app.route('/upload_file',methods=['GET','POST'])
 def upload_file():
     uploaded_file_path = None
-    
+
     if request.method == 'POST':
         file = request.files['file']
         
         if file:
             #create name and add to folder
             displayName= file.filename
-            filename = f"{file.filename}_{uuid.uuid4().hex}"
+            filename = f"{uuid.uuid4().hex}_{file.filename}"
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             print(f"Saving file to {file_path}")
             #save file to server
@@ -47,14 +64,18 @@ def upload_file():
             #store the file path in the session
             session['uploaded_file_name'] = displayName
             session['uploaded_file_path'] = file_path
+            session['uploaded_file_type'] = request.form.get('fileTypeSelector')
             
             return redirect(url_for('upload_file'))
     
     uploaded_file_name = session.get('uploaded_file_name')
     uploaded_file_path = session.get('uploaded_file_path')
+    file_type = session.get('uploaded_file_type')
+    print(file_type)
     return render_template('upload_file.html', 
                                    uploaded_file_path=uploaded_file_path,
-                                   uploaded_file_name=uploaded_file_name)
+                                   uploaded_file_name=uploaded_file_name,
+                                   file_type=file_type)
 
 @app.route('/retrieve_uploaded_file', methods=['GET'])
 def retrieve_uploaded_file():
@@ -76,39 +97,17 @@ def clear_file():
     file_name = session.pop('uploaded_file_name', None)
     if file_path and os.path.exists(file_path):
         os.remove(file_path)  # Delete the uploaded file from the server
-    return redirect(request.referrer or '/')  # Redirect back to the homepage to reset the form
+    return redirect(url_for('upload_file'))  # Redirect back to the homepage to reset the form
     
-
-######## Simple Routes ########
-
-@app.route('/images/<path:filename>')
-def serve_image(filename):
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(os.path.join(root_dir, 'images'), filename)
-
-@app.route('/')
-def homepage():
-    return render_template('homepage.html')
-
-@app.route('/publications', methods=['GET'])
-def publications():
-    return render_template('publications.html')
-
 
 ######## Metric Page Routes ###########
 
 @app.route('/dataQuality', methods=['GET', 'POST'])
 def dataQuality():
     start_time = time.time()
-    
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
     final_dict = {}
     
-    if not uploaded_file_path:
-        return render_template('metricTemplates/dataQuality.html')
-    
-    file = pd.read_csv(uploaded_file_path, index_col=False)
+    file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
         #check for parameters
@@ -139,15 +138,9 @@ def dataQuality():
 @app.route('/fairness', methods=['GET', 'POST'])
 def fairness():
     start_time = time.time()
-    
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    final_dict = {}
+    final_dict={}
 
-    if not uploaded_file_path:
-        return render_template('metricTemplates/fairness.html')
-    
-    file = pd.read_csv(uploaded_file_path, index_col=False)
+    file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
         #check for parameters
@@ -203,15 +196,9 @@ def fairness():
 @app.route('/correlationAnalysis', methods=['GET', 'POST'])
 def correlationAnalysis():
     start_time = time.time()
-    
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
     final_dict = {}
 
-    if not uploaded_file_path:
-        return render_template('metricTemplates/correlationAnalysis.html')
-    
-    file = pd.read_csv(uploaded_file_path, index_col=False)
+    file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
         #check for parameters
@@ -244,15 +231,9 @@ def correlationAnalysis():
 @app.route('/featureRelevance', methods=['GET', 'POST'])
 def featureRelevance():
     start_time = time.time()
-    
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
     final_dict = {}
 
-    if not uploaded_file_path:
-        return render_template('metricTemplates/featureRelevance.html')
-    
-    file = pd.read_csv(uploaded_file_path, index_col=False)
+    file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
         #check for parameters
@@ -310,15 +291,9 @@ def featureRelevance():
 @app.route('/classImbalance', methods=['GET', 'POST'])
 def classImbalance():
     start_time = time.time()
-    
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
     final_dict = {}
-
-    if not uploaded_file_path:
-        return render_template('metricTemplates/classImbalance.html')
     
-    file = pd.read_csv(uploaded_file_path, index_col=False)
+    file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
         #check for parameters
@@ -341,15 +316,9 @@ def classImbalance():
 @app.route('/privacyPreservation', methods=['GET', 'POST'])
 def privacyPreservation():
     start_time = time.time()
-    
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
     final_dict = {}
 
-    if not uploaded_file_path:
-        return render_template('metricTemplates/privacyPreservation.html')
-    
-    file = pd.read_csv(uploaded_file_path, index_col=False)
+    file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
         #check for parameters
@@ -461,50 +430,42 @@ def handle_summary_statistics():
 @app.route('/summary_statistics',methods=['GET'])
 def get_summary_stastistics():
     try:
-        uploaded_file_path = session.get('uploaded_file_path')
-        if uploaded_file_path and os.path.exists(uploaded_file_path):
-                with open(uploaded_file_path, 'r') as file:
-                    csv_content = file.read()
-                    csv_data = io.StringIO(csv_content)
-                     # Load CSV data into a Pandas DataFrame
-                    df = pd.read_csv(csv_data)
-                    # Extract summary statistics
-                    summary_statistics = df.describe().round(2).to_dict()
-                    
-                    # Calculate probability distributions
-                    histograms = summary_histograms(df)
+            df, uploaded_file_path, uploaded_file_name = read_file()
+            # Extract summary statistics
+            summary_statistics = df.describe().round(2).to_dict()
+            
+            # Calculate probability distributions
+            histograms = summary_histograms(df)
 
-                    # Separate numerical and categorical columns
-                    numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
-                    categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
-                    all_features = numerical_columns + categorical_columns
+            # Separate numerical and categorical columns
+            numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
+            categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
+            all_features = numerical_columns + categorical_columns
 
-                    for v in summary_statistics.values():
-                        for old_key in v:
-                            if old_key in ['25%','50%','75%']:
-                                new_key = old_key.replace("%","th percentile")
-                                v[new_key] = v.pop(old_key)
+            for v in summary_statistics.values():
+                for old_key in v:
+                    if old_key in ['25%','50%','75%']:
+                        new_key = old_key.replace("%","th percentile")
+                        v[new_key] = v.pop(old_key)
 
-                    # Count the number of records
-                    records_count = len(df)
+            # Count the number of records
+            records_count = len(df)
 
-                    #count the number of features
-                    feature_count = len(df.columns)
+            #count the number of features
+            feature_count = len(df.columns)
 
-                    response_data = {
-                        'success': True,
-                        'message': 'File uploaded successfully',
-                        'records_count': records_count,
-                        'features_count': feature_count,
-                        'categorical_features': list(categorical_columns),
-                        'numerical_features': list(numerical_columns),
-                        'all_features':all_features,
-                        'summary_statistics': summary_statistics,
-                        'histograms': histograms
-                    }
-                    return jsonify(response_data)
-        else:
-            return jsonify({'success': False, 'message': 'File not found or session expired.'})
+            response_data = {
+                'success': True,
+                'message': 'File uploaded successfully',
+                'records_count': records_count,
+                'features_count': feature_count,
+                'categorical_features': list(categorical_columns),
+                'numerical_features': list(numerical_columns),
+                'all_features':all_features,
+                'summary_statistics': summary_statistics,
+                'histograms': histograms
+            }
+            return jsonify(response_data)
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
     
@@ -513,16 +474,7 @@ def get_summary_stastistics():
 @app.route('/feature_set', methods=['POST'])
 def extract_features():
     try:
-        # Get the uploaded file
-        file = request.files['file']
-
-        # Read the CSV file
-        csv_content = file.read().decode('utf-8')
-        csv_data = io.StringIO(csv_content)
-        
-        # Load CSV data into a Pandas DataFrame
-        df = pd.read_csv(csv_data)
-
+        df, uploaded_file_path, uploaded_file_name = read_file()
 
 
         # Separate numerical and categorical columns
@@ -553,6 +505,31 @@ def extract_features():
 
 ##### Functions #####
 
+def read_file():
+    
+    uploaded_file_path = session.get('uploaded_file_path')
+    uploaded_file_name = session.get('uploaded_file_name')
+    uploaded_file_type = session.get('uploaded_file_type')
+
+    if not uploaded_file_path and uploaded_file_name:
+        return redirect(request.url)
+    
+    #default result
+    readFile = None
+    #csv
+    if uploaded_file_type==('.csv'):
+        readFile = pd.read_csv(uploaded_file_path, index_col=False)
+    #npz
+    if uploaded_file_type==('.npz'):
+        npz_data = np.load(uploaded_file_path,allow_pickle=True)
+        readFile = pd.DataFrame({key: npz_data[key] for key in npz_data.files})
+    #excel
+    if uploaded_file_type==('.xls,.xlsb,.xlsx,.xlsm'):
+        readFile = pd.read_excel(uploaded_file_path)
+
+    return readFile, uploaded_file_path, uploaded_file_name
+
+
 def store_result(metric, final_dict):
         formatted_final_dict = format_dict_values(final_dict)
         #save results
@@ -580,6 +557,8 @@ def get_result_or_default(metric,uploaded_file_path,uploaded_file_name):
                         uploaded_file_path=uploaded_file_path, 
                         uploaded_file_name=uploaded_file_name,
                         formatted_final_dict=formatted_final_dict)
+
+
 def format_dict_values(d):
     formatted_dict = {}
     

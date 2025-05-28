@@ -58,14 +58,17 @@
     </p>
       </div>
       
-    
     <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: row; ">
         <div style="display: flex; width: 35%; flex-direction:column;">
-
-            <select  class="fileType" style="margin:0; align-self:center; text-align:center; border-radius: 10px 10px 0px 0px; width:100%; max-width: none;" name="file type">
-                <option>File Type: CSV Structured</option>
-                <option>File Type: CSV Unstructured</option>
+            <select id="fileTypeSelector" name="fileTypeSelector" class="fileType" style="margin:0; border-radius: 10px 10px 0 0; padding: 15px; width:100%; max-width:none; text-align:center; font-size:1.5em;">
+                <option value="" {% if not file_type %}selected{% endif %}>Select a File Type</option>
+                <option value=".csv" {% if file_type == '.csv' %}selected{% endif %}>CSV (.csv)</option>
+                <option value=".npz"{% if file_type == '.npz' %}selected{% endif %}>NumPy (.npz)</option>
+                <option value=".xls,.xlsb,.xlsx,.xlsm" {% if file_type == '.xls,.xlsb,.xlsx,.xlsm' %}selected{% endif %}>Excel (.xls, .xlsb, .xlsx, .xlsm) </option>
+                
             </select>
+
+
 
             <label id="fileUploadContainer" for="file" class="custum-file-upload" required>
                 <div class="icon">
@@ -77,7 +80,7 @@
                 {% endif %}
                 </div>
 
-                <input id="file" name="file" type="file" accept=".csv" required onchange="uploadForm();">
+                <input id="file" name="file" type="file"  required onchange="uploadForm();">
                 <br>
                 <div id="fileLabel" style="color:#ffffff">
                     {% if session.get('uploaded_file_path') %}
@@ -89,7 +92,7 @@
                     </script>
                     <h2>File Uploaded: {{session.get('uploaded_file_name')}}</h2>
                     {% else %}
-                    <h2>Please Upload a File</h2>
+                    <h2 id="FileUploadMessage" style="transition: all 0.3s">Please Upload a File</h2>
                     {% endif %}
                 </div>
                 

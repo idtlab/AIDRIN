@@ -41,7 +41,20 @@
         dropdown.selectedIndex = 0;
     
     }
-    
+    /* Toggles Dark Mode for Histogram Plots */
+    const toggleSlidesColor = () => {
+    const slidesLight = document.getElementById("slideshow-container-light");
+    const slidesDark = document.getElementById("slideshow-container-dark");
+    if(darkmode === "null") {
+        slidesLight.style.display = "none";
+        slidesDark.style.display = "block";
+    }
+    else {
+        slidesLight.style.display = "block";
+        slidesDark.style.display = "none";
+    }
+
+}
     /************ Taken out of metric data download pop up *************/
     function toggleVisualization(id) {
         var element = document.getElementById(id);
