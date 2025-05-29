@@ -17,7 +17,6 @@ from aidrin.structured_data_metrics.conditional_demo_disp import conditional_dem
 from aidrin import app
 import pandas as pd
 import numpy as np 
-import openpyxl
 import matplotlib.pyplot as plt
 import os
 import json
@@ -26,6 +25,16 @@ import io
 import base64
 import seaborn as sns
 import uuid
+import logging
+
+##### Time Logging #####
+
+TIMEOUT_DURATION = 60 #seconds
+
+time_log = logging.getLogger('aidrin')
+file_upload_time_log = logging.getLogger('aidrin.file_upload')
+metric_time_log = logging.getLogger('aidrin.metric')
+
 
 ######## Simple Routes ########
 
@@ -48,6 +57,8 @@ def publications():
 
 @app.route('/upload_file',methods=['GET','POST'])
 def upload_file():
+    
+    file_upload_time_log.info("File upload initiated")
     uploaded_file_path = None
 
     if request.method == 'POST':
@@ -71,7 +82,9 @@ def upload_file():
     uploaded_file_name = session.get('uploaded_file_name')
     uploaded_file_path = session.get('uploaded_file_path')
     file_type = session.get('uploaded_file_type')
-    print(file_type)
+    
+    file_upload_time_log.info("File Uploaded. Type: %s",file_type)
+    
     return render_template('upload_file.html', 
                                    uploaded_file_path=uploaded_file_path,
                                    uploaded_file_name=uploaded_file_name,
@@ -534,6 +547,9 @@ def store_result(metric, final_dict):
         formatted_final_dict = format_dict_values(final_dict)
         #save results
         results_id = uuid.uuid4().hex
+        
+        # ISSUE: Cache size is RAM dependent, if the cache is too large, it may cause memory issues.
+        # POTENTIAL SOLUTION: Use a database (doc.db?) to store results or iteratively parse the results.
         current_app.TEMP_RESULTS_CACHE[results_id] = {
         'data': formatted_final_dict,
         }
