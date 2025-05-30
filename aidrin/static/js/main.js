@@ -38,6 +38,35 @@ function clearFile() {
         openErrorPopup("File Clear", error); // call error popup
     });
 }
+//get file type from user
+document.addEventListener("DOMContentLoaded", function () {
+    //file type selector and file input field
+    const fileTypeElement = document.getElementById("fileTypeSelector");
+    const fileInput = document.getElementById("file");
+    const fileUploadMessage = document.getElementById("FileUploadMessage");
+    // Bind select to function
+    fileTypeElement.addEventListener("change", function () {
+        updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage);
+    });
+    // Call it once on page load 
+    updateFileInputBasedOnType(fileTypeElement, fileInput,fileUploadMessage);
+});
+//changes file upload ability
+function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage) {
+    const fileType = fileTypeElement.value;
+    //if a filetype is present, set to that filetype only, otherwise disable
+    if (fileType) {
+        fileInput.disabled = false;
+        fileInput.setAttribute("accept", fileType);
+        console.log("USER SELECTED FILETYPE: " + fileType);
+        fileUploadMessage.style.opacity="1";
+    } else {
+        fileInput.disabled = true;
+        fileInput.removeAttribute("accept");
+        fileUploadMessage.style.opacity="0";
+        console.log("FILE UPLOAD DISABLED");
+    }
+}
 
 
 function submitForm() {
@@ -874,42 +903,47 @@ function toggleValueIndividual(checkbox) {
     console.log("Checkbox value:", checkbox.value); // For debugging
 }
 // Ensure proper initial state on page load
-    document.addEventListener("DOMContentLoaded", function() {
-        // Get all checkboxes inside each checkboxContainer
-        document.querySelectorAll(".checkboxContainer").forEach(container => {
-            
-            // For each container, get the checkbox inside and set the initial state
-            
-            const checkboxes = container.querySelectorAll("input[type='checkbox']");
-            checkboxes.forEach(checkbox => {
-                console.log(checkbox);
-                // Set initial state of selects based on checkbox
-                toggleValue(checkbox);
-            });
-            
+document.addEventListener("DOMContentLoaded", function() {
+    // Get all checkboxes inside each checkboxContainer
+    document.querySelectorAll(".checkboxContainer").forEach(container => {
+        
+        // For each container, get the checkbox inside and set the initial state
+        
+        const checkboxes = container.querySelectorAll("input[type='checkbox']");
+        checkboxes.forEach(checkbox => {
+            console.log(checkbox);
+            // Set initial state of selects based on checkbox
+            toggleValue(checkbox);
         });
+        
     });
-    //********** Darkmode Toggle *******
-    let darkmode = localStorage.getItem('darkmode')
-    //add a darkmode class to the body
-    const enableDarkmode = () => {
-        document.body.classList.add('darkmode')
-        localStorage.setItem('darkmode','active')
-    }
-    //remove the darkmode class from the body
-    const disableDarkmode = () => {
-        document.body.classList.remove('darkmode')
-        localStorage.setItem('darkmode',null)
-    }
-    document.addEventListener('DOMContentLoaded', (event) => {
+});
+
+//********** Darkmode Toggle *******
+let darkmode = localStorage.getItem('darkmode')
+//add a darkmode class to the body
+const enableDarkmode = () => {
+    document.body.classList.add('darkmode')
+    localStorage.setItem('darkmode','active')
     
+}
+//remove the darkmode class from the body
+const disableDarkmode = () => {
+    document.body.classList.remove('darkmode')
+    localStorage.setItem('darkmode',null)
+    
+}
+document.addEventListener('DOMContentLoaded', (event) => {
     const themeSwitch = document.getElementById('theme-switch')
-    //pn document lodad check if darkmode is active
+    //on document load check if darkmode is active
     if(darkmode === "active") enableDarkmode()
     //add a click event listener to the theme switch
     themeSwitch.addEventListener("click", () => {
         
         darkmode = localStorage.getItem('darkmode')
+        
         darkmode !== "active" ? enableDarkmode() : disableDarkmode()
-    }) 
+        toggleSlidesColor();
+
+    })
 });
