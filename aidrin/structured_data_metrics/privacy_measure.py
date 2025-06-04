@@ -223,9 +223,7 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
         
 def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
 
-
     try:
-
         # Validate input DataFrame
         if data.empty:
             raise ValueError("Input DataFrame is empty.")
@@ -234,19 +232,25 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
         for qi in quasi_identifiers:
             if qi not in data.columns:
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")   
+        data.replace('?', pd.NA, inplace=True)
+        # Drop rows where any quasi-identifier is missing
+        clean_data = data.dropna(subset=quasi_identifiers)
         
-
+        if clean_data.empty:
+            raise ValueError("No data left after dropping rows with missing quasi-identifiers.")
+        
         # Group by quasi-identifiers and count occurrences
-        equivalence_classes = data.groupby(quasi_identifiers).size()
+        equivalence_classes = clean_data.groupby(quasi_identifiers).size()
         
         if equivalence_classes.empty:
             raise ValueError("No equivalence classes could be formed. Check your quasi-identifiers.")
         
-
         # Determine k-anonymity
         k_anonymity = equivalence_classes.min()
-        return k_anonymity
+        sorted_equivalence_classes = equivalence_classes.sort_values()
 
+        return k_anonymity, sorted_equivalence_classes
+    
 
     except Exception as e:
         print(f"[Error in compute_k_anonymity]: {e}")
