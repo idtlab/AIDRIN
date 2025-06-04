@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import io
 import base64
+import pandas as pd
+from typing import List
 
 def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
     result_dict = {}
@@ -219,7 +221,38 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
         result_dict["Error"] = str(e)
         return result_dict
         
-    
+def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
+
+
+    try:
+
+        # Validate input DataFrame
+        if data.empty:
+            raise ValueError("Input DataFrame is empty.")
+        
+        # Validate quasi-identifiers
+        for qi in quasi_identifiers:
+            if qi not in data.columns:
+                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")   
+        
+
+        # Group by quasi-identifiers and count occurrences
+        equivalence_classes = data.groupby(quasi_identifiers).size()
+        
+        if equivalence_classes.empty:
+            raise ValueError("No equivalence classes could be formed. Check your quasi-identifiers.")
+        
+
+        # Determine k-anonymity
+        k_anonymity = equivalence_classes.min()
+        return k_anonymity
+
+
+    except Exception as e:
+        print(f"[Error in compute_k_anonymity]: {e}")
+        return None
+
+
 
     
 
