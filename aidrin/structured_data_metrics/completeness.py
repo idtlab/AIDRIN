@@ -1,7 +1,6 @@
 import io
 import base64
 import matplotlib.pyplot as plt
-
 def completeness(file):
     # Calculate completeness metric for each column
     completeness_scores = (1 - file.isnull().mean()).to_dict()

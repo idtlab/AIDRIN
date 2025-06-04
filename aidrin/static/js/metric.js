@@ -65,34 +65,35 @@
         }
     }
 
-    /** Error Handling: Creates a popup with error types and server response (details) */
+/** Error Handling: Creates a popup with error types and server response (details) */
+let errorPopup;
+function openErrorPopup(type,message){
+    errorPopup = document.getElementById("error-popup");
+    errorPopup.classList.add("open-popup");
 
-    let errorPopup;
-    function openErrorPopup(type,message){
-        errorPopup = document.getElementById("error-popup");
-        errorPopup.classList.add("open-popup");
+    errorType = document.getElementById("error-type");
+    errorType.innerHTML = "Error: "+type;
 
-        errorType = document.getElementById("error-type");
-        errorType.innerHTML = "Error: "+type;
+    errorMessage = document.getElementById("error-message");
+    errorMessage.innerHTML = message;
 
-        errorMessage = document.getElementById("error-message");
-        errorMessage.innerHTML = message;
-
-        
-    }
-    function closeErrorPopup(){
-        //error popup has to be present in the DOM for the function to call already
-        errorPopup.classList.remove("open-popup");
-    }
-    // Catch resource loading errors by adding an event listener to the window
-    window.addEventListener('error', function (e) {
-        if (e.target && (e.target.tagName === 'IMG' || e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
-            console.error("Resource failed to load:", e.target.src || e.target.href);
-            openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
-        }
-    }, true); // useCapture=true is important for resource errors
     
-    
+}
+function closeErrorPopup(){
+    //error popup has to be present in the DOM for the function to call already
+    errorPopup.classList.remove("open-popup");
+}
+// Catch resource loading errors by adding an event listener to the window
+window.addEventListener('error', function (e) {
+    if (e.target && (e.target.tagName === 'IMG' || e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+        console.error("Resource failed to load:", e.target.src || e.target.href);
+        openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
+    }
+}, true); // useCapture=true is important for resource errors
+
+
+
+
 $(document).ready(function () {
         fetch(retrieveFileUrl)
             .then(response => response.blob())  // Convert  to a Blob
