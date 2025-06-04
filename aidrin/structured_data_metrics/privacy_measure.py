@@ -233,7 +233,7 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
             if qi not in data.columns:
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")   
         data.replace('?', pd.NA, inplace=True)
-        
+
         # Drop rows with missing values in quasi-identifiers
         clean_data = data.dropna(subset=quasi_identifiers)
         
@@ -288,6 +288,54 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: List[str], sensit
         print(f"[Error in compute_l_diversity]: {e}")
         return None
 
+
+def compute_t_closeness(data: pd.DataFrame,quasi_identifiers: List[str],sensitive_column: str):
+    try:
+        # Validate input DataFrame
+        if data.empty:
+            raise ValueError("Input DataFrame is empty.")
+        
+        # Validate quasi-identifiers
+        for qi in quasi_identifiers:
+            if qi not in data.columns:
+                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+        
+        # Validate sensitive column presence
+        if sensitive_column not in data.columns:
+            raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
+        
+        # Treat '?' as missing values and replace with pd.NA
+        data = data.replace('?', pd.NA)
+        clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
+        
+        if clean_data.empty:
+            raise ValueError("No data left after dropping rows with missing values.")
+
+        # Overall sensitive value distribution (normalized counts)
+        global_dist = clean_data[sensitive_column].value_counts(normalize=True)
+
+        # Function to compute total variation distance
+        def tvd(p, q):
+            all_keys = set(p.index).union(set(q.index))
+            p_full = p.reindex(all_keys, fill_value=0)
+            q_full = q.reindex(all_keys, fill_value=0)
+            return 0.5 * np.abs(p_full - q_full).sum()
+
+        # Group by quasi-identifiers and compute t-closeness for each group
+        t_values = {}
+
+        for group_keys, group_df in clean_data.groupby(quasi_identifiers):
+            group_dist = group_df[sensitive_column].value_counts(normalize=True)
+            t_values[group_keys] = tvd(group_dist, global_dist)
+
+        t_series = pd.Series(t_values)
+        t_max = t_series.max()  # Worst case (largest divergence from global distribution)
+
+        return t_max, t_series.sort_values(ascending=False)
+
+    except Exception as e:
+        print(f"[Error in compute_t_closeness]: {e}")
+        return None
 
     
 
