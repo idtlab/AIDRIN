@@ -256,6 +256,43 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
         print(f"[Error in compute_k_anonymity]: {e}")
         return None
 
+def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: List[str], sensitive_column: str):
+    try:
+        # Validate input DataFrame
+        if data.empty:
+            raise ValueError("Input DataFrame is empty.")
+        
+        # Validate quasi-identifiers presence
+        for qi in quasi_identifiers:
+            if qi not in data.columns:
+                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+        
+        # Validate sensitive column presence
+        if sensitive_column not in data.columns:
+            raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
+
+        # Treat '?' as missing values and replace with pd.NA
+        data = data.replace('?', pd.NA)
+
+        # Drop rows with missing values in quasi-identifiers or sensitive column
+        clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
+        if clean_data.empty:
+            raise ValueError("No data left after dropping rows with missing quasi-identifiers or sensitive values.")
+
+        # Group by quasi-identifiers and count unique sensitive values
+        l_diversities = clean_data.groupby(quasi_identifiers)[sensitive_column].nunique()
+
+        if l_diversities.empty:
+            raise ValueError("No equivalence classes formed. Check your quasi-identifiers and sensitive column.")
+
+        # Minimum number of distinct sensitive values across all groups
+        l_diversity = l_diversities.min()
+
+        return l_diversity, l_diversities.sort_values()
+
+    except Exception as e:
+        print(f"[Error in compute_l_diversity]: {e}")
+        return None
 
 
     
