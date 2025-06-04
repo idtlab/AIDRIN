@@ -233,7 +233,8 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
             if qi not in data.columns:
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")   
         data.replace('?', pd.NA, inplace=True)
-        # Drop rows where any quasi-identifier is missing
+        
+        # Drop rows with missing values in quasi-identifiers
         clean_data = data.dropna(subset=quasi_identifiers)
         
         if clean_data.empty:
@@ -241,9 +242,6 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
         
         # Group by quasi-identifiers and count occurrences
         equivalence_classes = clean_data.groupby(quasi_identifiers).size()
-        
-        if equivalence_classes.empty:
-            raise ValueError("No equivalence classes could be formed. Check your quasi-identifiers.")
         
         # Determine k-anonymity
         k_anonymity = equivalence_classes.min()
@@ -262,16 +260,15 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: List[str], sensit
         if data.empty:
             raise ValueError("Input DataFrame is empty.")
         
-        # Validate quasi-identifiers presence
+        # Validate quasi-identifiers
         for qi in quasi_identifiers:
             if qi not in data.columns:
-                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")   
         
         # Validate sensitive column presence
         if sensitive_column not in data.columns:
             raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
 
-        # Treat '?' as missing values and replace with pd.NA
         data = data.replace('?', pd.NA)
 
         # Drop rows with missing values in quasi-identifiers or sensitive column
@@ -281,9 +278,6 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: List[str], sensit
 
         # Group by quasi-identifiers and count unique sensitive values
         l_diversities = clean_data.groupby(quasi_identifiers)[sensitive_column].nunique()
-
-        if l_diversities.empty:
-            raise ValueError("No equivalence classes formed. Check your quasi-identifiers and sensitive column.")
 
         # Minimum number of distinct sensitive values across all groups
         l_diversity = l_diversities.min()
