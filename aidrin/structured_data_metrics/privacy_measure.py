@@ -290,7 +290,8 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
 
     return result_dict
 
-def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: List[str], sensitive_column: str):
+def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_column: str):
+    result_dict = {}
     try:
         # Validate input DataFrame
         if data.empty:
@@ -299,7 +300,7 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: List[str], sensit
         # Validate quasi-identifiers
         for qi in quasi_identifiers:
             if qi not in data.columns:
-                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")   
+                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
         
         # Validate sensitive column presence
         if sensitive_column not in data.columns:
@@ -307,22 +308,66 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: List[str], sensit
 
         data = data.replace('?', pd.NA)
 
-        # Drop rows with missing values in quasi-identifiers or sensitive column
+        # Drop rows with missing quasi-identifiers or sensitive values
         clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
         if clean_data.empty:
             raise ValueError("No data left after dropping rows with missing quasi-identifiers or sensitive values.")
 
-        # Group by quasi-identifiers and count unique sensitive values
+        # Compute l-diversities: count of unique sensitive values per equivalence class
         l_diversities = clean_data.groupby(quasi_identifiers)[sensitive_column].nunique()
 
-        # Minimum number of distinct sensitive values across all groups
-        l_diversity = l_diversities.min()
+        # Minimum l-diversity (lowest number of distinct sensitive values)
+        min_l_diversity = int(l_diversities.min())
 
-        return l_diversity, l_diversities.sort_values()
+        # Descriptive statistics for l-diversity distribution
+        desc_stats = {
+            'min': int(l_diversities.min()),
+            'max': int(l_diversities.max()),
+            'mean': round(l_diversities.mean(), 2),
+            'median': int(l_diversities.median())
+        }
+
+        # Histogram plot of l-diversity counts
+        hist_data = l_diversities.value_counts().sort_index()
+        plt.figure(figsize=(8, 5))
+        plt.bar(hist_data.index, hist_data.values, color='skyblue')
+        plt.xlabel('Number of Distinct Sensitive Values (l)')
+        plt.ylabel('Number of Equivalence Classes')
+        plt.title('Distribution of l-Diversity Across Equivalence Classes')
+        plt.grid(axis='y', alpha=0.75)
+
+        # Save plot to base64 string
+        img_stream = io.BytesIO()
+        plt.savefig(img_stream, format='png')
+        plt.close()
+        img_stream.seek(0)
+        base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
+        img_stream.close()
+
+        # Calculate risk score based on min l-diversity
+        dataset_size = clean_data.shape[0]
+        max_safe_l = max(2, int(dataset_size * 0.01))  # 1% of dataset or minimum 2
+        risk_score = min(1.0, round(1 - min_l_diversity / max_safe_l, 2))
+
+        # Compose result dictionary
+        result_dict = {
+            "min_l_diversity": min_l_diversity,
+            "risk_score": risk_score,
+            "descriptive_statistics": desc_stats,
+            "histogram_data": hist_data.to_dict(),
+            "histogram_plot_base64": base64_image,
+            "description": (
+                "l-diversity measures the minimum number of distinct sensitive attribute values "
+                "in each equivalence class formed by quasi-identifiers. Higher l indicates better "
+                "privacy protection. The histogram shows how l-diversity values are distributed "
+                "across equivalence classes."
+            )
+        }
 
     except Exception as e:
-        print(f"[Error in compute_l_diversity]: {e}")
-        return None
+        result_dict["error"] = str(e)
+
+    return result_dict
 
 
 def compute_t_closeness(data: pd.DataFrame,quasi_identifiers: List[str],sensitive_column: str):
