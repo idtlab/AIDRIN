@@ -369,55 +369,89 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
 
     return result_dict
 
-
-def compute_t_closeness(data: pd.DataFrame,quasi_identifiers: List[str],sensitive_column: str):
+def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensitive_column: str):
+    result_dict = {}
     try:
-        # Validate input DataFrame
-        if data.empty:
-            raise ValueError("Input DataFrame is empty.")
-        
-        # Validate quasi-identifiers
-        for qi in quasi_identifiers:
-            if qi not in data.columns:
-                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
-        
-        # Validate sensitive column presence
-        if sensitive_column not in data.columns:
-            raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
-        
-        # Treat '?' as missing values and replace with pd.NA
-        data = data.replace('?', pd.NA)
-        clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
-        
-        if clean_data.empty:
-            raise ValueError("No data left after dropping rows with missing values.")
 
-        # Overall sensitive value distribution (normalized counts)
-        global_dist = clean_data[sensitive_column].value_counts(normalize=True)
-
-        # Function to compute total variation distance
+        # TVD computation
         def tvd(p, q):
             all_keys = set(p.index).union(set(q.index))
             p_full = p.reindex(all_keys, fill_value=0)
             q_full = q.reindex(all_keys, fill_value=0)
             return 0.5 * np.abs(p_full - q_full).sum()
 
-        # Group by quasi-identifiers and compute t-closeness for each group
-        t_values = {}
+        if data.empty:
+            raise ValueError("Input DataFrame is empty.")
 
-        for group_keys, group_df in clean_data.groupby(quasi_identifiers):
-            group_dist = group_df[sensitive_column].value_counts(normalize=True)
-            t_values[group_keys] = tvd(group_dist, global_dist)
+        for qi in quasi_identifiers:
+            if qi not in data.columns:
+                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+
+        if sensitive_column not in data.columns:
+            raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
+
+        data = data.replace('?', pd.NA)
+        clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
+        if clean_data.empty:
+            raise ValueError("No data left after dropping rows with missing values.")
+
+        # Global distribution of sensitive column
+        global_dist = clean_data[sensitive_column].value_counts(normalize=True)
+
+        # Compute t-closeness per equivalence class
+        t_values = {}
+        for keys, group in clean_data.groupby(quasi_identifiers):
+            group_dist = group[sensitive_column].value_counts(normalize=True)
+            t_values[keys] = tvd(group_dist, global_dist)
 
         t_series = pd.Series(t_values)
-        t_max = t_series.max()  # Worst case (largest divergence from global distribution)
+        max_t = round(t_series.max(), 4)
 
-        return t_max, t_series.sort_values(ascending=False)
+        # Descriptive stats
+        desc_stats = {
+            "min": round(t_series.min(), 4),
+            "max": max_t,
+            "mean": round(t_series.mean(), 4),
+            "median": round(t_series.median(), 4)
+        }
+
+        # Histogram plot
+        hist_data = t_series.round(2).value_counts().sort_index()
+        plt.figure(figsize=(8, 5))
+        plt.bar(hist_data.index, hist_data.values, color='salmon')
+        plt.xlabel('T-Closeness Value (TVD)')
+        plt.ylabel('Number of Equivalence Classes')
+        plt.title('Distribution of T-Closeness Across Equivalence Classes')
+        plt.grid(axis='y', alpha=0.75)
+
+        img_stream = io.BytesIO()
+        plt.savefig(img_stream, format='png')
+        plt.close()
+        img_stream.seek(0)
+        base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
+        img_stream.close()
+
+        # Risk Score: Higher t_closeness → higher privacy loss → higher risk
+        risk_score = min(1.0, round(max_t, 2))  # Since TVD ∈ [0,1]
+
+        result_dict = {
+
+            "max_t_closeness": max_t,
+            "risk_score": risk_score,
+            "descriptive_statistics": desc_stats,
+            "histogram_data": hist_data.to_dict(),
+            "histogram_plot_base64": base64_image,
+            "description": (
+                "T-closeness quantifies the distance between the distribution of sensitive values "
+                "within an equivalence class and the global distribution using total variation distance (TVD). "
+                "Higher t-closeness values indicate greater privacy risks due to distributional skew."
+            )
+        }
 
     except Exception as e:
-        print(f"[Error in compute_t_closeness]: {e}")
-        return None
+        result_dict["error"] = str(e)
 
+    return result_dict
     
 
     
