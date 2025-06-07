@@ -222,6 +222,73 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
         return result_dict
         
 def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
+    result_dict = {}
+    try:
+        if data.empty:
+            raise ValueError("Input DataFrame is empty.")
+
+        for qi in quasi_identifiers:
+            if qi not in data.columns:
+                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+
+        data.replace('?', pd.NA, inplace=True)
+        clean_data = data.dropna(subset=quasi_identifiers)
+        if clean_data.empty:
+            raise ValueError("No data left after dropping rows with missing quasi-identifiers.")
+
+        equivalence_classes = clean_data.groupby(quasi_identifiers).size().reset_index(name='count')
+        counts = equivalence_classes["count"]
+
+        # Compute k-anonymity
+        k_anonymity = int(counts.min())
+
+        # Descriptive statistics
+        desc_stats = {
+            'min': int(counts.min()),
+            'max': int(counts.max()),
+            'mean': round(counts.mean(), 2),
+            'median': int(counts.median())
+        }
+
+        # Histogram of equivalence class sizes
+        hist_data = counts.value_counts().sort_index().to_dict()
+        plt.figure(figsize=(8, 5))
+        plt.bar(hist_data.keys(), hist_data.values(), color='skyblue')
+        plt.xlabel('Equivalence Class Size (k)')
+        plt.ylabel('Number of Equivalence Classes')
+        plt.title('Distribution of Equivalence Class Sizes')
+        plt.grid(axis='y', alpha=0.75)
+
+        # Save histogram to base64
+        img_stream = io.BytesIO()
+        plt.savefig(img_stream, format='png')
+        plt.close()
+        img_stream.seek(0)
+        base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
+        img_stream.close()
+
+        # Risk scoring based on k value
+        # Normalize risk: Higher k = lower risk, scale it from 0 to 1
+        # Example: if k=1 => high risk (1.0), if k>=50 => very low risk (~0.0)
+        dataset_size = clean_data.shape[0]
+        max_safe_k = max(5, int( dataset_size*0.01))   # 1% of dataset, clamped between 5 and 100
+        risk_score = min(1.0, round(1 - min(k_anonymity / max_safe_k, 1.0), 2))
+
+        # Final result
+        result_dict = {
+            "k_anonymity": k_anonymity,
+            "risk_score": risk_score,
+            "descriptive_statistics": desc_stats,
+            "histogram_data": hist_data,
+            "histogram_plot_base64": base64_image,
+            "description": "k-anonymity measures the minimum size of equivalence classes formed by quasi-identifiers. "
+                           "Higher k indicates better privacy protection. The histogram shows the distribution of equivalence class sizes."
+        }
+
+    except Exception as e:
+        result_dict["error"] = str(e)
+
+    return result_dict
 
     try:
         # Validate input DataFrame
@@ -241,11 +308,13 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
             raise ValueError("No data left after dropping rows with missing quasi-identifiers.")
         
         # Group by quasi-identifiers and count occurrences
-        equivalence_classes = clean_data.groupby(quasi_identifiers).size()
+        equivalence_classes = clean_data.groupby(quasi_identifiers).size().reset_index(name='count')
         
         # Determine k-anonymity
         k_anonymity = equivalence_classes.min()
         sorted_equivalence_classes = equivalence_classes.sort_values()
+
+        
 
         return k_anonymity, sorted_equivalence_classes
     
