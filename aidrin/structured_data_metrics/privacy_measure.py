@@ -290,39 +290,6 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
 
     return result_dict
 
-    try:
-        # Validate input DataFrame
-        if data.empty:
-            raise ValueError("Input DataFrame is empty.")
-        
-        # Validate quasi-identifiers
-        for qi in quasi_identifiers:
-            if qi not in data.columns:
-                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")   
-        data.replace('?', pd.NA, inplace=True)
-
-        # Drop rows with missing values in quasi-identifiers
-        clean_data = data.dropna(subset=quasi_identifiers)
-        
-        if clean_data.empty:
-            raise ValueError("No data left after dropping rows with missing quasi-identifiers.")
-        
-        # Group by quasi-identifiers and count occurrences
-        equivalence_classes = clean_data.groupby(quasi_identifiers).size().reset_index(name='count')
-        
-        # Determine k-anonymity
-        k_anonymity = equivalence_classes.min()
-        sorted_equivalence_classes = equivalence_classes.sort_values()
-
-        
-
-        return k_anonymity, sorted_equivalence_classes
-    
-
-    except Exception as e:
-        print(f"[Error in compute_k_anonymity]: {e}")
-        return None
-
 def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: List[str], sensitive_column: str):
     try:
         # Validate input DataFrame
