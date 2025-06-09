@@ -124,6 +124,60 @@
                     </li>
                 </ul>
             </div>
+
+            <div class="checkboxContainerIndividual">
+                <label class="material-checkbox">
+                    <input type="checkbox" name="k-anonymity" onchange="toggleValue(this)"> 
+                    <span class="checkmark"></span>
+                    k-Anonymity:
+                </label>
+                <ul>
+                    <li>
+                        <label for="quasi identifiers for k-anonymity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
+                        <div id="kAnonymityQIsCheckbox"></div> 
+                        </li>
+                </ul>
+            </div>
+
+            <div class="checkboxContainerIndividual">
+                <label class="material-checkbox">
+                    <input type="checkbox" name="l-diversity" onchange="toggleValue(this)"> 
+                    <span class="checkmark"></span>
+                    l-Diversity:
+                </label>
+                <ul>
+                    <li>
+                        <label for="quasi identifiers for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers :</label>
+                        <div id="lDiversityQIsCheckbox"></div>
+                        </li>
+                    <li>
+                        <label for="sensitive attribute for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Sensitive Attribute:</label>
+                        <select name="sensitive attribute for l-diversity" id="lDiversitySensitiveDropdown" required>
+                            <option value="" disabled selected>Select a feature</option>
+                        </select>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="checkboxContainerIndividual">
+                <label class="material-checkbox">
+                    <input type="checkbox" name="t-closeness" onchange="toggleValue(this)"> 
+                    <span class="checkmark"></span>
+                    t-Closeness:
+                </label>
+                <ul>
+                    <li>
+                        <label for="quasi identifiers for t-closeness" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
+                        <div id="tClosenessQIsCheckbox"></div>
+                        </li>
+                    <li>
+                        <label for="sensitive attribute for t-closeness" style="padding:10px; padding-left:15px; min-width:300px;">Sensitive Attribute:</label>
+                        <select name="sensitive attribute for t-closeness" id="tClosenessSensitiveDropdown" required>
+                            <option value="" disabled selected>Select a feature</option>
+                        </select>
+                    </li>
+                </ul>
+            </div>
         </div>
     </div>
     <div id = "formbuttonsContainer">
@@ -146,7 +200,7 @@
         <div class="plot-container" id="histogramsContainer"></div>
         <div class="plot-container" style="text-align:left" id="metrics">
 
-        <h2 style="text-align:center">Data Quality Metrics</h2>
+        <h2 style="text-align:center">Privacy Preservation Metrics</h2>
         <p>No data available yet. Please submit a request.</p>
         <div id="buttonsContainer" style="display:none;">
             <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>

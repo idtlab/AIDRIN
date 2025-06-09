@@ -238,7 +238,7 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
 
         equivalence_classes = clean_data.groupby(quasi_identifiers).size().reset_index(name='count')
         counts = equivalence_classes["count"]
-
+    
         # Compute k-anonymity
         k_anonymity = int(counts.min())
 
@@ -258,7 +258,6 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
         plt.ylabel('Number of Equivalence Classes')
         plt.title('Distribution of Equivalence Class Sizes')
         plt.grid(axis='y', alpha=0.75)
-
         # Save histogram to base64
         img_stream = io.BytesIO()
         plt.savefig(img_stream, format='png')
@@ -276,12 +275,12 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
 
         # Final result
         result_dict = {
-            "k_anonymity": k_anonymity,
-            "risk_score": risk_score,
+            "Value": k_anonymity,
+            "Risk Score": risk_score,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data,
-            "histogram_plot_base64": base64_image,
-            "description": "k-anonymity measures the minimum size of equivalence classes formed by quasi-identifiers. "
+            "k-Anonymity Visualization": base64_image,
+            "Description": "k-anonymity measures the minimum size of equivalence classes formed by quasi-identifiers. "
                            "Higher k indicates better privacy protection. The histogram shows the distribution of equivalence class sizes."
         }
 
@@ -328,12 +327,14 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
         }
 
         # Histogram plot of l-diversity counts
-        hist_data = l_diversities.value_counts().sort_index()
-        plt.figure(figsize=(8, 5))
+        binned_l_diversities = l_diversities.round()  # or use: (l_diversities / 2).round() * 2 for bin size of 2
+        hist_data = binned_l_diversities.value_counts().sort_index()
+        plt.figure(figsize=(8, 8))
         plt.bar(hist_data.index, hist_data.values, color='skyblue')
         plt.xlabel('Number of Distinct Sensitive Values (l)')
         plt.ylabel('Number of Equivalence Classes')
         plt.title('Distribution of l-Diversity Across Equivalence Classes')
+        plt.xticks(sorted(hist_data.index))
         plt.grid(axis='y', alpha=0.75)
 
         # Save plot to base64 string
@@ -351,12 +352,12 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
 
         # Compose result dictionary
         result_dict = {
-            "min_l_diversity": min_l_diversity,
-            "risk_score": risk_score,
+            "Value": min_l_diversity,
+            "Risk Score": risk_score,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
-            "histogram_plot_base64": base64_image,
-            "description": (
+            "l-Diversity Visualization": base64_image,
+            "Description": (
                 "l-diversity measures the minimum number of distinct sensitive attribute values "
                 "in each equivalence class formed by quasi-identifiers. Higher l indicates better "
                 "privacy protection. The histogram shows how l-diversity values are distributed "
@@ -436,13 +437,13 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
 
         result_dict = {
 
-            "max_t_closeness": max_t,
-            "risk_score": risk_score,
+            "Value": max_t,
+            "Risk Score": risk_score,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
-            "histogram_plot_base64": base64_image,
-            "description": (
-                "T-closeness quantifies the distance between the distribution of sensitive values "
+            "t-Closeness Visualization": base64_image,
+            "Description": (
+                "t-closeness quantifies the distance between the distribution of sensitive values "
                 "within an equivalence class and the global distribution using total variation distance (TVD). "
                 "Higher t-closeness values indicate greater privacy risks due to distributional skew."
             )

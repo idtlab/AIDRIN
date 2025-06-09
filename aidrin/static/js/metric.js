@@ -1,5 +1,4 @@
 
-
 // Slideshow control for the histograms
 
     // Thumbnail image controls
@@ -118,7 +117,6 @@ $(document).ready(function () {
                         createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox1','categorical features for feature relevancy')
                         createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
                         createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox3','quasi identifiers to measure multiple attribute risk score')
-                        
                     }
 
                     if ('numerical_features' in response) {
@@ -129,6 +127,9 @@ $(document).ready(function () {
                     }
 
                     if ('all_features' in response){
+                        createCheckboxContainer(response.all_features,'kAnonymityQIsCheckbox','quasi identifiers for k-anonymity');
+                        createCheckboxContainer(response.all_features,'lDiversityQIsCheckbox','quasi identifiers for l-diversity');
+                        createCheckboxContainer(response.all_features,'tClosenessQIsCheckbox','quasi identifiers for t-closeness');
                         createDropdown(response.all_features,'allFeaturesDropdownRepRate');
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate1');
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate2');
@@ -139,6 +140,8 @@ $(document).ready(function () {
                         createDropdown(response.all_features,'allFeaturesDropdownMMM');
                         createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis1');
                         createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis2');
+                        createDropdown(response.all_features, 'lDiversitySensitiveDropdown');
+                        createDropdown(response.all_features, 'tClosenessSensitiveDropdown');
                     }
                     
                 } else {

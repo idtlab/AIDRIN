@@ -132,16 +132,18 @@ function submitForm() {
             'Completeness', 'Outliers', 'Representation Rate', 'Statistical Rate', 
             'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
             'Feature Relevance', 'Class Imbalance', 'DP Statistics', 
-            'Single attribute risk scoring', 'Multiple attribute risk scoring'
+            'Single attribute risk scoring', 'Multiple attribute risk scoring','k-Anonymity','l-Diversity','t-Closeness'
         ];
         visualizationTypes.forEach(function(type) {
             if (isKeyPresentAndDefined(data, type) && isKeyPresentAndDefined(data[type], type + ' Visualization')) {
                 console.log('Adding visualization:', type);
                 var image = data[type][type + ' Visualization'];
+                var value = data[type]['Value'] || 'N/A'; 
                 var description = data[type]['Description'];
+                var riskScore = data[type]['Risk Score'] || 'N/A'; 
                 var title = type;
                 var jsonData = JSON.stringify(data);
-                visualizationContent.push({ image: image, description: description, title: title, jsonData: jsonData});
+                visualizationContent.push({ image: image, riskScore: riskScore, value: value, description: description, title: title, jsonData: jsonData});
             }
         });
         // Boolean flag to track if heading has been added
@@ -168,8 +170,11 @@ function submitForm() {
                         <div id="${visualizationId}" style="display: none;">
                             <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
                             <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>
+                            
+                            ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
+                            ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
+                           <div><strong>Description:</strong> ${content.description}</div>
 
-                            <div>${content.description}</div>
                             
                         </div>
                     
