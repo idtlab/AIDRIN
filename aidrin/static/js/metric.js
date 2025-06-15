@@ -115,8 +115,6 @@ $(document).ready(function () {
                     if ('categorical_features' in response) {
                         createDropdown(response.categorical_features, 'catFeaturesDropdown');
                         createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox1','categorical features for feature relevancy')
-                        createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
-                        createCheckboxContainer(response.categorical_features,'catFeaturesCheckbox3','quasi identifiers to measure multiple attribute risk score')
                     }
 
                     if ('numerical_features' in response) {
@@ -130,6 +128,8 @@ $(document).ready(function () {
                         createCheckboxContainer(response.all_features,'kAnonymityQIsCheckbox','quasi identifiers for k-anonymity');
                         createCheckboxContainer(response.all_features,'lDiversityQIsCheckbox','quasi identifiers for l-diversity');
                         createCheckboxContainer(response.all_features,'tClosenessQIsCheckbox','quasi identifiers for t-closeness');
+                        createCheckboxContainer(response.all_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
+                        createCheckboxContainer(response.all_features,'catFeaturesCheckbox3','quasi identifiers to measure multiple attribute risk score')
                         createDropdown(response.all_features,'allFeaturesDropdownRepRate');
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate1');
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate2');
@@ -142,6 +142,7 @@ $(document).ready(function () {
                         createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis2');
                         createDropdown(response.all_features, 'lDiversitySensitiveDropdown');
                         createDropdown(response.all_features, 'tClosenessSensitiveDropdown');
+                        updateCrossDisable();
                     }
                     
                 } else {
@@ -382,4 +383,53 @@ function createCheckboxContainer(features, tableId, nameTag) {
         row.append(cell);
     }
 }
+});
+function updateCrossDisable() {
+    const selectedQIs = new Set();
+    $('input[name^="quasi identifiers"]').each(function () {
+        if ($(this).is(':checked')) {
+            selectedQIs.add($(this).val());
+        }
+    });
+
+    const sensitiveDropdowns = ['#lDiversitySensitiveDropdown', '#tClosenessSensitiveDropdown','#allFeaturesDropdownMMS', '#allFeaturesDropdownMMM'];
+
+    sensitiveDropdowns.forEach(dropdownId => {
+        $(`${dropdownId} option`).each(function () {
+            const val = $(this).text();
+            if (selectedQIs.has(val)) {
+                $(this).prop('disabled', true);
+            } else {
+                $(this).prop('disabled', false);
+            }
+        });
+    });
+
+    const selectedSensitives = new Set();
+    sensitiveDropdowns.forEach(dropdownId => {
+        const selected = $(dropdownId).val();
+        if (selected) selectedSensitives.add(selected);
+    });
+
+    $('input[name^="quasi identifiers"]').each(function () {
+        const val = $(this).val();
+        if (selectedSensitives.has(val)) {
+            $(this).prop('disabled', true);
+        } else {
+            if (!selectedQIs.has(val)) {
+                $(this).prop('disabled', false);
+            }
+        }
+    });
+}
+$(document).ready(function () {
+  // Trigger when a QI checkbox changes
+  $(document).on('change', 'input[name^="quasi identifiers"]', function () {
+    updateCrossDisable();
+  });
+
+  // Trigger when any sensitive dropdown changes
+  $('#lDiversitySensitiveDropdown, #tClosenessSensitiveDropdown, #allFeaturesDropdownMMS, #allFeaturesDropdownMMM').on('change', function () {
+    updateCrossDisable();
+  });
 });

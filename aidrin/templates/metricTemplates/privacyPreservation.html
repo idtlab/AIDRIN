@@ -16,7 +16,49 @@
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <title>Privacy Preservation</title>
+    <style>
+        .tooltip-box {
+        display: none;
+        position: absolute;
+        bottom: 120%;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #333;
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 0.85em;
+        z-index: 1000;
+        white-space: normal;
+        max-width: 250px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Dark mode tooltip fix */
+        body.darkmode .tooltip-box {
+        background-color: #f0f0f0;
+        color: #000;
+        box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+        border: 1px solid #ccc;
+        }
+
+        .tooltip-trigger {
+        position: relative;
+        display: inline-block;
+        margin-left: 5px;
+        cursor: pointer;
+        border: none;
+        background: none;
+        font-size: 1em;
+        color: #555;
+        }
+
+        .tooltip-trigger:focus .tooltip-box {
+        display: block;
+        }
+    </style>
 </head>
+
 <body>
     <!-- error handling popup -->
     <div id="error-popup" class="error-popup">
@@ -126,11 +168,22 @@
             </div>
 
             <div class="checkboxContainerIndividual">
-                <label class="material-checkbox">
-                    <input type="checkbox" name="k-anonymity" onchange="toggleValue(this)"> 
-                    <span class="checkmark"></span>
-                    k-Anonymity:
+                <label class="material-checkbox" style="position: relative;">
+                <input type="checkbox" name="k-anonymity" onchange="toggleValue(this)">
+                <span class="checkmark"></span>
+
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <span>k-Anonymity:</span>
+                    <button type="button" class="tooltip-trigger" onclick="toggleTooltip(this)">
+                    (?)
+                    <div class="tooltip-box">
+                        Ensures each individual is indistinguishable from at least <i>k</i> others based on quasi-identifiers.
+                    </div>
+                    </button>
+                </span>
                 </label>
+
+
                 <ul>
                     <li>
                         <label for="quasi identifiers for k-anonymity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
@@ -140,11 +193,21 @@
             </div>
 
             <div class="checkboxContainerIndividual">
-                <label class="material-checkbox">
-                    <input type="checkbox" name="l-diversity" onchange="toggleValue(this)"> 
-                    <span class="checkmark"></span>
-                    l-Diversity:
+                <label class="material-checkbox" style="position: relative;">
+                <input type="checkbox" name="l-diversity" onchange="toggleValue(this)">
+                <span class="checkmark"></span>
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <span>l-Diversity:</span>
+                    <button type="button" class="tooltip-trigger" onclick="toggleTooltip(this)">
+                    (?)
+                    <div class="tooltip-box">
+                        Strengthens k-anonymity by requiring diverse sensitive values in each equivalence class.
+                    </div>
+                    </button>
+                </span>
                 </label>
+
+
                 <ul>
                     <li>
                         <label for="quasi identifiers for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers :</label>
@@ -160,11 +223,25 @@
             </div>
 
             <div class="checkboxContainerIndividual">
-                <label class="material-checkbox">
-                    <input type="checkbox" name="t-closeness" onchange="toggleValue(this)"> 
-                    <span class="checkmark"></span>
-                    t-Closeness:
+                
+                <label class="material-checkbox" style="position: relative;">
+                <input type="checkbox" name="t-closeness" onchange="toggleValue(this)">
+                <span class="checkmark"></span>
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <span>t-Closeness:</span>
+                    <button type="button" class="tooltip-trigger" onclick="toggleTooltip(this)">
+                    (?)
+                    <div class="tooltip-box">
+                        Requires the sensitive attribute distribution to be close to the overall distribution.
+                    </div>
+                    </button>
+                </span>
                 </label>
+
+
+
+
+
                 <ul>
                     <li>
                         <label for="quasi identifiers for t-closeness" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
@@ -207,6 +284,21 @@
         </div>
             
     </div> 
+
+<script>
+function toggleTooltip(button) {
+  const tooltip = button.querySelector('.tooltip-box');
+  const isVisible = tooltip.style.display === 'block';
+
+  // Hide all tooltips first
+  document.querySelectorAll('.tooltip-box').forEach(t => t.style.display = 'none');
+
+  // Toggle current one
+  tooltip.style.display = isVisible ? 'none' : 'block';
+}
+</script>
+
+
 </body>
 
 </html>

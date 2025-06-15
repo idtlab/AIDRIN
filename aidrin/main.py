@@ -350,14 +350,14 @@ def privacyPreservation():
         #single attribute risk scores using markov model
         if request.form.get("single attribute risk score") == "yes":
             id_feature = request.form.get("id feature to measure single attribute risk score")
-            eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
+            eval_features = request.form.getlist("quasi identifiers to measure single attribute risk score")
             print("Eval Features:",eval_features)
             final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
         
         #multpiple attribute risk score using markov model
         if request.form.get("multiple attribute risk score") == "yes":
             id_feature = request.form.get("id feature to measure multiple attribute risk score")
-            eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
+            eval_features = request.form.getlist("quasi identifiers to measure multiple attribute risk score")
             final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
 
         # k-Anonymity
@@ -380,7 +380,7 @@ def privacyPreservation():
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
-        print("Final Dict Privacy:", final_dict)      
+        #print("Final Dict Privacy:", final_dict)      
         return store_result('privacyPreservation',final_dict)
     
     return get_result_or_default('privacyPreservation',uploaded_file_path,uploaded_file_name)
