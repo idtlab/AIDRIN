@@ -280,7 +280,7 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data,
             "k-Anonymity Visualization": base64_image,
-            "Description": "k-anonymity measures the minimum size of equivalence classes formed by quasi-identifiers. "
+            "Description": "k-anonymity measures the minimum size of equivalence classes formed by quasi-identifiers."
                            "Higher k indicates better privacy protection. The histogram shows the distribution of equivalence class sizes."
         }
 
@@ -420,7 +420,7 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
         hist_data = t_series.round(2).value_counts().sort_index()
         plt.figure(figsize=(8, 5))
         plt.bar(hist_data.index, hist_data.values, color='salmon')
-        plt.xlabel('T-Closeness Value (TVD)')
+        plt.xlabel('t-Closeness Value (TVD)')
         plt.ylabel('Number of Equivalence Classes')
         plt.title('Distribution of T-Closeness Across Equivalence Classes')
         plt.grid(axis='y', alpha=0.75)
