@@ -1,4 +1,3 @@
-
 // Slideshow control for the histograms
 
     // Thumbnail image controls
@@ -126,6 +125,7 @@ $(document).ready(function () {
 
                     if ('all_features' in response){
                         createCheckboxContainer(response.all_features,'kAnonymityQIsCheckbox','quasi identifiers for k-anonymity');
+                        updateMetricCheckboxState('k-anonymity');
                         createCheckboxContainer(response.all_features,'lDiversityQIsCheckbox','quasi identifiers for l-diversity');
                         createCheckboxContainer(response.all_features,'tClosenessQIsCheckbox','quasi identifiers for t-closeness');
                         createCheckboxContainer(response.all_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
@@ -432,4 +432,20 @@ $(document).ready(function () {
   $('#lDiversitySensitiveDropdown, #tClosenessSensitiveDropdown, #allFeaturesDropdownMMS, #allFeaturesDropdownMMM').on('change', function () {
     updateCrossDisable();
   });
+});
+
+function updateMetricCheckboxState(metricCheckboxName) {
+    const metricCheckbox = document.querySelector('input[type="checkbox"][name="' + metricCheckboxName + '"]');
+    if (metricCheckbox) {
+        toggleValue(metricCheckbox);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    updateMetricCheckboxState('k-anonymity');
+    updateMetricCheckboxState('l-diversity');
+    updateMetricCheckboxState('t-closeness');
+    updateMetricCheckboxState('single attribute risk score');
+    updateMetricCheckboxState('multiple attribute risk score');
+    // ...add for all your metrics
 });

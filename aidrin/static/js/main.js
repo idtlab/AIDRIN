@@ -139,11 +139,20 @@ function submitForm() {
                 console.log('Adding visualization:', type);
                 var image = data[type][type + ' Visualization'];
                 var value = data[type]['Value'] || 'N/A'; 
-                var description = data[type]['Description'];
+                var description = data[type]['Description'] || '';
+                var interpretation = data[type]['Interpretation'] || '';
                 var riskScore = data[type]['Risk Score'] || 'N/A'; 
                 var title = type;
                 var jsonData = JSON.stringify(data);
-                visualizationContent.push({ image: image, riskScore: riskScore, value: value, description: description, title: title, jsonData: jsonData});
+                visualizationContent.push({
+                    image: image,
+                    riskScore: riskScore,
+                    value: value,
+                    description: description,
+                    interpretation: interpretation,
+                    title: title,
+                    jsonData: jsonData
+                });
             }
         });
         // Boolean flag to track if heading has been added
@@ -174,7 +183,7 @@ function submitForm() {
                             ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
                             ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
                            <div><strong>Description:</strong> ${content.description}</div>
-
+                           ${content.interpretation ? `<div><strong>Interpretation:</strong> ${content.interpretation}</div>` : ''}
                             
                         </div>
                     

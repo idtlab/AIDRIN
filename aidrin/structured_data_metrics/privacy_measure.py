@@ -86,7 +86,11 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
 
         result_dict["DescriptiveStatistics"] = descriptive_stats_dict
         result_dict['Single attribute risk scoring Visualization'] = base64_image
-        result_dict["Description"] = "Box plots depict the privacy risk scores associated with each selected features"
+        result_dict["Description"] = "The box plots display the distribution of re-identification risk scores for each feature individually."
+        result_dict["Interpretation"] = (
+            "A feature with a higher median or more outliers in its box plot indicates a greater risk of uniquely identifying individuals using that feature. "
+            "If most risk scores for a feature are low, it is relatively safe; if high, consider further anonymization or removal."
+        )
         
 
     except Exception as e:
@@ -210,7 +214,11 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
         base64_image = base64.b64encode(image_stream.read()).decode('utf-8')
         image_stream.close()
 
-        result_dict["Description"] = "Distribution of risk scores derived from user-selected features"
+        result_dict["Description"] = "The histogram displays the combined re-identification risk when multiple features are used together."
+        result_dict["Interpretation"] = (
+            "A distribution skewed toward higher risk values means that, in combination, these features make individuals easier to re-identify. "
+            "If most values are low, your chosen feature set is relatively safe; if high, consider reducing the number of quasi-identifiers."
+        )
         result_dict["Descriptive statistics of the risk scores"] = stats_dict
         result_dict["Multiple attribute risk scoring Visualization"] = base64_image
         result_dict['Dataset Risk Score'] = normalized_distance
@@ -280,8 +288,11 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data,
             "k-Anonymity Visualization": base64_image,
-            "Description": "k-anonymity measures the minimum size of equivalence classes formed by quasi-identifiers."
-                           "Higher k indicates better privacy protection. The histogram shows the distribution of equivalence class sizes."
+            "Description": "The k-anonymity value tells you the minimum number of records sharing the same combination of quasi-identifiers.",
+            "Interpretation": (
+                "A higher k means better privacy. The histogram shows how many groups (equivalence classes) exist for each group size. "
+                "If most groups are small (low k), your data is at higher risk; aim for a higher minimum k for stronger privacy."
+            )
         }
 
     except Exception as e:
@@ -357,11 +368,10 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
             "l-Diversity Visualization": base64_image,
-            "Description": (
-                "l-diversity measures the minimum number of distinct sensitive attribute values "
-                "in each equivalence class formed by quasi-identifiers. Higher l indicates better "
-                "privacy protection. The histogram shows how l-diversity values are distributed "
-                "across equivalence classes."
+            "Description": "l-diversity measures how many different sensitive values appear within each group of records sharing the same quasi-identifiers.",
+            "Interpretation": (
+                "A higher l means more diversity and less risk of attribute disclosure. The histogram shows the spread of l-diversity values across all groups. "
+                "If many groups have low l, sensitive information may be at risk; aim for higher l values for better protection."
             )
         }
 
@@ -442,10 +452,10 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
             "t-Closeness Visualization": base64_image,
-            "Description": (
-                "t-closeness quantifies the distance between the distribution of sensitive values "
-                "within an equivalence class and the global distribution using total variation distance (TVD). "
-                "Higher t-closeness values indicate greater privacy risks due to distributional skew."
+            "Description": "t-closeness quantifies how closely the distribution of sensitive values in each group matches the overall dataset.",
+            "Interpretation": (
+                "Lower t values mean less information leakage. The histogram shows the distribution of t values across all groups. "
+                "If many groups have high t, there is a greater risk of attribute disclosure; strive for lower t values for stronger privacy."
             )
         }
 
