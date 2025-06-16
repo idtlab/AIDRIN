@@ -130,6 +130,7 @@ $(document).ready(function () {
                         createCheckboxContainer(response.all_features,'tClosenessQIsCheckbox','quasi identifiers for t-closeness');
                         createCheckboxContainer(response.all_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
                         createCheckboxContainer(response.all_features,'catFeaturesCheckbox3','quasi identifiers to measure multiple attribute risk score')
+                        createCheckboxContainer(response.all_features,'entropyRiskQIsCheckbox','quasi identifiers for entropy risk')
                         createDropdown(response.all_features,'allFeaturesDropdownRepRate');
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate1');
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate2');
@@ -447,5 +448,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateMetricCheckboxState('t-closeness');
     updateMetricCheckboxState('single attribute risk score');
     updateMetricCheckboxState('multiple attribute risk score');
+    updateMetricCheckboxState('entropy risk');
     // ...add for all your metrics
 });

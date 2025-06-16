@@ -132,7 +132,8 @@ function submitForm() {
             'Completeness', 'Outliers', 'Representation Rate', 'Statistical Rate', 
             'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
             'Feature Relevance', 'Class Imbalance', 'DP Statistics', 
-            'Single attribute risk scoring', 'Multiple attribute risk scoring','k-Anonymity','l-Diversity','t-Closeness'
+            '', 'Multiple attribute risk scoring',
+            'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
         ];
         visualizationTypes.forEach(function(type) {
             if (isKeyPresentAndDefined(data, type) && isKeyPresentAndDefined(data[type], type + ' Visualization')) {
@@ -140,7 +141,7 @@ function submitForm() {
                 var image = data[type][type + ' Visualization'];
                 var value = data[type]['Value'] || 'N/A'; 
                 var description = data[type]['Description'] || '';
-                var interpretation = data[type]['Interpretation'] || '';
+                var interpretation = data[type]['Graph interpretation'] || '';
                 var riskScore = data[type]['Risk Score'] || 'N/A'; 
                 var title = type;
                 var jsonData = JSON.stringify(data);
@@ -183,7 +184,7 @@ function submitForm() {
                             ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
                             ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
                            <div><strong>Description:</strong> ${content.description}</div>
-                           ${content.interpretation ? `<div><strong>Interpretation:</strong> ${content.interpretation}</div>` : ''}
+                           ${content.interpretation ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>` : ''}
                             
                         </div>
                     

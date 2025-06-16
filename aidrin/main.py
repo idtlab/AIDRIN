@@ -12,7 +12,7 @@ from aidrin.structured_data_metrics.FAIRness_dcat import categorize_metadata,ext
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree,class_distribution_plot
-from aidrin.structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores, compute_k_anonymity, compute_l_diversity, compute_t_closeness 
+from aidrin.structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores, compute_k_anonymity, compute_l_diversity, compute_t_closeness, compute_entropy_risk
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
 from aidrin import app
 import pandas as pd
@@ -376,6 +376,11 @@ def privacyPreservation():
             t_qis = request.form.getlist("quasi identifiers for t-closeness")
             t_sensitive = request.form.get("sensitive attribute for t-closeness")
             final_dict["t-Closeness"] = compute_t_closeness(file, t_qis, t_sensitive)
+
+        # Entropy Risk
+        if request.form.get("entropy risk") == "yes":
+            entropy_qis = request.form.getlist("quasi identifiers for entropy risk")
+            final_dict["Entropy Risk"] = compute_entropy_risk(file, entropy_qis)
 
         end_time = time.time()
         execution_time = end_time - start_time

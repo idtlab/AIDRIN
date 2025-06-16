@@ -86,10 +86,11 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
 
         result_dict["DescriptiveStatistics"] = descriptive_stats_dict
         result_dict['Single attribute risk scoring Visualization'] = base64_image
-        result_dict["Description"] = "The box plots display the distribution of re-identification risk scores for each feature individually."
-        result_dict["Interpretation"] = (
-            "A feature with a higher median or more outliers in its box plot indicates a greater risk of uniquely identifying individuals using that feature. "
-            "If most risk scores for a feature are low, it is relatively safe; if high, consider further anonymization or removal."
+        result_dict["Description"] = (
+            "This metric quantifies the re-identification risk for each quasi-identifier. Lower risk scores are preferred, indicating features that are less likely to uniquely identify individuals. High-risk features may require further anonymization or removal."
+        )
+        result_dict["Graph interpretation"] = (
+            "The box plot displays the distribution of risk scores for each feature. Features with higher medians or more outliers indicate greater privacy risk. A compact, lower box is desirable."
         )
         
 
@@ -214,10 +215,11 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
         base64_image = base64.b64encode(image_stream.read()).decode('utf-8')
         image_stream.close()
 
-        result_dict["Description"] = "The histogram displays the combined re-identification risk when multiple features are used together."
-        result_dict["Interpretation"] = (
-            "A distribution skewed toward higher risk values means that, in combination, these features make individuals easier to re-identify. "
-            "If most values are low, your chosen feature set is relatively safe; if high, consider reducing the number of quasi-identifiers."
+        result_dict["Description"] = (
+            "This metric evaluates the joint risk posed by combinations of quasi-identifiers. Lower overall risk scores are preferred, as they indicate that the selected set of features does not easily allow re-identification."
+        )
+        result_dict["Graph interpretation"] = (
+            "The box plot shows the distribution of combined risk scores. A distribution concentrated at lower values indicates better privacy."
         )
         result_dict["Descriptive statistics of the risk scores"] = stats_dict
         result_dict["Multiple attribute risk scoring Visualization"] = base64_image
@@ -288,10 +290,11 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data,
             "k-Anonymity Visualization": base64_image,
-            "Description": "The k-anonymity value tells you the minimum number of records sharing the same combination of quasi-identifiers.",
-            "Interpretation": (
-                "A higher k means better privacy. The histogram shows how many groups (equivalence classes) exist for each group size. "
-                "If most groups are small (low k), your data is at higher risk; aim for a higher minimum k for stronger privacy."
+            "Description": (
+                "k-anonymity measures the minimum group size sharing the same quasi-identifier values. Higher k values are preferred, as they indicate stronger anonymity."
+            ),
+            "Graph interpretation": (
+                "The histogram shows the distribution of equivalence class sizes. A shift toward larger class sizes (higher k) is desirable for privacy."
             )
         }
 
@@ -368,10 +371,11 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
             "l-Diversity Visualization": base64_image,
-            "Description": "l-diversity measures how many different sensitive values appear within each group of records sharing the same quasi-identifiers.",
-            "Interpretation": (
-                "A higher l means more diversity and less risk of attribute disclosure. The histogram shows the spread of l-diversity values across all groups. "
-                "If many groups have low l, sensitive information may be at risk; aim for higher l values for better protection."
+            "Description": (
+                "l-diversity quantifies the diversity of sensitive attributes within each group. Higher l values are preferred, indicating less risk of attribute disclosure."
+            ),
+            "Graph interpretation": (
+                "The histogram displays the spread of l-diversity values. A distribution concentrated at higher l values is optimal."
             )
         }
 
@@ -452,10 +456,11 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
             "t-Closeness Visualization": base64_image,
-            "Description": "t-closeness quantifies how closely the distribution of sensitive values in each group matches the overall dataset.",
-            "Interpretation": (
-                "Lower t values mean less information leakage. The histogram shows the distribution of t values across all groups. "
-                "If many groups have high t, there is a greater risk of attribute disclosure; strive for lower t values for stronger privacy."
+            "Description": (
+                "t-closeness measures the distance between the distribution of sensitive attributes in a group and the overall distribution. Lower t values are preferred, indicating less information leakage."
+            ),
+            "Graph interpretation": (
+                "The histogram shows the distribution of t values. Lower t values across groups indicate stronger privacy."
             )
         }
 
@@ -463,6 +468,81 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
         result_dict["error"] = str(e)
 
     return result_dict
-    
+
+def compute_entropy_risk(data, quasi_identifiers) :
+    result_dict = {}
+
+    try:
+        if data.empty:
+            raise ValueError("Input DataFrame is empty.")
+
+        for qi in quasi_identifiers:
+            if qi not in data.columns:
+                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+
+        data = data.replace('?', pd.NA)
+        clean_data = data.dropna(subset=quasi_identifiers)
+
+        if clean_data.empty:
+            raise ValueError("No data left after dropping rows with missing values.")
+
+        total_records = len(clean_data)
+        grouped = clean_data.groupby(quasi_identifiers)
+
+        entropy_values = {}
+        for keys, group in grouped:
+            size = len(group)
+            p_i = 1 / size
+            entropy = -size * p_i * np.log2(p_i)
+            entropy_values[keys] = entropy
+
+        entropy_series = pd.Series(entropy_values)
+        avg_entropy = entropy_series.sum() / total_records if total_records > 0 else 0.0
+        rounded_entropy = round(avg_entropy, 4)
+
+        # Histogram plot of entropy values
+        hist_data = entropy_series.round(2).value_counts().sort_index()
+        plt.figure(figsize=(8, 5))
+        plt.bar(hist_data.index, hist_data.values, color='royalblue')
+        plt.xlabel('Entropy Value')
+        plt.ylabel('Number of Equivalence Classes')
+        plt.title('Distribution of Entropy Across Equivalence Classes')
+        plt.grid(axis='y', alpha=0.75)
+
+        img_stream = io.BytesIO()
+        plt.savefig(img_stream, format='png')
+        plt.close()
+        img_stream.seek(0)
+        base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
+        img_stream.close()
+
+        desc_stats = {
+            "min": round(entropy_series.min(), 4),
+            "max": round(entropy_series.max(), 4),
+            "mean": round(entropy_series.mean(), 4),
+            "median": round(entropy_series.median(), 4)
+        }
+
+        risk_score = round(1 - (rounded_entropy / np.log2(total_records + 1)), 4)
+        risk_score = max(0.0, min(risk_score, 1.0))  # Bound it between 0 and 1
+
+        result_dict = {
+            "Value": rounded_entropy,
+            "Risk Score": risk_score,
+            "descriptive_statistics": desc_stats,
+            "histogram_data": hist_data.to_dict(),
+            "Entropy Risk Visualization": base64_image,
+            "Description": (
+                "Entropy risk quantifies the uncertainty in identifying individuals within equivalence classes. Higher entropy values are preferred, indicating greater anonymity and lower re-identification risk."
+            ),
+            "Graph interpretation": (
+                "The bar chart visualizes the distribution of entropy values. Higher bars on the right (higher entropy) indicate better privacy; left-skewed distributions suggest higher risk."
+            )
+        }
+
+    except Exception as e:
+        result_dict["error"] = str(e)
+
+    return result_dict
 
     
