@@ -2,8 +2,11 @@ import base64
 import io
 import matplotlib.pyplot as plt
 import numpy as np
-
-def outliers(file):
+from celery import shared_task, Task
+from aidrin.read_file import read_file
+@shared_task(bind=True, ignore_result=False)
+def outliers(self: Task, file_path: str, file_name: str, file_type: str) -> dict:
+    file,_,_= read_file(file_path,file_name,file_type)
     try:
         out_dict = {}
         # Select numerical columns for outlier detection

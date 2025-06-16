@@ -2,8 +2,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import io
 import base64
-
-def calculate_representation_rate(dataframe, columns):
+from celery import shared_task, Task
+from aidrin.read_file import read_file
+@shared_task(bind=True, ignore_result=False)
+def calculate_representation_rate(self: Task, columns, file_path: str, file_name: str, file_type: str) -> dict:
+    dataframe, _, _ = read_file(file_path, file_name, file_type)
     representation_rate_info = {}
     processed_keys = set()  # Using a set to track processed pairs
     x_tick_keys = []
@@ -11,10 +14,7 @@ def calculate_representation_rate(dataframe, columns):
         for column in columns:
             column_series = dataframe[column].dropna()  # Drop rows with NaN values
             value_counts = column_series.value_counts(normalize=True)
-            
-           
 
-            
             for attribute_value1 in value_counts.index:
                 for attribute_value2 in value_counts.index:
                     if attribute_value1 != attribute_value2:
@@ -40,8 +40,9 @@ def calculate_representation_rate(dataframe, columns):
 import io
 import base64
 import matplotlib.pyplot as plt
-
-def create_representation_rate_vis(dataframe, columns):
+@shared_task(bind=True, ignore_result=False)
+def create_representation_rate_vis(self: Task, columns, file_path: str, file_name: str, file_type: str) -> dict:
+    dataframe, _, _ = read_file(file_path, file_name, file_type)
     x_tick_keys = []
     try:
         for column in columns:

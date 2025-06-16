@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify, send_file, Response,render_template,send_from_directory,session,redirect,url_for, current_app
+from flask import Flask, request, jsonify, send_file, Response,render_template,send_from_directory,session,redirect,url_for, current_app,  Blueprint
+from celery.result import AsyncResult, TimeoutError
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.outliers import outliers
 from aidrin.structured_data_metrics.duplicity import duplicity
@@ -14,7 +15,10 @@ from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree,class_distribution_plot
 from aidrin.structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
-from aidrin import app
+from aidrin.logging import setup_logging
+from aidrin.read_file import read_file
+import redis
+import logging
 import pandas as pd
 import numpy as np 
 import matplotlib.pyplot as plt
@@ -26,34 +30,35 @@ import io
 import base64
 import seaborn as sns
 import uuid
-import logging
-#import concurrent.futures import ThreadPoolExecutor, TimeoutError
-##### Time Logging #####
 
-TIMEOUT_DURATION = 60 #seconds
 
-time_log = logging.getLogger('aidrin')
-file_upload_time_log = logging.getLogger('file_upload')
-metric_time_log = logging.getLogger('metric')
+
+##### Setup #####
+main = Blueprint('main',__name__) # register main blueprint
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0) # initialize Redis client for result storage
+### Logging ###
+setup_logging()  #  sets log config
+file_upload_time_log = logging.getLogger('file_upload') # file upload related logs
+metric_time_log = logging.getLogger('metric') # metric parsing related logs
 
 
 ######## Simple Routes ########
 
-@app.route('/images/<path:filename>')
+@main.route('/images/<path:filename>')
 def serve_image(filename):
     root_dir = os.path.dirname(os.path.abspath(__file__))
     return send_from_directory(os.path.join(root_dir, 'images'), filename)
 
-@app.route('/')
+@main.route('/')
 def homepage():
     return render_template('homepage.html')
 
-@app.route('/publications', methods=['GET'])
+@main.route('/publications', methods=['GET'])
 def publications():
     return render_template('publications.html')
 
 # for viewing data logs
-@app.route('/view_logs')
+@main.route('/view_logs')
 def view_logs():
     log_path = os.path.join(os.path.dirname(__file__), 'data', 'logs', 'aidrin.log')
 
@@ -80,10 +85,28 @@ def view_logs():
 
             return jsonify(log_rows)
     return jsonify({"error": "Log file not found."}), 404
+##### Result Polling #####
+@main.get("/result/<id>")
+def result(id: str):
+    result = AsyncResult(id)
+    ready = result.ready()
+    successful = result.successful() if ready else None
 
+    try:
+        value = result.get(timeout=1) if ready else result.result
+    except TimeoutError:
+        value = {"error": "Task did not return in time"}
+    except Exception as e:
+        value = {"error": str(e)}
+
+    return {
+        "ready": ready,
+        "successful": successful,
+        "value": value,
+    }
 ######### Uploading, Retrieving, Clearing File Routes ############
 
-@app.route('/upload_file',methods=['GET','POST'])
+@main.route('/upload_file',methods=['GET','POST'])
 def upload_file():
     
     
@@ -99,7 +122,7 @@ def upload_file():
             #create name and add to folder
             displayName= file.filename
             filename = f"{uuid.uuid4().hex}_{file.filename}"
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
             print(f"Saving file to {file_path}")
             #save file 
             file.save(file_path)
@@ -122,7 +145,7 @@ def upload_file():
                                    uploaded_file_name=uploaded_file_name,
                                    file_type=file_type)
 
-@app.route('/retrieve_uploaded_file', methods=['GET'])
+@main.route('/retrieve_uploaded_file', methods=['GET'])
 def retrieve_uploaded_file():
     file_upload_time_log.info("Retrieving File")
 
@@ -139,7 +162,7 @@ def retrieve_uploaded_file():
         file_upload_time_log.info("No file path found")
         return jsonify({"error": "No file path found"}), 404
 
-@app.route('/clear', methods=['POST'])
+@main.route('/clear', methods=['POST'])
 def clear_file():
     file_upload_time_log.info("Clearing File")
     #remove file path/name
@@ -155,11 +178,13 @@ def clear_file():
 
 ######## Metric Page Routes ###########
 
-@app.route('/dataQuality', methods=['GET', 'POST'])
+@main.route('/dataQuality', methods=['GET', 'POST'])
 def dataQuality():
    
     final_dict = {}
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    uploaded_file_path = session.get('uploaded_file_path')
+    uploaded_file_name = session.get('uploaded_file_name')
+    uploaded_file_type = session.get('uploaded_file_type')
 
     if request.method == 'POST':
         start_time = time.time()
@@ -167,40 +192,46 @@ def dataQuality():
         #check for parameters
         #Completeness
         if request.form.get('completeness') == "yes":  
-            start_time_completeness = time.time()      
-            compl_dict = completeness(file)
+            start_time_completeness = time.time()  
+            result = completeness.delay(uploaded_file_path, uploaded_file_name, uploaded_file_type)    
+            compl_dict = result.get()
             compl_dict['Description'] = 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete.'
             final_dict['Completeness'] = compl_dict
-            metric_time_log.info("Completeness took %f seconds",time.time()-start_time_completeness)
+            metric_time_log.info("Completeness took %.2f seconds",time.time()-start_time_completeness)
         #Outliers    
         if request.form.get('outliers') == 'yes':
             start_time_outliers = time.time()  
-            out_dict = outliers(file)
+            result = outliers.delay(uploaded_file_path, uploaded_file_name, uploaded_file_type)   
+            out_dict = result.get()
             out_dict['Description'] = "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
             final_dict['Outliers'] = out_dict
-            metric_time_log.info("Outliers took %f seconds",time.time()-start_time_outliers)
+            metric_time_log.info("Outliers took %.2f seconds",time.time()-start_time_outliers)
         #Duplicity
         if request.form.get('duplicity') == 'yes':
             start_time_duplicity = time.time()  
-            dup_dict = duplicity(file)
+            result = duplicity.delay(uploaded_file_path, uploaded_file_name, uploaded_file_type)
+            dup_dict = result.get()
             dup_dict['Description'] = "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
             final_dict['Duplicity'] = dup_dict 
-            metric_time_log.info("Duplicity took %f seconds",time.time()-start_time_duplicity)
+            metric_time_log.info("Duplicity took %.2f seconds",time.time()-start_time_duplicity)
             
         end_time = time.time()
         execution_time = end_time - start_time
-        metric_time_log.info(f"Data Quality Execution time: {execution_time} seconds")
+        metric_time_log.info(f"Data Quality Execution time: {execution_time:.2f} seconds")
 
         return store_result('dataQuality',final_dict)
     
     return get_result_or_default('dataQuality',uploaded_file_path,uploaded_file_name)
    
-@app.route('/fairness', methods=['GET', 'POST'])
+@main.route('/fairness', methods=['GET', 'POST'])
 def fairness():
     
     final_dict={}
+    uploaded_file_path = session.get('uploaded_file_path')
+    uploaded_file_name = session.get('uploaded_file_name')
+    uploaded_file_type = session.get('uploaded_file_type')
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    file, _, _ = read_file()
 
     if request.method == 'POST':
         metric_time_log.info("Fairness Request Started")
@@ -212,11 +243,13 @@ def fairness():
             #convert the string values a list
             rep_dict = {}
             list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
-            rep_dict['Probability ratios'] = calculate_representation_rate(file,list_of_cols)       
-            rep_dict['Representation Rate Visualization'] = create_representation_rate_vis(file,list_of_cols)
+            result = calculate_representation_rate.delay(list_of_cols,uploaded_file_path, uploaded_file_name, uploaded_file_type)    
+            rep_dict['Probability ratios'] = result.get()
+            result = create_representation_rate_vis.delay(list_of_cols,uploaded_file_path, uploaded_file_name, uploaded_file_type)
+            rep_dict['Representation Rate Visualization'] = result.get()
             rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
             final_dict['Representation Rate'] = rep_dict
-            metric_time_log.info("Representation Rate took %f seconds",time.time()-start_time_repRate)
+            metric_time_log.info("Representation Rate took %.2f seconds",time.time()-start_time_repRate)
         #statistical rate
         if request.form.get('statistical rate') == "yes" and request.form.get('features for statistical rate') != None and request.form.get('target for statistical rate') != None:
             try:
@@ -225,8 +258,9 @@ def fairness():
                 sensitive_attribute_column = request.form.get('features for statistical rate')
 
                 print("Inputs:", y_true, sensitive_attribute_column)
-                # This function never completes?
-                sr_dict = calculate_statistical_rates(file, y_true, sensitive_attribute_column)
+                # This function never completes (loads numpy in which is not supported)?
+                result = calculate_statistical_rates.delay(y_true, sensitive_attribute_column, uploaded_file_path, uploaded_file_name, uploaded_file_type)
+                sr_dict = result.get()
 
                 sr_dict['Description'] = (
                     'The graph illustrates the statistical rates of various classes across different sensitive attributes. '
@@ -234,7 +268,7 @@ def fairness():
                     'to a class, with the height indicating the proportion of that sensitive attribute within that particular class'
                 )
                 final_dict["Statistical Rate"] = sr_dict
-                metric_time_log.info("Statistical Rate analysis took %f seconds",time.time()-start_time_statRate)
+                metric_time_log.info("Statistical Rate analysis took %.2f seconds",time.time()-start_time_statRate)
             except Exception as e:
                 print("Error during Statistical Rate analysis:", e)
         #conditional demographic disparity
@@ -244,19 +278,20 @@ def fairness():
             target = request.form.get('target for conditional demographic disparity')
             sensitive = request.form.get('sensitive for conditional demographic disparity')
             accepted_value = request.form.get('target value for conditional demographic disparity')
-            cdd_dict = conditional_demographic_disparity(file[target].to_list(),file[sensitive].to_list(),accepted_value)
+            result = conditional_demographic_disparity.delay(file[target].to_list(), file[sensitive].to_list(), accepted_value)
+            cdd_dict = result.get()
             cdd_dict['Description'] = 'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'                 
             final_dict['Conditional Demographic Disparity'] = cdd_dict
-            metric_time_log.info("Conditional Demographic Disparity took %f seconds",time.time()-start_time_condDemoDisp)
+            metric_time_log.info("Conditional Demographic Disparity took %.2f seconds",time.time()-start_time_condDemoDisp)
         end_time = time.time()
         execution_time = end_time - start_time
-        metric_time_log.info(f"Fairness Execution time: {execution_time} seconds")
+        metric_time_log.info(f"Fairness Execution time: {execution_time:.2f} seconds")
 
         return store_result('fairness',final_dict)
     
     return get_result_or_default('fairness',uploaded_file_path,uploaded_file_name)
 
-@app.route('/correlationAnalysis', methods=['GET', 'POST'])
+@main.route('/correlationAnalysis', methods=['GET', 'POST'])
 def correlationAnalysis():
    
     final_dict = {}
@@ -273,7 +308,7 @@ def correlationAnalysis():
             comp_dict = compare_rep_rates(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
             comp_dict["Description"] = "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
             final_dict['Representation Rate Comparison with Real World'] = comp_dict
-            metric_time_log.info("Real dataset comparison took %f seconds",time.time()-start_time_realData)
+            metric_time_log.info("Real dataset comparison took %.2f seconds",time.time()-start_time_realData)
 
         if request.form.get('correlations') == 'yes':
             start_time_correlations = time.time()
@@ -287,17 +322,17 @@ def correlationAnalysis():
                 
                 final_dict['Correlations Analysis Categorical'] = corr_dict['Correlations Analysis Categorical']
                 final_dict['Correlations Analysis Numerical'] = corr_dict['Correlations Analysis Numerical']
-            metric_time_log.info("Correlations took %f seconds",time.time()-start_time_correlations)
+            metric_time_log.info("Correlations took %.2f seconds",time.time()-start_time_correlations)
 
         end_time = time.time()
         execution_time = end_time - start_time
-        metric_time_log.info(f"Correlation Analysis Execution time: {execution_time} seconds")
+        metric_time_log.info(f"Correlation Analysis Execution time: {execution_time:.2f} seconds")
     
         return store_result('correlationAnalysis',final_dict)
 
     return get_result_or_default('correlationAnalysis',uploaded_file_path,uploaded_file_name)
 
-@app.route('/featureRelevance', methods=['GET', 'POST'])
+@main.route('/featureRelevance', methods=['GET', 'POST'])
 def featureRelevance():
     
     final_dict = {}
@@ -353,13 +388,13 @@ def featureRelevance():
             
             end_time = time.time()
             execution_time = end_time - start_time
-            metric_time_log.info(f"Feature Relevance Execution time: {execution_time} seconds")
+            metric_time_log.info(f"Feature Relevance Execution time: {execution_time:.2f} seconds")
         
         return store_result('featureRelevance',final_dict)
     
     return get_result_or_default('featureRelevance',uploaded_file_path,uploaded_file_name)
                 
-@app.route('/classImbalance', methods=['GET', 'POST'])
+@main.route('/classImbalance', methods=['GET', 'POST'])
 def classImbalance():
     
     final_dict = {}
@@ -380,13 +415,13 @@ def classImbalance():
             
         end_time = time.time()
         execution_time = end_time - start_time
-        metric_time_log.info(f"Class Imbalance Execution time: {execution_time} seconds")
+        metric_time_log.info(f"Class Imbalance Execution time: {execution_time:.2f} seconds")
         
         return store_result('classImbalance',final_dict)
     
     return get_result_or_default('classImbalance',uploaded_file_path,uploaded_file_name)
     
-@app.route('/privacyPreservation', methods=['GET', 'POST'])
+@main.route('/privacyPreservation', methods=['GET', 'POST'])
 def privacyPreservation():
 
     final_dict = {}
@@ -407,7 +442,7 @@ def privacyPreservation():
 
             noisy_stat = return_noisy_stats(file, feature_to_add_noise, float(epsilon))
             final_dict['DP Statistics'] = noisy_stat
-            metric_time_log.info("Differential privacy took %f seconds",time.time()-start_time_diffPrivacy)
+            metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_diffPrivacy)
             
         #single attribute risk scores using markov model
         if request.form.get("single attribute risk score") == "yes":
@@ -416,23 +451,23 @@ def privacyPreservation():
             eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
             print("Eval Features:",eval_features)
             final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
-            metric_time_log.info("Differential privacy took %f seconds",time.time()-start_time_oneAttributeRisk)
+            metric_time_log.info("Differential privacy took %2f seconds",time.time()-start_time_oneAttributeRisk)
         #multpiple attribute risk score using markov model
         if request.form.get("multiple attribute risk score") == "yes":
             start_time_multAttributeRisk = time.time()
             id_feature = request.form.get("id feature to measure multiple attribute risk score")
             eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
             final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
-            metric_time_log.info("Differential privacy took %f seconds",time.time()-start_time_multAttributeRisk)
+            metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_multAttributeRisk)
         end_time = time.time()
         execution_time = end_time - start_time
-        metric_time_log.info(f"Privacy Preservation Execution time: {execution_time} seconds")
+        metric_time_log.info(f"Privacy Preservation Execution time: {execution_time:.2f} seconds")
               
         return store_result('privacyPreservation',final_dict)
     
     return get_result_or_default('privacyPreservation',uploaded_file_path,uploaded_file_name)
 
-@app.route('/FAIR', methods=['GET', 'POST'])
+@main.route('/FAIR', methods=['GET', 'POST'])
 def FAIR():
     
     try:
@@ -492,7 +527,7 @@ def FAIR():
     
 ##### Summary Statistics Routes #####
 
-@app.route('/summary_statistics', methods=['POST'])
+@main.route('/summary_statistics', methods=['POST'])
 def handle_summary_statistics():
     try:
         # Get the uploaded file
@@ -506,7 +541,7 @@ def handle_summary_statistics():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
      
-@app.route('/summary_statistics',methods=['GET'])
+@main.route('/summary_statistics',methods=['GET'])
 def get_summary_stastistics():
     try:
             metric_time_log.info("Summary Statistics Request Started")
@@ -547,14 +582,14 @@ def get_summary_stastistics():
                 'histograms': histograms
             }
             end_time=time.time()
-            metric_time_log.info(f"Summary Statistics Execution time: {end_time - start_time} seconds")
+            metric_time_log.info(f"Summary Statistics Execution time: {end_time - start_time:.2f} seconds")
             return jsonify(response_data)
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
     
 ##### Feature Set Route #####
 
-@app.route('/feature_set', methods=['POST'])
+@main.route('/feature_set', methods=['POST'])
 def extract_features():
     try:
         metric_time_log.info("Feature Set Request Started")
@@ -583,7 +618,7 @@ def extract_features():
             'all_features':all_features,
         }
         end_time=time.time()
-        metric_time_log.info(f"Feature Set Execution time: {end_time - start_time} seconds")
+        metric_time_log.info(f"Feature Set Execution time: {end_time - start_time:.2f} seconds")
         return jsonify(response_data)
 
     except Exception as e:
@@ -594,7 +629,7 @@ def extract_features():
 # Clears the data log on app exit
 def clear_files():
     log_path = os.path.join(os.path.dirname(__file__), 'data', 'logs', 'aidrin.log')
-    uploads_path = os.path.join(app.root_path, "data", "uploads")
+    uploads_path = os.path.join(current_app.root_path, "data", "uploads")
     #clear log
     with open(log_path, 'w') as f:
         f.truncate(0)
@@ -644,14 +679,15 @@ def read_file():
 
 def store_result(metric, final_dict):
         formatted_final_dict = format_dict_values(final_dict)
-        #save results
-        results_id = uuid.uuid4().hex
         
-        # ISSUE: Cache size is RAM dependent, if the cache is too large, it may cause memory issues.
-        # POTENTIAL SOLUTION: Use a database (doc.db?) to store results or iteratively parse the results.
-        current_app.TEMP_RESULTS_CACHE[results_id] = {
-        'data': formatted_final_dict,
-        }
+        #save results
+        results_id = uuid.uuid4().hex #unique id
+        # Serialize the data as JSON
+        redis_client.setex(
+            name=f'results:{results_id}',
+            time=600,  # expires in 10 minutes
+            value=json.dumps(formatted_final_dict)
+        )
         return redirect(url_for(metric, 
                                 results_id=results_id, 
                                 return_type=request.args.get('returnType')))
@@ -661,11 +697,12 @@ def get_result_or_default(metric,uploaded_file_path,uploaded_file_name):
     results_id = request.args.get('results_id')
     return_type = request.args.get('return_type')
     formatted_final_dict = None
-    #if present, load data
-    if results_id and results_id in current_app.TEMP_RESULTS_CACHE:
-        entry = current_app.TEMP_RESULTS_CACHE.pop(results_id)  # Remove data after use
-        formatted_final_dict = entry['data']
-
+    
+    #if present, load data from database
+    data_json = redis_client.get(f'results:{results_id}')
+    
+    if data_json is not None:
+        formatted_final_dict = json.loads(data_json)
     if return_type == 'json' and formatted_final_dict:
         return jsonify(formatted_final_dict)        
     return render_template('metricTemplates/'+metric+'.html',
@@ -770,4 +807,4 @@ def summary_histograms(df):
 #             return jsonify(final_dict),200
 #     return render_template('medical_image.html')
 if __name__ == '__main__':
-    app.run(debug=True)
+    current_app.run(debug=True)

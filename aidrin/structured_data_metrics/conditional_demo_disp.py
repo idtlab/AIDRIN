@@ -1,6 +1,8 @@
 import pandas as pd
-
-def conditional_demographic_disparity(target, sensitive, accepted_value):
+from celery import shared_task, Task
+from aidrin.read_file import read_file
+@shared_task(bind=True, ignore_result=False)
+def conditional_demographic_disparity(self: Task, target, sensitive, accepted_value):
     """
     Calculate the demographic disparity metric for multiple target and sensitive groups.
     
@@ -12,6 +14,8 @@ def conditional_demographic_disparity(target, sensitive, accepted_value):
     Returns:
     pd.DataFrame: A DataFrame containing the demographic disparity results for each sensitive group.
     """
+    
+    
     # Create a DataFrame from the input lists
     df = pd.DataFrame({'target': target, 'sensitive': sensitive})
     
@@ -20,7 +24,8 @@ def conditional_demographic_disparity(target, sensitive, accepted_value):
     
     # Calculate counts for each group and target combination
     group_counts = df.groupby(['sensitive', 'target_binary']).size().unstack(fill_value=0)
-    
+    print("Group Counts:")
+    print(group_counts)
     # Calculate the total numbers of rejected and accepted outcomes
     total_rejected = group_counts[0].sum()
     total_accepted = group_counts[1].sum()

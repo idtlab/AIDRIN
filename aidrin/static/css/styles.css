@@ -923,9 +923,8 @@ thead th{
 .navbar-buttons{
   height: 64px;
   width: 64px;
-  padding: 0px;
   margin:0px;
-  padding:10px;
+  padding:0px;
   border:none;
   background: var(--secondaryColor);
   display: flex;

@@ -1,7 +1,12 @@
 import io
 import base64
 import matplotlib.pyplot as plt
-def completeness(file):
+from celery import shared_task, Task
+from aidrin.read_file import read_file
+@shared_task(bind=True, ignore_result=False)
+def completeness(self: Task, file_path: str, file_name: str, file_type: str) -> dict:
+
+    file,_,_= read_file(file_path,file_name,file_type)
     # Calculate completeness metric for each column
     completeness_scores = (1 - file.isnull().mean()).to_dict()
 

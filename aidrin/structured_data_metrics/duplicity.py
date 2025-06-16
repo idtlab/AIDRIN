@@ -1,4 +1,8 @@
-def duplicity(file):
+from celery import shared_task, Task
+from aidrin.read_file import read_file
+@shared_task(bind=True, ignore_result=False)
+def duplicity(self: Task, file_path: str, file_name: str, file_type: str) -> dict:
+    file,_,_= read_file(file_path,file_name,file_type)
     dup_dict = {}
     # Calculate the proportion of duplicate values
     duplicate_proportions = (file.duplicated().sum() / len(file)) 

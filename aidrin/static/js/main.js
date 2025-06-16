@@ -134,11 +134,17 @@ function submitForm() {
 
         // Check for each type of visualization
         var visualizationTypes = [
-            'Completeness', 'Outliers', 'Representation Rate', 'Statistical Rate', 
+            'Completeness', 'Outliers','Duplicity', 'Representation Rate', 'Statistical Rate', 
             'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
             'Feature Relevance', 'Class Imbalance', 'DP Statistics', 
             'Single attribute risk scoring', 'Multiple attribute risk scoring'
         ];
+        console.log("Checking keys in data:");
+        visualizationTypes.forEach(type => {
+            if (data[type]) {
+                console.log(`${type}:`, Object.keys(data[type]));
+            }
+        });
         visualizationTypes.forEach(function(type) {
             if (isKeyPresentAndDefined(data, type) && isKeyPresentAndDefined(data[type], type + ' Visualization')) {
                 console.log('Adding visualization:', type);
@@ -161,11 +167,10 @@ function submitForm() {
 
                 headingAdded = true;
             }
-            
+            console.log('Visualization content:', visualizationContent);
             // Add each visualization to the metric visualization section
             visualizationContent.forEach(function(content, index) {
-                //check if vizualization is duplicity with score=0 (no dublicates)
-              
+
                 const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
                 const visualizationId = `visualization_${index}`;
                 metrics.innerHTML += `<div class="visualization-container">
@@ -187,6 +192,13 @@ function submitForm() {
                     <div class="toggle" onclick="toggleVisualization('duplicity')">Duplicity</div>
                     <div id="duplicity" style="display: none; text-align: center;">
                         No duplicates found 
+                    </div>      
+                </div>`;
+            } else if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores')) {
+                metrics.innerHTML += `<div class="visualization-container">
+                    <div class="toggle" onclick="toggleVisualization('duplicity')">Duplicity</div>
+                    <div id="duplicity" style="display: none;">
+                        <p style="text-align:center">Overall Duplicity: ${data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset']}</p>
                     </div>      
                 </div>`;
             }
@@ -818,7 +830,7 @@ function downloadJSON() {
 }
 
 function showResults() {
-    // Show Completeness Visualization content if it exists
+    // Show Duplicity Visualization content if it exists
     var duplicityScoreResult = document.getElementById('duplicityScoreResult');
     if (duplicityScoreResult) {
         duplicityScoreResult.style.display = 'block';
