@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import io
 import base64
 from celery import shared_task, Task
+from celery.exceptions import SoftTimeLimitExceeded
 from aidrin.read_file import read_file
 
 @shared_task(bind=True, ignore_result=False)
@@ -90,7 +91,8 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
         result_dict['Single attribute risk scoring Visualization'] = base64_image
         result_dict["Description"] = "Box plots depict the privacy risk scores associated with each selected features"
         
-
+    except SoftTimeLimitExceeded:
+        raise Exception("Single Attribute Risk task timed out.")
     except Exception as e:
         result_dict["Error"] = str(e)
 
@@ -219,7 +221,8 @@ def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, fi
         result_dict['Dataset Risk Score'] = normalized_distance
 
         return result_dict
-
+    except SoftTimeLimitExceeded:
+        raise Exception("Multiple Attribute Risk task timed out.")
     except Exception as e:
         result_dict["Error"] = str(e)
         return result_dict

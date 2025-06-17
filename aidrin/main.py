@@ -25,7 +25,6 @@ import pandas as pd
 import numpy as np 
 import matplotlib.pyplot as plt
 import os
-import atexit
 import json
 import time
 import io
@@ -207,30 +206,33 @@ def dataQuality():
         metric_time_log.info("Data quality Request Started")
         #check for parameters
         #Completeness
-        if request.form.get('completeness') == "yes":  
-            start_time_completeness = time.time()  
-            completeness_result = completeness.delay(file_info)    
-            compl_dict = completeness_result.get()
-            compl_dict['Description'] = 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete.'
-            final_dict['Completeness'] = compl_dict
-            metric_time_log.info("Completeness took %.2f seconds",time.time()-start_time_completeness)
-        #Outliers    
-        if request.form.get('outliers') == 'yes':
-            start_time_outliers = time.time()  
-            outliers_result = outliers.delay(file_info)   
-            out_dict = outliers_result.get()
-            out_dict['Description'] = "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
-            final_dict['Outliers'] = out_dict
-            metric_time_log.info("Outliers took %.2f seconds",time.time()-start_time_outliers)
-        #Duplicity
-        if request.form.get('duplicity') == 'yes':
-            start_time_duplicity = time.time()  
-            duplicity_result = duplicity.delay(file_info)
-            dup_dict = duplicity_result.get()
-            dup_dict['Description'] = "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
-            final_dict['Duplicity'] = dup_dict 
-            metric_time_log.info("Duplicity took %.2f seconds",time.time()-start_time_duplicity)
-            
+        try:
+            if request.form.get('completeness') == "yes":  
+                start_time_completeness = time.time()  
+                completeness_result = completeness.delay(file_info)    
+                compl_dict = completeness_result.get()
+                compl_dict['Description'] = 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete.'
+                final_dict['Completeness'] = compl_dict
+                metric_time_log.info("Completeness took %.2f seconds",time.time()-start_time_completeness)
+            #Outliers    
+            if request.form.get('outliers') == 'yes':
+                start_time_outliers = time.time()  
+                outliers_result = outliers.delay(file_info)   
+                out_dict = outliers_result.get()
+                out_dict['Description'] = "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
+                final_dict['Outliers'] = out_dict
+                metric_time_log.info("Outliers took %.2f seconds",time.time()-start_time_outliers)
+            #Duplicity
+            if request.form.get('duplicity') == 'yes':
+                start_time_duplicity = time.time()  
+                duplicity_result = duplicity.delay(file_info)
+                dup_dict = duplicity_result.get()
+                dup_dict['Description'] = "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
+                final_dict['Duplicity'] = dup_dict 
+                metric_time_log.info("Duplicity took %.2f seconds",time.time()-start_time_duplicity)
+        except Exception as e:
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
         end_time = time.time()
         execution_time = end_time - start_time
         metric_time_log.info(f"Data Quality Execution time: {execution_time:.2f} seconds")
@@ -253,54 +255,57 @@ def fairness():
     if request.method == 'POST':
         metric_time_log.info("Fairness Request Started")
         start_time = time.time()
-        #check for parameters
-        #Representation Rate
-        if request.form.get('representation rate') == "yes" and request.form.get('features for representation rate') != None:
-            start_time_repRate = time.time()
-            #convert the string values a list
-            rep_dict = {}
-            list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
-            rep_rate_result = calculate_representation_rate.delay(list_of_cols, file_info)    
-            rep_dict['Probability ratios'] = rep_rate_result.get()
-            rep_rate_vis_result = create_representation_rate_vis.delay(list_of_cols, file_info)
-            rep_dict['Representation Rate Visualization'] = rep_rate_vis_result.get()
-            rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
-            final_dict['Representation Rate'] = rep_dict
-            metric_time_log.info("Representation Rate took %.2f seconds",time.time()-start_time_repRate)
-        #statistical rate
-        if request.form.get('statistical rate') == "yes" and request.form.get('features for statistical rate') != None and request.form.get('target for statistical rate') != None:
-            try:
-                start_time_statRate = time.time()
-                y_true = request.form.get('target for statistical rate')
-                sensitive_attribute_column = request.form.get('features for statistical rate')
+        try:
+            #check for parameters
+            #Representation Rate
+            if request.form.get('representation rate') == "yes" and request.form.get('features for representation rate') != None:
+                start_time_repRate = time.time()
+                #convert the string values a list
+                rep_dict = {}
+                list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
+                rep_rate_result = calculate_representation_rate.delay(list_of_cols, file_info)    
+                rep_dict['Probability ratios'] = rep_rate_result.get()
+                rep_rate_vis_result = create_representation_rate_vis.delay(list_of_cols, file_info)
+                rep_dict['Representation Rate Visualization'] = rep_rate_vis_result.get()
+                rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
+                final_dict['Representation Rate'] = rep_dict
+                metric_time_log.info("Representation Rate took %.2f seconds",time.time()-start_time_repRate)
+            #statistical rate
+            if request.form.get('statistical rate') == "yes" and request.form.get('features for statistical rate') != None and request.form.get('target for statistical rate') != None:
+                try:
+                    start_time_statRate = time.time()
+                    y_true = request.form.get('target for statistical rate')
+                    sensitive_attribute_column = request.form.get('features for statistical rate')
 
-                print("Inputs:", y_true, sensitive_attribute_column)
-                # This function never completes (loads numpy in which is not supported)?
-                stat_rate_result = calculate_statistical_rates.delay(y_true, sensitive_attribute_column, file_info)
-                sr_dict = stat_rate_result.get()
+                    print("Inputs:", y_true, sensitive_attribute_column)
+                    # This function never completes (loads numpy in which is not supported)?
+                    stat_rate_result = calculate_statistical_rates.delay(y_true, sensitive_attribute_column, file_info)
+                    sr_dict = stat_rate_result.get()
 
-                sr_dict['Description'] = (
-                    'The graph illustrates the statistical rates of various classes across different sensitive attributes. '
-                    'Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds '
-                    'to a class, with the height indicating the proportion of that sensitive attribute within that particular class'
-                )
-                final_dict["Statistical Rate"] = sr_dict
-                metric_time_log.info("Statistical Rate analysis took %.2f seconds",time.time()-start_time_statRate)
-            except Exception as e:
-                print("Error during Statistical Rate analysis:", e)
-        #conditional demographic disparity
-        if request.form.get('conditional demographic disparity') == 'yes':
-            start_time_condDemoDisp = time.time()
-            cdd_dict = {}
-            target = request.form.get('target for conditional demographic disparity')
-            sensitive = request.form.get('sensitive for conditional demographic disparity')
-            accepted_value = request.form.get('target value for conditional demographic disparity')
-            print ("Inputs:", file[target].to_list(), file[sensitive].to_list(), accepted_value)
-            cond_demo_disp_result = conditional_demographic_disparity.delay(file[target].to_list(), file[sensitive].to_list(), accepted_value)
-            cdd_dict = cond_demo_disp_result.get()
-            cdd_dict['Description'] = 'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'                 
-            final_dict['Conditional Demographic Disparity'] = cdd_dict
-            metric_time_log.info("Conditional Demographic Disparity took %.2f seconds",time.time()-start_time_condDemoDisp)
+                    sr_dict['Description'] = (
+                        'The graph illustrates the statistical rates of various classes across different sensitive attributes. '
+                        'Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds '
+                        'to a class, with the height indicating the proportion of that sensitive attribute within that particular class'
+                    )
+                    final_dict["Statistical Rate"] = sr_dict
+                    metric_time_log.info("Statistical Rate analysis took %.2f seconds",time.time()-start_time_statRate)
+                except Exception as e:
+                    print("Error during Statistical Rate analysis:", e)
+            #conditional demographic disparity
+            if request.form.get('conditional demographic disparity') == 'yes':
+                start_time_condDemoDisp = time.time()
+                cdd_dict = {}
+                target = request.form.get('target for conditional demographic disparity')
+                sensitive = request.form.get('sensitive for conditional demographic disparity')
+                accepted_value = request.form.get('target value for conditional demographic disparity')
+                cond_demo_disp_result = conditional_demographic_disparity.delay(file[target].to_list(), file[sensitive].to_list(), accepted_value)
+                cdd_dict = cond_demo_disp_result.get()
+                cdd_dict['Description'] = 'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'                 
+                final_dict['Conditional Demographic Disparity'] = cdd_dict
+                metric_time_log.info("Conditional Demographic Disparity took %.2f seconds",time.time()-start_time_condDemoDisp)
+        except Exception as e:
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
         end_time = time.time()
         execution_time = end_time - start_time
         metric_time_log.info(f"Fairness Execution time: {execution_time:.2f} seconds")
@@ -321,31 +326,34 @@ def correlationAnalysis():
     if request.method == 'POST':
         metric_time_log.info("Correlation Analysis Request Started")
         start_time = time.time()
-        #check for parameters
-        #correlations
-        if request.form.get('compare real to dataset') == 'yes':
-            start_time_realData = time.time()
-            comp_rep_rate_result = compare_rep_rates.delay(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
-            comp_dict = comp_rep_rate_result.get()
-            comp_dict["Description"] = "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
-            final_dict['Representation Rate Comparison with Real World'] = comp_dict
-            metric_time_log.info("Real dataset comparison took %.2f seconds",time.time()-start_time_realData)
+        try:
+            #check for parameters
+            #correlations
+            if request.form.get('compare real to dataset') == 'yes':
+                start_time_realData = time.time()
+                comp_rep_rate_result = compare_rep_rates.delay(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
+                comp_dict = comp_rep_rate_result.get()
+                comp_dict["Description"] = "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
+                final_dict['Representation Rate Comparison with Real World'] = comp_dict
+                metric_time_log.info("Real dataset comparison took %.2f seconds",time.time()-start_time_realData)
 
-        if request.form.get('correlations') == 'yes':
-            start_time_correlations = time.time()
-            columns = request.form.getlist('all features for data transformation')
-            correlations_result = calc_correlations.delay(columns, file_info)
-            corr_dict = correlations_result.get()
-            #catch potential errors
-            if 'Message' in corr_dict:
-                print("Correlation analysis failed:", corr_dict['Message'])
-                final_dict['Error'] = corr_dict['Message']
-            else:
-                
-                final_dict['Correlations Analysis Categorical'] = corr_dict['Correlations Analysis Categorical']
-                final_dict['Correlations Analysis Numerical'] = corr_dict['Correlations Analysis Numerical']
-            metric_time_log.info("Correlations took %.2f seconds",time.time()-start_time_correlations)
-
+            if request.form.get('correlations') == 'yes':
+                start_time_correlations = time.time()
+                columns = request.form.getlist('all features for data transformation')
+                correlations_result = calc_correlations.delay(columns, file_info)
+                corr_dict = correlations_result.get()
+                #catch potential errors
+                if 'Message' in corr_dict:
+                    print("Correlation analysis failed:", corr_dict['Message'])
+                    final_dict['Error'] = corr_dict['Message']
+                else:
+                    
+                    final_dict['Correlations Analysis Categorical'] = corr_dict['Correlations Analysis Categorical']
+                    final_dict['Correlations Analysis Numerical'] = corr_dict['Correlations Analysis Numerical']
+                metric_time_log.info("Correlations took %.2f seconds",time.time()-start_time_correlations)
+        except Exception as e:
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
         end_time = time.time()
         execution_time = end_time - start_time
         metric_time_log.info(f"Correlation Analysis Execution time: {execution_time:.2f} seconds")
@@ -367,56 +375,59 @@ def featureRelevance():
     if request.method == 'POST':
         metric_time_log.info("Feature Relevance Request Started")
         start_time = time.time()
-        #check for parameters
-        #feature relevancy
-        if request.form.get("feature relevancy") == "yes":
-           # Get raw input from form and sanitize
-            raw_cat_cols = request.form.get("categorical features for feature relevancy", "")
-            raw_num_cols = request.form.get("numerical features for feature relevancy", "")
+        try:
+            #check for parameters
+            #feature relevancy
+            if request.form.get("feature relevancy") == "yes":
+            # Get raw input from form and sanitize
+                raw_cat_cols = request.form.get("categorical features for feature relevancy", "")
+                raw_num_cols = request.form.get("numerical features for feature relevancy", "")
 
-            # Clean each list by removing empty strings and whitespace-only entries
-            cat_cols = [col.strip() for col in raw_cat_cols.split(",") if col.strip()]
-            num_cols = [col.strip() for col in raw_num_cols.split(",") if col.strip()]
+                # Clean each list by removing empty strings and whitespace-only entries
+                cat_cols = [col.strip() for col in raw_cat_cols.split(",") if col.strip()]
+                num_cols = [col.strip() for col in raw_num_cols.split(",") if col.strip()]
 
-            print(cat_cols)
-            print(num_cols)
+                print(cat_cols)
+                print(num_cols)
 
-            target = request.form.get("target for feature relevance")
-            
-            try:
-                print("Calling data_cleaning with:", cat_cols, num_cols, target)
-                if target in cat_cols or target in num_cols:
-                    print("Error: Target is same as feature")
+                target = request.form.get("target for feature relevance")
+                
+                try:
+                    print("Calling data_cleaning with:", cat_cols, num_cols, target)
+                    if target in cat_cols or target in num_cols:
+                        print("Error: Target is same as feature")
+                        return jsonify({"trigger": "correlationError"}), 200
+                    data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
+                    df_json = data_cleaning_result.get() #json serialized
+                    print("Data cleaning returned df with shape:", pd.DataFrame.from_dict(df_json).shape if df_json is not None else "None")
+                except Exception as e:
+                    print("Error occurred during data cleaning:", e)
+                    df_json = None
+
+                
+                
+                # Generate Pearson correlation
+                pearson_corr_result = pearson_correlation.delay(df_json, target)
+                correlations = pearson_corr_result.get()
+                #don't let the user check the same target and feature
+                if correlations is None:
+                    print("Error: Correlations is None")
                     return jsonify({"trigger": "correlationError"}), 200
-                data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
-                df_json = data_cleaning_result.get() #json serialized
-                print("Data cleaning returned df with shape:", pd.DataFrame.from_dict(df_json).shape if df_json is not None else "None")
-            except Exception as e:
-                print("Error occurred during data cleaning:", e)
-                df_json = None
-
-            
-            
-            # Generate Pearson correlation
-            pearson_corr_result = pearson_correlation.delay(df_json, target)
-            correlations = pearson_corr_result.get()
-            #don't let the user check the same target and feature
-            if correlations is None:
-                print("Error: Correlations is None")
-                return jsonify({"trigger": "correlationError"}), 200
-            plot_features_result = plot_features.delay(correlations, target)
-            f_plot = plot_features_result.get()
-            f_dict = {}
-            
-            f_dict['Pearson Correlation to Target'] = correlations
-            f_dict['Feature Relevance Visualization'] = f_plot
-            f_dict['Description'] = "With minimum data cleaning (drop missing values, onehot encode categorical features, labelencode target feature), the Pearson correlation coefficient is calculated for each feature against the target variable. A value of 1 indicates a perfect positive correlation, while a value of -1 indicates a perfect negative correlation."
-            final_dict['Feature Relevance'] = f_dict
-            
-            end_time = time.time()
-            execution_time = end_time - start_time
-            metric_time_log.info(f"Feature Relevance Execution time: {execution_time:.2f} seconds")
-        
+                plot_features_result = plot_features.delay(correlations, target)
+                f_plot = plot_features_result.get()
+                f_dict = {}
+                
+                f_dict['Pearson Correlation to Target'] = correlations
+                f_dict['Feature Relevance Visualization'] = f_plot
+                f_dict['Description'] = "With minimum data cleaning (drop missing values, onehot encode categorical features, labelencode target feature), the Pearson correlation coefficient is calculated for each feature against the target variable. A value of 1 indicates a perfect positive correlation, while a value of -1 indicates a perfect negative correlation."
+                final_dict['Feature Relevance'] = f_dict
+        except Exception as e:
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
+        end_time = time.time()
+        execution_time = end_time - start_time
+        metric_time_log.info(f"Feature Relevance Execution time: {execution_time:.2f} seconds")
+    
         return store_result('featureRelevance',final_dict)
     
     return get_result_or_default('featureRelevance',file_path,file_name)
@@ -434,18 +445,21 @@ def classImbalance():
     if request.method == 'POST':
         metric_time_log.info("Class Imbalance Request Started")
         start_time = time.time()
-        #check for parameters
-        if request.form.get("class imbalance") == "yes":
-            ci_dict = {}
-            classes = request.form.get("features for class imbalance")
-            # known display issue
-            class_distrib_plot_result = class_distribution_plot.delay(classes, file_info)
-            ci_dict['Class Imbalance Visualization'] = class_distrib_plot_result.get()
-            ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
-            calc_imbalance_degree_result = calc_imbalance_degree.delay(classes, file_info, dist_metric="EU")  #By default the distance metric is euclidean distance
-            ci_dict['Imbalance degree score'] = calc_imbalance_degree_result.get()
-            final_dict['Class Imbalance'] = ci_dict
-            
+        try:
+            #check for parameters
+            if request.form.get("class imbalance") == "yes":
+                ci_dict = {}
+                classes = request.form.get("features for class imbalance")
+                # known display issue
+                class_distrib_plot_result = class_distribution_plot.delay(classes, file_info)
+                ci_dict['Class Imbalance Visualization'] = class_distrib_plot_result.get()
+                ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
+                calc_imbalance_degree_result = calc_imbalance_degree.delay(classes, file_info, dist_metric="EU")  #By default the distance metric is euclidean distance
+                ci_dict['Imbalance degree score'] = calc_imbalance_degree_result.get()
+                final_dict['Class Imbalance'] = ci_dict
+        except Exception as e:
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
         end_time = time.time()
         execution_time = end_time - start_time
         metric_time_log.info(f"Class Imbalance Execution time: {execution_time:.2f} seconds")
@@ -467,37 +481,41 @@ def privacyPreservation():
     if request.method == 'POST':
         metric_time_log.info("Privacy Preservation Request Started")
         start_time = time.time()
-        #check for parameters
-        #differential privacy
-        if request.form.get("differential privacy") == "yes":
-            start_time_diffPrivacy = time.time()
-            feature_to_add_noise = request.form.get("numerical features to add noise").split(",")
-            epsilon = request.form.get("privacy budget")
-            if epsilon is None or epsilon == "":
-                epsilon = 0.1  # Assign a default value for epsilon
+        try:
+            #check for parameters
+            #differential privacy
+            if request.form.get("differential privacy") == "yes":
+                start_time_diffPrivacy = time.time()
+                feature_to_add_noise = request.form.get("numerical features to add noise").split(",")
+                epsilon = request.form.get("privacy budget")
+                if epsilon is None or epsilon == "":
+                    epsilon = 0.1  # Assign a default value for epsilon
 
-            noisy_stat_results = return_noisy_stats.delay(feature_to_add_noise, float(epsilon), file_info)
-            noisy_stat = noisy_stat_results.get()
-            final_dict['DP Statistics'] = noisy_stat
-            metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_diffPrivacy)
-            
-        #single attribute risk scores using markov model
-        if request.form.get("single attribute risk score") == "yes":
-            start_time_oneAttributeRisk = time.time()
-            id_feature = request.form.get("id feature to measure single attribute risk score")
-            eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
-            print("Eval Features:",eval_features)
-            single_attribute_result = generate_single_attribute_MM_risk_scores.delay(id_feature,eval_features, file_info)
-            final_dict["Single attribute risk scoring"] = single_attribute_result.get()
-            metric_time_log.info("Differential privacy took %2f seconds",time.time()-start_time_oneAttributeRisk)
-        #multpiple attribute risk score using markov model
-        if request.form.get("multiple attribute risk score") == "yes":
-            start_time_multAttributeRisk = time.time()
-            id_feature = request.form.get("id feature to measure multiple attribute risk score")
-            eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
-            multiple_attribute_result = generate_multiple_attribute_MM_risk_scores.delay(id_feature,eval_features, file_info)
-            final_dict["Multiple attribute risk scoring"] = multiple_attribute_result.get()
-            metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_multAttributeRisk)
+                noisy_stat_results = return_noisy_stats.delay(feature_to_add_noise, float(epsilon), file_info)
+                noisy_stat = noisy_stat_results.get()
+                final_dict['DP Statistics'] = noisy_stat
+                metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_diffPrivacy)
+                
+            #single attribute risk scores using markov model
+            if request.form.get("single attribute risk score") == "yes":
+                start_time_oneAttributeRisk = time.time()
+                id_feature = request.form.get("id feature to measure single attribute risk score")
+                eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
+                print("Eval Features:",eval_features)
+                single_attribute_result = generate_single_attribute_MM_risk_scores.delay(id_feature,eval_features, file_info)
+                final_dict["Single attribute risk scoring"] = single_attribute_result.get()
+                metric_time_log.info("Differential privacy took %2f seconds",time.time()-start_time_oneAttributeRisk)
+            #multpiple attribute risk score using markov model
+            if request.form.get("multiple attribute risk score") == "yes":
+                start_time_multAttributeRisk = time.time()
+                id_feature = request.form.get("id feature to measure multiple attribute risk score")
+                eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
+                multiple_attribute_result = generate_multiple_attribute_MM_risk_scores.delay(id_feature,eval_features, file_info)
+                final_dict["Multiple attribute risk scoring"] = multiple_attribute_result.get()
+                metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_multAttributeRisk)
+        except Exception as e:
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
         end_time = time.time()
         execution_time = end_time - start_time
         metric_time_log.info(f"Privacy Preservation Execution time: {execution_time:.2f} seconds")
@@ -578,7 +596,8 @@ def handle_summary_statistics():
         else:
             return render_template('upload_file.html')
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
      
 @main.route('/summary_statistics',methods=['GET'])
 def get_summary_stastistics():
@@ -629,7 +648,8 @@ def get_summary_stastistics():
             metric_time_log.info(f"Summary Statistics Execution time: {end_time - start_time:.2f} seconds")
             return jsonify(response_data)
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
     
 ##### Feature Set Route #####
 
@@ -670,7 +690,8 @@ def extract_features():
         return jsonify(response_data)
 
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
 
 ##### Functions #####
 

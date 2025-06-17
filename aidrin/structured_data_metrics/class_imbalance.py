@@ -5,6 +5,7 @@ import io
 import base64
 from math import sqrt, log
 from celery import shared_task, Task
+from celery.exceptions import SoftTimeLimitExceeded
 from aidrin.read_file import read_file
 
 def imbalance_degree(classes, distance="EU"):
@@ -156,7 +157,8 @@ def class_distribution_plot(self: Task, column, file_info):
         buf.close()
 
         return plot_base64
-
+    except SoftTimeLimitExceeded:
+        raise Exception("Class Distribution Plot task timed out.")
     except Exception as e:
         # Handle errors and store the error message in the result
         return str(e)
@@ -175,7 +177,8 @@ def calc_imbalance_degree(self:Task, column, file_info, dist_metric='EU'):
         res['Imbalance degree score'] = id
         res['Description'] = "The Imbalance Degree (ID) is a metric that quantifies class imbalance in datasets by comparing the observed class distribution to an idealized balanced state. A value of 0 indicates perfect balance, while higher values signify increased dissimilarity and greater imbalance. Calculated using a distance or similarity function, ID provides a concise measure for understanding and addressing challenges posed by uneven class representation in machine learning datasets."
 
-
+    except (TimeoutError, SoftTimeLimitExceeded):
+        raise Exception("Calculate Imbalance Degree task timed out.")
     except Exception as e:
         # Handle errors and store the error message in the result
         res['Error'] = str(e)

@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import io
 import base64
+from celery.exceptions import SoftTimeLimitExceeded
 from celery import shared_task, Task
 from aidrin.read_file import read_file
 @shared_task(bind=True, ignore_result=False)
@@ -34,6 +35,8 @@ def calculate_representation_rate(self: Task, columns, file_info):
                         representation_rate_info[key] = probability_ratio
 
         return representation_rate_info
+    except SoftTimeLimitExceeded:
+        raise Exception("Representation Rate task timed out.")
     except Exception as e:
         return {"Error": f"Error calculating representation rate: {str(e)}"}
 
@@ -77,5 +80,7 @@ def create_representation_rate_vis(self: Task, columns, file_info):
             plt.close()  # Close the plot to free up resources
 
             return img_base64
+    except SoftTimeLimitExceeded:
+        raise Exception("Representation Rate Vis task timed out.")
     except Exception as e:
         return {"Error": f"Error calculating representation rate: {str(e)}"}

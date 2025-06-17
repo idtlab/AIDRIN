@@ -7,6 +7,7 @@ import seaborn as sns
 import base64
 from io import BytesIO
 from celery import shared_task, Task
+from celery.exceptions import SoftTimeLimitExceeded
 from aidrin.read_file import read_file
 
 matplotlib.use('Agg')
@@ -112,5 +113,7 @@ def calc_correlations(self: Task, columns: List[str], file_info):
         result_dict["Correlation Scores"] = correlation_dict
 
         return result_dict
+    except SoftTimeLimitExceeded:
+        raise Exception("Correlations task timed out.")
     except Exception as e:
         return {"Message": f"Error: {str(e)}"}

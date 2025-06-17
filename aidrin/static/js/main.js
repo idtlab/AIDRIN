@@ -116,13 +116,15 @@ function submitForm() {
         }
     })
     .then(data => {
-        
+         
         if (data.trigger === "correlationError") {
             openErrorPopup("Invalid Request","Input Feature and Target Feature cannot be the same"); // call error popup
         } 
+        if (data.error) {
+            openErrorPopup("", data.error); // call error popup
+        }  
         console.log('Server Response:', data);
         var resultContainer = document.getElementById('resultContainer');
-
         resp_data = data;
 
         // Function to check if a key is present and not undefined

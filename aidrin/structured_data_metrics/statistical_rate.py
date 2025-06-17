@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 import base64
 import io
 from celery import shared_task, Task
+from celery.exceptions import SoftTimeLimitExceeded
 from aidrin.read_file import read_file
 import pandas as pd
 @shared_task(bind=True, ignore_result=False)
 def calculate_statistical_rates(self: Task, y_true_column, sensitive_attribute_column, file_info):
-
     try:    
         dataframe, _, _ = read_file(file_info)
         # Drop rows with NaN values in the specified columns
@@ -114,7 +114,8 @@ def calculate_statistical_rates(self: Task, y_true_column, sensitive_attribute_c
             "Statistical Rate Visualization": base64_plot
         })
         return {"Statistical Rates": cleaned_payload["Statistical Rates"], "TSD scores": cleaned_payload["TSD scores"], "Description": cleaned_payload["Description"], "Statistical Rate Visualization": cleaned_payload["Statistical Rate Visualization"]}
-
+    except SoftTimeLimitExceeded:
+        raise Exception("Statistical Rate task timed out.")
     except Exception as e:
         return {"Error": str(e)}
 

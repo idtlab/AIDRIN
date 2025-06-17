@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import io
 import base64
 from celery import shared_task, Task
+from celery.exceptions import SoftTimeLimitExceeded
 from aidrin.read_file import read_file
 
 # def calc_shapley(df, cat_cols, num_cols, target_col):
@@ -175,28 +176,33 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
             df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
         #need to make json serializable to be passed by celery
         return df_filtered.to_dict(orient='list')
+    except SoftTimeLimitExceeded:
+        raise Exception("Data Cleaning task timed out.")
     except Exception as e:
         print(f"Error occurred during data cleaning: {e}")
 
 @shared_task(bind=True, ignore_result=False)
 def pearson_correlation(self: Task, df_json, target_col) -> dict:
-    df = pd.DataFrame.from_dict(df_json)
-    cols = df.columns.difference([target_col])
-    correlations = {}
-    for col in cols:
-        if col != target_col:
-            try:
-                # Calculate covariance
-                cov = np.cov(df[col], df[target_col], ddof=0)[0, 1]
-                # Calculate standard deviations
-                std_dev_col = np.std(df[col], ddof=0)
-                std_dev_target = np.std(df[target_col], ddof=0)
-                # Calculate Pearson correlation coefficient
-                corr = cov / (std_dev_col * std_dev_target)
-                correlations[col] = corr
-            except TypeError:
-                print(f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values.")
-    return correlations
+    try:
+        df = pd.DataFrame.from_dict(df_json)
+        cols = df.columns.difference([target_col])
+        correlations = {}
+        for col in cols:
+            if col != target_col:
+                try:
+                    # Calculate covariance
+                    cov = np.cov(df[col], df[target_col], ddof=0)[0, 1]
+                    # Calculate standard deviations
+                    std_dev_col = np.std(df[col], ddof=0)
+                    std_dev_target = np.std(df[target_col], ddof=0)
+                    # Calculate Pearson correlation coefficient
+                    corr = cov / (std_dev_col * std_dev_target)
+                    correlations[col] = corr
+                except TypeError:
+                    print(f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values.")
+        return correlations
+    except SoftTimeLimitExceeded:
+        raise Exception("Pearson Correlation task timed out.")
 
 @shared_task(bind=True, ignore_result=False)
 def plot_features(self: Task, correlations, target_col):
@@ -226,6 +232,8 @@ def plot_features(self: Task, correlations, target_col):
         buf.seek(0)
         image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
         return image_base64
+    except SoftTimeLimitExceeded:
+        raise Exception("Plot Features task timed out.")
     except Exception as e:
         print(f"Error occurred during plotting: {e}")
         return None
