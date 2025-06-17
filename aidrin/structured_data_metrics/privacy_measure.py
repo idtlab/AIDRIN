@@ -2,8 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import io
 import base64
+from celery import shared_task, Task
+from aidrin.read_file import read_file
 
-def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
+@shared_task(bind=True, ignore_result=False)
+def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file_path: str, file_name: str, file_type: str):
+    df, _, _ = read_file(file_path, file_name, file_type)
     result_dict = {}
 
     try:
@@ -92,8 +96,9 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
 
     return result_dict
 
-
-def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
+@shared_task(bind=True, ignore_result=False)
+def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file_path: str, file_name: str, file_type: str):
+    df, _, _ = read_file(file_path, file_name, file_type)
     result_dict = {}
 
     try:

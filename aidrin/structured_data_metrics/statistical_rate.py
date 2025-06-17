@@ -4,7 +4,7 @@ import base64
 import io
 from celery import shared_task, Task
 from aidrin.read_file import read_file
-
+import pandas as pd
 @shared_task(bind=True, ignore_result=False)
 def calculate_statistical_rates(self: Task, y_true_column, sensitive_attribute_column, file_path: str, file_name: str, file_type: str) -> dict:
 
@@ -96,9 +96,25 @@ def calculate_statistical_rates(self: Task, y_true_column, sensitive_attribute_c
         base64_plot = base64.b64encode(buffer.read()).decode('utf-8')
         # Close the BytesIO stream
         buffer.close()
-                
-        return {"Statistical Rates": class_proportions,"TSD scores": tsd, "Description":"The TSD values are calculated by getting the standard deveiation of the proportions of each group accros the different classes. Lower TSD reflects on a similar treatment across the groups while a higher TSD reflects an unequal treatment accross the sensitive groups","Statistical Rate Visualization":base64_plot }
-    
+        
+        # Full disclosure: This workaround is from stackoverflow. Recasts all numpy types to their native Python types so Celery can pass the data correctly.
+        def to_serializable(obj):
+            if isinstance(obj, dict):
+                return {str(k): to_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple, np.ndarray)):
+                return [to_serializable(i) for i in obj]
+            elif isinstance(obj, (np.integer, np.int64)):
+                return int(obj)  
+            else:
+                return obj
+        cleaned_payload = to_serializable({
+            "Statistical Rates": class_proportions,
+            "TSD scores": tsd,
+            "Description": "The TSD values are calculated by getting the standard deviation of the proportions of each group across the different classes...",
+            "Statistical Rate Visualization": base64_plot
+        })
+        return {"Statistical Rates": cleaned_payload["Statistical Rates"], "TSD scores": cleaned_payload["TSD scores"], "Description": cleaned_payload["Description"], "Statistical Rate Visualization": cleaned_payload["Statistical Rate Visualization"]}
+
     except Exception as e:
         return {"Error": str(e)}
 

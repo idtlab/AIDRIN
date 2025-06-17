@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_file, Response,render_template,send_from_directory,session,redirect,url_for, current_app,  Blueprint
 from celery.result import AsyncResult, TimeoutError
+from celery import shared_task, Task
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.outliers import outliers
 from aidrin.structured_data_metrics.duplicity import duplicity
@@ -15,6 +16,7 @@ from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree,class_distribution_plot
 from aidrin.structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
+from aidrin.structured_data_metrics.summary_statistics import summary_histograms
 from aidrin.logging import setup_logging
 from aidrin.read_file import read_file
 import redis
@@ -278,6 +280,7 @@ def fairness():
             target = request.form.get('target for conditional demographic disparity')
             sensitive = request.form.get('sensitive for conditional demographic disparity')
             accepted_value = request.form.get('target value for conditional demographic disparity')
+            print ("Inputs:", file[target].to_list(), file[sensitive].to_list(), accepted_value)
             result = conditional_demographic_disparity.delay(file[target].to_list(), file[sensitive].to_list(), accepted_value)
             cdd_dict = result.get()
             cdd_dict['Description'] = 'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'                 
@@ -295,8 +298,9 @@ def fairness():
 def correlationAnalysis():
    
     final_dict = {}
-
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    uploaded_file_path = session.get('uploaded_file_path')
+    uploaded_file_name = session.get('uploaded_file_name')
+    uploaded_file_type = session.get('uploaded_file_type')
 
     if request.method == 'POST':
         metric_time_log.info("Correlation Analysis Request Started")
@@ -305,7 +309,8 @@ def correlationAnalysis():
         #correlations
         if request.form.get('compare real to dataset') == 'yes':
             start_time_realData = time.time()
-            comp_dict = compare_rep_rates(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
+            result = compare_rep_rates.delay(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
+            comp_dict = result.get()
             comp_dict["Description"] = "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
             final_dict['Representation Rate Comparison with Real World'] = comp_dict
             metric_time_log.info("Real dataset comparison took %.2f seconds",time.time()-start_time_realData)
@@ -313,7 +318,8 @@ def correlationAnalysis():
         if request.form.get('correlations') == 'yes':
             start_time_correlations = time.time()
             columns = request.form.getlist('all features for data transformation')
-            corr_dict = calc_correlations(file,columns)
+            result = calc_correlations.delay(columns, uploaded_file_path, uploaded_file_name,uploaded_file_type)
+            corr_dict = result.get()
             #catch potential errors
             if 'Message' in corr_dict:
                 print("Correlation analysis failed:", corr_dict['Message'])
@@ -337,7 +343,9 @@ def featureRelevance():
     
     final_dict = {}
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    uploaded_file_path = session.get('uploaded_file_path')
+    uploaded_file_name = session.get('uploaded_file_name')
+    uploaded_file_type = session.get('uploaded_file_type')
 
     if request.method == 'POST':
         metric_time_log.info("Feature Relevance Request Started")
@@ -363,22 +371,24 @@ def featureRelevance():
                 if target in cat_cols or target in num_cols:
                     print("Error: Target is same as feature")
                     return jsonify({"trigger": "correlationError"}), 200
-                df = data_cleaning(file, cat_cols, num_cols, target)
-                print("Data cleaning returned df with shape:", df.shape if df is not None else "None")
+                result = data_cleaning.delay(cat_cols, num_cols, target, uploaded_file_path, uploaded_file_name, uploaded_file_type)
+                df_json = result.get() #json serialized
+                print("Data cleaning returned df with shape:", pd.DataFrame.from_dict(df_json).shape if df_json is not None else "None")
             except Exception as e:
                 print("Error occurred during data cleaning:", e)
-                df = None
+                df_json = None
 
             
             
             # Generate Pearson correlation
-            correlations = pearson_correlation(df, df.columns.difference([target]), target)
+            result = pearson_correlation.delay(df_json, target)
+            correlations = result.get()
             #don't let the user check the same target and feature
             if correlations is None:
                 print("Error: Correlations is None")
                 return jsonify({"trigger": "correlationError"}), 200
-            
-            f_plot = plot_features(correlations,target)
+            result = plot_features.delay(correlations, target)
+            f_plot = result.get()
             f_dict = {}
             
             f_dict['Pearson Correlation to Target'] = correlations
@@ -399,7 +409,9 @@ def classImbalance():
     
     final_dict = {}
     
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    uploaded_file_path = session.get('uploaded_file_path')
+    uploaded_file_name = session.get('uploaded_file_name')
+    uploaded_file_type = session.get('uploaded_file_type')
 
     if request.method == 'POST':
         metric_time_log.info("Class Imbalance Request Started")
@@ -408,9 +420,12 @@ def classImbalance():
         if request.form.get("class imbalance") == "yes":
             ci_dict = {}
             classes = request.form.get("features for class imbalance")
-            ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file,classes)
+            # known display issue
+            result = class_distribution_plot.delay(classes, uploaded_file_path, uploaded_file_name, uploaded_file_type)
+            ci_dict['Class Imbalance Visualization'] = result.get()
             ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
-            ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric="EU")#By default the distance metric is euclidean distance
+            result = calc_imbalance_degree.delay(classes, uploaded_file_path, uploaded_file_name, uploaded_file_type, dist_metric="EU")  #By default the distance metric is euclidean distance
+            ci_dict['Imbalance degree score'] = result.get()
             final_dict['Class Imbalance'] = ci_dict
             
         end_time = time.time()
@@ -426,7 +441,9 @@ def privacyPreservation():
 
     final_dict = {}
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    uploaded_file_path = session.get('uploaded_file_path')
+    uploaded_file_name = session.get('uploaded_file_name')
+    uploaded_file_type = session.get('uploaded_file_type')
 
     if request.method == 'POST':
         metric_time_log.info("Privacy Preservation Request Started")
@@ -440,7 +457,7 @@ def privacyPreservation():
             if epsilon is None or epsilon == "":
                 epsilon = 0.1  # Assign a default value for epsilon
 
-            noisy_stat = return_noisy_stats(file, feature_to_add_noise, float(epsilon))
+            noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), uploaded_file_path, uploaded_file_name, uploaded_file_type)
             final_dict['DP Statistics'] = noisy_stat
             metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_diffPrivacy)
             
@@ -450,14 +467,16 @@ def privacyPreservation():
             id_feature = request.form.get("id feature to measure single attribute risk score")
             eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
             print("Eval Features:",eval_features)
-            final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
+            result = generate_single_attribute_MM_risk_scores.delay(id_feature,eval_features, uploaded_file_path,uploaded_file_name,uploaded_file_type)
+            final_dict["Single attribute risk scoring"] = result.get()
             metric_time_log.info("Differential privacy took %2f seconds",time.time()-start_time_oneAttributeRisk)
         #multpiple attribute risk score using markov model
         if request.form.get("multiple attribute risk score") == "yes":
             start_time_multAttributeRisk = time.time()
             id_feature = request.form.get("id feature to measure multiple attribute risk score")
             eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
-            final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
+            result = generate_multiple_attribute_MM_risk_scores.delay(id_feature,eval_features, uploaded_file_path,uploaded_file_name,uploaded_file_type)
+            final_dict["Multiple attribute risk scoring"] = result.get()
             metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_multAttributeRisk)
         end_time = time.time()
         execution_time = end_time - start_time
@@ -551,7 +570,11 @@ def get_summary_stastistics():
             summary_statistics = df.describe().round(2).to_dict()
             
             # Calculate probability distributions
-            histograms = summary_histograms(df)
+            uploaded_file_path = session.get('uploaded_file_path')
+            uploaded_file_name = session.get('uploaded_file_name')
+            uploaded_file_type = session.get('uploaded_file_type')
+            result = summary_histograms.delay(uploaded_file_path, uploaded_file_name, uploaded_file_type)
+            histograms = result.get()
 
             # Separate numerical and categorical columns
             numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
@@ -724,52 +747,7 @@ def format_dict_values(d):
     
     return formatted_dict
 
-def summary_histograms(df):
-    # background colors for plots (light and dark mode)
-    plot_colors = {
-        'light': { 
-        'bg': '#FBFBF2',     
-        'text': '#212529',
-        'curve': 'blue'
-        },
-        'dark': { 
-        'bg': '#495057',
-        'text': '#F8F9FA',
-        'curve': 'red'
-        }
-    }
-    
-    line_graphs = {}
-    for column in df.select_dtypes(include='number').columns:
-        for theme, colors in plot_colors.items():
-            plt.figure(figsize=(6, 6),facecolor=colors['bg'])
-            ax = plt.gca()
-            ax.set_facecolor(colors['bg'])
-            
-            # Using seaborn's kdeplot to estimate the distribution
-            sns.kdeplot(df[column], bw_adjust=0.5,ax=ax,color=colors['curve'])
 
-            # Set a larger font size for the title
-            plt.title(f'Distribution Estimate for {column}', fontsize=14, color=colors['text'])
-
-            # Add labels to the axes
-            plt.xlabel('Values', fontsize=12, color=colors['text'])
-            plt.ylabel('Density', fontsize=12, color=colors['text'])
-            # Set axis color
-            ax.tick_params(colors=colors['text'])
-            for spine in ax.spines.values():
-                spine.set_color(colors['text'])
-            # Encode the plot as base64
-            img_buffer = io.BytesIO()
-            plt.savefig(img_buffer, format='png',bbox_inches='tight', pad_inches=0.1)
-            img_buffer.seek(0)
-            encoded_img = base64.b64encode(img_buffer.read()).decode('utf-8')
-
-            line_graphs[f'{column}_{theme}'] = encoded_img
-            plt.close()
-            img_buffer.close()
-
-    return line_graphs
 
 
 # @app.route('/FAIRness', methods=['GET', 'POST'])

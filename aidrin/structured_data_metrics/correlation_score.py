@@ -6,12 +6,16 @@ from dython.nominal import associations
 import seaborn as sns
 import base64
 from io import BytesIO
+from celery import shared_task, Task
+from aidrin.read_file import read_file
 
 matplotlib.use('Agg')
 
 NOMINAL_NOMINAL_ASSOC = 'theil'
 
-def calc_correlations(df: pd.DataFrame, columns: List[str]) -> Dict:
+@shared_task(bind=True, ignore_result=False)
+def calc_correlations(self: Task, columns: List[str], file_path, file_name, file_type ) -> Dict:
+    df,_,_ = read_file(file_path, file_name, file_type)
     try:
         # Separate categorical and numerical columns
         categorical_columns = df[columns].select_dtypes(include='object').columns

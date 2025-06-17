@@ -4,14 +4,17 @@ import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
 import os
-
+from celery import shared_task, Task
+from aidrin.read_file import read_file
 # Function to add Laplace noise
 def add_laplace_noise(data, epsilon):
     scale = 1 / epsilon
     noise = np.random.laplace(0, scale, len(data))
     return data + noise
 
-def return_noisy_stats(df, add_noise_columns, epsilon):
+@shared_task(bind=True, ignore_result=False)
+def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_path: str, file_name: str, file_type: str) -> dict:
+    df, _, _ = read_file(file_path, file_name, file_type)
     df_drop_na = df.dropna()
     df_drop_na = df_drop_na.reset_index(inplace=False)
 

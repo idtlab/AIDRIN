@@ -14,22 +14,21 @@ def conditional_demographic_disparity(self: Task, target, sensitive, accepted_va
     Returns:
     pd.DataFrame: A DataFrame containing the demographic disparity results for each sensitive group.
     """
-    
-    
+
+    accepted_value = type(target[0])(accepted_value) #cast accepted_value to the same type as target elements
+
     # Create a DataFrame from the input lists
     df = pd.DataFrame({'target': target, 'sensitive': sensitive})
-    
+    print(df)
     # Convert target to binary (1 for accepted, 0 for rejected)
     df['target_binary'] = df['target'].apply(lambda x: 1 if x == accepted_value else 0)
-    
+    print(df['target_binary'])
     # Calculate counts for each group and target combination
     group_counts = df.groupby(['sensitive', 'target_binary']).size().unstack(fill_value=0)
-    print("Group Counts:")
-    print(group_counts)
+
     # Calculate the total numbers of rejected and accepted outcomes
     total_rejected = group_counts[0].sum()
-    total_accepted = group_counts[1].sum()
-    
+    total_accepted = group_counts[1].sum() #if there are no accepted values, this column will not exist and an error will be raised
     # Initialize a list to store results
     results = {}
     

@@ -2,8 +2,10 @@ import base64
 import io
 import matplotlib.pyplot as plt
 import numpy as np
+from celery import shared_task, Task
 
-def compare_rep_rates(rep_dict, rrr_dict):
+@shared_task(bind=True, ignore_result=False)
+def compare_rep_rates(self: Task, rep_dict, rrr_dict):
     final_dict = {}
 
     real_values = []

@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import io
 import base64
 from math import sqrt, log
+from celery import shared_task, Task
+from aidrin.read_file import read_file
 
 def imbalance_degree(classes, distance="EU"):
     """
@@ -115,8 +117,9 @@ def imbalance_degree(classes, distance="EU"):
     dfn = _dist_fn()
     dist_ed = dfn(empirical_distribution, e)
     return 0.0 if dist_ed == 00 else (dist_ed / dfn(i_m, e)) + (m - 1)
-
-def class_distribution_plot(df, column):
+@shared_task(bind=True, ignore_result=False)
+def class_distribution_plot(self: Task, column, file_path: str, file_name: str, file_type: str) -> str:
+    df, _, _ = read_file(file_path, file_name, file_type)
     plot_res = {}
     try:
         # Get unique class labels
@@ -129,7 +132,8 @@ def class_distribution_plot(df, column):
         plt.figure(figsize=(8, 8))
 
         # Plotting a pie chart for each class
-        class_labels_modified = [label[:9] + '...' if len(label) > 8 else label for label in class_labels]
+        class_labels_modified = [str(label)[:9] + '...' if len(str(label)) > 8 else str(label) for label in class_labels] #convert to strings to prevent numpy error
+
         patches, texts, _ = plt.pie(class_counts, labels=class_labels_modified, startangle=90, autopct=lambda p: f'{p:.1f}%' if p >= 10 else None)
 
         # Add labels to sections with percentages above 10%
@@ -158,7 +162,9 @@ def class_distribution_plot(df, column):
         return str(e)
 
 #imbalance degree calculation with default distance metric to be Euclidean
-def calc_imbalance_degree(df, column, dist_metric='EU'):
+@shared_task(bind=True, ignore_result=False)
+def calc_imbalance_degree(self:Task, column, file_path: str , file_name: str , file_type: str, dist_metric='EU') -> dict:
+    df, _, _ = read_file(file_path, file_name, file_type)
     res = {}
 
     try:

@@ -7,6 +7,8 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import io
 import base64
+from celery import shared_task, Task
+from aidrin.read_file import read_file
 
 # def calc_shapley(df, cat_cols, num_cols, target_col):
 #     """
@@ -150,8 +152,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 
-def data_cleaning(df, cat_cols, num_cols, target_col):
+@shared_task(bind=True, ignore_result=False)
+def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_path: str, file_name: str, file_type: str) -> dict:
     try:
+        try:
+            df, _, _ = read_file(file_path, file_name, file_type)
+        except Exception as e:
+            print(f"Error reading file: {e}")
+            return {"Error": "Failed to read the file. Please check the file path and type."}
         # Filter DataFrame to include only the specified columns
         df_filtered = df[[target_col] + cat_cols + num_cols].copy()  # Make a copy to avoid SettingWithCopyWarning
         # Fill missing values
@@ -165,11 +173,15 @@ def data_cleaning(df, cat_cols, num_cols, target_col):
         if df_filtered[target_col].dtype == 'object':
             le_target = LabelEncoder()
             df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
-        return df_filtered
+        #need to make json serializable to be passed by celery
+        return df_filtered.to_dict(orient='list')
     except Exception as e:
         print(f"Error occurred during data cleaning: {e}")
 
-def pearson_correlation(df, cols, target_col):
+@shared_task(bind=True, ignore_result=False)
+def pearson_correlation(self: Task, df_json, target_col) -> dict:
+    df = pd.DataFrame.from_dict(df_json)
+    cols = df.columns.difference([target_col])
     correlations = {}
     for col in cols:
         if col != target_col:
@@ -186,7 +198,8 @@ def pearson_correlation(df, cols, target_col):
                 print(f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values.")
     return correlations
 
-def plot_features(correlations, target_col):
+@shared_task(bind=True, ignore_result=False)
+def plot_features(self: Task, correlations, target_col):
     try:
         # Extract features and correlation values
         features = list(correlations.keys())
