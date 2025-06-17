@@ -87,6 +87,7 @@ def view_logs():
 
             return jsonify(log_rows)
     return jsonify({"error": "Log file not found."}), 404
+
 ##### Result Polling #####
 @main.get("/result/<id>")
 def result(id: str):
@@ -163,7 +164,7 @@ def retrieve_uploaded_file():
     else:
         file_upload_time_log.info("No file path found")
         return jsonify({"error": "No file path found"}), 404
-
+    
 @main.route('/clear', methods=['POST'])
 def clear_file():
     file_upload_time_log.info("Clearing File")
@@ -178,16 +179,29 @@ def clear_file():
         file_upload_time_log.info("File Clear Failure: No File Found")
     return redirect(url_for('upload_file'))
 
+# Clear stale file session data before each request 
+@main.before_app_request
+def clear_stale_file_session():
+    file_path = session.get('uploaded_file_path')
+    if file_path:
+        if not os.path.exists(file_path):
+            # Only clear session if the file was expected but is missing
+            session.pop('uploaded_file_name', None)
+            session.pop('uploaded_file_path', None)
+            session.pop('uploaded_file_type', None)
+
 ######## Metric Page Routes ###########
 
 @main.route('/dataQuality', methods=['GET', 'POST'])
 def dataQuality():
    
     final_dict = {}
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
-
+    # get file info
+    file_path = session.get('uploaded_file_path')
+    file_name = session.get('uploaded_file_name')
+    file_type = session.get('uploaded_file_type')
+    file_info = (file_path, file_name, file_type)
+    
     if request.method == 'POST':
         start_time = time.time()
         metric_time_log.info("Data quality Request Started")
@@ -195,24 +209,24 @@ def dataQuality():
         #Completeness
         if request.form.get('completeness') == "yes":  
             start_time_completeness = time.time()  
-            result = completeness.delay(uploaded_file_path, uploaded_file_name, uploaded_file_type)    
-            compl_dict = result.get()
+            completeness_result = completeness.delay(file_info)    
+            compl_dict = completeness_result.get()
             compl_dict['Description'] = 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete.'
             final_dict['Completeness'] = compl_dict
             metric_time_log.info("Completeness took %.2f seconds",time.time()-start_time_completeness)
         #Outliers    
         if request.form.get('outliers') == 'yes':
             start_time_outliers = time.time()  
-            result = outliers.delay(uploaded_file_path, uploaded_file_name, uploaded_file_type)   
-            out_dict = result.get()
+            outliers_result = outliers.delay(file_info)   
+            out_dict = outliers_result.get()
             out_dict['Description'] = "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
             final_dict['Outliers'] = out_dict
             metric_time_log.info("Outliers took %.2f seconds",time.time()-start_time_outliers)
         #Duplicity
         if request.form.get('duplicity') == 'yes':
             start_time_duplicity = time.time()  
-            result = duplicity.delay(uploaded_file_path, uploaded_file_name, uploaded_file_type)
-            dup_dict = result.get()
+            duplicity_result = duplicity.delay(file_info)
+            dup_dict = duplicity_result.get()
             dup_dict['Description'] = "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
             final_dict['Duplicity'] = dup_dict 
             metric_time_log.info("Duplicity took %.2f seconds",time.time()-start_time_duplicity)
@@ -223,17 +237,18 @@ def dataQuality():
 
         return store_result('dataQuality',final_dict)
     
-    return get_result_or_default('dataQuality',uploaded_file_path,uploaded_file_name)
+    return get_result_or_default('dataQuality',file_path,file_name)
    
 @main.route('/fairness', methods=['GET', 'POST'])
 def fairness():
     
     final_dict={}
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
-
-    file, _, _ = read_file()
+    # get file info
+    file_path = session.get('uploaded_file_path')
+    file_name = session.get('uploaded_file_name')
+    file_type = session.get('uploaded_file_type')
+    file_info = (file_path, file_name, file_type)
+    file, _, _ = read_file(file_info)
 
     if request.method == 'POST':
         metric_time_log.info("Fairness Request Started")
@@ -245,10 +260,10 @@ def fairness():
             #convert the string values a list
             rep_dict = {}
             list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(',')]
-            result = calculate_representation_rate.delay(list_of_cols,uploaded_file_path, uploaded_file_name, uploaded_file_type)    
-            rep_dict['Probability ratios'] = result.get()
-            result = create_representation_rate_vis.delay(list_of_cols,uploaded_file_path, uploaded_file_name, uploaded_file_type)
-            rep_dict['Representation Rate Visualization'] = result.get()
+            rep_rate_result = calculate_representation_rate.delay(list_of_cols, file_info)    
+            rep_dict['Probability ratios'] = rep_rate_result.get()
+            rep_rate_vis_result = create_representation_rate_vis.delay(list_of_cols, file_info)
+            rep_dict['Representation Rate Visualization'] = rep_rate_vis_result.get()
             rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
             final_dict['Representation Rate'] = rep_dict
             metric_time_log.info("Representation Rate took %.2f seconds",time.time()-start_time_repRate)
@@ -261,8 +276,8 @@ def fairness():
 
                 print("Inputs:", y_true, sensitive_attribute_column)
                 # This function never completes (loads numpy in which is not supported)?
-                result = calculate_statistical_rates.delay(y_true, sensitive_attribute_column, uploaded_file_path, uploaded_file_name, uploaded_file_type)
-                sr_dict = result.get()
+                stat_rate_result = calculate_statistical_rates.delay(y_true, sensitive_attribute_column, file_info)
+                sr_dict = stat_rate_result.get()
 
                 sr_dict['Description'] = (
                     'The graph illustrates the statistical rates of various classes across different sensitive attributes. '
@@ -281,8 +296,8 @@ def fairness():
             sensitive = request.form.get('sensitive for conditional demographic disparity')
             accepted_value = request.form.get('target value for conditional demographic disparity')
             print ("Inputs:", file[target].to_list(), file[sensitive].to_list(), accepted_value)
-            result = conditional_demographic_disparity.delay(file[target].to_list(), file[sensitive].to_list(), accepted_value)
-            cdd_dict = result.get()
+            cond_demo_disp_result = conditional_demographic_disparity.delay(file[target].to_list(), file[sensitive].to_list(), accepted_value)
+            cdd_dict = cond_demo_disp_result.get()
             cdd_dict['Description'] = 'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'                 
             final_dict['Conditional Demographic Disparity'] = cdd_dict
             metric_time_log.info("Conditional Demographic Disparity took %.2f seconds",time.time()-start_time_condDemoDisp)
@@ -292,15 +307,16 @@ def fairness():
 
         return store_result('fairness',final_dict)
     
-    return get_result_or_default('fairness',uploaded_file_path,uploaded_file_name)
+    return get_result_or_default('fairness',file_path, file_name)
 
 @main.route('/correlationAnalysis', methods=['GET', 'POST'])
 def correlationAnalysis():
    
     final_dict = {}
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
+    file_path = session.get('uploaded_file_path')
+    file_name = session.get('uploaded_file_name')
+    file_type = session.get('uploaded_file_type')
+    file_info = (file_path, file_name, file_type)
 
     if request.method == 'POST':
         metric_time_log.info("Correlation Analysis Request Started")
@@ -309,8 +325,8 @@ def correlationAnalysis():
         #correlations
         if request.form.get('compare real to dataset') == 'yes':
             start_time_realData = time.time()
-            result = compare_rep_rates.delay(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
-            comp_dict = result.get()
+            comp_rep_rate_result = compare_rep_rates.delay(rep_dict['Probability ratios'],rrr_dict["Probability ratios"])
+            comp_dict = comp_rep_rate_result.get()
             comp_dict["Description"] = "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
             final_dict['Representation Rate Comparison with Real World'] = comp_dict
             metric_time_log.info("Real dataset comparison took %.2f seconds",time.time()-start_time_realData)
@@ -318,8 +334,8 @@ def correlationAnalysis():
         if request.form.get('correlations') == 'yes':
             start_time_correlations = time.time()
             columns = request.form.getlist('all features for data transformation')
-            result = calc_correlations.delay(columns, uploaded_file_path, uploaded_file_name,uploaded_file_type)
-            corr_dict = result.get()
+            correlations_result = calc_correlations.delay(columns, file_info)
+            corr_dict = correlations_result.get()
             #catch potential errors
             if 'Message' in corr_dict:
                 print("Correlation analysis failed:", corr_dict['Message'])
@@ -336,16 +352,17 @@ def correlationAnalysis():
     
         return store_result('correlationAnalysis',final_dict)
 
-    return get_result_or_default('correlationAnalysis',uploaded_file_path,uploaded_file_name)
+    return get_result_or_default('correlationAnalysis', file_path,file_name)
 
 @main.route('/featureRelevance', methods=['GET', 'POST'])
 def featureRelevance():
     
     final_dict = {}
 
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
+    file_path = session.get('uploaded_file_path')
+    file_name = session.get('uploaded_file_name')
+    file_type = session.get('uploaded_file_type')
+    file_info = (file_path, file_name, file_type)
 
     if request.method == 'POST':
         metric_time_log.info("Feature Relevance Request Started")
@@ -371,8 +388,8 @@ def featureRelevance():
                 if target in cat_cols or target in num_cols:
                     print("Error: Target is same as feature")
                     return jsonify({"trigger": "correlationError"}), 200
-                result = data_cleaning.delay(cat_cols, num_cols, target, uploaded_file_path, uploaded_file_name, uploaded_file_type)
-                df_json = result.get() #json serialized
+                data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
+                df_json = data_cleaning_result.get() #json serialized
                 print("Data cleaning returned df with shape:", pd.DataFrame.from_dict(df_json).shape if df_json is not None else "None")
             except Exception as e:
                 print("Error occurred during data cleaning:", e)
@@ -381,14 +398,14 @@ def featureRelevance():
             
             
             # Generate Pearson correlation
-            result = pearson_correlation.delay(df_json, target)
-            correlations = result.get()
+            pearson_corr_result = pearson_correlation.delay(df_json, target)
+            correlations = pearson_corr_result.get()
             #don't let the user check the same target and feature
             if correlations is None:
                 print("Error: Correlations is None")
                 return jsonify({"trigger": "correlationError"}), 200
-            result = plot_features.delay(correlations, target)
-            f_plot = result.get()
+            plot_features_result = plot_features.delay(correlations, target)
+            f_plot = plot_features_result.get()
             f_dict = {}
             
             f_dict['Pearson Correlation to Target'] = correlations
@@ -402,16 +419,17 @@ def featureRelevance():
         
         return store_result('featureRelevance',final_dict)
     
-    return get_result_or_default('featureRelevance',uploaded_file_path,uploaded_file_name)
+    return get_result_or_default('featureRelevance',file_path,file_name)
                 
 @main.route('/classImbalance', methods=['GET', 'POST'])
 def classImbalance():
     
     final_dict = {}
     
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
+    file_path = session.get('uploaded_file_path')
+    file_name = session.get('uploaded_file_name')
+    file_type = session.get('uploaded_file_type')
+    file_info = (file_path, file_name, file_type)
 
     if request.method == 'POST':
         metric_time_log.info("Class Imbalance Request Started")
@@ -421,30 +439,31 @@ def classImbalance():
             ci_dict = {}
             classes = request.form.get("features for class imbalance")
             # known display issue
-            result = class_distribution_plot.delay(classes, uploaded_file_path, uploaded_file_name, uploaded_file_type)
-            ci_dict['Class Imbalance Visualization'] = result.get()
+            class_distrib_plot_result = class_distribution_plot.delay(classes, file_info)
+            ci_dict['Class Imbalance Visualization'] = class_distrib_plot_result.get()
             ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
-            result = calc_imbalance_degree.delay(classes, uploaded_file_path, uploaded_file_name, uploaded_file_type, dist_metric="EU")  #By default the distance metric is euclidean distance
-            ci_dict['Imbalance degree score'] = result.get()
+            calc_imbalance_degree_result = calc_imbalance_degree.delay(classes, file_info, dist_metric="EU")  #By default the distance metric is euclidean distance
+            ci_dict['Imbalance degree score'] = calc_imbalance_degree_result.get()
             final_dict['Class Imbalance'] = ci_dict
             
         end_time = time.time()
         execution_time = end_time - start_time
         metric_time_log.info(f"Class Imbalance Execution time: {execution_time:.2f} seconds")
-        
-        return store_result('classImbalance',final_dict)
-    
-    return get_result_or_default('classImbalance',uploaded_file_path,uploaded_file_name)
-    
+
+        return store_result('classImbalance', final_dict)
+
+    return get_result_or_default('classImbalance', file_path, file_name)
+
 @main.route('/privacyPreservation', methods=['GET', 'POST'])
 def privacyPreservation():
 
     final_dict = {}
 
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
-
+    file_path = session.get('uploaded_file_path')
+    file_name = session.get('uploaded_file_name')
+    file_type = session.get('uploaded_file_type')
+    file_info = (file_path, file_name, file_type)
+    
     if request.method == 'POST':
         metric_time_log.info("Privacy Preservation Request Started")
         start_time = time.time()
@@ -457,7 +476,8 @@ def privacyPreservation():
             if epsilon is None or epsilon == "":
                 epsilon = 0.1  # Assign a default value for epsilon
 
-            noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), uploaded_file_path, uploaded_file_name, uploaded_file_type)
+            noisy_stat_results = return_noisy_stats.delay(feature_to_add_noise, float(epsilon), file_info)
+            noisy_stat = noisy_stat_results.get()
             final_dict['DP Statistics'] = noisy_stat
             metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_diffPrivacy)
             
@@ -467,24 +487,24 @@ def privacyPreservation():
             id_feature = request.form.get("id feature to measure single attribute risk score")
             eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
             print("Eval Features:",eval_features)
-            result = generate_single_attribute_MM_risk_scores.delay(id_feature,eval_features, uploaded_file_path,uploaded_file_name,uploaded_file_type)
-            final_dict["Single attribute risk scoring"] = result.get()
+            single_attribute_result = generate_single_attribute_MM_risk_scores.delay(id_feature,eval_features, file_info)
+            final_dict["Single attribute risk scoring"] = single_attribute_result.get()
             metric_time_log.info("Differential privacy took %2f seconds",time.time()-start_time_oneAttributeRisk)
         #multpiple attribute risk score using markov model
         if request.form.get("multiple attribute risk score") == "yes":
             start_time_multAttributeRisk = time.time()
             id_feature = request.form.get("id feature to measure multiple attribute risk score")
             eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
-            result = generate_multiple_attribute_MM_risk_scores.delay(id_feature,eval_features, uploaded_file_path,uploaded_file_name,uploaded_file_type)
-            final_dict["Multiple attribute risk scoring"] = result.get()
+            multiple_attribute_result = generate_multiple_attribute_MM_risk_scores.delay(id_feature,eval_features, file_info)
+            final_dict["Multiple attribute risk scoring"] = multiple_attribute_result.get()
             metric_time_log.info("Differential privacy took %.2f seconds",time.time()-start_time_multAttributeRisk)
         end_time = time.time()
         execution_time = end_time - start_time
         metric_time_log.info(f"Privacy Preservation Execution time: {execution_time:.2f} seconds")
               
         return store_result('privacyPreservation',final_dict)
-    
-    return get_result_or_default('privacyPreservation',uploaded_file_path,uploaded_file_name)
+
+    return get_result_or_default('privacyPreservation',file_path,file_name)
 
 @main.route('/FAIR', methods=['GET', 'POST'])
 def FAIR():
@@ -565,15 +585,16 @@ def get_summary_stastistics():
     try:
             metric_time_log.info("Summary Statistics Request Started")
             start_time = time.time()
-            df, uploaded_file_path, uploaded_file_name = read_file()
+            file_path = session.get('uploaded_file_path')
+            file_name = session.get('uploaded_file_name')
+            file_type = session.get('uploaded_file_type')
+            file_info = (file_path, file_name, file_type)
+            df, _, _ = read_file(file_info)
             # Extract summary statistics
             summary_statistics = df.describe().round(2).to_dict()
             
             # Calculate probability distributions
-            uploaded_file_path = session.get('uploaded_file_path')
-            uploaded_file_name = session.get('uploaded_file_name')
-            uploaded_file_type = session.get('uploaded_file_type')
-            result = summary_histograms.delay(uploaded_file_path, uploaded_file_name, uploaded_file_type)
+            result = summary_histograms.delay(file_info)
             histograms = result.get()
 
             # Separate numerical and categorical columns
@@ -617,8 +638,12 @@ def extract_features():
     try:
         metric_time_log.info("Feature Set Request Started")
         start_time = time.time()
-
-        df, uploaded_file_path, uploaded_file_name = read_file()
+        
+        file_path = session.get('uploaded_file_path')
+        file_name = session.get('uploaded_file_name')
+        file_type = session.get('uploaded_file_type')
+        file_info = (file_path, file_name, file_type)
+        df, _, _ = read_file(file_info)
 
         # Separate numerical and categorical columns
         numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
@@ -648,56 +673,6 @@ def extract_features():
         return jsonify({'success': False, 'message': str(e)})
 
 ##### Functions #####
-
-# Clears the data log on app exit
-def clear_files():
-    log_path = os.path.join(os.path.dirname(__file__), 'data', 'logs', 'aidrin.log')
-    uploads_path = os.path.join(current_app.root_path, "data", "uploads")
-    #clear log
-    with open(log_path, 'w') as f:
-        f.truncate(0)
-    #clear uploads folder
-    for filename in os.listdir(uploads_path):
-        file_path = os.path.join(uploads_path, filename)
-        try:
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-        except Exception as e:
-            print(f"Failed to delete {file_path}: {e}")
-    file_upload_time_log.info("Files Cleared")
-atexit.register(clear_files)    
-
-# Parses the uploaded file into a pandas database 
-def read_file():
-    file_upload_time_log.info("file parsing intiaited...")
-
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
-
-    if not uploaded_file_path and uploaded_file_name:
-        return redirect(request.url)
-    
-    #default result
-    readFile = None
-    #csv
-    if uploaded_file_type==('.csv'):
-        readFile = pd.read_csv(uploaded_file_path, index_col=False)
-    #npz
-    if uploaded_file_type==('.npz'):
-        npz_data = np.load(uploaded_file_path,allow_pickle=True)
-        readFile = pd.DataFrame({key: npz_data[key] for key in npz_data.files})
-    #excel
-    if uploaded_file_type==('.xls,.xlsb,.xlsx,.xlsm'):
-        readFile = pd.read_excel(uploaded_file_path)
-    #json
-    if uploaded_file_type==('.json'):
-        readFile = pd.read_json(uploaded_file_path)
-    #hdf
-    if uploaded_file_type==('.h5'):
-        readFile = pd.read_hdf(uploaded_file_path)
-    file_upload_time_log.info("file successfully parsed!")
-    return readFile, uploaded_file_path, uploaded_file_name
 
 
 def store_result(metric, final_dict):

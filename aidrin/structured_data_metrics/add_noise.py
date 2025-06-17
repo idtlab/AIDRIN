@@ -13,8 +13,8 @@ def add_laplace_noise(data, epsilon):
     return data + noise
 
 @shared_task(bind=True, ignore_result=False)
-def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_path: str, file_name: str, file_type: str) -> dict:
-    df, _, _ = read_file(file_path, file_name, file_type)
+def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_info):
+    df, _, _ = read_file(file_info)
     df_drop_na = df.dropna()
     df_drop_na = df_drop_na.reset_index(inplace=False)
 

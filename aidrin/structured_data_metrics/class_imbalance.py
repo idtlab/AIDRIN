@@ -118,8 +118,8 @@ def imbalance_degree(classes, distance="EU"):
     dist_ed = dfn(empirical_distribution, e)
     return 0.0 if dist_ed == 00 else (dist_ed / dfn(i_m, e)) + (m - 1)
 @shared_task(bind=True, ignore_result=False)
-def class_distribution_plot(self: Task, column, file_path: str, file_name: str, file_type: str) -> str:
-    df, _, _ = read_file(file_path, file_name, file_type)
+def class_distribution_plot(self: Task, column, file_info):
+    df, _, _ = read_file(file_info)
     plot_res = {}
     try:
         # Get unique class labels
@@ -163,8 +163,8 @@ def class_distribution_plot(self: Task, column, file_path: str, file_name: str, 
 
 #imbalance degree calculation with default distance metric to be Euclidean
 @shared_task(bind=True, ignore_result=False)
-def calc_imbalance_degree(self:Task, column, file_path: str , file_name: str , file_type: str, dist_metric='EU') -> dict:
-    df, _, _ = read_file(file_path, file_name, file_type)
+def calc_imbalance_degree(self:Task, column, file_info, dist_metric='EU'):
+    df, _, _ = read_file(file_info)
     res = {}
 
     try:

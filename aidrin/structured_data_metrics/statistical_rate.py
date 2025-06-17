@@ -6,10 +6,10 @@ from celery import shared_task, Task
 from aidrin.read_file import read_file
 import pandas as pd
 @shared_task(bind=True, ignore_result=False)
-def calculate_statistical_rates(self: Task, y_true_column, sensitive_attribute_column, file_path: str, file_name: str, file_type: str) -> dict:
+def calculate_statistical_rates(self: Task, y_true_column, sensitive_attribute_column, file_info):
 
     try:    
-        dataframe, _, _ = read_file(file_path, file_name, file_type)
+        dataframe, _, _ = read_file(file_info)
         # Drop rows with NaN values in the specified columns
         dataframe_cleaned = dataframe.dropna(subset=[y_true_column, sensitive_attribute_column])
 

@@ -14,8 +14,8 @@ matplotlib.use('Agg')
 NOMINAL_NOMINAL_ASSOC = 'theil'
 
 @shared_task(bind=True, ignore_result=False)
-def calc_correlations(self: Task, columns: List[str], file_path, file_name, file_type ) -> Dict:
-    df,_,_ = read_file(file_path, file_name, file_type)
+def calc_correlations(self: Task, columns: List[str], file_info):
+    df,_,_ = read_file(file_info)
     try:
         # Separate categorical and numerical columns
         categorical_columns = df[columns].select_dtypes(include='object').columns

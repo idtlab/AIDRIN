@@ -153,10 +153,10 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 
 @shared_task(bind=True, ignore_result=False)
-def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_path: str, file_name: str, file_type: str) -> dict:
+def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
     try:
         try:
-            df, _, _ = read_file(file_path, file_name, file_type)
+            df, _, _ = read_file(file_info)
         except Exception as e:
             print(f"Error reading file: {e}")
             return {"Error": "Failed to read the file. Please check the file path and type."}

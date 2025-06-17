@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, session
 from celery import Celery, Task
 from .main import main as main_blueprint
 import os
@@ -15,7 +15,7 @@ def create_app():
         "task_soft_time_limit": 6, #Task is soft killed 
         "task_time_limit": 10,     #Task is force killed after this time
         "worker_hijack_root_logger": False, # prevent default celery logging configuration
-        "result_expires": 600 #Delete results after 10 min
+        "result_expires": 600 #Delete results from db after 10 min
     }
     app.config.from_prefixed_env()
     celery_init_app(app)
@@ -25,6 +25,15 @@ def create_app():
     UPLOAD_FOLDER = os.path.join(app.root_path, "data", "uploads")
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+    #clear uploads folder on app start 
+    for filename in os.listdir(UPLOAD_FOLDER):
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        try:
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+        except Exception as e:
+            print(f"Failed to delete {file_path}: {e}")
+            
     return app
 
 
@@ -40,4 +49,3 @@ def celery_init_app(app: Flask) -> Celery:
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app
-          
