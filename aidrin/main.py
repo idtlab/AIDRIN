@@ -135,18 +135,24 @@ def upload_file():
             print("fileType POST: %s",request.form.get('fileTypeSelector'))
             return redirect(url_for('upload_file'))
     
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_path = session.get('uploaded_file_path')
+    file_name = session.get('uploaded_file_name')
+    file_path = session.get('uploaded_file_path')
     file_type = session.get('uploaded_file_type')
+    file_info=(file_path, file_name, file_type)
     #log uploaded file
-    if uploaded_file_name and uploaded_file_path: 
+    df_html=None
+    if file_name and file_path: 
         file_upload_time_log.info("File Uploaded. Type: %s",file_type)
+        df = read_file(file_info) #if file, create a preview with df 
+        df = df .iloc[:10]
+        df_html = df.to_html(classes='table table-striped', index=False, border=0) #convert df to html
     
     return render_template('upload_file.html', 
-                                   uploaded_file_path=uploaded_file_path,
-                                   uploaded_file_name=uploaded_file_name,
+                                   uploaded_file_path=file_path,
+                                   uploaded_file_name=file_name,
                                    supported_file_types=SUPPORTED_FILE_TYPES,
-                                   file_type=file_type)
+                                   file_type=file_type,
+                                   df_html=df_html)
 
 @main.route('/retrieve_uploaded_file', methods=['GET'])
 def retrieve_uploaded_file():

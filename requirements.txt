@@ -30,3 +30,6 @@ Werkzeug==3.0.1
 
 Celery==5.3.0
 redis==4.6.0
+#tables
+#xlrd
+#openpxyl

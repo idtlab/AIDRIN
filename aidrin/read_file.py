@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
 import logging
+from flask import jsonify
 
-#Supported file types
+# Supported file types. Read on front end to create select features.
 SUPPORTED_FILE_TYPES = [
     ('.csv', 'CSV'),
     ('.xls, .xlsb, .xlsx, .xlsm', 'Excel'),
@@ -42,7 +43,7 @@ def read_file(file_info):
     Notes
     ----------
     To add support for new file types:
-        - Add parsing logic to 'read_file' using the 'BaseTemplate' below.
+        - Add parsing logic to 'read_file' using the 'BaseFileReader' below.
         - Add file type information to the 'SUPPORTED_FILE_TYPES' list above.
     """
     # logging config
@@ -55,7 +56,6 @@ def read_file(file_info):
         file_upload_time_log.error("Missing file path or file name.")
         return None
     try:
-        #default result
         df = None
         reader_map = {
             '.csv': csvReader,
@@ -70,8 +70,9 @@ def read_file(file_info):
             file_upload_time_log.info("File successfully parsed!")
         else:
             file_upload_time_log.warning("Unsupported file type: {file_type}")
-       
+        
         return df
+        
     except Exception as e:
         file_upload_time_log.error(f"Error while File Parsing: {e}")
         return str(e)
@@ -101,5 +102,5 @@ class jsonReader(BaseFileReader):
 
 class hdf5Reader(BaseFileReader):
     def read(self):
-        readFile = pd.read_hdf(self.file_path)
+        return pd.read_hdf(self.file_path)
 

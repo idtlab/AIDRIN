@@ -916,6 +916,20 @@ thead th{
   transform: translate(-50%, -50%) scale(1);
   transition: transform 0.15s ease-in-out, visibility 0.15s ease-in-out;
 }
+.preview{
+  background: var(--secondaryColorHalfOpacity);
+  display:flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+  padding:20px;
+  border-radius:20px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.1);
+  max-width: 2000px;
+  width:100%;
+  box-sizing: border-box;
+  overflow-x: scroll;
+  
+}
 .radio-group{
     font-size: large;
     margin: 15px;
