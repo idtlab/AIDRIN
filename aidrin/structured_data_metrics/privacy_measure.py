@@ -280,8 +280,18 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
         # Normalize risk: Higher k = lower risk, scale it from 0 to 1
         # Example: if k=1 => high risk (1.0), if k>=50 => very low risk (~0.0)
         dataset_size = clean_data.shape[0]
-        max_safe_k = max(5, int( dataset_size*0.01))   # 1% of dataset, clamped between 5 and 100
-        risk_score = min(1.0, round(1 - min(k_anonymity / max_safe_k, 1.0), 2))
+
+        if dataset_size < 150:
+            max_safe_k = max(3, int(dataset_size * 0.05))  # 5% of dataset or at least 3
+        elif dataset_size < 1500:
+            max_safe_k = max(10, int(dataset_size * 0.01))  # 1% or at least 10
+        else:
+            max_safe_k = min(100, int(dataset_size * 0.01))  # Cap at 100
+
+        if k_anonymity == 1:
+            risk_score = 1.0
+        else:
+            risk_score = min(1.0, round(1 - min(k_anonymity / max_safe_k, 1.0), 2))
 
         # Final result
         result_dict = {
@@ -361,8 +371,15 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
 
         # Calculate risk score based on min l-diversity
         dataset_size = clean_data.shape[0]
-        max_safe_l = max(2, int(dataset_size * 0.01))  # 1% of dataset or minimum 2
-        risk_score = min(1.0, round(1 - min_l_diversity / max_safe_l, 2))
+        if dataset_size < 150:
+            max_safe_l = max(2, int(dataset_size * 0.05))  # 5% for small datasets
+        elif dataset_size < 1500:
+            max_safe_l = max(10, int(dataset_size * 0.01))  # 1% or minimum 10
+        else:
+            max_safe_l = min(50, int(dataset_size * 0.01))  # Cap at 50
+
+        risk_score = max(0.0, min(1.0, round(1 - min_l_diversity / max_safe_l, 2)))
+
 
         # Compose result dictionary
         result_dict = {
@@ -447,7 +464,12 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
         img_stream.close()
 
         # Risk Score: Higher t_closeness → higher privacy loss → higher risk
-        risk_score = min(1.0, round(max_t, 2))  # Since TVD ∈ [0,1]
+        if max_t <= 0.1:
+            risk_score = 0.0
+        elif max_t >= 0.4:
+            risk_score = 1.0
+        else:
+            risk_score = round((max_t - 0.1) / 0.3, 2)
 
         result_dict = {
 
