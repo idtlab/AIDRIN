@@ -37,12 +37,16 @@
         <div style="display: flex; width: 35%; flex-direction:column;">
             <select id="fileTypeSelector" name="fileTypeSelector" class="fileType" style="margin:0; border-radius: 10px 10px 0 0; padding: 15px; width:100%; max-width:none; text-align:center; font-size:1.5em;">
                 <option disabled value="" {% if not file_type%}selected{% endif %}>Select a File Type</option>
-                <option value=".csv" {% if file_type == '.csv' %}selected{% endif %}>CSV (.csv)</option>
-                <option value=".npz"{% if file_type == '.npz' %}selected{% endif %}>NumPy (.npz)</option>
-                <option value=".json" {% if file_type == '.json' %}selected{% endif %}>JSON (.json)</option>
-                <option value=".h5" {% if file_type == '.h5' %}selected{% endif %}>HDF5 (.h5)</option>
-                <option value=".xls,.xlsb,.xlsx,.xlsm" {% if file_type == '.xls,.xlsb,.xlsx,.xlsm' %}selected{% endif %} style="border-radius: 0px 0px 10px 10px;">Excel (.xls, .xlsb, .xlsx, .xlsm) </option>
-                
+                {% for ext, label in supported_file_types %}
+                    <option value="{{ ext }}" {% if file_type == ext %}selected{% endif %}>
+                        {{ label }} ({{ ext }})
+                    </option>
+                {% endfor %}
+                <!-- 
+                Add additional supported file types here using the following template:
+                    <option value="new_file_type"{%if file_type=='new_file_type'%}selected{%endif%}>File Type Name (new_file_type)</option>
+                -->
+
             </select>
 
 
@@ -67,7 +71,7 @@
                         document.getElementById("fileUploadContainer").style.borderBottom = "none";
                         
                     </script>
-                    <h2>File Uploaded: {{session.get('uploaded_file_name')}}</h2>
+                    <h2 id="FileUploadMessage">File Uploaded: {{session.get('uploaded_file_name')}}</h2>
                     {% else %}
                     <h2 id="FileUploadMessage" style="transition: all 0.3s;">Please Upload a File</h2>
                     {% endif %}

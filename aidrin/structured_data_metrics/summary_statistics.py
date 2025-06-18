@@ -6,7 +6,7 @@ from celery import shared_task, Task
 from aidrin.read_file import read_file
 @shared_task(bind=True, ignore_result=False)
 def summary_histograms(self: Task, file_info):
-    df, _, _ = read_file(file_info)
+    df = read_file(file_info)
     # background colors for plots (light and dark mode)
     plot_colors = {
         'light': { 

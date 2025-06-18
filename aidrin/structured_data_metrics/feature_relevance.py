@@ -157,7 +157,7 @@ from sklearn.preprocessing import LabelEncoder
 def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
     try:
         try:
-            df, _, _ = read_file(file_info)
+            df = read_file(file_info)
         except Exception as e:
             print(f"Error reading file: {e}")
             return {"Error": "Failed to read the file. Please check the file path and type."}

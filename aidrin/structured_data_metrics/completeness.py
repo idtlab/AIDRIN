@@ -9,7 +9,7 @@ from celery import shared_task, Task
 @shared_task(bind=True, ignore_result=False)
 def completeness(self: Task, file_info):
     try:
-        file, _, _ = read_file(file_info)
+        file = read_file(file_info)
         # Calculate completeness metric for each column
         completeness_scores = (1 - file.isnull().mean()).to_dict()
         # Calculate overall completeness metric for the dataset

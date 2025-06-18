@@ -7,7 +7,7 @@ from celery import shared_task, Task
 from aidrin.read_file import read_file
 @shared_task(bind=True, ignore_result=False)
 def calculate_representation_rate(self: Task, columns, file_info):
-    dataframe, _, _ = read_file(file_info)
+    dataframe = read_file(file_info)
     representation_rate_info = {}
     processed_keys = set()  # Using a set to track processed pairs
     x_tick_keys = []
@@ -45,7 +45,7 @@ import base64
 import matplotlib.pyplot as plt
 @shared_task(bind=True, ignore_result=False)
 def create_representation_rate_vis(self: Task, columns, file_info):
-    dataframe, _, _ = read_file(file_info)
+    dataframe = read_file(file_info)
     x_tick_keys = []
     try:
         for column in columns:

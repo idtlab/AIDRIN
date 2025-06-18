@@ -8,7 +8,7 @@ from aidrin.read_file import read_file
 
 @shared_task(bind=True, ignore_result=False)
 def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file_info):
-    df, _, _ = read_file(file_info)
+    df = read_file(file_info)
     result_dict = {}
 
     try:
@@ -100,7 +100,7 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
 
 @shared_task(bind=True, ignore_result=False)
 def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file_info):
-    df, _, _ = read_file(file_info)
+    df = read_file(file_info)
     result_dict = {}
 
     try:

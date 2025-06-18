@@ -4,7 +4,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 @shared_task(bind=True, ignore_result=False)
 def duplicity(self: Task, file_info):
     try:
-        file,_,_= read_file(file_info)
+        file= read_file(file_info)
         dup_dict = {}
         # Calculate the proportion of duplicate values
         duplicate_proportions = (file.duplicated().sum() / len(file)) 

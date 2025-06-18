@@ -8,7 +8,7 @@ from aidrin.read_file import read_file
 @shared_task(bind=True, ignore_result=False)
 def outliers(self: Task, file_info):
     try:
-        file,_,_= read_file(file_info)
+        file = read_file(file_info)
         try:
             out_dict = {}
             # Select numerical columns for outlier detection

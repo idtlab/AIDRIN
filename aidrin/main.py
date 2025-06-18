@@ -18,7 +18,7 @@ from aidrin.structured_data_metrics.privacy_measure import generate_single_attri
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
 from aidrin.structured_data_metrics.summary_statistics import summary_histograms
 from aidrin.logging import setup_logging
-from aidrin.read_file import read_file
+from aidrin.read_file import read_file, SUPPORTED_FILE_TYPES
 import redis
 import logging
 import pandas as pd
@@ -145,6 +145,7 @@ def upload_file():
     return render_template('upload_file.html', 
                                    uploaded_file_path=uploaded_file_path,
                                    uploaded_file_name=uploaded_file_name,
+                                   supported_file_types=SUPPORTED_FILE_TYPES,
                                    file_type=file_type)
 
 @main.route('/retrieve_uploaded_file', methods=['GET'])
@@ -250,7 +251,7 @@ def fairness():
     file_name = session.get('uploaded_file_name')
     file_type = session.get('uploaded_file_type')
     file_info = (file_path, file_name, file_type)
-    file, _, _ = read_file(file_info)
+    file = read_file(file_info)
 
     if request.method == 'POST':
         metric_time_log.info("Fairness Request Started")
@@ -608,7 +609,7 @@ def get_summary_stastistics():
             file_name = session.get('uploaded_file_name')
             file_type = session.get('uploaded_file_type')
             file_info = (file_path, file_name, file_type)
-            df, _, _ = read_file(file_info)
+            df = read_file(file_info)
             # Extract summary statistics
             summary_statistics = df.describe().round(2).to_dict()
             
@@ -663,7 +664,7 @@ def extract_features():
         file_name = session.get('uploaded_file_name')
         file_type = session.get('uploaded_file_type')
         file_info = (file_path, file_name, file_type)
-        df, _, _ = read_file(file_info)
+        df= read_file(file_info)
 
         # Separate numerical and categorical columns
         numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]

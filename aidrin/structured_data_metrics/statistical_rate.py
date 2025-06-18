@@ -9,7 +9,7 @@ import pandas as pd
 @shared_task(bind=True, ignore_result=False)
 def calculate_statistical_rates(self: Task, y_true_column, sensitive_attribute_column, file_info):
     try:    
-        dataframe, _, _ = read_file(file_info)
+        dataframe = read_file(file_info)
         # Drop rows with NaN values in the specified columns
         dataframe_cleaned = dataframe.dropna(subset=[y_true_column, sensitive_attribute_column])
 
