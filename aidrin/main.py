@@ -351,14 +351,43 @@ def privacyPreservation():
         if request.form.get("single attribute risk score") == "yes":
             id_feature = request.form.get("id feature to measure single attribute risk score")
             eval_features = request.form.getlist("quasi identifiers to measure single attribute risk score")
-            print("Eval Features:",eval_features)
-            final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
+            print("Single Attribute Risk Score - ID Feature:", id_feature)
+            print("Single Attribute Risk Score - Eval Features:", eval_features)
+            print("Single Attribute Risk Score - Eval Features Type:", type(eval_features))
+            print("Single Attribute Risk Score - Form data keys:", list(request.form.keys()))
+            print("Single Attribute Risk Score - All form data:", dict(request.form))
+            
+            # Validate that user has selected quasi-identifiers
+            if not eval_features or (len(eval_features) == 1 and eval_features[0] == ''):
+                final_dict["Single attribute risk scoring"] = {
+                    "Error": "No quasi-identifiers selected. Please select at least one quasi-identifier for single attribute risk scoring.",
+                    "Single attribute risk scoring Visualization": "",
+                    "Description": "No quasi-identifiers were selected for analysis.",
+                    "Graph interpretation": "Please select quasi-identifiers and try again."
+                }
+            else:
+                final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
         
         #multpiple attribute risk score using markov model
         if request.form.get("multiple attribute risk score") == "yes":
             id_feature = request.form.get("id feature to measure multiple attribute risk score")
             eval_features = request.form.getlist("quasi identifiers to measure multiple attribute risk score")
-            final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
+            print("Multiple Attribute Risk Score - ID Feature:", id_feature)
+            print("Multiple Attribute Risk Score - Eval Features:", eval_features)
+            print("Multiple Attribute Risk Score - Eval Features Type:", type(eval_features))
+            print("Multiple Attribute Risk Score - Form data keys:", list(request.form.keys()))
+            print("Multiple Attribute Risk Score - All form data:", dict(request.form))
+            
+            # Validate that user has selected quasi-identifiers
+            if not eval_features or (len(eval_features) == 1 and eval_features[0] == ''):
+                final_dict["Multiple attribute risk scoring"] = {
+                    "Error": "No quasi-identifiers selected. Please select at least one quasi-identifier for multiple attribute risk scoring.",
+                    "Multiple attribute risk scoring Visualization": "",
+                    "Description": "No quasi-identifiers were selected for analysis.",
+                    "Graph interpretation": "Please select quasi-identifiers and try again."
+                }
+            else:
+                final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
 
         # k-Anonymity
         if request.form.get("k-anonymity") == "yes":

@@ -348,7 +348,7 @@ $(document).ready(function() {
 
 
 function createCheckboxContainer(features, tableId, nameTag) {
-       
+    console.log(features)  
     var table = $('#' + tableId);
     table.empty(); // Clear previous content
     var columns = 4; // Maximum number of columns

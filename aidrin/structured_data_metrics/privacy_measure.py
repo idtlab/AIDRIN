@@ -13,11 +13,20 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
         if df.empty:
             raise ValueError("Input DataFrame is empty.")
 
-        # eval_cols = eval_cols.split(',')
-    
-        # # Remove any leading or trailing whitespace from each element
-        # eval_cols = [identifier.strip() for identifier in eval_cols]
+        # Handle eval_cols - it might be a string or list
+        if isinstance(eval_cols, str):
+            # If it's a string, split by comma and clean up
+            eval_cols = [col.strip() for col in eval_cols.split(',') if col.strip()]
+        elif isinstance(eval_cols, list):
+            # If it's already a list, clean up each item
+            eval_cols = [col.strip() for col in eval_cols if col.strip()]
+        else:
+            raise ValueError("eval_cols must be a string or list")
 
+        # Validate that all columns exist in the dataframe
+        missing_cols = [col for col in eval_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Columns not found in dataset: {missing_cols}")
 
         # Check if the DataFrame is still non-empty after dropping missing values
         if df.empty:
@@ -96,6 +105,10 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
 
     except Exception as e:
         result_dict["Error"] = str(e)
+        # Ensure the visualization key is always present for frontend compatibility
+        result_dict['Single attribute risk scoring Visualization'] = ""
+        result_dict["Description"] = f"Error occurred: {str(e)}"
+        result_dict["Graph interpretation"] = "No visualization available due to error."
 
     return result_dict
 
@@ -109,8 +122,42 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
             result_dict["Value Error"] = "Input dataframe is empty"
             return result_dict
 
+        # Debug: Print input parameters
+        print(f"DEBUG: id_col = {id_col}, type = {type(id_col)}")
+        print(f"DEBUG: eval_cols = {eval_cols}, type = {type(eval_cols)}")
+        print(f"DEBUG: DataFrame columns = {list(df.columns)}")
+
+        # Handle eval_cols - it might be a string or list
+        if isinstance(eval_cols, str):
+            # If it's a string, split by comma and clean up
+            eval_cols = [col.strip() for col in eval_cols.split(',') if col.strip()]
+            print(f"DEBUG: After string processing, eval_cols = {eval_cols}")
+        elif isinstance(eval_cols, list):
+            # If it's already a list, clean up each item
+            eval_cols = [col.strip() for col in eval_cols if col.strip()]
+            print(f"DEBUG: After list processing, eval_cols = {eval_cols}")
+        else:
+            raise ValueError(f"eval_cols must be a string or list, got {type(eval_cols)}")
+
+        # Check if eval_cols is empty after processing
+        if not eval_cols:
+            raise ValueError("No valid columns provided in eval_cols after processing")
+
+        # Validate that all columns exist in the dataframe
+        missing_cols = [col for col in eval_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Columns not found in dataset: {missing_cols}")
+
+        # Validate id_col
+        if not id_col or id_col not in df.columns:
+            raise ValueError(f"ID column '{id_col}' not found in dataset")
+
+        print(f"DEBUG: Final eval_cols = {eval_cols}")
+        print(f"DEBUG: Final id_col = {id_col}")
+
         #select specidied columns from dataframe
         selected_columns = [id_col] + eval_cols
+        print(f"DEBUG: selected_columns = {selected_columns}")
         selected_df = df[selected_columns]
 
         selected_df = selected_df.dropna()
@@ -229,6 +276,10 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
 
     except Exception as e:
         result_dict["Error"] = str(e)
+        # Ensure the visualization key is always present for frontend compatibility
+        result_dict["Multiple attribute risk scoring Visualization"] = ""
+        result_dict["Description"] = f"Error occurred: {str(e)}"
+        result_dict["Graph interpretation"] = "No visualization available due to error."
         return result_dict
         
 def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):

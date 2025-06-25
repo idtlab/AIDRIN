@@ -76,17 +76,16 @@ function submitForm() {
 
     // Get the values of the checkboxes and concatenate them with a comma
     var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
-    var quasicheckboxValuesS = Array.from(formData.getAll('quasi identifiers to measure single attribute risk score')).join(',');
-    var quasicheckboxValuesM = Array.from(formData.getAll('quasi identifiers to measure multiple attribute risk score')).join(',');
     var numFeaCheckboxValues = Array.from(formData.getAll('numerical features for feature relevancy')).join(',');
     var catFeaCheckboxValues = Array.from(formData.getAll('categorical features for feature relevancy')).join(',');
     
     // Add the concatenated checkbox values to the form data
     formData.set('correlation columns', checkboxValues);
-    formData.set("quasi identifiers to measure single attribute risk score", quasicheckboxValuesS);
-    formData.set("quasi identifiers to measure multiple attribute risk score", quasicheckboxValuesM);
     formData.set("numerical features for feature relevancy", numFeaCheckboxValues);
     formData.set("categorical features for feature relevancy", catFeaCheckboxValues);
+    
+    // Note: We don't need to modify the quasi-identifier fields as they should remain as lists
+    // The backend will handle both string and list formats
     // Populate metrics visualizations
     var metrics = document.getElementById("metrics");
     if(metrics){
@@ -132,28 +131,58 @@ function submitForm() {
             'Completeness', 'Outliers', 'Representation Rate', 'Statistical Rate', 
             'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
             'Feature Relevance', 'Class Imbalance', 'DP Statistics', 
-            '', 'Multiple attribute risk scoring',
+            'Single attribute risk scoring', 'Multiple attribute risk scoring',
             'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
         ];
         visualizationTypes.forEach(function(type) {
-            if (isKeyPresentAndDefined(data, type) && isKeyPresentAndDefined(data[type], type + ' Visualization')) {
-                console.log('Adding visualization:', type);
-                var image = data[type][type + ' Visualization'];
-                var value = data[type]['Value'] || 'N/A'; 
-                var description = data[type]['Description'] || '';
-                var interpretation = data[type]['Graph interpretation'] || '';
-                var riskScore = data[type]['Risk Score'] || 'N/A'; 
-                var title = type;
-                var jsonData = JSON.stringify(data);
-                visualizationContent.push({
-                    image: image,
-                    riskScore: riskScore,
-                    value: value,
-                    description: description,
-                    interpretation: interpretation,
-                    title: title,
-                    jsonData: jsonData
-                });
+            console.log('Checking type:', type);
+            console.log('Data keys:', Object.keys(data));
+            if (isKeyPresentAndDefined(data, type)) {
+                console.log('Found type in data:', type);
+                console.log('Type data keys:', Object.keys(data[type]));
+                if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
+                    console.log('Adding visualization:', type);
+                    var image = data[type][type + ' Visualization'];
+                    var value = data[type]['Value'] || 'N/A'; 
+                    var description = data[type]['Description'] || '';
+                    var interpretation = data[type]['Graph interpretation'] || '';
+                    var riskScore = data[type]['Risk Score'] || 'N/A'; 
+                    var title = type;
+                    var jsonData = JSON.stringify(data);
+                    
+                    // Check if there's an error or if the image is empty
+                    if (data[type]['Error']) {
+                        console.log('Error in', type, ':', data[type]['Error']);
+                        // Still add to visualization content but with error message
+                        visualizationContent.push({
+                            image: image || "",
+                            riskScore: riskScore,
+                            value: value,
+                            description: description,
+                            interpretation: interpretation,
+                            title: title,
+                            jsonData: jsonData,
+                            hasError: true
+                        });
+                    } else if (image && image.trim() !== "") {
+                        visualizationContent.push({
+                            image: image,
+                            riskScore: riskScore,
+                            value: value,
+                            description: description,
+                            interpretation: interpretation,
+                            title: title,
+                            jsonData: jsonData,
+                            hasError: false
+                        });
+                    } else {
+                        console.log('Empty visualization for:', type);
+                    }
+                } else {
+                    console.log('Missing visualization key for:', type, 'Expected:', type + ' Visualization');
+                }
+            } else {
+                console.log('Type not found in data:', type);
             }
         });
         // Boolean flag to track if heading has been added
@@ -173,14 +202,29 @@ function submitForm() {
             visualizationContent.forEach(function(content, index) {
                 //check if vizualization is duplicity with score=0 (no dublicates)
               
-                const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
                 const visualizationId = `visualization_${index}`;
-                metrics.innerHTML += `<div class="visualization-container">
+                let visualizationHtml = `<div class="visualization-container">
                         <div class="toggle" onclick="toggleVisualization('${visualizationId}')">${content.title}</div>
-                        <div id="${visualizationId}" style="display: none;">
-                            <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>
-                            
+                        <div id="${visualizationId}" style="display: none;">`;
+                
+                if (content.hasError) {
+                    // Display error message instead of image
+                    visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
+                        <strong>Error:</strong> ${content.description}
+                    </div>`;
+                } else if (content.image && content.image.trim() !== "") {
+                    // Display normal visualization
+                    const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
+                    visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
+                    <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
+                } else {
+                    // Display message for empty visualization
+                    visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
+                        No visualization available for this metric.
+                    </div>`;
+                }
+                
+                visualizationHtml += `
                             ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
                             ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
                            <div><strong>Description:</strong> ${content.description}</div>
@@ -189,6 +233,8 @@ function submitForm() {
                         </div>
                     
                     </div>`;
+                
+                metrics.innerHTML += visualizationHtml;
             });
             
             //check if duplicity is present and 0 (no duplicity)
@@ -234,7 +280,6 @@ function submitForm() {
     })
     .catch(error => {
         console.error('Error:', error);
-        //call popup
         openErrorPopup("Visualization Error",error); // call error popup
         
         // Check if "Completeness Visualization" key is present
@@ -733,6 +778,7 @@ function removeVisualizationKey(data) {
 //         noisyContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
 
+    
 //      // Show single attribute risk scores
 //      var singleRiskContent = document.getElementById('singleRiskVis');
 //     if (singleRiskContent) {
