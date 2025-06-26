@@ -5,7 +5,7 @@ import base64
 from io import BytesIO
 import os
 from celery import shared_task, Task
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 # Function to add Laplace noise
 def add_laplace_noise(data, epsilon):
     scale = 1 / epsilon

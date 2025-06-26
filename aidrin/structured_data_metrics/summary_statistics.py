@@ -3,7 +3,7 @@ import base64
 import matplotlib.pyplot as plt
 import seaborn as sns
 from celery import shared_task, Task
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 @shared_task(bind=True, ignore_result=False)
 def summary_histograms(self: Task, file_info):
     df = read_file(file_info)

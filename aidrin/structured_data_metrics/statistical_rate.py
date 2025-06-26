@@ -4,7 +4,7 @@ import base64
 import io
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 import pandas as pd
 @shared_task(bind=True, ignore_result=False)
 def calculate_statistical_rates(self: Task, y_true_column, sensitive_attribute_column, file_info):

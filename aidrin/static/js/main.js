@@ -20,8 +20,10 @@ function togglePillarDropdown(id) {
 //for uploads
 function uploadForm() {
     const form = document.getElementById('uploadForm');
-    form.submit();  // Submit the form automatically when a file is selected
+    form.submit();
 }
+
+
 //to clear
 function clearFile() {
     fetch('/clear', {
@@ -51,7 +53,88 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     // Call it once on page load 
     updateFileInputBasedOnType(fileTypeElement, fileInput,fileUploadMessage);
+
+    if (window.renderPreview) {
+        const { preview, checked } = window.renderPreview();
+
+        // Get table element by ID
+        const table = $('#file_preview');
+        table.empty();
+        // Add Select All
+        const selectAllRow = $('<tr>');
+        const selectAllCheckbox = $('<input>').attr({
+            type: 'checkbox',
+            id: 'selectAllCheckbox',
+            style: 'margin-right:10px',
+            onchange: 'toggleSelectAll(this)'
+        });
+        const selectAllLabel = $('<label>')
+            .attr('style', 'display: flex; flex-direction: row; min-width: 125px; align-items: center;margin-left:10px;')
+            .addClass('material-checkbox')
+            .append(selectAllCheckbox)
+            .append($('<span>').addClass('checkmark'))
+            .append('Select All');
+
+        const selectAllCell = $('<td style="border-bottom:0px;">').append(selectAllLabel);
+        selectAllRow.append(selectAllCell);
+        table.append(selectAllRow);
+        for (let i = 0; i < preview.length; i++) {
+            const row = $('<tr>');
+            table.append(row);
+
+            const checkbox = $('<input>').attr({
+                type: 'checkbox',
+                class: 'checkbox individual',
+                style: 'margin-right:10px',
+                onchange: 'toggleValueIndividual(this)',
+                name: 'checkboxValues',
+                id: preview[i] + 'checkbox_' + i,
+                value: preview[i],
+            });
+
+            const span = $('<span>').addClass('checkmark');
+
+            const label = $('<label>')
+                .attr('style', 'display: flex; flex-direction: row; min-width: 125px; align-items: center;margin-left:30px;')
+                .attr('class', 'material-checkbox')
+                .attr('id', preview[i] + 'checkbox_' + i);
+
+            label.append(checkbox).append(span).append(preview[i]);
+            const cell = $('<td style="border-bottom:0px;">').append(label);
+            row.append(cell);
+        }
+        const checkboxes = document.querySelectorAll('.checkbox.individual');
+        checkboxes.forEach(cb => {
+            const label = cb.closest("label");
+            const text = label.textContent.trim();
+            
+            if (checked.includes(text)) {
+                cb.checked = true;
+                cb.value = text;
+            } else {
+                cb.checked = false;
+                cb.value = "no";
+            }
+
+            console.log("Checkbox value:", cb.value); // For debugging
+        });
+    }
 });
+//select all functionality
+function toggleSelectAll(source) {
+    const checkboxes = document.querySelectorAll('.checkbox.individual');
+    checkboxes.forEach(cb => {
+        cb.checked = source.checked;
+        if (cb.checked) {
+            const label = cb.closest("label");
+            const text = label.textContent.trim();
+            cb.value = text;
+        } else {
+            cb.value = "no";
+        }
+        console.log("Checkbox value:", cb.value); // For debugging 
+    });
+}
 //changes file upload ability
 function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage) {
     const fileType = fileTypeElement.value;
@@ -73,7 +156,30 @@ function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessag
     }
 }
 
-
+function modifyFile(){
+    var form = document.getElementById('filePreview');
+    var formData = new FormData(form);
+    var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
+    console.log("Checkbox Values:",checkboxValues);
+    fetch('/filter_file', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ keys: checkboxValues })  // Send as JSON list
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.href = '/upload_file';  // Now manually reload
+        } else {
+            openErrorPopup('Filtering Error', data.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        openErrorPopup('Network Error', error);
+    });
+}
 function submitForm() {
     
     var form = document.getElementById('uploadForm');
@@ -919,7 +1025,26 @@ function toggleValueIndividual(checkbox) {
     } else {
         checkbox.value = "no";
     }
+    updateSelectAllState();
     console.log("Checkbox value:", checkbox.value); // For debugging
+}
+function updateSelectAllState() {
+    const checkboxes = document.querySelectorAll('.checkbox.individual');
+    const selectAll = document.getElementById('selectAllCheckbox');
+
+    const total = checkboxes.length;
+    const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+
+    if (checked === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    } else if (checked === total) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+    } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = true;
+    }
 }
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function() {
@@ -1030,3 +1155,14 @@ function closeDatalogPopup(){
     //close datalog popup has to be present in the DOM for the function to call already
     datalogPopup.classList.remove("open-popup");
 }
+function closeErrorPopup(){
+    //error popup has to be present in the DOM for the function to call already
+    errorPopup.classList.remove("open-popup");
+}
+// Catch resource loading errors by adding an event listener to the window
+window.addEventListener('error', function (e) {
+    if (e.target && (e.target.tagName === 'IMG' || e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+        console.error("Resource failed to load:", e.target.src || e.target.href);
+        openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
+    }
+}, true); // useCapture=true is important for resource errors

@@ -3,7 +3,7 @@ import base64
 import matplotlib.pyplot as plt
 import time
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 from celery import shared_task, Task
 
 @shared_task(bind=True, ignore_result=False)

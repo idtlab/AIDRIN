@@ -4,7 +4,7 @@ import io
 import base64
 from celery.exceptions import SoftTimeLimitExceeded
 from celery import shared_task, Task
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 @shared_task(bind=True, ignore_result=False)
 def calculate_representation_rate(self: Task, columns, file_info):
     dataframe = read_file(file_info)

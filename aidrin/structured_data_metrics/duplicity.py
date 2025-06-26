@@ -1,5 +1,5 @@
 from celery import shared_task, Task
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 from celery.exceptions import SoftTimeLimitExceeded
 @shared_task(bind=True, ignore_result=False)
 def duplicity(self: Task, file_info):

@@ -89,14 +89,16 @@ window.addEventListener('error', function (e) {
         console.error("Resource failed to load:", e.target.src || e.target.href);
         openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
     }
-}, true); // useCapture=true is important for resource errors
+}, true); 
 
 
 
 
 $(document).ready(function () {
+        console.log("Feature Set");
+        console.log("retrieve:",retrieveFileUrl);
         fetch(retrieveFileUrl)
-            .then(response => response.blob())  // Convert  to a Blob
+            .then(response => response.blob())  // Convert to a Blob
             .then(fileBlob => {
                 //append to form
                 var formData = new FormData();
@@ -112,7 +114,6 @@ $(document).ready(function () {
             processData: false,
             success: function (response) {
                 if (response.success) {
-
                     // Check if either categorical or numerical features exist in the response
                     if ('categorical_features' in response) {
                         createDropdown(response.categorical_features, 'catFeaturesDropdown');

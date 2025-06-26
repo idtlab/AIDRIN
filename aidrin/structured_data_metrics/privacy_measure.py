@@ -4,7 +4,7 @@ import io
 import base64
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 
 @shared_task(bind=True, ignore_result=False)
 def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file_info):

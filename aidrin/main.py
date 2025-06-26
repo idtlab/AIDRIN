@@ -18,7 +18,7 @@ from aidrin.structured_data_metrics.privacy_measure import generate_single_attri
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
 from aidrin.structured_data_metrics.summary_statistics import summary_histograms
 from aidrin.logging import setup_logging
-from aidrin.read_file import read_file, SUPPORTED_FILE_TYPES
+from aidrin.file_parser import read_file, parse_file,filter_file, SUPPORTED_FILE_TYPES
 import redis
 import logging
 import pandas as pd
@@ -111,9 +111,6 @@ def result(id: str):
 @main.route('/upload_file',methods=['GET','POST'])
 def upload_file():
     
-    
-    uploaded_file_path = None
-
     if request.method == 'POST':
         #Log file processing request
         file_upload_time_log.info("File upload initiated")
@@ -121,38 +118,49 @@ def upload_file():
         file = request.files['file']
         
         if file:
+            clear_file()
             #create name and add to folder
             displayName= file.filename
-            filename = f"{uuid.uuid4().hex}_{file.filename}"
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+            file_name = f"{uuid.uuid4().hex}_{file.filename}"
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], file_name)
+            file_type = request.form.get('fileTypeSelector')
             print(f"Saving file to {file_path}")
             #save file 
             file.save(file_path)
             #store the file path in the session
             session['uploaded_file_name'] = displayName
             session['uploaded_file_path'] = file_path
-            session['uploaded_file_type'] = request.form.get('fileTypeSelector')
+            session['uploaded_file_type'] = file_type
             print("fileType POST: %s",request.form.get('fileTypeSelector'))
+            
             return redirect(url_for('upload_file'))
     
     file_name = session.get('uploaded_file_name')
     file_path = session.get('uploaded_file_path')
     file_type = session.get('uploaded_file_type')
-    file_info=(file_path, file_name, file_type)
+    file_info = (file_path, file_name, file_type)
+    file_preview = None
+    current_checked_keys = None
+    if(file_type=='.json' or file_type=='.h5'):
+        if 'original_file_path' in session:
+            original_file_path = session.get('original_file_path')
+            original_file_info = (original_file_path, file_name, file_type)
+            file_preview = parse_file(original_file_info)
+            current_checked_keys = parse_file(file_info)
+        else:
+            file_preview = parse_file(file_info)
+    file_upload_time_log.info("upload file: %s", session.get('uploaded_file_path'))
     #log uploaded file
-    df_html=None
     if file_name and file_path: 
         file_upload_time_log.info("File Uploaded. Type: %s",file_type)
-        df = read_file(file_info) #if file, create a preview with df 
-        df = df .iloc[:10]
-        df_html = df.to_html(classes='table table-striped', index=False, border=0) #convert df to html
-    
+       
     return render_template('upload_file.html', 
                                    uploaded_file_path=file_path,
                                    uploaded_file_name=file_name,
                                    supported_file_types=SUPPORTED_FILE_TYPES,
                                    file_type=file_type,
-                                   df_html=df_html)
+                                   file_preview=file_preview,
+                                   current_checked_keys = current_checked_keys)
 
 @main.route('/retrieve_uploaded_file', methods=['GET'])
 def retrieve_uploaded_file():
@@ -178,11 +186,16 @@ def clear_file():
     file_path = session.pop('uploaded_file_path', None)
     file_name = session.pop('uploaded_file_name', None)
     file_type = session.pop('uploaded_file_type', None)
-    if file_path and os.path.exists(file_path):
-        os.remove(file_path)  # Delete the file 
-        file_upload_time_log.info("File Cleared Succesfully")
-    else:
-        file_upload_time_log.info("File Clear Failure: No File Found")
+    session.clear()
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    try:
+        for filename in os.listdir(upload_folder):
+            file_path = os.path.join(upload_folder, filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+    except Exception as e:
+        file_upload_time_log.info("File Clear Failure: Unable to clear folder")
+        return jsonify({'success': False, 'error': str(e)}), 500
     return redirect(url_for('upload_file'))
 
 # Clear stale file session data before each request 
@@ -192,9 +205,43 @@ def clear_stale_file_session():
     if file_path:
         if not os.path.exists(file_path):
             # Only clear session if the file was expected but is missing
-            session.pop('uploaded_file_name', None)
-            session.pop('uploaded_file_path', None)
-            session.pop('uploaded_file_type', None)
+            session.clear()
+    
+
+@main.route('/filter_file',methods=['POST'])
+def refine_file():
+    try:
+        kept_keys = request.json.get('keys')  # list
+        
+        file_name = session.get('uploaded_file_name')
+        file_type = session.get('uploaded_file_type')
+       
+        if 'original_file_path' not in session:
+            #set original file to allow user to change selections
+            session['original_file_path'] = session.get('uploaded_file_path')
+            file_path = session.get('uploaded_file_path')
+            file_info = (file_path, file_name, file_type)
+            new_file_path = filter_file(file_info, kept_keys)
+             
+            session['uploaded_file_path'] = new_file_path
+            file_upload_time_log.info("filter_file: %s", session['uploaded_file_path'])
+        else:
+            #use original file to keep original groups
+            file_path = session.get('original_file_path')
+            file_info = (file_path, file_name, file_type)
+            new_file_path = filter_file(file_info, kept_keys)
+            
+            #remove current filtered file
+            uploaded_file = session.get('uploaded_file_path')
+            if uploaded_file and os.path.exists(uploaded_file):
+                os.remove(uploaded_file)
+            #set working path to new path
+            session['uploaded_file_path'] = new_file_path
+            file_upload_time_log.info("filter_file: %s", session['uploaded_file_path'])
+        return jsonify({'success': True})
+    except Exception as e:
+        file_upload_time_log.info(f"Error: {e}")
+        return jsonify({'error': str(e)}), 400
 
 ######## Metric Page Routes ###########
 

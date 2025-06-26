@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 @shared_task(bind=True, ignore_result=False)
 def outliers(self: Task, file_info):
     try:

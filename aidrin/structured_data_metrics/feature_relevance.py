@@ -9,7 +9,7 @@ import io
 import base64
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 
 # def calc_shapley(df, cat_cols, num_cols, target_col):
 #     """

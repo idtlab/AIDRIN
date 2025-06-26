@@ -6,7 +6,7 @@ import base64
 from math import sqrt, log
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.read_file import read_file
+from aidrin.file_parser import read_file
 
 def imbalance_degree(classes, distance="EU"):
     """
