@@ -27,7 +27,7 @@ git clone https://github.com/idtlab/AIDRIN.git
 cd AIDRIN
 ```
 
-### 2. Create and Activate the COnda Environment
+### 2. Create and Activate the Conda Environment
 
 ```bash
 conda create -n aidrin-env python==3.10 -y
