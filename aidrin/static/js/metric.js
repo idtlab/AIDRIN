@@ -124,13 +124,17 @@ $(document).ready(function () {
                     }
 
                     if ('all_features' in response){
+                        // Use all features for k-anonymity, l-diversity, t-closeness, and entropy risk
                         createCheckboxContainer(response.all_features,'kAnonymityQIsCheckbox','quasi identifiers for k-anonymity');
-                        updateMetricCheckboxState('k-anonymity');
                         createCheckboxContainer(response.all_features,'lDiversityQIsCheckbox','quasi identifiers for l-diversity');
                         createCheckboxContainer(response.all_features,'tClosenessQIsCheckbox','quasi identifiers for t-closeness');
+                        createCheckboxContainer(response.all_features,'entropyRiskQIsCheckbox','quasi identifiers for entropy risk')
+                        
+                        // Use all features for risk scoring (these can share features with other metrics)
                         createCheckboxContainer(response.all_features,'catFeaturesCheckbox2','quasi identifiers to measure single attribute risk score')
                         createCheckboxContainer(response.all_features,'catFeaturesCheckbox3','quasi identifiers to measure multiple attribute risk score')
-                        createCheckboxContainer(response.all_features,'entropyRiskQIsCheckbox','quasi identifiers for entropy risk')
+                        
+                        // Create dropdowns for all features
                         createDropdown(response.all_features,'allFeaturesDropdownRepRate');
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate1');
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate2');
@@ -143,7 +147,20 @@ $(document).ready(function () {
                         createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis2');
                         createDropdown(response.all_features, 'lDiversitySensitiveDropdown');
                         createDropdown(response.all_features, 'tClosenessSensitiveDropdown');
-                        updateCrossDisable();
+                        
+                        // Initialize main metric checkbox states first
+                        updateMetricCheckboxState('k-anonymity');
+                        updateMetricCheckboxState('l-diversity');
+                        updateMetricCheckboxState('t-closeness');
+                        updateMetricCheckboxState('single attribute risk score');
+                        updateMetricCheckboxState('multiple attribute risk score');
+                        updateMetricCheckboxState('entropy risk');
+                        
+                        // Then initialize cross-disabling for each metric separately
+                        // Use setTimeout to ensure DOM is fully updated
+                        setTimeout(function() {
+                            updateCrossDisable();
+                        }, 100);
                     }
                     
                 } else {
@@ -386,46 +403,144 @@ function createCheckboxContainer(features, tableId, nameTag) {
 }
 });
 function updateCrossDisable() {
-    const selectedQIs = new Set();
-    $('input[name^="quasi identifiers"]').each(function () {
-        if ($(this).is(':checked')) {
-            selectedQIs.add($(this).val());
-        }
+    // Get selected quasi-identifiers for each metric separately
+    // This allows users to select the same feature for different metrics when appropriate
+    const kAnonymityQIs = new Set();
+    const lDiversityQIs = new Set();
+    const tClosenessQIs = new Set();
+    const entropyRiskQIs = new Set();
+    const singleAttributeQIs = new Set();
+    const multipleAttributeQIs = new Set();
+
+    // Collect selected QIs for each metric independently
+    $('input[name="quasi identifiers for k-anonymity"]:checked').each(function() {
+        kAnonymityQIs.add($(this).val());
+    });
+    
+    $('input[name="quasi identifiers for l-diversity"]:checked').each(function() {
+        lDiversityQIs.add($(this).val());
+    });
+    
+    $('input[name="quasi identifiers for t-closeness"]:checked').each(function() {
+        tClosenessQIs.add($(this).val());
+    });
+    
+    $('input[name="quasi identifiers for entropy risk"]:checked').each(function() {
+        entropyRiskQIs.add($(this).val());
+    });
+    
+    $('input[name="quasi identifiers to measure single attribute risk score"]:checked').each(function() {
+        singleAttributeQIs.add($(this).val());
+    });
+    
+    $('input[name="quasi identifiers to measure multiple attribute risk score"]:checked').each(function() {
+        multipleAttributeQIs.add($(this).val());
     });
 
-    const sensitiveDropdowns = ['#lDiversitySensitiveDropdown', '#tClosenessSensitiveDropdown','#allFeaturesDropdownMMS', '#allFeaturesDropdownMMM'];
-
-    sensitiveDropdowns.forEach(dropdownId => {
-        $(`${dropdownId} option`).each(function () {
-            const val = $(this).text();
-            if (selectedQIs.has(val)) {
-                $(this).prop('disabled', true);
-            } else {
-                $(this).prop('disabled', false);
-            }
-        });
-    });
-
+    // Get selected sensitive attributes for each metric
     const selectedSensitives = new Set();
+    const sensitiveDropdowns = ['#lDiversitySensitiveDropdown', '#tClosenessSensitiveDropdown','#allFeaturesDropdownMMS', '#allFeaturesDropdownMMM'];
+    
     sensitiveDropdowns.forEach(dropdownId => {
         const selected = $(dropdownId).val();
         if (selected) selectedSensitives.add(selected);
     });
 
-    $('input[name^="quasi identifiers"]').each(function () {
+    // Check if main metric checkboxes are enabled
+    const kAnonymityEnabled = $('input[name="k-anonymity"]').is(':checked');
+    const lDiversityEnabled = $('input[name="l-diversity"]').is(':checked');
+    const tClosenessEnabled = $('input[name="t-closeness"]').is(':checked');
+    const entropyRiskEnabled = $('input[name="entropy risk"]').is(':checked');
+    const singleAttributeEnabled = $('input[name="single attribute risk score"]').is(':checked');
+    const multipleAttributeEnabled = $('input[name="multiple attribute risk score"]').is(':checked');
+
+    // Update dropdowns - only disable options that are selected as QIs in the SAME metric
+    // This prevents selecting the same feature as both QI and sensitive attribute within the same metric
+    $('#lDiversitySensitiveDropdown option').each(function() {
+        const val = $(this).text();
+        $(this).prop('disabled', lDiversityQIs.has(val));
+    });
+    
+    $('#tClosenessSensitiveDropdown option').each(function() {
+        const val = $(this).text();
+        $(this).prop('disabled', tClosenessQIs.has(val));
+    });
+    
+    $('#allFeaturesDropdownMMS option').each(function() {
+        const val = $(this).text();
+        $(this).prop('disabled', singleAttributeQIs.has(val));
+    });
+    
+    $('#allFeaturesDropdownMMM option').each(function() {
+        const val = $(this).text();
+        $(this).prop('disabled', multipleAttributeQIs.has(val));
+    });
+
+    // Update QI checkboxes - only disable if selected as sensitive in the SAME metric
+    // AND ensure they're disabled if the main metric checkbox is not checked
+    $('input[name="quasi identifiers for k-anonymity"]').each(function() {
         const val = $(this).val();
-        if (selectedSensitives.has(val)) {
-            $(this).prop('disabled', true);
-        } else {
-            if (!selectedQIs.has(val)) {
-                $(this).prop('disabled', false);
-            }
-        }
+        const isSelectedAsSensitive = $('#lDiversitySensitiveDropdown').val() === val || $('#tClosenessSensitiveDropdown').val() === val;
+        $(this).prop('disabled', !kAnonymityEnabled || isSelectedAsSensitive);
+    });
+    
+    $('input[name="quasi identifiers for l-diversity"]').each(function() {
+        const val = $(this).val();
+        const isSelectedAsSensitive = $('#lDiversitySensitiveDropdown').val() === val;
+        $(this).prop('disabled', !lDiversityEnabled || isSelectedAsSensitive);
+    });
+    
+    $('input[name="quasi identifiers for t-closeness"]').each(function() {
+        const val = $(this).val();
+        const isSelectedAsSensitive = $('#tClosenessSensitiveDropdown').val() === val;
+        $(this).prop('disabled', !tClosenessEnabled || isSelectedAsSensitive);
+    });
+    
+    $('input[name="quasi identifiers for entropy risk"]').each(function() {
+        const val = $(this).val();
+        $(this).prop('disabled', !entropyRiskEnabled);
+    });
+    
+    $('input[name="quasi identifiers to measure single attribute risk score"]').each(function() {
+        const val = $(this).val();
+        const isSelectedAsSensitive = $('#allFeaturesDropdownMMS').val() === val;
+        $(this).prop('disabled', !singleAttributeEnabled || isSelectedAsSensitive);
+    });
+    
+    $('input[name="quasi identifiers to measure multiple attribute risk score"]').each(function() {
+        const val = $(this).val();
+        const isSelectedAsSensitive = $('#allFeaturesDropdownMMM').val() === val;
+        $(this).prop('disabled', !multipleAttributeEnabled || isSelectedAsSensitive);
     });
 }
 $(document).ready(function () {
-  // Trigger when a QI checkbox changes
-  $(document).on('change', 'input[name^="quasi identifiers"]', function () {
+  // Trigger when main metric checkboxes change
+  $(document).on('change', 'input[name="k-anonymity"], input[name="l-diversity"], input[name="t-closeness"], input[name="entropy risk"], input[name="single attribute risk score"], input[name="multiple attribute risk score"]', function () {
+    updateCrossDisable();
+  });
+  
+  // Trigger when a QI checkbox changes - now each metric is independent
+  $(document).on('change', 'input[name="quasi identifiers for k-anonymity"]', function () {
+    updateCrossDisable();
+  });
+  
+  $(document).on('change', 'input[name="quasi identifiers for l-diversity"]', function () {
+    updateCrossDisable();
+  });
+  
+  $(document).on('change', 'input[name="quasi identifiers for t-closeness"]', function () {
+    updateCrossDisable();
+  });
+  
+  $(document).on('change', 'input[name="quasi identifiers for entropy risk"]', function () {
+    updateCrossDisable();
+  });
+  
+  $(document).on('change', 'input[name="quasi identifiers to measure single attribute risk score"]', function () {
+    updateCrossDisable();
+  });
+  
+  $(document).on('change', 'input[name="quasi identifiers to measure multiple attribute risk score"]', function () {
     updateCrossDisable();
   });
 
@@ -442,12 +557,3 @@ function updateMetricCheckboxState(metricCheckboxName) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    updateMetricCheckboxState('k-anonymity');
-    updateMetricCheckboxState('l-diversity');
-    updateMetricCheckboxState('t-closeness');
-    updateMetricCheckboxState('single attribute risk score');
-    updateMetricCheckboxState('multiple attribute risk score');
-    updateMetricCheckboxState('entropy risk');
-    // ...add for all your metrics
-});
