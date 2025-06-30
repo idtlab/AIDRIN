@@ -12,7 +12,7 @@ from aidrin.structured_data_metrics.FAIRness_dcat import categorize_metadata,ext
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree,class_distribution_plot
-from aidrin.structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores
+from aidrin.structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores, compute_k_anonymity, compute_l_diversity, compute_t_closeness, compute_entropy_risk
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
 from aidrin import app
 import pandas as pd
@@ -350,20 +350,71 @@ def privacyPreservation():
         #single attribute risk scores using markov model
         if request.form.get("single attribute risk score") == "yes":
             id_feature = request.form.get("id feature to measure single attribute risk score")
-            eval_features = request.form.get("quasi identifiers to measure single attribute risk score").split(",")
-            print("Eval Features:",eval_features)
-            final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
+            eval_features = request.form.getlist("quasi identifiers to measure single attribute risk score")
+            print("Single Attribute Risk Score - ID Feature:", id_feature)
+            print("Single Attribute Risk Score - Eval Features:", eval_features)
+            print("Single Attribute Risk Score - Eval Features Type:", type(eval_features))
+            print("Single Attribute Risk Score - Form data keys:", list(request.form.keys()))
+            print("Single Attribute Risk Score - All form data:", dict(request.form))
+            
+            # Validate that user has selected quasi-identifiers
+            if not eval_features or (len(eval_features) == 1 and eval_features[0] == ''):
+                final_dict["Single attribute risk scoring"] = {
+                    "Error": "No quasi-identifiers selected. Please select at least one quasi-identifier for single attribute risk scoring.",
+                    "Single attribute risk scoring Visualization": "",
+                    "Description": "No quasi-identifiers were selected for analysis.",
+                    "Graph interpretation": "Please select quasi-identifiers and try again."
+                }
+            else:
+                final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
         
         #multpiple attribute risk score using markov model
         if request.form.get("multiple attribute risk score") == "yes":
             id_feature = request.form.get("id feature to measure multiple attribute risk score")
-            eval_features = request.form.get("quasi identifiers to measure multiple attribute risk score").split(",")
-            final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
-    
+            eval_features = request.form.getlist("quasi identifiers to measure multiple attribute risk score")
+            print("Multiple Attribute Risk Score - ID Feature:", id_feature)
+            print("Multiple Attribute Risk Score - Eval Features:", eval_features)
+            print("Multiple Attribute Risk Score - Eval Features Type:", type(eval_features))
+            print("Multiple Attribute Risk Score - Form data keys:", list(request.form.keys()))
+            print("Multiple Attribute Risk Score - All form data:", dict(request.form))
+            
+            # Validate that user has selected quasi-identifiers
+            if not eval_features or (len(eval_features) == 1 and eval_features[0] == ''):
+                final_dict["Multiple attribute risk scoring"] = {
+                    "Error": "No quasi-identifiers selected. Please select at least one quasi-identifier for multiple attribute risk scoring.",
+                    "Multiple attribute risk scoring Visualization": "",
+                    "Description": "No quasi-identifiers were selected for analysis.",
+                    "Graph interpretation": "Please select quasi-identifiers and try again."
+                }
+            else:
+                final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
+
+        # k-Anonymity
+        if request.form.get("k-anonymity") == "yes":
+            k_qis = request.form.getlist("quasi identifiers for k-anonymity")
+            final_dict["k-Anonymity"] = compute_k_anonymity(file, k_qis)
+
+        # l-Diversity
+        if request.form.get("l-diversity") == "yes":
+            l_qis = request.form.getlist("quasi identifiers for l-diversity")
+            l_sensitive = request.form.get("sensitive attribute for l-diversity")
+            final_dict["l-Diversity"] = compute_l_diversity(file, l_qis, l_sensitive)
+
+        # t-Closeness
+        if request.form.get("t-closeness") == "yes":
+            t_qis = request.form.getlist("quasi identifiers for t-closeness")
+            t_sensitive = request.form.get("sensitive attribute for t-closeness")
+            final_dict["t-Closeness"] = compute_t_closeness(file, t_qis, t_sensitive)
+
+        # Entropy Risk
+        if request.form.get("entropy risk") == "yes":
+            entropy_qis = request.form.getlist("quasi identifiers for entropy risk")
+            final_dict["Entropy Risk"] = compute_entropy_risk(file, entropy_qis)
+
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
-              
+        #print("Final Dict Privacy:", final_dict)      
         return store_result('privacyPreservation',final_dict)
     
     return get_result_or_default('privacyPreservation',uploaded_file_path,uploaded_file_name)
