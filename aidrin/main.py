@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, Response,render_template,send_from_directory,session,redirect,url_for, current_app
+from flask import Flask, request, jsonify, send_file, Response,render_template,send_from_directory,session,redirect,url_for, current_app, make_response
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.outliers import outliers
 from aidrin.structured_data_metrics.duplicity import duplicity
@@ -26,7 +26,8 @@ import base64
 import seaborn as sns
 import uuid
 import logging
-
+import importlib
+import inspect
 ##### Time Logging #####
 
 TIMEOUT_DURATION = 60 #seconds
@@ -635,6 +636,111 @@ def summary_histograms(df):
 
     return line_graphs
 
+@app.route('/custom_dr', methods=['GET', 'POST'])
+def custom_dr():
+    # if request.method == 'POST':
+    #     # Handle POST request logic here
+    #     return jsonify({"message": "Custom Data Readiness POST request handled successfully"})
+    return render_template('metricTemplates/custom_dr.html')
+
+@app.route('/download-base-dr')
+def download_base_dr():
+    custom_dr_dir = os.path.join(os.getcwd(), 'custom_dr')
+    return send_from_directory(custom_dr_dir, 'base_dr.py', as_attachment=True)
+
+@app.route('/generate-template', methods=['POST'])
+def generate_template():
+    class_name = request.form.get('class_name')
+    filename = f"{class_name.lower()}.py"
+
+    # Basic validation
+    if not class_name.isidentifier():
+        return "Invalid class name", 400
+
+    template = f"""from .base_dr import BaseDRAgent
+
+from typing import Any
+class {class_name}(BaseDRAgent):
+    def __init__(self, dataset: Any, **kwargs):
+        # Initialize the parent class with dataset and additional arguments
+        super().__init__(dataset, **kwargs)
+        
+        # Additional initialization logic can be added here if needed
+        self.dataset = dataset  # Ensure dataset is initialized
+        
+    def metric(self):
+        \"\"\"
+        Implement your custom metric logic here.
+        Return a dictionary of results.
+        \"\"\"
+        # Example:
+        # return {{
+        #     "null_values": self.dataset.isnull().sum().to_dict()
+        # }}
+        pass
+    """
+
+    response = make_response(template)
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    response.mimetype = 'text/x-python'
+    return response
+
+# Route for handling the file upload
+@app.route('/upload-custom-dr', methods=['POST'])
+def upload_custom_dr():
+    if 'custom_dr_file' not in request.files:
+        return jsonify({"message": "No file part in the request"}), 400
+
+    file = request.files['custom_dr_file']
+    if file.filename == '':
+        return jsonify({"message": "No file selected"}), 400
+
+    if not file.filename.endswith('.py'):
+        return jsonify({"message": "Invalid file type. Only .py files are allowed."}), 400
+
+    # Save uploaded .py file to custom_dr directory
+    custom_dr_dir = os.path.join(app.root_path, 'custom_dr')
+    os.makedirs(custom_dr_dir, exist_ok=True)
+
+    file_path = os.path.join(custom_dr_dir, file.filename)
+    file.save(file_path)
+
+    # Retrieve uploaded CSV file path from session
+    uploaded_file_path = session.get('uploaded_file_path')
+    if not uploaded_file_path or not os.path.exists(uploaded_file_path):
+        return jsonify({"message": "No valid CSV file found in session"}), 400
+
+    try:
+        # Load CSV into DataFrame
+        with open(uploaded_file_path, 'r') as file_df:
+            csv_content = file_df.read()
+        csv_data = io.StringIO(csv_content)
+        df = pd.read_csv(csv_data)
+
+        # Import the uploaded Python module dynamically
+        module_name = file.filename[:-3]  # Remove .py extension
+        custom_metric_module = importlib.import_module(f'aidrin.custom_dr.{module_name}')
+
+        # Find the class defined in the module
+        metric_instance = None
+        for name, obj in inspect.getmembers(custom_metric_module, inspect.isclass):
+            if obj.__module__ == custom_metric_module.__name__:
+                metric_instance = obj(df)
+                break
+
+        if not metric_instance:
+            return jsonify({"message": "No valid class found in the uploaded module"}), 400
+
+        # Run the metric method
+        metric_result = metric_instance.metric()
+
+        return jsonify({
+            "message": "File uploaded and metric executed successfully",
+            "results": metric_result
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
 # @app.route('/FAIRness', methods=['GET', 'POST'])
 # def FAIRness():
