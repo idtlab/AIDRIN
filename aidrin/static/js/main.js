@@ -118,6 +118,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             console.log("Checkbox value:", cb.value); // For debugging
         });
+        updateSelectAllState();
     }
 });
 //select all functionality
@@ -161,6 +162,8 @@ function modifyFile(){
     var formData = new FormData(form);
     var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
     console.log("Checkbox Values:",checkboxValues);
+    
+
     fetch('/filter_file', {
         method: 'POST',
         headers: {
@@ -171,7 +174,8 @@ function modifyFile(){
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            window.location.href = '/upload_file';  // Now manually reload
+            
+            window.location.href = '/upload_file?minimize_preview=true';  // Now reload to get preview data
         } else {
             openErrorPopup('Filtering Error', data.error || 'Unknown error');
         }
@@ -1037,13 +1041,10 @@ function updateSelectAllState() {
 
     if (checked === 0) {
         selectAll.checked = false;
-        selectAll.indeterminate = false;
     } else if (checked === total) {
         selectAll.checked = true;
-        selectAll.indeterminate = false;
     } else {
         selectAll.checked = false;
-        selectAll.indeterminate = true;
     }
 }
 // Ensure proper initial state on page load
@@ -1165,4 +1166,51 @@ window.addEventListener('error', function (e) {
         console.error("Resource failed to load:", e.target.src || e.target.href);
         openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
     }
-}, true); // useCapture=true is important for resource errors
+}, true);
+// Set hierarchical file selection tab relative to upload_form
+function positionPreview() {
+    const uploadContainer = document.getElementById("fileUploadContainer");
+    const filePreview = document.getElementById("filePreview");
+    const editSelections = document.getElementById("SelectionEdit");
+
+    const uploadFormRect = uploadContainer.getBoundingClientRect();
+    filePreview.style.position = 'absolute';
+   
+    
+    filePreview.style.width = `${uploadFormRect.width}px`;
+    filePreview.style.height = `${uploadFormRect.height}px`;
+    filePreview.style.left = `${uploadFormRect.left + window.scrollX}px`;
+    filePreview.style.top = `${uploadFormRect.top + window.scrollY}px`;
+    if(filePreview.classList.contains('minimized')){
+        const height = 40.5;
+        const top = uploadFormRect.top + uploadFormRect.height - height + window.scrollY;
+        const left = uploadFormRect.left + window.scrollX;
+        filePreview.style.top = `${top}px`;
+        filePreview.style.height = `${height}px`;
+
+        editSelections.style.top = `${top}px`;
+        editSelections.style.left = `${left}px`;
+        editSelections.style.width = `${uploadFormRect.width}px`;
+        editSelections.style.height = `${height}px`;
+        editSelections.style.display = 'flex';
+       
+
+
+    }
+    
+    filePreview.style.opacity='1';
+};
+function editSelections(){
+    const filePreview = document.getElementById("filePreview");
+    const editSelections = document.getElementById("SelectionEdit");
+    filePreview.classList.remove("minimized");
+    editSelections.style.display = 'none';
+    positionPreview();
+}
+document.addEventListener("DOMContentLoaded",function(){
+    positionPreview();
+});
+window.addEventListener('scroll', positionPreview);
+window.addEventListener('resize', positionPreview);
+window.addEventListener('click',positionPreview)
+

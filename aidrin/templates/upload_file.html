@@ -31,8 +31,8 @@
         ">
           Upload a supported structured dataset to evaluate it on the metrics available below
     </p>
-      </div>
-      
+    </div>
+    
     <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: row; ">
         <div style="display: flex; width: 35%; flex-direction:column;">
             <select id="fileTypeSelector" name="fileTypeSelector" class="fileType" style="margin:0; border-radius: 10px 10px 0 0; padding: 15px; width:100%; max-width:none; text-align:center; font-size:1.5em;">
@@ -61,7 +61,7 @@
                 {% endif %}
                 </div>
 
-                <input id="file" name="file" type="file"  required onchange="uploadForm();">
+                <input id="file" name="file" type="file"  required onchange="uploadForm(); positionPreview();">
                 <br>
                 <div id="fileLabel" style="color:#ffffff">
                     {% if uploaded_file_path %}
@@ -82,7 +82,6 @@
                 <!-- clear button: visible when file is uploaded, change form style to match-->
                 <button type="button" class="clear-button" onclick="clearFile()">Clear Uploaded File</button>
             {% endif %}
-        
         </div>
         <div style="display: flex; flex-direction: column; margin-top: 10px; align-self: center; width: max-content;">
         {% if uploaded_file_path %}
@@ -137,30 +136,35 @@
                     <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("FAIR")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
             <h3 class="noUpload metric-info">Data Structure and Organization<span class="metric-info-text">Please upload a file</span></h3>
-    {% endif %}
+        {% endif %}
         </div>
     </form>
     <!-- Filled with detected keys when Hierarchical data is detected -->
     {% if file_preview %}
         <form id="filePreview" class="preview"  enctype="multipart/form-data">
-                    <h2 style="text-align:center">Hierarchical Data Detected</h1>    
-                    <p>The following keys were detected. Select the keys you wish to parse.<p>
-                        <table id="file_preview"></table>  
-                        <button class="animated-button" style="display:felx; align-self:center;" type="submit" onclick="modifyFile();">
-                                <span>Save</span>
-                                <span></span>
-                        </button>
-                    <script>
-                        const preview = {{ file_preview | tojson | safe }};
-                        const currently_checked = {{ current_checked_keys | tojson | safe }}
-                        window.renderPreview = function() {
-                            return {
-                                preview: preview,
-                                checked: currently_checked
-                            };
-                        };
-                    </script>
+            <h3 style="margin-left:0px; display:block; text-align:center; margin-bottom:0px;">Hierarchical Data Detected</h1>    
+            <p>The following keys were detected. Select the keys you wish to parse.<p>
+                <table id="file_preview"></table>  
+                <button class="animated-button" style="display:flex; align-self:center; justify-content:center;" type="submit" onclick="modifyFile();">
+                        <span>Save</span>
+                        <span></span>
+                </button>
+            <script>
+                const preview = {{ file_preview | tojson | safe }};
+                
+                const currently_checked = {{ current_checked_keys | tojson | safe }}
+                {% if session.get('minimize_preview') %}
+                    document.getElementById("filePreview").classList.add("minimized");
+                {% endif %}
+                window.renderPreview = function() {
+                    return {
+                        preview: preview,
+                        checked: currently_checked,
+                    };
+                };
+            </script>
         </form>
+        <button id="SelectionEdit" type="button" class="edit-button" onclick="editSelections()">Edit Selections</button>
     {% endif %}
    <strong onclick="location.href='{{url_for("publications")}}'" class="clickable" style="text-align: center; font-size: 1.5em; display:flex; align-items:center; align-self:center">Publications  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"/></svg></strong>
            

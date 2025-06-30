@@ -70,7 +70,6 @@ form {
     background: var(--secondaryColor);
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
-
     margin-bottom: 20px;
     padding: 20px;
     border-radius: 10px;
@@ -78,7 +77,6 @@ form {
     max-width: 2000px; 
     width: 100%;
     box-sizing: border-box;
-    
 }
 a:visited {
     color: var(--visitedColor); /* Change the color of visited links */
@@ -574,7 +572,21 @@ ul {
   .custum-file-upload input {
     display: none;
   }
-
+  .edit-button{
+    position:absolute;
+    font-size: 1em;
+    align-self: center;
+    justify-content: center;
+    background-color: rgb(45, 84, 181);
+    color: white;
+    margin-bottom:0px;
+    border-radius: 0px;
+    border:2px white solid;
+    display:none;
+  }
+  .edit-button:hover{
+    background-color: rgb(75, 110, 199);
+  }
   .clear-button{
     display:flex;
     width: 100%;
@@ -920,14 +932,14 @@ thead th{
   background: var(--secondaryColorHalfOpacity);
   display:flex;
   flex-direction: column;
-  margin-bottom: 20px;
-  padding:20px;
-  border-radius:20px;
   box-shadow: 0 0 20px rgba(0,0,0,0.1);
-  max-width: fit-content;
   box-sizing: border-box;
   overflow-x: scroll;
-  
+  margin:0px;
+  padding:0px;
+  border-radius: 0px;
+  border:2px solid white;
+  opacity:0;
 }
 .radio-group{
     font-size: large;

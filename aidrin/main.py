@@ -139,9 +139,13 @@ def upload_file():
     file_path = session.get('uploaded_file_path')
     file_type = session.get('uploaded_file_type')
     file_info = (file_path, file_name, file_type)
+    #handling hierarchical data
     file_preview = None
     current_checked_keys = None
     if(file_type=='.json' or file_type=='.h5'):
+        minimize_preview = request.args.get('minimize_preview') == 'true'
+        if minimize_preview:
+            session['minimize_preview'] = 'true'
         if 'original_file_path' in session:
             original_file_path = session.get('original_file_path')
             original_file_info = (original_file_path, file_name, file_type)
@@ -149,6 +153,7 @@ def upload_file():
             current_checked_keys = parse_file(file_info)
         else:
             file_preview = parse_file(file_info)
+        
     file_upload_time_log.info("upload file: %s", session.get('uploaded_file_path'))
     #log uploaded file
     if file_name and file_path: 
@@ -160,7 +165,8 @@ def upload_file():
                                    supported_file_types=SUPPORTED_FILE_TYPES,
                                    file_type=file_type,
                                    file_preview=file_preview,
-                                   current_checked_keys = current_checked_keys)
+                                   current_checked_keys = current_checked_keys,
+                                    )
 
 @main.route('/retrieve_uploaded_file', methods=['GET'])
 def retrieve_uploaded_file():
@@ -183,9 +189,10 @@ def retrieve_uploaded_file():
 def clear_file():
     file_upload_time_log.info("Clearing File")
     #remove file path/name
-    file_path = session.pop('uploaded_file_path', None)
-    file_name = session.pop('uploaded_file_name', None)
-    file_type = session.pop('uploaded_file_type', None)
+    session.pop('uploaded_file_path', None)
+    session.pop('uploaded_file_name', None)
+    session.pop('uploaded_file_type', None)
+    session.pop('minimize_preview',None)
     session.clear()
     upload_folder = current_app.config['UPLOAD_FOLDER']
     try:
