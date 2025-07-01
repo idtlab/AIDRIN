@@ -127,9 +127,9 @@ function submitForm() {
             'Completeness', 'Outliers','Duplicity', 'Representation Rate', 'Statistical Rate', 
             'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
             'Feature Relevance', 'Class Imbalance', 'DP Statistics', 
-            'Single attribute risk scoring', 'Multiple attribute risk scoring'
+            'Single attribute risk scoring', 'Multiple attribute risk scoring',
+            'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
         ];
-        console.log("Checking keys in data:");
         visualizationTypes.forEach(type => {
             if (data[type]) {
                 console.log(`${type}:`, Object.keys(data[type]));
