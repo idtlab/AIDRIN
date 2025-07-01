@@ -638,10 +638,16 @@ def summary_histograms(df):
 
 @app.route('/custom_dr', methods=['GET', 'POST'])
 def custom_dr():
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
     # if request.method == 'POST':
     #     # Handle POST request logic here
     #     return jsonify({"message": "Custom Data Readiness POST request handled successfully"})
-    return render_template('metricTemplates/custom_dr.html')
+    return render_template('metricTemplates/custom_dr.html',
+                           uploaded_file_path=file_path, 
+                           uploaded_file_name=file_name,
+                           )
+                            
 
 @app.route('/download-base-dr')
 def download_base_dr():

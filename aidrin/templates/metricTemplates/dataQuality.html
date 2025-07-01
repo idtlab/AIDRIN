@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" max-width: 100%>
+<html lang="en" max-width: "100%">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,7 +28,6 @@
     </div>
     
     <div class="top-left-container">
-       
         <div id="navbar">
             <a class="home" href="/">
                 <img style="max-width:48px; max-height:48px;" src="images/logoNoBackground.png" alt="Aidrin Logo">
@@ -46,21 +45,6 @@
         </div>
     </div>
     <h1>Data Quality</h1>
-    <div id="metric-download-gui" class="metric-download-gui">
-        <div id="metric-download-gui-fileName" class="metric-download-gui-fileName">
-        {% if uploaded_file_path %}
-                    File: {{ uploaded_file_name }}
-                    {% else %}
-                    No File Uploaded
-                    {% endif %}
-        </div>
-        {% if uploaded_file_path %}
-                <!-- clear button: visible when file is uploaded, change form style to match-->
-                <button type="button" class="clear-button" style="border:none" onclick="clearFile()">Clear Submission</button>
-        {%else%}
-                <button type="button" class="redirect-upload-button" style="border:none" onclick="location.href='{{ url_for("upload_file") }}'">Upload a File</button>
-         {% endif %}
-    </div>
      <div id="metric-download-gui" class="metric-download-gui">
         <div id="metric-download-gui-fileName" class="metric-download-gui-fileName">
         {% if uploaded_file_path %}
