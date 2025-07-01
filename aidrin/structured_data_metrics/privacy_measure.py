@@ -368,7 +368,8 @@ def compute_k_anonymity(self:Task, quasi_identifiers: List[str], file_info: tupl
                 "The histogram shows the distribution of equivalence class sizes. A shift toward larger class sizes (higher k) is desirable for privacy."
             )
         }
-
+    except SoftTimeLimitExceeded:
+        raise Exception("K anonymity task timed out.")
     except Exception as e:
         result_dict["error"] = str(e)
 
@@ -458,7 +459,8 @@ def compute_l_diversity(self:Task, quasi_identifiers: list, sensitive_column: st
                 "The histogram displays the spread of l-diversity values. A distribution concentrated at higher l values is optimal."
             )
         }
-
+    except SoftTimeLimitExceeded:
+        raise Exception("L Diversity task timed out.")
     except Exception as e:
         result_dict["error"] = str(e)
 
@@ -550,7 +552,8 @@ def compute_t_closeness(self: Task, quasi_identifiers: List[str], sensitive_colu
                 "The histogram shows the distribution of t values. Lower t values across groups indicate stronger privacy."
             )
         }
-
+    except SoftTimeLimitExceeded:
+        raise Exception("T Closeness task timed out.")
     except Exception as e:
         result_dict["error"] = str(e)
 
@@ -627,7 +630,8 @@ def compute_entropy_risk(self: Task, quasi_identifiers, file_info: tuple[str, st
                 "The bar chart visualizes the distribution of entropy values. Higher bars on the right (higher entropy) indicate better privacy; left-skewed distributions suggest higher risk."
             )
         }
-
+    except SoftTimeLimitExceeded:
+        raise Exception("Entropy Risk task timed out.")
     except Exception as e:
         result_dict["error"] = str(e)
 

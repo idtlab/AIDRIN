@@ -663,8 +663,10 @@ def FAIR():
                 # Read and parse the JSON data
                 try:
                     data_dict = json.loads(json_data.decode('utf-8'))
-                    extracted_json = extract_keys_and_values(data_dict)
-                    fair_dict = categorize_metadata(extracted_json, data_dict)
+                    extract_json_result = extract_keys_and_values.delay(data_dict)
+                    extracted_json = extract_json_result.get()
+                    fair_dict_result = categorize_metadata.delay(extracted_json, data_dict)
+                    fair_dict = fair_dict_result.get()
                     result = format_dict_values(fair_dict)
                 except json.JSONDecodeError as e:
                     return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
