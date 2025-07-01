@@ -1,6 +1,11 @@
-# AIDRIN
+<p align='center'>
+    <img src="aidrin/images/logo.png" alt="Preview" alt="AIDRIN logo" style="width: 40%; height: auto; align: center"/>
+</p>
 
-**AI Data Readiness Indicator (AIDRIN)** is a tool developed to assess the readiness of datasets for artificial intelligence applications. It helps users quickly evaluate the quality, structure, and completeness of their data to ensure it meets the foundational requirements for machine learning and other AI workflows.
+# AIDRIN - AI Data Readiness Inspector
+
+
+**AIDRIN** is a tool developed to assess the readiness of datasets for artificial intelligence applications. It helps users quickly evaluate the quality, structure, and completeness of their data to ensure it meets the foundational requirements for machine learning and other AI workflows.
 
 ---
 
@@ -22,7 +27,7 @@ git clone https://github.com/idtlab/AIDRIN.git
 cd AIDRIN
 ```
 
-### 2. Create and Activate the COnda Environment
+### 2. Create and Activate the Conda Environment
 
 ```bash
 conda create -n aidrin-env python==3.10 -y
@@ -49,7 +54,7 @@ To start the development server:
 flask --app aidrin run --debug
 ```
 
-Then open your browser and navigate to: http://127.0.0.1:5000
+After the server starts, open your browser and navigate to: http://127.0.0.1:5000
 
 ## Citation
 If you use AIDRIN in your research or publication, please cite as:

@@ -36,6 +36,31 @@
                         <option value ="" disabled selected>Select a feature</option>
             </select><br>
                 </li>
+                    <li  >
+                        <label for="privacy budget" style="padding:10px; padding-left:15px; min-width:300px;">Privacy budget (default epsilon=0.1):</label>
+                        <input class="textWrapper" type="text" name="privacy budget">
+                    </li>
+                </ul>
+            </div>
+            <div class="checkboxContainerIndividual">
+                <label class="material-checkbox" style="position: relative;">
+                <input  type="checkbox" name="single attribute risk score" onchange="toggleValue(this)">
+                <span class="checkmark"></span>
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <span>Evaluate single attribute risks:</span>
+                    <span class="info-icon">i
+                        <span class="info-text">Measures the risk of re-identification based on individual attributes, helping identify which features might lead to privacy breaches.</span>
+                    </span>
+                    
+                </span>
+                </label>
+                <ul>
+                    <li>
+                        <label for="id feature to measure single attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">ID feature: </label>
+                        <select name="id feature to measure single attribute risk score" id="allFeaturesDropdownMMS" required>
+                            <option value ="" disabled selected>Select a feature</option>
+                </select><br>
+                    </li>
 
                 <li >
                     <label  for="quasi identifiers to measure single attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
@@ -58,10 +83,132 @@
                         <option value ="" disabled selected>Select a feature</option>
                     </select><br>
                 </li>
+                    <li >
+                        <label  for="quasi identifiers to measure single attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
+                        <div id ="catFeaturesCheckbox2"></div><br>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="checkboxContainerIndividual">
+                <label class="material-checkbox" style="position: relative;">
+                <input type="checkbox" name="multiple attribute risk score" onchange="toggleValue(this)"> 
+                <span class="checkmark"></span>
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <span>Evaluate multiple attribute risks:</span>
+                    <span class="info-icon">i
+                        <span class="info-text">Assesses the combined risk of re-identification when multiple attributes are considered together, providing a more comprehensive privacy risk assessment.</span>
+                    </span>
 
-                <li >
-                    <label for="quasi identifiers to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
-                    <div  id ="catFeaturesCheckbox3"></div><br>
+                </span>
+                </label>
+                
+                <ul>
+                    <li >
+                        <label for="id feature to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">ID feature</label>
+                        <select name="id feature to measure multiple attribute risk score" id="allFeaturesDropdownMMM" required>
+                            <option value ="" disabled selected>Select a feature</option>
+                        </select><br>
+                    </li>
+                    <li >
+                        <label for="quasi identifiers to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
+                        <div  id ="catFeaturesCheckbox3"></div><br>
+                    </li>
+            </ul>
+        </div>
+        <div class="checkboxContainerIndividual">
+            <label class="material-checkbox" style="position: relative;">
+            <input type="checkbox" name="entropy risk" onchange="toggleValue(this)">
+            <span class="checkmark"></span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                <span>Compute Entropy Risk:</span>
+                <span class="info-icon">i
+                    <span class="info-text">Estimates privacy risk by calculating the entropy of equivalence classes formed by selected quasi-identifiers. Used to assess the likelihood of re-identifying individuals.</span>
+                </span>
+                
+            </span>
+            </label>
+            <ul>
+                <li>
+                    <label for="quasi identifiers for entropy risk" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
+                    <div id="entropyRiskQIsCheckbox"></div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+            <label class="material-checkbox" style="position: relative;">
+            <input type="checkbox" name="k-anonymity" onchange="toggleValue(this)">
+            <span class="checkmark"></span>
+
+            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                <span>k-Anonymity:</span>
+                <span class="info-icon">i
+                    <span class="info-text"> Ensures each individual is indistinguishable from at least <i>k</i> others based on quasi-identifiers.</span>
+                </span>
+                
+            </span>
+            </label>
+
+
+            <ul>
+                <li>
+                    <label for="quasi identifiers for k-anonymity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
+                    <div id="kAnonymityQIsCheckbox"></div> 
+                    </li>
+            </ul>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+            <label class="material-checkbox" style="position: relative;">
+            <input type="checkbox" name="l-diversity" onchange="toggleValue(this)">
+            <span class="checkmark"></span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                <span>l-Diversity:</span>
+                <span class="info-icon">i
+                    <span class="info-text"> Strengthens k-anonymity by requiring diverse sensitive values in each equivalence class.</span>
+                </span>
+                
+            </span>
+            </label>
+
+            <ul>
+                <li>
+                    <label for="quasi identifiers for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers :</label>
+                    <div id="lDiversityQIsCheckbox"></div>
+                    </li>
+                <li>
+                    <label for="sensitive attribute for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Sensitive Attribute:</label>
+                    <select name="sensitive attribute for l-diversity" id="lDiversitySensitiveDropdown" required>
+                        <option value="" disabled selected>Select a feature</option>
+                    </select>
+                </li>
+            </ul>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+            
+            <label class="material-checkbox" style="position: relative;">
+            <input type="checkbox" name="t-closeness" onchange="toggleValue(this)">
+            <span class="checkmark"></span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                <span>t-Closeness:</span>
+                <span class="info-icon">i
+                    <span class="info-text">Requires the sensitive attribute distribution to be close to the overall distribution.</span>
+                </span>
+            </span>
+            </label>
+
+            <ul>
+                <li>
+                    <label for="quasi identifiers for t-closeness" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
+                    <div id="tClosenessQIsCheckbox"></div>
+                    </li>
+                <li>
+                    <label for="sensitive attribute for t-closeness" style="padding:10px; padding-left:15px; min-width:300px;">Sensitive Attribute:</label>
+                    <select name="sensitive attribute for t-closeness" id="tClosenessSensitiveDropdown" required>
+                        <option value="" disabled selected>Select a feature</option>
+                    </select>
                 </li>
             </ul>
         </div>
