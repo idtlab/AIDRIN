@@ -104,21 +104,23 @@ document.addEventListener("DOMContentLoaded", function () {
             row.append(cell);
         }
         const checkboxes = document.querySelectorAll('.checkbox.individual');
-        checkboxes.forEach(cb => {
-            const label = cb.closest("label");
-            const text = label.textContent.trim();
-            
-            if (checked.includes(text)) {
-                cb.checked = true;
-                cb.value = text;
-            } else {
-                cb.checked = false;
-                cb.value = "no";
-            }
+        if(checked){
+            checkboxes.forEach(cb => {
+                const label = cb.closest("label");
+                const text = label.textContent.trim();
+                
+                if (checked.includes(text)) {
+                    cb.checked = true;
+                    cb.value = text;
+                } else {
+                    cb.checked = false;
+                    cb.value = "no";
+                }
 
-            console.log("Checkbox value:", cb.value); // For debugging
-        });
-        updateSelectAllState();
+                console.log("Checkbox value:", cb.value); // For debugging
+            });
+            updateSelectAllState();
+        }
     }
 });
 //select all functionality
@@ -1213,4 +1215,5 @@ document.addEventListener("DOMContentLoaded",function(){
 window.addEventListener('scroll', positionPreview);
 window.addEventListener('resize', positionPreview);
 window.addEventListener('click',positionPreview)
+
 

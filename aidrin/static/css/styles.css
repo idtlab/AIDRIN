@@ -577,15 +577,16 @@ ul {
     font-size: 1em;
     align-self: center;
     justify-content: center;
-    background-color: rgb(45, 84, 181);
+    background-color: rgb(72, 112, 212);
     color: white;
     margin-bottom:0px;
     border-radius: 0px;
     border:2px white solid;
     display:none;
+    transition: background-color 0.3s;
   }
   .edit-button:hover{
-    background-color: rgb(75, 110, 199);
+    background-color: rgb(126, 155, 229);
   }
   .clear-button{
     display:flex;
@@ -940,6 +941,11 @@ thead th{
   border-radius: 0px;
   border:2px solid white;
   opacity:0;
+}  
+.preview table {
+  overflow-y: scroll;
+  height:150px;
+  display: block;
 }
 .radio-group{
     font-size: large;

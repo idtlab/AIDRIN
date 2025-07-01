@@ -30,7 +30,18 @@ conda activate aidrin-env
 pip install -e .
 ```
 
-## Running the App
+### 3. Terminal 1: Start Redis using Docker
+
+```bash
+docker compose up -d 
+```
+### 4. Terminal 2: Start the Celery Worker
+
+```bash
+PYTHONPATH=. celery -A aidrin.make_celery worker --loglevel=info
+```
+
+## Terminal 3: Running the App
 
 To start the development server:
 
