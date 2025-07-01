@@ -605,24 +605,28 @@ def privacyPreservation():
             # k-Anonymity
             if request.form.get("k-anonymity") == "yes":
                 k_qis = request.form.getlist("quasi identifiers for k-anonymity")
-                final_dict["k-Anonymity"] = compute_k_anonymity(file, k_qis)
+                k_anonymity_result = compute_k_anonymity.delay(k_qis,file_info)
+                final_dict["k-Anonymity"] = k_anonymity_result.get()
 
             # l-Diversity
             if request.form.get("l-diversity") == "yes":
                 l_qis = request.form.getlist("quasi identifiers for l-diversity")
                 l_sensitive = request.form.get("sensitive attribute for l-diversity")
-                final_dict["l-Diversity"] = compute_l_diversity(file, l_qis, l_sensitive)
+                l_diversity_result = compute_l_diversity.delay(l_qis, l_sensitive,file_info)
+                final_dict["l-Diversity"] = l_diversity_result.get()
 
             # t-Closeness
             if request.form.get("t-closeness") == "yes":
                 t_qis = request.form.getlist("quasi identifiers for t-closeness")
                 t_sensitive = request.form.get("sensitive attribute for t-closeness")
-                final_dict["t-Closeness"] = compute_t_closeness(file, t_qis, t_sensitive)
+                t_closeness_result = compute_t_closeness.delay(t_qis, t_sensitive,file_info)
+                final_dict["t-Closeness"] = t_closeness_result.get()
 
             # Entropy Risk
             if request.form.get("entropy risk") == "yes":
                 entropy_qis = request.form.getlist("quasi identifiers for entropy risk")
-                final_dict["Entropy Risk"] = compute_entropy_risk(file, entropy_qis)
+                entropy_risk_result = compute_entropy_risk.delay(entropy_qis,file_info)
+                final_dict["Entropy Risk"] = entropy_risk_result.get()
         except Exception as e:
             metric_time_log.error(f"Error: {e}")
             return jsonify({"error": str(e)}), 200

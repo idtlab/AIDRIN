@@ -1,7 +1,3 @@
-<p align='center'>
-    <img src="aidrin/images/logo.png" alt="Preview" alt="AIDRIN logo" style="width: 40%; height: auto; align: center"/>
-</p>
-
 # AIDRIN - AI Data Readiness Inspector
 
 
@@ -27,7 +23,7 @@ git clone https://github.com/idtlab/AIDRIN.git
 cd AIDRIN
 ```
 
-### 2. Create and Activate the Conda Environment
+### 2. Terminal 1: Create and Activate the Conda Environment
 
 ```bash
 conda create -n aidrin-env python==3.10 -y
@@ -35,18 +31,18 @@ conda activate aidrin-env
 pip install -e .
 ```
 
-### 3. Terminal 1: Start Redis using Docker
+### 3. Terminal 2: Start Redis using Docker
 
 ```bash
 docker compose up -d 
 ```
-### 4. Terminal 2: Start the Celery Worker
+### 4. Terminal 3: Start the Celery Worker
 
 ```bash
 PYTHONPATH=. celery -A aidrin.make_celery worker --loglevel=info
 ```
 
-## Terminal 3: Running the App
+## Terminal 1: Running the App
 
 To start the development server:
 

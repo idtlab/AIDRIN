@@ -40,104 +40,7 @@ function clearFile() {
         openErrorPopup("File Clear", error); // call error popup
     });
 }
-//get file type from user
-document.addEventListener("DOMContentLoaded", function () {
-    //file type selector and file input field
-    const fileTypeElement = document.getElementById("fileTypeSelector");
-    const fileInput = document.getElementById("file");
-    const fileUploadMessage = document.getElementById("FileUploadMessage");
-    const fileTypeSelector = document.getElementById("fileTypeSelector");
-    // Bind select to function
-    fileTypeElement.addEventListener("change", function () {
-        updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage);
-    });
-    // Call it once on page load 
-    updateFileInputBasedOnType(fileTypeElement, fileInput,fileUploadMessage);
 
-    if (window.renderPreview) {
-        const { preview, checked } = window.renderPreview();
-
-        // Get table element by ID
-        const table = $('#file_preview');
-        table.empty();
-        // Add Select All
-        const selectAllRow = $('<tr>');
-        const selectAllCheckbox = $('<input>').attr({
-            type: 'checkbox',
-            id: 'selectAllCheckbox',
-            style: 'margin-right:10px',
-            onchange: 'toggleSelectAll(this)'
-        });
-        const selectAllLabel = $('<label>')
-            .attr('style', 'display: flex; flex-direction: row; min-width: 125px; align-items: center;margin-left:10px;')
-            .addClass('material-checkbox')
-            .append(selectAllCheckbox)
-            .append($('<span>').addClass('checkmark'))
-            .append('Select All');
-
-        const selectAllCell = $('<td style="border-bottom:0px;">').append(selectAllLabel);
-        selectAllRow.append(selectAllCell);
-        table.append(selectAllRow);
-        for (let i = 0; i < preview.length; i++) {
-            const row = $('<tr>');
-            table.append(row);
-
-            const checkbox = $('<input>').attr({
-                type: 'checkbox',
-                class: 'checkbox individual',
-                style: 'margin-right:10px',
-                onchange: 'toggleValueIndividual(this)',
-                name: 'checkboxValues',
-                id: preview[i] + 'checkbox_' + i,
-                value: preview[i],
-            });
-
-            const span = $('<span>').addClass('checkmark');
-
-            const label = $('<label>')
-                .attr('style', 'display: flex; flex-direction: row; min-width: 125px; align-items: center;margin-left:30px;')
-                .attr('class', 'material-checkbox')
-                .attr('id', preview[i] + 'checkbox_' + i);
-
-            label.append(checkbox).append(span).append(preview[i]);
-            const cell = $('<td style="border-bottom:0px;">').append(label);
-            row.append(cell);
-        }
-        const checkboxes = document.querySelectorAll('.checkbox.individual');
-        if(checked){
-            checkboxes.forEach(cb => {
-                const label = cb.closest("label");
-                const text = label.textContent.trim();
-                
-                if (checked.includes(text)) {
-                    cb.checked = true;
-                    cb.value = text;
-                } else {
-                    cb.checked = false;
-                    cb.value = "no";
-                }
-
-                console.log("Checkbox value:", cb.value); // For debugging
-            });
-            updateSelectAllState();
-        }
-    }
-});
-//select all functionality
-function toggleSelectAll(source) {
-    const checkboxes = document.querySelectorAll('.checkbox.individual');
-    checkboxes.forEach(cb => {
-        cb.checked = source.checked;
-        if (cb.checked) {
-            const label = cb.closest("label");
-            const text = label.textContent.trim();
-            cb.value = text;
-        } else {
-            cb.value = "no";
-        }
-        console.log("Checkbox value:", cb.value); // For debugging 
-    });
-}
 //changes file upload ability
 function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage) {
     const fileType = fileTypeElement.value;
@@ -159,33 +62,7 @@ function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessag
     }
 }
 
-function modifyFile(){
-    var form = document.getElementById('filePreview');
-    var formData = new FormData(form);
-    var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
-    console.log("Checkbox Values:",checkboxValues);
-    
 
-    fetch('/filter_file', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ keys: checkboxValues })  // Send as JSON list
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            
-            window.location.href = '/upload_file?minimize_preview=true';  // Now reload to get preview data
-        } else {
-            openErrorPopup('Filtering Error', data.error || 'Unknown error');
-        }
-    })
-    .catch(error => {
-        openErrorPopup('Network Error', error);
-    });
-}
 function submitForm() {
     
     var form = document.getElementById('uploadForm');
@@ -259,11 +136,7 @@ function submitForm() {
             }
         });
         visualizationTypes.forEach(function(type) {
-            console.log('Checking type:', type);
-            console.log('Data keys:', Object.keys(data));
             if (isKeyPresentAndDefined(data, type)) {
-                console.log('Found type in data:', type);
-                console.log('Type data keys:', Object.keys(data[type]));
                 if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
                     console.log('Adding visualization:', type);
                     var image = data[type][type + ' Visualization'];
@@ -1230,51 +1103,3 @@ window.addEventListener('error', function (e) {
         openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
     }
 }, true);
-// Set hierarchical file selection tab relative to upload_form
-function positionPreview() {
-    const uploadContainer = document.getElementById("fileUploadContainer");
-    const filePreview = document.getElementById("filePreview");
-    const editSelections = document.getElementById("SelectionEdit");
-
-    const uploadFormRect = uploadContainer.getBoundingClientRect();
-    filePreview.style.position = 'absolute';
-   
-    
-    filePreview.style.width = `${uploadFormRect.width}px`;
-    filePreview.style.height = `${uploadFormRect.height}px`;
-    filePreview.style.left = `${uploadFormRect.left + window.scrollX}px`;
-    filePreview.style.top = `${uploadFormRect.top + window.scrollY}px`;
-    if(filePreview.classList.contains('minimized')){
-        const height = 40.5;
-        const top = uploadFormRect.top + uploadFormRect.height - height + window.scrollY;
-        const left = uploadFormRect.left + window.scrollX;
-        filePreview.style.top = `${top}px`;
-        filePreview.style.height = `${height}px`;
-
-        editSelections.style.top = `${top}px`;
-        editSelections.style.left = `${left}px`;
-        editSelections.style.width = `${uploadFormRect.width}px`;
-        editSelections.style.height = `${height}px`;
-        editSelections.style.display = 'flex';
-       
-
-
-    }
-    
-    filePreview.style.opacity='1';
-};
-function editSelections(){
-    const filePreview = document.getElementById("filePreview");
-    const editSelections = document.getElementById("SelectionEdit");
-    filePreview.classList.remove("minimized");
-    editSelections.style.display = 'none';
-    positionPreview();
-}
-document.addEventListener("DOMContentLoaded",function(){
-    positionPreview();
-});
-window.addEventListener('scroll', positionPreview);
-window.addEventListener('resize', positionPreview);
-window.addEventListener('click',positionPreview)
-
-

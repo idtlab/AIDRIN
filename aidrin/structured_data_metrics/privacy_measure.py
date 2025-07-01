@@ -289,8 +289,10 @@ def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, fi
         result_dict["Description"] = f"Error occurred: {str(e)}"
         result_dict["Graph interpretation"] = "No visualization available due to error."
         return result_dict
-        
-def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
+    
+@shared_task(bind=True, ignore_result=False)
+def compute_k_anonymity(self:Task, quasi_identifiers: List[str], file_info: tuple[str, str, str]):
+    data = read_file(file_info)
     result_dict = {}
     try:
         if data.empty:
@@ -372,7 +374,9 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
 
     return result_dict
 
-def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_column: str):
+@shared_task(bind=True, ignore_result=False)
+def compute_l_diversity(self:Task, quasi_identifiers: list, sensitive_column: str, file_info: tuple[str, str, str]):
+    data = read_file(file_info)
     result_dict = {}
     try:
         # Validate input DataFrame
@@ -460,7 +464,9 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
 
     return result_dict
 
-def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensitive_column: str):
+@shared_task(bind=True, ignore_result=False)
+def compute_t_closeness(self: Task, quasi_identifiers: List[str], sensitive_column: str, file_info: tuple[str, str, str]):
+    data = read_file(file_info)
     result_dict = {}
     try:
 
@@ -549,8 +555,9 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
         result_dict["error"] = str(e)
 
     return result_dict
-
-def compute_entropy_risk(data, quasi_identifiers) :
+@shared_task(bind=True, ignore_result=False)
+def compute_entropy_risk(self: Task, quasi_identifiers, file_info: tuple[str, str, str]) :
+    data = read_file(file_info)
     result_dict = {}
 
     try:
