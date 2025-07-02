@@ -51,7 +51,13 @@ def homepage():
 def publications():
     return render_template('publications.html')
 
+@app.route('/privacy-metrics-docs', methods=['GET'])
+def privacy_metrics_docs():
+    return render_template('documentation/privacyMetricsDocs.html')
 
+@app.route('/class-imbalance-docs')
+def class_imbalance_docs():
+    return render_template('documentation/classImbalanceDocs.html')
 
 ######### Uploading, Retrieving, Clearing File Routes ############
 
@@ -309,14 +315,23 @@ def classImbalance():
     file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
+        print("Class Imbalance - Form data:", dict(request.form))
+        print("Class Imbalance - Form keys:", list(request.form.keys()))
+        
         #check for parameters
         if request.form.get("class imbalance") == "yes":
+            print("Class Imbalance - Processing class imbalance request")
             ci_dict = {}
             classes = request.form.get("features for class imbalance")
+            print("Class Imbalance - Selected feature:", classes)
+            dist_metric = request.form.get("distance metric for class imbalance", "EU")
+            print("Class Imbalance - Selected distance metric:", dist_metric)
             ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file,classes)
             ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
-            ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric="EU")#By default the distance metric is euclidean distance
+            ci_dict['Graph interpretation'] = "The pie chart shows the proportion of each class in the dataset. A balanced dataset would show roughly equal slices, while an imbalanced dataset will have some classes significantly larger than others."
+            ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric=dist_metric)
             final_dict['Class Imbalance'] = ci_dict
+            print("Class Imbalance - Final dict:", final_dict)
             
         end_time = time.time()
         execution_time = end_time - start_time
@@ -363,7 +378,10 @@ def privacyPreservation():
                     "Error": "No quasi-identifiers selected. Please select at least one quasi-identifier for single attribute risk scoring.",
                     "Single attribute risk scoring Visualization": "",
                     "Description": "No quasi-identifiers were selected for analysis.",
-                    "Graph interpretation": "Please select quasi-identifiers and try again."
+                    "Graph interpretation": "Please select quasi-identifiers and try again.",
+                    "Risk Score": "N/A",
+                    "Risk Level": "N/A",
+                    "Risk Color": "N/A"
                 }
             else:
                 final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
@@ -384,7 +402,10 @@ def privacyPreservation():
                     "Error": "No quasi-identifiers selected. Please select at least one quasi-identifier for multiple attribute risk scoring.",
                     "Multiple attribute risk scoring Visualization": "",
                     "Description": "No quasi-identifiers were selected for analysis.",
-                    "Graph interpretation": "Please select quasi-identifiers and try again."
+                    "Graph interpretation": "Please select quasi-identifiers and try again.",
+                    "Risk Score": "N/A",
+                    "Risk Level": "N/A",
+                    "Risk Color": "N/A"
                 }
             else:
                 final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)

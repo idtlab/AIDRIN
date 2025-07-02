@@ -15,6 +15,94 @@
     </script>
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        /* Hide QI sections by default */
+        .checkboxContainerIndividual ul {
+            display: none !important;
+            margin-top: 10px;
+            padding-left: 20px;
+        }
+        
+        /* Show QI sections when metric is selected */
+        .checkboxContainerIndividual.metric-selected ul {
+            display: block !important;
+        }
+        
+        /* Smooth transition for showing/hiding */
+        .checkboxContainerIndividual ul {
+            transition: all 0.3s ease;
+        }
+        
+        /* Add visual indicator for collapsible sections */
+        .checkboxContainerIndividual:not(.metric-selected) .material-checkbox {
+            opacity: 0.8;
+        }
+        
+        .checkboxContainerIndividual.metric-selected .material-checkbox {
+            opacity: 1;
+        }
+        
+        /* Ensure tooltip behavior is consistent regardless of checkbox state */
+        .checkboxContainerIndividual .info-icon,
+        .checkboxContainerIndividual .info-text {
+            pointer-events: auto !important;
+            z-index: 100 !important;
+            opacity: 1 !important; /* Force full opacity for tooltips regardless of checkbox state */
+        }
+        
+        /* Prevent metric-selected styling from affecting tooltip positioning */
+        .checkboxContainerIndividual.metric-selected .info-icon {
+            position: relative !important;
+        }
+        
+        /* Ensure tooltip container is always fully opaque for consistent hover detection */
+        .checkboxContainerIndividual .info-icon {
+            opacity: 1 !important;
+        }
+        
+        /* Add subtle border when section is active */
+        .checkboxContainerIndividual.metric-selected {
+            border-left: 3px solid #B0B0B0; /* pale grey */
+            padding-left: 10px;
+            margin-left: -10px;
+            background-color: rgba(128, 128, 128, 0.11); 
+        }
+        
+        /* Ensure proper spacing */
+        .checkboxContainerIndividual {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        /* Risk level styling */
+        .risk-level {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+        
+        .risk-level.low {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .risk-level.medium {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .risk-level.high {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
     <title>Privacy Preservation</title>
 
 </head>
@@ -70,7 +158,12 @@
                 <label class="material-checkbox">
                     <input  type="checkbox" name="differential privacy" onchange="toggleValue(this)"> 
                     <span class="checkmark"></span>
-                    Differential privacy by adding laplacian noise:<br>
+                    <span style="display: inline-flex; align-items: center; gap: 4px;">
+                        <span>Differential privacy by adding laplacian noise:</span>
+                        <span class="info-icon">i
+                            <span class="info-text">Adds carefully calibrated noise to query results to provide strong privacy guarantees. <a href="{{ url_for('privacy_metrics_docs') }}#differential-privacy" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span>
+                        </span>
+                    </span>
                 </label>
                 <ul>
                     <li  >
@@ -91,7 +184,7 @@
                 <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <span>Evaluate single attribute risks:</span>
                     <span class="info-icon">i
-                        <span class="info-text">Measures the risk of re-identification based on individual attributes, helping identify which features might lead to privacy breaches.</span>
+                        <span class="info-text">Measures the risk of re-identification based on individual attributes, helping identify which features might lead to privacy breaches. <a href="{{ url_for('privacy_metrics_docs') }}#single-attribute-risk" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span>
                     </span>
                     
                 </span>
@@ -118,7 +211,7 @@
                 <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <span>Evaluate multiple attribute risks:</span>
                     <span class="info-icon">i
-                        <span class="info-text">Assesses the combined risk of re-identification when multiple attributes are considered together, providing a more comprehensive privacy risk assessment.</span>
+                        <span class="info-text">Assesses the combined risk of re-identification when multiple attributes are considered together, providing a more comprehensive privacy risk assessment. <a href="{{ url_for('privacy_metrics_docs') }}#multiple-attribute-risk" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span>
                     </span>
 
                 </span>
@@ -146,7 +239,7 @@
                 <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <span>Compute Entropy Risk:</span>
                     <span class="info-icon">i
-                        <span class="info-text">Estimates privacy risk by calculating the entropy of equivalence classes formed by selected quasi-identifiers. Used to assess the likelihood of re-identifying individuals.</span>
+                        <span class="info-text">Estimates privacy risk by calculating the entropy of equivalence classes formed by selected quasi-identifiers. Used to assess the likelihood of re-identifying individuals. <a href="{{ url_for('privacy_metrics_docs') }}#entropy-risk" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span>
                     </span>
                     
                 </span>
@@ -167,7 +260,7 @@
                 <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <span>k-Anonymity:</span>
                     <span class="info-icon">i
-                        <span class="info-text"> Ensures each individual is indistinguishable from at least <i>k</i> others based on quasi-identifiers.</span>
+                        <span class="info-text">Ensures each individual is indistinguishable from at least <i>k</i> others based on quasi-identifiers. <a href="{{ url_for('privacy_metrics_docs') }}#k-anonymity" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span>
                     </span>
                     
                 </span>
@@ -189,7 +282,7 @@
                 <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <span>l-Diversity:</span>
                     <span class="info-icon">i
-                        <span class="info-text"> Strengthens k-anonymity by requiring diverse sensitive values in each equivalence class.</span>
+                        <span class="info-text">Strengthens k-anonymity by requiring diverse sensitive values in each equivalence class. <a href="{{ url_for('privacy_metrics_docs') }}#l-diversity" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span>
                     </span>
                     
                 </span>
@@ -218,7 +311,7 @@
                 <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <span>t-Closeness:</span>
                     <span class="info-icon">i
-                        <span class="info-text">Requires the sensitive attribute distribution to be close to the overall distribution.</span>
+                        <span class="info-text">Requires the sensitive attribute distribution to be close to the overall distribution. <a href="{{ url_for('privacy_metrics_docs') }}#t-closeness" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span>
                     </span>
                 </span>
                 </label>
@@ -270,9 +363,150 @@
             
     </div> 
 
-
-
-
+    <script>
+        // Robust tooltip management with improved hover proximity detection
+        document.addEventListener('DOMContentLoaded', function() {
+            const infoIcons = document.querySelectorAll('.info-icon');
+            let currentlyOpenTooltip = null; // Track which tooltip is currently open
+            
+            infoIcons.forEach(icon => {
+                const tooltip = icon.querySelector('.info-text');
+                let timeoutId;
+                let isHoveringTooltip = false;
+                let isHoveringIcon = false;
+                let hoverBuffer = 50; // Buffer zone in pixels around tooltip
+                
+                // Ensure tooltip and icon are always interactive regardless of checkbox state
+                icon.style.pointerEvents = 'auto';
+                tooltip.style.pointerEvents = 'auto';
+                icon.style.opacity = '1'; // Force full opacity for consistent hover detection
+                tooltip.style.opacity = '1'; // Force full opacity for tooltip
+                
+                // Show tooltip on icon hover
+                icon.addEventListener('mouseenter', function() {
+                    clearTimeout(timeoutId);
+                    
+                    // Close any other open tooltip first
+                    if (currentlyOpenTooltip && currentlyOpenTooltip !== tooltip) {
+                        currentlyOpenTooltip.style.display = 'none';
+                        console.log('Closed other tooltip');
+                    }
+                    
+                    isHoveringIcon = true;
+                    tooltip.style.display = 'block';
+                    currentlyOpenTooltip = tooltip; // Set this as the currently open tooltip
+                    console.log('Entered icon');
+                });
+                
+                // Hide tooltip when leaving icon (with 4000ms delay for easier navigation)
+                icon.addEventListener('mouseleave', function() {
+                    isHoveringIcon = false;
+                    timeoutId = setTimeout(() => {
+                        if (!isHoveringTooltip && !isHoveringIcon) {
+                            tooltip.style.display = 'none';
+                            if (currentlyOpenTooltip === tooltip) {
+                                currentlyOpenTooltip = null; // Clear the reference when tooltip is closed
+                            }
+                        }
+                    }, 4000); // Increased from 2500ms to 4000ms for more time to click links
+                });
+                
+                // Keep tooltip visible when entering tooltip content
+                tooltip.addEventListener('mouseenter', function() {
+                    clearTimeout(timeoutId);
+                    isHoveringTooltip = true;
+                    console.log('Entered tooltip');
+                });
+                
+                // Hide tooltip when leaving tooltip content (with delay)
+                tooltip.addEventListener('mouseleave', function() {
+                    isHoveringTooltip = false;
+                    timeoutId = setTimeout(() => {
+                        if (!isHoveringTooltip && !isHoveringIcon) {
+                            tooltip.style.display = 'none';
+                            if (currentlyOpenTooltip === tooltip) {
+                                currentlyOpenTooltip = null; // Clear the reference when tooltip is closed
+                            }
+                            console.log('Left tooltip');
+                        }
+                    }, 1500); // Increased from 800ms to 1500ms for more time to interact
+                });
+                
+                // Add global mouse tracking for better proximity detection
+                document.addEventListener('mousemove', function(e) {
+                    if (tooltip.style.display === 'block') {
+                        const iconRect = icon.getBoundingClientRect();
+                        const tooltipRect = tooltip.getBoundingClientRect();
+                        
+                        // Check if mouse is within buffer zone of icon or tooltip
+                        const nearIcon = e.clientX >= iconRect.left - hoverBuffer && 
+                                       e.clientX <= iconRect.right + hoverBuffer && 
+                                       e.clientY >= iconRect.top - hoverBuffer && 
+                                       e.clientY <= iconRect.bottom + hoverBuffer;
+                        
+                        const nearTooltip = e.clientX >= tooltipRect.left - hoverBuffer && 
+                                          e.clientX <= tooltipRect.right + hoverBuffer && 
+                                          e.clientY >= tooltipRect.top - hoverBuffer && 
+                                          e.clientY <= tooltipRect.bottom + hoverBuffer;
+                        
+                        if (nearIcon || nearTooltip) {
+                            clearTimeout(timeoutId);
+                            if (!tooltip.style.display === 'block') {
+                                tooltip.style.display = 'block';
+                            }
+                        } else {
+                            // Mouse is far from both icon and tooltip
+                            timeoutId = setTimeout(() => {
+                                tooltip.style.display = 'none';
+                            }, 1000);
+                        }
+                    }
+                });
+                
+                // Add event listeners to all elements inside tooltip
+                const tooltipElements = tooltip.querySelectorAll('*');
+                tooltipElements.forEach(element => {
+                    element.addEventListener('mouseenter', function() {
+                        clearTimeout(timeoutId);
+                        isHoveringTooltip = true;
+                    });
+                    
+                    element.addEventListener('mouseleave', function() {
+                        // Don't hide immediately, let the main tooltip handle it
+                        setTimeout(() => {
+                            if (!isHoveringTooltip && !isHoveringIcon) {
+                                tooltip.style.display = 'none';
+                            }
+                        }, 100); // Increased from 50ms to 100ms
+                    });
+                    
+                    // Prevent event bubbling for links to avoid interference
+                    if (element.tagName === 'A') {
+                        element.addEventListener('click', function(e) {
+                            e.stopPropagation(); // Prevent event from bubbling up
+                            console.log('Link clicked:', this.href);
+                        });
+                        
+                        // Keep tooltip visible when hovering over links
+                        element.addEventListener('mouseenter', function() {
+                            clearTimeout(timeoutId);
+                            isHoveringTooltip = true;
+                            console.log('Hovering over link');
+                        });
+                        
+                        element.addEventListener('mouseleave', function() {
+                            // Don't hide immediately when leaving link
+                            setTimeout(() => {
+                                if (!isHoveringTooltip && !isHoveringIcon) {
+                                    tooltip.style.display = 'none';
+                                }
+                            }, 200); // Short delay when leaving link
+                        });
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 
 </html>

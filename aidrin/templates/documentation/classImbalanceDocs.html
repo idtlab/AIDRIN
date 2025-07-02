@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Imbalance Metrics Guide - AIDRIN</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background-color: #f8f9fa; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; margin-right: 280px; margin-left: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 0; text-align: center; margin-bottom: 30px; margin-right: 280px; margin-left: 20px; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        .metric-card { background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 30px; overflow: hidden; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .metric-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15); }
+        .metric-header { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; position: relative; }
+        .metric-header h2 { font-size: 1.8em; margin-bottom: 10px; }
+        .metric-header .category { background: rgba(255, 255, 255, 0.2); padding: 5px 15px; border-radius: 20px; font-size: 0.9em; display: inline-block; }
+        .metric-content { padding: 25px; }
+        .section { margin-bottom: 25px; }
+        .section h3 { color: #2c3e50; font-size: 1.3em; margin-bottom: 15px; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+        .section ul, .section ol { margin: 15px 0; padding-left: 25px; }
+        .section li { margin-bottom: 8px; line-height: 1.6; }
+        .section ul li { list-style-type: disc; color: #555; }
+        .section ol li { list-style-type: decimal; color: #555; }
+        .definition { background: #f8f9fa; border-left: 4px solid #3498db; padding: 15px; margin-bottom: 20px; border-radius: 0 5px 5px 0; }
+        .math-formula { background: #f1f2f6; border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 5px; font-family: 'Courier New', monospace; text-align: center; }
+        .metric-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .metric-table th, .metric-table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        .metric-table th { background: #e3f2fd; }
+        
+        .navigation {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            max-width: 250px;
+            z-index: 1000;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        .navigation h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .nav-links {
+            list-style: none;
+        }
+
+        .nav-links li {
+            margin-bottom: 8px;
+        }
+
+        .nav-links a {
+            color: #3498db;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: #2980b9;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin-right: 20px;
+                margin-left: 20px;
+                padding: 15px;
+            }
+            
+            .header {
+                margin-right: 20px;
+                margin-left: 20px;
+                padding: 30px 0;
+            }
+            
+            .navigation {
+                position: static;
+                margin-bottom: 20px;
+                max-width: 100%;
+                max-height: none;
+                overflow-y: visible;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Class Imbalance Metrics Guide</h1>
+        <p>Comprehensive Guide to Quantifying and Assessing Class Distribution Imbalance in Machine Learning Datasets</p>
+    </div>
+
+    <div class="navigation">
+        <h3>Quick Navigation</h3>
+        <ul class="nav-links">
+            <li><a href="#what-is-class-imbalance">What is Class Imbalance?</a></li>
+            <li><a href="#distance-metrics">Distance Metrics</a></li>
+            <li><a href="#tvd-distance">Total Variation Distance (TVD)</a></li>
+            <li><a href="#euclidean-distance">Euclidean Distance</a></li>
+            <li><a href="#chebyshev-distance">Chebyshev</a></li>
+            <li><a href="#hellinger-distance">Hellinger</a></li>
+            <li><a href="#kl-divergence">KL Divergence</a></li>
+            <li><a href="#chi-squared">Chi-Squared</a></li>
+            <li><a href="#summary-table">Summary Table</a></li>
+        </ul>
+    </div>
+
+    <div class="container">
+        <div class="metric-card">
+            <div class="metric-header">
+                <h2>Class Imbalance Metrics</h2>
+                <span class="category">Data Quality & Fairness</span>
+            </div>
+            <div class="metric-content">
+                <div class="section" id="what-is-class-imbalance">
+                    <h3>Class Imbalance Overview</h3>
+                    <div class="definition">
+                        Class imbalance represents a fundamental challenge in machine learning where the distribution of class labels exhibits significant skewness, with certain classes being substantially more prevalent than others. This phenomenon can introduce systematic biases in model training, leading to suboptimal generalization performance, particularly for underrepresented classes. Systematic quantification of imbalance severity enables informed decisions regarding data preprocessing strategies and algorithm selection.
+                    </div>
+                </div>
+                <div class="section" id="distance-metrics">
+                    <h3>Distance Metrics for Imbalance Degree Calculation</h3>
+                    <div class="definition">
+                        The <b>Imbalance Degree</b> constitutes a sophisticated ratio-based metric that systematically compares observed class distributions against both idealized balanced (uniform) distributions and perfectly skewed reference distributions. The mathematical formulation is: <br><br>
+                        <strong>ID = (distance from empirical to uniform) / (distance from perfectly skewed to uniform) + (number of minority classes - 1)</strong><br><br>
+                        This formulation yields a normalized measure where zero indicates perfect balance and higher values signify progressively greater imbalance relative to the theoretical worst-case scenario for the given number of minority classes.
+                    </div>
+                </div>
+                <div class="section" id="tvd-distance">
+                    <h3>Total Variation Distance (TVD)</h3>
+                    <div class="math-formula">
+                        TV(p, u) = 0.5 &times; &sum;<sub>i</sub> |p<sub>i</sub> - u<sub>i</sub>|<br>
+                        (where u<sub>i</sub> = 1/K for K classes)
+                    </div>
+                    <ul>
+                        <li><b>Mathematical Foundation:</b> Total variation distance measures the maximum difference in probability that can be assigned to any event by two probability distributions. It's equivalent to half the L1 norm of the difference between distributions.</li>
+                        <li><b>Interpretation:</b> Represents the total "mass" of probability that needs to be redistributed to transform one distribution into another. 0 indicates identical distributions (perfect balance), while 1 indicates maximally different distributions.</li>
+                        <li><b>Properties:</b> Bounded between [0,1], symmetric, and satisfies the triangle inequality. It's a true metric that provides a natural scale for comparing distributions.</li>
+                        <li><b>When to use:</b> Excellent default choice for most applications. Particularly useful when you want a robust, interpretable measure that's not overly sensitive to outliers or extreme values.</li>
+                        <li><b>Advantages:</b> Intuitive interpretation, bounded range, robust to noise, computationally efficient, and widely understood in statistics.</li>
+                        <li><b>Limitations:</b> May not capture subtle differences in distributions with many classes, and treats all deviations equally regardless of magnitude.</li>
+                        <li><b>Real-world analogy:</b> Think of it as measuring how much "work" is needed to redistribute resources evenly across all classes.</li>
+                    </ul>
+                </div>
+                <div class="section" id="euclidean-distance">
+                    <h3>Euclidean Distance</h3>
+                    <div class="math-formula">
+                        EU(p, u) = sqrt(&sum;<sub>i</sub> (p<sub>i</sub> - u<sub>i</sub>)<sup>2</sup>)
+                    </div>
+                    <ul>
+                        <li><b>Mathematical Foundation:</b> Euclidean distance is the straight-line distance between two points in n-dimensional space. For probability distributions, it measures the geometric distance between the distribution vectors.</li>
+                        <li><b>Interpretation:</b> Represents the "as-the-crow-flies" distance between distributions. The squared terms mean that larger deviations are penalized more heavily than smaller ones, making it sensitive to outliers.</li>
+                        <li><b>Properties:</b> Always non-negative, symmetric, and satisfies the triangle inequality. However, it's not bounded to [0,1] and can exceed 1 for highly imbalanced distributions with many classes.</li>
+                        <li><b>When to use:</b> Ideal when you want to emphasize large imbalances and are less concerned about small deviations. Useful in scenarios where you want to detect extreme class imbalances quickly.</li>
+                        <li><b>Advantages:</b> Familiar geometric interpretation, sensitive to large deviations, computationally efficient, and widely used in machine learning.</li>
+                        <li><b>Limitations:</b> Unbounded range can make interpretation difficult, overly sensitive to outliers, and may not provide consistent scale across different numbers of classes.</li>
+                        <li><b>Real-world analogy:</b> Like measuring the straight-line distance between two cities on a map - it's the shortest possible path, but may not reflect the actual "cost" of getting from one to the other.</li>
+                    </ul>
+                </div>
+                <div class="section" id="chebyshev-distance">
+                    <h3>Chebyshev Distance</h3>
+                    <div class="math-formula">
+                        CH(p, u) = max<sub>i</sub> |p<sub>i</sub> - u<sub>i</sub>|
+                    </div>
+                    <ul>
+                        <li><b>Mathematical Foundation:</b> Chebyshev distance (also known as L∞ norm or maximum norm) measures the maximum absolute difference between corresponding elements of two vectors. It represents the worst-case scenario in terms of individual class deviations.</li>
+                        <li><b>Interpretation:</b> Identifies the single class with the largest deviation from perfect balance. This metric focuses on the "worst offender" rather than the overall distribution pattern.</li>
+                        <li><b>Properties:</b> Bounded between [0,1], symmetric, and satisfies the triangle inequality. It's a true metric that provides a conservative estimate of distribution difference.</li>
+                        <li><b>When to use:</b> Particularly useful when you're concerned about individual class fairness or when the worst-case scenario is more important than average behavior. Common in fairness-aware machine learning.</li>
+                        <li><b>Advantages:</b> Easy to interpret, bounded range, robust to the number of classes, and directly identifies problematic classes. Useful for regulatory compliance where maximum deviation matters.</li>
+                        <li><b>Limitations:</b> Ignores the overall distribution pattern, may miss systematic biases across multiple classes, and doesn't distinguish between different types of imbalance patterns.</li>
+                        <li><b>Real-world analogy:</b> Like a quality control inspector who only cares about the worst defect found, regardless of how many other defects exist.</li>
+                    </ul>
+                </div>
+                <div class="section" id="hellinger-distance">
+                    <h3>Hellinger Distance</h3>
+                    <div class="math-formula">
+                        HE(p, u) = sqrt(0.5 &times; &sum;<sub>i</sub> (sqrt(p<sub>i</sub>) - sqrt(u<sub>i</sub>))<sup>2</sup>)
+                    </div>
+                    <ul>
+                        <li><b>Mathematical Foundation:</b> Hellinger distance is based on the square root of probabilities, making it sensitive to relative rather than absolute differences. It's derived from the Bhattacharyya coefficient and measures the overlap between probability distributions.</li>
+                        <li><b>Interpretation:</b> Measures the "geometric" difference between distributions by comparing their square roots. This transformation makes the metric more sensitive to differences in rare classes while being less affected by dominant classes.</li>
+                        <li><b>Properties:</b> Bounded between [0,1], symmetric, and satisfies the triangle inequality. It's a true metric that provides a balanced view of distribution differences.</li>
+                        <li><b>When to use:</b> Excellent choice when you have rare classes or when you want to give equal weight to relative differences regardless of absolute class sizes. Particularly useful in domains with long-tailed distributions.</li>
+                        <li><b>Advantages:</b> Bounded range, symmetric, robust to outliers, and provides balanced sensitivity across different class frequencies. Mathematically well-founded in information theory.</li>
+                        <li><b>Limitations:</b> Less intuitive interpretation compared to L1/L2, computationally slightly more expensive due to square root operations, and may not be as familiar to practitioners.</li>
+                        <li><b>Real-world analogy:</b> Like comparing the "shapes" of two distributions rather than their absolute values - similar to how a magnifying glass can reveal details that are invisible to the naked eye.</li>
+                    </ul>
+                </div>
+                <div class="section" id="kl-divergence">
+                    <h3>Kullback-Leibler Divergence (KL)</h3>
+                    <div class="math-formula">
+                        KL(p || u) = &sum;<sub>i</sub> p<sub>i</sub> log(p<sub>i</sub> / u<sub>i</sub>)
+                    </div>
+                    <ul>
+                        <li><b>Mathematical Foundation:</b> KL divergence measures the relative entropy between two probability distributions. It quantifies the information loss when approximating one distribution with another, based on information theory principles.</li>
+                        <li><b>Interpretation:</b> Represents the expected logarithmic difference between the true distribution and the approximating distribution. Zero indicates identical distributions, while higher values indicate greater information loss.</li>
+                        <li><b>Properties:</b> Non-negative, asymmetric (KL(p||q) ≠ KL(q||p)), and not bounded above. It's not a true metric but provides a theoretically sound measure of distribution difference.</li>
+                        <li><b>When to use:</b> Appropriate when you need a theoretically grounded measure based on information theory, particularly in machine learning contexts where information loss is a key concern.</li>
+                        <li><b>Advantages:</b> Strong theoretical foundation in information theory, widely used in machine learning, and provides meaningful interpretation in terms of information content.</li>
+                        <li><b>Limitations:</b> Asymmetric nature requires careful interpretation, unbounded range makes comparison difficult, and numerical instability with zero probabilities requires special handling.</li>
+                        <li><b>Real-world analogy:</b> Like measuring how much information is lost when compressing a detailed map into a simplified version - some details are inevitably lost in the process.</li>
+                    </ul>
+                </div>
+                <div class="section" id="chi-squared">
+                    <h3>Chi-Squared Distance</h3>
+                    <div class="math-formula">
+                        CS(p, u) = &sum;<sub>i</sub> (p<sub>i</sub> - u<sub>i</sub>)<sup>2</sup> / u<sub>i</sub>
+                    </div>
+                    <ul>
+                        <li><b>Mathematical Foundation:</b> Chi-squared distance is derived from the chi-squared test statistic, which measures the discrepancy between observed and expected frequencies. It's a weighted sum of squared differences, where each term is normalized by the expected frequency.</li>
+                        <li><b>Interpretation:</b> Measures the statistical significance of deviations from expected frequencies. The weighting by expected frequencies means that deviations in rare classes are penalized more heavily than deviations in common classes.</li>
+                        <li><b>Properties:</b> Non-negative, symmetric, and not bounded above. It's not a true metric but provides a statistically principled measure of distribution difference.</li>
+                        <li><b>When to use:</b> Particularly suitable when you want to emphasize the importance of rare classes or when you need a measure that aligns with traditional statistical testing procedures.</li>
+                        <li><b>Advantages:</b> Well-established in statistical literature, provides interpretable p-values when used in hypothesis testing, and naturally emphasizes rare class deviations.</li>
+                        <li><b>Limitations:</b> Unbounded range, numerical instability with very small expected frequencies, and may overemphasize rare class deviations in some contexts.</li>
+                        <li><b>Real-world analogy:</b> Like a quality control system that pays extra attention to rare defects because they might indicate systematic problems in the manufacturing process.</li>
+                    </ul>
+                </div>
+                <div class="section" id="summary-table">
+                    <h3>Summary Table</h3>
+                    <table class="metric-table">
+                        <tr><th>Metric</th><th>Formula</th><th>Range</th><th>Symmetric?</th><th>Robust to Zeros?</th><th>Interpretation</th></tr>
+                        <tr><td>Total Variation Distance (TVD)</td><td>0.5 &sum;|p<sub>i</sub>-u<sub>i</sub>|</td><td>[0,1]</td><td>Yes</td><td>Yes</td><td>Simple, intuitive</td></tr>
+                        <tr><td>Euclidean Distance</td><td>sqrt(&sum;(p<sub>i</sub>-u<sub>i</sub>)²)</td><td>[0,1]</td><td>Yes</td><td>Yes</td><td>Penalizes large deviations</td></tr>
+                        <tr><td>Chebyshev</td><td>max|p<sub>i</sub>-u<sub>i</sub>|</td><td>[0,1]</td><td>Yes</td><td>Yes</td><td>Focuses on worst class</td></tr>
+                        <tr><td>Hellinger</td><td>sqrt(0.5 &sum;(√p<sub>i</sub>-√u<sub>i</sub>)²)</td><td>[0,1]</td><td>Yes</td><td>Yes</td><td>Geometric difference</td></tr>
+                        <tr><td>KL</td><td>&sum; p<sub>i</sub> log(p<sub>i</sub>/u<sub>i</sub>)</td><td>[0,∞)</td><td>No</td><td>No</td><td>Information loss</td></tr>
+                        <tr><td>Chi-Squared</td><td>&sum;(p<sub>i</sub>-u<sub>i</sub>)²/u<sub>i</sub></td><td>[0,∞)</td><td>Yes</td><td>No</td><td>Statistical test</td></tr>
+                    </table>
+                </div>
+                <div class="section">
+                    <h3>References</h3>
+                    <ul>
+                        <li>J. Ortigosa-Hernández, I. Inza, and J. A. Lozano, "Measuring the class-imbalance extent of multi-class problems," Pattern Recognit. Lett., 2017.</li>
+                        <li><a href="https://www.sciencedirect.com/topics/computer-science/chebyshev-distance" target="_blank">A Generalization of the Chebyshev Distance and Its Application to Pattern Recognition</a></li>
+                        <li>Kullback, S., & Leibler, R. A. (1951). "On Information and Sufficiency." <a href="https://doi.org/10.1214/aoms/1177729694" target="_blank">Annals of Mathematical Statistics, 22(1), 79–86</a>.</li>
+                        <li>Hellinger, E. (1909). "Neue Begründung der Theorie quadratischer Formen von unendlichvielen Veränderlichen." <a href="https://doi.org/10.1515/crll.1909.136.210" target="_blank">Journal für die reine und angewandte Mathematik, 136, 210–271</a>.</li>
+                        <li>Le Cam, L. (1973). "Convergence of estimates under dimensionality restrictions." <a href="https://doi.org/10.1214/aos/1176342365" target="_blank">Annals of Statistics, 1(1), 38–53</a>.</li>
+                        <li>Pearson, K. (1900). "On the criterion that a given system of deviations from the probable in the case of a correlated system of variables is such that it can be reasonably supposed to have arisen from random sampling." <a href="https://doi.org/10.1080/14786440009463897" target="_blank">Philosophical Magazine, 50(302), 157–175</a>.</li>
+                        <li>Wikipedia: <a href="https://en.wikipedia.org/wiki/Distance_(mathematics)" target="_blank">Distance (mathematics)</a></li>
+
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                const targetElement = document.getElementById(targetId);
+                if (targetElement) {
+                    targetElement.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Add scroll effect to metric cards
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.metric-card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(card);
+        });
+    </script>
+</body>
+</html> 

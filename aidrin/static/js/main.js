@@ -147,6 +147,8 @@ function submitForm() {
                     var description = data[type]['Description'] || '';
                     var interpretation = data[type]['Graph interpretation'] || '';
                     var riskScore = data[type]['Risk Score'] || 'N/A'; 
+                    var riskLevel = data[type]['Risk Level'] || null;
+                    var riskColor = data[type]['Risk Color'] || null;
                     var title = type;
                     var jsonData = JSON.stringify(data);
                     
@@ -157,6 +159,8 @@ function submitForm() {
                         visualizationContent.push({
                             image: image || "",
                             riskScore: riskScore,
+                            riskLevel: riskLevel,
+                            riskColor: riskColor,
                             value: value,
                             description: description,
                             interpretation: interpretation,
@@ -168,6 +172,8 @@ function submitForm() {
                         visualizationContent.push({
                             image: image,
                             riskScore: riskScore,
+                            riskLevel: riskLevel,
+                            riskColor: riskColor,
                             value: value,
                             description: description,
                             interpretation: interpretation,
@@ -226,12 +232,62 @@ function submitForm() {
                 
                 visualizationHtml += `
                             ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
+                    ${content.riskLevel ? `<div><strong>Risk Level:</strong> <span style="color: ${content.riskColor}; font-weight: bold;">${content.riskLevel}</span></div>` : ''}
                             ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
-                           <div><strong>Description:</strong> ${content.description}</div>
-                           ${content.interpretation ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>` : ''}
-                            
+                    ${content.interpretation && content.title !== 'Class Imbalance' ? `<div><strong>Graph interpretation:</strong> ${content.interpretation} ${getDocsButton(content.title)}</div>` : ''}
+                `;
+                
+                // Special handling for Class Imbalance: show Imbalance Degree Value
+                if (content.title === 'Class Imbalance' && data['Class Imbalance'] && data['Class Imbalance']['Imbalance degree']) {
+                    const imbalanceData = data['Class Imbalance']['Imbalance degree'];
+                    if (imbalanceData['Imbalance Degree score'] !== undefined) {
+                        const score = imbalanceData['Imbalance Degree score'];
+                        // Get the distance metric from the form data for reference
+                        const distanceMetric = getDistanceMetricName();
+                        visualizationHtml += `<div><strong>Imbalance Degree:</strong> ${score}</div>`;
+                        // Add graph interpretation below Imbalance Degree
+                        if (content.interpretation) {
+                            visualizationHtml += `<div><strong>Graph interpretation:</strong> ${content.interpretation} <a href="/class-imbalance-docs" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a></div>`;
+                        }
+                        setTimeout(() => { if (typeof showImbalanceDegreeDocsBtn === 'function') showImbalanceDegreeDocsBtn(); }, 0);
+                    } else if (imbalanceData['Error'] !== undefined) {
+                        const error = imbalanceData['Error'];
+                        const distanceMetric = getDistanceMetricName();
+                        visualizationHtml += `<div><strong>Imbalance Degree:</strong> <span style="color: red;">${error}</span></div>`;
+                    }
+                }
+                
+                // Special handling for Privacy Metrics: show specific values
+                if (content.title === 'k-Anonymity' && data['k-Anonymity']) {
+                    const kData = data['k-Anonymity'];
+                    if (kData['k-Value'] !== undefined) {
+                        visualizationHtml += `<div><strong>k-Value:</strong> ${kData['k-Value']}</div>`;
+                    }
+                }
+                
+                if (content.title === 'l-Diversity' && data['l-Diversity']) {
+                    const lData = data['l-Diversity'];
+                    if (lData['l-Value'] !== undefined) {
+                        visualizationHtml += `<div><strong>l-Value:</strong> ${lData['l-Value']}</div>`;
+                    }
+                }
+                
+                if (content.title === 't-Closeness' && data['t-Closeness']) {
+                    const tData = data['t-Closeness'];
+                    if (tData['t-Value'] !== undefined) {
+                        visualizationHtml += `<div><strong>t-Value:</strong> ${tData['t-Value']}</div>`;
+                    }
+                }
+                
+                if (content.title === 'Entropy Risk' && data['Entropy Risk']) {
+                    const entropyData = data['Entropy Risk'];
+                    if (entropyData['Entropy-Value'] !== undefined) {
+                        visualizationHtml += `<div><strong>Entropy Value:</strong> ${entropyData['Entropy-Value']}</div>`;
+                    }
+                }
+                
+                visualizationHtml += `
                         </div>
-                    
                     </div>`;
                 
                 metrics.innerHTML += visualizationHtml;
@@ -427,425 +483,20 @@ function removeVisualizationKey(data) {
     return data;
 }
 
-
-
-
-// Modify the function to accept an array of visualization content
-// function showVis(visualizationContent) {
-//     // Create a new popup window
-//     var popup = window.open("", "Popup", "width=1000,height=1000,resizable=yes,scrollbars=yes");
-
-//     // Ensure the popup window is fully loaded before writing content
-//     popup.onload = function() {
-//         // Write HTML and CSS into the popup window
-//         popup.document.write(`
-//             <html>
-//             <head>
-//                 <title>Visualizations</title>
-//                 <style>
-//                     body {
-//                         font-family: Arial, sans-serif;
-//                         padding: 20px;
-//                         background-color: #f9f9f9;
-//                     }
-//                     .visualization-container {
-//                         margin-bottom: 20px;
-//                     }
-//                     .visualization-container img {
-//                         max-width: 100%;
-//                         border-radius: 4px;
-//                         margin-bottom: 10px;
-//                     }
-//                     .visualization-container div {
-//                         color: #333;
-//                         font-size: 20px;
-//                     }
-//                     .download-button {
-//                         display: inline-block;
-//                         padding: 10px 20px;
-//                         margin-bottom: 10px;
-//                         background-color: #007bff;
-//                         color: white;
-//                         text-decoration: none;
-//                         border-radius: 4px;
-//                         font-size: 14px;
-//                     }
-//                 </style>
-//             </head>
-//             <body>
-//         `);
-
-//         visualizationContent.forEach(function(content, index) {
-//             const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
-//             popup.document.write(`
-//                 <div class="visualization-container">
-//                     <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-//                     <a href="${imageBlobUrl}" download="Visualization_${index + 1}.jpg" class="download-button">Download</a>
-                    
-//                     <div>${content.description}</div>
-//                 </div>
-//             `);
-//         });
-
-//         // Close the HTML document
-//         popup.document.write('</body></html>');
-
-//         // Close the document to render the content
-//         popup.document.close();
-//     };
-// }
-
-// function showVisualization() {
-
-//     // Get Completeness Visualization content
-//     var completenessContent = document.getElementById('complVis');
-
-//     if (completenessContent) {
-//         // Reduce the size of the image
-//         completenessContent.style.width = '600px'; // Set a fixed width
-//         completenessContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         completenessContent.style.display = 'flex';
-//         completenessContent.style.flexDirection = 'column';
-//         // completenessContent.style.alignItems = 'center';
-//         completenessContent.style.border = '1px solid #ddd'; // Add a border
-//         completenessContent.style.borderRadius = '8px'; // Add rounded corners
-//         completenessContent.style.padding = '10px'; // Add some padding
-//         completenessContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         completenessContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         completenessContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         completenessContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         completenessContent.querySelector('div').style.color = '#333'; // Set text color
-//         completenessContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         completenessContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-//     // Show Outliers Visualization content if it exists
-//     var outliersContent = document.getElementById('outVis');
-//     if (outliersContent) {
-
-//         // Reduce the size of the image
-//         outliersContent.style.width = '600px'; // Set a fixed width
-//         outliersContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         outliersContent.style.display = 'flex';
-//         outliersContent.style.flexDirection = 'column';
-//         outliersContent.style.alignItems = 'center';
-//         outliersContent.style.border = '1px solid #ddd'; // Add a border
-//         outliersContent.style.borderRadius = '8px'; // Add rounded corners
-//         outliersContent.style.padding = '10px'; // Add some padding
-//         outliersContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         outliersContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         outliersContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         outliersContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         outliersContent.querySelector('div').style.color = '#333'; // Set text color
-//         outliersContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         outliersContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-//     // Show Representation Rate Visualization content if it exists
-//     var representationRateContent = document.getElementById('repVis');
-//     if (representationRateContent) {
-
-//         // Reduce the size of the image
-//         representationRateContent.style.width = '600px'; // Set a fixed width
-//         representationRateContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         representationRateContent.style.display = 'flex';
-//         representationRateContent.style.flexDirection = 'column';
-//         // representationRateContent.style.alignItems = 'center';
-//         representationRateContent.style.border = '1px solid #ddd'; // Add a border
-//         representationRateContent.style.borderRadius = '8px'; // Add rounded corners
-//         representationRateContent.style.padding = '10px'; // Add some padding
-//         representationRateContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         representationRateContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         representationRateContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         representationRateContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         representationRateContent.querySelector('div').style.color = '#333'; // Set text color
-//         representationRateContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         representationRateContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-//     // Show Comparison Visualization content if it exists
-//     var comparisonContent = document.getElementById('compVis');
-//     if (comparisonContent) {
-
-//         // Reduce the size of the image
-//         comparisonContent.style.width = '600px'; // Set a fixed width
-//         comparisonContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         comparisonContent.style.display = 'flex';
-//         comparisonContent.style.flexDirection = 'column';
-
-//         // comparisonContent.style.alignItems = 'center';
-//         comparisonContent.style.border = '1px solid #ddd'; // Add a border
-//         comparisonContent.style.borderRadius = '8px'; // Add rounded corners
-//         comparisonContent.style.padding = '10px'; // Add some padding
-//         comparisonContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         comparisonContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         comparisonContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         comparisonContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         comparisonContent.querySelector('div').style.color = '#333'; // Set text color
-//         comparisonContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         comparisonContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-//     // Statistical Rate Visualization content if it exists
-//     var stateRateVis = document.getElementById('statRateVis');
-//     if (stateRateVis) {
-
-//         // Reduce the size of the image
-//         stateRateVis.style.width = '600px'; // Set a fixed width
-//         stateRateVis.style.height = 'auto'; // Let the height adjust proportionally
-
-//         stateRateVis.style.display = 'flex';
-//         stateRateVis.style.flexDirection = 'column';
-
-   
-//         // stateRateVis.style.display = 'flex';
-//         // stateRateVis.style.alignItems = 'center';
-//         stateRateVis.style.border = '1px solid #ddd'; // Add a border
-//         stateRateVis.style.borderRadius = '8px'; // Add rounded corners
-//         stateRateVis.style.padding = '10px'; // Add some padding
-//         stateRateVis.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         stateRateVis.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         stateRateVis.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         stateRateVis.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         stateRateVis.querySelector('div').style.color = '#333'; // Set text color
-//         stateRateVis.querySelector('div').style.fontSize = '20px'; // Set font size
-//         stateRateVis.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-//     // Show Correlation Visualization content if it exists
-//     var catCorrContent = document.getElementById('catCorrVis');
-//     if (catCorrContent) {
-
-//         // Reduce the size of the image
-//         catCorrContent.style.width = '600px'; // Set a fixed width
-//         catCorrContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         catCorrContent.style.display = 'flex';
-//         catCorrContent.style.flexDirection = 'column';
-
-//         // catCorrContent.style.display = 'flex';
-//         // catCorrContent.style.alignItems = 'center';
-//         catCorrContent.style.border = '1px solid #ddd'; // Add a border
-//         catCorrContent.style.borderRadius = '8px'; // Add rounded corners
-//         catCorrContent.style.padding = '10px'; // Add some padding
-//         catCorrContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         catCorrContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         catCorrContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         catCorrContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         catCorrContent.querySelector('div').style.color = '#333'; // Set text color
-//         catCorrContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         catCorrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-//     var numCorrContent = document.getElementById('numCorrVis');
-//     if (numCorrContent) {
-
-//         // Reduce the size of the image
-//         numCorrContent.style.width = '600px'; // Set a fixed width
-//         numCorrContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         numCorrContent.style.display = 'flex';
-//         numCorrContent.style.flexDirection = 'column';
-
-//         // numCorrContent.style.display = 'flex';
-//         // numCorrContent.style.alignItems = 'center';
-//         numCorrContent.style.border = '1px solid #ddd'; // Add a border
-//         numCorrContent.style.borderRadius = '8px'; // Add rounded corners
-//         numCorrContent.style.padding = '10px'; // Add some padding
-//         numCorrContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         numCorrContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         numCorrContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         numCorrContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         numCorrContent.querySelector('div').style.color = '#333'; // Set text color
-//         numCorrContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         numCorrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-    
-//     var featureRelContent = document.getElementById('featureRelVis');
-//     if (featureRelContent) {
-
-//         // Reduce the size of the image
-//         featureRelContent.style.width = '600px'; // Set a fixed width
-//         featureRelContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         featureRelContent.style.display = 'flex';
-//         featureRelContent.style.flexDirection = 'column';
-
-//         // featureRelContent.style.display = 'flex';
-//         // featureRelContent.style.alignItems = 'center';
-//         featureRelContent.style.border = '1px solid #ddd'; // Add a border
-//         featureRelContent.style.borderRadius = '8px'; // Add rounded corners
-//         featureRelContent.style.padding = '10px'; // Add some padding
-//         featureRelContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         featureRelContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         featureRelContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         featureRelContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         featureRelContent.querySelector('div').style.color = '#333'; // Set text color
-//         featureRelContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         featureRelContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-//     var classImbalanceContent = document.getElementById('classDisVis');
-//     if (classImbalanceContent) {
-
-//         // Reduce the size of the image
-//         classImbalanceContent.style.width = '600px'; // Set a fixed width
-//         classImbalanceContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         classImbalanceContent.style.display = 'flex';
-//         classImbalanceContent.style.flexDirection = 'column';
-
-//         // classImbalanceContent.style.display = 'flex';
-//         // classImbalanceContent.style.alignItems = 'center';
-//         classImbalanceContent.style.border = '1px solid #ddd'; // Add a border
-//         classImbalanceContent.style.borderRadius = '8px'; // Add rounded corners
-//         classImbalanceContent.style.padding = '10px'; // Add some padding
-//         classImbalanceContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         classImbalanceContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         classImbalanceContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         classImbalanceContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         classImbalanceContent.querySelector('div').style.color = '#333'; // Set text color
-//         classImbalanceContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         classImbalanceContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-//     // Show Normal vs Noisy Feature Visualization content if it exists
-//     var noisyContent = document.getElementById('noisyVis');
-//     if (noisyContent) {
-
-//         // Reduce the size of the image
-//         noisyContent.style.width = '600px'; // Set a fixed width
-//         noisyContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         noisyContent.style.display = 'flex';
-//         noisyContent.style.flexDirection = 'column';
-
-//         // noisyContent.style.display = 'flex';
-//         // noisyContent.style.alignItems = 'center';
-//         noisyContent.style.border = '1px solid #ddd'; // Add a border
-//         noisyContent.style.borderRadius = '8px'; // Add rounded corners
-//         noisyContent.style.padding = '10px'; // Add some padding
-//         noisyContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         noisyContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         noisyContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         noisyContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         noisyContent.querySelector('div').style.color = '#333'; // Set text color
-//         noisyContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         noisyContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-    
-//      // Show single attribute risk scores
-//      var singleRiskContent = document.getElementById('singleRiskVis');
-//     if (singleRiskContent) {
-
-//         // Reduce the size of the image
-//         singleRiskContent.style.width = '600px'; // Set a fixed width
-//         singleRiskContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         singleRiskContent.style.display = 'flex';
-//         singleRiskContent.style.flexDirection = 'column';
-
-//         // singleRiskContent.style.display = 'flex';
-//         // singleRiskContent.style.alignItems = 'center';
-//         singleRiskContent.style.border = '1px solid #ddd'; // Add a border
-//         singleRiskContent.style.borderRadius = '8px'; // Add rounded corners
-//         singleRiskContent.style.padding = '10px'; // Add some padding
-//         singleRiskContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         singleRiskContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         singleRiskContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         singleRiskContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         singleRiskContent.querySelector('div').style.color = '#333'; // Set text color
-//         singleRiskContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         singleRiskContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-//     // Show multiple attribute risk scores
-//     var multipleRiskContent = document.getElementById('multipleRiskVis');
-//     if (multipleRiskContent) {
-
-//         // Reduce the size of the image
-//         multipleRiskContent.style.width = '600px'; // Set a fixed width
-//         multipleRiskContent.style.height = 'auto'; // Let the height adjust proportionally
-
-//         multipleRiskContent.style.display = 'flex';
-//         multipleRiskContent.style.flexDirection = 'column';
-
-//         // multipleRiskContent.style.display = 'flex';
-//         // multipleRiskContent.style.alignItems = 'center';
-//         multipleRiskContent.style.border = '1px solid #ddd'; // Add a border
-//         multipleRiskContent.style.borderRadius = '8px'; // Add rounded corners
-//         multipleRiskContent.style.padding = '10px'; // Add some padding
-//         multipleRiskContent.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'; // Add a subtle box shadow
-
-//         // Styles for the image
-//         multipleRiskContent.querySelector('img').style.maxWidth = '100%'; // Make sure the image doesn't exceed the container width
-//         multipleRiskContent.querySelector('img').style.borderRadius = '4px'; // Add rounded corners to the image
-
-//         // Styles for the description
-//         multipleRiskContent.querySelector('div').style.fontFamily = 'Arial, sans-serif'; // Change font family
-//         multipleRiskContent.querySelector('div').style.color = '#333'; // Set text color
-//         multipleRiskContent.querySelector('div').style.fontSize = '20px'; // Set font size
-//         multipleRiskContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
-//     }
-
-    
-
-
-//     // Hide JSON content
-//     var scoreResult = document.getElementById('scoreResult');
-//     if (scoreResult) {
-//         scoreResult.style.display = 'none';
-//     }
-// }
+function getDocsButton(title) {
+    const anchorMap = {
+        'DP Statistics': '#differential-privacy',
+        'Single attribute risk scoring': '#single-attribute-risk',
+        'Multiple attribute risk scoring': '#multiple-attribute-risk',
+        'Entropy Risk': '#entropy-risk',
+        'k-Anonymity': '#k-anonymity',
+        'l-Diversity': '#l-diversity',
+        't-Closeness': '#t-closeness',
+    };
+    const anchor = anchorMap[title] || '';
+    if (!anchor) return '';
+    return `<a href="/privacy-metrics-docs${anchor}" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a>`;
+}
 
 function downloadJSON() {
     // Get the JSON data
@@ -929,6 +580,16 @@ function toggleValue(checkbox) {
          return;
      }
      console.log("Container found:", container);
+     
+     // Toggle the metric-selected class to show/hide QI sections
+     if (checkbox.checked) {
+         container.classList.add('metric-selected');
+         console.log("Added metric-selected class - QI sections should be visible");
+     } else {
+         container.classList.remove('metric-selected');
+         console.log("Removed metric-selected class - QI sections should be hidden");
+     }
+     
      // Find all select dropdowns within that container
      const dropdowns = container.querySelectorAll("select");
      const inputs = container.querySelectorAll("input.textWrapper");
@@ -978,6 +639,16 @@ document.addEventListener("DOMContentLoaded", function() {
         });
         
     });
+    
+    // Also handle checkboxContainerIndividual containers for privacy preservation
+    document.querySelectorAll(".checkboxContainerIndividual").forEach(container => {
+        const checkboxes = container.querySelectorAll("input[type='checkbox']");
+        checkboxes.forEach(checkbox => {
+            console.log(checkbox);
+            // Set initial state of selects based on checkbox
+            toggleValue(checkbox);
+        });
+    });
 });
 
 //********** Darkmode Toggle *******
@@ -1008,3 +679,21 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     })
 });
+
+function getDistanceMetricName() {
+    // Get the selected distance metric from the form
+    const distanceSelect = document.getElementById('distance-metric');
+    if (distanceSelect) {
+        const selectedValue = distanceSelect.value;
+        const metricNames = {
+            'EU': 'Euclidean Distance',
+            'CH': 'Chebyshev Distance', 
+            'KL': 'KL Divergence',
+            'HE': 'Hellinger Distance',
+            'TV': 'Total Variation Distance',
+            'CS': 'Chi-Squared Distance'
+        };
+        return metricNames[selectedValue] || 'Distance Metric';
+    }
+    return 'Distance Metric';
+}

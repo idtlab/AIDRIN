@@ -55,7 +55,7 @@
                 <!-- clear button: visible when file is uploaded, change form style to match-->
                 <button type="button" class="clear-button" style="border:none" onclick="clearFile()">Clear Submission</button>
         {%else%}
-                <button type="button" class="redirect-upload-button" style="border:none" onclick="location.href='{{ url_for("upload_file") }}'">Upload a File</button>
+                <button type="button" class="redirect-upload-button" style="border:none" onclick="location.href='{{ url_for('upload_file') }}'">Upload a File</button>
          {% endif %}
     </div>
     <div class="metric-page-container">
@@ -65,9 +65,13 @@
                     <label class="material-checkbox">
                         <input type="checkbox" name="class imbalance" value="yes" onchange="toggleValue(this)">
                         <span class="checkmark"></span>
-                        Check class imbalance
+                        <span style="display: inline-flex; align-items: center; gap: 4px;">
+                            <span>Check class imbalance</span>
                         <span class="info-icon">i
-                            <span class="info-text">This option checks the distribution of the target feature and displays a pie chart highlighting the class imbalance in the dataset.</span>
+                                <span class="info-text">
+                                    Checks the distribution of the target feature and visualizes class imbalance. For information about the selection of distance metric, <a href="{{ url_for('class_imbalance_docs') }}" target="_blank" style="color: #4a90e2; font-style: italic;">see documentation</a>.
+                                </span>
+                            </span>
                         </span>
                     </label>
                     <ul>
@@ -76,6 +80,17 @@
                             <select name="features for class imbalance" id = "allFeaturesDropdownClIm" required>
                                 <option value="" disabled selected>No features available for this dataset</option>
                                 <!-- Options will be added dynamically using JavaScript -->
+                            </select>
+                        </li>
+                        <li >
+                            <label for="distance metric for class imbalance" style="padding:10px; padding-left:15px;">Distance metric:</label>
+                            <select name="distance metric for class imbalance" id="distanceMetricDropdownClIm" required>
+                                <option value="TV">Total Variation Distance (TVD)</option>
+                                <option value="EU">Euclidean Distance</option>
+                                <option value="CH">Chebyshev Distance</option>
+                                <option value="HE">Hellinger Distance</option>
+                                <option value="KL">Kullback-Leibler Divergence</option>
+                                <option value="CS">Chi-Squared Distance</option>
                             </select>
                         </li>
                     </ul>
@@ -87,7 +102,7 @@
             <span>Submit</span>
             <span></span>
             </button>
-        <button class="animated-button return" type="button" onclick="location.href='{{url_for("upload_file")}}'">
+        <button class="animated-button return" type="button" onclick="location.href='{{url_for('upload_file')}}'">
             <span>Return</span>
             <span></span>
             </button>
@@ -100,12 +115,168 @@
      <div style="display:flex;">
         <div class="plot-container" id="histogramsContainer"></div>
         <div class="plot-container" style="text-align:left" id="metrics">
-
-        <h2 style="text-align:center">Data Quality Metrics</h2>
+        <h2 style="text-align:center">Class Imbalance Metrics</h2>
         <p>No data available yet. Please submit a request.</p>
         <div id="buttonsContainer" style="display:none;">
             <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
         </div>
+        </div>
+    </div>
+    <!-- After the numeric imbalance degree value is displayed, add a 'See documentation' button -->
+    <div id="imbalanceDegreeDocsBtnContainer" style="display:none; margin-top:10px;">
+        <button type="button" class="animated-button" onclick="window.open('{{ url_for('class_imbalance_docs') }}', '_blank')">See documentation</button>
+    </div>
+    <script>
+    // Show the documentation button next to the imbalance degree value when result is displayed
+    function showImbalanceDegreeDocsBtn() {
+        document.getElementById('imbalanceDegreeDocsBtnContainer').style.display = 'block';
+    }
+    // Call showImbalanceDegreeDocsBtn() after displaying the imbalance degree value in your result rendering logic
+    </script>
+    
+    <script>
+        // Robust tooltip management with improved hover proximity detection
+        document.addEventListener('DOMContentLoaded', function() {
+            const infoIcons = document.querySelectorAll('.info-icon');
+            let currentlyOpenTooltip = null; // Track which tooltip is currently open
             
-    </div> 
+            infoIcons.forEach(icon => {
+                const tooltip = icon.querySelector('.info-text');
+                let timeoutId;
+                let isHoveringTooltip = false;
+                let isHoveringIcon = false;
+                let hoverBuffer = 50; // Buffer zone in pixels around tooltip
+                
+                // Ensure tooltip and icon are always interactive regardless of checkbox state
+                icon.style.pointerEvents = 'auto';
+                tooltip.style.pointerEvents = 'auto';
+                icon.style.opacity = '1'; // Force full opacity for consistent hover detection
+                tooltip.style.opacity = '1'; // Force full opacity for tooltip
+                
+                // Show tooltip on icon hover
+                icon.addEventListener('mouseenter', function() {
+                    clearTimeout(timeoutId);
+                    
+                    // Close any other open tooltip first
+                    if (currentlyOpenTooltip && currentlyOpenTooltip !== tooltip) {
+                        currentlyOpenTooltip.style.display = 'none';
+                        console.log('Closed other tooltip');
+                    }
+                    
+                    isHoveringIcon = true;
+                    tooltip.style.display = 'block';
+                    currentlyOpenTooltip = tooltip; // Set this as the currently open tooltip
+                    console.log('Entered icon');
+                });
+                
+                // Hide tooltip when leaving icon (with 4000ms delay for easier navigation)
+                icon.addEventListener('mouseleave', function() {
+                    isHoveringIcon = false;
+                    timeoutId = setTimeout(() => {
+                        if (!isHoveringTooltip && !isHoveringIcon) {
+                            tooltip.style.display = 'none';
+                            if (currentlyOpenTooltip === tooltip) {
+                                currentlyOpenTooltip = null; // Clear the reference when tooltip is closed
+                            }
+                        }
+                    }, 4000); // Increased from 2500ms to 4000ms for more time to click links
+                });
+                
+                // Keep tooltip visible when entering tooltip content
+                tooltip.addEventListener('mouseenter', function() {
+                    clearTimeout(timeoutId);
+                    isHoveringTooltip = true;
+                    console.log('Entered tooltip');
+                });
+                
+                // Hide tooltip when leaving tooltip content (with delay)
+                tooltip.addEventListener('mouseleave', function() {
+                    isHoveringTooltip = false;
+                    timeoutId = setTimeout(() => {
+                        if (!isHoveringTooltip && !isHoveringIcon) {
+                            tooltip.style.display = 'none';
+                            if (currentlyOpenTooltip === tooltip) {
+                                currentlyOpenTooltip = null; // Clear the reference when tooltip is closed
+                            }
+                            console.log('Left tooltip');
+                        }
+                    }, 1500); // Increased from 800ms to 1500ms for more time to interact
+                });
+                
+                // Add global mouse tracking for better proximity detection
+                document.addEventListener('mousemove', function(e) {
+                    if (tooltip.style.display === 'block') {
+                        const iconRect = icon.getBoundingClientRect();
+                        const tooltipRect = tooltip.getBoundingClientRect();
+                        
+                        // Check if mouse is within buffer zone of icon or tooltip
+                        const nearIcon = e.clientX >= iconRect.left - hoverBuffer && 
+                                       e.clientX <= iconRect.right + hoverBuffer && 
+                                       e.clientY >= iconRect.top - hoverBuffer && 
+                                       e.clientY <= iconRect.bottom + hoverBuffer;
+                        
+                        const nearTooltip = e.clientX >= tooltipRect.left - hoverBuffer && 
+                                          e.clientX <= tooltipRect.right + hoverBuffer && 
+                                          e.clientY >= tooltipRect.top - hoverBuffer && 
+                                          e.clientY <= tooltipRect.bottom + hoverBuffer;
+                        
+                        if (nearIcon || nearTooltip) {
+                            clearTimeout(timeoutId);
+                            if (!tooltip.style.display === 'block') {
+                                tooltip.style.display = 'block';
+                            }
+                        } else {
+                            // Mouse is far from both icon and tooltip
+                            timeoutId = setTimeout(() => {
+                                tooltip.style.display = 'none';
+                            }, 1000);
+                        }
+                    }
+                });
+                
+                // Add event listeners to all elements inside tooltip
+                const tooltipElements = tooltip.querySelectorAll('*');
+                tooltipElements.forEach(element => {
+                    element.addEventListener('mouseenter', function() {
+                        clearTimeout(timeoutId);
+                        isHoveringTooltip = true;
+                    });
+                    
+                    element.addEventListener('mouseleave', function() {
+                        // Don't hide immediately, let the main tooltip handle it
+                        setTimeout(() => {
+                            if (!isHoveringTooltip && !isHoveringIcon) {
+                                tooltip.style.display = 'none';
+                            }
+                        }, 100); // Increased from 50ms to 100ms
+                    });
+                    
+                    // Prevent event bubbling for links to avoid interference
+                    if (element.tagName === 'A') {
+                        element.addEventListener('click', function(e) {
+                            e.stopPropagation(); // Prevent event from bubbling up
+                            console.log('Link clicked:', this.href);
+                        });
+                        
+                        // Keep tooltip visible when hovering over links
+                        element.addEventListener('mouseenter', function() {
+                            clearTimeout(timeoutId);
+                            isHoveringTooltip = true;
+                            console.log('Hovering over link');
+                        });
+                        
+                        element.addEventListener('mouseleave', function() {
+                            // Don't hide immediately when leaving link
+                            setTimeout(() => {
+                                if (!isHoveringTooltip && !isHoveringIcon) {
+                                    tooltip.style.display = 'none';
+                                }
+                            }, 200); // Short delay when leaving link
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+</body>
 </html>

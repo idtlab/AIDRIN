@@ -96,7 +96,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
         result_dict["DescriptiveStatistics"] = descriptive_stats_dict
         result_dict['Single attribute risk scoring Visualization'] = base64_image
         result_dict["Description"] = (
-            "This metric quantifies the re-identification risk for each quasi-identifier. Lower risk scores are preferred, indicating features that are less likely to uniquely identify individuals. High-risk features may require further anonymization or removal."
+            "This metric quantifies the re-identification risk for each quasi-identifier. Lower values are preferred, indicating features that are less likely to uniquely identify individuals. High-risk features may require further anonymization or removal."
         )
         result_dict["Graph interpretation"] = (
             "The box plot displays the distribution of risk scores for each feature. Features with higher medians or more outliers indicate greater privacy risk. A compact, lower box is desirable."
@@ -263,7 +263,7 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
         image_stream.close()
 
         result_dict["Description"] = (
-            "This metric evaluates the joint risk posed by combinations of quasi-identifiers. Lower overall risk scores are preferred, as they indicate that the selected set of features does not easily allow re-identification."
+            "This metric evaluates the joint risk posed by combinations of quasi-identifiers. Lower values are preferred, as they indicate that the selected set of features does not easily allow re-identification."
         )
         result_dict["Graph interpretation"] = (
             "The box plot shows the distribution of combined risk scores. A distribution concentrated at lower values indicates better privacy."
@@ -327,27 +327,9 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
         base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
         img_stream.close()
 
-        # Risk scoring based on k value
-        # Normalize risk: Higher k = lower risk, scale it from 0 to 1
-        # Example: if k=1 => high risk (1.0), if k>=50 => very low risk (~0.0)
-        dataset_size = clean_data.shape[0]
-
-        if dataset_size < 150:
-            max_safe_k = max(3, int(dataset_size * 0.05))  # 5% of dataset or at least 3
-        elif dataset_size < 1500:
-            max_safe_k = max(10, int(dataset_size * 0.01))  # 1% or at least 10
-        else:
-            max_safe_k = min(100, int(dataset_size * 0.01))  # Cap at 100
-
-        if k_anonymity == 1:
-            risk_score = 1.0
-        else:
-            risk_score = min(1.0, round(1 - min(k_anonymity / max_safe_k, 1.0), 2))
-
         # Final result
         result_dict = {
-            "Value": k_anonymity,
-            "Risk Score": risk_score,
+            "k-Value": k_anonymity,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data,
             "k-Anonymity Visualization": base64_image,
@@ -420,22 +402,9 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
         base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
         img_stream.close()
 
-        # Calculate risk score based on min l-diversity
-        dataset_size = clean_data.shape[0]
-        if dataset_size < 150:
-            max_safe_l = max(2, int(dataset_size * 0.05))  # 5% for small datasets
-        elif dataset_size < 1500:
-            max_safe_l = max(10, int(dataset_size * 0.01))  # 1% or minimum 10
-        else:
-            max_safe_l = min(50, int(dataset_size * 0.01))  # Cap at 50
-
-        risk_score = max(0.0, min(1.0, round(1 - min_l_diversity / max_safe_l, 2)))
-
-
         # Compose result dictionary
         result_dict = {
-            "Value": min_l_diversity,
-            "Risk Score": risk_score,
+            "l-Value": min_l_diversity,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
             "l-Diversity Visualization": base64_image,
@@ -514,18 +483,8 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
         base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
         img_stream.close()
 
-        # Risk Score: Higher t_closeness → higher privacy loss → higher risk
-        if max_t <= 0.1:
-            risk_score = 0.0
-        elif max_t >= 0.4:
-            risk_score = 1.0
-        else:
-            risk_score = round((max_t - 0.1) / 0.3, 2)
-
         result_dict = {
-
-            "Value": max_t,
-            "Risk Score": risk_score,
+            "t-Value": max_t,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
             "t-Closeness Visualization": base64_image,
@@ -596,12 +555,8 @@ def compute_entropy_risk(data, quasi_identifiers) :
             "median": round(entropy_series.median(), 4)
         }
 
-        risk_score = round(1 - (rounded_entropy / np.log2(total_records + 1)), 4)
-        risk_score = max(0.0, min(risk_score, 1.0))  # Bound it between 0 and 1
-
         result_dict = {
-            "Value": rounded_entropy,
-            "Risk Score": risk_score,
+            "Entropy-Value": rounded_entropy,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
             "Entropy Risk Visualization": base64_image,
