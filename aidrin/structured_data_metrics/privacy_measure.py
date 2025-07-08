@@ -4,9 +4,10 @@ import io
 import base64
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.file_parser import read_file
+from aidrin.file_handling.file_parser import read_file
 import pandas as pd
 from typing import List
+
 
 @shared_task(bind=True, ignore_result=False)
 def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file_info):
@@ -21,7 +22,8 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
         # Handle eval_cols - it might be a string or list
         if isinstance(eval_cols, str):
             # If it's a string, split by comma and clean up
-            eval_cols = [col.strip() for col in eval_cols.split(',') if col.strip()]
+            eval_cols = [col.strip()
+                         for col in eval_cols.split(',') if col.strip()]
         elif isinstance(eval_cols, list):
             # If it's already a list, clean up each item
             eval_cols = [col.strip() for col in eval_cols if col.strip()]
@@ -35,7 +37,8 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
 
         # Check if the DataFrame is still non-empty after dropping missing values
         if df.empty:
-            raise ValueError("After dropping missing values, the DataFrame is empty.")
+            raise ValueError(
+                "After dropping missing values, the DataFrame is empty.")
 
         # Select the specified columns from the DataFrame
         selected_columns = [id_col] + eval_cols
@@ -52,9 +55,11 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
         for i, col in enumerate(eval_cols):
             risk_scores = np.zeros(len(my_array))
             for j in range(len(my_array)):
-                attr1_tot = np.count_nonzero(my_array[:, i + 1] == my_array[j, i + 1])
+                attr1_tot = np.count_nonzero(
+                    my_array[:, i + 1] == my_array[j, i + 1])
 
-                mask_attr1_user = (my_array[:, 0] == my_array[j, 0]) & (my_array[:, i + 1] == my_array[j, i + 1])
+                mask_attr1_user = (my_array[:, 0] == my_array[j, 0]) & (
+                    my_array[:, i + 1] == my_array[j, i + 1])
                 count_attr1_user = np.count_nonzero(mask_attr1_user)
 
                 start_prob_attr1 = attr1_tot / len(my_array)
@@ -79,10 +84,9 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
                 'max': np.max(value)
             }
             descriptive_stats_dict[key] = stats_dict
-        
 
         # Create a box plot
-        plt.figure(figsize=(8,8))
+        plt.figure(figsize=(8, 8))
         plt.boxplot(list(sing_res.values()), labels=sing_res.keys())
         plt.title('Box plot of single feature risk scores')
         plt.xlabel('Feature')
@@ -106,7 +110,7 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
         result_dict["Graph interpretation"] = (
             "The box plot displays the distribution of risk scores for each feature. Features with higher medians or more outliers indicate greater privacy risk. A compact, lower box is desirable."
         )
-        
+
     except SoftTimeLimitExceeded:
         raise Exception("Single Attribute Risk task timed out.")
     except Exception as e:
@@ -118,13 +122,14 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
 
     return result_dict
 
+
 @shared_task(bind=True, ignore_result=False)
 def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file_info):
     df = read_file(file_info)
     result_dict = {}
 
     try:
-        #check if dataframe is empty
+        # check if dataframe is empty
         if df.empty:
             result_dict["Value Error"] = "Input dataframe is empty"
             return result_dict
@@ -137,18 +142,21 @@ def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, fi
         # Handle eval_cols - it might be a string or list
         if isinstance(eval_cols, str):
             # If it's a string, split by comma and clean up
-            eval_cols = [col.strip() for col in eval_cols.split(',') if col.strip()]
+            eval_cols = [col.strip()
+                         for col in eval_cols.split(',') if col.strip()]
             print(f"DEBUG: After string processing, eval_cols = {eval_cols}")
         elif isinstance(eval_cols, list):
             # If it's already a list, clean up each item
             eval_cols = [col.strip() for col in eval_cols if col.strip()]
             print(f"DEBUG: After list processing, eval_cols = {eval_cols}")
         else:
-            raise ValueError(f"eval_cols must be a string or list, got {type(eval_cols)}")
+            raise ValueError(
+                f"eval_cols must be a string or list, got {type(eval_cols)}")
 
         # Check if eval_cols is empty after processing
         if not eval_cols:
-            raise ValueError("No valid columns provided in eval_cols after processing")
+            raise ValueError(
+                "No valid columns provided in eval_cols after processing")
 
         # Validate that all columns exist in the dataframe
         missing_cols = [col for col in eval_cols if col not in df.columns]
@@ -162,85 +170,93 @@ def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, fi
         print(f"DEBUG: Final eval_cols = {eval_cols}")
         print(f"DEBUG: Final id_col = {id_col}")
 
-        #select specidied columns from dataframe
+        # select specidied columns from dataframe
         selected_columns = [id_col] + eval_cols
         print(f"DEBUG: selected_columns = {selected_columns}")
         selected_df = df[selected_columns]
 
         selected_df = selected_df.dropna()
 
-        #check if the dataframe is still non-empty after dropping missing values
+        # check if the dataframe is still non-empty after dropping missing values
         if selected_df.empty:
             result_dict["Values Error"] = "After dropping missing values, the dataframe is empty"
             return result_dict
-            
-        #convert dataframe to numpy array
+
+        # convert dataframe to numpy array
         my_array = selected_df.to_numpy()
 
-        #array to store risk scores of each data point
+        # array to store risk scores of each data point
         risk_scores = np.zeros(len(my_array))
-        #risk scoring
+        # risk scoring
         for j in range(len(my_array)):
-    
-            if len(my_array[0]) >2:
+
+            if len(my_array[0]) > 2:
                 priv_prob_MM = 1
-        
-                for i in range(2,len(my_array[0])):    
-                    
-                    attr1_tot = np.count_nonzero(my_array[:,i-1] == my_array[j][i-1])
-            
-                    mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i-1] == my_array[j][i-1])
+
+                for i in range(2, len(my_array[0])):
+
+                    attr1_tot = np.count_nonzero(
+                        my_array[:, i-1] == my_array[j][i-1])
+
+                    mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (
+                        my_array[:, i-1] == my_array[j][i-1])
                     count_attr1_user = np.count_nonzero(mask_attr1_user)
-                    
-                    start_prob_attr1 = attr1_tot/len(my_array)#1
-                    
-                    obs_prob_attr1 = 1 - (count_attr1_user/attr1_tot)#2
-                    
-                    mask_attr1_attr2 = (my_array[:, i-1] == my_array[j][i-1]) 
+
+                    start_prob_attr1 = attr1_tot/len(my_array)  # 1
+
+                    obs_prob_attr1 = 1 - (count_attr1_user/attr1_tot)  # 2
+
+                    mask_attr1_attr2 = (my_array[:, i-1] == my_array[j][i-1])
                     count_attr1_attr2 = np.count_nonzero(mask_attr1_attr2)
-            
-                    mask2_attr1_attr2 = (my_array[:, i-1] == my_array[j][i-1]) & (my_array[:, i] == my_array[j][i]) 
+
+                    mask2_attr1_attr2 = (
+                        my_array[:, i-1] == my_array[j][i-1]) & (my_array[:, i] == my_array[j][i])
                     count2_attr1_attr2 = np.count_nonzero(mask2_attr1_attr2)
-                    
-                    trans_prob_attr1_attr2 = count2_attr1_attr2/count_attr1_attr2#3
-                    
-                    attr2_tot = np.count_nonzero(my_array[:,i]==my_array[j][i])
-            
-                    mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i] == my_array[j][i])
+
+                    trans_prob_attr1_attr2 = count2_attr1_attr2/count_attr1_attr2  # 3
+
+                    attr2_tot = np.count_nonzero(
+                        my_array[:, i] == my_array[j][i])
+
+                    mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (
+                        my_array[:, i] == my_array[j][i])
                     count_attr2_user = np.count_nonzero(mask_attr2_user)
-        
-                    obs_prob_attr2 = 1 - (count_attr2_user/attr2_tot)#4
-            
-                    priv_prob_MM = priv_prob_MM * start_prob_attr1*obs_prob_attr1*trans_prob_attr1_attr2*obs_prob_attr2
-                    worst_case_MM_risk_score = round(1 - priv_prob_MM,2)#5
+
+                    obs_prob_attr2 = 1 - (count_attr2_user/attr2_tot)  # 4
+
+                    priv_prob_MM = priv_prob_MM * start_prob_attr1 * \
+                        obs_prob_attr1*trans_prob_attr1_attr2*obs_prob_attr2
+                    worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)  # 5
                 risk_scores[j] = worst_case_MM_risk_score
             elif len(my_array[0]) == 2:
                 priv_prob_MM = 1
-                attr1_tot = np.count_nonzero(my_array[:,1] == my_array[j][1])
-        
-                mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, 1] == my_array[j][1])
+                attr1_tot = np.count_nonzero(my_array[:, 1] == my_array[j][1])
+
+                mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (
+                    my_array[:, 1] == my_array[j][1])
                 count_attr1_user = np.count_nonzero(mask_attr1_user)
-                
-                start_prob_attr1 = attr1_tot/len(my_array)#1
-                
-                obs_prob_attr1 = 1 - (count_attr1_user/attr1_tot)#2
-        
+
+                start_prob_attr1 = attr1_tot/len(my_array)  # 1
+
+                obs_prob_attr1 = 1 - (count_attr1_user/attr1_tot)  # 2
+
                 priv_prob_MM = priv_prob_MM * start_prob_attr1*obs_prob_attr1
-                worst_case_MM_risk_score = round(1 - priv_prob_MM,2)#5
+                worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)  # 5
                 risk_scores[j] = worst_case_MM_risk_score
 
         # calculate the entire dataset privacy level
         min_risk_scores = np.zeros(len(risk_scores))
         # Calculate the Euclidean distance
         euclidean_distance = np.linalg.norm(risk_scores - min_risk_scores)
-        
+
         max_risk_scores = np.ones(len(risk_scores))
 
-        #max euclidean distance
-        max_euclidean_distance = np.linalg.norm(max_risk_scores - min_risk_scores)
+        # max euclidean distance
+        max_euclidean_distance = np.linalg.norm(
+            max_risk_scores - min_risk_scores)
         normalized_distance = euclidean_distance/max_euclidean_distance
-                
-        #descriptive statistics
+
+        # descriptive statistics
         stats_dict = {
             'mean': np.mean(risk_scores),
             'std': np.std(risk_scores),
@@ -252,8 +268,9 @@ def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, fi
         }
         x_label = ",".join(eval_cols)
         # Create a box plot
-        plt.figure(figsize=(8,8))
-        plt.boxplot(risk_scores, vert=True)  # vert=False for horizontal box plot
+        plt.figure(figsize=(8, 8))
+        # vert=False for horizontal box plot
+        plt.boxplot(risk_scores, vert=True)
         plt.title('Box Plot of Multiple Attribute Risk Scores')
         plt.ylabel('Risk Score')
         plt.xlabel('Feature Combination')
@@ -289,9 +306,10 @@ def generate_multiple_attribute_MM_risk_scores(self: Task, id_col, eval_cols, fi
         result_dict["Description"] = f"Error occurred: {str(e)}"
         result_dict["Graph interpretation"] = "No visualization available due to error."
         return result_dict
-    
+
+
 @shared_task(bind=True, ignore_result=False)
-def compute_k_anonymity(self:Task, quasi_identifiers: List[str], file_info: tuple[str, str, str]):
+def compute_k_anonymity(self: Task, quasi_identifiers: List[str], file_info: tuple[str, str, str]):
     data = read_file(file_info)
     result_dict = {}
     try:
@@ -300,16 +318,19 @@ def compute_k_anonymity(self:Task, quasi_identifiers: List[str], file_info: tupl
 
         for qi in quasi_identifiers:
             if qi not in data.columns:
-                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+                raise ValueError(
+                    f"Quasi-identifier '{qi}' not found in the dataset.")
 
         data.replace('?', pd.NA, inplace=True)
         clean_data = data.dropna(subset=quasi_identifiers)
         if clean_data.empty:
-            raise ValueError("No data left after dropping rows with missing quasi-identifiers.")
+            raise ValueError(
+                "No data left after dropping rows with missing quasi-identifiers.")
 
-        equivalence_classes = clean_data.groupby(quasi_identifiers).size().reset_index(name='count')
+        equivalence_classes = clean_data.groupby(
+            quasi_identifiers).size().reset_index(name='count')
         counts = equivalence_classes["count"]
-    
+
         # Compute k-anonymity
         k_anonymity = int(counts.min())
 
@@ -343,7 +364,8 @@ def compute_k_anonymity(self:Task, quasi_identifiers: List[str], file_info: tupl
         dataset_size = clean_data.shape[0]
 
         if dataset_size < 150:
-            max_safe_k = max(3, int(dataset_size * 0.05))  # 5% of dataset or at least 3
+            # 5% of dataset or at least 3
+            max_safe_k = max(3, int(dataset_size * 0.05))
         elif dataset_size < 1500:
             max_safe_k = max(10, int(dataset_size * 0.01))  # 1% or at least 10
         else:
@@ -352,7 +374,8 @@ def compute_k_anonymity(self:Task, quasi_identifiers: List[str], file_info: tupl
         if k_anonymity == 1:
             risk_score = 1.0
         else:
-            risk_score = min(1.0, round(1 - min(k_anonymity / max_safe_k, 1.0), 2))
+            risk_score = min(1.0, round(
+                1 - min(k_anonymity / max_safe_k, 1.0), 2))
 
         # Final result
         result_dict = {
@@ -375,33 +398,38 @@ def compute_k_anonymity(self:Task, quasi_identifiers: List[str], file_info: tupl
 
     return result_dict
 
+
 @shared_task(bind=True, ignore_result=False)
-def compute_l_diversity(self:Task, quasi_identifiers: list, sensitive_column: str, file_info: tuple[str, str, str]):
+def compute_l_diversity(self: Task, quasi_identifiers: list, sensitive_column: str, file_info: tuple[str, str, str]):
     data = read_file(file_info)
     result_dict = {}
     try:
         # Validate input DataFrame
         if data.empty:
             raise ValueError("Input DataFrame is empty.")
-        
+
         # Validate quasi-identifiers
         for qi in quasi_identifiers:
             if qi not in data.columns:
-                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
-        
+                raise ValueError(
+                    f"Quasi-identifier '{qi}' not found in the dataset.")
+
         # Validate sensitive column presence
         if sensitive_column not in data.columns:
-            raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
+            raise ValueError(
+                f"Sensitive column '{sensitive_column}' not found in the dataset.")
 
         data = data.replace('?', pd.NA)
 
         # Drop rows with missing quasi-identifiers or sensitive values
         clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
         if clean_data.empty:
-            raise ValueError("No data left after dropping rows with missing quasi-identifiers or sensitive values.")
+            raise ValueError(
+                "No data left after dropping rows with missing quasi-identifiers or sensitive values.")
 
         # Compute l-diversities: count of unique sensitive values per equivalence class
-        l_diversities = clean_data.groupby(quasi_identifiers)[sensitive_column].nunique()
+        l_diversities = clean_data.groupby(quasi_identifiers)[
+            sensitive_column].nunique()
 
         # Minimum l-diversity (lowest number of distinct sensitive values)
         min_l_diversity = int(l_diversities.min())
@@ -415,7 +443,8 @@ def compute_l_diversity(self:Task, quasi_identifiers: list, sensitive_column: st
         }
 
         # Histogram plot of l-diversity counts
-        binned_l_diversities = l_diversities.round()  # or use: (l_diversities / 2).round() * 2 for bin size of 2
+        # or use: (l_diversities / 2).round() * 2 for bin size of 2
+        binned_l_diversities = l_diversities.round()
         hist_data = binned_l_diversities.value_counts().sort_index()
         plt.figure(figsize=(8, 8))
         plt.bar(hist_data.index, hist_data.values, color='skyblue')
@@ -436,14 +465,15 @@ def compute_l_diversity(self:Task, quasi_identifiers: list, sensitive_column: st
         # Calculate risk score based on min l-diversity
         dataset_size = clean_data.shape[0]
         if dataset_size < 150:
-            max_safe_l = max(2, int(dataset_size * 0.05))  # 5% for small datasets
+            max_safe_l = max(2, int(dataset_size * 0.05)
+                             )  # 5% for small datasets
         elif dataset_size < 1500:
             max_safe_l = max(10, int(dataset_size * 0.01))  # 1% or minimum 10
         else:
             max_safe_l = min(50, int(dataset_size * 0.01))  # Cap at 50
 
-        risk_score = max(0.0, min(1.0, round(1 - min_l_diversity / max_safe_l, 2)))
-
+        risk_score = max(
+            0.0, min(1.0, round(1 - min_l_diversity / max_safe_l, 2)))
 
         # Compose result dictionary
         result_dict = {
@@ -466,6 +496,7 @@ def compute_l_diversity(self:Task, quasi_identifiers: list, sensitive_column: st
 
     return result_dict
 
+
 @shared_task(bind=True, ignore_result=False)
 def compute_t_closeness(self: Task, quasi_identifiers: List[str], sensitive_column: str, file_info: tuple[str, str, str]):
     data = read_file(file_info)
@@ -484,15 +515,18 @@ def compute_t_closeness(self: Task, quasi_identifiers: List[str], sensitive_colu
 
         for qi in quasi_identifiers:
             if qi not in data.columns:
-                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+                raise ValueError(
+                    f"Quasi-identifier '{qi}' not found in the dataset.")
 
         if sensitive_column not in data.columns:
-            raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
+            raise ValueError(
+                f"Sensitive column '{sensitive_column}' not found in the dataset.")
 
         data = data.replace('?', pd.NA)
         clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
         if clean_data.empty:
-            raise ValueError("No data left after dropping rows with missing values.")
+            raise ValueError(
+                "No data left after dropping rows with missing values.")
 
         # Global distribution of sensitive column
         global_dist = clean_data[sensitive_column].value_counts(normalize=True)
@@ -558,8 +592,10 @@ def compute_t_closeness(self: Task, quasi_identifiers: List[str], sensitive_colu
         result_dict["error"] = str(e)
 
     return result_dict
+
+
 @shared_task(bind=True, ignore_result=False)
-def compute_entropy_risk(self: Task, quasi_identifiers, file_info: tuple[str, str, str]) :
+def compute_entropy_risk(self: Task, quasi_identifiers, file_info: tuple[str, str, str]):
     data = read_file(file_info)
     result_dict = {}
 
@@ -569,13 +605,15 @@ def compute_entropy_risk(self: Task, quasi_identifiers, file_info: tuple[str, st
 
         for qi in quasi_identifiers:
             if qi not in data.columns:
-                raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
+                raise ValueError(
+                    f"Quasi-identifier '{qi}' not found in the dataset.")
 
         data = data.replace('?', pd.NA)
         clean_data = data.dropna(subset=quasi_identifiers)
 
         if clean_data.empty:
-            raise ValueError("No data left after dropping rows with missing values.")
+            raise ValueError(
+                "No data left after dropping rows with missing values.")
 
         total_records = len(clean_data)
         grouped = clean_data.groupby(quasi_identifiers)
@@ -614,7 +652,8 @@ def compute_entropy_risk(self: Task, quasi_identifiers, file_info: tuple[str, st
             "median": round(entropy_series.median(), 4)
         }
 
-        risk_score = round(1 - (rounded_entropy / np.log2(total_records + 1)), 4)
+        risk_score = round(
+            1 - (rounded_entropy / np.log2(total_records + 1)), 4)
         risk_score = max(0.0, min(risk_score, 1.0))  # Bound it between 0 and 1
 
         result_dict = {
@@ -636,5 +675,3 @@ def compute_entropy_risk(self: Task, quasi_identifiers, file_info: tuple[str, st
         result_dict["error"] = str(e)
 
     return result_dict
-
-    

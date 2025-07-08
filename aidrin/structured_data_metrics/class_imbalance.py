@@ -6,14 +6,15 @@ import base64
 from math import sqrt, log
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.file_parser import read_file
+from aidrin.file_handling.file_parser import read_file
+
 
 def imbalance_degree(classes, distance="EU"):
     """
     Calculates the imbalance degree [1] of a multi-class dataset.
     This metric is an alternative for the well known imbalance ratio, which
     is only suitable for binary classification problems.
-    
+
     Parameters
     ----------
     classes : list of int.
@@ -27,7 +28,7 @@ def imbalance_degree(classes, distance="EU"):
             - HE: Hellinger distance.
             - TV: Total variation distance.
             - CS: Chi-square divergence.
-        
+
     References
     ----------
     .. [1] J. Ortigosa-Hernández, I. Inza, and J. A. Lozano, 
@@ -38,45 +39,46 @@ def imbalance_degree(classes, distance="EU"):
         """
         Euclidean distance from empirical distribution 
         to equiprobability distribution.
-        
+
         Parameters
         ----------
         _d : list of float.
             Empirical distribution of class probabilities.
         _e : float.
             Equiprobability term (1/K, where K is the number of classes).
-        
+
         Returns
         -------
         distance value.
         """
-        summ = np.vectorize(lambda p : pow(p - _e, 2))(_d).sum()
+        summ = np.vectorize(lambda p: pow(p - _e, 2))(_d).sum()
         return sqrt(summ)
+
     def _min_classes(_d, _e):
         """
         Calculates the number of minority classes. We call minority class to
         those classes with a probability lower than the equiprobability term.
-        
+
         Parameters
         ----------
         _d : list of float.
             Empirical distribution of class probabilities.
         _e : float.
             Equiprobability term (1/K, where K is the number of classes).
-        
+
         Returns
         -------
         Number of minority clases.
         """
         return len(_d[_d < _e])
-    
+
     def _i_m(_K, _m):
         """
         Calculates the distribution showing exactly m minority classes with the
         highest distance to the equiprobability term. This distribution is 
         always the same for all distance functions proposed, and is explained
         in [1].
-        
+
         Parameters
         ----------
         _K : int.
@@ -85,7 +87,7 @@ def imbalance_degree(classes, distance="EU"):
             The number of minority classes. We call minority class to
             those classes with a probability lower than the equiprobability 
             term.
-        
+
         Returns
         -------
         A list with the i_m distribution.
@@ -94,11 +96,11 @@ def imbalance_degree(classes, distance="EU"):
         maj_i = np.ones((_K - _m - 1)) * (1 / _K)
         maj = np.array([1 - (_K - _m - 1) / _K])
         return np.concatenate((min_i, maj_i, maj)).tolist()
-    
+
     def _dist_fn():
         """
         Selects the distance function according to the distance paramenter.
-        
+
         Returns
         -------
         A distance function.
@@ -106,9 +108,9 @@ def imbalance_degree(classes, distance="EU"):
         if distance == "EU":
             return _eu
         else:
-            raise ValueError("Bad distance function parameter. " + \
-                    "Should be one in EU, CH, KL, HE, TV, or CS")
-    
+            raise ValueError("Bad distance function parameter. " +
+                             "Should be one in EU, CH, KL, HE, TV, or CS")
+
     _, class_counts = np.unique(classes, return_counts=True)
     empirical_distribution = class_counts / class_counts.sum()
     K = len(class_counts)
@@ -118,6 +120,8 @@ def imbalance_degree(classes, distance="EU"):
     dfn = _dist_fn()
     dist_ed = dfn(empirical_distribution, e)
     return 0.0 if dist_ed == 00 else (dist_ed / dfn(i_m, e)) + (m - 1)
+
+
 @shared_task(bind=True, ignore_result=False)
 def class_distribution_plot(self: Task, column, file_info):
     df = read_file(file_info)
@@ -133,9 +137,11 @@ def class_distribution_plot(self: Task, column, file_info):
         plt.figure(figsize=(8, 8))
 
         # Plotting a pie chart for each class
-        class_labels_modified = [str(label)[:9] + '...' if len(str(label)) > 8 else str(label) for label in class_labels] #convert to strings to prevent numpy error
+        class_labels_modified = [str(label)[:9] + '...' if len(str(label)) > 8 else str(
+            label) for label in class_labels]  # convert to strings to prevent numpy error
 
-        patches, texts, _ = plt.pie(class_counts, labels=class_labels_modified, startangle=90, autopct=lambda p: f'{p:.1f}%' if p >= 10 else None)
+        patches, texts, _ = plt.pie(class_counts, labels=class_labels_modified,
+                                    startangle=90, autopct=lambda p: f'{p:.1f}%' if p >= 10 else None)
 
         # Add labels to sections with percentages above 10%
         for text in texts:
@@ -163,9 +169,11 @@ def class_distribution_plot(self: Task, column, file_info):
         # Handle errors and store the error message in the result
         return str(e)
 
-#imbalance degree calculation with default distance metric to be Euclidean
+# imbalance degree calculation with default distance metric to be Euclidean
+
+
 @shared_task(bind=True, ignore_result=False)
-def calc_imbalance_degree(self:Task, column, file_info, dist_metric='EU'):
+def calc_imbalance_degree(self: Task, column, file_info, dist_metric='EU'):
     df = read_file(file_info)
     res = {}
 

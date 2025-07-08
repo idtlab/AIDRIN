@@ -9,7 +9,7 @@ import io
 import base64
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.file_parser import read_file
+from aidrin.file_handling.file_parser import read_file
 
 # def calc_shapley(df, cat_cols, num_cols, target_col):
 #     """
@@ -153,6 +153,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 
+
 @shared_task(bind=True, ignore_result=False)
 def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
     try:
@@ -162,24 +163,29 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
             print(f"Error reading file: {e}")
             return {"Error": "Failed to read the file. Please check the file path and type."}
         # Filter DataFrame to include only the specified columns
-        df_filtered = df[[target_col] + cat_cols + num_cols].copy()  # Make a copy to avoid SettingWithCopyWarning
+        # Make a copy to avoid SettingWithCopyWarning
+        df_filtered = df[[target_col] + cat_cols + num_cols].copy()
         # Fill missing values
-        df_filtered.loc[:, cat_cols] = df_filtered[cat_cols].fillna('Missing')  # Use .loc to set values
-        df_filtered.loc[:, num_cols] = df_filtered[num_cols].fillna(df_filtered[num_cols].mean())  # Use .loc to set values
-        
+        df_filtered.loc[:, cat_cols] = df_filtered[cat_cols].fillna(
+            'Missing')  # Use .loc to set values
+        df_filtered.loc[:, num_cols] = df_filtered[num_cols].fillna(
+            df_filtered[num_cols].mean())  # Use .loc to set values
+
         # One-hot encode categorical columns
         df_filtered = pd.get_dummies(df_filtered, columns=cat_cols)
-        
+
         # Encode target variable if categorical
         if df_filtered[target_col].dtype == 'object':
             le_target = LabelEncoder()
-            df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
-        #need to make json serializable to be passed by celery
+            df_filtered[target_col] = le_target.fit_transform(
+                df_filtered[target_col])
+        # need to make json serializable to be passed by celery
         return df_filtered.to_dict(orient='list')
     except SoftTimeLimitExceeded:
         raise Exception("Data Cleaning task timed out.")
     except Exception as e:
         print(f"Error occurred during data cleaning: {e}")
+
 
 @shared_task(bind=True, ignore_result=False)
 def pearson_correlation(self: Task, df_json, target_col) -> dict:
@@ -199,10 +205,12 @@ def pearson_correlation(self: Task, df_json, target_col) -> dict:
                     corr = cov / (std_dev_col * std_dev_target)
                     correlations[col] = corr
                 except TypeError:
-                    print(f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values.")
+                    print(
+                        f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values.")
         return correlations
     except SoftTimeLimitExceeded:
         raise Exception("Pearson Correlation task timed out.")
+
 
 @shared_task(bind=True, ignore_result=False)
 def plot_features(self: Task, correlations, target_col):
@@ -210,10 +218,11 @@ def plot_features(self: Task, correlations, target_col):
         # Extract features and correlation values
         features = list(correlations.keys())
         corr_values = list(correlations.values())
-        
+
         plt.figure(figsize=(8, 8))
         plt.bar(features, corr_values, color='skyblue')  # Vertical bar plot
-        plt.axhline(y=0, color='black', linewidth=0.5)  # Add a horizontal line at y=0
+        # Add a horizontal line at y=0
+        plt.axhline(y=0, color='black', linewidth=0.5)
         plt.title(f'Correlation of Features with {target_col}')
         plt.xlabel('Features')
         plt.ylabel('Correlation')
@@ -222,7 +231,8 @@ def plot_features(self: Task, correlations, target_col):
         plt.xticks(rotation=45, ha='right')
 
         # Add leading dots to xticks longer than 8 characters
-        formatted_features = [feat if len(feat) <= 8 else feat[:5] + '...' for feat in features]
+        formatted_features = [feat if len(
+            feat) <= 8 else feat[:5] + '...' for feat in features]
         plt.xticks(range(len(features)), formatted_features)
 
         # Save the plot to a BytesIO object and encode it as base64
@@ -237,8 +247,6 @@ def plot_features(self: Task, correlations, target_col):
     except Exception as e:
         print(f"Error occurred during plotting: {e}")
         return None
-
-
 
 
 # import io
@@ -293,7 +301,7 @@ def plot_features(self: Task, correlations, target_col):
 #                 plt.title(f'{cat_col} vs {target_col}')
 #                 plt.xticks(rotation=45)
 #                 plt.legend().remove()  # Remove legend
-            
+
 #             # Perform chi-squared test for independence
 #             chi2_scores = {}
 #             for cat_col in cat_cols:
@@ -338,4 +346,3 @@ def plot_features(self: Task, correlations, target_col):
 # Example usage:
 # combined_plot = generate_combined_plot_to_base64(your_dataframe, ['cat_col1', 'cat_col2'], ['num_col1', 'num_col2'], 'target_col')
 # print(combined_plot)
-

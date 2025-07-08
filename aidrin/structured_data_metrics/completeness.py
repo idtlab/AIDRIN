@@ -3,8 +3,9 @@ import base64
 import matplotlib.pyplot as plt
 import time
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.file_parser import read_file
+from aidrin.file_handling.file_parser import read_file
 from celery import shared_task, Task
+
 
 @shared_task(bind=True, ignore_result=False)
 def completeness(self: Task, file_info):
@@ -18,9 +19,10 @@ def completeness(self: Task, file_info):
         result_dict = {}
 
         if overall_completeness != 0 and overall_completeness != 1:
-            
+
             # Filter out columns with completeness score of 1
-            incomplete_columns = {k: v for k, v in completeness_scores.items() if v < 1}
+            incomplete_columns = {k: v for k,
+                                  v in completeness_scores.items() if v < 1}
 
             if incomplete_columns:
                 # Add completeness scores to the dictionary
@@ -28,11 +30,13 @@ def completeness(self: Task, file_info):
 
                 # Create a bar chart
                 plt.figure(figsize=(8, 8))
-                plt.bar(incomplete_columns.keys(), incomplete_columns.values(), color='blue')
+                plt.bar(incomplete_columns.keys(),
+                        incomplete_columns.values(), color='blue')
                 plt.title('Completeness Scores', fontsize=16)
                 plt.xlabel('Columns', fontsize=14)
                 plt.ylabel('Completeness Score', fontsize=14)
-                plt.ylim(0, 1)  # Setting y-axis limit between 0 and 1 for completeness scores
+                # Setting y-axis limit between 0 and 1 for completeness scores
+                plt.ylim(0, 1)
 
                 # Rotate x-axis tick labels
                 plt.xticks(rotation=45, ha='right', fontsize=12)
@@ -63,7 +67,8 @@ def completeness(self: Task, file_info):
             plt.title('Missingness of the Dataset')
             plt.xlabel('Dataset')
             plt.ylabel('Missingness Score')
-            plt.ylim(0, 1)  # Setting y-axis limit between 0 and 1 for completeness scores
+            # Setting y-axis limit between 0 and 1 for completeness scores
+            plt.ylim(0, 1)
 
             plt.tight_layout()
 

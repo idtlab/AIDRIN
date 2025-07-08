@@ -5,12 +5,15 @@ import base64
 from io import BytesIO
 import os
 from celery import shared_task, Task
-from aidrin.file_parser import read_file
+from aidrin.file_handling.file_parser import read_file
 # Function to add Laplace noise
+
+
 def add_laplace_noise(data, epsilon):
     scale = 1 / epsilon
     noise = np.random.laplace(0, scale, len(data))
     return data + noise
+
 
 @shared_task(bind=True, ignore_result=False)
 def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_info):
@@ -58,14 +61,17 @@ def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_info):
         df_drop_na[f'noisy_{column}'] = noisy_feature
 
         # Box plot for the normal feature
-        current_ax.boxplot(df_drop_na[column], positions=[0], widths=0.6, showfliers=False)
-        current_ax.set_title(f'Normal vs Noisy representations: Feature {column}')
+        current_ax.boxplot(df_drop_na[column], positions=[
+                           0], widths=0.6, showfliers=False)
+        current_ax.set_title(
+            f'Normal vs Noisy representations: Feature {column}')
         current_ax.set_ylabel('Value')
 
         # Box plot for the noisy feature
-        current_ax.boxplot(noisy_feature, positions=[1], widths=0.6, showfliers=False)
+        current_ax.boxplot(noisy_feature, positions=[
+                           1], widths=0.6, showfliers=False)
         current_ax.set_ylabel('Value')
-    
+
     # Adjust the spacing between subplots
     plt.tight_layout()
 
@@ -75,7 +81,8 @@ def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_info):
     img_buf.seek(0)
 
     # Encode the combined image as base64
-    combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode('utf-8')
+    combined_image_base64 = base64.b64encode(
+        img_buf.getvalue()).decode('utf-8')
     img_buf.close()
 
     try:

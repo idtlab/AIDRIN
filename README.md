@@ -34,6 +34,7 @@ pip install -e .
 ### 3. Terminal 2: Start Redis using Docker
 
 ```bash
+cd aidrin
 docker compose up -d 
 ```
 ### 4. Terminal 3: Start the Celery Worker

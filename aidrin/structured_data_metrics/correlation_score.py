@@ -8,33 +8,38 @@ import base64
 from io import BytesIO
 from celery import shared_task, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from aidrin.file_parser import read_file
+from aidrin.file_handling.file_parser import read_file
 
 matplotlib.use('Agg')
 
 NOMINAL_NOMINAL_ASSOC = 'theil'
+
 
 @shared_task(bind=True, ignore_result=False)
 def calc_correlations(self: Task, columns: List[str], file_info):
     df = read_file(file_info)
     try:
         # Separate categorical and numerical columns
-        categorical_columns = df[columns].select_dtypes(include='object').columns
+        categorical_columns = df[columns].select_dtypes(
+            include='object').columns
         numerical_columns = df[columns].select_dtypes(exclude='object').columns
 
-        result_dict = {'Correlations Analysis Categorical': {}, 'Correlations Analysis Numerical': {}, 'Correlation Scores': {}}
+        result_dict = {'Correlations Analysis Categorical': {
+        }, 'Correlations Analysis Numerical': {}, 'Correlation Scores': {}}
 
         # Check if there are categorical features
         if not categorical_columns.empty:
             # Categorical-categorical correlations are computed using theil
-            categorical_correlation = associations(df[categorical_columns], nom_nom_assoc=NOMINAL_NOMINAL_ASSOC, plot=False)
+            categorical_correlation = associations(
+                df[categorical_columns], nom_nom_assoc=NOMINAL_NOMINAL_ASSOC, plot=False)
             print(categorical_correlation['corr'])
 
             # Create a subplot with 1 row and 1 column
             fig, axes = plt.subplots(1, 1, figsize=(8, 8))
 
             # Plot for categorical-categorical correlations
-            cax1 = sns.heatmap(categorical_correlation['corr'], annot=True, cmap='coolwarm', fmt='.2f', ax=axes)
+            cax1 = sns.heatmap(
+                categorical_correlation['corr'], annot=True, cmap='coolwarm', fmt='.2f', ax=axes)
             axes.set_title('Categorical-Categorical Correlation Matrix')
             axes.tick_params(axis='x', rotation=0, labelsize=12)
             axes.tick_params(axis='y', rotation=90, labelsize=12)
@@ -58,14 +63,15 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             plt.close()
 
             # Convert the plot to base64
-            base64_image_cat = base64.b64encode(image_stream_cat.getvalue()).decode('utf-8')
+            base64_image_cat = base64.b64encode(
+                image_stream_cat.getvalue()).decode('utf-8')
 
             # Close the BytesIO stream
             image_stream_cat.close()
 
             result_dict['Correlations Analysis Categorical']["Correlations Analysis Categorical Visualization"] = base64_image_cat
             result_dict['Correlations Analysis Categorical']["Description"] = "Categorical correlations are calculated using Theil's U, with values ranging from 0 to 1. A value of 1 indicates a perfect correlation, while a value of 0 indicates no correlation"
-            
+
         # Check if there are numerical features
         if not numerical_columns.empty:
             # Numerical-numerical correlations are computed using pearson
@@ -75,7 +81,8 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             fig, axes = plt.subplots(1, 1, figsize=(8, 8))
 
             # Plot for numerical-numerical correlations
-            cax2 = sns.heatmap(numerical_correlation, annot=True, cmap='coolwarm', fmt='.2f', ax=axes)
+            cax2 = sns.heatmap(numerical_correlation, annot=True,
+                               cmap='coolwarm', fmt='.2f', ax=axes)
             axes.set_title('Numerical-Numerical Correlation Matrix')
             axes.tick_params(axis='x', rotation=0, labelsize=12)
             axes.tick_params(axis='y', rotation=90, labelsize=12)
@@ -86,7 +93,8 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             plt.close()
 
             # Convert the plot to base64
-            base64_image_num = base64.b64encode(image_stream_num.getvalue()).decode('utf-8')
+            base64_image_num = base64.b64encode(
+                image_stream_num.getvalue()).decode('utf-8')
 
             # Close the BytesIO stream
             image_stream_num.close()

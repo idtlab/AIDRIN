@@ -944,7 +944,7 @@ thead th{
 }  
 .preview table {
   overflow-y: scroll;
-  height:150px;
+  height:200px;
   display: block;
 }
 .radio-group{
