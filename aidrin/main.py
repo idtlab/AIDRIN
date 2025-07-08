@@ -323,21 +323,66 @@ def classImbalance():
         #check for parameters
         if request.form.get("class imbalance") == "yes":
             print("Class Imbalance - Processing class imbalance request")
-            ci_dict = {}
             classes = request.form.get("features for class imbalance")
             print("Class Imbalance - Selected feature:", classes)
             dist_metric = request.form.get("distance metric for class imbalance", "EU")
             print("Class Imbalance - Selected distance metric:", dist_metric)
-            ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file,classes)
-            ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
-            ci_dict['Graph interpretation'] = "The pie chart shows the proportion of each class in the dataset. A balanced dataset would show roughly equal slices, while an imbalanced dataset will have some classes significantly larger than others."
-            ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric=dist_metric)
-            final_dict['Class Imbalance'] = ci_dict
+            
+            # Generate cache key for class imbalance
+            cache_key = generate_metric_cache_key(
+                uploaded_file_name, 
+                "classimbalance", 
+                classes=classes, 
+                dist_metric=dist_metric
+            )
+            
+            # Check if this calculation has been cached
+            if cache_key in current_app.TEMP_RESULTS_CACHE:
+                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                if is_metric_cache_valid(cached_entry):
+                    final_dict['Class Imbalance'] = cached_entry['data']
+                    # Reset expiration time when using cached result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': cached_entry['data'],
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Using cached Class Imbalance for key: {cache_key} (expiration reset)")
+                else:
+                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                    ci_dict = {}
+                    ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file,classes)
+                    ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
+                    ci_dict['Graph interpretation'] = "The pie chart shows the proportion of each class in the dataset. A balanced dataset would show roughly equal slices, while an imbalanced dataset will have some classes significantly larger than others."
+                    ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric=dist_metric)
+                    final_dict['Class Imbalance'] = ci_dict
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': ci_dict,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached Class Imbalance for key: {cache_key}")
+            else:
+                ci_dict = {}
+                ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file,classes)
+                ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
+                ci_dict['Graph interpretation'] = "The pie chart shows the proportion of each class in the dataset. A balanced dataset would show roughly equal slices, while an imbalanced dataset will have some classes significantly larger than others."
+                ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric=dist_metric)
+                final_dict['Class Imbalance'] = ci_dict
+                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                    'data': ci_dict,
+                    'timestamp': time.time(),
+                    'expires_at': time.time() + (30 * 60)
+                }
+                print(f"Cached Class Imbalance for key: {cache_key}")
             print("Class Imbalance - Final dict:", final_dict)
             
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
+        
+        # Manage current user's metric cache size to prevent memory issues
+        manage_metric_cache_size()
         
         return store_result('classImbalance',final_dict)
     
@@ -1056,6 +1101,11 @@ def generate_metric_cache_key(file_name, metric_type, **params):
         qis = params.get('qis', [])
         cache_parts.append(f"entropy:qis:{','.join(sorted(qis))}")
     
+    elif metric_type == "classimbalance":
+        classes = params.get('classes', '')
+        dist_metric = params.get('dist_metric', 'EU')
+        cache_parts.append(f"classimbalance:classes:{classes}:dist_metric:{dist_metric}")
+    
     return "|".join(cache_parts)
 
 def is_metric_cache_valid(cache_entry, max_age_minutes=30):
@@ -1067,7 +1117,7 @@ def manage_metric_cache_size(max_cache_size=100):
     user_id = get_current_user_id()
     user_metric_keys = [key for key in current_app.TEMP_RESULTS_CACHE.keys() 
                        if key.startswith(f"user:{user_id}") and 
-                       any(metric in key for metric in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:'])]
+                       any(metric in key for metric in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:', 'classimbalance:'])]
     
     if len(user_metric_keys) > max_cache_size:
         items_to_remove = int(max_cache_size * 0.2)
@@ -1087,7 +1137,7 @@ def get_cache_stats():
     for key in current_app.TEMP_RESULTS_CACHE.keys():
         if key.startswith(f"user:{user_id}"):
             user_entries += 1
-            if any(privacy_metric in key for privacy_metric in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:']):
+            if any(privacy_metric in key for privacy_metric in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:', 'classimbalance:']):
                 user_privacy_entries += 1
             else:
                 user_other_entries += 1
@@ -1147,7 +1197,7 @@ def clear_metric_cache():
     user_id = get_current_user_id()
     keys_to_remove = []
     for key in current_app.TEMP_RESULTS_CACHE.keys():
-        if key.startswith(f"user:{user_id}") and any(metric_type in key for metric_type in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:']):
+        if key.startswith(f"user:{user_id}") and any(metric_type in key for metric_type in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:', 'classimbalance:']):
             keys_to_remove.append(key)
     
     for key in keys_to_remove:
