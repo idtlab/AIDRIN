@@ -27,6 +27,8 @@ import seaborn as sns
 import uuid
 import logging
 
+
+
 ##### Time Logging #####
 
 TIMEOUT_DURATION = 60 #seconds
@@ -352,15 +354,50 @@ def privacyPreservation():
         #check for parameters
         #differential privacy
         if request.form.get("differential privacy") == "yes":
-            
             feature_to_add_noise = request.form.get("numerical features to add noise").split(",")
             epsilon = request.form.get("privacy budget")
             if epsilon is None or epsilon == "":
                 epsilon = 0.1  # Assign a default value for epsilon
-
-            noisy_stat = return_noisy_stats(file, feature_to_add_noise, float(epsilon))
-            final_dict['DP Statistics'] = noisy_stat
             
+            # Generate cache key for differential privacy
+            cache_key = generate_metric_cache_key(
+                uploaded_file_name, 
+                "dp", 
+                features=feature_to_add_noise, 
+                epsilon=epsilon
+            )
+            
+            # Check if this calculation has been cached
+            if cache_key in current_app.TEMP_RESULTS_CACHE:
+                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                if is_metric_cache_valid(cached_entry):
+                    final_dict['DP Statistics'] = cached_entry['data']
+                    # Reset expiration time when using cached result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': cached_entry['data'],
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Using cached DP Statistics for key: {cache_key} (expiration reset)")
+                else:
+                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                    noisy_stat = return_noisy_stats(file, feature_to_add_noise, float(epsilon))
+                    final_dict['DP Statistics'] = noisy_stat
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': noisy_stat,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached DP Statistics for key: {cache_key}")
+            else:
+                noisy_stat = return_noisy_stats(file, feature_to_add_noise, float(epsilon))
+                final_dict['DP Statistics'] = noisy_stat
+                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                    'data': noisy_stat,
+                    'timestamp': time.time(),
+                    'expires_at': time.time() + (30 * 60)
+                }
+                print(f"Cached DP Statistics for key: {cache_key}")
             
         #single attribute risk scores using markov model
         if request.form.get("single attribute risk score") == "yes":
@@ -384,7 +421,45 @@ def privacyPreservation():
                     "Risk Color": "N/A"
                 }
             else:
-                final_dict["Single attribute risk scoring"] = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
+                # Generate cache key for single attribute risk scoring
+                cache_key = generate_metric_cache_key(
+                    uploaded_file_name, 
+                    "single", 
+                    id_feature=id_feature, 
+                    qis=eval_features
+                )
+                
+                # Check if this calculation has been cached
+                if cache_key in current_app.TEMP_RESULTS_CACHE:
+                    cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                    if is_metric_cache_valid(cached_entry):
+                        final_dict["Single attribute risk scoring"] = cached_entry['data']
+                        # Reset expiration time when using cached result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': cached_entry['data'],
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Using cached Single attribute risk scoring for key: {cache_key} (expiration reset)")
+                    else:
+                        current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                        result = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
+                        final_dict["Single attribute risk scoring"] = result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': result,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached Single attribute risk scoring for key: {cache_key}")
+                else:
+                    result = generate_single_attribute_MM_risk_scores(file,id_feature,eval_features)
+                    final_dict["Single attribute risk scoring"] = result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': result,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached Single attribute risk scoring for key: {cache_key}")
         
         #multpiple attribute risk score using markov model
         if request.form.get("multiple attribute risk score") == "yes":
@@ -408,33 +483,229 @@ def privacyPreservation():
                     "Risk Color": "N/A"
                 }
             else:
-                final_dict["Multiple attribute risk scoring"] = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
+                # Generate cache key for multiple attribute risk scoring
+                cache_key = generate_metric_cache_key(
+                    uploaded_file_name, 
+                    "multiple", 
+                    id_feature=id_feature, 
+                    qis=eval_features
+                )
+                
+                # Check if this calculation has been cached
+                if cache_key in current_app.TEMP_RESULTS_CACHE:
+                    cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                    if is_metric_cache_valid(cached_entry):
+                        final_dict["Multiple attribute risk scoring"] = cached_entry['data']
+                        # Reset expiration time when using cached result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': cached_entry['data'],
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Using cached Multiple attribute risk scoring for key: {cache_key} (expiration reset)")
+                    else:
+                        current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                        result = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
+                        final_dict["Multiple attribute risk scoring"] = result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': result,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached Multiple attribute risk scoring for key: {cache_key}")
+                else:
+                    result = generate_multiple_attribute_MM_risk_scores(file,id_feature,eval_features)
+                    final_dict["Multiple attribute risk scoring"] = result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': result,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached Multiple attribute risk scoring for key: {cache_key}")
 
         # k-Anonymity
         if request.form.get("k-anonymity") == "yes":
             k_qis = request.form.getlist("quasi identifiers for k-anonymity")
-            final_dict["k-Anonymity"] = compute_k_anonymity(file, k_qis)
+            
+            # Generate cache key for k-anonymity
+            cache_key = generate_metric_cache_key(
+                uploaded_file_name, 
+                "kanon", 
+                qis=k_qis
+            )
+            
+            # Check if this calculation has been cached
+            if cache_key in current_app.TEMP_RESULTS_CACHE:
+                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                if is_metric_cache_valid(cached_entry):
+                    final_dict["k-Anonymity"] = cached_entry['data']
+                    # Reset expiration time when using cached result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': cached_entry['data'],
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Using cached k-Anonymity for key: {cache_key} (expiration reset)")
+                else:
+                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                    result = compute_k_anonymity(file, k_qis)
+                    final_dict["k-Anonymity"] = result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': result,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached k-Anonymity for key: {cache_key}")
+            else:
+                result = compute_k_anonymity(file, k_qis)
+                final_dict["k-Anonymity"] = result
+                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                    'data': result,
+                    'timestamp': time.time(),
+                    'expires_at': time.time() + (30 * 60)
+                }
+                print(f"Cached k-Anonymity for key: {cache_key}")
 
         # l-Diversity
         if request.form.get("l-diversity") == "yes":
             l_qis = request.form.getlist("quasi identifiers for l-diversity")
             l_sensitive = request.form.get("sensitive attribute for l-diversity")
-            final_dict["l-Diversity"] = compute_l_diversity(file, l_qis, l_sensitive)
+            
+            # Generate cache key for l-diversity
+            cache_key = generate_metric_cache_key(
+                uploaded_file_name, 
+                "ldiv", 
+                qis=l_qis, 
+                sensitive=l_sensitive
+            )
+            
+            # Check if this calculation has been cached
+            if cache_key in current_app.TEMP_RESULTS_CACHE:
+                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                if is_metric_cache_valid(cached_entry):
+                    final_dict["l-Diversity"] = cached_entry['data']
+                    # Reset expiration time when using cached result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': cached_entry['data'],
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Using cached l-Diversity for key: {cache_key} (expiration reset)")
+                else:
+                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                    result = compute_l_diversity(file, l_qis, l_sensitive)
+                    final_dict["l-Diversity"] = result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': result,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached l-Diversity for key: {cache_key}")
+            else:
+                result = compute_l_diversity(file, l_qis, l_sensitive)
+                final_dict["l-Diversity"] = result
+                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                    'data': result,
+                    'timestamp': time.time(),
+                    'expires_at': time.time() + (30 * 60)
+                }
+                print(f"Cached l-Diversity for key: {cache_key}")
 
         # t-Closeness
         if request.form.get("t-closeness") == "yes":
             t_qis = request.form.getlist("quasi identifiers for t-closeness")
             t_sensitive = request.form.get("sensitive attribute for t-closeness")
-            final_dict["t-Closeness"] = compute_t_closeness(file, t_qis, t_sensitive)
+            
+            # Generate cache key for t-closeness
+            cache_key = generate_metric_cache_key(
+                uploaded_file_name, 
+                "tclose", 
+                qis=t_qis, 
+                sensitive=t_sensitive
+            )
+            
+            # Check if this calculation has been cached
+            if cache_key in current_app.TEMP_RESULTS_CACHE:
+                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                if is_metric_cache_valid(cached_entry):
+                    final_dict["t-Closeness"] = cached_entry['data']
+                    # Reset expiration time when using cached result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': cached_entry['data'],
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Using cached t-Closeness for key: {cache_key} (expiration reset)")
+                else:
+                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                    result = compute_t_closeness(file, t_qis, t_sensitive)
+                    final_dict["t-Closeness"] = result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': result,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached t-Closeness for key: {cache_key}")
+            else:
+                result = compute_t_closeness(file, t_qis, t_sensitive)
+                final_dict["t-Closeness"] = result
+                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                    'data': result,
+                    'timestamp': time.time(),
+                    'expires_at': time.time() + (30 * 60)
+                }
+                print(f"Cached t-Closeness for key: {cache_key}")
 
         # Entropy Risk
         if request.form.get("entropy risk") == "yes":
             entropy_qis = request.form.getlist("quasi identifiers for entropy risk")
-            final_dict["Entropy Risk"] = compute_entropy_risk(file, entropy_qis)
+            
+            # Generate cache key for entropy risk
+            cache_key = generate_metric_cache_key(
+                uploaded_file_name, 
+                "entropy", 
+                qis=entropy_qis
+            )
+            
+            # Check if this calculation has been cached
+            if cache_key in current_app.TEMP_RESULTS_CACHE:
+                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                if is_metric_cache_valid(cached_entry):
+                    final_dict["Entropy Risk"] = cached_entry['data']
+                    # Reset expiration time when using cached result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': cached_entry['data'],
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Using cached Entropy Risk for key: {cache_key} (expiration reset)")
+                else:
+                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                    result = compute_entropy_risk(file, entropy_qis)
+                    final_dict["Entropy Risk"] = result
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': result,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached Entropy Risk for key: {cache_key}")
+            else:
+                result = compute_entropy_risk(file, entropy_qis)
+                final_dict["Entropy Risk"] = result
+                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                    'data': result,
+                    'timestamp': time.time(),
+                    'expires_at': time.time() + (30 * 60)
+                }
+                print(f"Cached Entropy Risk for key: {cache_key}")
 
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
+        
+        # Manage current user's metric cache size to prevent memory issues
+        manage_metric_cache_size()
+        
         #print("Final Dict Privacy:", final_dict)      
         return store_result('privacyPreservation',final_dict)
     
@@ -634,6 +905,18 @@ def read_file():
 
     return readFile, uploaded_file_path, uploaded_file_name
 
+def manage_cache_size(max_cache_size=100):
+    """
+    Manage the cache size by removing oldest entries if cache exceeds max size.
+    This prevents memory issues from cache growth.
+    """
+    if len(current_app.TEMP_RESULTS_CACHE) > max_cache_size:
+        # Remove oldest entries (first 20% of cache)
+        items_to_remove = int(max_cache_size * 0.2)
+        keys_to_remove = list(current_app.TEMP_RESULTS_CACHE.keys())[:items_to_remove]
+        for key in keys_to_remove:
+            current_app.TEMP_RESULTS_CACHE.pop(key, None)
+        print(f"Cache cleanup: Removed {len(keys_to_remove)} old entries")
 
 def store_result(metric, final_dict):
         formatted_final_dict = format_dict_values(final_dict)
@@ -727,6 +1010,169 @@ def summary_histograms(df):
 
     return line_graphs
 
+def get_current_user_id():
+    """Get current user ID from session or generate one."""
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())
+    return session['user_id']
+
+def generate_metric_cache_key(file_name, metric_type, **params):
+    """
+    Generate a user-specific cache key for metrics.
+    """
+    user_id = get_current_user_id()
+    cache_parts = [f"user:{user_id}", f"file:{file_name}"]
+    
+    if metric_type == "dp":
+        features = params.get('features', [])
+        epsilon = params.get('epsilon', 0.1)
+        cache_parts.append(f"dp:features:{','.join(sorted(features))}:epsilon:{epsilon}")
+    
+    elif metric_type == "single":
+        id_feature = params.get('id_feature', '')
+        qis = params.get('qis', [])
+        cache_parts.append(f"single:id:{id_feature}:qis:{','.join(sorted(qis))}")
+    
+    elif metric_type == "multiple":
+        id_feature = params.get('id_feature', '')
+        qis = params.get('qis', [])
+        cache_parts.append(f"multiple:id:{id_feature}:qis:{','.join(sorted(qis))}")
+    
+    elif metric_type == "kanon":
+        qis = params.get('qis', [])
+        cache_parts.append(f"kanon:qis:{','.join(sorted(qis))}")
+    
+    elif metric_type == "ldiv":
+        qis = params.get('qis', [])
+        sensitive = params.get('sensitive', '')
+        cache_parts.append(f"ldiv:qis:{','.join(sorted(qis))}:sensitive:{sensitive}")
+    
+    elif metric_type == "tclose":
+        qis = params.get('qis', [])
+        sensitive = params.get('sensitive', '')
+        cache_parts.append(f"tclose:qis:{','.join(sorted(qis))}:sensitive:{sensitive}")
+    
+    elif metric_type == "entropy":
+        qis = params.get('qis', [])
+        cache_parts.append(f"entropy:qis:{','.join(sorted(qis))}")
+    
+    return "|".join(cache_parts)
+
+def is_metric_cache_valid(cache_entry, max_age_minutes=30):
+    """Check if metric cache entry is still valid based on time."""
+    return time.time() < cache_entry.get('expires_at', 0)
+
+def manage_metric_cache_size(max_cache_size=100):
+    """Manage metric cache size by removing oldest entries per user."""
+    user_id = get_current_user_id()
+    user_metric_keys = [key for key in current_app.TEMP_RESULTS_CACHE.keys() 
+                       if key.startswith(f"user:{user_id}") and 
+                       any(metric in key for metric in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:'])]
+    
+    if len(user_metric_keys) > max_cache_size:
+        items_to_remove = int(max_cache_size * 0.2)
+        keys_to_remove = user_metric_keys[:items_to_remove]
+        for key in keys_to_remove:
+            current_app.TEMP_RESULTS_CACHE.pop(key, None)
+        print(f"User {user_id} metric cache cleanup: Removed {len(keys_to_remove)} old entries")
+
+def get_cache_stats():
+    """Get statistics about the current cache state."""
+    user_id = get_current_user_id()
+    total_entries = len(current_app.TEMP_RESULTS_CACHE)
+    user_entries = 0
+    user_privacy_entries = 0
+    user_other_entries = 0
+    
+    for key in current_app.TEMP_RESULTS_CACHE.keys():
+        if key.startswith(f"user:{user_id}"):
+            user_entries += 1
+            if any(privacy_metric in key for privacy_metric in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:']):
+                user_privacy_entries += 1
+            else:
+                user_other_entries += 1
+    
+    return {
+        'total_entries': total_entries,
+        'user_entries': user_entries,
+        'user_privacy_entries': user_privacy_entries,
+        'user_other_entries': user_other_entries,
+        'user_id': user_id,
+        'cache_keys': [key for key in current_app.TEMP_RESULTS_CACHE.keys() if key.startswith(f"user:{user_id}")][:10]
+    }
+
+@app.route('/cache_stats', methods=['GET'])
+def cache_stats_route():
+    """Route to get current user's cache statistics for debugging purposes."""
+    try:
+        stats = get_cache_stats()
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error getting cache stats: {str(e)}'
+        }), 500
+
+@app.route('/user_cache_info', methods=['GET'])
+def user_cache_info_route():
+    """Route to get detailed information about current user's cache."""
+    try:
+        user_id = get_current_user_id()
+        user_keys = [key for key in current_app.TEMP_RESULTS_CACHE.keys() 
+                    if key.startswith(f"user:{user_id}")]
+        
+        cache_info = {
+            'user_id': user_id,
+            'total_user_entries': len(user_keys),
+            'user_cache_keys': user_keys,
+            'global_cache_size': len(current_app.TEMP_RESULTS_CACHE),
+            'user_cache_percentage': round((len(user_keys) / len(current_app.TEMP_RESULTS_CACHE)) * 100, 2) if current_app.TEMP_RESULTS_CACHE else 0
+        }
+        
+        return jsonify({
+            'success': True,
+            'cache_info': cache_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error getting user cache info: {str(e)}'
+        }), 500
+
+def clear_metric_cache():
+    """Clear all metric-related cache entries for current user."""
+    user_id = get_current_user_id()
+    keys_to_remove = []
+    for key in current_app.TEMP_RESULTS_CACHE.keys():
+        if key.startswith(f"user:{user_id}") and any(metric_type in key for metric_type in ['dp:', 'single:', 'multiple:', 'kanon:', 'ldiv:', 'tclose:', 'entropy:']):
+            keys_to_remove.append(key)
+    
+    for key in keys_to_remove:
+        current_app.TEMP_RESULTS_CACHE.pop(key, None)
+    
+    print(f"User {user_id} metric cache cleared: Removed {len(keys_to_remove)} entries")
+    return len(keys_to_remove)
+
+@app.route('/clear_metric_cache', methods=['POST'])
+def clear_metric_cache_route():
+    """Route to clear current user's metrics cache for debugging purposes."""
+    try:
+        removed_count = clear_metric_cache()
+        user_id = get_current_user_id()
+        return jsonify({
+            'success': True,
+            'message': f'User {user_id} metric cache cleared. Removed {removed_count} entries.',
+            'cache_size': len(current_app.TEMP_RESULTS_CACHE),
+            'user_id': user_id
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error clearing cache: {str(e)}'
+        }), 500
 
 # @app.route('/FAIRness', methods=['GET', 'POST'])
 # def FAIRness():

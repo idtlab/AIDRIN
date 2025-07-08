@@ -244,7 +244,7 @@ function submitForm() {
                         const score = imbalanceData['Imbalance Degree score'];
                         // Get the distance metric from the form data for reference
                         const distanceMetric = getDistanceMetricName();
-                        visualizationHtml += `<div><strong>Imbalance Degree:</strong> ${score}</div>`;
+                    visualizationHtml += `<div><strong>Imbalance Degree:</strong> ${score}</div>`;
                         // Add graph interpretation below Imbalance Degree
                         if (content.interpretation) {
                             visualizationHtml += `<div><strong>Graph interpretation:</strong> ${content.interpretation} <a href="/class-imbalance-docs" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a></div>`;
