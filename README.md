@@ -31,15 +31,34 @@ conda activate aidrin-env
 pip install -e .
 ```
 
-### 3. Terminal 2: Start Redis using Docker
+### 3. Start Redis using Docker
+
+#### Download and install Docker Desktop:
+
+If you haven't already, download and install Docker Desktop for your operating system:
+https://www.docker.com/products/docker-desktop/
+
+#### Verify Installation
+
+Run the following commands to ensure Docker and Docker Compose are available:
 
 ```bash
-cd aidrin
-docker compose up -d 
+docker --version
+docker compose version
 ```
-### 4. Terminal 3: Start the Celery Worker
+
+#### Start Redis
 
 ```bash
+docker compose --file aidrin/docker-compose.yml up -d
+```
+
+### 4. Terminal 2: Start the Celery Worker
+
+In a seperate terminal, enable the conda environment and Start the Celery Worker
+
+```bash
+conda activate aidrin-env
 PYTHONPATH=. celery -A aidrin.make_celery worker --loglevel=info
 ```
 

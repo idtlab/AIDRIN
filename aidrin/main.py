@@ -17,7 +17,7 @@ from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree
 from aidrin.structured_data_metrics.privacy_measure import generate_single_attribute_MM_risk_scores, generate_multiple_attribute_MM_risk_scores, compute_k_anonymity, compute_l_diversity, compute_t_closeness, compute_entropy_risk
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
 from aidrin.structured_data_metrics.summary_statistics import summary_histograms
-from aidrin.logging import setup_logging
+from aidrin.logging_utils import setup_logging
 from aidrin.file_handling.file_parser import read_file, parse_file, filter_file, SUPPORTED_FILE_TYPES
 import redis
 import logging
