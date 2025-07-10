@@ -496,7 +496,9 @@ def get_summary_stastistics():
     try:
             df, uploaded_file_path, uploaded_file_name = read_file()
             # Extract summary statistics
-            summary_statistics = df.describe().round(2).to_dict()
+            summary_statistics = df.describe().applymap(
+                lambda x: f"{x:.2e}" if abs(x) < 0.01 else round(x, 2)
+            ).to_dict()
             
             # Calculate probability distributions
             histograms = summary_histograms(df)
@@ -585,8 +587,26 @@ def read_file():
         readFile = pd.read_csv(uploaded_file_path, index_col=False)
     #npz
     if uploaded_file_type==('.npz'):
-        npz_data = np.load(uploaded_file_path,allow_pickle=True)
-        readFile = pd.DataFrame({key: npz_data[key] for key in npz_data.files})
+        npz_data = np.load(uploaded_file_path, allow_pickle=True)
+
+        data_dict = {}
+
+        for key in npz_data.files:
+            array = npz_data[key]
+            
+            # Check dimensionality
+            if array.ndim == 1:
+                data_dict[key] = array
+            else:
+                # Flatten if it's a 2D array with only 1 column
+                if array.ndim == 2 and array.shape[1] == 1:
+                    data_dict[key] = array.flatten()
+                else:
+                    # Otherwise, store the whole array as a column of objects (fallback)
+                    data_dict[key] = [row for row in array]
+
+        # Now create the DataFrame safely
+        readFile = pd.DataFrame(data_dict)
     #excel
     if uploaded_file_type==('.xls,.xlsb,.xlsx,.xlsm'):
         readFile = pd.read_excel(uploaded_file_path)
