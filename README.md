@@ -25,6 +25,11 @@ cd AIDRIN
 
 ### 2. Terminal 1: Create and Activate the Conda Environment
 
+AIDRIN uses Conda for environment control. If you don't have Conda installed, we recommend installing
+Miniconda.
+Miniconda download for your operating system can be found at the link below:
+https://www.anaconda.com/download/success
+
 ```bash
 conda create -n aidrin-env python==3.10 -y
 conda activate aidrin-env
@@ -35,10 +40,13 @@ pip install -e .
 
 #### Download and install Docker Desktop:
 
-If you haven't already, download and install Docker Desktop for your operating system:
+The backend and broker hosted on Redis require access to specific local ports. We recommend using Docker 
+as the container service for ease of use. If you choose to use a different container solution, refer to 
+the docker-compose.yml file to identify the required port mappings.
+Docker Desktop download for your operating system can be found at the link below:
 https://www.docker.com/products/docker-desktop/
 
-#### Verify Installation
+## Verify Docker Installation
 
 Run the following commands to ensure Docker and Docker Compose are available:
 
@@ -47,7 +55,7 @@ docker --version
 docker compose version
 ```
 
-#### Start Redis
+## Start Redis
 
 ```bash
 docker compose --file aidrin/docker-compose.yml up -d

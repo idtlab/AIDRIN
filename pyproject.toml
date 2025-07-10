@@ -12,7 +12,8 @@ dependencies = [
     "shap",
     "celery",
     "redis",
-    "h5py"
+    "h5py",
+    "conda"
 ]
 
 [build-system]
