@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   push:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Python Lint (AIDRIN)
@@ -23,6 +26,6 @@ jobs:
         with:
           checkName: "AIDRIN Lint"
           path: aidrin/
-          config: tox.ini  # uses the [flake8] section inside this file
+          config: tox.ini
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
