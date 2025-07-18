@@ -811,17 +811,6 @@ def handle_summary_statistics():
 @main.route('/summary_statistics', methods=['GET'])
 def get_summary_stastistics():
     try:
-<<<<<<< HEAD
-        metric_time_log.info("Summary Statistics Request Started")
-        start_time = time.time()
-        file_path = session.get('uploaded_file_path')
-        file_name = session.get('uploaded_file_name')
-        file_type = session.get('uploaded_file_type')
-        file_info = (file_path, file_name, file_type)
-        df = read_file(file_info)
-        # Extract summary statistics
-        summary_statistics = df.describe().round(2).to_dict()
-=======
             df, uploaded_file_path, uploaded_file_name = read_file()
             # Extract summary statistics
             summary_statistics = df.describe().applymap(
@@ -869,7 +858,6 @@ def get_summary_stastistics():
 def extract_features():
     try:
         df, uploaded_file_path, uploaded_file_name = read_file()
->>>>>>> origin/main
 
         # Calculate probability distributions
         result = summary_histograms.delay(file_info)
@@ -961,51 +949,6 @@ def extract_features():
 
 ##### Functions #####
 
-<<<<<<< HEAD
-=======
-def read_file():
-    
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
-
-    if not uploaded_file_path and uploaded_file_name:
-        return redirect(request.url)
-    
-    #default result
-    readFile = None
-    #csv
-    if uploaded_file_type==('.csv'):
-        readFile = pd.read_csv(uploaded_file_path, index_col=False)
-    #npz
-    if uploaded_file_type==('.npz'):
-        npz_data = np.load(uploaded_file_path, allow_pickle=True)
-
-        data_dict = {}
-
-        for key in npz_data.files:
-            array = npz_data[key]
-            
-            # Check dimensionality
-            if array.ndim == 1:
-                data_dict[key] = array
-            else:
-                # Flatten if it's a 2D array with only 1 column
-                if array.ndim == 2 and array.shape[1] == 1:
-                    data_dict[key] = array.flatten()
-                else:
-                    # Otherwise, store the whole array as a column of objects (fallback)
-                    data_dict[key] = [row for row in array]
-
-        # Now create the DataFrame safely
-        readFile = pd.DataFrame(data_dict)
-    #excel
-    if uploaded_file_type==('.xls,.xlsb,.xlsx,.xlsm'):
-        readFile = pd.read_excel(uploaded_file_path)
-
-    return readFile, uploaded_file_path, uploaded_file_name
-
->>>>>>> origin/main
 
 def store_result(metric, final_dict):
     formatted_final_dict = format_dict_values(final_dict)
