@@ -1,11 +1,12 @@
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import io
 import base64
-from math import sqrt, log
-from celery import shared_task, Task
+import io
+from math import sqrt
+
+import matplotlib.pyplot as plt
+import numpy as np
+from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
+
 from aidrin.file_handling.file_parser import read_file
 
 
@@ -31,13 +32,14 @@ def imbalance_degree(classes, distance="EU"):
 
     References
     ----------
-    .. [1] J. Ortigosa-Hernández, I. Inza, and J. A. Lozano, 
-            “Measuring the class-imbalance extent of multi-class problems,” 
+    .. [1] J. Ortigosa-Hernández, I. Inza, and J. A. Lozano,
+            “Measuring the class-imbalance extent of multi-class problems,”
             Pattern Recognit. Lett., 2017.
     """
+
     def _eu(_d, _e):
         """
-        Euclidean distance from empirical distribution 
+        Euclidean distance from empirical distribution
         to equiprobability distribution.
 
         Parameters
@@ -75,7 +77,7 @@ def imbalance_degree(classes, distance="EU"):
     def _i_m(_K, _m):
         """
         Calculates the distribution showing exactly m minority classes with the
-        highest distance to the equiprobability term. This distribution is 
+        highest distance to the equiprobability term. This distribution is
         always the same for all distance functions proposed, and is explained
         in [1].
 
@@ -85,7 +87,7 @@ def imbalance_degree(classes, distance="EU"):
             The number of classes (targets).
         _m : int.
             The number of minority classes. We call minority class to
-            those classes with a probability lower than the equiprobability 
+            those classes with a probability lower than the equiprobability
             term.
 
         Returns
@@ -108,8 +110,10 @@ def imbalance_degree(classes, distance="EU"):
         if distance == "EU":
             return _eu
         else:
-            raise ValueError("Bad distance function parameter. " +
-                             "Should be one in EU, CH, KL, HE, TV, or CS")
+            raise ValueError(
+                "Bad distance function parameter. "
+                + "Should be one in EU, CH, KL, HE, TV, or CS"
+            )
 
     _, class_counts = np.unique(classes, return_counts=True)
     empirical_distribution = class_counts / class_counts.sum()
@@ -125,7 +129,6 @@ def imbalance_degree(classes, distance="EU"):
 @shared_task(bind=True, ignore_result=False)
 def class_distribution_plot(self: Task, column, file_info):
     df = read_file(file_info)
-    plot_res = {}
     try:
         # Get unique class labels
         class_labels = df[column].dropna().unique()
@@ -137,26 +140,32 @@ def class_distribution_plot(self: Task, column, file_info):
         plt.figure(figsize=(8, 8))
 
         # Plotting a pie chart for each class
-        class_labels_modified = [str(label)[:9] + '...' if len(str(label)) > 8 else str(
-            label) for label in class_labels]  # convert to strings to prevent numpy error
+        class_labels_modified = [
+            str(label)[:9] + "..." if len(str(label)) > 8 else str(label)
+            for label in class_labels
+        ]  # convert to strings to prevent numpy error
 
-        patches, texts, _ = plt.pie(class_counts, labels=class_labels_modified,
-                                    startangle=90, autopct=lambda p: f'{p:.1f}%' if p >= 10 else None)
+        patches, texts, _ = plt.pie(
+            class_counts,
+            labels=class_labels_modified,
+            startangle=90,
+            autopct=lambda p: f"{p:.1f}%" if p >= 10 else None,
+        )
 
         # Add labels to sections with percentages above 10%
         for text in texts:
             text.set_fontsize(12)
 
-        plt.title(f'Distribution of Each Class in {column}')
-        plt.axis('equal')
+        plt.title(f"Distribution of Each Class in {column}")
+        plt.axis("equal")
 
         # Save the plot to a BytesIO buffer
         buf = io.BytesIO()
-        plt.savefig(buf, format='png')
+        plt.savefig(buf, format="png")
         buf.seek(0)
 
         # Encode the buffer to base64
-        plot_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        plot_base64 = base64.b64encode(buf.read()).decode("utf-8")
 
         # Close the plot and buffer to free up resources
         plt.close()
@@ -169,11 +178,12 @@ def class_distribution_plot(self: Task, column, file_info):
         # Handle errors and store the error message in the result
         return str(e)
 
+
 # imbalance degree calculation with default distance metric to be Euclidean
 
 
 @shared_task(bind=True, ignore_result=False)
-def calc_imbalance_degree(self: Task, column, file_info, dist_metric='EU'):
+def calc_imbalance_degree(self: Task, column, file_info, dist_metric="EU"):
     df = read_file(file_info)
     res = {}
 
@@ -182,13 +192,15 @@ def calc_imbalance_degree(self: Task, column, file_info, dist_metric='EU'):
         classes = np.array(df[column].dropna())
         id = imbalance_degree(classes, dist_metric)
 
-        res['Imbalance degree score'] = id
-        res['Description'] = "The Imbalance Degree (ID) is a metric that quantifies class imbalance in datasets by comparing the observed class distribution to an idealized balanced state. A value of 0 indicates perfect balance, while higher values signify increased dissimilarity and greater imbalance. Calculated using a distance or similarity function, ID provides a concise measure for understanding and addressing challenges posed by uneven class representation in machine learning datasets."
+        res["Imbalance degree score"] = id
+        res["Description"] = (
+            "The Imbalance Degree (ID) is a metric that quantifies class imbalance in datasets by comparing the observed class distribution to an idealized balanced state. A value of 0 indicates perfect balance, while higher values signify increased dissimilarity and greater imbalance. Calculated using a distance or similarity function, ID provides a concise measure for understanding and addressing challenges posed by uneven class representation in machine learning datasets."
+        )
 
     except (TimeoutError, SoftTimeLimitExceeded):
         raise Exception("Calculate Imbalance Degree task timed out.")
     except Exception as e:
         # Handle errors and store the error message in the result
-        res['Error'] = str(e)
+        res["Error"] = str(e)
 
     return res

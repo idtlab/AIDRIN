@@ -1,11 +1,13 @@
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import base64
-from io import BytesIO
 import os
-from celery import shared_task, Task
+from io import BytesIO
+
+import matplotlib.pyplot as plt
+import numpy as np
+from celery import Task, shared_task
+
 from aidrin.file_handling.file_parser import read_file
+
 # Function to add Laplace noise
 
 
@@ -22,7 +24,6 @@ def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_info):
     df_drop_na = df_drop_na.reset_index(inplace=False)
 
     stat_dict = {}
-    combined_image = None
 
     num_columns = len(add_noise_columns)
 
@@ -57,42 +58,42 @@ def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_info):
         stat_dict[f"Variance of feature {column}(before noise)"] = variance_norm
         stat_dict[f"Mean of feature {column}(after noise)"] = mean_noisy
         stat_dict[f"Variance of feature {column}(after noise)"] = variance_noisy
-        stat_dict['Description'] = "The numerical features have been augmented with privacy-preserving measures through the addition of random Laplacian noise. This intentional introduction of noise ensures differential privacy guarantees. The accompanying box plots visually compare the distributions of the original and privacy-enhanced data"
-        df_drop_na[f'noisy_{column}'] = noisy_feature
+        stat_dict["Description"] = (
+            "The numerical features have been augmented with privacy-preserving measures through the addition of random Laplacian noise. This intentional introduction of noise ensures differential privacy guarantees. The accompanying box plots visually compare the distributions of the original and privacy-enhanced data"
+        )
+        df_drop_na[f"noisy_{column}"] = noisy_feature
 
         # Box plot for the normal feature
-        current_ax.boxplot(df_drop_na[column], positions=[
-                           0], widths=0.6, showfliers=False)
-        current_ax.set_title(
-            f'Normal vs Noisy representations: Feature {column}')
-        current_ax.set_ylabel('Value')
+        current_ax.boxplot(
+            df_drop_na[column], positions=[0], widths=0.6, showfliers=False
+        )
+        current_ax.set_title(f"Normal vs Noisy representations: Feature {column}")
+        current_ax.set_ylabel("Value")
 
         # Box plot for the noisy feature
-        current_ax.boxplot(noisy_feature, positions=[
-                           1], widths=0.6, showfliers=False)
-        current_ax.set_ylabel('Value')
+        current_ax.boxplot(noisy_feature, positions=[1], widths=0.6, showfliers=False)
+        current_ax.set_ylabel("Value")
 
     # Adjust the spacing between subplots
     plt.tight_layout()
 
     # Save the chart as BytesIO
     img_buf = BytesIO()
-    plt.savefig(img_buf, format='png')
+    plt.savefig(img_buf, format="png")
     img_buf.seek(0)
 
     # Encode the combined image as base64
-    combined_image_base64 = base64.b64encode(
-        img_buf.getvalue()).decode('utf-8')
+    combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode("utf-8")
     img_buf.close()
 
     try:
         # Create the new directory
         os.makedirs("noisy", exist_ok=True)
         df_drop_na.to_csv("noisy/noisy_data.csv", index=False)
-        stat_dict['Noisy file saved'] = "Successful"
-    except Exception as e:
-        stat_dict['Noisy file saved'] = "Error"
+        stat_dict["Noisy file saved"] = "Successful"
+    except Exception:
+        stat_dict["Noisy file saved"] = "Error"
 
-    stat_dict['DP Statistics Visualization'] = combined_image_base64
+    stat_dict["DP Statistics Visualization"] = combined_image_base64
 
     return stat_dict
