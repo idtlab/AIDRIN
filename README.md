@@ -1,32 +1,32 @@
-# 🧠 AIDRIN – AI Data Readiness Inspector
+# AIDRIN – AI Data Readiness Inspector
 
 **AIDRIN** (AI Data Readiness Inspector) is a lightweight tool that helps users assess how ready their datasets are for AI and machine learning workflows. It provides an interactive web interface to evaluate the quality, completeness, and structure of datasets using quantitative metrics.
 
 ---
 
-## ✨ Features
+## Features
 
-- ✅ Evaluate dataset readiness for AI applications  
-- ✅ Interactive web interface for exploration  
-- ✅ Lightweight, open-source, and customizable  
-- ✅ Built with Flask, Celery, and Redis  
+- Evaluate dataset readiness for AI applications  
+- Interactive web interface for exploration  
+- Lightweight, open-source, and customizable  
+- Built with Flask, Celery, and Redis  
 
 ---
 
-## 🚀 Quickstart Guide
+## Quickstart Guide
 
 > Works on **macOS**, **Linux**, and **Windows** (via WSL or Anaconda)
 
 ---
 
-## 📦 Prerequisites
+## Prerequisites
 
 - [Python 3.10](https://www.python.org/downloads/release/python-3100/)  
 - [Conda (Anaconda or Miniconda)](https://docs.conda.io/en/latest/miniconda.html)   
 
 ---
 
-## 🛠️ Installation
+## Installation
 
 ### 1. Clone the Repository
 
@@ -42,16 +42,16 @@ cd AIDRIN
 ```bash
 conda create -n aidrin-env python=3.10 -y
 conda activate aidrin-env
-pip install -e .
+python -m pip install -e .
 ```
 
 ---
 
-## 🧱 Required Services
+## Required Services
 
 AIDRIN uses **Redis** as a message broker for background task management, and **Celery** to run those tasks asynchronously.
 
-### ✅ Install Redis Locally (No Docker Needed)
+### Install Redis Locally (No Docker Needed)
 
 #### On macOS (using Homebrew):
 
@@ -75,13 +75,13 @@ Make sure Redis server is running on port 6379 (default).
 
 ---
 
-## 🏗️ Starting the Application
+## Starting the Application
 
 You will need **three terminal windows/tabs** open:
 
 ---
 
-### 🔁 Terminal 1: Start Redis Server
+### Terminal 1: Start Redis Server
 
 Make sure Redis is running locally:
 
@@ -91,7 +91,7 @@ redis-server --port 6379
 
 ---
 
-### ⚙️ Terminal 2: Start Celery Worker
+### Terminal 2: Start Celery Worker
 
 From within the AIDRIN directory:
 
@@ -100,11 +100,11 @@ conda activate aidrin-env
 PYTHONPATH=. celery -A aidrin.make_celery worker --loglevel=info
 ```
 
-Wait a few seconds (30 to 60) until the Celery worker is fully initialized and ready.
+Wait until you see ``ready`` or ``waiting for tasks`` in the Celery logs. This may take 30 to 40 seconds.
 
 ---
 
-### 🌐 Terminal 3: Run Flask Application
+### Terminal 3: Run Flask Application
 
 From within the AIDRIN directory:
 
@@ -117,7 +117,7 @@ Open your browser and visit:
 **[http://127.0.0.1:5000](http://127.0.0.1:5000)**
 
 
-## 📚 Citation
+## Citation
 
 If you use AIDRIN in your work, please cite:
 

@@ -728,11 +728,11 @@ def privacyPreservation():
 
 @main.route('/FAIR', methods=['GET', 'POST'])
 def FAIR():
-
+    start_time = time.time()
     try:
         if request.method == 'POST':
             metric_time_log.info("FAIR Request Started")
-            start_tiime = time.time()
+            
             # Check if the 'metadata' field exists in the form data
             if 'metadata' not in request.files:
                 return jsonify({"error": "No 'metadata' field found in form data"}), 400
@@ -767,22 +767,27 @@ def FAIR():
                     return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
             else:
                 return jsonify({"Error:", "Unknown metadata type"}), 400
-
+            
             return store_result('FAIR', result)
 
         else:
             # check for data from POST request
             results_id = request.args.get('results_id')
             # if present, load data
-            if results_id and results_id in current_app.TEMP_RESULTS_CACHE:
-                entry = current_app.TEMP_RESULTS_CACHE.pop(
-                    results_id)  # Remove data after use
-                data = entry['data']
-                return jsonify(data)
+            if results_id:
+                redis_key = f'results:{results_id}'
+                cached_result = redis_client.get(redis_key)
+                if cached_result:
+                    try:
+                        data = json.loads(cached_result.decode('utf-8'))
+                        return jsonify(data)
+                    except json.JSONDecodeError:
+                        return jsonify({"error": "Corrupted data in Redis"}), 500
+
 
             end_time = time.time()
             metric_time_log.info(
-                f"FAIR Execution time: {end_time - start_tiime} seconds")
+                f"FAIR Execution time: {end_time - start_time} seconds")
             # Render the form for a GET request
             return render_template("metricTemplates/upload_meta.html")
 
@@ -811,53 +816,17 @@ def handle_summary_statistics():
 @main.route('/summary_statistics', methods=['GET'])
 def get_summary_stastistics():
     try:
-            df, uploaded_file_path, uploaded_file_name = read_file()
-            # Extract summary statistics
-            summary_statistics = df.describe().applymap(
+        metric_time_log.info("Summary Statistics Request Started")
+        start_time = time.time()
+        file_path = session.get('uploaded_file_path')
+        file_name = session.get('uploaded_file_name')
+        file_type = session.get('uploaded_file_type')
+        file_info = (file_path, file_name, file_type)
+        df = read_file(file_info)
+        # Extract summary statistics
+        summary_statistics = df.describe().applymap(
                 lambda x: f"{x:.2e}" if abs(x) < 0.01 else round(x, 2)
             ).to_dict()
-            
-            # Calculate probability distributions
-            histograms = summary_histograms(df)
-
-            # Separate numerical and categorical columns
-            numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
-            categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
-            all_features = numerical_columns + categorical_columns
-
-            for v in summary_statistics.values():
-                for old_key in v:
-                    if old_key in ['25%','50%','75%']:
-                        new_key = old_key.replace("%","th percentile")
-                        v[new_key] = v.pop(old_key)
-
-            # Count the number of records
-            records_count = len(df)
-
-            #count the number of features
-            feature_count = len(df.columns)
-
-            response_data = {
-                'success': True,
-                'message': 'File uploaded successfully',
-                'records_count': records_count,
-                'features_count': feature_count,
-                'categorical_features': list(categorical_columns),
-                'numerical_features': list(numerical_columns),
-                'all_features':all_features,
-                'summary_statistics': summary_statistics,
-                'histograms': histograms
-            }
-            return jsonify(response_data)
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-    
-##### Feature Set Route #####
-
-@app.route('/feature_set', methods=['POST'])
-def extract_features():
-    try:
-        df, uploaded_file_path, uploaded_file_name = read_file()
 
         # Calculate probability distributions
         result = summary_histograms.delay(file_info)

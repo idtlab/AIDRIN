@@ -18,6 +18,11 @@ def create_app():
         "result_expires": 600 #Delete results from db after 10 min
     }
     app.config.from_prefixed_env()
+
+    #initialize in-memory cache
+    app.TEMP_RESULTS_CACHE = {}
+
+
     celery_init_app(app)
     app.register_blueprint(main_blueprint, url_prefix="", name="") #register main blueprint
 
