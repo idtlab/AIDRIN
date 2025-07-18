@@ -4,9 +4,6 @@ on:
   workflow_dispatch:
   push:
 
-permissions:
-  contents: read
-
 jobs:
   lint:
     name: Python Lint (AIDRIN)
@@ -21,11 +18,8 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Install dependencies
+        run: pip install flake8
+
       - name: Run flake8
-        uses: julianwachholz/flake8-action@v2
-        with:
-          checkName: "AIDRIN Lint"
-          path: aidrin/
-          config: tox.ini
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: flake8 --config=tox.ini aidrin/
