@@ -33,18 +33,18 @@ import seaborn as sns
 import uuid
 
 
-##### Setup #####
+# Setup #####
 main = Blueprint('main', __name__)  # register main blueprint
 # initialize Redis client for result storage
 redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
-### Logging ###
+# Logging ###
 setup_logging()  # sets log config
 file_upload_time_log = logging.getLogger(
     'file_upload')  # file upload related logs
 metric_time_log = logging.getLogger('metric')  # metric parsing related logs
 
 
-######## Simple Routes ########
+# Simple Routes ########
 
 @main.route('/images/<path:filename>')
 def serve_image(filename):
@@ -93,7 +93,7 @@ def view_logs():
             return jsonify(log_rows)
     return jsonify({"error": "Log file not found."}), 404
 
-##### Result Polling #####
+# Result Polling #####
 
 
 @main.get("/result/<id>")
@@ -114,7 +114,7 @@ def result(id: str):
         "successful": successful,
         "value": value,
     }
-######### Uploading, Retrieving, Clearing File Routes ############
+# Uploading, Retrieving, Clearing File Routes ############
 
 
 @main.route('/upload_file', methods=['GET', 'POST'])
@@ -267,7 +267,7 @@ def refine_file():
         file_upload_time_log.info(f"Error: {e}")
         return jsonify({'error': str(e)}), 400
 
-######## Metric Page Routes ###########
+# Metric Page Routes ###########
 
 
 @main.route('/dataQuality', methods=['GET', 'POST'])
@@ -794,7 +794,7 @@ def FAIR():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-##### Summary Statistics Routes #####
+# Summary Statistics Routes #####
 
 
 @main.route('/summary_statistics', methods=['POST'])
@@ -870,7 +870,7 @@ def get_summary_stastistics():
         metric_time_log.error(f"Error: {e}")
         return jsonify({"error": str(e)}), 200
 
-##### Feature Set Route #####
+# Feature Set Route #####
 
 
 @main.route('/feature_set', methods=['POST'])
@@ -916,7 +916,7 @@ def extract_features():
         metric_time_log.error(f"Error: {e}")
         return jsonify({"error": str(e)}), 200
 
-##### Functions #####
+# Functions #####
 
 
 def store_result(metric, final_dict):
