@@ -506,21 +506,6 @@ def correlationAnalysis():
         try:
             # check for parameters
             # correlations
-            if request.form.get("compare real to dataset") == "yes":
-                start_time_realData = time.time()
-                comp_rep_rate_result = compare_rep_rates.delay(
-                    rep_dict["Probability ratios"], rrr_dict["Probability ratios"]
-                )
-                comp_dict = comp_rep_rate_result.get()
-                comp_dict["Description"] = (
-                    "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
-                )
-                final_dict["Representation Rate Comparison with Real World"] = comp_dict
-                metric_time_log.info(
-                    "Real dataset comparison took %.2f seconds",
-                    time.time() - start_time_realData,
-                )
-
             if request.form.get("correlations") == "yes":
                 start_time_correlations = time.time()
                 columns = request.form.getlist("all features for data transformation")
