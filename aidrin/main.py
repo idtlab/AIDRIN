@@ -32,7 +32,6 @@ from aidrin.structured_data_metrics.class_imbalance import (
     calc_imbalance_degree,
     class_distribution_plot,
 )
-from aidrin.structured_data_metrics.compare_representation_rate import compare_rep_rates
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.conditional_demo_disp import (
     conditional_demographic_disparity,
@@ -329,7 +328,11 @@ def dataQuality():
                 completeness_result = completeness.delay(file_info)
                 compl_dict = completeness_result.get()
                 compl_dict["Description"] = (
-                    "Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete."
+                    "Indicate the proportion of available data for "
+                    "each feature, with values closer to 1 indicating "
+                    "high completeness, and values near 0 indicating low "
+                    "completeness. If the visualization is empty, it means "
+                    "that all features are complete."
                 )
                 final_dict["Completeness"] = compl_dict
                 metric_time_log.info(
@@ -342,7 +345,10 @@ def dataQuality():
                 outliers_result = outliers.delay(file_info)
                 out_dict = outliers_result.get()
                 out_dict["Description"] = (
-                    "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
+                    "Outlier scores are calculated for numerical columns using "
+                    "the Interquartile Range (IQR) method, where a score of 1 indicates"
+                    " that all data points in a column are identified as outliers, a score "
+                    "of 0 signifies no outliers are detected"
                 )
                 final_dict["Outliers"] = out_dict
                 metric_time_log.info(
@@ -354,7 +360,8 @@ def dataQuality():
                 duplicity_result = duplicity.delay(file_info)
                 dup_dict = duplicity_result.get()
                 dup_dict["Description"] = (
-                    "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
+                    "A value of 0 indicates no duplicates, and a value closer to 1 "
+                    "signifies a higher proportion of duplicated data points in the dataset"
                 )
                 final_dict["Duplicity"] = dup_dict
                 metric_time_log.info(
@@ -415,7 +422,10 @@ def fairness():
                     rep_rate_vis_result.get()
                 )
                 rep_dict["Description"] = (
-                    "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
+                    "Represent probability ratios that quantify the relative "
+                    "representation of different categories within the sensitive "
+                    "features, highlighting differences in representation rates between "
+                    "various groups. Higher values imply overrepresentation relative to another"
                 )
                 final_dict["Representation Rate"] = rep_dict
                 metric_time_log.info(
@@ -472,7 +482,15 @@ def fairness():
                 )
                 cdd_dict = cond_demo_disp_result.get()
                 cdd_dict["Description"] = (
-                    'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'
+                    'The conditional demographic disparity metric evaluates the distribution of '
+                    'outcomes categorized as positive and negative across various sensitive groups. '
+                    'The user specifies which outcome category is considered "positive" for the analysis, '
+                    'with all other outcome categories classified as "negative". The metric calculates '
+                    'the proportion of outcomes classified as "positive" and "negative" within each sensitive '
+                    'group. A resulting disparity value of True indicates that within a specific sensitive group, '
+                    'the proportion of outcomes classified as "negative" exceeds the proportion classified as '
+                    '"positive". This metric provides insights into potential disparities in outcome distribution '
+                    'across sensitive groups based on the user-defined positive outcome criterion.'
                 )
                 final_dict["Conditional Demographic Disparity"] = cdd_dict
                 metric_time_log.info(
@@ -614,7 +632,11 @@ def featureRelevance():
                 f_dict["Pearson Correlation to Target"] = correlations
                 f_dict["Feature Relevance Visualization"] = f_plot
                 f_dict["Description"] = (
-                    "With minimum data cleaning (drop missing values, onehot encode categorical features, labelencode target feature), the Pearson correlation coefficient is calculated for each feature against the target variable. A value of 1 indicates a perfect positive correlation, while a value of -1 indicates a perfect negative correlation."
+                    "With minimum data cleaning (drop missing values, onehot encode "
+                    "categorical features, labelencode target feature), the Pearson correlation "
+                    "coefficient is calculated for each feature against the target variable. "
+                    "A value of 1 indicates a perfect positive correlation, while a value of -1 "
+                    "indicates a perfect negative correlation."
                 )
                 final_dict["Feature Relevance"] = f_dict
         except Exception as e:
@@ -657,7 +679,8 @@ def classImbalance():
                     class_distrib_plot_result.get()
                 )
                 ci_dict["Description"] = (
-                    "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
+                    "The chart displays the distribution of classes within the specified "
+                    "feature, providing a visual representation of the relative proportions of each class."
                 )
                 calc_imbalance_degree_result = calc_imbalance_degree.delay(
                     classes, file_info, dist_metric="EU"

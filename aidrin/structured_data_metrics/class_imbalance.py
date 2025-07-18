@@ -194,7 +194,12 @@ def calc_imbalance_degree(self: Task, column, file_info, dist_metric="EU"):
 
         res["Imbalance degree score"] = id
         res["Description"] = (
-            "The Imbalance Degree (ID) is a metric that quantifies class imbalance in datasets by comparing the observed class distribution to an idealized balanced state. A value of 0 indicates perfect balance, while higher values signify increased dissimilarity and greater imbalance. Calculated using a distance or similarity function, ID provides a concise measure for understanding and addressing challenges posed by uneven class representation in machine learning datasets."
+            "The Imbalance Degree (ID) is a metric that quantifies class imbalance "
+            "in datasets by comparing the observed class distribution to an idealized "
+            "balanced state. A value of 0 indicates perfect balance, while higher values "
+            "signify increased dissimilarity and greater imbalance. Calculated using a distance "
+            "or similarity function, ID provides a concise measure for understanding and addressing "
+            "challenges posed by uneven class representation in machine learning datasets."
         )
 
     except (TimeoutError, SoftTimeLimitExceeded):

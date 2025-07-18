@@ -105,10 +105,13 @@ def generate_single_attribute_MM_risk_scores(self: Task, id_col, eval_cols, file
         result_dict["DescriptiveStatistics"] = descriptive_stats_dict
         result_dict["Single attribute risk scoring Visualization"] = base64_image
         result_dict["Description"] = (
-            "This metric quantifies the re-identification risk for each quasi-identifier. Lower risk scores are preferred, indicating features that are less likely to uniquely identify individuals. High-risk features may require further anonymization or removal."
+            "This metric quantifies the re-identification risk for each quasi-identifier. "
+            "Lower risk scores are preferred, indicating features that are less likely to uniquely "
+            "identify individuals. High-risk features may require further anonymization or removal."
         )
         result_dict["Graph interpretation"] = (
-            "The box plot displays the distribution of risk scores for each feature. Features with higher medians or more outliers indicate greater privacy risk. A compact, lower box is desirable."
+            "The box plot displays the distribution of risk scores for each feature. Features with "
+            "higher medians or more outliers indicate greater privacy risk. A compact, lower box is desirable."
         )
 
     except SoftTimeLimitExceeded:
@@ -298,10 +301,13 @@ def generate_multiple_attribute_MM_risk_scores(
         image_stream.close()
 
         result_dict["Description"] = (
-            "This metric evaluates the joint risk posed by combinations of quasi-identifiers. Lower overall risk scores are preferred, as they indicate that the selected set of features does not easily allow re-identification."
+            "This metric evaluates the joint risk posed by combinations of quasi-identifiers. "
+            "Lower overall risk scores are preferred, as they indicate that the selected set of "
+            "features does not easily allow re-identification."
         )
         result_dict["Graph interpretation"] = (
-            "The box plot shows the distribution of combined risk scores. A distribution concentrated at lower values indicates better privacy."
+            "The box plot shows the distribution of combined risk scores. A distribution concentrated "
+            "at lower values indicates better privacy."
         )
         result_dict["Descriptive statistics of the risk scores"] = stats_dict
         result_dict["Multiple attribute risk scoring Visualization"] = base64_image
@@ -398,10 +404,12 @@ def compute_k_anonymity(
             "histogram_data": hist_data,
             "k-Anonymity Visualization": base64_image,
             "Description": (
-                "k-anonymity measures the minimum group size sharing the same quasi-identifier values. Higher k values are preferred, as they indicate stronger anonymity."
+                "k-anonymity measures the minimum group size sharing the same quasi-identifier values. "
+                "Higher k values are preferred, as they indicate stronger anonymity."
             ),
             "Graph interpretation": (
-                "The histogram shows the distribution of equivalence class sizes. A shift toward larger class sizes (higher k) is desirable for privacy."
+                "The histogram shows the distribution of equivalence class sizes. A shift toward "
+                "larger class sizes (higher k) is desirable for privacy."
             ),
         }
     except SoftTimeLimitExceeded:
@@ -501,10 +509,13 @@ def compute_l_diversity(
             "histogram_data": hist_data.to_dict(),
             "l-Diversity Visualization": base64_image,
             "Description": (
-                "l-diversity quantifies the diversity of sensitive attributes within each group. Higher l values are preferred, indicating less risk of attribute disclosure."
+                "l-diversity quantifies the diversity of sensitive attributes "
+                "within each group. Higher l values are preferred, indicating less "
+                "risk of attribute disclosure."
             ),
             "Graph interpretation": (
-                "The histogram displays the spread of l-diversity values. A distribution concentrated at higher l values is optimal."
+                "The histogram displays the spread of l-diversity values. A distribution "
+                "concentrated at higher l values is optimal."
             ),
         }
     except SoftTimeLimitExceeded:
@@ -601,7 +612,9 @@ def compute_t_closeness(
             "histogram_data": hist_data.to_dict(),
             "t-Closeness Visualization": base64_image,
             "Description": (
-                "t-closeness measures the distance between the distribution of sensitive attributes in a group and the overall distribution. Lower t values are preferred, indicating less information leakage."
+                "t-closeness measures the distance between the distribution of sensitive "
+                "attributes in a group and the overall distribution. Lower t values are preferred, "
+                "indicating less information leakage."
             ),
             "Graph interpretation": (
                 "The histogram shows the distribution of t values. Lower t values across groups indicate stronger privacy."
@@ -683,10 +696,13 @@ def compute_entropy_risk(
             "histogram_data": hist_data.to_dict(),
             "Entropy Risk Visualization": base64_image,
             "Description": (
-                "Entropy risk quantifies the uncertainty in identifying individuals within equivalence classes. Higher entropy values are preferred, indicating greater anonymity and lower re-identification risk."
+                "Entropy risk quantifies the uncertainty in identifying individuals within "
+                "equivalence classes. Higher entropy values are preferred, indicating greater "
+                "anonymity and lower re-identification risk."
             ),
             "Graph interpretation": (
-                "The bar chart visualizes the distribution of entropy values. Higher bars on the right (higher entropy) indicate better privacy; left-skewed distributions suggest higher risk."
+                "The bar chart visualizes the distribution of entropy values. Higher bars on "
+                "the right (higher entropy) indicate better privacy; left-skewed distributions suggest higher risk."
             ),
         }
     except SoftTimeLimitExceeded:

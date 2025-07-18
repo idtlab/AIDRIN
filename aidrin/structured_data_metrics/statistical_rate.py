@@ -131,10 +131,10 @@ def calculate_statistical_rates(
             {
                 "Statistical Rates": class_proportions,
                 "TSD scores": tsd,
-                "Description": "The TSD values are calculated by getting the standard deviation of the proportions of each group across the different classes...",
+                "Description": "The TSD values are calculated by getting the standard "
+                "deviation of the proportions of each group across the different classes...",
                 "Statistical Rate Visualization": base64_plot,
-            }
-        )
+            })
         return {
             "Statistical Rates": cleaned_payload["Statistical Rates"],
             "TSD scores": cleaned_payload["TSD scores"],

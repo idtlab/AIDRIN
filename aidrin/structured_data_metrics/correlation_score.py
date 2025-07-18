@@ -42,7 +42,7 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             fig, axes = plt.subplots(1, 1, figsize=(8, 8))
 
             # Plot for categorical-categorical correlations
-            cax1 = sns.heatmap(
+            _ = sns.heatmap(
                 categorical_correlation["corr"],
                 annot=True,
                 cmap="coolwarm",
@@ -84,7 +84,9 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             ] = base64_image_cat
             result_dict["Correlations Analysis Categorical"][
                 "Description"
-            ] = "Categorical correlations are calculated using Theil's U, with values ranging from 0 to 1. A value of 1 indicates a perfect correlation, while a value of 0 indicates no correlation"
+            ] = "Categorical correlations are calculated using Theil's U, with values " \
+                "ranging from 0 to 1. A value of 1 indicates a perfect correlation, while a " \
+                "value of 0 indicates no correlation"
 
         # Check if there are numerical features
         if not numerical_columns.empty:
@@ -95,7 +97,7 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             fig, axes = plt.subplots(1, 1, figsize=(8, 8))
 
             # Plot for numerical-numerical correlations
-            cax2 = sns.heatmap(
+            _ = sns.heatmap(
                 numerical_correlation, annot=True, cmap="coolwarm", fmt=".2f", ax=axes
             )
             axes.set_title("Numerical-Numerical Correlation Matrix")
@@ -120,7 +122,9 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             ] = base64_image_num
             result_dict["Correlations Analysis Numerical"][
                 "Description"
-            ] = "Numerical correlations are calculated using Pearson's correlation coefficient, with values ranging from -1 to 1. A value of 1 indicates a perfect positive correlation, -1 indicates a perfect negative correlation, and 0 indicates no correlation"
+            ] = "Numerical correlations are calculated using Pearson's correlation coefficient, " \
+                "with values ranging from -1 to 1. A value of 1 indicates a perfect positive correlation," \
+                " -1 indicates a perfect negative correlation, and 0 indicates no correlation"
 
         # Create and return a dictionary with correlation scores and plots
         correlation_dict = {}

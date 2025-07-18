@@ -59,7 +59,10 @@ def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_info):
         stat_dict[f"Mean of feature {column}(after noise)"] = mean_noisy
         stat_dict[f"Variance of feature {column}(after noise)"] = variance_noisy
         stat_dict["Description"] = (
-            "The numerical features have been augmented with privacy-preserving measures through the addition of random Laplacian noise. This intentional introduction of noise ensures differential privacy guarantees. The accompanying box plots visually compare the distributions of the original and privacy-enhanced data"
+            "The numerical features have been augmented with privacy-preserving measures "
+            "through the addition of random Laplacian noise. This intentional introduction of "
+            "noise ensures differential privacy guarantees. The accompanying box plots visually "
+            "compare the distributions of the original and privacy-enhanced data"
         )
         df_drop_na[f"noisy_{column}"] = noisy_feature
 
