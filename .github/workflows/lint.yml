@@ -1,25 +1,49 @@
-name: lint
+name: fix-and-lint
 
 on:
   workflow_dispatch:
   push:
 
 jobs:
-  lint:
-    name: Python Lint (AIDRIN)
+  fix_and_lint:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: 3.10
 
-      - name: Install flake8
-        run: pip install flake8
+      - name: Install tools
+        run: pip install autoflake autopep8 isort black flake8
 
-      - name: Run flake8
+      - name: Run autoflake (remove unused imports/vars)
+        run: autoflake --in-place --remove-unused-variables --remove-all-unused-imports -r aidrin/
+
+      - name: Run autopep8 (style fixes)
+        run: autopep8 --in-place --aggressive --aggressive -r aidrin/
+
+      - name: Run isort (sort imports)
+        run: isort aidrin/
+
+      - name: Run black (code formatting)
+        run: black aidrin/
+
+      - name: Commit and push fixes if any
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No fixes to commit"
+          else
+            git commit -m "Auto-fix linting issues"
+            git push
+          fi
+
+      - name: Run flake8 lint
         run: flake8 --config=tox.ini aidrin/
