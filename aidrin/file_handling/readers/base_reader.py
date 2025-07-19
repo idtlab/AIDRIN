@@ -11,8 +11,7 @@ class BaseFileReader:
         self.logger = logger
 
     def read(self):
-        raise NotImplementedError(
-            "Subclasses must implement the read() method.")
+        raise NotImplementedError("Subclasses must implement the read() method.")
 
     # Optional method: parse hierarchical group identifiers
     def parse(self):

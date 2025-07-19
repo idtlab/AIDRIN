@@ -1,206 +1,233 @@
 function togglePillarDropdown(id) {
-    const container = document.getElementById(id); //
-    const subElements = container.querySelectorAll('.toggle-button');
+  const container = document.getElementById(id); //
+  const subElements = container.querySelectorAll(".toggle-button");
 
-    const header = document.querySelector(`h3[onclick*="${id}"]`);
-    const svg = header.querySelector("svg");
-    subElements.forEach(element => {
-        if (element.style.display === 'none' || element.style.display === '') {
-            element.style.display = 'flex';
-            svg.innerHTML = '<path d="M480-360 280-559.33h400L480-360Z"/>';
-
-        } else {
-            element.style.display = 'none';
-            svg.innerHTML = '<path d="M400-280v-400l200 200-200 200Z"/>';
-        }
-    });
+  const header = document.querySelector(`h3[onclick*="${id}"]`);
+  const svg = header.querySelector("svg");
+  subElements.forEach((element) => {
+    if (element.style.display === "none" || element.style.display === "") {
+      element.style.display = "flex";
+      svg.innerHTML = '<path d="M480-360 280-559.33h400L480-360Z"/>';
+    } else {
+      element.style.display = "none";
+      svg.innerHTML = '<path d="M400-280v-400l200 200-200 200Z"/>';
+    }
+  });
 }
-
 
 //for uploads
 function uploadForm() {
-    const form = document.getElementById('uploadForm');
-    form.submit();
+  const form = document.getElementById("uploadForm");
+  form.submit();
 }
-
 
 //to clear
 function clearFile() {
-    fetch('/clear', {
-        method: 'POST',
+  fetch("/clear", {
+    method: "POST",
+  })
+    .then((response) => {
+      if (response.redirected) {
+        // Redirect to the specified location
+        window.location.href = response.url;
+      }
     })
-        .then(response => {
-            if (response.redirected) {
-                // Redirect to the specified location
-                window.location.href = response.url;
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            openErrorPopup("File Clear", error); // call error popup
-        });
+    .catch((error) => {
+      console.error("Error:", error);
+      openErrorPopup("File Clear", error); // call error popup
+    });
 }
 
 //changes file upload ability
-function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage) {
-    const fileType = fileTypeElement.value;
-    //if a filetype is present, set to that filetype only, otherwise disable
-    if (fileType) {
-        fileInput.disabled = false;
-        fileInput.setAttribute("accept", fileType);
-        console.log("USER SELECTED FILETYPE: " + fileType);
-        fileUploadMessage.style.opacity = "1";
-        fileUploadMessage.style.fontSize = "1.5em";
-        fileTypeSelector.style.fontSize = "1.25em";
-    } else {
-        fileInput.disabled = true;
-        fileInput.removeAttribute("accept");
-        fileUploadMessage.style.opacity = "0";
-        fileUploadMessage.style.fontSize = "0px";
-        fileTypeSelector.style.fontSize = "1.75em";
-        console.log("FILE UPLOAD DISABLED");
-    }
+function updateFileInputBasedOnType(
+  fileTypeElement,
+  fileInput,
+  fileUploadMessage
+) {
+  const fileType = fileTypeElement.value;
+  //if a filetype is present, set to that filetype only, otherwise disable
+  if (fileType) {
+    fileInput.disabled = false;
+    fileInput.setAttribute("accept", fileType);
+    console.log("USER SELECTED FILETYPE: " + fileType);
+    fileUploadMessage.style.opacity = "1";
+    fileUploadMessage.style.fontSize = "1.5em";
+    fileTypeSelector.style.fontSize = "1.25em";
+  } else {
+    fileInput.disabled = true;
+    fileInput.removeAttribute("accept");
+    fileUploadMessage.style.opacity = "0";
+    fileUploadMessage.style.fontSize = "0px";
+    fileTypeSelector.style.fontSize = "1.75em";
+    console.log("FILE UPLOAD DISABLED");
+  }
 }
 
-
 function submitForm() {
+  var form = document.getElementById("uploadForm");
+  var formData = new FormData(form);
 
-    var form = document.getElementById('uploadForm');
-    var formData = new FormData(form);
+  // Get the values of the checkboxes and concatenate them with a comma
+  var checkboxValues = Array.from(formData.getAll("checkboxValues")).join(",");
+  var numFeaCheckboxValues = Array.from(
+    formData.getAll("numerical features for feature relevancy")
+  ).join(",");
+  var catFeaCheckboxValues = Array.from(
+    formData.getAll("categorical features for feature relevancy")
+  ).join(",");
 
-    // Get the values of the checkboxes and concatenate them with a comma
-    var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
-    var numFeaCheckboxValues = Array.from(formData.getAll('numerical features for feature relevancy')).join(',');
-    var catFeaCheckboxValues = Array.from(formData.getAll('categorical features for feature relevancy')).join(',');
+  // Add the concatenated checkbox values to the form data
+  formData.set("correlation columns", checkboxValues);
+  formData.set(
+    "numerical features for feature relevancy",
+    numFeaCheckboxValues
+  );
+  formData.set(
+    "categorical features for feature relevancy",
+    catFeaCheckboxValues
+  );
 
-    // Add the concatenated checkbox values to the form data
-    formData.set('correlation columns', checkboxValues);
-    formData.set("numerical features for feature relevancy", numFeaCheckboxValues);
-    formData.set("categorical features for feature relevancy", catFeaCheckboxValues);
-
-    // Note: We don't need to modify the quasi-identifier fields as they should remain as lists
-    // The backend will handle both string and list formats
-    // Populate metrics visualizations
-    var metrics = document.getElementById("metrics");
-    if (metrics) {
-        metrics.innerHTML = '<p>Loading visualizations, please wait...</p>';
-    } else {
-        console.error("No Element ID");
-        console.log("No Element ID");
-        print("No Element ID");
-    }
-    const url = new URL(window.location.href);
-    url.searchParams.set('returnType', 'json');
-    const currentURL = url.toString();
-    fetch(currentURL, {
-        method: 'POST',
-        body: formData
+  // Note: We don't need to modify the quasi-identifier fields as they should remain as lists
+  // The backend will handle both string and list formats
+  // Populate metrics visualizations
+  var metrics = document.getElementById("metrics");
+  if (metrics) {
+    metrics.innerHTML = "<p>Loading visualizations, please wait...</p>";
+  } else {
+    console.error("No Element ID");
+    console.log("No Element ID");
+    print("No Element ID");
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("returnType", "json");
+  const currentURL = url.toString();
+  fetch(currentURL, {
+    method: "POST",
+    body: formData,
+  })
+    .then((response) => {
+      if (
+        response.ok &&
+        response.headers.get("content-type")?.includes("application/json")
+      ) {
+        return response.json();
+      } else {
+        throw new Error("Server did not return valid JSON.");
+      }
     })
-        .then(response => {
-            if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
-                return response.json();
+    .then((data) => {
+      if (data.trigger === "correlationError") {
+        openErrorPopup(
+          "Invalid Request",
+          "Input Feature and Target Feature cannot be the same"
+        ); // call error popup
+      }
+      if (data.error) {
+        openErrorPopup("", data.error); // call error popup
+      }
+      console.log("Server Response:", data);
+      var resultContainer = document.getElementById("resultContainer");
+      resp_data = data;
+
+      // Function to check if a key is present and not undefined
+      function isKeyPresentAndDefined(obj, key) {
+        return obj && obj[key] !== undefined;
+      }
+
+      var visualizationContent = [];
+
+      // Check for each type of visualization
+      var visualizationTypes = [
+        "Completeness",
+        "Outliers",
+        "Duplicity",
+        "Representation Rate",
+        "Statistical Rate",
+        "Correlations Analysis Categorical",
+        "Correlations Analysis Numerical",
+        "Feature Relevance",
+        "Class Imbalance",
+        "DP Statistics",
+        "Single attribute risk scoring",
+        "Multiple attribute risk scoring",
+        "k-Anonymity",
+        "l-Diversity",
+        "t-Closeness",
+        "Entropy Risk",
+      ];
+      visualizationTypes.forEach((type) => {
+        if (data[type]) {
+          console.log(`${type}:`, Object.keys(data[type]));
+        }
+      });
+      visualizationTypes.forEach(function (type) {
+        if (isKeyPresentAndDefined(data, type)) {
+          if (isKeyPresentAndDefined(data[type], type + " Visualization")) {
+            console.log("Adding visualization:", type);
+            var image = data[type][type + " Visualization"];
+            var value = data[type]["Value"] || "N/A";
+            var description = data[type]["Description"] || "";
+            var interpretation = data[type]["Graph interpretation"] || "";
+            var riskScore = data[type]["Risk Score"] || "N/A";
+            var title = type;
+            var jsonData = JSON.stringify(data);
+
+            // Check if there's an error or if the image is empty
+            if (data[type]["Error"]) {
+              console.log("Error in", type, ":", data[type]["Error"]);
+              // Still add to visualization content but with error message
+              visualizationContent.push({
+                image: image || "",
+                riskScore: riskScore,
+                value: value,
+                description: description,
+                interpretation: interpretation,
+                title: title,
+                jsonData: jsonData,
+                hasError: true,
+              });
+            } else if (image && image.trim() !== "") {
+              visualizationContent.push({
+                image: image,
+                riskScore: riskScore,
+                value: value,
+                description: description,
+                interpretation: interpretation,
+                title: title,
+                jsonData: jsonData,
+                hasError: false,
+              });
             } else {
-                throw new Error('Server did not return valid JSON.');
+              console.log("Empty visualization for:", type);
             }
-        })
-        .then(data => {
+          } else {
+            console.log(
+              "Missing visualization key for:",
+              type,
+              "Expected:",
+              type + " Visualization"
+            );
+          }
+        } else {
+          console.log("Type not found in data:", type);
+        }
+      });
+      // Boolean flag to track if heading has been added
+      var headingAdded = false;
 
-            if (data.trigger === "correlationError") {
-                openErrorPopup("Invalid Request", "Input Feature and Target Feature cannot be the same"); // call error popup
-            }
-            if (data.error) {
-                openErrorPopup("", data.error); // call error popup
-            }
-            console.log('Server Response:', data);
-            var resultContainer = document.getElementById('resultContainer');
-            resp_data = data;
+      if (visualizationContent.length > 0) {
+        // Add heading if not already added
+        if (!headingAdded) {
+          metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
 
-            // Function to check if a key is present and not undefined
-            function isKeyPresentAndDefined(obj, key) {
-                return obj && obj[key] !== undefined;
-            }
-
-            var visualizationContent = [];
-
-            // Check for each type of visualization
-            var visualizationTypes = [
-                'Completeness', 'Outliers', 'Duplicity', 'Representation Rate', 'Statistical Rate',
-                'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
-                'Feature Relevance', 'Class Imbalance', 'DP Statistics',
-                'Single attribute risk scoring', 'Multiple attribute risk scoring',
-                'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
-            ];
-            visualizationTypes.forEach(type => {
-                if (data[type]) {
-                    console.log(`${type}:`, Object.keys(data[type]));
-                }
-            });
-            visualizationTypes.forEach(function (type) {
-                if (isKeyPresentAndDefined(data, type)) {
-                    if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
-                        console.log('Adding visualization:', type);
-                        var image = data[type][type + ' Visualization'];
-                        var value = data[type]['Value'] || 'N/A';
-                        var description = data[type]['Description'] || '';
-                        var interpretation = data[type]['Graph interpretation'] || '';
-                        var riskScore = data[type]['Risk Score'] || 'N/A';
-                        var title = type;
-                        var jsonData = JSON.stringify(data);
-
-                        // Check if there's an error or if the image is empty
-                        if (data[type]['Error']) {
-                            console.log('Error in', type, ':', data[type]['Error']);
-                            // Still add to visualization content but with error message
-                            visualizationContent.push({
-                                image: image || "",
-                                riskScore: riskScore,
-                                value: value,
-                                description: description,
-                                interpretation: interpretation,
-                                title: title,
-                                jsonData: jsonData,
-                                hasError: true
-                            });
-                        } else if (image && image.trim() !== "") {
-                            visualizationContent.push({
-                                image: image,
-                                riskScore: riskScore,
-                                value: value,
-                                description: description,
-                                interpretation: interpretation,
-                                title: title,
-                                jsonData: jsonData,
-                                hasError: false
-                            });
-                        } else {
-                            console.log('Empty visualization for:', type);
-                        }
-                    } else {
-                        console.log('Missing visualization key for:', type, 'Expected:', type + ' Visualization');
-                    }
-                } else {
-                    console.log('Type not found in data:', type);
-                }
-            });
-            // Boolean flag to track if heading has been added
-            var headingAdded = false;
-
-            if (visualizationContent.length > 0) {
-
-
-                // Add heading if not already added
-                if (!headingAdded) {
-                    metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
-
-                    headingAdded = true;
-                }
-                console.log('Visualization content:', visualizationContent);
-                // Add each visualization to the metric visualization section
-                visualizationContent.forEach(function (content, index) {
-
-                    const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
-                    const visualizationId = `visualization_${index}`;
-                    let visualizationHtml = `<div class="visualization-container">
+          headingAdded = true;
+        }
+        console.log("Visualization content:", visualizationContent);
+        // Add each visualization to the metric visualization section
+        visualizationContent.forEach(function (content, index) {
+          const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
+          const visualizationId = `visualization_${index}`;
+          let visualizationHtml = `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('${visualizationId}')">
                         <div style="display: flex; justify-content:space-between; align-items: center;">
                             <div>${content.title}</div>
@@ -209,39 +236,63 @@ function submitForm() {
                     </div>
                         <div id="${visualizationId}" style="display: none;">`;
 
-                    if (content.hasError) {
-                        // Display error message instead of image
-                        visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
+          if (content.hasError) {
+            // Display error message instead of image
+            visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
                         <strong>Error:</strong> ${content.description}
                     </div>`;
-                    } else if (content.image && content.image.trim() !== "") {
-                        // Display normal visualization
-                        const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
-                        visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                    <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
-                    } else {
-                        // Display message for empty visualization
-                        visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
+          } else if (content.image && content.image.trim() !== "") {
+            // Display normal visualization
+            const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
+            visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${
+              index + 1
+            } Chart">
+                    <a href="${imageBlobUrl}" download="${
+              content.title
+            }.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
+          } else {
+            // Display message for empty visualization
+            visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
                         No visualization available for this metric.
                     </div>`;
-                    }
+          }
 
-                    visualizationHtml += `
-                            ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
-                            ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
-                           <div><strong>Description:</strong> ${content.description}</div>
-                           ${content.interpretation ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>` : ''}
+          visualizationHtml += `
+                            ${
+                              content.riskScore !== "N/A"
+                                ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>`
+                                : ""
+                            }
+                            ${
+                              content.value !== "N/A"
+                                ? `<div><strong>${content.title}:</strong> ${content.value}</div>`
+                                : ""
+                            }
+                           <div><strong>Description:</strong> ${
+                             content.description
+                           }</div>
+                           ${
+                             content.interpretation
+                               ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>`
+                               : ""
+                           }
                             
                         </div>
                     
                     </div>`;
 
-                    metrics.innerHTML += visualizationHtml;
-                });
+          metrics.innerHTML += visualizationHtml;
+        });
 
-                //check if duplicity is present and 0 (no duplicity)
-                if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
-                    metrics.innerHTML += `<div class="visualization-container">
+        //check if duplicity is present and 0 (no duplicity)
+        if (
+          isKeyPresentAndDefined(data, "Duplicity") &&
+          isKeyPresentAndDefined(data["Duplicity"], "Duplicity scores") &&
+          data["Duplicity"]["Duplicity scores"][
+            "Overall duplicity of the dataset"
+          ] === 0
+        ) {
+          metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
                         <div style="display: flex; justify-content:space-between; align-items: center;">  
                             <div>Duplicity</div>
@@ -253,8 +304,11 @@ function submitForm() {
                     </div> 
                     
                 </div>`;
-                } else if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores')) {
-                    metrics.innerHTML += `<div class="visualization-container">
+        } else if (
+          isKeyPresentAndDefined(data, "Duplicity") &&
+          isKeyPresentAndDefined(data["Duplicity"], "Duplicity scores")
+        ) {
+          metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
                         <div style="display: flex; justify-content:space-between; align-items: center;">  
                             <div>Duplicity</div>
@@ -262,27 +316,32 @@ function submitForm() {
                         </div>
                     </div>
                     <div id="duplicity" style="display: none;">
-                        <p style="text-align:center">Overall Duplicity: ${data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset']}</p>
+                        <p style="text-align:center">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
                     </div>  
                     <    
                 </div>`;
-                }
+        }
 
+        // Assuming 'data' is your dictionary
+        const modifiedData = removeVisualizationKey(data);
+        const jsonBlobUrl = `data:application/json,${encodeURIComponent(
+          JSON.stringify(modifiedData)
+        )}`;
+        // Add the "Download JSON" link for the last jsonData outside the loop
+        metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
 
-
-                // Assuming 'data' is your dictionary
-                const modifiedData = removeVisualizationKey(data);
-                const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
-                // Add the "Download JSON" link for the last jsonData outside the loop
-                metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
-
-                metrics.scrollIntoView({ behavior: 'smooth' });
-
-            } else {
-                //check if duplicity is present and 0 (no duplicity)
-                if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
-                    metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
-                    metrics.innerHTML += `<div class="visualization-container">
+        metrics.scrollIntoView({ behavior: "smooth" });
+      } else {
+        //check if duplicity is present and 0 (no duplicity)
+        if (
+          isKeyPresentAndDefined(data, "Duplicity") &&
+          isKeyPresentAndDefined(data["Duplicity"], "Duplicity scores") &&
+          data["Duplicity"]["Duplicity scores"][
+            "Overall duplicity of the dataset"
+          ] === 0
+        ) {
+          metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
+          metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
                         <div style="display: flex; justify-content:space-between; align-items: center;">  
                             <div>Duplicity</div>
@@ -293,169 +352,164 @@ function submitForm() {
                         No duplicates found 
                     </div>      
                 </div>`;
-                    metrics.scrollIntoView({ behavior: 'smooth' });
-                } else {
-                    metrics.innerHTML = '<h3 style="text-align:center;">No visualizations available.</h3>';
-                }
-                // Assuming 'data' is your dictionary
-                const modifiedData = removeVisualizationKey(data);
-                const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
-                // Add the "Download JSON" link for the last jsonData outside the loop
-                metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+          metrics.scrollIntoView({ behavior: "smooth" });
+        } else {
+          metrics.innerHTML =
+            '<h3 style="text-align:center;">No visualizations available.</h3>';
+        }
+        // Assuming 'data' is your dictionary
+        const modifiedData = removeVisualizationKey(data);
+        const jsonBlobUrl = `data:application/json,${encodeURIComponent(
+          JSON.stringify(modifiedData)
+        )}`;
+        // Add the "Download JSON" link for the last jsonData outside the loop
+        metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+      }
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      openErrorPopup("Visualization Error", error); // call error popup
 
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            openErrorPopup("Visualization Error", error); // call error popup
+      // Check if "Completeness Visualization" key is present
+      // if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="complVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">' +
+      //         '<div style="margin-left: 10px;">' +data['Completeness']['Description'] + '</div>' +
+      //         '</div>';
+      // }
 
-            // Check if "Completeness Visualization" key is present
-            // if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="complVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">' +
-            //         '<div style="margin-left: 10px;">' +data['Completeness']['Description'] + '</div>' +
-            //         '</div>';
-            // }
+      // Check if "Outliers Visualization" key is present
+      // if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="outVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">' +
+      //         '<div style="margin-left: 10px;">' +data['Outliers']['Description'] + '</div>' +
+      //         '</div>';
+      // }
 
-            // Check if "Outliers Visualization" key is present
-            // if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="outVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">' +
-            //         '<div style="margin-left: 10px;">' +data['Outliers']['Description'] + '</div>' +
-            //         '</div>';
-            // }
+      // if (
+      //     isKeyPresentAndDefined(data, 'Representation Rate') &&
+      //     isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Visualization')
+      // ) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="repVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">' +
+      //         '<div style="margin-left: 10px;">' +data['Representation Rate']['Description'] + '</div>' +
+      //         '</div>';
+      // }
 
-            // if (
-            //     isKeyPresentAndDefined(data, 'Representation Rate') &&
-            //     isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Visualization')
-            // ) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="repVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">' +
-            //         '<div style="margin-left: 10px;">' +data['Representation Rate']['Description'] + '</div>' +
-            //         '</div>';
-            // }
+      // if (isKeyPresentAndDefined(data, 'Statistical Rate') && isKeyPresentAndDefined(data['Statistical Rate'], 'Visualization')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="statRateVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Statistical Rate']['class_proportions_plot'] + '" alt="Statistical rate bar plot">' +
+      //         '<div style="margin-left: 10px;">' +data['Statistical Rate']['Description'] + '</div>' +
+      //         '</div>';
+      // }
 
-            // if (isKeyPresentAndDefined(data, 'Statistical Rate') && isKeyPresentAndDefined(data['Statistical Rate'], 'Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="statRateVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Statistical Rate']['class_proportions_plot'] + '" alt="Statistical rate bar plot">' +
-            //         '<div style="margin-left: 10px;">' +data['Statistical Rate']['Description'] + '</div>' +
-            //         '</div>';
-            // }
+      // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
+      // if (
+      //     isKeyPresentAndDefined(data, 'Representation Rate Comparison with Real World') &&
+      //     isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
+      // ) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="compVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">' +
+      //         '<div style="margin-left: 10px;">' +data['Representation Rate Comparison with Real World']['Description'] + '</div>' +
+      //         '</div>';
+      // }
 
-            // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
-            // if (
-            //     isKeyPresentAndDefined(data, 'Representation Rate Comparison with Real World') &&
-            //     isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
-            // ) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="compVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">' +
-            //         '<div style="margin-left: 10px;">' +data['Representation Rate Comparison with Real World']['Description'] + '</div>' +
-            //         '</div>';
-            // }
+      // if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Categorical-Categorical Visualization')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="catCorrVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Categorical-Categorical Correlation Matrix'] + '" alt="Categorical-Categorical Correlation Matrix">' +
+      //         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['cat_description'] + '</div>' +
+      //         '</div>';
 
-            // if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Categorical-Categorical Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="catCorrVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Categorical-Categorical Correlation Matrix'] + '" alt="Categorical-Categorical Correlation Matrix">' +
-            //         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['cat_description'] + '</div>' +
-            //         '</div>';
+      // }
 
-            // }
+      // if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Numerical-Numerical Visualization')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="numCorrVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Numerical-Numerical Correlation Matrix'] + '" alt="Numerical-Numerical Correlation Matrix">' +
+      //         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['num_description'] + '</div>' +
+      //         '</div>';
 
-            // if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Numerical-Numerical Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="numCorrVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Numerical-Numerical Correlation Matrix'] + '" alt="Numerical-Numerical Correlation Matrix">' +
-            //         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['num_description'] + '</div>' +
-            //         '</div>';
+      // }
 
-            // }
+      // if (isKeyPresentAndDefined(data, 'Feature relevance') && isKeyPresentAndDefined(data['Feature relevance'], 'Feature relevance Visualization')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="featureRelVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Feature relevance']['summary plot'] + '" alt="Shapley value plot">' +
+      //         '<div style="margin-left: 10px;">' +data['Feature relevance']['Description'] + '</div>' +
+      //         '</div>';
+      // }
+      // if (isKeyPresentAndDefined(data, 'Class imbalance') && isKeyPresentAndDefined(data['Class imbalance'], 'Class distribution plot')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="classDisVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Class imbalance']['Class distribution plot'] + '" alt="Class distribution plot">' +
+      //         '<div style="margin-left: 10px;">' +data['Class imbalance']['Description'] + '</div>' +
+      //         '</div>';
+      // }
 
-            // if (isKeyPresentAndDefined(data, 'Feature relevance') && isKeyPresentAndDefined(data['Feature relevance'], 'Feature relevance Visualization')) {                    
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="featureRelVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Feature relevance']['summary plot'] + '" alt="Shapley value plot">' +
-            //         '<div style="margin-left: 10px;">' +data['Feature relevance']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-            // if (isKeyPresentAndDefined(data, 'Class imbalance') && isKeyPresentAndDefined(data['Class imbalance'], 'Class distribution plot')) {                    
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="classDisVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Class imbalance']['Class distribution plot'] + '" alt="Class distribution plot">' +
-            //         '<div style="margin-left: 10px;">' +data['Class imbalance']['Description'] + '</div>' +
-            //         '</div>';
-            // }
+      // if (isKeyPresentAndDefined(data, 'DP statistics') && isKeyPresentAndDefined(data['DP statistics'], 'Combined Plots')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="noisyVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['DP statistics']['Combined Plots'] + '" alt="Normal vs Noisy Feature Box Plots">' +
+      //         '<div style="margin-left: 10px;">' +data['DP statistics']['Description'] + '</div>' +
+      //         '</div>';
+      // }
 
-            // if (isKeyPresentAndDefined(data, 'DP statistics') && isKeyPresentAndDefined(data['DP statistics'], 'Combined Plots')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="noisyVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['DP statistics']['Combined Plots'] + '" alt="Normal vs Noisy Feature Box Plots">' +
-            //         '<div style="margin-left: 10px;">' +data['DP statistics']['Description'] + '</div>' +
-            //         '</div>';
-            // }
+      // if (isKeyPresentAndDefined(data, 'Single attribute risk scoring') && isKeyPresentAndDefined(data['Single attribute risk scoring'], 'BoxPlot')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="singleRiskVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Single attribute risk scoring']['BoxPlot'] + '" alt="Single attribute risk score box plots">'+
+      //         '<div style="margin-left: 10px;">' +data['Single attribute risk scoring']['Description'] + '</div>' +
+      //         '</div>'
 
-            // if (isKeyPresentAndDefined(data, 'Single attribute risk scoring') && isKeyPresentAndDefined(data['Single attribute risk scoring'], 'BoxPlot')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="singleRiskVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Single attribute risk scoring']['BoxPlot'] + '" alt="Single attribute risk score box plots">'+
-            //         '<div style="margin-left: 10px;">' +data['Single attribute risk scoring']['Description'] + '</div>' +
-            //         '</div>' 
+      // }
+      // if (isKeyPresentAndDefined(data, 'Multiple attribute risk scoring') && isKeyPresentAndDefined(data['Multiple attribute risk scoring'], 'Box Plot')) {
+      //     // Display the chart image and description in a single div
+      //     resultContainer.innerHTML += '<div id="multipleRiskVis" style="display:none; text-align: left;">' +
+      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Multiple attribute risk scoring']['Box Plot'] + '" alt="Multiple attribute risk score box plots">'+
+      //         '<div style="margin-left: 10px;">' +data['Multiple attribute risk scoring']['Description'] + '</div>' +
+      //         '</div>'
 
-            // }
-            // if (isKeyPresentAndDefined(data, 'Multiple attribute risk scoring') && isKeyPresentAndDefined(data['Multiple attribute risk scoring'], 'Box Plot')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="multipleRiskVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Multiple attribute risk scoring']['Box Plot'] + '" alt="Multiple attribute risk score box plots">'+
-            //         '<div style="margin-left: 10px;">' +data['Multiple attribute risk scoring']['Description'] + '</div>' +
-            //         '</div>' 
+      // }
 
-            // }
+      //Display other result information as JSON
+      // if (data['Duplicity'] && data['Duplicity']['Duplicity scores'] && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] !== undefined) {
+      //     resultContainer.innerHTML += '<div id="duplicityScoreResult" style="display:none"> <h3> Duplicity Scores </h3>'+
+      //         '<pre> Overall Duplicity: ' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>' +
+      //         '</div>';
+      // }
 
+      // if (data['Class imbalance'] && data['Class imbalance']['Imbalance degree'] && data['Class imbalance']['Imbalance degree']['Imbalance degree score'] !== undefined) {
+      //     resultContainer.innerHTML += '<div id="imbalanceScoreResult" style="display:none"> <h3> Class Imbalance Scores </h3>'+
+      //         '<pre> Imbalance degree: ' + data['Class imbalance']['Imbalance degree']['Imbalance degree score'] + '</pre>' +
+      //         '</div>';
+      // }
 
-
-
-            //Display other result information as JSON
-            // if (data['Duplicity'] && data['Duplicity']['Duplicity scores'] && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] !== undefined) {
-            //     resultContainer.innerHTML += '<div id="duplicityScoreResult" style="display:none"> <h3> Duplicity Scores </h3>'+ 
-            //         '<pre> Overall Duplicity: ' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>' +
-            //         '</div>';
-            // }
-
-            // if (data['Class imbalance'] && data['Class imbalance']['Imbalance degree'] && data['Class imbalance']['Imbalance degree']['Imbalance degree score'] !== undefined) {
-            //     resultContainer.innerHTML += '<div id="imbalanceScoreResult" style="display:none"> <h3> Class Imbalance Scores </h3>'+ 
-            //         '<pre> Imbalance degree: ' + data['Class imbalance']['Imbalance degree']['Imbalance degree score'] + '</pre>' +
-            //         '</div>';
-            // }
-
-            // resultContainer.innerHTML += '<pre id="scoreResult" style="display:none;">' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>';
-
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            openErrorPopup("", error); // call error popup
-        });
+      // resultContainer.innerHTML += '<pre id="scoreResult" style="display:none;">' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>';
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      openErrorPopup("", error); // call error popup
+    });
 }
 
 function removeVisualizationKey(data) {
-    for (let key in data) {
-        if (typeof data[key] === 'object' && data[key] !== null) {
-            // If the value is an object, recursively call removeVisualizationKey
-            data[key] = removeVisualizationKey(data[key]);
-        } else if (key.endsWith(' Visualization')) {
-            // If the key is 'Completeness Visualization', remove it
-            delete data[key];
-        }
+  for (let key in data) {
+    if (typeof data[key] === "object" && data[key] !== null) {
+      // If the value is an object, recursively call removeVisualizationKey
+      data[key] = removeVisualizationKey(data[key]);
+    } else if (key.endsWith(" Visualization")) {
+      // If the key is 'Completeness Visualization', remove it
+      delete data[key];
     }
-    return data;
+  }
+  return data;
 }
-
-
-
 
 // Modify the function to accept an array of visualization content
 // function showVis(visualizationContent) {
@@ -644,7 +698,6 @@ function removeVisualizationKey(data) {
 //         stateRateVis.style.display = 'flex';
 //         stateRateVis.style.flexDirection = 'column';
 
-
 //         // stateRateVis.style.display = 'flex';
 //         // stateRateVis.style.alignItems = 'center';
 //         stateRateVis.style.border = '1px solid #ddd'; // Add a border
@@ -718,7 +771,6 @@ function removeVisualizationKey(data) {
 //         numCorrContent.querySelector('div').style.fontSize = '20px'; // Set font size
 //         numCorrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
-
 
 //     var featureRelContent = document.getElementById('featureRelVis');
 //     if (featureRelContent) {
@@ -805,7 +857,6 @@ function removeVisualizationKey(data) {
 //         noisyContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
 
-
 //      // Show single attribute risk scores
 //      var singleRiskContent = document.getElementById('singleRiskVis');
 //     if (singleRiskContent) {
@@ -864,9 +915,6 @@ function removeVisualizationKey(data) {
 //         multipleRiskContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
 
-
-
-
 //     // Hide JSON content
 //     var scoreResult = document.getElementById('scoreResult');
 //     if (scoreResult) {
@@ -875,41 +923,41 @@ function removeVisualizationKey(data) {
 // }
 
 function downloadJSON() {
-    // Get the JSON data
-    var jsonData = JSON.stringify(resp_data, null, 2);
+  // Get the JSON data
+  var jsonData = JSON.stringify(resp_data, null, 2);
 
-    // Create a Blob with the JSON data
-    var blob = new Blob([jsonData], { type: 'application/json' });
+  // Create a Blob with the JSON data
+  var blob = new Blob([jsonData], { type: "application/json" });
 
-    // Create a link element
-    var link = document.createElement('a');
+  // Create a link element
+  var link = document.createElement("a");
 
-    // Set the link's href attribute to a data URL containing the Blob
-    link.href = window.URL.createObjectURL(blob);
+  // Set the link's href attribute to a data URL containing the Blob
+  link.href = window.URL.createObjectURL(blob);
 
-    // Set the link's download attribute to specify the file name
-    link.download = 'result.json';
+  // Set the link's download attribute to specify the file name
+  link.download = "result.json";
 
-    // Append the link to the document
-    document.body.appendChild(link);
+  // Append the link to the document
+  document.body.appendChild(link);
 
-    // Trigger a click on the link to start the download
-    link.click();
+  // Trigger a click on the link to start the download
+  link.click();
 
-    // Remove the link from the document
-    document.body.removeChild(link);
+  // Remove the link from the document
+  document.body.removeChild(link);
 }
 
 function showResults() {
-    // Show Duplicity Visualization content if it exists
-    var duplicityScoreResult = document.getElementById('duplicityScoreResult');
-    if (duplicityScoreResult) {
-        duplicityScoreResult.style.display = 'block';
-    }
-    var imbalanceScoreResult = document.getElementById('imbalanceScoreResult');
-    if (imbalanceScoreResult) {
-        imbalanceScoreResult.style.display = 'block';
-    }
+  // Show Duplicity Visualization content if it exists
+  var duplicityScoreResult = document.getElementById("duplicityScoreResult");
+  if (duplicityScoreResult) {
+    duplicityScoreResult.style.display = "block";
+  }
+  var imbalanceScoreResult = document.getElementById("imbalanceScoreResult");
+  if (imbalanceScoreResult) {
+    imbalanceScoreResult.style.display = "block";
+  }
 }
 
 // function toggleCheckboxes(sectionId, sectionTag, innertext) {
@@ -947,182 +995,191 @@ function showResults() {
 // }
 
 function toggleValue(checkbox) {
-    console.log("Checkbox clicked:", checkbox);
-    // Find the closest parent container of the checkbox (checkboxContainer)
-    const container = checkbox.closest(".checkboxContainerIndividual");
-    console.log(container);
+  console.log("Checkbox clicked:", checkbox);
+  // Find the closest parent container of the checkbox (checkboxContainer)
+  const container = checkbox.closest(".checkboxContainerIndividual");
+  console.log(container);
 
-    if (!container) {
-        return;
-    }
-    console.log("Container found:", container);
-    // Find all select dropdowns within that container
-    const dropdowns = container.querySelectorAll("select");
-    const inputs = container.querySelectorAll("input.textWrapper");
-    const checkboxes = container.querySelectorAll("input.checkbox.individual");
-    // Enable or disable all dropdowns inside the container based on checkbox state
-    dropdowns.forEach(dropdown => {
-        dropdown.disabled = !checkbox.checked;
-    });
-    inputs.forEach(input => {
-        input.disabled = !checkbox.checked;
-    });
-    checkboxes.forEach(input => {
-        input.disabled = !checkbox.checked;
-    });
-    // Toggle the value based on the checked state
-    if (checkbox.checked) {
-        checkbox.value = "yes";
-    } else {
-        checkbox.value = "no";
-    }
-    console.log("Checkbox value:", checkbox.value); // For debugging
+  if (!container) {
+    return;
+  }
+  console.log("Container found:", container);
+  // Find all select dropdowns within that container
+  const dropdowns = container.querySelectorAll("select");
+  const inputs = container.querySelectorAll("input.textWrapper");
+  const checkboxes = container.querySelectorAll("input.checkbox.individual");
+  // Enable or disable all dropdowns inside the container based on checkbox state
+  dropdowns.forEach((dropdown) => {
+    dropdown.disabled = !checkbox.checked;
+  });
+  inputs.forEach((input) => {
+    input.disabled = !checkbox.checked;
+  });
+  checkboxes.forEach((input) => {
+    input.disabled = !checkbox.checked;
+  });
+  // Toggle the value based on the checked state
+  if (checkbox.checked) {
+    checkbox.value = "yes";
+  } else {
+    checkbox.value = "no";
+  }
+  console.log("Checkbox value:", checkbox.value); // For debugging
 }
 function toggleValueIndividual(checkbox) {
-    // Toggle the value based on the checked state
-    if (checkbox.checked) {
-        const label = checkbox.closest("label");
-        const text = label.textContent.trim();
-        checkbox.value = text;
-
-    } else {
-        checkbox.value = "no";
-    }
-    updateSelectAllState();
-    console.log("Checkbox value:", checkbox.value); // For debugging
+  // Toggle the value based on the checked state
+  if (checkbox.checked) {
+    const label = checkbox.closest("label");
+    const text = label.textContent.trim();
+    checkbox.value = text;
+  } else {
+    checkbox.value = "no";
+  }
+  updateSelectAllState();
+  console.log("Checkbox value:", checkbox.value); // For debugging
 }
 function updateSelectAllState() {
-    const checkboxes = document.querySelectorAll('.checkbox.individual');
-    const selectAll = document.getElementById('selectAllCheckbox');
+  const checkboxes = document.querySelectorAll(".checkbox.individual");
+  const selectAll = document.getElementById("selectAllCheckbox");
 
-    const total = checkboxes.length;
-    const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+  const total = checkboxes.length;
+  const checked = Array.from(checkboxes).filter((cb) => cb.checked).length;
 
-    if (checked === 0) {
-        selectAll.checked = false;
-    } else if (checked === total) {
-        selectAll.checked = true;
-    } else {
-        selectAll.checked = false;
-    }
+  if (checked === 0) {
+    selectAll.checked = false;
+  } else if (checked === total) {
+    selectAll.checked = true;
+  } else {
+    selectAll.checked = false;
+  }
 }
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function () {
-    // Get all checkboxes inside each checkboxContainer
-    document.querySelectorAll(".checkboxContainer").forEach(container => {
+  // Get all checkboxes inside each checkboxContainer
+  document.querySelectorAll(".checkboxContainer").forEach((container) => {
+    // For each container, get the checkbox inside and set the initial state
 
-        // For each container, get the checkbox inside and set the initial state
-
-        const checkboxes = container.querySelectorAll("input[type='checkbox']");
-        checkboxes.forEach(checkbox => {
-            console.log(checkbox);
-            // Set initial state of selects based on checkbox
-            toggleValue(checkbox);
-        });
-
+    const checkboxes = container.querySelectorAll("input[type='checkbox']");
+    checkboxes.forEach((checkbox) => {
+      console.log(checkbox);
+      // Set initial state of selects based on checkbox
+      toggleValue(checkbox);
     });
+  });
 });
 
 //********** Darkmode Toggle *******
-let darkmode = localStorage.getItem('darkmode')
+let darkmode = localStorage.getItem("darkmode");
 //add a darkmode class to the body
 const enableDarkmode = () => {
-    document.body.classList.add('darkmode')
-    localStorage.setItem('darkmode', 'active')
-
-}
+  document.body.classList.add("darkmode");
+  localStorage.setItem("darkmode", "active");
+};
 //remove the darkmode class from the body
 const disableDarkmode = () => {
-    document.body.classList.remove('darkmode')
-    localStorage.setItem('darkmode', null)
-
-}
+  document.body.classList.remove("darkmode");
+  localStorage.setItem("darkmode", null);
+};
 let datalogPopup;
-document.addEventListener('DOMContentLoaded', (event) => {
-    const themeSwitch = document.getElementById('theme-switch')
-    //on document load check if darkmode is active
-    if (darkmode === "active") enableDarkmode()
-    //add a click event listener to the theme switch
-    themeSwitch.addEventListener("click", () => {
+document.addEventListener("DOMContentLoaded", (event) => {
+  const themeSwitch = document.getElementById("theme-switch");
+  //on document load check if darkmode is active
+  if (darkmode === "active") enableDarkmode();
+  //add a click event listener to the theme switch
+  themeSwitch.addEventListener("click", () => {
+    darkmode = localStorage.getItem("darkmode");
 
-        darkmode = localStorage.getItem('darkmode')
+    darkmode !== "active" ? enableDarkmode() : disableDarkmode();
+    toggleSlidesColor();
+  });
 
-        darkmode !== "active" ? enableDarkmode() : disableDarkmode()
-        toggleSlidesColor();
+  //data log handlers
+  const dataLogButton = document.getElementById("datalog-button"); //navbar button
 
-    })
+  const radioButtons = document.querySelectorAll('input[name="tableSwitch"]');
+  const tableContainers = document.querySelectorAll(".scrollable-container");
+  // popping up current log
+  dataLogButton.addEventListener("click", () => {
+    datalogPopup = document.getElementById("datalog-popup");
+    const datalogContent = document.getElementById("datalog-content");
 
-    //data log handlers 
-    const dataLogButton = document.getElementById('datalog-button'); //navbar button
+    //open popup
+    datalogPopup.classList.add("open-popup");
 
-    const radioButtons = document.querySelectorAll('input[name="tableSwitch"]');
-    const tableContainers = document.querySelectorAll('.scrollable-container');
-    // popping up current log
-    dataLogButton.addEventListener("click", () => {
-        datalogPopup = document.getElementById("datalog-popup");
-        const datalogContent = document.getElementById("datalog-content");
+    fetch("/view_logs")
+      .then((response) => response.json())
+      .then((data) => {
+        const tbodyMaster = document.querySelector("#masterLogTable tbody");
+        const tbodyFile = document.querySelector("#fileUploadLogTable");
+        const tbodyMetric = document.querySelector("#metricLogTable");
+        tbodyMaster.innerHTML = "";
 
-        //open popup
-        datalogPopup.classList.add("open-popup");
+        data.forEach((row) => {
+          const tr = document.createElement("tr");
 
-        fetch('/view_logs')
-            .then(response => response.json())
-            .then(data => {
-                const tbodyMaster = document.querySelector('#masterLogTable tbody');
-                const tbodyFile = document.querySelector("#fileUploadLogTable");
-                const tbodyMetric = document.querySelector("#metricLogTable");
-                tbodyMaster.innerHTML = '';
+          ["timestamp", "logger", "message"].forEach((key) => {
+            const td = document.createElement("td");
+            td.textContent = row[key];
+            tr.appendChild(td);
+          });
+          tbodyMaster.appendChild(tr);
 
-                data.forEach(row => {
-                    const tr = document.createElement('tr');
+          // row without logger
+          const trNoLogger = document.createElement("tr");
+          ["timestamp", "message"].forEach((key) => {
+            const td = document.createElement("td");
+            td.textContent = row[key];
+            trNoLogger.appendChild(td);
+          });
 
-                    ['timestamp', 'logger', 'message'].forEach(key => {
-                        const td = document.createElement('td');
-                        td.textContent = row[key]
-                        tr.appendChild(td);
-                    })
-                    tbodyMaster.appendChild(tr);
-
-                    // row without logger
-                    const trNoLogger = document.createElement('tr');
-                    ['timestamp', 'message'].forEach(key => {
-                        const td = document.createElement('td');
-                        td.textContent = row[key];
-                        trNoLogger.appendChild(td);
-                    });
-
-                    if (row.logger === 'file_upload') {
-                        tbodyFile.appendChild(trNoLogger);
-                    } else if (row.logger === 'metric') {
-                        tbodyMetric.appendChild(trNoLogger);
-                    }
-                });
-            })
-            .catch(error => {
-                console.error("Error loading log:", error);
-                openErrorPopup("Error loading log:", error);
-            });
-    })
-    // switching between logs
-    radioButtons.forEach(radio => {
-        radio.addEventListener('change', () => {
-            tableContainers.forEach(container => container.classList.remove('active'));
-            document.getElementById(radio.value).classList.add('active');
+          if (row.logger === "file_upload") {
+            tbodyFile.appendChild(trNoLogger);
+          } else if (row.logger === "metric") {
+            tbodyMetric.appendChild(trNoLogger);
+          }
         });
+      })
+      .catch((error) => {
+        console.error("Error loading log:", error);
+        openErrorPopup("Error loading log:", error);
+      });
+  });
+  // switching between logs
+  radioButtons.forEach((radio) => {
+    radio.addEventListener("change", () => {
+      tableContainers.forEach((container) =>
+        container.classList.remove("active")
+      );
+      document.getElementById(radio.value).classList.add("active");
     });
+  });
 });
 function closeDatalogPopup() {
-    //close datalog popup has to be present in the DOM for the function to call already
-    datalogPopup.classList.remove("open-popup");
+  //close datalog popup has to be present in the DOM for the function to call already
+  datalogPopup.classList.remove("open-popup");
 }
 function closeErrorPopup() {
-    //error popup has to be present in the DOM for the function to call already
-    errorPopup.classList.remove("open-popup");
+  //error popup has to be present in the DOM for the function to call already
+  errorPopup.classList.remove("open-popup");
 }
 // Catch resource loading errors by adding an event listener to the window
-window.addEventListener('error', function (e) {
-    if (e.target && (e.target.tagName === 'IMG' || e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
-        console.error("Resource failed to load:", e.target.src || e.target.href);
-        openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
+window.addEventListener(
+  "error",
+  function (e) {
+    if (
+      e.target &&
+      (e.target.tagName === "IMG" ||
+        e.target.tagName === "SCRIPT" ||
+        e.target.tagName === "LINK")
+    ) {
+      console.error("Resource failed to load:", e.target.src || e.target.href);
+      openErrorPopup(
+        "Resource Load Error",
+        `Failed to load ${e.target.tagName.toLowerCase()} from: ${
+          e.target.src || e.target.href
+        }`
+      );
     }
-}, true);
+  },
+  true
+);

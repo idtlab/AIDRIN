@@ -1,9 +1,11 @@
 import base64
 import io
+
 import matplotlib.pyplot as plt
 import numpy as np
-from celery import shared_task, Task
+from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
+
 
 @shared_task(bind=True, ignore_result=False)
 def compare_rep_rates(self: Task, rep_dict, rrr_dict):
@@ -40,8 +42,6 @@ def compare_rep_rates(self: Task, rep_dict, rrr_dict):
             real_values.append(value2)
             dataset_values.append(value1)
 
-
-
         # Calculate the total for each category
         totals = [v1 + v2 for v1, v2 in zip(real_values, dataset_values)]
 
@@ -56,34 +56,33 @@ def compare_rep_rates(self: Task, rep_dict, rrr_dict):
         y = np.arange(len(categories))
 
         # Plot the first stacked bars and annotate with percentages
-        bars1 = ax.barh(y, real_values, label='Real World', color='blue')
+        bars1 = ax.barh(y, real_values, label="Real World", color="blue")
         for i, bar, percentage in zip(y, bars1, percentages1):
-            width = bar.get_width()
-            
+            bar.get_width()
 
         # Plot the second stacked bars on top of the first ones and annotate with percentages
-        bars2 = ax.barh(y, dataset_values, label="Dataset", color='red', left=real_values)
+        bars2 = ax.barh(
+            y, dataset_values, label="Dataset", color="red", left=real_values
+        )
         for i, bar, percentage in zip(y, bars2, percentages2):
-            width = bar.get_width()
-            
+            bar.get_width()
 
         # Customize the y-axis labels
         ax.set_yticks(y)
         ax.set_yticklabels(categories, fontsize=10, rotation=45, ha="right")
 
         # Add labels and legend
-        ax.set_xlabel('Values')
-        ax.set_ylabel('Categories')
-        ax.set_title('Real World vs Dataset Representation Rates')
+        ax.set_xlabel("Values")
+        ax.set_ylabel("Categories")
+        ax.set_title("Real World vs Dataset Representation Rates")
         ax.legend()
         plt.tight_layout()
 
-
         # Save the chart to BytesIO and encode as base64
         img_buf = io.BytesIO()
-        plt.savefig(img_buf, format='png')
+        plt.savefig(img_buf, format="png")
         img_buf.seek(0)
-        img_base64 = base64.b64encode(img_buf.read()).decode('utf-8')
+        img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
 
         # Add the base64-encoded image to the dictionary under a separate key
         final_dict["Comparison Visualization"] = img_base64
