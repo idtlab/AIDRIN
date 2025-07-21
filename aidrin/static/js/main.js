@@ -117,16 +117,24 @@ function submitForm() {
                 openErrorPopup("", data.error); // call error popup
             }
             console.log('Server Response:', data);
-            var resultContainer = document.getElementById('resultContainer');
+
             taskMap = data;
 
-            totalTasks = Object.keys(data).length;
+
+            totalTasks = Object.values(data)
+                .flatMap(obj => Object.keys(obj).filter(key => key.startsWith("task_id")))
+                .length;
             completedTasks = 0;
             // Track each task for its results, add visualization content when ready
-            Object.values(data).forEach(({ task_id }) => {
-                pollTaskResult(task_id);
+            Object.entries(data).forEach(([metricName, info]) => {
+                Object.entries(info).forEach(([key, value]) => {
+                    if (key.startsWith('task_id') && value) {
+                        task = key.replace('task_id_', '')
+                        console.log(`Processing metric: ${task}, ${key}: ${value}`);
+                        pollTaskResults(value, task, metricName);
+                    }
+                });
             });
-
 
         })
         .catch(error => {
@@ -140,7 +148,7 @@ function submitForm() {
         });
 }
 
-function pollTaskResult(taskId) {
+function pollTaskResults(taskId, taskName, metricName) {
     const pollInterval = 500; // Poll every 500 milliseconds
 
     function poll() {
@@ -148,26 +156,18 @@ function pollTaskResult(taskId) {
             .then(res => res.json())
             .then(data => {
                 if (data.ready) {
+                    console.log(`Task ${taskId} completed for task: ${metricName}.`);
                     completedTasks++;
                     updateProgressBar(completedTasks, totalTasks);
 
-                    // Find the matching metric by scanning
-                    const [metricName, entry] = Object.entries(taskMap).find(
-                        ([_, v]) => v.task_id === taskId
-                    );
-
-                    if (!metricName) {
-                        console.error(`No matching metric found for task ID: ${taskId}`);
-                        return;
-                    }
-
+                    console.log('taskMap current:', taskMap[metricName])
                     // Merge returned result into original entry
                     const result = data.value;
                     taskMap[metricName] = {
                         ...result,
-                        Description: entry.description
+                        description: taskMap[metricName].description
                     };
-
+                    console.log(`Result for ${metricName}:`, taskMap[metricName]);
                     // Render each visualization as soon as it's ready (async)
                     createVisualizationElement({ [metricName]: taskMap[metricName] });
 
@@ -215,7 +215,7 @@ function createVisualizationElement(data) {
         console.log('Adding visualization:', type);
         var image = data[type][type + ' Visualization'];
         var value = data[type]['Value'] || 'N/A';
-        var description = data[type]['Description'] || '';
+        var description = data[type]['description'] || '';
         var interpretation = data[type]['Graph interpretation'] || '';
         var riskScore = data[type]['Risk Score'] || 'N/A';
         var title = type;
@@ -284,9 +284,11 @@ function createVisualizationElement(data) {
             <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
             } else {
                 // Display message for empty visualization
-                visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
+                if (completedTasks === totalTasks) {
+                    visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
                 No visualization available for this metric.
-            </div>`;
+                </div>`;
+                }
             }
 
             visualizationHtml += `
@@ -347,7 +349,9 @@ function createVisualizationElement(data) {
             </div>      
         </div>`;
         } else {
-            metrics.innerHTML = '<h3 style="text-align:center;">No visualizations available.</h3>';
+            if (completedTasks === totalTasks) {
+                metrics.innerHTML = '<h3 style="text-align:center;">No visualizations available.</h3>';
+            }
         }
 
     }

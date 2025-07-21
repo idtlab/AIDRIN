@@ -357,11 +357,14 @@ def fairness():
                     'features for representation rate').split(',')]
                 rep_rate_result = calculate_representation_rate.delay(
                     list_of_cols, file_info)
-                rep_dict['Probability ratios'] = rep_rate_result.get()
                 rep_rate_vis_result = create_representation_rate_vis.delay(
                     list_of_cols, file_info)
-                rep_dict['Representation Rate Visualization'] = rep_rate_vis_result.get()
-                rep_dict['Description'] = "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
+
+                rep_dict = {
+                    "task_id_rep_rate": rep_rate_result.id,
+                    "task_id_rep_rate_vis": rep_rate_vis_result.id,
+                    "description": "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
+                }
                 final_dict['Representation Rate'] = rep_dict
                 metric_time_log.info(
                     "Representation Rate took %.2f seconds", time.time()-start_time_repRate)
