@@ -86,9 +86,8 @@ function submitForm() {
         metrics.innerHTML = '<p>Loading visualizations, please wait...</p>';
     } else {
         console.error("No Element ID");
-        console.log("No Element ID");
-        print("No Element ID");
     }
+
     const url = new URL(window.location.href);
     url.searchParams.set('returnType', 'json');
     const currentURL = url.toString();
@@ -104,6 +103,12 @@ function submitForm() {
             }
         })
         .then(data => {
+            const progressBarContainer = document.getElementById('progressBarContainer');
+            const metricPageContainer = document.querySelector('.metric-page-container');
+
+            metricPageContainer.classList.add('extended');
+            progressBarContainer.classList.add('visible');
+
 
             if (data.trigger === "correlationError") {
                 openErrorPopup("Invalid Request", "Input Feature and Target Feature cannot be the same"); // call error popup
@@ -113,332 +118,276 @@ function submitForm() {
             }
             console.log('Server Response:', data);
             var resultContainer = document.getElementById('resultContainer');
-            resp_data = data;
+            taskMap = data;
 
-            // Function to check if a key is present and not undefined
-            function isKeyPresentAndDefined(obj, key) {
-                return obj && obj[key] !== undefined;
-            }
-
-            var visualizationContent = [];
-
-            // Check for each type of visualization
-            var visualizationTypes = [
-                'Completeness', 'Outliers', 'Duplicity', 'Representation Rate', 'Statistical Rate',
-                'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
-                'Feature Relevance', 'Class Imbalance', 'DP Statistics',
-                'Single attribute risk scoring', 'Multiple attribute risk scoring',
-                'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
-            ];
-            visualizationTypes.forEach(type => {
-                if (data[type]) {
-                    console.log(`${type}:`, Object.keys(data[type]));
-                }
-            });
-            visualizationTypes.forEach(function (type) {
-                if (isKeyPresentAndDefined(data, type)) {
-                    if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
-                        console.log('Adding visualization:', type);
-                        var image = data[type][type + ' Visualization'];
-                        var value = data[type]['Value'] || 'N/A';
-                        var description = data[type]['Description'] || '';
-                        var interpretation = data[type]['Graph interpretation'] || '';
-                        var riskScore = data[type]['Risk Score'] || 'N/A';
-                        var title = type;
-                        var jsonData = JSON.stringify(data);
-
-                        // Check if there's an error or if the image is empty
-                        if (data[type]['Error']) {
-                            console.log('Error in', type, ':', data[type]['Error']);
-                            // Still add to visualization content but with error message
-                            visualizationContent.push({
-                                image: image || "",
-                                riskScore: riskScore,
-                                value: value,
-                                description: description,
-                                interpretation: interpretation,
-                                title: title,
-                                jsonData: jsonData,
-                                hasError: true
-                            });
-                        } else if (image && image.trim() !== "") {
-                            visualizationContent.push({
-                                image: image,
-                                riskScore: riskScore,
-                                value: value,
-                                description: description,
-                                interpretation: interpretation,
-                                title: title,
-                                jsonData: jsonData,
-                                hasError: false
-                            });
-                        } else {
-                            console.log('Empty visualization for:', type);
-                        }
-                    } else {
-                        console.log('Missing visualization key for:', type, 'Expected:', type + ' Visualization');
-                    }
-                } else {
-                    console.log('Type not found in data:', type);
-                }
-            });
+            totalTasks = Object.keys(data).length;
+            completedTasks = 0;
             // Boolean flag to track if heading has been added
-            var headingAdded = false;
-
-            if (visualizationContent.length > 0) {
-
-
-                // Add heading if not already added
-                if (!headingAdded) {
-                    metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
-
-                    headingAdded = true;
-                }
-                console.log('Visualization content:', visualizationContent);
-                // Add each visualization to the metric visualization section
-                visualizationContent.forEach(function (content, index) {
-
-                    const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
-                    const visualizationId = `visualization_${index}`;
-                    let visualizationHtml = `<div class="visualization-container">
-                    <div class="toggle" style="display:block" onclick="toggleVisualization('${visualizationId}')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">
-                            <div>${content.title}</div>
-                            <svg id="${visualizationId}-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
-                        </div>
-                    </div>
-                        <div id="${visualizationId}" style="display: none;">`;
-
-                    if (content.hasError) {
-                        // Display error message instead of image
-                        visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
-                        <strong>Error:</strong> ${content.description}
-                    </div>`;
-                    } else if (content.image && content.image.trim() !== "") {
-                        // Display normal visualization
-                        const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
-                        visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                    <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
-                    } else {
-                        // Display message for empty visualization
-                        visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
-                        No visualization available for this metric.
-                    </div>`;
-                    }
-
-                    visualizationHtml += `
-                            ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
-                            ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
-                           <div><strong>Description:</strong> ${content.description}</div>
-                           ${content.interpretation ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>` : ''}
-                            
-                        </div>
-                    
-                    </div>`;
-
-                    metrics.innerHTML += visualizationHtml;
-                });
-
-                //check if duplicity is present and 0 (no duplicity)
-                if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
-                    metrics.innerHTML += `<div class="visualization-container">
-                    <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
-                            <div>Duplicity</div>
-                            <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
-                        </div>
-                    </div>
-                    <div id="duplicity" style="display: none; text-align: center;">
-                        No duplicates found 
-                    </div> 
-                    
-                </div>`;
-                } else if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores')) {
-                    metrics.innerHTML += `<div class="visualization-container">
-                    <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
-                            <div>Duplicity</div>
-                            <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
-                        </div>
-                    </div>
-                    <div id="duplicity" style="display: none;">
-                        <p style="text-align:center">Overall Duplicity: ${data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset']}</p>
-                    </div>  
-                    <    
-                </div>`;
-                }
+            Object.values(data).forEach(({ task_id }) => {
+                pollTaskResult(task_id);
+            });
 
 
-
-                // Assuming 'data' is your dictionary
-                const modifiedData = removeVisualizationKey(data);
-                const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
-                // Add the "Download JSON" link for the last jsonData outside the loop
-                metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
-
-                metrics.scrollIntoView({ behavior: 'smooth' });
-
-            } else {
-                //check if duplicity is present and 0 (no duplicity)
-                if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
-                    metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
-                    metrics.innerHTML += `<div class="visualization-container">
-                    <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
-                            <div>Duplicity</div>
-                            <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
-                        </div>
-                    </div>
-                    <div id="duplicity" style="display: none; text-align: center;">
-                        No duplicates found 
-                    </div>      
-                </div>`;
-                    metrics.scrollIntoView({ behavior: 'smooth' });
-                } else {
-                    metrics.innerHTML = '<h3 style="text-align:center;">No visualizations available.</h3>';
-                }
-                // Assuming 'data' is your dictionary
-                const modifiedData = removeVisualizationKey(data);
-                const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
-                // Add the "Download JSON" link for the last jsonData outside the loop
-                metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
-
-            }
         })
         .catch(error => {
             console.error('Error:', error);
             openErrorPopup("Visualization Error", error); // call error popup
-
-            // Check if "Completeness Visualization" key is present
-            // if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="complVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">' +
-            //         '<div style="margin-left: 10px;">' +data['Completeness']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-
-            // Check if "Outliers Visualization" key is present
-            // if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="outVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">' +
-            //         '<div style="margin-left: 10px;">' +data['Outliers']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-
-            // if (
-            //     isKeyPresentAndDefined(data, 'Representation Rate') &&
-            //     isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Visualization')
-            // ) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="repVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">' +
-            //         '<div style="margin-left: 10px;">' +data['Representation Rate']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-
-            // if (isKeyPresentAndDefined(data, 'Statistical Rate') && isKeyPresentAndDefined(data['Statistical Rate'], 'Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="statRateVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Statistical Rate']['class_proportions_plot'] + '" alt="Statistical rate bar plot">' +
-            //         '<div style="margin-left: 10px;">' +data['Statistical Rate']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-
-            // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
-            // if (
-            //     isKeyPresentAndDefined(data, 'Representation Rate Comparison with Real World') &&
-            //     isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
-            // ) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="compVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">' +
-            //         '<div style="margin-left: 10px;">' +data['Representation Rate Comparison with Real World']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-
-            // if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Categorical-Categorical Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="catCorrVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Categorical-Categorical Correlation Matrix'] + '" alt="Categorical-Categorical Correlation Matrix">' +
-            //         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['cat_description'] + '</div>' +
-            //         '</div>';
-
-            // }
-
-            // if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Numerical-Numerical Visualization')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="numCorrVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Numerical-Numerical Correlation Matrix'] + '" alt="Numerical-Numerical Correlation Matrix">' +
-            //         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['num_description'] + '</div>' +
-            //         '</div>';
-
-            // }
-
-            // if (isKeyPresentAndDefined(data, 'Feature relevance') && isKeyPresentAndDefined(data['Feature relevance'], 'Feature relevance Visualization')) {                    
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="featureRelVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Feature relevance']['summary plot'] + '" alt="Shapley value plot">' +
-            //         '<div style="margin-left: 10px;">' +data['Feature relevance']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-            // if (isKeyPresentAndDefined(data, 'Class imbalance') && isKeyPresentAndDefined(data['Class imbalance'], 'Class distribution plot')) {                    
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="classDisVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Class imbalance']['Class distribution plot'] + '" alt="Class distribution plot">' +
-            //         '<div style="margin-left: 10px;">' +data['Class imbalance']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-
-            // if (isKeyPresentAndDefined(data, 'DP statistics') && isKeyPresentAndDefined(data['DP statistics'], 'Combined Plots')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="noisyVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['DP statistics']['Combined Plots'] + '" alt="Normal vs Noisy Feature Box Plots">' +
-            //         '<div style="margin-left: 10px;">' +data['DP statistics']['Description'] + '</div>' +
-            //         '</div>';
-            // }
-
-            // if (isKeyPresentAndDefined(data, 'Single attribute risk scoring') && isKeyPresentAndDefined(data['Single attribute risk scoring'], 'BoxPlot')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="singleRiskVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Single attribute risk scoring']['BoxPlot'] + '" alt="Single attribute risk score box plots">'+
-            //         '<div style="margin-left: 10px;">' +data['Single attribute risk scoring']['Description'] + '</div>' +
-            //         '</div>' 
-
-            // }
-            // if (isKeyPresentAndDefined(data, 'Multiple attribute risk scoring') && isKeyPresentAndDefined(data['Multiple attribute risk scoring'], 'Box Plot')) {
-            //     // Display the chart image and description in a single div
-            //     resultContainer.innerHTML += '<div id="multipleRiskVis" style="display:none; text-align: left;">' +
-            //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Multiple attribute risk scoring']['Box Plot'] + '" alt="Multiple attribute risk score box plots">'+
-            //         '<div style="margin-left: 10px;">' +data['Multiple attribute risk scoring']['Description'] + '</div>' +
-            //         '</div>' 
-
-            // }
-
-
-
-
-            //Display other result information as JSON
-            // if (data['Duplicity'] && data['Duplicity']['Duplicity scores'] && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] !== undefined) {
-            //     resultContainer.innerHTML += '<div id="duplicityScoreResult" style="display:none"> <h3> Duplicity Scores </h3>'+ 
-            //         '<pre> Overall Duplicity: ' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>' +
-            //         '</div>';
-            // }
-
-            // if (data['Class imbalance'] && data['Class imbalance']['Imbalance degree'] && data['Class imbalance']['Imbalance degree']['Imbalance degree score'] !== undefined) {
-            //     resultContainer.innerHTML += '<div id="imbalanceScoreResult" style="display:none"> <h3> Class Imbalance Scores </h3>'+ 
-            //         '<pre> Imbalance degree: ' + data['Class imbalance']['Imbalance degree']['Imbalance degree score'] + '</pre>' +
-            //         '</div>';
-            // }
-
-            // resultContainer.innerHTML += '<pre id="scoreResult" style="display:none;">' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>';
 
         })
         .catch(error => {
             console.error('Error:', error);
             openErrorPopup("", error); // call error popup
         });
+}
+
+function pollTaskResult(taskId) {
+    const pollInterval = 500; // Poll every 500 milliseconds
+
+    function poll() {
+        fetch(`/result/${taskId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.ready) {
+                    completedTasks++;
+                    updateProgressBar(completedTasks, totalTasks);
+
+                    // Find the matching metric by scanning
+                    const [metricName, entry] = Object.entries(taskMap).find(
+                        ([_, v]) => v.task_id === taskId
+                    );
+
+                    if (!metricName) {
+                        console.error(`No matching metric found for task ID: ${taskId}`);
+                        return;
+                    }
+
+                    // Merge returned result into original entry
+                    const result = data.value;
+                    taskMap[metricName] = {
+                        ...result,
+                        Description: entry.description
+                    };
+
+                    // Optionally render immediately
+                    createVisualizationElement({ [metricName]: taskMap[metricName] });
+
+                } else {
+                    setTimeout(poll, pollInterval);
+                }
+            })
+            .catch(err => {
+                console.error(`Polling failed for task ${taskId}:`, err);
+                completedTasks++;
+                updateProgressBar(completedTasks, totalTasks);
+            });
+    }
+
+    poll();
+}
+function updateProgressBar(done, total) {
+    const progress = document.getElementById("taskProgress");
+    const label = document.getElementById("progressText");
+
+    if (progress) {
+        progress.max = total;
+        progress.value = done;
+    }
+
+    if (label) {
+        label.innerText = `${done} of ${total} Complete`;
+    }
+
+    if (done >= total) {
+        label.innerText = "All tasks complete!";
+    }
+}
+function createVisualizationElement(data) {
+
+    // Function to check if a key is present and not undefined
+    function isKeyPresentAndDefined(obj, key) {
+        return obj && obj[key] !== undefined;
+    }
+
+    var visualizationContent = [];
+
+    // Check for each type of visualization
+    var visualizationTypes = [
+        'Completeness', 'Outliers', 'Duplicity', 'Representation Rate', 'Statistical Rate',
+        'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
+        'Feature Relevance', 'Class Imbalance', 'DP Statistics',
+        'Single attribute risk scoring', 'Multiple attribute risk scoring',
+        'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
+    ];
+    visualizationTypes.forEach(type => {
+        if (data[type]) {
+            console.log(`${type}:`, Object.keys(data[type]));
+        }
+    });
+    visualizationTypes.forEach(function (type) {
+        if (isKeyPresentAndDefined(data, type)) {
+            if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
+                console.log('Adding visualization:', type);
+                var image = data[type][type + ' Visualization'];
+                var value = data[type]['Value'] || 'N/A';
+                var description = data[type]['Description'] || '';
+                var interpretation = data[type]['Graph interpretation'] || '';
+                var riskScore = data[type]['Risk Score'] || 'N/A';
+                var title = type;
+                var jsonData = JSON.stringify(data);
+
+                // Check if there's an error or if the image is empty
+                if (data[type]['Error']) {
+                    console.log('Error in', type, ':', data[type]['Error']);
+                    // Still add to visualization content but with error message
+                    visualizationContent.push({
+                        image: image || "",
+                        riskScore: riskScore,
+                        value: value,
+                        description: description,
+                        interpretation: interpretation,
+                        title: title,
+                        jsonData: jsonData,
+                        hasError: true
+                    });
+                } else if (image && image.trim() !== "") {
+                    visualizationContent.push({
+                        image: image,
+                        riskScore: riskScore,
+                        value: value,
+                        description: description,
+                        interpretation: interpretation,
+                        title: title,
+                        jsonData: jsonData,
+                        hasError: false
+                    });
+                } else {
+                    console.log('Empty visualization for:', type);
+                }
+            } else {
+                console.log('Missing visualization key for:', type, 'Expected:', type + ' Visualization');
+            }
+        } else {
+            console.log('Type not found in data:', type);
+        }
+    });
+
+    if (visualizationContent.length > 0) {
+        if (completedTasks === 1) {
+            metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
+        }
+
+        console.log('Visualization content:', visualizationContent);
+        // Add each visualization to the metric visualization section
+        visualizationContent.forEach(function (content, index) {
+
+            const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
+            const visualizationId = `visualization_${index}`;
+            let visualizationHtml = `<div class="visualization-container">
+            <div class="toggle" style="display:block" onclick="toggleVisualization('${visualizationId}')">
+                <div style="display: flex; justify-content:space-between; align-items: center;">
+                    <div>${content.title}</div>
+                    <svg id="${visualizationId}-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
+                </div>
+            </div>
+                <div id="${visualizationId}" style="display: none;">`;
+
+            if (content.hasError) {
+                // Display error message instead of image
+                visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
+                <strong>Error:</strong> ${content.description}
+            </div>`;
+            } else if (content.image && content.image.trim() !== "") {
+                // Display normal visualization
+                const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
+                visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
+            <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
+            } else {
+                // Display message for empty visualization
+                visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
+                No visualization available for this metric.
+            </div>`;
+            }
+
+            visualizationHtml += `
+                    ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
+                    ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
+                    <div><strong>Description:</strong> ${content.description}</div>
+                    ${content.interpretation ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>` : ''}
+                    
+                </div>
+            
+            </div>`;
+
+            metrics.innerHTML += visualizationHtml;
+        });
+
+        //check if duplicity is present and 0 (no duplicity)
+        if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
+            metrics.innerHTML += `<div class="visualization-container">
+            <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
+                <div style="display: flex; justify-content:space-between; align-items: center;">  
+                    <div>Duplicity</div>
+                    <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
+                </div>
+            </div>
+            <div id="duplicity" style="display: none; text-align: center;">
+                No duplicates found 
+            </div> 
+            
+        </div>`;
+        } else if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores')) {
+            metrics.innerHTML += `<div class="visualization-container">
+            <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
+                <div style="display: flex; justify-content:space-between; align-items: center;">  
+                    <div>Duplicity</div>
+                    <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
+                </div>
+            </div>
+            <div id="duplicity" style="display: none;">
+                <p style="text-align:center">Overall Duplicity: ${data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset']}</p>
+            </div>  
+            <    
+        </div>`;
+        }
+
+
+        if (completedTasks === totalTasks) {
+            const modifiedData = removeVisualizationKey(data);
+            const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
+            // Add the "Download JSON" link for the last jsonData outside the loop
+            metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+        }
+        metrics.scrollIntoView({ behavior: 'smooth' });
+
+    } else {
+        //check if duplicity is present and 0 (no duplicity)
+        if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
+            //if the only task is duplicity, add heading, otherwise append data.
+            if (totalTasks === 1) {
+                metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
+            }
+            metrics.innerHTML += `<div class="visualization-container">
+            <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
+                <div style="display: flex; justify-content:space-between; align-items: center;">  
+                    <div>Duplicity</div>
+                    <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
+                </div>
+            </div>
+            <div id="duplicity" style="display: none; text-align: center;">
+                No duplicates found 
+            </div>      
+        </div>`;
+            metrics.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            metrics.innerHTML = '<h3 style="text-align:center;">No visualizations available.</h3>';
+        }
+        if (completedTasks === totalTasks) {
+            const modifiedData = removeVisualizationKey(data);
+            const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
+            // Add the "Download JSON" link for the last jsonData outside the loop
+            metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+        }
+    }
 }
 
 function removeVisualizationKey(data) {

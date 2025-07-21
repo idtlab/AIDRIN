@@ -114,6 +114,7 @@ def result(id: str):
         "successful": successful,
         "value": value,
     }
+
 ######### Uploading, Retrieving, Clearing File Routes ############
 
 
@@ -289,8 +290,10 @@ def dataQuality():
             if request.form.get('completeness') == "yes":
                 start_time_completeness = time.time()
                 completeness_result = completeness.delay(file_info)
-                compl_dict = completeness_result.get()
-                compl_dict['Description'] = 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete.'
+                compl_dict = {
+                    "task_id": completeness_result.id,
+                    "description": 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete.'
+                }
                 final_dict['Completeness'] = compl_dict
                 metric_time_log.info(
                     "Completeness took %.2f seconds", time.time()-start_time_completeness)
@@ -298,8 +301,10 @@ def dataQuality():
             if request.form.get('outliers') == 'yes':
                 start_time_outliers = time.time()
                 outliers_result = outliers.delay(file_info)
-                out_dict = outliers_result.get()
-                out_dict['Description'] = "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
+                out_dict = {
+                    "task_id": outliers_result.id,
+                    "description": "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
+                }
                 final_dict['Outliers'] = out_dict
                 metric_time_log.info(
                     "Outliers took %.2f seconds", time.time()-start_time_outliers)
@@ -307,8 +312,10 @@ def dataQuality():
             if request.form.get('duplicity') == 'yes':
                 start_time_duplicity = time.time()
                 duplicity_result = duplicity.delay(file_info)
-                dup_dict = duplicity_result.get()
-                dup_dict['Description'] = "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
+                dup_dict = {
+                    "task_id": duplicity_result.id,
+                    "description": "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
+                }
                 final_dict['Duplicity'] = dup_dict
                 metric_time_log.info(
                     "Duplicity took %.2f seconds", time.time()-start_time_duplicity)

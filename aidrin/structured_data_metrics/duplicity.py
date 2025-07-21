@@ -13,7 +13,7 @@ def duplicity(self: Task, file_info):
 
         dup_dict["Duplicity scores"] = {
             'Overall duplicity of the dataset': duplicate_proportions}
-
+        self.update_state(state="PROGRESS", meta={"current": 1, "total": 3})
         return dup_dict
     except SoftTimeLimitExceeded:
         raise Exception("Duplicity task timed out.")
