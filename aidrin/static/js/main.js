@@ -103,9 +103,9 @@ function submitForm() {
             }
         })
         .then(data => {
+            //show progress bar
             const progressBarContainer = document.getElementById('progressBarContainer');
             const metricPageContainer = document.querySelector('.metric-page-container');
-
             metricPageContainer.classList.add('extended');
             progressBarContainer.classList.add('visible');
 
@@ -122,7 +122,7 @@ function submitForm() {
 
             totalTasks = Object.keys(data).length;
             completedTasks = 0;
-            // Boolean flag to track if heading has been added
+            // Track each task for its results, add visualization content when ready
             Object.values(data).forEach(({ task_id }) => {
                 pollTaskResult(task_id);
             });
@@ -168,7 +168,7 @@ function pollTaskResult(taskId) {
                         Description: entry.description
                     };
 
-                    // Optionally render immediately
+                    // Render each visualization as soon as it's ready (async)
                     createVisualizationElement({ [metricName]: taskMap[metricName] });
 
                 } else {
@@ -184,15 +184,14 @@ function pollTaskResult(taskId) {
 
     poll();
 }
-function updateProgressBar(done, total) {
-    const progress = document.getElementById("taskProgress");
-    const label = document.getElementById("progressText");
 
+function updateProgressBar(done, total) {
+    const progress = document.getElementById("progress");
+    const label = document.getElementById("progressText");
     if (progress) {
         progress.max = total;
         progress.value = done;
     }
-
     if (label) {
         label.innerText = `${done} of ${total} Complete`;
     }
@@ -210,78 +209,60 @@ function createVisualizationElement(data) {
 
     var visualizationContent = [];
 
-    // Check for each type of visualization
-    var visualizationTypes = [
-        'Completeness', 'Outliers', 'Duplicity', 'Representation Rate', 'Statistical Rate',
-        'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
-        'Feature Relevance', 'Class Imbalance', 'DP Statistics',
-        'Single attribute risk scoring', 'Multiple attribute risk scoring',
-        'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
-    ];
-    visualizationTypes.forEach(type => {
-        if (data[type]) {
-            console.log(`${type}:`, Object.keys(data[type]));
-        }
-    });
-    visualizationTypes.forEach(function (type) {
-        if (isKeyPresentAndDefined(data, type)) {
-            if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
-                console.log('Adding visualization:', type);
-                var image = data[type][type + ' Visualization'];
-                var value = data[type]['Value'] || 'N/A';
-                var description = data[type]['Description'] || '';
-                var interpretation = data[type]['Graph interpretation'] || '';
-                var riskScore = data[type]['Risk Score'] || 'N/A';
-                var title = type;
-                var jsonData = JSON.stringify(data);
+    const type = Object.keys(data)[0];  // get metric name
+    //add visualization if content is present
+    if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
+        console.log('Adding visualization:', type);
+        var image = data[type][type + ' Visualization'];
+        var value = data[type]['Value'] || 'N/A';
+        var description = data[type]['Description'] || '';
+        var interpretation = data[type]['Graph interpretation'] || '';
+        var riskScore = data[type]['Risk Score'] || 'N/A';
+        var title = type;
+        var jsonData = JSON.stringify(data);
 
-                // Check if there's an error or if the image is empty
-                if (data[type]['Error']) {
-                    console.log('Error in', type, ':', data[type]['Error']);
-                    // Still add to visualization content but with error message
-                    visualizationContent.push({
-                        image: image || "",
-                        riskScore: riskScore,
-                        value: value,
-                        description: description,
-                        interpretation: interpretation,
-                        title: title,
-                        jsonData: jsonData,
-                        hasError: true
-                    });
-                } else if (image && image.trim() !== "") {
-                    visualizationContent.push({
-                        image: image,
-                        riskScore: riskScore,
-                        value: value,
-                        description: description,
-                        interpretation: interpretation,
-                        title: title,
-                        jsonData: jsonData,
-                        hasError: false
-                    });
-                } else {
-                    console.log('Empty visualization for:', type);
-                }
-            } else {
-                console.log('Missing visualization key for:', type, 'Expected:', type + ' Visualization');
-            }
+        // Check if there's an error or if the image is empty
+        if (data[type]['Error']) {
+            console.log('Error in', type, ':', data[type]['Error']);
+            // Still add to visualization content but with error message
+            visualizationContent.push({
+                image: image || "",
+                riskScore: riskScore,
+                value: value,
+                description: description,
+                interpretation: interpretation,
+                title: title,
+                jsonData: jsonData,
+                hasError: true
+            });
+        } else if (image && image.trim() !== "") {
+            visualizationContent.push({
+                image: image,
+                riskScore: riskScore,
+                value: value,
+                description: description,
+                interpretation: interpretation,
+                title: title,
+                jsonData: jsonData,
+                hasError: false
+            });
         } else {
-            console.log('Type not found in data:', type);
+            console.log('Empty visualization for:', type);
         }
-    });
-
+    }
+    //add header
+    if (completedTasks === 1) {
+        metrics.innerHTML = `<h2 style="text-align:center">Data Visualizations</h2>`;
+    }
     if (visualizationContent.length > 0) {
-        if (completedTasks === 1) {
-            metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
-        }
+
 
         console.log('Visualization content:', visualizationContent);
         // Add each visualization to the metric visualization section
         visualizationContent.forEach(function (content, index) {
 
             const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
-            const visualizationId = `visualization_${index}`;
+            const visualizationId = `visualization_${content.title}`;
             let visualizationHtml = `<div class="visualization-container">
             <div class="toggle" style="display:block" onclick="toggleVisualization('${visualizationId}')">
                 <div style="display: flex; justify-content:space-between; align-items: center;">
@@ -351,21 +332,9 @@ function createVisualizationElement(data) {
         }
 
 
-        if (completedTasks === totalTasks) {
-            const modifiedData = removeVisualizationKey(data);
-            const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
-            // Add the "Download JSON" link for the last jsonData outside the loop
-            metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
-        }
-        metrics.scrollIntoView({ behavior: 'smooth' });
-
     } else {
         //check if duplicity is present and 0 (no duplicity)
         if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
-            //if the only task is duplicity, add heading, otherwise append data.
-            if (totalTasks === 1) {
-                metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
-            }
             metrics.innerHTML += `<div class="visualization-container">
             <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
                 <div style="display: flex; justify-content:space-between; align-items: center;">  
@@ -377,16 +346,17 @@ function createVisualizationElement(data) {
                 No duplicates found 
             </div>      
         </div>`;
-            metrics.scrollIntoView({ behavior: 'smooth' });
         } else {
             metrics.innerHTML = '<h3 style="text-align:center;">No visualizations available.</h3>';
         }
-        if (completedTasks === totalTasks) {
-            const modifiedData = removeVisualizationKey(data);
-            const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
-            // Add the "Download JSON" link for the last jsonData outside the loop
-            metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
-        }
+
+    }
+    metrics.scrollIntoView({ behavior: 'smooth' });
+    if (completedTasks === totalTasks) {
+        const modifiedData = removeVisualizationKey(data);
+        const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
+        // Add the "Download JSON" link for the last jsonData outside the loop
+        metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
     }
 }
 
