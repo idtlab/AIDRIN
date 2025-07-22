@@ -73,6 +73,10 @@ def upload_file():
         file = request.files['file']
         
         if file:
+            # Clear all cache for the user when a new file is uploaded
+            cleared_count = clear_all_user_cache()
+            print(f"Cache cleared for new file upload: {cleared_count} entries removed")
+            
             #create name and add to folder
             displayName= file.filename
             filename = f"{uuid.uuid4().hex}_{file.filename}"
@@ -1206,6 +1210,20 @@ def clear_metric_cache():
     print(f"User {user_id} metric cache cleared: Removed {len(keys_to_remove)} entries")
     return len(keys_to_remove)
 
+def clear_all_user_cache():
+    """Clear ALL cache entries for current user (including non-metric cache)."""
+    user_id = get_current_user_id()
+    keys_to_remove = []
+    for key in current_app.TEMP_RESULTS_CACHE.keys():
+        if key.startswith(f"user:{user_id}"):
+            keys_to_remove.append(key)
+    
+    for key in keys_to_remove:
+        current_app.TEMP_RESULTS_CACHE.pop(key, None)
+    
+    print(f"User {user_id} ALL cache cleared: Removed {len(keys_to_remove)} entries")
+    return len(keys_to_remove)
+
 @app.route('/clear_metric_cache', methods=['POST'])
 def clear_metric_cache_route():
     """Route to clear current user's metrics cache for debugging purposes."""
@@ -1222,6 +1240,24 @@ def clear_metric_cache_route():
         return jsonify({
             'success': False,
             'message': f'Error clearing cache: {str(e)}'
+        }), 500
+
+@app.route('/clear_all_cache', methods=['POST'])
+def clear_all_cache_route():
+    """Route to clear ALL cache entries for current user for debugging purposes."""
+    try:
+        removed_count = clear_all_user_cache()
+        user_id = get_current_user_id()
+        return jsonify({
+            'success': True,
+            'message': f'User {user_id} ALL cache cleared. Removed {removed_count} entries.',
+            'cache_size': len(current_app.TEMP_RESULTS_CACHE),
+            'user_id': user_id
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error clearing all cache: {str(e)}'
         }), 500
 
 # @app.route('/FAIRness', methods=['GET', 'POST'])

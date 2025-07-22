@@ -53,6 +53,7 @@
     }
 
 }
+
     /************ Taken out of metric data download pop up *************/
     function toggleVisualization(id) {
         var element = document.getElementById(id);
