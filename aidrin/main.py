@@ -9,7 +9,7 @@ from aidrin.structured_data_metrics.statistical_rate import calculate_statistica
 from aidrin.structured_data_metrics.real_repreentation_rate import calculate_real_representation_rates
 from aidrin.structured_data_metrics.compare_representation_rate import compare_rep_rates
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
-from aidrin.structured_data_metrics.feature_relevance import data_cleaning, pearson_correlation, plot_features
+from aidrin.structured_data_metrics.feature_relevance import data_cleaning, generate_features_plot
 from aidrin.structured_data_metrics.FAIRness_dcat import categorize_metadata, extract_keys_and_values
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -464,7 +464,6 @@ def correlationAnalysis():
                 final_dict['Representation Rate Comparison with Real World'] = comp_dict
                 metric_time_log.info(
                     "Real dataset comparison took %.2f seconds", time.time()-start_time_realData)
-            # FIX
             if request.form.get('correlations') == 'yes':
                 start_time_correlations = time.time()
                 columns = request.form.getlist(
@@ -475,7 +474,6 @@ def correlationAnalysis():
                     "task_id_corr_dict": correlations_result.id,
                     "result_corr_dict": "",
                 }
-                # fix error catching
                 final_dict["Correlations Analysis"] = corr_dict
 
                 metric_time_log.info(
@@ -542,22 +540,14 @@ def featureRelevance():
                     print("Error occurred during data cleaning:", e)
                     df_json = None
 
-                # Generate Pearson correlation
-                pearson_corr_result = pearson_correlation.delay(
+                generate_features_plot_result = generate_features_plot.delay(
                     df_json, target)
-                correlations = pearson_corr_result.get()
-                # don't let the user check the same target and feature
-                if correlations is None:
-                    print("Error: Correlations is None")
-                    return jsonify({"trigger": "correlationError"}), 200
-                plot_features_result = plot_features.delay(
-                    correlations, target)
-                f_plot = plot_features_result.get()
-                f_dict = {}
 
-                f_dict['Pearson Correlation to Target'] = correlations
-                f_dict['Feature Relevance Visualization'] = f_plot
-                f_dict['Description'] = "With minimum data cleaning (drop missing values, onehot encode categorical features, labelencode target feature), the Pearson correlation coefficient is calculated for each feature against the target variable. A value of 1 indicates a perfect positive correlation, while a value of -1 indicates a perfect negative correlation."
+                f_dict = {
+                    "task_id_features_plot": generate_features_plot_result.id,
+                    "result_features_plot": "",
+                    'description': "With minimum data cleaning (drop missing values, onehot encode categorical features, labelencode target feature), the Pearson correlation coefficient is calculated for each feature against the target variable. A value of 1 indicates a perfect positive correlation, while a value of -1 indicates a perfect negative correlation.",
+                }
                 final_dict['Feature Relevance'] = f_dict
         except Exception as e:
             metric_time_log.error(f"Error: {e}")
@@ -778,7 +768,7 @@ def privacyPreservation():
 
 @main.route('/FAIR', methods=['GET', 'POST'])
 def FAIR():
-
+    # ADD PROGRESS BAR COMPATABILITY ONCE MERGED WITH 'Kaveen/FAIR_datasets'
     try:
         if request.method == 'POST':
             metric_time_log.info("FAIR Request Started")

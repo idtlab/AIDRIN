@@ -150,8 +150,25 @@ from aidrin.file_handling.file_parser import read_file
 
 import pandas as pd
 import numpy as np
+from flask import jsonify
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
+
+
+@shared_task(bind=True, ignore_result=False)
+def generate_features_plot(self: Task, df_json, target):
+    correlations = pearson_correlation(df_json, target)
+    # don't let the user check the same target and feature
+    if correlations is None:
+        print("Error: Correlations is None")
+        return jsonify({"trigger": "correlationError"}), 200
+    f_plot = plot_features(correlations, target)
+
+    plot_dict = {}
+
+    plot_dict['Pearson Correlation to Target'] = correlations
+    plot_dict['Feature Relevance Visualization'] = f_plot
+    return plot_dict
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -187,8 +204,7 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
         print(f"Error occurred during data cleaning: {e}")
 
 
-@shared_task(bind=True, ignore_result=False)
-def pearson_correlation(self: Task, df_json, target_col) -> dict:
+def pearson_correlation(df_json, target_col) -> dict:
     try:
         df = pd.DataFrame.from_dict(df_json)
         cols = df.columns.difference([target_col])
@@ -196,7 +212,7 @@ def pearson_correlation(self: Task, df_json, target_col) -> dict:
         for col in cols:
             if col != target_col:
                 try:
-                    # Calculate covariance
+                 # Calculate covariance
                     cov = np.cov(df[col], df[target_col], ddof=0)[0, 1]
                     # Calculate standard deviations
                     std_dev_col = np.std(df[col], ddof=0)
@@ -212,8 +228,7 @@ def pearson_correlation(self: Task, df_json, target_col) -> dict:
         raise Exception("Pearson Correlation task timed out.")
 
 
-@shared_task(bind=True, ignore_result=False)
-def plot_features(self: Task, correlations, target_col):
+def plot_features(correlations, target_col):
     try:
         # Extract features and correlation values
         features = list(correlations.keys())
