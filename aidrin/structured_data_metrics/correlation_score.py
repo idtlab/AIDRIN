@@ -55,8 +55,6 @@ def calc_correlations(self: Task, columns: List[str], file_info):
                 if len(label.get_text()) > 9:
                     label.set_text(label.get_text()[:9] + '...')
 
-            plt.show()
-
             # Save the plot to a BytesIO object
             image_stream_cat = BytesIO()
             plt.savefig(image_stream_cat, format='png')
@@ -98,9 +96,10 @@ def calc_correlations(self: Task, columns: List[str], file_info):
 
             # Close the BytesIO stream
             image_stream_num.close()
-
-            result_dict['Correlations Analysis Numerical']["Correlations Analysis Numerical Visualization"] = base64_image_num
-            result_dict['Correlations Analysis Numerical']["Description"] = "Numerical correlations are calculated using Pearson's correlation coefficient, with values ranging from -1 to 1. A value of 1 indicates a perfect positive correlation, -1 indicates a perfect negative correlation, and 0 indicates no correlation"
+            result_dict['Correlations Analysis Numerical'] = {
+                "Correlations Analysis Numerical Visualization": base64_image_num,
+                "Description": "Numerical correlations are calculated using Pearson's correlation coefficient, with values ranging from -1 to 1. A value of 1 indicates a perfect positive correlation, -1 indicates a perfect negative correlation, and 0 indicates no correlation",
+            }
 
         # Create and return a dictionary with correlation scores and plots
         correlation_dict = {}
@@ -119,7 +118,6 @@ def calc_correlations(self: Task, columns: List[str], file_info):
                         correlation_dict[key] = numerical_correlation.loc[col1, col2]
 
         result_dict["Correlation Scores"] = correlation_dict
-
         return result_dict
     except SoftTimeLimitExceeded:
         raise Exception("Correlations task timed out.")

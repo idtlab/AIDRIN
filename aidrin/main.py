@@ -108,12 +108,12 @@ def result(id: str):
         value = {"error": "Task did not return in time"}
     except Exception as e:
         value = {"error": str(e)}
-
-    return {
+    file_upload_time_log.info(f"value: %s", value)
+    return jsonify({
         "ready": ready,
         "successful": successful,
         "value": value,
-    }
+    })
 
 ######### Uploading, Retrieving, Clearing File Routes ############
 
@@ -291,7 +291,13 @@ def dataQuality():
                 start_time_completeness = time.time()
                 completeness_result = completeness.delay(file_info)
                 compl_dict = {
-                    "task_id": completeness_result.id,
+                    # General Format:
+                    # task_id_*metricName*
+                    # result_*metricName*
+                    # description
+                    # result_*metricName* will be replaced with the result when ready via polling
+                    "task_id_Completeness": completeness_result.id,
+                    "result_Completeness": "",
                     "description": 'Indicate the proportion of available data for each feature, with values closer to 1 indicating high completeness, and values near 0 indicating low completeness. If the visualization is empty, it means that all features are complete.'
                 }
                 final_dict['Completeness'] = compl_dict
@@ -302,7 +308,8 @@ def dataQuality():
                 start_time_outliers = time.time()
                 outliers_result = outliers.delay(file_info)
                 out_dict = {
-                    "task_id": outliers_result.id,
+                    "task_id_Outliers": outliers_result.id,
+                    "result_Outliers": "",
                     "description": "Outlier scores are calculated for numerical columns using the Interquartile Range (IQR) method, where a score of 1 indicates that all data points in a column are identified as outliers, a score of 0 signifies no outliers are detected"
                 }
                 final_dict['Outliers'] = out_dict
@@ -313,7 +320,8 @@ def dataQuality():
                 start_time_duplicity = time.time()
                 duplicity_result = duplicity.delay(file_info)
                 dup_dict = {
-                    "task_id": duplicity_result.id,
+                    "task_id_Duplicity": duplicity_result.id,
+                    "result_Duplicity": "",
                     "description": "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher proportion of duplicated data points in the dataset"
                 }
                 final_dict['Duplicity'] = dup_dict
@@ -362,7 +370,9 @@ def fairness():
 
                 rep_dict = {
                     "task_id_rep_rate": rep_rate_result.id,
+                    "result_rep_rate": "",
                     "task_id_rep_rate_vis": rep_rate_vis_result.id,
+                    "result_representation_rep_rate_vis": "",
                     "description": "Represent probability ratios that quantify the relative representation of different categories within the sensitive features, highlighting differences in representation rates between various groups. Higher values imply overrepresentation relative to another"
                 }
                 final_dict['Representation Rate'] = rep_dict
@@ -380,13 +390,14 @@ def fairness():
                     # This function never completes (loads numpy in which is not supported)?
                     stat_rate_result = calculate_statistical_rates.delay(
                         y_true, sensitive_attribute_column, file_info)
-                    sr_dict = stat_rate_result.get()
+                    sr_dict = {
+                        "task_id_stat_rate": stat_rate_result.id,
+                        "result_stat_rate": "",
+                        "description": ('The graph illustrates the statistical rates of various classes across different sensitive attributes. '
+                                        'Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds '
+                                        'to a class, with the height indicating the proportion of that sensitive attribute within that particular class')
+                    }
 
-                    sr_dict['Description'] = (
-                        'The graph illustrates the statistical rates of various classes across different sensitive attributes. '
-                        'Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds '
-                        'to a class, with the height indicating the proportion of that sensitive attribute within that particular class'
-                    )
                     final_dict["Statistical Rate"] = sr_dict
                     metric_time_log.info(
                         "Statistical Rate analysis took %.2f seconds", time.time()-start_time_statRate)
@@ -404,8 +415,11 @@ def fairness():
                     'target value for conditional demographic disparity')
                 cond_demo_disp_result = conditional_demographic_disparity.delay(
                     file[target].to_list(), file[sensitive].to_list(), accepted_value)
-                cdd_dict = cond_demo_disp_result.get()
-                cdd_dict['Description'] = 'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'
+                cdd_dict = {
+                    "task_id_cdd": cond_demo_disp_result.id,
+                    "result_cdd": "",
+                    "description": 'The conditional demographic disparity metric evaluates the distribution of outcomes categorized as positive and negative across various sensitive groups. The user specifies which outcome category is considered "positive" for the analysis, with all other outcome categories classified as "negative". The metric calculates the proportion of outcomes classified as "positive" and "negative" within each sensitive group. A resulting disparity value of True indicates that within a specific sensitive group, the proportion of outcomes classified as "negative" exceeds the proportion classified as "positive". This metric provides insights into potential disparities in outcome distribution across sensitive groups based on the user-defined positive outcome criterion.'
+                }
                 final_dict['Conditional Demographic Disparity'] = cdd_dict
                 metric_time_log.info(
                     "Conditional Demographic Disparity took %.2f seconds", time.time()-start_time_condDemoDisp)
@@ -442,26 +456,28 @@ def correlationAnalysis():
                 comp_rep_rate_result = compare_rep_rates.delay(
                     rep_dict['Probability ratios'], rrr_dict["Probability ratios"])
                 comp_dict = comp_rep_rate_result.get()
-                comp_dict["Description"] = "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
+                comp_dict = {
+                    "task_id_comp": compare_rep_rates.id,
+                    "result_comp": "",
+                    "description": "The stacked bar graph visually compares the proportions of specific sensitive attributes within both the real-world population and the given dataset. Each stack in the graph represents the combined ratio of these attributes, allowing for an immediate comparison of their distribution between the observed dataset and the broader demographic context"
+                }
                 final_dict['Representation Rate Comparison with Real World'] = comp_dict
                 metric_time_log.info(
                     "Real dataset comparison took %.2f seconds", time.time()-start_time_realData)
-
+            # FIX
             if request.form.get('correlations') == 'yes':
                 start_time_correlations = time.time()
                 columns = request.form.getlist(
                     'all features for data transformation')
                 correlations_result = calc_correlations.delay(
                     columns, file_info)
-                corr_dict = correlations_result.get()
-                # catch potential errors
-                if 'Message' in corr_dict:
-                    print("Correlation analysis failed:", corr_dict['Message'])
-                    final_dict['Error'] = corr_dict['Message']
-                else:
+                corr_dict = {
+                    "task_id_corr_dict": correlations_result.id,
+                    "result_corr_dict": "",
+                }
+                # fix error catching
+                final_dict["Correlations Analysis"] = corr_dict
 
-                    final_dict['Correlations Analysis Categorical'] = corr_dict['Correlations Analysis Categorical']
-                    final_dict['Correlations Analysis Numerical'] = corr_dict['Correlations Analysis Numerical']
                 metric_time_log.info(
                     "Correlations took %.2f seconds", time.time()-start_time_correlations)
         except Exception as e:

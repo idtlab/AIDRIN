@@ -1,7 +1,9 @@
 import os
 import logging
 
- # Initialize time log
+# Initialize time log
+
+
 def setup_logging():
     log_dir = os.path.join(os.path.dirname(__file__), 'data', 'logs')
     os.makedirs(log_dir, exist_ok=True)  # Ensure logs directory exists
@@ -24,7 +26,7 @@ def setup_logging():
     ]:
         logging.getLogger(name).setLevel(logging.WARNING)
 
-    #Suppress werkzeug logs for POST and GET requests to declutter -- but keep start up messages
+    # Suppress werkzeug logs for POST and GET requests to declutter -- but keep start up messages
     class SuppressRequestsFilter(logging.Filter):
         def filter(self, record):
             return not ('GET' in record.getMessage() or 'POST' in record.getMessage())

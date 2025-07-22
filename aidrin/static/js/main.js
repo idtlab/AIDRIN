@@ -156,6 +156,7 @@ function pollTaskResults(taskId, taskName, metricName) {
             .then(res => res.json())
             .then(data => {
                 if (data.ready) {
+                    console.log("data after successful poll:", data.value)
                     console.log(`Task ${taskId} completed for task: ${metricName}.`);
                     completedTasks++;
                     updateProgressBar(completedTasks, totalTasks);
@@ -163,10 +164,11 @@ function pollTaskResults(taskId, taskName, metricName) {
                     console.log('taskMap current:', taskMap[metricName])
                     // Merge returned result into original entry
                     const result = data.value;
-                    taskMap[metricName] = {
-                        ...result,
-                        description: taskMap[metricName].description
-                    };
+                    ;
+                    const resultKey = `result_${taskName}`;
+                    console.log("resultKey", resultKey);
+                    Object.assign(taskMap[metricName], result);
+                    delete taskMap[metricName][resultKey];
                     console.log(`Result for ${metricName}:`, taskMap[metricName]);
                     // Render each visualization as soon as it's ready (async)
                     createVisualizationElement({ [metricName]: taskMap[metricName] });
@@ -202,54 +204,61 @@ function updateProgressBar(done, total) {
 }
 function createVisualizationElement(data) {
 
-    // Function to check if a key is present and not undefined
     function isKeyPresentAndDefined(obj, key) {
-        return obj && obj[key] !== undefined;
+        return obj && obj[key] !== undefined && obj[key] !== null;
     }
 
     var visualizationContent = [];
 
-    const type = Object.keys(data)[0];  // get metric name
-    //add visualization if content is present
-    if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
-        console.log('Adding visualization:', type);
-        var image = data[type][type + ' Visualization'];
-        var value = data[type]['Value'] || 'N/A';
-        var description = data[type]['description'] || '';
-        var interpretation = data[type]['Graph interpretation'] || '';
-        var riskScore = data[type]['Risk Score'] || 'N/A';
-        var title = type;
-        var jsonData = JSON.stringify(data);
+    // Helper to push a visualization block
+    function addVisualizationBlock(image, dataSource, title, fullData) {
 
-        // Check if there's an error or if the image is empty
-        if (data[type]['Error']) {
-            console.log('Error in', type, ':', data[type]['Error']);
-            // Still add to visualization content but with error message
-            visualizationContent.push({
-                image: image || "",
-                riskScore: riskScore,
-                value: value,
-                description: description,
-                interpretation: interpretation,
-                title: title,
-                jsonData: jsonData,
-                hasError: true
-            });
-        } else if (image && image.trim() !== "") {
-            visualizationContent.push({
-                image: image,
-                riskScore: riskScore,
-                value: value,
-                description: description,
-                interpretation: interpretation,
-                title: title,
-                jsonData: jsonData,
-                hasError: false
-            });
-        } else {
-            console.log('Empty visualization for:', type);
-        }
+        const description = dataSource['description'] || dataSource['Description'];
+        const interpretation = dataSource['Graph interpretation'];
+        const riskScore = dataSource['Risk Score'];
+        const value = dataSource['Value'];
+        const jsonData = JSON.stringify(fullData);
+        const hasError = !!dataSource['Error'];
+
+        visualizationContent.push({
+            image,
+            riskScore,
+            value,
+            description,
+            interpretation,
+            title,
+            jsonData,
+            hasError
+        });
+
+        console.log(`Added visualization for: ${title}`);
     }
+
+    // Iterate over top-level keys
+    Object.keys(data).forEach(function (topKey) {
+        const topVal = data[topKey];
+
+        if (typeof topVal !== 'object' || !topVal) return;
+
+        // Case: top level contains visualization (primary case)
+        Object.keys(topVal).forEach(subKey => {
+            if (subKey.endsWith('Visualization')) {
+                addVisualizationBlock(topVal[subKey], topVal, topKey, data);
+            }
+        });
+
+        // Case: sublevel contains visualization (special case: multiple visualizations for one metric)
+        Object.keys(topVal).forEach(function (subSectionKey) {
+            const subSection = topVal[subSectionKey];
+            if (typeof subSection !== 'object' || !subSection) return;
+
+            Object.keys(subSection).forEach(function (deepKey) {
+                if (deepKey.endsWith('Visualization')) {
+                    addVisualizationBlock(subSection[deepKey], subSection, subSectionKey, data);
+                }
+            });
+        });
+    });
     //add header
     if (completedTasks === 1) {
         metrics.innerHTML = `<h2 style="text-align:center">Data Visualizations</h2>`;
@@ -357,10 +366,10 @@ function createVisualizationElement(data) {
     }
     metrics.scrollIntoView({ behavior: 'smooth' });
     if (completedTasks === totalTasks) {
-        const modifiedData = removeVisualizationKey(data);
-        const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
+        //const modifiedData = removeVisualizationKey(data);
+        //const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
         // Add the "Download JSON" link for the last jsonData outside the loop
-        metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+        //metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
     }
 }
 
