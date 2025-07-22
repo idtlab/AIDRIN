@@ -161,8 +161,9 @@ def class_distribution_plot(self: Task, column, file_info):
         # Close the plot and buffer to free up resources
         plt.close()
         buf.close()
-
-        return plot_base64
+        plot_dict = {}
+        plot_dict["Class Distribution Visualization"] = plot_base64
+        return plot_dict
     except SoftTimeLimitExceeded:
         raise Exception("Class Distribution Plot task timed out.")
     except Exception as e:

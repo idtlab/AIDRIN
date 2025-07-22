@@ -591,13 +591,19 @@ def classImbalance():
                 ci_dict = {}
                 classes = request.form.get("features for class imbalance")
                 # known display issue
+
                 class_distrib_plot_result = class_distribution_plot.delay(
                     classes, file_info)
-                ci_dict['Class Imbalance Visualization'] = class_distrib_plot_result.get()
-                ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
                 calc_imbalance_degree_result = calc_imbalance_degree.delay(
                     classes, file_info, dist_metric="EU")  # By default the distance metric is euclidean distance
-                ci_dict['Imbalance degree score'] = calc_imbalance_degree_result.get()
+                ci_dict = {
+                    "task_id_class_imbalance_vis": class_distrib_plot_result.id,
+                    "result_class_imbalance_vis": "",
+                    "task_id_calc_imbalance_degree": calc_imbalance_degree_result.id,
+                    "result_calc_imbalance_degree": "",
+                    "Description": "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class.",
+
+                }
                 final_dict['Class Imbalance'] = ci_dict
         except Exception as e:
             metric_time_log.error(f"Error: {e}")
@@ -669,8 +675,11 @@ def privacyPreservation():
                 else:
                     single_attribute_result = generate_single_attribute_MM_risk_scores.delay(
                         id_feature, eval_features, file_info)
-                    final_dict["Single attribute risk scoring"] = single_attribute_result.get(
-                    )
+                    final_dict["Single attribute risk scoring"] = {
+                        "task_id_single_attr_risk": single_attribute_result.id,
+                        "result_single_attr_risk": "",
+                    }
+
                 metric_time_log.info(
                     "Single attribute risk took %2f seconds", time.time()-start_time_oneAttributeRisk)
             # multpiple attribute risk score using markov model
@@ -700,8 +709,11 @@ def privacyPreservation():
                 else:
                     multiple_attribute_result = generate_multiple_attribute_MM_risk_scores.delay(
                         id_feature, eval_features, file_info)
-                    final_dict["Multiple attribute risk scoring"] = multiple_attribute_result.get(
-                    )
+                    final_dict["Multiple attribute risk scoring"] = {
+                        "task_id_mult_attr_risk": multiple_attribute_result.id,
+                        "result_mult_attr_risk": "",
+                    }
+
                 metric_time_log.info(
                     "Differential privacy took %.2f seconds", time.time()-start_time_multAttributeRisk)
             # k-Anonymity
@@ -711,6 +723,10 @@ def privacyPreservation():
                 k_anonymity_result = compute_k_anonymity.delay(
                     k_qis, file_info)
                 final_dict["k-Anonymity"] = k_anonymity_result.get()
+                final_dict["k-Anonymity"] = {
+                    "task_id_k-anonymity": k_anonymity_result.id,
+                    "result_k-anonymity": "",
+                }
 
             # l-Diversity
             if request.form.get("l-diversity") == "yes":
@@ -720,8 +736,10 @@ def privacyPreservation():
                     "sensitive attribute for l-diversity")
                 l_diversity_result = compute_l_diversity.delay(
                     l_qis, l_sensitive, file_info)
-                final_dict["l-Diversity"] = l_diversity_result.get()
-
+                final_dict["l-Diversity"] = {
+                    "task_id_l_diversity": l_diversity_result.id,
+                    "result_l_diversity": "",
+                }
             # t-Closeness
             if request.form.get("t-closeness") == "yes":
                 t_qis = request.form.getlist(
@@ -730,8 +748,10 @@ def privacyPreservation():
                     "sensitive attribute for t-closeness")
                 t_closeness_result = compute_t_closeness.delay(
                     t_qis, t_sensitive, file_info)
-                final_dict["t-Closeness"] = t_closeness_result.get()
-
+                final_dict["t-Closeness"] = {
+                    "task_id_t-closeness": t_closeness_result.id,
+                    "result_t-closeness": "",
+                }
             # Entropy Risk
             if request.form.get("entropy risk") == "yes":
                 entropy_qis = request.form.getlist(
@@ -739,6 +759,10 @@ def privacyPreservation():
                 entropy_risk_result = compute_entropy_risk.delay(
                     entropy_qis, file_info)
                 final_dict["Entropy Risk"] = entropy_risk_result.get()
+                final_dict["Entropy Risk"] = {
+                    "task_id_entropy_risk": entropy_risk_result.id,
+                    "result_entropy_risk": "",
+                }
         except Exception as e:
             metric_time_log.error(f"Error: {e}")
             return jsonify({"error": str(e)}), 200
