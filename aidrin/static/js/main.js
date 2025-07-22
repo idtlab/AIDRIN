@@ -279,13 +279,10 @@ function createVisualizationElement(data) {
                     <svg id="${visualizationId}-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                 </div>
             </div>
-                <div id="${visualizationId}" style="display: none;">`;
+                <div id="${visualizationId}" class="visualization" style="display: none;">`;
 
             if (content.hasError) {
-                // Display error message instead of image
-                visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
-                <strong>Error:</strong> ${content.description}
-            </div>`;
+                openErrorPopoup("Visualization Error", content.description);
             } else if (content.image && content.image.trim() !== "") {
                 // Display normal visualization
                 const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
@@ -306,9 +303,7 @@ function createVisualizationElement(data) {
                     <div><strong>Description:</strong> ${content.description}</div>
                     ${content.interpretation ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>` : ''}
                     
-                </div>
-            
-            </div>`;
+                </div>`;
 
             metrics.innerHTML += visualizationHtml;
         });
@@ -324,9 +319,7 @@ function createVisualizationElement(data) {
             </div>
             <div id="duplicity" style="display: none; text-align: center;">
                 No duplicates found 
-            </div> 
-            
-        </div>`;
+            </div>`;
         } else if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores')) {
             metrics.innerHTML += `<div class="visualization-container">
             <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
@@ -337,9 +330,7 @@ function createVisualizationElement(data) {
             </div>
             <div id="duplicity" style="display: none;">
                 <p style="text-align:center">Overall Duplicity: ${data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset']}</p>
-            </div>  
-            <    
-        </div>`;
+            </div>`;
         }
 
 
@@ -355,8 +346,7 @@ function createVisualizationElement(data) {
             </div>
             <div id="duplicity" style="display: none; text-align: center;">
                 No duplicates found 
-            </div>      
-        </div>`;
+            </div>`;
         } else {
             if (completedTasks === totalTasks) {
                 metrics.innerHTML = '<h3 style="text-align:center;">No visualizations available.</h3>';
@@ -365,12 +355,24 @@ function createVisualizationElement(data) {
 
     }
     metrics.scrollIntoView({ behavior: 'smooth' });
-    if (completedTasks === totalTasks) {
-        //const modifiedData = removeVisualizationKey(data);
-        //const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
-        // Add the "Download JSON" link for the last jsonData outside the loop
-        //metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
-    }
+
+    //create json download link for each metric's data (hide task_id)
+    download_data = data
+    Object.values(download_data).forEach(section => {
+        if (typeof section === 'object' && section !== null) {
+            Object.keys(section).forEach(key => {
+                if (key.startsWith("task_id")) {
+                    delete section[key];
+                }
+            });
+        }
+    });
+    const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(download_data))}`;
+    //Add the "Download JSON" link for the last jsonData 
+    const containers = document.querySelectorAll('.visualization');
+    const visualizationContainer = containers[containers.length - 1];
+    visualizationContainer.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+
 }
 
 function removeVisualizationKey(data) {
