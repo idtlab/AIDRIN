@@ -27,3 +27,6 @@ threadpoolctl==3.3.0
 tzdata==2024.1
 Werkzeug==3.0.1
 celery>=5.0
+redis>=4.0.0
+flower>=2.0.0
+shap>=0.40.0

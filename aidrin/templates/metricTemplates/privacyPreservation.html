@@ -360,6 +360,103 @@
         <div id="buttonsContainer" style="display:none;">
             <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
         </div>
+        
+        <!-- Display Results -->
+        {% if formatted_final_dict %}
+            <div id="results-display">
+                {% for metric_name, metric_data in formatted_final_dict.items() %}
+                    <div class="metric-result" data-metric="{{ metric_name }}">
+                        <h3>{{ metric_name }}</h3>
+                        
+                        {% if metric_data.is_async %}
+                            <!-- Async task in progress -->
+                            <div class="async-task-status" 
+                                 data-task-id="{{ metric_data.task_id }}" 
+                                 data-cache-key="{{ metric_data.cache_key }}"
+                                 data-metric-name="{{ metric_name }}">
+                                <p><strong>Status:</strong> {{ metric_data.status }}</p>
+                                <p><em>{{ metric_data.message }}</em></p>
+                                <div class="progress-indicator">
+                                    <div class="spinner"></div>
+                                    <span>Processing in background...</span>
+                                </div>
+                            </div>
+                        {% else %}
+                            <!-- Regular metric result -->
+                            {% for key, value in metric_data.items() %}
+                                {% if key not in ['is_async', 'task_id', 'cache_key', 'status', 'message', 'DescriptiveStatistics', 'Descriptive statistics of the risk scores'] %}
+                                    <div class="metric-item">
+                                        <strong>{{ key }}:</strong>
+                                        {% if key.endswith('Visualization') and value %}
+                                            <div class="visualization">
+                                                <img src="data:image/png;base64,{{ value }}" alt="{{ key }}" style="max-width: 100%; height: auto;">
+                                            </div>
+                                        {% elif value is mapping %}
+                                            <ul>
+                                                {% for sub_key, sub_value in value.items() %}
+                                                    <li><strong>{{ sub_key }}:</strong> {{ sub_value }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <span>{{ value }}</span>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    <hr>
+                {% endfor %}
+            </div>
+            
+            <style>
+                .async-task-status {
+                    padding: 15px;
+                    background-color: #f0f8ff;
+                    border: 1px solid #007bff;
+                    border-radius: 5px;
+                    margin: 10px 0;
+                }
+                
+                .progress-indicator {
+                    display: flex;
+                    align-items: center;
+                    margin-top: 10px;
+                }
+                
+                .spinner {
+                    width: 20px;
+                    height: 20px;
+                    border: 2px solid #f3f3f3;
+                    border-top: 2px solid #007bff;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                    margin-right: 10px;
+                }
+                
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                
+                .metric-result {
+                    margin: 20px 0;
+                    padding: 15px;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    background-color: #f9f9f9;
+                }
+                
+                .metric-item {
+                    margin: 10px 0;
+                }
+                
+                .visualization {
+                    text-align: center;
+                    margin: 15px 0;
+                }
+            </style>
+        {% endif %}
             
     </div> 
 
@@ -507,6 +604,20 @@
             });
         });
     </script>
+    
+    <!-- Async Task Polling for MMrisk Scores -->
+    {% if formatted_final_dict %}
+        {% for metric_name, metric_data in formatted_final_dict.items() %}
+            {% if metric_data.is_async %}
+                <script data-task-id="{{ metric_data.task_id }}" 
+                        data-cache-key="{{ metric_data.cache_key }}" 
+                        data-metric-name="{{ metric_name }}">
+                    // Auto-polling will be handled by the main.js DOMContentLoaded event
+                    console.log('Async task detected for {{ metric_name }}: {{ metric_data.task_id }}');
+                </script>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
 </body>
 
 </html>

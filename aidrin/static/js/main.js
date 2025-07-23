@@ -140,7 +140,35 @@ function submitForm() {
             if (isKeyPresentAndDefined(data, type)) {
                 console.log('Found type in data:', type);
                 console.log('Type data keys:', Object.keys(data[type]));
-                if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
+                
+                // Check if this is an async task
+                if (data[type]['is_async']) {
+                    console.log('Adding async task placeholder:', type);
+                    var title = type;
+                    var jsonData = JSON.stringify(data);
+                    
+                    // Create placeholder for async task
+                    visualizationContent.push({
+                        image: "",
+                        riskScore: 'N/A',
+                        riskLevel: null,
+                        riskColor: null,
+                        value: 'N/A',
+                        description: data[type]['message'] || 'Processing in background...',
+                        interpretation: 'Task is being processed. Please wait...',
+                        title: title,
+                        jsonData: jsonData,
+                        hasError: false,
+                        isAsync: true,
+                        taskId: data[type]['task_id'],
+                        cacheKey: data[type]['cache_key']
+                    });
+                    
+                    // Start polling for this task
+                    console.log('Starting polling for task:', data[type]['task_id']);
+                    pollAsyncTask(data[type]['task_id'], data[type]['cache_key'], type);
+                    
+                } else if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
                     console.log('Adding visualization:', type);
                     var image = data[type][type + ' Visualization'];
                     var value = data[type]['Value'] || 'N/A'; 
@@ -218,6 +246,27 @@ function submitForm() {
                     visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
                         <strong>Error:</strong> ${content.description}
                     </div>`;
+                } else if (content.isAsync) {
+                    // Display async task status with loading indicator
+                    visualizationHtml += `<div class="async-task-status" 
+                         data-task-id="${content.taskId}" 
+                         data-cache-key="${content.cacheKey}"
+                         data-metric-name="${content.title}"
+                         style="text-align: center; padding: 20px; background-color: #f0f8ff; border: 1px solid #007bff; border-radius: 5px;">
+                        <div class="progress-indicator" style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                            <div class="spinner" style="width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px;"></div>
+                            <span><strong>Processing in background...</strong></span>
+                        </div>
+                        <p><strong>Status:</strong> <span id="status-${content.taskId}">PENDING</span></p>
+                        <p><em id="message-${content.taskId}">${content.description}</em></p>
+                        <p><small>Task ID: ${content.taskId}</small></p>
+                    </div>
+                    <style>
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    </style>`;
                 } else if (content.image && content.image.trim() !== "") {
                     // Display normal visualization
                     const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
@@ -234,6 +283,7 @@ function submitForm() {
                             ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
                     ${content.riskLevel ? `<div><strong>Risk Level:</strong> <span style="color: ${content.riskColor}; font-weight: bold;">${content.riskLevel}</span></div>` : ''}
                             ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
+                    ${content.description ? `<div><strong>Description:</strong> ${content.description}</div>` : ''}
                     ${content.interpretation && content.title !== 'Class Imbalance' ? `<div><strong>Graph interpretation:</strong> ${content.interpretation} ${getDocsButton(content.title)}</div>` : ''}
                 `;
                 
@@ -697,3 +747,246 @@ function getDistanceMetricName() {
     }
     return 'Distance Metric';
 }
+
+// Async task polling for MMrisk score calculations
+function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval = 1500) {
+    let attempts = 0;
+    console.log(`Starting polling for ${metricName} task: ${taskId} (max ${maxAttempts} attempts, ${interval}ms intervals)`);
+    
+    function checkTask() {
+        attempts++;
+        console.log(`Polling attempt ${attempts}/${maxAttempts} for ${metricName}`);
+        
+        fetch(`/check_and_update_task/${taskId}/${encodeURIComponent(cacheKey)}`)
+            .then(response => {
+                console.log(`Poll response status: ${response.status} for ${metricName}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(`Poll response data for ${metricName}:`, data);
+                
+                if (data.completed) {
+                    if (data.success) {
+                        // Task completed successfully, update the placeholder with actual results
+                        console.log(`✅ ${metricName} calculation completed successfully`);
+                        updateAsyncTaskWithResults(taskId, metricName, data.result);
+                    } else {
+                        // Task failed
+                        console.error(`❌ ${metricName} calculation failed:`, data.error);
+                        updateTaskStatus(metricName, 'Failed', data.error);
+                    }
+                } else if (attempts < maxAttempts) {
+                    // Task still running, check again
+                    const status = data.state || 'Processing';
+                    const message = data.info?.status || 'Processing...';
+                    console.log(`🔄 ${metricName} still processing: ${status} - ${message}`);
+                    updateTaskStatus(metricName, status, message);
+                    setTimeout(checkTask, interval);
+                } else {
+                    // Max attempts reached
+                    console.error(`⏰ ${metricName} calculation timed out after ${maxAttempts} attempts`);
+                    updateTaskStatus(metricName, 'Timeout', `Calculation timed out after ${Math.round(maxAttempts * interval / 1000)} seconds. The task may still be running in the background.`);
+                }
+            })
+            .catch(error => {
+                console.error(`🚨 Error checking ${metricName} task (attempt ${attempts}):`, error);
+                if (attempts < maxAttempts) {
+                    console.log(`⏳ Retrying in ${interval}ms...`);
+                    setTimeout(checkTask, interval);
+                } else {
+                    updateTaskStatus(metricName, 'Error', 'Connection error after multiple attempts. Please refresh the page.');
+                }
+            });
+    }
+    
+    checkTask();
+}
+
+function updateAsyncTaskWithResults(taskId, metricName, results) {
+    console.log(`updateAsyncTaskWithResults called:`, { taskId, metricName, results });
+    
+    // Find the async task placeholder
+    const asyncElement = document.querySelector(`[data-task-id="${taskId}"]`);
+    console.log(`Found asyncElement:`, asyncElement);
+    
+    if (asyncElement) {
+        // Find the parent visualization container
+        const visualizationContainer = asyncElement.closest('.visualization-container');
+        console.log(`Found visualizationContainer:`, visualizationContainer);
+        
+        const visualizationId = visualizationContainer ? visualizationContainer.querySelector('.toggle').getAttribute('onclick').match(/'([^']+)'/)[1] : null;
+        console.log(`Extracted visualizationId:`, visualizationId);
+        
+        if (visualizationId) {
+            const contentDiv = document.getElementById(visualizationId);
+            console.log(`Found contentDiv:`, contentDiv);
+            
+            if (contentDiv && results) {
+                // Build the completed visualization HTML
+                let completedHtml = '';
+                
+                console.log(`Building HTML for results:`, Object.keys(results));
+                
+                // Check if there's an error
+                if (results['Error']) {
+                    console.log(`Error in results:`, results['Error']);
+                    completedHtml = `<div style="text-align: center; padding: 20px; color: #d32f2f;">
+                        <strong>Error:</strong> ${results['Error']}
+                    </div>`;
+                } else {
+                    // Add visualization image if present
+                    const vizKey = `${metricName} Visualization`;
+                    console.log(`Looking for visualization key:`, vizKey);
+                    console.log(`Available keys:`, Object.keys(results));
+                    console.log(`Visualization data length:`, results[vizKey] ? results[vizKey].length : 'Not found');
+                    
+                    if (results[vizKey] && results[vizKey].trim() !== "") {
+                        console.log(`Adding visualization image for ${metricName}`);
+                        const imageBlobUrl = `data:image/jpeg;base64,${results[vizKey]}`;
+                        completedHtml += `<img src="${imageBlobUrl}" alt="${metricName} Chart" style="max-width: 100%; height: auto;">
+                        <a href="${imageBlobUrl}" download="${metricName}.jpg" class="toggle metric-download" style="padding:0px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
+                                <path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/>
+                            </svg>
+                        </a>`;
+                    } else {
+                        console.log(`No visualization found for key: ${vizKey}`);
+                    }
+                }
+                
+                // Add risk score if present
+                if (results['Risk Score'] && results['Risk Score'] !== 'N/A') {
+                    completedHtml += `<div><strong>Risk Score:</strong> ${results['Risk Score']}</div>`;
+                }
+                
+                // Add risk level if present
+                if (results['Risk Level']) {
+                    const riskColor = results['Risk Color'] || '#000';
+                    completedHtml += `<div><strong>Risk Level:</strong> <span style="color: ${riskColor}; font-weight: bold;">${results['Risk Level']}</span></div>`;
+                }
+                
+                // Add dataset risk score for multiple attribute
+                if (results['Dataset Risk Score']) {
+                    completedHtml += `<div><strong>Dataset Risk Score:</strong> ${results['Dataset Risk Score']}</div>`;
+                }
+                
+                // Add description if present
+                if (results['Description']) {
+                    completedHtml += `<div><strong>Description:</strong> ${results['Description']}</div>`;
+                }
+                
+                // Add graph interpretation if present
+                if (results['Graph interpretation']) {
+                    completedHtml += `<div><strong>Graph interpretation:</strong> ${results['Graph interpretation']} ${getDocsButton(metricName)}</div>`;
+                }
+                
+                // Replace the async placeholder with the completed results
+                contentDiv.innerHTML = completedHtml;
+                
+                console.log(`Successfully updated ${metricName} with completed results`);
+                console.log(`Final HTML length:`, completedHtml.length);
+            } else {
+                console.error(`Could not find contentDiv or results missing:`, { contentDiv, results });
+            }
+        } else {
+            console.error(`Could not extract visualizationId from container`);
+        }
+    } else {
+        console.error(`Could not find async element for task ${taskId}`);
+    }
+}
+
+function updateTaskStatus(metricName, status, message) {
+    // Find the async task status element for this metric
+    const asyncElements = document.querySelectorAll(`[data-metric-name="${metricName}"]`);
+    
+    if (asyncElements.length > 0) {
+        asyncElements.forEach(element => {
+            // Update the status display
+            const statusP = element.querySelector('p:first-child');
+            const messageP = element.querySelector('p:nth-child(2)');
+            
+            if (statusP) {
+                statusP.innerHTML = `<strong>Status:</strong> ${status}`;
+            }
+            if (messageP) {
+                messageP.innerHTML = `<em>${message}</em>`;
+            }
+            
+            // If task completed successfully, hide the spinner
+            if (status === 'SUCCESS' || status === 'COMPLETED') {
+                const spinner = element.querySelector('.progress-indicator');
+                if (spinner) {
+                    spinner.style.display = 'none';
+                }
+            }
+        });
+    } else {
+        // Final fallback: add status to page
+        console.log(`Task Status Update - ${metricName}: ${status} - ${message}`);
+    }
+}
+
+// Auto-start polling for async tasks when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded: Checking for async tasks...');
+    
+    // Check if there are any async tasks that need polling
+    const scripts = document.querySelectorAll('script[data-task-id]');
+    console.log('Found', scripts.length, 'scripts with task IDs');
+    
+    scripts.forEach(script => {
+        const taskId = script.getAttribute('data-task-id');
+        const cacheKey = script.getAttribute('data-cache-key');
+        const metricName = script.getAttribute('data-metric-name');
+        
+        console.log('Script attributes:', { taskId, cacheKey, metricName });
+        
+        if (taskId && cacheKey && metricName) {
+            console.log(`Starting polling for ${metricName} task: ${taskId}`);
+            pollAsyncTask(taskId, cacheKey, metricName);
+        }
+    });
+    
+    // Also check for any elements that contain async task information in the results
+    const resultElements = document.querySelectorAll('[data-task-id]');
+    console.log('Found', resultElements.length, 'result elements with task IDs');
+    
+    resultElements.forEach(element => {
+        const taskId = element.getAttribute('data-task-id');
+        const cacheKey = element.getAttribute('data-cache-key');
+        const metricName = element.getAttribute('data-metric-name') || 'MMrisk Score';
+        
+        if (taskId && cacheKey) {
+            console.log(`Starting polling for ${metricName} from result element: ${taskId}`);
+            pollAsyncTask(taskId, cacheKey, metricName);
+        }
+    });
+    
+    // Also check for async task status elements specifically
+    const asyncStatusElements = document.querySelectorAll('.async-task-status[data-task-id]');
+    console.log('Found', asyncStatusElements.length, 'async status elements');
+    
+    asyncStatusElements.forEach(element => {
+        const taskId = element.getAttribute('data-task-id');
+        const cacheKey = element.getAttribute('data-cache-key');
+        const metricName = element.getAttribute('data-metric-name') || 'MMrisk Score';
+        
+        if (taskId && cacheKey) {
+            console.log(`Starting polling for ${metricName} from async status element: ${taskId}`);
+            pollAsyncTask(taskId, cacheKey, metricName);
+        }
+    });
+    
+    // Check for task IDs in the page content (fallback)
+    const pageContent = document.body.innerHTML;
+    const taskIdMatches = pageContent.match(/"task_id":\s*"([^"]+)"/g);
+    
+    if (taskIdMatches) {
+        console.log('Found task IDs in page content:', taskIdMatches);
+        // This is a more complex case that would need additional parsing
+    }
+});

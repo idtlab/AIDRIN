@@ -4,6 +4,10 @@ import io
 import base64
 import pandas as pd
 from typing import List
+from celery import current_task
+import logging
+
+logger = logging.getLogger(__name__)
 
 def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
     result_dict = {}
@@ -572,5 +576,95 @@ def compute_entropy_risk(data, quasi_identifiers) :
         result_dict["error"] = str(e)
 
     return result_dict
+
+# Celery tasks for async processing
+try:
+    from aidrin.celery_app import celery_app
+    
+    @celery_app.task(bind=True)
+    def calculate_single_attribute_risk_score(self, df_data, id_col, eval_cols):
+        """
+        Celery task for calculating single attribute MM risk scores.
+        """
+        try:
+            # Update task state
+            self.update_state(
+                state='PROGRESS',
+                meta={'current': 0, 'total': 100, 'status': 'Starting single attribute risk calculation...'}
+            )
+            
+            # Convert DataFrame from JSON back to pandas DataFrame
+            df = pd.read_json(df_data)
+            
+            # Update progress
+            self.update_state(
+                state='PROGRESS',
+                meta={'current': 25, 'total': 100, 'status': 'Data loaded, calculating risk scores...'}
+            )
+            
+            # Calculate risk scores using existing function
+            result = generate_single_attribute_MM_risk_scores(df, id_col, eval_cols)
+            
+            # Update progress
+            self.update_state(
+                state='PROGRESS',
+                meta={'current': 75, 'total': 100, 'status': 'Risk scores calculated, finalizing...'}
+            )
+            
+            # Return the actual result (don't update state to SUCCESS as it overwrites the result)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in single attribute risk calculation: {str(e)}")
+            self.update_state(
+                state='FAILURE',
+                meta={'error': str(e)}
+            )
+            raise
+
+    @celery_app.task(bind=True)
+    def calculate_multiple_attribute_risk_score(self, df_data, id_col, eval_cols):
+        """
+        Celery task for calculating multiple attribute MM risk scores.
+        """
+        try:
+            # Update task state
+            self.update_state(
+                state='PROGRESS',
+                meta={'current': 0, 'total': 100, 'status': 'Starting multiple attribute risk calculation...'}
+            )
+            
+            # Convert DataFrame from JSON back to pandas DataFrame
+            df = pd.read_json(df_data)
+            
+            # Update progress
+            self.update_state(
+                state='PROGRESS',
+                meta={'current': 25, 'total': 100, 'status': 'Data loaded, calculating risk scores...'}
+            )
+            
+            # Calculate risk scores using existing function
+            result = generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols)
+            
+            # Update progress
+            self.update_state(
+                state='PROGRESS',
+                meta={'current': 75, 'total': 100, 'status': 'Risk scores calculated, finalizing...'}
+            )
+            
+            # Return the actual result (don't update state to SUCCESS as it overwrites the result)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in multiple attribute risk calculation: {str(e)}")
+            self.update_state(
+                state='FAILURE',
+                meta={'error': str(e)}
+            )
+            raise
+
+except ImportError:
+    # Fallback for when running outside of the Flask app context
+    pass
 
     
