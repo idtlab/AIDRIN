@@ -102,6 +102,11 @@ function submitForm() {
             const metricPageContainer = document.querySelector('.metric-page-container');
             metricPageContainer.classList.add('extended');
             progressBarContainer.classList.add('visible');
+            const progress = document.getElementById("progress");
+            const label = document.getElementById("progressText");
+            progress.value = 0;
+            label.innerText = "";
+
 
 
             if (data.trigger === "correlationError") {
