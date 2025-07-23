@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Cache Info</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 700px; margin: auto; }
+        .message { background: #e0ffe0; color: #1a4d1a; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        .error { background: #ffe0e0; color: #a11a1a; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        .cache-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .cache-table th, .cache-table td { border: 1px solid #ccc; padding: 8px; }
+        .cache-table th { background: #f0f0f0; }
+        .clear-btn { background: #d86470; color: white; border: none; padding: 12px 24px; border-radius: 5px; font-size: 1.1em; cursor: pointer; margin-top: 20px; }
+        .clear-btn:hover { background: #a11a1a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>My Cache Info</h1>
+        {% if message %}
+            <div class="{{ 'message' if 'cleared' in message else 'error' }}">{{ message }}</div>
+        {% endif %}
+        {% if cache_info %}
+            <p><strong>User ID:</strong> {{ cache_info.user_id }}</p>
+            <p><strong>Total User Entries:</strong> {{ cache_info.total_user_entries }}</p>
+            <p><strong>Global Cache Size:</strong> {{ cache_info.global_cache_size }}</p>
+            <p><strong>User Cache Percentage:</strong> {{ cache_info.user_cache_percentage }}%</p>
+            <h3>User Cache Keys</h3>
+            <table class="cache-table">
+                <tr><th>#</th><th>Cache Key</th></tr>
+                {% for key in cache_info.user_cache_keys %}
+                <tr><td>{{ loop.index }}</td><td>{{ key }}</td></tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <p>No cache info available.</p>
+        {% endif %}
+        <form method="post">
+            <button class="clear-btn" type="submit">Clear My Cache</button>
+        </form>
+        <p><a href="/">&larr; Back to Homepage</a></p>
+    </div>
+</body>
+</html> 

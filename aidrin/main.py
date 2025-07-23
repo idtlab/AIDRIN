@@ -1428,6 +1428,29 @@ def get_summary_stastistics():
                 'error': f'Error getting task result: {str(e)}'
             }), 500
 
+    @app.route('/my_cache', methods=['GET', 'POST'])
+    def my_cache():
+        message = None
+        if request.method == 'POST':
+            try:
+                removed_count = clear_all_user_cache()
+                message = f"Cache cleared! Removed {removed_count} entries."
+            except Exception as e:
+                message = f"Error clearing cache: {str(e)}"
+        try:
+            user_id = get_current_user_id()
+            user_keys = [key for key in current_app.TEMP_RESULTS_CACHE.keys() if key.startswith(f"user:{user_id}")]
+            cache_info = {
+                'user_id': user_id,
+                'total_user_entries': len(user_keys),
+                'user_cache_keys': user_keys,
+                'global_cache_size': len(current_app.TEMP_RESULTS_CACHE),
+                'user_cache_percentage': round((len(user_keys) / len(current_app.TEMP_RESULTS_CACHE)) * 100, 2) if current_app.TEMP_RESULTS_CACHE else 0
+            }
+            return render_template('my_cache.html', cache_info=cache_info, message=message)
+        except Exception as e:
+            return render_template('my_cache.html', cache_info=None, message=f"Error: {str(e)}")
+
 # Close the route protection block
 
 if __name__ == '__main__':
