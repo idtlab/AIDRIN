@@ -17,12 +17,6 @@ function togglePillarDropdown(id) {
 }
 
 
-//for uploads
-function uploadForm() {
-    const form = document.getElementById('uploadForm');
-    form.submit();
-}
-
 
 //to clear
 function clearFile() {
@@ -371,7 +365,7 @@ function createVisualizationElement(data) {
     //Add the "Download JSON" link for the last jsonData 
     const containers = document.querySelectorAll('.visualization');
     const visualizationContainer = containers[containers.length - 1];
-    visualizationContainer.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
+    visualizationContainer.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle" style="margin-top:10px;">Download JSON Report</a>`;
 
 }
 

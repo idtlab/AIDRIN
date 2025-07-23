@@ -642,7 +642,7 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  border: 2px #e8e8e8 dashed;
+  border: 2px #e8e8e8 solid;
   border-top: none;
   background-color: #212121;
   padding: 1.5em;

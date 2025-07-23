@@ -157,6 +157,7 @@ def upload_file():
         minimize_preview = request.args.get('minimize_preview') == 'true'
         if minimize_preview:
             session['minimize_preview'] = 'true'
+
         if 'original_file_path' in session:
             original_file_path = session.get('original_file_path')
             original_file_info = (original_file_path, file_name, file_type)

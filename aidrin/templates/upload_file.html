@@ -31,7 +31,6 @@
           Upload a supported structured dataset to evaluate it on the metrics available below
     </p>
     </div>
-    
     <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: row; ">
         <div style="display: flex; width: 35%; flex-direction:column;">
             <select id="fileTypeSelector" name="fileTypeSelector" class="fileType" style="margin:0; border-radius: 10px 10px 0 0; padding: 15px; width:100%; max-width:none; text-align:center; font-size:1.5em;">
@@ -65,10 +64,10 @@
                 <div id="fileLabel" style="color:#ffffff">
                     {% if uploaded_file_path %}
                     <script>
-                        document.getElementById("fileUploadContainer").style.borderRadius = "0px 0px 0px 0px";
-                        document.getElementById("fileUploadContainer").style.border = "2px  #e8e8e8 solid";
-                        document.getElementById("fileUploadContainer").style.borderBottom = "none";
-                        
+                        fileUploadContainer = document.getElementById("fileUploadContainer");
+                        fileUploadContainer.style.borderRadius = "0px 0px 0px 0px";
+                        fileUploadContainer.style.border = "2px  #e8e8e8 solid";
+                        fileUploadContainer.style.borderBottom = "none";
                     </script>
                     <h2 id="FileUploadMessage">File Uploaded: {{uploaded_file_name}}</h2>
                     {% else %}
@@ -81,6 +80,18 @@
                 <!-- clear button: visible when file is uploaded, change form style to match-->
                 <button type="button" class="clear-button" onclick="clearFile()">Clear Uploaded File</button>
             {% endif %}
+            <!-- Progress bar for upload status -->
+            <div id="fileUploadProgress" class = "progress-bar-container" style = "position:relative; bottom:10px; padding-top:10px; height:44.5px;">
+                <div id="progressBar" style="align-self:center; text-align:center; width:80%;">
+                    <progress id="progress" style="width:100%; height:30px;" value=0 max=100></progress>
+                </div>
+            </div>
+            <script>
+                {% if uploaded_file_path %}
+                    progressBar = document.getElementById("fileUploadProgress");
+                    progressBar.classList.remove("visible");
+                {% endif %}
+            </script>
         </div>
         <div style="display: flex; flex-direction: column; margin-top: 10px; align-self: center; width: max-content;">
         {% if uploaded_file_path %}
@@ -162,12 +173,48 @@
             };
         </script>
     </form>
-    <button id="SelectionEdit" type="button" class="edit-button" onclick="editSelections()">Edit Selections</button>
 
-   <strong onclick="location.href='{{url_for("publications")}}'" class="clickable" style="text-align: center; font-size: 1.5em; display:flex; align-items:center; align-self:center">Publications  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"/></svg></strong>
+
+
+    <button id="SelectionEdit" type="button" class="edit-button" onclick="editSelections()">Edit Selections</button>
+    <strong onclick="location.href='{{url_for("publications")}}'" class="clickable" style="text-align: center; font-size: 1.5em; display:flex; align-items:center; align-self:center">Publications  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"/></svg></strong>
+    
 </body>
 <script>
+    //for uploads
+    function uploadForm() {
+        document.getElementById("fileUploadProgress").classList.add("visible");
+        document.getElementById('uploadForm').dispatchEvent(new Event('submit', { cancelable: true }));
+    }
+    document.getElementById('uploadForm').addEventListener('submit', function (e) {
+        e.preventDefault(); // Prevent normal form submission
 
+        
+        uploadMessage = document.getElementById("FileUploadMessage");
+        uploadMessage.innerHTML = "File Uploading...";
+
+        const form = document.getElementById('uploadForm');
+        const formData = new FormData(form);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '{{ url_for("upload_file") }}', true);  
+
+        xhr.upload.onprogress = function (e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                document.getElementById("progress").value = percent;
+                console.log(`Upload progress: ${percent}%`);
+            }
+        };
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                window.location.href = '{{ url_for("upload_file") }}'; //Send GET
+            } else {
+                uploadMessage.innerHTML = "Upload failed.";
+            }
+        };
+        xhr.send(formData);
+    });
     //get file type from user
     document.addEventListener("DOMContentLoaded", function () {
         //file type selector and file input field
