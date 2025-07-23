@@ -759,12 +759,12 @@ function getDistanceMetricName() {
 // Async task polling for MMrisk score calculations
 function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval = 1500) {
     let attempts = 0;
-    console.log(`🚀 Starting polling for ${metricName} task: ${taskId} (max ${maxAttempts} attempts, ${interval}ms intervals)`);
+    console.log(`Starting polling for ${metricName} task: ${taskId} (max ${maxAttempts} attempts, ${interval}ms intervals)`);
     
     function checkTask() {
         attempts++;
         
-        console.log(`🔄 Polling attempt ${attempts}/${maxAttempts} for ${metricName}`);
+        console.log(`Polling attempt ${attempts}/${maxAttempts} for ${metricName}`);
         
         fetch(`/check_and_update_task/${taskId}/${encodeURIComponent(cacheKey)}`)
             .then(response => {
@@ -775,7 +775,7 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                 return response.json();
             })
             .then(data => {
-                console.log(`📥 Poll response data for ${metricName}:`, data);
+                console.log(`Poll response data for ${metricName}:`, data);
                 
                 // Get DOM elements for progress bar and status
                 const progressBar = document.querySelector(`#task-status-${taskId}`).closest('.async-task-status').querySelector('.progress-bar');
@@ -806,7 +806,7 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                         statusSpan.textContent = `${realStatus} (${timeElapsed}s elapsed)`;
                     }
                     
-                    console.log(`📊 Real progress update: ${realProgress}% - ${realStatus}`);
+                    console.log(`Real progress update: ${realProgress}% - ${realStatus}`);
                 } else {
                     // Fallback for pending tasks without progress info
                     if (statusSpan) {
@@ -823,10 +823,10 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                             progressBar.style.background = 'linear-gradient(90deg, #4CAF50, #8BC34A)';
                         }
                         if (statusSpan) {
-                            statusSpan.textContent = '✅ Calculation completed!';
+                            statusSpan.textContent = 'Calculation completed!';
                         }
                         
-                        console.log(`✅ ${metricName} calculation completed successfully`);
+                        console.log(`${metricName} calculation completed successfully`);
                         
                         // Wait a moment to show completion, then update with results
                         setTimeout(() => {
@@ -838,9 +838,9 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                             progressBar.style.background = 'linear-gradient(90deg, #F44336, #E57373)';
                         }
                         if (statusSpan) {
-                            statusSpan.textContent = '❌ Calculation failed';
+                            statusSpan.textContent = 'Calculation failed';
                         }
-                        console.error(`❌ ${metricName} calculation failed:`, data.error);
+                        console.error(`${metricName} calculation failed:`, data.error);
                         updateTaskStatus(taskId, metricName, 'FAILED', data.error || 'Task failed');
                     }
                 } else {
@@ -853,9 +853,9 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                             progressBar.style.background = 'linear-gradient(90deg, #FF9800, #FFB74D)';
                         }
                         if (statusSpan) {
-                            statusSpan.textContent = '⏰ Taking longer than expected...';
+                            statusSpan.textContent = 'Taking longer than expected...';
                         }
-                        console.warn(`⏰ ${metricName} polling timeout reached. Task may still be running.`);
+                        console.warn(`${metricName} polling timeout reached. Task may still be running.`);
                         updateTaskStatus(taskId, metricName, 'TIMEOUT', 'Polling timeout reached. The task may still be running in the background.');
                     }
                 }
@@ -872,7 +872,7 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                         progressBar.style.background = 'linear-gradient(90deg, #F44336, #E57373)';
                     }
                     if (statusSpan) {
-                        statusSpan.textContent = '❌ Connection error';
+                        statusSpan.textContent = 'Connection error';
                     }
                     updateTaskStatus(taskId, metricName, 'ERROR', error.message);
                 }

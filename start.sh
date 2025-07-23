@@ -2,7 +2,7 @@
 
 echo "Starting AIDRIN with Celery and Redis"
 
-docker-compose up --build -d
+docker-compose up --build -d 
 
 echo "Services started!"
 echo "Flask app (Docker): http://localhost:5000"

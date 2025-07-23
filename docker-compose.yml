@@ -18,7 +18,7 @@ services:
   celery-worker:
     build: .
     container_name: aidrin-celery-worker
-    command: celery -A aidrin.celery_app worker --loglevel=info
+    command: celery -A aidrin.celery_app worker --loglevel=info --autoscale=10,3 
     volumes:
       - ./aidrin:/app/aidrin
       - ./aidrin/data:/app/aidrin/data
@@ -41,7 +41,7 @@ services:
         condition: service_healthy
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     restart: unless-stopped
 
 volumes:
