@@ -509,7 +509,6 @@ if not hasattr(app, '_routes_defined'):
                                 "task_id": task.id,
                                 "cache_key": cache_key,
                                 "status": "PENDING",
-                                "message": "Single attribute risk calculation started. Processing in background...",
                                 "is_async": True
                             }
                             current_app.TEMP_RESULTS_CACHE[cache_key] = {
@@ -527,7 +526,6 @@ if not hasattr(app, '_routes_defined'):
                             "task_id": task.id,
                             "cache_key": cache_key,
                             "status": "PENDING",
-                            "message": "Single attribute risk calculation started. Processing in background...",
                             "is_async": True
                         }
                         current_app.TEMP_RESULTS_CACHE[cache_key] = {
@@ -589,7 +587,6 @@ if not hasattr(app, '_routes_defined'):
                                 "task_id": task.id,
                                 "cache_key": cache_key,
                                 "status": "PENDING",
-                                "message": "Multiple attribute risk calculation started. Processing in background...",
                                 "is_async": True
                             }
                             current_app.TEMP_RESULTS_CACHE[cache_key] = {
@@ -607,7 +604,6 @@ if not hasattr(app, '_routes_defined'):
                             "task_id": task.id,
                             "cache_key": cache_key,
                             "status": "PENDING",
-                            "message": "Multiple attribute risk calculation started. Processing in background...",
                             "is_async": True
                         }
                         current_app.TEMP_RESULTS_CACHE[cache_key] = {

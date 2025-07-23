@@ -154,8 +154,8 @@ function submitForm() {
                         riskLevel: null,
                         riskColor: null,
                         value: 'N/A',
-                        description: data[type]['message'] || 'Processing in background...',
-                        interpretation: 'Task is being processed. Please wait...',
+                        description: '',
+                        interpretation: '',
                         title: title,
                         jsonData: jsonData,
                         hasError: false,
@@ -247,26 +247,34 @@ function submitForm() {
                         <strong>Error:</strong> ${content.description}
                     </div>`;
                 } else if (content.isAsync) {
-                    // Display async task status with loading indicator
+                    // Display async task status with progress bar
                     visualizationHtml += `<div class="async-task-status" 
                          data-task-id="${content.taskId}" 
                          data-cache-key="${content.cacheKey}"
                          data-metric-name="${content.title}"
-                         style="text-align: center; padding: 20px; background-color: #f0f8ff; border: 1px solid #007bff; border-radius: 5px;">
-                        <div class="progress-indicator" style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-                            <div class="spinner" style="width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px;"></div>
-                            <span><strong>Processing in background...</strong></span>
+                         style="text-align: center; padding: 20px; border: 2px solid #2196F3; border-radius: 8px; background-color: #f8f9fa;">
+                         
+                        <div style="margin-bottom: 15px;">
+                            <h4 style="color: #1976D2; margin: 0 0 10px 0;">Results are being calculated...</h4>
+                            <p style="color: #666; margin: 0; font-size: 14px;">This may take a few minutes. Please wait.</p>
                         </div>
-                        <p><strong>Status:</strong> <span id="status-${content.taskId}">PENDING</span></p>
-                        <p><em id="message-${content.taskId}">${content.description}</em></p>
-                        <p><small>Task ID: ${content.taskId}</small></p>
-                    </div>
-                    <style>
-                        @keyframes spin {
-                            0% { transform: rotate(0deg); }
-                            100% { transform: rotate(360deg); }
-                        }
-                    </style>`;
+                        
+                        <div class="progress-container" style="width: 100%; background-color: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; margin-bottom: 15px;">
+                            <div class="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #2196F3, #64B5F6); border-radius: 10px; transition: width 0.3s ease; animation: pulse 2s infinite;"></div>
+                        </div>
+                        
+                        <div style="font-size: 12px; color: #888;">
+                            <span id="task-status-${content.taskId}">Processing...</span>
+                        </div>
+                        
+                        <style>
+                            @keyframes pulse {
+                                0% { opacity: 0.7; }
+                                50% { opacity: 1; }
+                                100% { opacity: 0.7; }
+                            }
+                        </style>
+                    </div>`;
                 } else if (content.image && content.image.trim() !== "") {
                     // Display normal visualization
                     const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
@@ -751,57 +759,127 @@ function getDistanceMetricName() {
 // Async task polling for MMrisk score calculations
 function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval = 1500) {
     let attempts = 0;
-    console.log(`Starting polling for ${metricName} task: ${taskId} (max ${maxAttempts} attempts, ${interval}ms intervals)`);
+    console.log(`🚀 Starting polling for ${metricName} task: ${taskId} (max ${maxAttempts} attempts, ${interval}ms intervals)`);
     
     function checkTask() {
         attempts++;
-        console.log(`Polling attempt ${attempts}/${maxAttempts} for ${metricName}`);
+        
+        console.log(`🔄 Polling attempt ${attempts}/${maxAttempts} for ${metricName}`);
         
         fetch(`/check_and_update_task/${taskId}/${encodeURIComponent(cacheKey)}`)
             .then(response => {
-                console.log(`Poll response status: ${response.status} for ${metricName}`);
+                console.log(`📡 Poll response status: ${response.status} for ${metricName}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 return response.json();
             })
             .then(data => {
-                console.log(`Poll response data for ${metricName}:`, data);
+                console.log(`📥 Poll response data for ${metricName}:`, data);
+                
+                // Get DOM elements for progress bar and status
+                const progressBar = document.querySelector(`#task-status-${taskId}`).closest('.async-task-status').querySelector('.progress-bar');
+                const statusSpan = document.querySelector(`#task-status-${taskId}`);
+                
+                // Update progress bar and status from real Celery data
+                if (data.state === 'PROGRESS' && data.info) {
+                    // Use real progress from Celery
+                    const realProgress = data.info.current || 0;
+                    const realStatus = data.info.status || 'Processing...';
+                    
+                    if (progressBar) {
+                        progressBar.style.width = `${realProgress}%`;
+                        // Update progress bar color based on stage
+                        if (realProgress < 30) {
+                            progressBar.style.background = 'linear-gradient(90deg, #2196F3, #64B5F6)'; // Blue - preprocessing
+                        } else if (realProgress < 70) {
+                            progressBar.style.background = 'linear-gradient(90deg, #FF9800, #FFB74D)'; // Orange - calculation
+                        } else if (realProgress < 90) {
+                            progressBar.style.background = 'linear-gradient(90deg, #9C27B0, #BA68C8)'; // Purple - statistics
+                        } else {
+                            progressBar.style.background = 'linear-gradient(90deg, #4CAF50, #8BC34A)'; // Green - visualization
+                        }
+                    }
+                    
+                    if (statusSpan) {
+                        const timeElapsed = Math.round((attempts * interval) / 1000);
+                        statusSpan.textContent = `${realStatus} (${timeElapsed}s elapsed)`;
+                    }
+                    
+                    console.log(`📊 Real progress update: ${realProgress}% - ${realStatus}`);
+                } else {
+                    // Fallback for pending tasks without progress info
+                    if (statusSpan) {
+                        const timeElapsed = Math.round((attempts * interval) / 1000);
+                        statusSpan.textContent = `Processing... (${timeElapsed}s elapsed)`;
+                    }
+                }
                 
                 if (data.completed) {
                     if (data.success) {
-                        // Task completed successfully, update the placeholder with actual results
+                        // Task completed successfully, complete the progress bar
+                        if (progressBar) {
+                            progressBar.style.width = '100%';
+                            progressBar.style.background = 'linear-gradient(90deg, #4CAF50, #8BC34A)';
+                        }
+                        if (statusSpan) {
+                            statusSpan.textContent = '✅ Calculation completed!';
+                        }
+                        
                         console.log(`✅ ${metricName} calculation completed successfully`);
-                        updateAsyncTaskWithResults(taskId, metricName, data.result);
+                        
+                        // Wait a moment to show completion, then update with results
+                        setTimeout(() => {
+                            updateAsyncTaskWithResults(taskId, metricName, data.result);
+                        }, 1000);
                     } else {
                         // Task failed
+                        if (progressBar) {
+                            progressBar.style.background = 'linear-gradient(90deg, #F44336, #E57373)';
+                        }
+                        if (statusSpan) {
+                            statusSpan.textContent = '❌ Calculation failed';
+                        }
                         console.error(`❌ ${metricName} calculation failed:`, data.error);
-                        updateTaskStatus(metricName, 'Failed', data.error);
+                        updateTaskStatus(taskId, metricName, 'FAILED', data.error || 'Task failed');
                     }
-                } else if (attempts < maxAttempts) {
-                    // Task still running, check again
-                    const status = data.state || 'Processing';
-                    const message = data.info?.status || 'Processing...';
-                    console.log(`🔄 ${metricName} still processing: ${status} - ${message}`);
-                    updateTaskStatus(metricName, status, message);
-                    setTimeout(checkTask, interval);
                 } else {
-                    // Max attempts reached
-                    console.error(`⏰ ${metricName} calculation timed out after ${maxAttempts} attempts`);
-                    updateTaskStatus(metricName, 'Timeout', `Calculation timed out after ${Math.round(maxAttempts * interval / 1000)} seconds. The task may still be running in the background.`);
+                    // Task still running, continue polling
+                    if (attempts < maxAttempts) {
+                        setTimeout(checkTask, interval);
+                    } else {
+                        // Timeout reached
+                        if (progressBar) {
+                            progressBar.style.background = 'linear-gradient(90deg, #FF9800, #FFB74D)';
+                        }
+                        if (statusSpan) {
+                            statusSpan.textContent = '⏰ Taking longer than expected...';
+                        }
+                        console.warn(`⏰ ${metricName} polling timeout reached. Task may still be running.`);
+                        updateTaskStatus(taskId, metricName, 'TIMEOUT', 'Polling timeout reached. The task may still be running in the background.');
+                    }
                 }
             })
             .catch(error => {
-                console.error(`🚨 Error checking ${metricName} task (attempt ${attempts}):`, error);
+                console.error(`🚨 Error polling ${metricName} task:`, error);
+                
                 if (attempts < maxAttempts) {
-                    console.log(`⏳ Retrying in ${interval}ms...`);
+                    // Retry on error
                     setTimeout(checkTask, interval);
                 } else {
-                    updateTaskStatus(metricName, 'Error', 'Connection error after multiple attempts. Please refresh the page.');
+                    // Max retries reached
+                    if (progressBar) {
+                        progressBar.style.background = 'linear-gradient(90deg, #F44336, #E57373)';
+                    }
+                    if (statusSpan) {
+                        statusSpan.textContent = '❌ Connection error';
+                    }
+                    updateTaskStatus(taskId, metricName, 'ERROR', error.message);
                 }
             });
     }
     
+    // Start polling
     checkTask();
 }
 
@@ -899,7 +977,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
     }
 }
 
-function updateTaskStatus(metricName, status, message) {
+function updateTaskStatus(taskId, metricName, status, message) {
     // Find the async task status element for this metric
     const asyncElements = document.querySelectorAll(`[data-metric-name="${metricName}"]`);
     

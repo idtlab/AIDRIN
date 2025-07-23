@@ -9,10 +9,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
+def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
     result_dict = {}
 
     try:
+        # Stage 1: Data validation & preprocessing (5%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 5, 'total': 100, 'status': 'Data validation & preprocessing...'}
+            )
+        
         # Check if the DataFrame is empty
         if df.empty:
             raise ValueError("Input DataFrame is empty.")
@@ -46,14 +53,24 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
         # Convert the selected DataFrame to a NumPy array
         my_array = selected_df.to_numpy()
 
-        # Single attribute risk scoring
+        # Stage 2: Calculate risk scores for each column (15-70%)
         sing_res = {}
-        for i, col in enumerate(eval_cols):
+        total_columns = len(eval_cols)
+        
+        for col_idx, col in enumerate(eval_cols):
+            if task:
+                # Progress from 15% to 70% based on column completion
+                progress = 15 + (col_idx / total_columns) * 55
+                task.update_state(
+                    state='PROGRESS',
+                    meta={'current': int(progress), 'total': 100, 'status': f'Calculating risk scores for {col}... ({col_idx + 1}/{total_columns})'}
+                )
+            
             risk_scores = np.zeros(len(my_array))
             for j in range(len(my_array)):
-                attr1_tot = np.count_nonzero(my_array[:, i + 1] == my_array[j, i + 1])
+                attr1_tot = np.count_nonzero(my_array[:, col_idx + 1] == my_array[j, col_idx + 1])
 
-                mask_attr1_user = (my_array[:, 0] == my_array[j, 0]) & (my_array[:, i + 1] == my_array[j, i + 1])
+                mask_attr1_user = (my_array[:, 0] == my_array[j, 0]) & (my_array[:, col_idx + 1] == my_array[j, col_idx + 1])
                 count_attr1_user = np.count_nonzero(mask_attr1_user)
 
                 start_prob_attr1 = attr1_tot / len(my_array)
@@ -65,6 +82,13 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
 
             sing_res[col] = risk_scores
 
+        # Stage 3: Calculate descriptive statistics (70-85%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 75, 'total': 100, 'status': 'Calculating descriptive statistics...'}
+            )
+        
         # Calculate descriptive statistics for risk scores
         descriptive_stats_dict = {}
         for key, value in sing_res.items():
@@ -79,6 +103,12 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
             }
             descriptive_stats_dict[key] = stats_dict
         
+        # Stage 4: Generate visualization (85-100%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 90, 'total': 100, 'status': 'Generating visualization...'}
+            )
 
         # Create a box plot
         plt.figure(figsize=(8,8))
@@ -117,10 +147,17 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols):
     return result_dict
 
 
-def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
+def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
     result_dict = {}
 
     try:
+        # Stage 1: Data validation & preprocessing (5%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 5, 'total': 100, 'status': 'Data validation & preprocessing...'}
+            )
+        
         #check if dataframe is empty
         if df.empty:
             result_dict["Value Error"] = "Input dataframe is empty"
@@ -174,10 +211,26 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
         #convert dataframe to numpy array
         my_array = selected_df.to_numpy()
 
+        # Stage 2: Calculate risk scores for all rows (15-70%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 15, 'total': 100, 'status': 'Starting risk score calculations...'}
+            )
+
         #array to store risk scores of each data point
         risk_scores = np.zeros(len(my_array))
+        total_rows = len(my_array)
+        
         #risk scoring
         for j in range(len(my_array)):
+            # Update progress for every 10% of rows processed
+            if task and j % max(1, total_rows // 10) == 0:
+                progress = 15 + (j / total_rows) * 55  # 15% to 70%
+                task.update_state(
+                    state='PROGRESS',
+                    meta={'current': int(progress), 'total': 100, 'status': f'Calculating risk scores... ({j}/{total_rows} rows processed)'}
+                )
     
             if len(my_array[0]) >2:
                 priv_prob_MM = 1
@@ -226,6 +279,13 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
                 worst_case_MM_risk_score = round(1 - priv_prob_MM,2)#5
                 risk_scores[j] = worst_case_MM_risk_score
 
+        # Stage 3: Calculate dataset privacy level (70-80%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 75, 'total': 100, 'status': 'Calculating dataset privacy level...'}
+            )
+
         # calculate the entire dataset privacy level
         min_risk_scores = np.zeros(len(risk_scores))
         # Calculate the Euclidean distance
@@ -236,6 +296,13 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
         #max euclidean distance
         max_euclidean_distance = np.linalg.norm(max_risk_scores - min_risk_scores)
         normalized_distance = euclidean_distance/max_euclidean_distance
+        
+        # Stage 4: Calculate descriptive statistics (80-90%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 85, 'total': 100, 'status': 'Calculating descriptive statistics...'}
+            )
                 
         #descriptive statistics
         stats_dict = {
@@ -247,6 +314,14 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols):
             '75%': np.percentile(risk_scores, 75),
             'max': np.max(risk_scores)
         }
+        
+        # Stage 5: Generate visualization (90-100%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 95, 'total': 100, 'status': 'Generating visualization...'}
+            )
+        
         x_label = ",".join(eval_cols)
         # Create a box plot
         plt.figure(figsize=(8,8))
@@ -603,7 +678,7 @@ try:
             )
             
             # Calculate risk scores using existing function
-            result = generate_single_attribute_MM_risk_scores(df, id_col, eval_cols)
+            result = generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, self)
             
             # Update progress
             self.update_state(
@@ -644,7 +719,7 @@ try:
             )
             
             # Calculate risk scores using existing function
-            result = generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols)
+            result = generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, self)
             
             # Update progress
             self.update_state(
