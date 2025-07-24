@@ -198,7 +198,7 @@ function updateProgressBar(done, total) {
     }
 
     if (done >= total) {
-        label.innerText = "All tasks complete!";
+        label.innerText = "All metrics computed";
     }
 }
 function createVisualizationElement(data) {
@@ -982,9 +982,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
         darkmode !== "active" ? enableDarkmode() : disableDarkmode()
         toggleSlidesColor();
-
     })
-
+    toggleSlidesColor();
     //data log handlers 
     const dataLogButton = document.getElementById('datalog-button'); //navbar button
 
