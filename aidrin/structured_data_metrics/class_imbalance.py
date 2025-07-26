@@ -1,9 +1,14 @@
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
+plt.ioff()  # Turn off interactive mode
 import io
 import base64
 from math import sqrt, log
+import warnings
+warnings.filterwarnings('ignore')  # Suppress matplotlib warnings
 
 def imbalance_degree(classes, distance="EU"):
     """
@@ -51,7 +56,6 @@ def imbalance_degree(classes, distance="EU"):
             summ = np.vectorize(lambda p : pow(p - _e, 2))(_d).sum()
             return sqrt(summ)
         except Exception as e:
-            print(f"Error in Euclidean distance calculation: {e}")
             return None
     def _ch(_d, _e):
         # Chebyshev distance: max absolute difference
@@ -64,15 +68,9 @@ def imbalance_degree(classes, distance="EU"):
             q = np.full_like(_d, _e)
             mask = (_d > 0) & (q > 0)
             if not np.any(mask):
-                print("Warning: No valid values for KL divergence calculation (all probabilities are zero)")
                 return None
-            print(_d)
-            print(_e)
-            print(np.sum(_d[mask] * np.log(_d[mask] / q[mask])))
-            print()
             return np.sum(_d[mask] * np.log(_d[mask] / q[mask]))
         except Exception as e:
-            print(f"Error in KL divergence calculation: {e}")
             return None
     def _he(_d, _e):
         # Hellinger distance: sqrt(0.5 * sum((sqrt(p) - sqrt(q))^2))
@@ -80,7 +78,6 @@ def imbalance_degree(classes, distance="EU"):
             q = np.full_like(_d, _e)
             return sqrt(0.5 * np.sum((np.sqrt(_d) - np.sqrt(q)) ** 2))
         except Exception as e:
-            print(f"Error in Hellinger distance calculation: {e}")
             return None
     def _tv(_d, _e):
         # Total variation distance: 0.5 * sum(|p - q|)
@@ -88,7 +85,6 @@ def imbalance_degree(classes, distance="EU"):
             q = np.full_like(_d, _e)
             return 0.5 * np.sum(np.abs(_d - q))
         except Exception as e:
-            print(f"Error in Total Variation distance calculation: {e}")
             return None
     def _cs(_d, _e):
         # Chi-square divergence: sum((p - q)^2 / q)
@@ -96,7 +92,6 @@ def imbalance_degree(classes, distance="EU"):
             q = np.full_like(_d, _e)
             return np.sum((( _d - q) ** 2) / q)
         except Exception as e:
-            print(f"Error in Chi-squared distance calculation: {e}")
             return None
     def _min_classes(_d, _e):
         """
@@ -158,7 +153,6 @@ def imbalance_degree(classes, distance="EU"):
             
             return result
         except Exception as e:
-            print(f"Error in _i_m calculation: {e}")
             # Return equiprobability distribution as fallback
             return np.array([1/_K] * _K)
     
@@ -189,11 +183,9 @@ def imbalance_degree(classes, distance="EU"):
     
     # Validate input data
     if len(class_counts) == 0:
-        print("Error: No classes found in the data")
         return None
     
     if len(class_counts) == 1:
-        print("Warning: Only one class found, imbalance degree is 0")
         return 0.0
     
     empirical_distribution = class_counts / class_counts.sum()
@@ -209,38 +201,82 @@ def imbalance_degree(classes, distance="EU"):
         
         # Check if distance calculations returned None
         if dist_ed is None or dist_im is None:
-            print(f"Warning: Distance calculation returned None for {distance} metric")
             return None
+            
+        # Handle the case where empirical distribution is already uniform (perfect balance)
+        if dist_ed == 0:
+            return 0.0
             
         # Avoid division by zero
         if dist_im == 0:
-            print(f"Warning: Reference distance is zero for {distance} metric, cannot compute imbalance degree")
-            return None
+            # If reference distance is 0, it means the reference distribution is uniform
+            # This can happen when m=0 (no minority classes) or m=K (all classes are minority)
+            # In both cases, the imbalance degree should be 0 (perfect balance)
+            return 0.0
             
-        result = 0.0 if dist_ed == 0 else (dist_ed / dist_im) + (m - 1)
+        result = (dist_ed / dist_im) + (m - 1)
         return result
     except Exception as e:
-        print(f"Error in imbalance degree calculation for {distance} metric: {e}")
         return None
 
 def class_distribution_plot(df, column):
-    plot_res = {}
     try:
-        # Get unique class labels
-        class_labels = df[column].dropna().unique()
-
+        # Ensure column exists and has data
+        if column not in df.columns:
+            return ""
+        
+        # Get data and handle NaN values
+        column_data = df[column].dropna()
+        if len(column_data) == 0:
+            return ""
+        
         # Calculate class frequencies
-        class_counts = df[column].dropna().value_counts()
-        class_labels_modified = [label[:9] + '...' if len(label) > 8 else label for label in class_counts.index]
+        class_counts = column_data.value_counts()
+        
+        # Check if we have any data to plot
+        if len(class_counts) == 0:
+            return ""
+        
+        # Debug: Check if we have valid data
+        if class_counts.sum() == 0:
+            return ""
+        
+        # Debug: Print some info about the data
+        print(f"Class distribution plot - Column: {column}, Unique values: {len(class_counts)}, Total: {class_counts.sum()}")
+        
+        # Convert labels to strings and handle truncation safely
+        class_labels_modified = []
+        for label in class_counts.index:
+            label_str = str(label)
+            if len(label_str) > 8:
+                class_labels_modified.append(label_str[:9] + '...')
+            else:
+                class_labels_modified.append(label_str)
         # Set the figure size
-        fig, ax = plt.subplots(figsize=(8, 8))
-
+        try:
+            fig, ax = plt.subplots(figsize=(8, 8))
+        except Exception as e:
+            return ""
+        
+        # Ensure we have valid data for pie chart
+        if len(class_counts) == 0 or class_counts.sum() == 0:
+            plt.close()
+            return ""
+        
         # Plotting a pie chart without labels
-        wedges, _ = ax.pie(class_counts, startangle=90)
+        try:
+            wedges, _ = ax.pie(class_counts.values, startangle=90)
+        except Exception as e:
+            plt.close()
+            return ""
 
         # Create legend labels with class name and percentage only
         total = class_counts.sum()
-        legend_labels = [f'{label}: {count/total:.1%}' for label, count in zip(class_labels_modified, class_counts)]
+        legend_labels = []
+        for label, count in zip(class_labels_modified, class_counts):
+            percentage = (count / total) * 100
+            legend_labels.append(f'{label}: {percentage:.1f}%')
+        
         ax.legend(wedges, legend_labels, title="Classes", loc="center left", bbox_to_anchor=(1, 0.5), fontsize=12)
 
         plt.title(f'Distribution of Each Class in {column}')
@@ -251,11 +287,20 @@ def class_distribution_plot(df, column):
 
         # Save the plot to a BytesIO buffer
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
         buf.seek(0)
 
         # Encode the buffer to base64
-        plot_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        try:
+            plot_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            if not plot_base64:
+                plt.close()
+                buf.close()
+                return ""
+        except Exception as e:
+            plt.close()
+            buf.close()
+            return ""
 
         # Close the plot and buffer to free up resources
         plt.close()
@@ -264,8 +309,8 @@ def class_distribution_plot(df, column):
         return plot_base64
 
     except Exception as e:
-        # Handle errors and store the error message in the result
-        return str(e)
+        # Handle errors and return empty string for visualization
+        return ""
 
 #imbalance degree calculation with default distance metric to be Euclidean
 def calc_imbalance_degree(df, column, dist_metric='EU'):

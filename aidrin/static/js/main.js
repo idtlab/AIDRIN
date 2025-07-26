@@ -171,6 +171,10 @@ function submitForm() {
                 } else if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
                     console.log('Adding visualization:', type);
                     var image = data[type][type + ' Visualization'];
+                    // Ensure image is a string
+                    if (typeof image !== 'string') {
+                        image = image ? String(image) : "";
+                    }
                     var value = data[type]['Value'] || 'N/A'; 
                     var description = data[type]['Description'] || '';
                     var interpretation = data[type]['Graph interpretation'] || '';
@@ -275,7 +279,7 @@ function submitForm() {
                             }
                         </style>
                     </div>`;
-                } else if (content.image && content.image.trim() !== "") {
+                } else if (content.image && typeof content.image === 'string' && content.image.trim() !== "") {
                     // Display normal visualization
                     const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
                     visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">

@@ -365,7 +365,9 @@ if not hasattr(app, '_routes_defined'):
                     else:
                         current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
                         ci_dict = {}
-                        ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file,classes)
+                        visualization = class_distribution_plot(file,classes)
+                        print(f"Class Imbalance - Visualization length: {len(visualization) if visualization else 0}")
+                        ci_dict['Class Imbalance Visualization'] = visualization if visualization else ""
                         ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
                         ci_dict['Graph interpretation'] = "The pie chart shows the proportion of each class in the dataset. A balanced dataset would show roughly equal slices, while an imbalanced dataset will have some classes significantly larger than others."
                         ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric=dist_metric)
@@ -378,7 +380,9 @@ if not hasattr(app, '_routes_defined'):
                         print(f"Cached Class Imbalance for key: {cache_key}")
                 else:
                     ci_dict = {}
-                    ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file,classes)
+                    visualization = class_distribution_plot(file,classes)
+                    print(f"Class Imbalance - Visualization length: {len(visualization) if visualization else 0}")
+                    ci_dict['Class Imbalance Visualization'] = visualization if visualization else ""
                     ci_dict['Description'] = "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class."
                     ci_dict['Graph interpretation'] = "The pie chart shows the proportion of each class in the dataset. A balanced dataset would show roughly equal slices, while an imbalanced dataset will have some classes significantly larger than others."
                     ci_dict['Imbalance degree'] = calc_imbalance_degree(file,classes,dist_metric=dist_metric)
@@ -929,6 +933,14 @@ def get_summary_stastistics():
             # Separate numerical and categorical columns
             numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
             categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
+            
+            # For class imbalance, we want columns with less than 30 different values (categorical-like)
+            categorical_for_imbalance = []
+            for col in df.columns:
+                unique_count = df[col].nunique()
+                if unique_count < 30:
+                    categorical_for_imbalance.append(col)
+            
             all_features = numerical_columns + categorical_columns
 
             # Count the number of records
@@ -944,7 +956,8 @@ def get_summary_stastistics():
                 'features_count': feature_count,
                 'categorical_features': list(categorical_columns),
                 'numerical_features': list(numerical_columns),
-                'all_features':all_features,
+                'all_features': all_features,
+                'categorical_for_imbalance': list(categorical_for_imbalance),
             }
 
             return jsonify(response_data)

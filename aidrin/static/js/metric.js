@@ -141,7 +141,7 @@ $(document).ready(function () {
                         createDropdown(response.all_features,'allFeaturesDropdownStatRate2');
                         createDropdown(response.all_features,'allFeaturesDropdownRealRep');
                         createDropdown(response.all_features,'allFeaturesDropdownFeaRel');
-                        createDropdown(response.all_features,'allFeaturesDropdownClIm');
+                        createDropdown(response.categorical_for_imbalance,'allFeaturesDropdownClIm');
                         createDropdown(response.all_features,'allFeaturesDropdownMMS');
                         createDropdown(response.all_features,'allFeaturesDropdownMMM');
                         createDropdown(response.all_features,'allFeaturesDropdownCondDemoDis1');
