@@ -864,23 +864,23 @@ if not hasattr(app, '_routes_defined'):
         
     ####### Summary Statistics Routes #####
 
-@app.route('/summary_statistics', methods=['POST'])
-def handle_summary_statistics():
-    try:
-        # Get the uploaded file
-        uploaded_file_path = session.get('uploaded_file_path')
-        if uploaded_file_path and os.path.exists(uploaded_file_path):
-            #if data to be parsed, reroute to GET Request
-            return redirect(url_for('get_summary_stastistics'))
-        #otherwise no file is uploaded, redirect back to file upload
-        else:
-            return render_template('upload_file.html')
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-     
-@app.route('/summary_statistics',methods=['GET'])
-def get_summary_stastistics():
-    try:
+    @app.route('/summary_statistics', methods=['POST'])
+    def handle_summary_statistics():
+        try:
+            # Get the uploaded file
+            uploaded_file_path = session.get('uploaded_file_path')
+            if uploaded_file_path and os.path.exists(uploaded_file_path):
+                #if data to be parsed, reroute to GET Request
+                return redirect(url_for('get_summary_stastistics'))
+            #otherwise no file is uploaded, redirect back to file upload
+            else:
+                return render_template('upload_file.html')
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)})
+        
+    @app.route('/summary_statistics',methods=['GET'])
+    def get_summary_stastistics():
+        try:
             df, uploaded_file_path, uploaded_file_name = read_file()
             # Extract summary statistics
             summary_statistics = df.describe().applymap(
@@ -890,58 +890,16 @@ def get_summary_stastistics():
             # Calculate probability distributions
             histograms = summary_histograms(df)
 
-                # Separate numerical and categorical columns
-                numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
-                categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
-                all_features = numerical_columns + categorical_columns
-
-                for v in summary_statistics.values():
-                    for old_key in v:
-                        if old_key in ['25%','50%','75%']:
-                            new_key = old_key.replace("%","th percentile")
-                            v[new_key] = v.pop(old_key)
-
-                # Count the number of records
-                records_count = len(df)
-
-                #count the number of features
-                feature_count = len(df.columns)
-
-                response_data = {
-                    'success': True,
-                    'message': 'File uploaded successfully',
-                    'records_count': records_count,
-                    'features_count': feature_count,
-                    'categorical_features': list(categorical_columns),
-                    'numerical_features': list(numerical_columns),
-                    'all_features':all_features,
-                    'summary_statistics': summary_statistics,
-                    'histograms': histograms
-                }
-                return jsonify(response_data)
-        except Exception as e:
-            return jsonify({'success': False, 'message': str(e)})
-        
-    ####### Feature Set Route #####
-
-    @app.route('/feature_set', methods=['POST'])
-    def extract_features():
-        try:
-            df, uploaded_file_path, uploaded_file_name = read_file()
-
-
             # Separate numerical and categorical columns
             numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
             categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
-            
-            # For class imbalance, we want columns with less than 30 different values (categorical-like)
-            categorical_for_imbalance = []
-            for col in df.columns:
-                unique_count = df[col].nunique()
-                if unique_count < 30:
-                    categorical_for_imbalance.append(col)
-            
             all_features = numerical_columns + categorical_columns
+
+            for v in summary_statistics.values():
+                for old_key in v:
+                    if old_key in ['25%','50%','75%']:
+                        new_key = old_key.replace("%","th percentile")
+                        v[new_key] = v.pop(old_key)
 
             # Count the number of records
             records_count = len(df)
@@ -956,14 +914,56 @@ def get_summary_stastistics():
                 'features_count': feature_count,
                 'categorical_features': list(categorical_columns),
                 'numerical_features': list(numerical_columns),
-                'all_features': all_features,
-                'categorical_for_imbalance': list(categorical_for_imbalance),
+                'all_features':all_features,
+                'summary_statistics': summary_statistics,
+                'histograms': histograms
             }
-
             return jsonify(response_data)
-
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)})
+            
+    ####### Feature Set Route #####
+
+    @app.route('/feature_set', methods=['POST'])
+    def extract_features():
+            try:
+                df, uploaded_file_path, uploaded_file_name = read_file()
+
+
+                # Separate numerical and categorical columns
+                numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
+                categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
+                
+                # For class imbalance, we want columns with less than 30 different values (categorical-like)
+                categorical_for_imbalance = []
+                for col in df.columns:
+                    unique_count = df[col].nunique()
+                    if unique_count < 30:
+                        categorical_for_imbalance.append(col)
+                
+                all_features = numerical_columns + categorical_columns
+
+                # Count the number of records
+                records_count = len(df)
+
+                #count the number of features
+                feature_count = len(df.columns)
+
+                response_data = {
+                    'success': True,
+                    'message': 'File uploaded successfully',
+                    'records_count': records_count,
+                    'features_count': feature_count,
+                    'categorical_features': list(categorical_columns),
+                    'numerical_features': list(numerical_columns),
+                    'all_features': all_features,
+                    'categorical_for_imbalance': list(categorical_for_imbalance),
+                }
+
+                return jsonify(response_data)
+
+            except Exception as e:
+                return jsonify({'success': False, 'message': str(e)})
 
     ####### Functions #####
 
@@ -973,39 +973,39 @@ def get_summary_stastistics():
         uploaded_file_name = session.get('uploaded_file_name')
         uploaded_file_type = session.get('uploaded_file_type')
 
-    if not uploaded_file_path and uploaded_file_name:
-        return redirect(request.url)
-    
-    #default result
-    readFile = None
-    #csv
-    if uploaded_file_type==('.csv'):
-        readFile = pd.read_csv(uploaded_file_path, index_col=False)
-    #npz
-    if uploaded_file_type==('.npz'):
-        npz_data = np.load(uploaded_file_path, allow_pickle=True)
+        if not uploaded_file_path and uploaded_file_name:
+            return redirect(request.url)
+        
+        #default result
+        readFile = None
+        #csv
+        if uploaded_file_type==('.csv'):
+            readFile = pd.read_csv(uploaded_file_path, index_col=False)
+        #npz
+        if uploaded_file_type==('.npz'):
+            npz_data = np.load(uploaded_file_path, allow_pickle=True)
 
-        data_dict = {}
+            data_dict = {}
 
-        for key in npz_data.files:
-            array = npz_data[key]
-            
-            # Check dimensionality
-            if array.ndim == 1:
-                data_dict[key] = array
-            else:
-                # Flatten if it's a 2D array with only 1 column
-                if array.ndim == 2 and array.shape[1] == 1:
-                    data_dict[key] = array.flatten()
+            for key in npz_data.files:
+                array = npz_data[key]
+                
+                # Check dimensionality
+                if array.ndim == 1:
+                    data_dict[key] = array
                 else:
-                    # Otherwise, store the whole array as a column of objects (fallback)
-                    data_dict[key] = [row for row in array]
+                    # Flatten if it's a 2D array with only 1 column
+                    if array.ndim == 2 and array.shape[1] == 1:
+                        data_dict[key] = array.flatten()
+                    else:
+                        # Otherwise, store the whole array as a column of objects (fallback)
+                        data_dict[key] = [row for row in array]
 
-        # Now create the DataFrame safely
-        readFile = pd.DataFrame(data_dict)
-    #excel
-    if uploaded_file_type==('.xls,.xlsb,.xlsx,.xlsm'):
-        readFile = pd.read_excel(uploaded_file_path)
+            # Now create the DataFrame safely
+            readFile = pd.DataFrame(data_dict)
+        #excel
+        if uploaded_file_type==('.xls,.xlsb,.xlsx,.xlsm'):
+            readFile = pd.read_excel(uploaded_file_path)
 
         return readFile, uploaded_file_path, uploaded_file_name
 
