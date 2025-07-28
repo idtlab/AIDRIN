@@ -1,0 +1,144 @@
+<!-- Includes univeral elements -->
+
+<!-- error handling popup -->
+<div id="error-popup" class="error-popup">
+  <svg
+    style="padding-top: 5%"
+    xmlns="http://www.w3.org/2000/svg"
+    height="96px"
+    viewBox="0 -960 960 960"
+    width="96px"
+    fill="currentColor"
+  >
+    <path
+      d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"
+    />
+  </svg>
+  <h2 id="error-type" style="margin-top: 0">Error: Placeholder Type</h2>
+  <p id="error-message">Placeholder Error Details</p>
+  <br />
+  <button id="close-popup" onclick="closeErrorPopup()" style="width: 30%">
+    Ok
+  </button>
+</div>
+
+<!-- data log popup -->
+<div id="datalog-popup" class="datalog-popup">
+  <h2>Datalog</h2>
+  <!-- Table switcher radio buttons -->
+  <div class="radio-group">
+    <label
+      ><input type="radio" name="tableSwitch" value="masterLog" checked />
+      Master</label
+    >
+    <label
+      ><input type="radio" name="tableSwitch" value="fileUploadLog" /> File
+      Upload</label
+    >
+    <label
+      ><input type="radio" name="tableSwitch" value="metricLog" /> Metric
+      Specific</label
+    >
+  </div>
+  <!-- Overall log -->
+  <div class="scrollable-container active" id="masterLog">
+    <table id="masterLogTable">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Logger</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <!-- File Upload log -->
+  <div class="scrollable-container" id="fileUploadLog">
+    <table id="fileUploadLogTable">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <!-- Metric upload log -->
+  <div class="scrollable-container" id="metricLog">
+    <table id="metricLogTable">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <button id="close-popup" onclick="closeDatalogPopup()" style="width: 30%">
+    Close Log
+  </button>
+</div>
+
+<!-- navbar (home button, datalog, themeswitch) -->
+<div class="top-left-container">
+  <div id="navbar">
+    <a class="home" href="/">
+      <img
+        style="max-width: 48px; max-height: 48px"
+        src="images/logoNoBackground.png"
+        alt="Aidrin Logo"
+      />
+    </a>
+    <button class="navbar-buttons" id="datalog-button">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        height="48px"
+        viewBox="0 -960 960 960"
+        width="48px"
+        fill="#5f6368"
+      >
+        <path
+          d="M120-160v-160h720v160H120Zm80-40h80v-80h-80v80Zm-80-440v-160h720v160H120Zm80-40h80v-80h-80v80Zm-80 280v-160h720v160H120Zm80-40h80v-80h-80v80Z"
+        />
+      </svg>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        height="48px"
+        viewBox="0 -960 960 960"
+        width="48px"
+        fill="#5f6368"
+      >
+        <path
+          d="M120-160v-160h720v160H120Zm80-40h80v-80h-80v80Zm-80-440v-160h720v160H120Zm80-40h80v-80h-80v80Zm-80 280v-160h720v160H120Zm80-40h80v-80h-80v80Z"
+        />
+      </svg>
+      <button class="navbar-buttons" id="theme-switch">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          height="48px"
+          viewBox="0 -960 960 960"
+          width="48px"
+          fill="#5f6368"
+        >
+          <path
+            d="M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Z"
+          />
+        </svg>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          height="48px"
+          viewBox="0 -960 960 960"
+          width="3em"
+          fill="#5f6368"
+        >
+          <path
+            d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Z"
+          />
+        </svg>
+      </button>
+    </button>
+  </div>
+</div>
