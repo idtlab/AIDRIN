@@ -9,7 +9,7 @@ from aidrin.file_handling.file_parser import read_file
 
 
 @shared_task(bind=True, ignore_result=False)
-def completeness(self: Task, file_info):
+def completeness(self: Task, file_info, return_base64: bool = True):
     try:
         file = read_file(file_info)
         # Calculate completeness metric for each column
@@ -73,18 +73,22 @@ def completeness(self: Task, file_info):
 
             plt.tight_layout()
 
-            # Save the chart to a BytesIO object
-            img_buf = io.BytesIO()
-            plt.savefig(img_buf, format="png")
-            img_buf.seek(0)
+            if return_base64:
 
-            # Encode the image as base64
-            img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
+                # Save the chart to a BytesIO object
+                img_buf = io.BytesIO()
+                plt.savefig(img_buf, format="png")
+                img_buf.seek(0)
 
-            # Add the base64-encoded image to the dictionary under a separate key
-            result_dict["Completeness Visualization"] = img_base64
+                # Encode the image as base64
+                img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
 
-            plt.close()  # Close the plot to free up resources
+                # Add the base64-encoded image to the dictionary under a separate key
+                result_dict["Completeness Visualization"] = img_base64
+                plt.close()  # Close the plot to free up resources
+            else:
+                plt.show()
+                plt.close()  # Close the plot to free up resources
 
             # Add overall completeness to the dictionary
             result_dict["Overall Completeness"] = 1

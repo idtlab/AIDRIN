@@ -2,7 +2,6 @@ import base64
 from io import BytesIO
 from typing import List
 
-import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from celery import Task, shared_task
@@ -11,7 +10,7 @@ from dython.nominal import associations
 
 from aidrin.file_handling.file_parser import read_file
 
-matplotlib.use("Agg")
+# matplotlib.use("Agg")
 
 NOMINAL_NOMINAL_ASSOC = "theil"
 

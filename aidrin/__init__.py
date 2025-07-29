@@ -4,6 +4,8 @@ from celery import Celery, Task
 from flask import Flask
 
 from .main import main as main_blueprint
+from aidrin.structured_data_metrics.completeness import completeness  # noqa: F401
+from aidrin.structured_data_metrics.class_imbalance import class_distribution_plot, calc_imbalance_degree  # noqa: F401
 
 
 # create app config
@@ -58,3 +60,4 @@ def celery_init_app(app: Flask) -> Celery:
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app
+

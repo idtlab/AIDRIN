@@ -127,24 +127,25 @@ def imbalance_degree(classes, distance="EU"):
 
 
 @shared_task(bind=True, ignore_result=False)
-def class_distribution_plot(self: Task, column, file_info):
-    df = read_file(file_info)
+def class_distribution_plot(self: Task, column: str, file_info: dict, return_base64: bool = True):
     try:
-        # Get unique class labels
-        class_labels = df[column].dropna().unique()
+        # Read the DataFrame
+        df = read_file(file_info)
+        if column not in df.columns:
+            raise ValueError(f"Column '{column}' not found in the dataset.")
 
-        # Calculate class frequencies
+        # Drop NaNs and get value counts
         class_counts = df[column].dropna().value_counts()
+        class_labels = class_counts.index.tolist()
 
-        # Set the figure size
-        plt.figure(figsize=(8, 8))
-
-        # Plotting a pie chart for each class
+        # Shorten long labels
         class_labels_modified = [
             str(label)[:9] + "..." if len(str(label)) > 8 else str(label)
             for label in class_labels
-        ]  # convert to strings to prevent numpy error
+        ]
 
+        # Create the pie chart
+        plt.figure(figsize=(8, 8))
         patches, texts, _ = plt.pie(
             class_counts,
             labels=class_labels_modified,
@@ -152,32 +153,31 @@ def class_distribution_plot(self: Task, column, file_info):
             autopct=lambda p: f"{p:.1f}%" if p >= 10 else None,
         )
 
-        # Add labels to sections with percentages above 10%
         for text in texts:
             text.set_fontsize(12)
 
-        plt.title(f"Distribution of Each Class in {column}")
+        plt.title(f"Distribution of Each Class in '{column}'")
         plt.axis("equal")
 
-        # Save the plot to a BytesIO buffer
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png")
-        buf.seek(0)
+        if return_base64:
+            # Return image as base64 string
+            buf = io.BytesIO()
+            plt.savefig(buf, format="png")
+            buf.seek(0)
+            plot_base64 = base64.b64encode(buf.read()).decode("utf-8")
+            buf.close()
+            plt.close()
+            return plot_base64
+        else:
+            # Show the plot directly
+            plt.show()
+            plt.close()
+            return None
 
-        # Encode the buffer to base64
-        plot_base64 = base64.b64encode(buf.read()).decode("utf-8")
-
-        # Close the plot and buffer to free up resources
-        plt.close()
-        buf.close()
-
-        return plot_base64
     except SoftTimeLimitExceeded:
         raise Exception("Class Distribution Plot task timed out.")
     except Exception as e:
-        # Handle errors and store the error message in the result
-        return str(e)
-
+        return f"Error: {str(e)}"
 
 # imbalance degree calculation with default distance metric to be Euclidean
 
