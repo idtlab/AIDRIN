@@ -23,7 +23,6 @@ class hdf5Reader(BaseFileReader):
                 return df
 
             def recurse(name, obj, path=[]):
-
                 if isinstance(obj, h5py.Dataset):
                     data = obj[()]
                     # If it's a 1D or structured dataset, load it into dicts
@@ -71,7 +70,7 @@ class hdf5Reader(BaseFileReader):
     def filter(self, kept_keys):
         if isinstance(kept_keys, str):
             kept_keys = kept_keys.split(",")
-            kept_keys = set(g.strip("/") for g in kept_keys)
+            kept_keys = {g.strip("/") for g in kept_keys}
         new_file_name = (
             f"filtered_{uuid.uuid4().hex}_{session.get('uploaded_file_name')}"
         )

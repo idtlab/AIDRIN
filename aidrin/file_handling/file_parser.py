@@ -20,7 +20,7 @@ READER_MAP = {
     ".xls, .xlsb, .xlsx, .xlsm": excelReader,
     ".json": jsonReader,
     ".h5": hdf5Reader,
-    # Add additonal file types here
+    # Add additional file types here
 }
 
 # Supported file types. Read on front end to create select features.

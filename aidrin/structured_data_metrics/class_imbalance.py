@@ -70,7 +70,7 @@ def imbalance_degree(classes, distance="EU"):
 
         Returns
         -------
-        Number of minority clases.
+        Number of minority classes.
         """
         return len(_d[_d < _e])
 
@@ -95,13 +95,13 @@ def imbalance_degree(classes, distance="EU"):
         A list with the i_m distribution.
         """
         min_i = np.zeros(_m)
-        maj_i = np.ones((_K - _m - 1)) * (1 / _K)
+        maj_i = np.ones(_K - _m - 1) * (1 / _K)
         maj = np.array([1 - (_K - _m - 1) / _K])
         return np.concatenate((min_i, maj_i, maj)).tolist()
 
     def _dist_fn():
         """
-        Selects the distance function according to the distance paramenter.
+        Selects the distance function according to the distance parameter.
 
         Returns
         -------

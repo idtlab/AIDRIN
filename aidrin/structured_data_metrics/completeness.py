@@ -20,7 +20,6 @@ def completeness(self: Task, file_info):
         result_dict = {}
 
         if overall_completeness != 0 and overall_completeness != 1:
-
             # Filter out columns with completeness score of 1
             incomplete_columns = {k: v for k, v in completeness_scores.items() if v < 1}
 

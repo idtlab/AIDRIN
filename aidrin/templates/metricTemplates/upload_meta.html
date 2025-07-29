@@ -6,16 +6,16 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/metric.js') }}"></script>
-   
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    
+
     <title>Upload JSON File</title>
     <style>
-       
+
         #uploadForm {
             max-width: 400px;
             margin-top: 100px;
-            
+
         }
         #uploadForm label {
             display: block;
@@ -24,7 +24,7 @@
     </style>
 </head>
 <body>
-    <!-- Include univeral elements -->
+    <!-- Include universal elements -->
     {% include 'universalComponents.html'%}
     <h1 style="text-align:center;">FAIR Compliance Evaluation</h1>
     <form id="uploadForm" style="align-self:center; margin-top:0px;" method="post" enctype="multipart/form-data">
@@ -41,7 +41,7 @@
         </label>
         <!--clear button for file (initially hidden)-->
         <button type="button" id="clearButton" class="clear-button" style="margin:0px; margin-bottom:5px;display:none" onclick="clearFile()">Clear Uploaded File</button>
-       
+
 
         <label for="metadata type">Select the metadata type:</label>
         <select name="metadata type" style="margin:0px;" id="metadata type" required>
@@ -85,7 +85,7 @@
         }
     </script>
     </form>
-   
+
     <div id="resultContainer"></div>
 
     <script>
@@ -140,10 +140,10 @@
             resetUI();
         }
         });
-        
+
         function clearFile() {
-        //clear file input and reset box 
-        fileInput.value = '';      
+        //clear file input and reset box
+        fileInput.value = '';
         container.style.border       = '';
         container.style.borderRadius = '10px';
         uploadIcon.style.display     = 'block';
@@ -154,8 +154,8 @@
         // Clear the result container
         document.getElementById('resultContainer').innerHTML = '';
         }
-        
-       
+
+
         function getLightColor(key) {
             switch (key) {
                 case 'Findable':
@@ -194,7 +194,7 @@
             predefinedOrder.forEach(function(key) {
                 if (obj.hasOwnProperty(key) && key !== "Pie chart" && key !== "FAIR Compliance Checks") {
                     var value = obj[key];
-                    
+
                     if (key === "Accessible" || key === "Interoperable" || key === "Reusable" || key === "Findable" || key === "Other" || key === "Original Metadata") {
                         result += "<ul>";
                     } else {
@@ -217,7 +217,7 @@
 
                     result += '</ul>';
 
-                    
+
                 }
             });
 

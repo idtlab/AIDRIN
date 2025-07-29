@@ -6,10 +6,10 @@
 
 ## Features
 
-- Evaluate dataset readiness for AI applications  
-- Interactive web interface for exploration  
-- Lightweight, open-source, and customizable  
-- Built with Flask, Celery, and Redis  
+- Evaluate dataset readiness for AI applications
+- Interactive web interface for exploration
+- Lightweight, open-source, and customizable
+- Built with Flask, Celery, and Redis
 
 ---
 
@@ -21,8 +21,8 @@
 
 ## Prerequisites
 
-- [Python 3.10](https://www.python.org/downloads/release/python-3100/)  
-- [Conda (Anaconda or Miniconda)](https://docs.conda.io/en/latest/miniconda.html)   
+- [Python 3.10](https://www.python.org/downloads/release/python-3100/)
+- [Conda (Anaconda or Miniconda)](https://docs.conda.io/en/latest/miniconda.html)
 
 ---
 
