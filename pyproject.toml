@@ -10,10 +10,9 @@ dependencies = [
     "dython",
     "pandas",
     "shap",
-    "celery",
-    "redis",
     "h5py",
-    "conda"
+    "celery",
+    "redis"
 ]
 
 [build-system]

@@ -1,16 +1,15 @@
 function togglePillarDropdown(id) {
     const container = document.getElementById(id); //
-    const subElements = container.querySelectorAll('.toggle-button');
+    const subElements = container.querySelectorAll(".toggle-button");
 
     const header = document.querySelector(`h3[onclick*="${id}"]`);
     const svg = header.querySelector("svg");
-    subElements.forEach(element => {
-        if (element.style.display === 'none' || element.style.display === '') {
-            element.style.display = 'flex';
+    subElements.forEach((element) => {
+        if (element.style.display === "none" || element.style.display === "") {
+            element.style.display = "flex";
             svg.innerHTML = '<path d="M480-360 280-559.33h400L480-360Z"/>';
-
         } else {
-            element.style.display = 'none';
+            element.style.display = "none";
             svg.innerHTML = '<path d="M400-280v-400l200 200-200 200Z"/>';
         }
     });
@@ -20,23 +19,27 @@ function togglePillarDropdown(id) {
 
 //to clear
 function clearFile() {
-    fetch('/clear', {
-        method: 'POST',
+    fetch("/clear", {
+        method: "POST",
     })
-        .then(response => {
+        .then((response) => {
             if (response.redirected) {
                 // Redirect to the specified location
                 window.location.href = response.url;
             }
         })
-        .catch(error => {
-            console.error('Error:', error);
+        .catch((error) => {
+            console.error("Error:", error);
             openErrorPopup("File Clear", error); // call error popup
         });
 }
 
 //changes file upload ability
-function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage) {
+function updateFileInputBasedOnType(
+    fileTypeElement,
+    fileInput,
+    fileUploadMessage
+) {
     const fileType = fileTypeElement.value;
     //if a filetype is present, set to that filetype only, otherwise disable
     if (fileType) {
@@ -56,21 +59,29 @@ function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessag
     }
 }
 
-
 function submitForm() {
-
-    var form = document.getElementById('uploadForm');
+    var form = document.getElementById("uploadForm");
     var formData = new FormData(form);
 
     // Get the values of the checkboxes and concatenate them with a comma
-    var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
-    var numFeaCheckboxValues = Array.from(formData.getAll('numerical features for feature relevancy')).join(',');
-    var catFeaCheckboxValues = Array.from(formData.getAll('categorical features for feature relevancy')).join(',');
+    var checkboxValues = Array.from(formData.getAll("checkboxValues")).join(",");
+    var numFeaCheckboxValues = Array.from(
+        formData.getAll("numerical features for feature relevancy")
+    ).join(",");
+    var catFeaCheckboxValues = Array.from(
+        formData.getAll("categorical features for feature relevancy")
+    ).join(",");
 
     // Add the concatenated checkbox values to the form data
-    formData.set('correlation columns', checkboxValues);
-    formData.set("numerical features for feature relevancy", numFeaCheckboxValues);
-    formData.set("categorical features for feature relevancy", catFeaCheckboxValues);
+    formData.set("correlation columns", checkboxValues);
+    formData.set(
+        "numerical features for feature relevancy",
+        numFeaCheckboxValues
+    );
+    formData.set(
+        "categorical features for feature relevancy",
+        catFeaCheckboxValues
+    );
 
     // Note: We don't need to modify the quasi-identifier fields as they should remain as lists
     // The backend will handle both string and list formats
@@ -376,19 +387,16 @@ function createVisualizationElement(data) {
 
 function removeVisualizationKey(data) {
     for (let key in data) {
-        if (typeof data[key] === 'object' && data[key] !== null) {
+        if (typeof data[key] === "object" && data[key] !== null) {
             // If the value is an object, recursively call removeVisualizationKey
             data[key] = removeVisualizationKey(data[key]);
-        } else if (key.endsWith(' Visualization')) {
+        } else if (key.endsWith(" Visualization")) {
             // If the key is 'Completeness Visualization', remove it
             delete data[key];
         }
     }
     return data;
 }
-
-
-
 
 // Modify the function to accept an array of visualization content
 // function showVis(visualizationContent) {
@@ -577,7 +585,6 @@ function removeVisualizationKey(data) {
 //         stateRateVis.style.display = 'flex';
 //         stateRateVis.style.flexDirection = 'column';
 
-
 //         // stateRateVis.style.display = 'flex';
 //         // stateRateVis.style.alignItems = 'center';
 //         stateRateVis.style.border = '1px solid #ddd'; // Add a border
@@ -651,7 +658,6 @@ function removeVisualizationKey(data) {
 //         numCorrContent.querySelector('div').style.fontSize = '20px'; // Set font size
 //         numCorrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
-
 
 //     var featureRelContent = document.getElementById('featureRelVis');
 //     if (featureRelContent) {
@@ -738,7 +744,6 @@ function removeVisualizationKey(data) {
 //         noisyContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
 
-
 //      // Show single attribute risk scores
 //      var singleRiskContent = document.getElementById('singleRiskVis');
 //     if (singleRiskContent) {
@@ -797,9 +802,6 @@ function removeVisualizationKey(data) {
 //         multipleRiskContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
 
-
-
-
 //     // Hide JSON content
 //     var scoreResult = document.getElementById('scoreResult');
 //     if (scoreResult) {
@@ -812,16 +814,16 @@ function downloadJSON() {
     var jsonData = JSON.stringify(resp_data, null, 2);
 
     // Create a Blob with the JSON data
-    var blob = new Blob([jsonData], { type: 'application/json' });
+    var blob = new Blob([jsonData], { type: "application/json" });
 
     // Create a link element
-    var link = document.createElement('a');
+    var link = document.createElement("a");
 
     // Set the link's href attribute to a data URL containing the Blob
     link.href = window.URL.createObjectURL(blob);
 
     // Set the link's download attribute to specify the file name
-    link.download = 'result.json';
+    link.download = "result.json";
 
     // Append the link to the document
     document.body.appendChild(link);
@@ -835,13 +837,13 @@ function downloadJSON() {
 
 function showResults() {
     // Show Duplicity Visualization content if it exists
-    var duplicityScoreResult = document.getElementById('duplicityScoreResult');
+    var duplicityScoreResult = document.getElementById("duplicityScoreResult");
     if (duplicityScoreResult) {
-        duplicityScoreResult.style.display = 'block';
+        duplicityScoreResult.style.display = "block";
     }
-    var imbalanceScoreResult = document.getElementById('imbalanceScoreResult');
+    var imbalanceScoreResult = document.getElementById("imbalanceScoreResult");
     if (imbalanceScoreResult) {
-        imbalanceScoreResult.style.display = 'block';
+        imbalanceScoreResult.style.display = "block";
     }
 }
 
@@ -894,13 +896,13 @@ function toggleValue(checkbox) {
     const inputs = container.querySelectorAll("input.textWrapper");
     const checkboxes = container.querySelectorAll("input.checkbox.individual");
     // Enable or disable all dropdowns inside the container based on checkbox state
-    dropdowns.forEach(dropdown => {
+    dropdowns.forEach((dropdown) => {
         dropdown.disabled = !checkbox.checked;
     });
-    inputs.forEach(input => {
+    inputs.forEach((input) => {
         input.disabled = !checkbox.checked;
     });
-    checkboxes.forEach(input => {
+    checkboxes.forEach((input) => {
         input.disabled = !checkbox.checked;
     });
     // Toggle the value based on the checked state
@@ -917,7 +919,6 @@ function toggleValueIndividual(checkbox) {
         const label = checkbox.closest("label");
         const text = label.textContent.trim();
         checkbox.value = text;
-
     } else {
         checkbox.value = "no";
     }
@@ -925,11 +926,11 @@ function toggleValueIndividual(checkbox) {
     console.log("Checkbox value:", checkbox.value); // For debugging
 }
 function updateSelectAllState() {
-    const checkboxes = document.querySelectorAll('.checkbox.individual');
-    const selectAll = document.getElementById('selectAllCheckbox');
+    const checkboxes = document.querySelectorAll(".checkbox.individual");
+    const selectAll = document.getElementById("selectAllCheckbox");
 
     const total = checkboxes.length;
-    const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const checked = Array.from(checkboxes).filter((cb) => cb.checked).length;
 
     if (checked === 0) {
         selectAll.checked = false;
@@ -942,41 +943,38 @@ function updateSelectAllState() {
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function () {
     // Get all checkboxes inside each checkboxContainer
-    document.querySelectorAll(".checkboxContainer").forEach(container => {
-
+    document.querySelectorAll(".checkboxContainer").forEach((container) => {
         // For each container, get the checkbox inside and set the initial state
 
         const checkboxes = container.querySelectorAll("input[type='checkbox']");
-        checkboxes.forEach(checkbox => {
+        checkboxes.forEach((checkbox) => {
             console.log(checkbox);
             // Set initial state of selects based on checkbox
             toggleValue(checkbox);
         });
-
     });
 });
 
 //********** Darkmode Toggle *******
-let darkmode = localStorage.getItem('darkmode')
+let darkmode = localStorage.getItem("darkmode");
 //add a darkmode class to the body
 const enableDarkmode = () => {
-    document.body.classList.add('darkmode')
-    localStorage.setItem('darkmode', 'active')
-
-}
+    document.body.classList.add("darkmode");
+    localStorage.setItem("darkmode", "active");
+};
 //remove the darkmode class from the body
 const disableDarkmode = () => {
-    document.body.classList.remove('darkmode')
-    localStorage.setItem('darkmode', null)
-
-}
+    document.body.classList.remove("darkmode");
+    localStorage.setItem("darkmode", null);
+};
 let datalogPopup;
-document.addEventListener('DOMContentLoaded', (event) => {
-    const themeSwitch = document.getElementById('theme-switch')
+document.addEventListener("DOMContentLoaded", (event) => {
+    const themeSwitch = document.getElementById("theme-switch");
     //on document load check if darkmode is active
-    if (darkmode === "active") enableDarkmode()
+    if (darkmode === "active") enableDarkmode();
     //add a click event listener to the theme switch
     themeSwitch.addEventListener("click", () => {
+        darkmode = localStorage.getItem("darkmode");
 
         darkmode = localStorage.getItem('darkmode')
 
@@ -988,7 +986,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     const dataLogButton = document.getElementById('datalog-button'); //navbar button
 
     const radioButtons = document.querySelectorAll('input[name="tableSwitch"]');
-    const tableContainers = document.querySelectorAll('.scrollable-container');
+    const tableContainers = document.querySelectorAll(".scrollable-container");
     // popping up current log
     dataLogButton.addEventListener("click", () => {
         datalogPopup = document.getElementById("datalog-popup");
@@ -997,49 +995,51 @@ document.addEventListener('DOMContentLoaded', (event) => {
         //open popup
         datalogPopup.classList.add("open-popup");
 
-        fetch('/view_logs')
-            .then(response => response.json())
-            .then(data => {
-                const tbodyMaster = document.querySelector('#masterLogTable tbody');
+        fetch("/view_logs")
+            .then((response) => response.json())
+            .then((data) => {
+                const tbodyMaster = document.querySelector("#masterLogTable tbody");
                 const tbodyFile = document.querySelector("#fileUploadLogTable");
                 const tbodyMetric = document.querySelector("#metricLogTable");
-                tbodyMaster.innerHTML = '';
+                tbodyMaster.innerHTML = "";
 
-                data.forEach(row => {
-                    const tr = document.createElement('tr');
+                data.forEach((row) => {
+                    const tr = document.createElement("tr");
 
-                    ['timestamp', 'logger', 'message'].forEach(key => {
-                        const td = document.createElement('td');
-                        td.textContent = row[key]
+                    ["timestamp", "logger", "message"].forEach((key) => {
+                        const td = document.createElement("td");
+                        td.textContent = row[key];
                         tr.appendChild(td);
-                    })
+                    });
                     tbodyMaster.appendChild(tr);
 
                     // row without logger
-                    const trNoLogger = document.createElement('tr');
-                    ['timestamp', 'message'].forEach(key => {
-                        const td = document.createElement('td');
+                    const trNoLogger = document.createElement("tr");
+                    ["timestamp", "message"].forEach((key) => {
+                        const td = document.createElement("td");
                         td.textContent = row[key];
                         trNoLogger.appendChild(td);
                     });
 
-                    if (row.logger === 'file_upload') {
+                    if (row.logger === "file_upload") {
                         tbodyFile.appendChild(trNoLogger);
-                    } else if (row.logger === 'metric') {
+                    } else if (row.logger === "metric") {
                         tbodyMetric.appendChild(trNoLogger);
                     }
                 });
             })
-            .catch(error => {
+            .catch((error) => {
                 console.error("Error loading log:", error);
                 openErrorPopup("Error loading log:", error);
             });
-    })
+    });
     // switching between logs
-    radioButtons.forEach(radio => {
-        radio.addEventListener('change', () => {
-            tableContainers.forEach(container => container.classList.remove('active'));
-            document.getElementById(radio.value).classList.add('active');
+    radioButtons.forEach((radio) => {
+        radio.addEventListener("change", () => {
+            tableContainers.forEach((container) =>
+                container.classList.remove("active")
+            );
+            document.getElementById(radio.value).classList.add("active");
         });
     });
 });
@@ -1052,9 +1052,22 @@ function closeErrorPopup() {
     errorPopup.classList.remove("open-popup");
 }
 // Catch resource loading errors by adding an event listener to the window
-window.addEventListener('error', function (e) {
-    if (e.target && (e.target.tagName === 'IMG' || e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
-        console.error("Resource failed to load:", e.target.src || e.target.href);
-        openErrorPopup("Resource Load Error", `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href}`);
-    }
-}, true);
+window.addEventListener(
+    "error",
+    function (e) {
+        if (
+            e.target &&
+            (e.target.tagName === "IMG" ||
+                e.target.tagName === "SCRIPT" ||
+                e.target.tagName === "LINK")
+        ) {
+            console.error("Resource failed to load:", e.target.src || e.target.href);
+            openErrorPopup(
+                "Resource Load Error",
+                `Failed to load ${e.target.tagName.toLowerCase()} from: ${e.target.src || e.target.href
+                }`
+            );
+        }
+    },
+    true
+);

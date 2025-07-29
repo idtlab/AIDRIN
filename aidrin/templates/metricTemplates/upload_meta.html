@@ -93,6 +93,10 @@
             var form = document.getElementById('uploadForm');
             var formData = new FormData(form);
 
+            //clear previous result
+            document.getElementById('resultContainer').innerHTML = '';
+
+
             fetch('/FAIR', {
                 method: 'POST',
                 body: formData
@@ -146,6 +150,9 @@
         uploadedIcon.style.display       = 'none';
         clearBtn.style.display       = 'none';
         fileLabel.textContent        = 'Upload Metadata File (JSON)';
+
+        // Clear the result container
+        document.getElementById('resultContainer').innerHTML = '';
         }
         
        

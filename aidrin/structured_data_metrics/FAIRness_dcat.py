@@ -1,191 +1,169 @@
-import re
-import matplotlib.pyplot as plt
 import base64
 import io
-from celery import shared_task, Task
+import re
+
+import matplotlib.pyplot as plt
+from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
-# Function to extract keys and values and create a dictionary
+
 @shared_task(bind=True, ignore_result=False)
-def extract_keys_and_values(self: Task, data, parent_key='', separator='_'):
+def extract_keys_and_values(self: Task, data, parent_key="", separator="_"):
     try:
-        result_dict = {}
+        result = {}
         for key, value in data.items():
             new_key = f"{parent_key}{separator}{key}" if parent_key else key
             if isinstance(value, dict):
-                result_dict.update(extract_keys_and_values(value, new_key, separator=separator))
+                result.update(extract_keys_and_values(value, new_key, separator))
             elif isinstance(value, list):
                 for i, item in enumerate(value, start=1):
                     if isinstance(item, dict):
-                        result_dict.update(extract_keys_and_values(item, f"{new_key}{separator}{i}", separator=separator))
+                        result.update(
+                            extract_keys_and_values(
+                                item, f"{new_key}{separator}{i}", separator
+                            )
+                        )
                     else:
-                        result_dict[f"{new_key}{separator}{i}"] = item
+                        result[f"{new_key}{separator}{i}"] = item
             else:
-                result_dict[new_key] = value
-        
-        return result_dict
+                result[new_key] = value
+        return result
     except SoftTimeLimitExceeded:
-        raise Exception("Extract Keys and Values task timed out.")
-
+        raise Exception("Extract keys and values task timed out.")
 
 
 @shared_task(bind=True, ignore_result=False)
-def categorize_metadata(self: Task, metadata_dict,original_metadata):
+def categorize_metadata(self: Task, flat_metadata, original_metadata):
     try:
-        # Initialize dictionaries for each category
-        findable = {}
-        accessible = {}
-        interoperable = {}
-        reusable = {}
-        other = {}
-        find_c,acc_c,inter_c,reu_c = 0,0,0,0
-        find_tot_checks = 6
-        acc_tot_checks = 5
-        inter_tot_checks = 3
-        reu_tot_checks = 6
-
-        find_iter,acc_iter,inter_iter,reu_iter = 0,0,0,0
-
-        keyword_weight = 0.1
-        for key, value in metadata_dict.items():
-            categorized = False  # Flag to track if the key was categorized
-            
-            # Findable
-            if key in ["identifier", "description","title","theme","keyword","landingPage"]:
-                find_c+=1
-                findable[key] = value
-                categorized = True
-            elif key.startswith("keyword") or key.startswith("theme"):
-                if find_iter > 1:
-                    findable[key] = value
-                    categorized = True
-                else:
-                    find_c+=1
-                    findable[key] = value
-                    categorized = True
-                    find_iter+=1
-            # Accessible
-            if key in ['downloadURL','format','accessLevel','publisher']:
-                accessible[key] = value
-                acc_c+=1
-                categorized = True
-            elif key.startswith("distribution") or key.startswith("publisher"):
-                
-                if acc_iter > 1:
-                    accessible[key] = value
-                    categorized = True
-                else:
-                    acc_c+=1
-                    accessible[key] = value
-                    categorized = True
-                    acc_iter+=1
-            # Interoperable
-            if key.endswith("conformsTo") or key.endswith("format") or key.endswith("references"):
-                interoperable[key] = value
-                inter_c+=1
-                categorized = True
-            
-            # Reusable
-            if key.endswith("license") or key.startswith("programCode") or key.startswith("bureauCode") or key.endswith("description") or key.endswith("conformsTo") or key.endswith("format"):
-                reusable[key] = value
-                reu_c+=1
-                categorized = True
-            
-            # elif re.match(r"publisher_\d+_name", key) or re.match(r"publisher_name", key):
-            #     if reu_iter > 1:
-            #         reu_tot_checks+=1
-
-            #     reusable[key] = value
-            #     reu_c+=1
-            #     categorized = True
-            # Other (not in predefined categories)
-            if not categorized:
-                other[key] = value
-
-        # Create a dictionary containing the categorized key-value pairs
-        categorized_metadata = {
-            "Findable": findable,
-            "Accessible": accessible,
-            "Interoperable": interoperable,
-            "Reusable": reusable,
-            "FAIR Compliance Checks": {"Findablity Checks":"{}/{}".format(round(find_c,2),round(find_tot_checks,2)),"Accesseiblity Checks":"{}/{}".format(round(acc_c,2),round(acc_tot_checks,2)),"Interoperability Checks":"{}/{}".format(round(inter_c,2),round(inter_tot_checks,2)),"Reusability Checks":"{}/{}".format(round(reu_c,2),round(reu_tot_checks,2)),"Total Checks":"{}/{}".format(round((find_c+acc_c+inter_c+reu_c),2),format(round((find_tot_checks+acc_tot_checks+reu_tot_checks+inter_tot_checks),2)))},
-            "Other": other,  # All other keys
-            "Original Metadata":original_metadata
+        # FAIR principles and criteria
+        fair_criteria = {
+            "Findable": [
+                "identifier",
+                "title",
+                "description",
+                "keyword",
+                "theme",
+                "landingPage",
+            ],
+            "Accessible": [
+                "accessLevel",
+                "downloadURL",
+                "mediaType",
+                "accessURL",
+                "issued",
+                "modified",
+            ],
+            "Interoperable": [
+                "conformsTo",
+                "references",
+                "language",
+                "format",
+                "spatial",
+                "temporal",
+            ],
+            "Reusable": [
+                "license",
+                "rights",
+                "publisher",
+                "description",
+                "format",
+                "programCode",
+                "bureauCode",
+                "contactPoint",
+            ],
         }
 
-        #create the pie chart
-        # Extract FAIRness Score data
-        fairness_score = categorized_metadata.get("FAIRness Score", {})
-        labels = ['Findability Checks', 'Accessibility Checks', 'Interoperability Checks', 'Reusability Checks']
-        sizes = [find_c, acc_c, inter_c, reu_c]
+        categories = {k: {} for k in fair_criteria}
+        categories["Other"] = {}
+        categorized_keys = set()
+        fair_pass_counts = {}
 
-        # Plot Pie Chart
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 4), gridspec_kw={'width_ratios': [3, 3], 'wspace': 0.8})  # 1 row, 2 columns
-        
-        # Set font size
-        plt.rcParams.update({'font.size': 20})
+        # Normalize and match
+        for principle, fields in fair_criteria.items():
+            matched = 0
+            for field in fields:
+                found = False
+                for key in flat_metadata:
+                    base_key = re.sub(r"_\d+$", "", key)
+                    if field == base_key or field == key or key.endswith(field):
+                        if key not in categorized_keys:
+                            categories[principle][field] = flat_metadata[key]
+                            categorized_keys.add(key)
+                            matched += 1
+                            found = True
+                            break
+                if not found:
+                    categories[principle][field] = "CHECK FAILED ❌"
+            fair_pass_counts[principle] = matched
 
-        plabels = ['Pass', 'Fail']
-        psizes = [sum(sizes), sum([find_tot_checks, acc_tot_checks, inter_tot_checks, reu_tot_checks]) - sum(sizes)]
-        colors = ['green', 'lightgray']
-        ax1.pie(psizes, labels=plabels, colors=colors, autopct='%1.1f%%', startangle=90)
-        ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-        ax1.set_title('FAIR compliance checks')
+        # Other keys
+        for key, value in flat_metadata.items():
+            if key not in categorized_keys:
+                categories["Other"][key] = value
 
-        # Plot Horizontal Bar Chart for Percentage of Completed Checks
-        categories = ["Findability", "Accessibility", "Interoperability", "Reusability"]
-        percentages = [find_c / find_tot_checks * 100,
-                    acc_c / acc_tot_checks * 100,
-                    inter_c / inter_tot_checks * 100,
-                    reu_c / reu_tot_checks * 100]
+        # Compliance summary
+        total_checks = {k: len(set(v)) for k, v in fair_criteria.items()}
+        total_passed = sum(fair_pass_counts.values())
+        total_expected = sum(total_checks.values())
+        fair_summary = {
+            f"{p} Checks": f"{fair_pass_counts[p]}/{total_checks[p]}"
+            for p in fair_criteria
+        }
+        fair_summary["Total Checks"] = f"{total_passed}/{total_expected}"
 
-        # Sort the categories and percentages in the order of appearance in the categories list
-        sorted_data = sorted(zip(categories, percentages), key=lambda x: categories.index(x[0]), reverse=True)
-        categories, percentages = zip(*reversed(sorted_data))
+        # Visualization
+        pie_labels = ["Pass", "Fail"]
+        pie_sizes = [total_passed, max(0, total_expected - total_passed)]
 
+        fig, (ax1, ax2) = plt.subplots(
+            1, 2, figsize=(15, 4), gridspec_kw={"width_ratios": [3, 3], "wspace": 0.8}
+        )
+        plt.rcParams.update({"font.size": 20})
 
-        bars = ax2.barh(categories, percentages, color='skyblue')
-        ax2.spines['top'].set_visible(False)
-        ax2.spines['right'].set_visible(False)
-        ax2.spines['bottom'].set_visible(False)
-        ax2.spines['left'].set_visible(False)
-        ax2.set_xticks([])  # Remove x tick values
+        ax1.pie(
+            pie_sizes,
+            labels=pie_labels,
+            colors=["green", "lightgray"],
+            autopct="%1.1f%%",
+            startangle=90,
+        )
+        ax1.axis("equal")
+        ax1.set_title("FAIR Compliance Summary")
 
-        # Display the percentage values on the bars
-        total_checks = [find_tot_checks, acc_tot_checks, inter_tot_checks, reu_tot_checks]
-        count = 0
-        for bar in bars:
+        bar_labels = list(fair_criteria.keys())
+        bar_passed = [fair_pass_counts[k] for k in bar_labels]
+        bar_totals = [total_checks[k] for k in bar_labels]
+        bar_percentages = [
+            p / t * 100 if t else 0 for p, t in zip(bar_passed, bar_totals)
+        ]
 
-            plt.text(bar.get_width(), bar.get_y() + bar.get_height()/2, f'{sizes[count]}/{total_checks[count]}', va='center')
-            count += 1
+        bars = ax2.barh(bar_labels, bar_percentages, color="skyblue")
+        for i, bar in enumerate(bars):
+            ax2.text(
+                bar.get_width(),
+                bar.get_y() + bar.get_height() / 2,
+                f"{bar_passed[i]}/{bar_totals[i]}",
+                va="center",
+            )
 
-        # Save the plot to a BytesIO object
-        image_stream_combined = io.BytesIO()
-        plt.savefig(image_stream_combined, format='png')
+        ax2.set_title("Compliance per Principle")
+        ax2.set_xticks([])
+        for spine in ax2.spines.values():
+            spine.set_visible(False)
+
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format="png", bbox_inches="tight")
         plt.close()
+        encoded_image_combined = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-        # Encode the BytesIO content as base64
-        encoded_image_combined = base64.b64encode(image_stream_combined.getvalue()).decode('utf-8')
-
-        # Add the combined plot to categorized_metadata
-        categorized_metadata['Pie chart'] = encoded_image_combined
+        # Final return structure
+        categorized_metadata = {
+            **categories,
+            "FAIR Compliance Checks": fair_summary,
+            "Pie chart": encoded_image_combined,
+            "Original Metadata": original_metadata,
+        }
 
         return categorized_metadata
-
-    # Extract keys and values and create a dictionary
-    # result_dict = extract_keys_and_values(data_dict)
-
-    # Print the resulting dictionary
-    # for key, value in result_dict.items():
-    #     print(f"{key}: {value}")
-
-    # Categorize the metadata
-    # categorized_metadata = categorize_metadata(result_dict)
-
-    # for category, category_dict in categorized_metadata.items():
-    #     print(f"{category}:")
-    #     for key, value in category_dict.items():
-    #         print(f"{key}: {value}")
-    #     print()
     except SoftTimeLimitExceeded:
-        raise Exception("Categorize Metadata task timed out.")
+        raise Exception("Categorize metadata task timed out.")
