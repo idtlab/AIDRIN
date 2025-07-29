@@ -9,7 +9,11 @@ dependencies = [
     "matplotlib",
     "dython",
     "pandas",
-    "shap"
+    "shap",
+    "h5py",
+    "celery",
+    "redis",
+    "flower"
 ]
 
 [build-system]
