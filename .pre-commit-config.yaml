@@ -21,11 +21,3 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
-        exclude: 'examples/notebook_tutorials/.*\.ipynb'  # Adjust/remove if not applicable
-
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.12.4
-    hooks:
-      - id: ruff
-        args: ["--fix"]
-      - id: ruff-format
