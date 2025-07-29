@@ -124,34 +124,47 @@ Visit [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser to access A
 
 ## Stopping the Application
 
-To properly shut down AIDRIN and free system resources:
+To shut down AIDRIN and release system resources, follow the steps below in order:
 
-1. **Stop Flask (Terminal 3)**: Press `Ctrl+C` in the terminal running the Flask application.
-2. **Stop Celery (Terminal 2)**: Press `Ctrl+C` in the terminal running the Celery worker. Wait for a graceful shutdown (a few seconds).
-3. **Stop Redis (Terminal 1)**: Press `Ctrl+C` in the terminal running the Redis server, or use:
+### 1. Stop the Flask Application (Terminal 3)
+Press `Ctrl+C` in the terminal running the Flask application.
 
-   ```bash
-   redis-cli shutdown
-   ```
+### 2. Stop the Celery Worker (Terminal 2)
+Press `Ctrl+C` in the terminal running the Celery worker. Wait a few seconds for a graceful shutdown.
 
-To verify all processes are terminated:
+### 3. Stop the Redis Server (Terminal 1)
 
-- Check for running processes:
-  ```bash
-  ps aux | grep redis
-  ps aux | grep celery
-  ps aux | grep flask
-  ```
-  If any processes persist, terminate them with `kill -9 <PID>` (replace `<PID>` with the process ID).
+If you started Redis manually:
 
-- Ensure ports 6379 (Redis) and 5000 (Flask) are free:
-  ```bash
-  netstat -an | grep 6379
-  netstat -an | grep 5000
-  ```
+```bash
+redis-cli shutdown
+```
 
-If Redis runs as a service (e.g., on Ubuntu), stop it with:
+If Redis is running as a system service (e.g., on Ubuntu):
 
 ```bash
 sudo systemctl stop redis
+```
+
+### 4. Verify All Processes Are Terminated
+Check for any remaining processes:
+
+```bash
+pgrep -f redis
+pgrep -f celery
+pgrep -f flask
+```
+
+If any remain, terminate them manually:
+
+```bash
+kill -9 <PID>
+```
+
+Replace `<PID>` with the actual process ID.
+Alternatively, to check for used ports (6379 for Redis, 5000 for Flask):
+
+```bash
+lsof -i :6379
+lsof -i :5000
 ```
