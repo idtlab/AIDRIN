@@ -4,9 +4,6 @@ from io import BytesIO
 
 import matplotlib.pyplot as plt
 import numpy as np
-from celery import Task, shared_task
-
-from aidrin.file_handling.file_parser import read_file
 
 # Function to add Laplace noise
 
@@ -62,8 +59,21 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info):
         stat_dict[f"Variance of feature {column}(before noise)"] = variance_norm
         stat_dict[f"Mean of feature {column}(after noise)"] = mean_noisy
         stat_dict[f"Variance of feature {column}(after noise)"] = variance_noisy
-        stat_dict['Description'] = "The numerical features have been augmented with privacy-preserving measures through the addition of random Laplacian noise. This intentional introduction of noise ensures differential privacy guarantees. The accompanying box plots visually compare the distributions of the original and privacy-enhanced data"
-        stat_dict['Graph interpretation'] = "The box plots show the distribution of original data (left) versus noise-added data (right) for each feature. The spread and position of the boxes indicate how much the noise affects the data distribution. Wider boxes suggest more variability introduced by the noise, while similar box positions indicate the noise preserves the central tendency of the data."
+        stat_dict['Description'] = (
+            "The numerical features have been augmented with privacy-preserving "
+            "measures through the addition of random Laplacian noise. This "
+            "intentional introduction of noise ensures differential privacy "
+            "guarantees. The accompanying box plots visually compare the "
+            "distributions of the original and privacy-enhanced data"
+        )
+        stat_dict['Graph interpretation'] = (
+            "The box plots show the distribution of original data (left) versus "
+            "noise-added data (right) for each feature. The spread and position "
+            "of the boxes indicate how much the noise affects the data "
+            "distribution. Wider boxes suggest more variability introduced by "
+            "the noise, while similar box positions indicate the noise preserves "
+            "the central tendency of the data."
+        )
         df_drop_na[f'noisy_{column}'] = noisy_feature
 
         # Box plot for the normal feature
