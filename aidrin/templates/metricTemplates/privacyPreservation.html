@@ -197,6 +197,27 @@
                 </select><br>
                     </li>
 
+                <li >
+                    <label  for="quasi identifiers to measure single attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
+                    <div id ="catFeaturesCheckbox2"></div><br>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="checkboxContainerIndividual">
+            <label class="material-checkbox">
+                <input type="checkbox" name="multiple attribute risk score" onchange="toggleValue(this)"> 
+                <span class="checkmark"></span>
+                Evaluate multiple attribute risks:<br>
+            </label>
+            
+            <ul>
+                <li >
+                    <label for="id feature to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">ID feature</label>
+                    <select name="id feature to measure multiple attribute risk score" id="allFeaturesDropdownMMM" required>
+                        <option value ="" disabled selected>Select a feature</option>
+                    </select><br>
+                </li>
                     <li >
                         <label  for="quasi identifiers to measure single attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
                         <div id ="catFeaturesCheckbox2"></div><br>
@@ -224,7 +245,6 @@
                             <option value ="" disabled selected>Select a feature</option>
                         </select><br>
                     </li>
-
                     <li >
                         <label for="quasi identifiers to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
                         <div  id ="catFeaturesCheckbox3"></div><br>
@@ -252,10 +272,10 @@
                 </ul>
             </div>
 
-            <div class="checkboxContainerIndividual">
-                <label class="material-checkbox" style="position: relative;">
-                <input type="checkbox" name="k-anonymity" onchange="toggleValue(this)">
-                <span class="checkmark"></span>
+        <div class="checkboxContainerIndividual">
+            <label class="material-checkbox" style="position: relative;">
+            <input type="checkbox" name="k-anonymity" onchange="toggleValue(this)">
+            <span class="checkmark"></span>
 
                 <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <span>k-Anonymity:</span>
@@ -267,13 +287,13 @@
                 </label>
 
 
-                <ul>
-                    <li>
-                        <label for="quasi identifiers for k-anonymity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
-                        <div id="kAnonymityQIsCheckbox"></div> 
-                        </li>
-                </ul>
-            </div>
+            <ul>
+                <li>
+                    <label for="quasi identifiers for k-anonymity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
+                    <div id="kAnonymityQIsCheckbox"></div> 
+                    </li>
+            </ul>
+        </div>
 
             <div class="checkboxContainerIndividual">
                 <label class="material-checkbox" style="position: relative;">
@@ -289,19 +309,19 @@
                 </label>
 
 
-                <ul>
-                    <li>
-                        <label for="quasi identifiers for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers :</label>
-                        <div id="lDiversityQIsCheckbox"></div>
-                        </li>
-                    <li>
-                        <label for="sensitive attribute for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Sensitive Attribute:</label>
-                        <select name="sensitive attribute for l-diversity" id="lDiversitySensitiveDropdown" required>
-                            <option value="" disabled selected>Select a feature</option>
-                        </select>
+            <ul>
+                <li>
+                    <label for="quasi identifiers for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers :</label>
+                    <div id="lDiversityQIsCheckbox"></div>
                     </li>
-                </ul>
-            </div>
+                <li>
+                    <label for="sensitive attribute for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Sensitive Attribute:</label>
+                    <select name="sensitive attribute for l-diversity" id="lDiversitySensitiveDropdown" required>
+                        <option value="" disabled selected>Select a feature</option>
+                    </select>
+                </li>
+            </ul>
+        </div>
 
             <div class="checkboxContainerIndividual">
                 

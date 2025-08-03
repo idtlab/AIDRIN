@@ -1,12 +1,17 @@
-import numpy as np
-import pandas as pd
+import base64
+import io
+from math import sqrt
+
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
 plt.ioff()  # Turn off interactive mode
-import io
-import base64
-from math import sqrt, log
+import numpy as np
+from celery import Task, shared_task
+from celery.exceptions import SoftTimeLimitExceeded
+
+from aidrin.file_handling.file_parser import read_file
+
 import warnings
 warnings.filterwarnings('ignore')  # Suppress matplotlib warnings
 
@@ -15,7 +20,7 @@ def imbalance_degree(classes, distance="EU"):
     Calculates the imbalance degree [1] of a multi-class dataset.
     This metric is an alternative for the well known imbalance ratio, which
     is only suitable for binary classification problems.
-    
+
     Parameters
     ----------
     classes : list of int.
@@ -29,25 +34,26 @@ def imbalance_degree(classes, distance="EU"):
             - HE: Hellinger distance.
             - TV: Total variation distance.
             - CS: Chi-square divergence.
-        
+
     References
     ----------
     .. [1] J. Ortigosa-Hernández, I. Inza, and J. A. Lozano, 
             "Measuring the class-imbalance extent of multi-class problems," 
             Pattern Recognit. Lett., 2017.
     """
+
     def _eu(_d, _e):
         """
-        Euclidean distance from empirical distribution 
+        Euclidean distance from empirical distribution
         to equiprobability distribution.
-        
+
         Parameters
         ----------
         _d : list of float.
             Empirical distribution of class probabilities.
         _e : float.
             Equiprobability term (1/K, where K is the number of classes).
-        
+
         Returns
         -------
         distance value.
@@ -97,36 +103,36 @@ def imbalance_degree(classes, distance="EU"):
         """
         Calculates the number of minority classes. We call minority class to
         those classes with a probability lower than the equiprobability term.
-        
+
         Parameters
         ----------
         _d : list of float.
             Empirical distribution of class probabilities.
         _e : float.
             Equiprobability term (1/K, where K is the number of classes).
-        
+
         Returns
         -------
         Number of minority clases.
         """
         return len(_d[_d < _e])
-    
+
     def _i_m(_K, _m):
         """
         Calculates the distribution showing exactly m minority classes with the
-        highest distance to the equiprobability term. This distribution is 
+        highest distance to the equiprobability term. This distribution is
         always the same for all distance functions proposed, and is explained
         in [1].
-        
+
         Parameters
         ----------
         _K : int.
             The number of classes (targets).
         _m : int.
             The number of minority classes. We call minority class to
-            those classes with a probability lower than the equiprobability 
+            those classes with a probability lower than the equiprobability
             term.
-        
+
         Returns
         -------
         A numpy array with the i_m distribution.
@@ -159,7 +165,7 @@ def imbalance_degree(classes, distance="EU"):
     def _dist_fn():
         """
         Selects the distance function according to the distance paramenter.
-        
+
         Returns
         -------
         A distance function.
@@ -307,7 +313,8 @@ def class_distribution_plot(df, column):
         buf.close()
 
         return plot_base64
-
+    except SoftTimeLimitExceeded:
+        raise Exception("Class Distribution Plot task timed out.")
     except Exception as e:
         # Handle errors and return empty string for visualization
         return ""
@@ -329,6 +336,6 @@ def calc_imbalance_degree(df, column, dist_metric='EU'):
 
     except Exception as e:
         # Handle errors and store the error message in the result
-        res['Error'] = str(e)
+        res["Error"] = str(e)
 
     return res

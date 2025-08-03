@@ -1,5 +1,6 @@
-from aidrin import app
-from aidrin.logging_utils import setup_logging
+from aidrin import create_app
+from aidrin.logging import setup_logging
 
 setup_logging()  # Initialize logging before creating the app
-celery_app = app.extensions["celery"] 
+flask_app = create_app()
+celery_app = flask_app.extensions["celery"]

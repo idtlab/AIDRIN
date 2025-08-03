@@ -1,11 +1,12 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import io
 import base64
-import pandas as pd
+import io
 from typing import List
 from celery import current_task
 import logging
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from celery.exceptions import SoftTimeLimitExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         # Handle eval_cols - it might be a string or list
         if isinstance(eval_cols, str):
             # If it's a string, split by comma and clean up
-            eval_cols = [col.strip() for col in eval_cols.split(',') if col.strip()]
+            eval_cols = [col.strip() for col in eval_cols.split(",") if col.strip()]
         elif isinstance(eval_cols, list):
             # If it's already a list, clean up each item
             eval_cols = [col.strip() for col in eval_cols if col.strip()]
@@ -93,13 +94,13 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         descriptive_stats_dict = {}
         for key, value in sing_res.items():
             stats_dict = {
-                'mean': np.mean(value),
-                'std': np.std(value),
-                'min': np.min(value),
-                '25%': np.percentile(value, 25),
-                '50%': np.median(value),
-                '75%': np.percentile(value, 75),
-                'max': np.max(value)
+                "mean": np.mean(value),
+                "std": np.std(value),
+                "min": np.min(value),
+                "25%": np.percentile(value, 25),
+                "50%": np.median(value),
+                "75%": np.percentile(value, 75),
+                "max": np.max(value),
             }
             descriptive_stats_dict[key] = stats_dict
         
@@ -111,36 +112,38 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
             )
 
         # Create a box plot
-        plt.figure(figsize=(8,8))
+        plt.figure(figsize=(8, 8))
         plt.boxplot(list(sing_res.values()), labels=sing_res.keys())
-        plt.title('Box plot of single feature risk scores')
-        plt.xlabel('Feature')
-        plt.ylabel('Risk Score')
+        plt.title("Box plot of single feature risk scores")
+        plt.xlabel("Feature")
+        plt.ylabel("Risk Score")
 
         # Save the plot as a PNG image in memory
         image_stream = io.BytesIO()
-        plt.savefig(image_stream, format='png')
+        plt.savefig(image_stream, format="png")
         plt.close()
 
         # Convert the image to a base64 string
         image_stream.seek(0)
-        base64_image = base64.b64encode(image_stream.read()).decode('utf-8')
+        base64_image = base64.b64encode(image_stream.read()).decode("utf-8")
         image_stream.close()
 
         result_dict["DescriptiveStatistics"] = descriptive_stats_dict
-        result_dict['Single attribute risk scoring Visualization'] = base64_image
+        result_dict["Single attribute risk scoring Visualization"] = base64_image
         result_dict["Description"] = (
             "This metric quantifies the re-identification risk for each quasi-identifier. Lower values are preferred, indicating features that are less likely to uniquely identify individuals. High-risk features may require further anonymization or removal."
         )
         result_dict["Graph interpretation"] = (
-            "The box plot displays the distribution of risk scores for each feature. Features with higher medians or more outliers indicate greater privacy risk. A compact, lower box is desirable."
+            "The box plot displays the distribution of risk scores for each feature. Features with "
+            "higher medians or more outliers indicate greater privacy risk. A compact, lower box is desirable."
         )
-        
 
+    except SoftTimeLimitExceeded:
+        raise Exception("Single Attribute Risk task timed out.")
     except Exception as e:
         result_dict["Error"] = str(e)
         # Ensure the visualization key is always present for frontend compatibility
-        result_dict['Single attribute risk scoring Visualization'] = ""
+        result_dict["Single attribute risk scoring Visualization"] = ""
         result_dict["Description"] = f"Error occurred: {str(e)}"
         result_dict["Graph interpretation"] = "No visualization available due to error."
 
@@ -171,14 +174,16 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         # Handle eval_cols - it might be a string or list
         if isinstance(eval_cols, str):
             # If it's a string, split by comma and clean up
-            eval_cols = [col.strip() for col in eval_cols.split(',') if col.strip()]
+            eval_cols = [col.strip() for col in eval_cols.split(",") if col.strip()]
             print(f"DEBUG: After string processing, eval_cols = {eval_cols}")
         elif isinstance(eval_cols, list):
             # If it's already a list, clean up each item
             eval_cols = [col.strip() for col in eval_cols if col.strip()]
             print(f"DEBUG: After list processing, eval_cols = {eval_cols}")
         else:
-            raise ValueError(f"eval_cols must be a string or list, got {type(eval_cols)}")
+            raise ValueError(
+                f"eval_cols must be a string or list, got {type(eval_cols)}"
+            )
 
         # Check if eval_cols is empty after processing
         if not eval_cols:
@@ -196,19 +201,21 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         print(f"DEBUG: Final eval_cols = {eval_cols}")
         print(f"DEBUG: Final id_col = {id_col}")
 
-        #select specidied columns from dataframe
+        # select specidied columns from dataframe
         selected_columns = [id_col] + eval_cols
         print(f"DEBUG: selected_columns = {selected_columns}")
         selected_df = df[selected_columns]
 
         selected_df = selected_df.dropna()
 
-        #check if the dataframe is still non-empty after dropping missing values
+        # check if the dataframe is still non-empty after dropping missing values
         if selected_df.empty:
-            result_dict["Values Error"] = "After dropping missing values, the dataframe is empty"
+            result_dict["Values Error"] = (
+                "After dropping missing values, the dataframe is empty"
+            )
             return result_dict
-            
-        #convert dataframe to numpy array
+
+        # convert dataframe to numpy array
         my_array = selected_df.to_numpy()
 
         # Stage 2: Calculate risk scores for all rows (15-70%)
@@ -234,49 +241,65 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
     
             if len(my_array[0]) >2:
                 priv_prob_MM = 1
-        
-                for i in range(2,len(my_array[0])):    
-                    
-                    attr1_tot = np.count_nonzero(my_array[:,i-1] == my_array[j][i-1])
-            
-                    mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i-1] == my_array[j][i-1])
+
+                for i in range(2, len(my_array[0])):
+
+                    attr1_tot = np.count_nonzero(
+                        my_array[:, i - 1] == my_array[j][i - 1]
+                    )
+
+                    mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (
+                        my_array[:, i - 1] == my_array[j][i - 1]
+                    )
                     count_attr1_user = np.count_nonzero(mask_attr1_user)
-                    
-                    start_prob_attr1 = attr1_tot/len(my_array)#1
-                    
-                    obs_prob_attr1 = 1 - (count_attr1_user/attr1_tot)#2
-                    
-                    mask_attr1_attr2 = (my_array[:, i-1] == my_array[j][i-1]) 
+
+                    start_prob_attr1 = attr1_tot / len(my_array)  # 1
+
+                    obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)  # 2
+
+                    mask_attr1_attr2 = my_array[:, i - 1] == my_array[j][i - 1]
                     count_attr1_attr2 = np.count_nonzero(mask_attr1_attr2)
-            
-                    mask2_attr1_attr2 = (my_array[:, i-1] == my_array[j][i-1]) & (my_array[:, i] == my_array[j][i]) 
+
+                    mask2_attr1_attr2 = (my_array[:, i - 1] == my_array[j][i - 1]) & (
+                        my_array[:, i] == my_array[j][i]
+                    )
                     count2_attr1_attr2 = np.count_nonzero(mask2_attr1_attr2)
-                    
-                    trans_prob_attr1_attr2 = count2_attr1_attr2/count_attr1_attr2#3
-                    
-                    attr2_tot = np.count_nonzero(my_array[:,i]==my_array[j][i])
-            
-                    mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i] == my_array[j][i])
+
+                    trans_prob_attr1_attr2 = count2_attr1_attr2 / count_attr1_attr2  # 3
+
+                    attr2_tot = np.count_nonzero(my_array[:, i] == my_array[j][i])
+
+                    mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (
+                        my_array[:, i] == my_array[j][i]
+                    )
                     count_attr2_user = np.count_nonzero(mask_attr2_user)
-        
-                    obs_prob_attr2 = 1 - (count_attr2_user/attr2_tot)#4
-            
-                    priv_prob_MM = priv_prob_MM * start_prob_attr1*obs_prob_attr1*trans_prob_attr1_attr2*obs_prob_attr2
-                    worst_case_MM_risk_score = round(1 - priv_prob_MM,2)#5
+
+                    obs_prob_attr2 = 1 - (count_attr2_user / attr2_tot)  # 4
+
+                    priv_prob_MM = (
+                        priv_prob_MM
+                        * start_prob_attr1
+                        * obs_prob_attr1
+                        * trans_prob_attr1_attr2
+                        * obs_prob_attr2
+                    )
+                    worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)  # 5
                 risk_scores[j] = worst_case_MM_risk_score
             elif len(my_array[0]) == 2:
                 priv_prob_MM = 1
-                attr1_tot = np.count_nonzero(my_array[:,1] == my_array[j][1])
-        
-                mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, 1] == my_array[j][1])
+                attr1_tot = np.count_nonzero(my_array[:, 1] == my_array[j][1])
+
+                mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (
+                    my_array[:, 1] == my_array[j][1]
+                )
                 count_attr1_user = np.count_nonzero(mask_attr1_user)
-                
-                start_prob_attr1 = attr1_tot/len(my_array)#1
-                
-                obs_prob_attr1 = 1 - (count_attr1_user/attr1_tot)#2
-        
-                priv_prob_MM = priv_prob_MM * start_prob_attr1*obs_prob_attr1
-                worst_case_MM_risk_score = round(1 - priv_prob_MM,2)#5
+
+                start_prob_attr1 = attr1_tot / len(my_array)  # 1
+
+                obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)  # 2
+
+                priv_prob_MM = priv_prob_MM * start_prob_attr1 * obs_prob_attr1
+                worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)  # 5
                 risk_scores[j] = worst_case_MM_risk_score
 
         # Stage 3: Calculate dataset privacy level (70-80%)
@@ -290,10 +313,10 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         min_risk_scores = np.zeros(len(risk_scores))
         # Calculate the Euclidean distance
         euclidean_distance = np.linalg.norm(risk_scores - min_risk_scores)
-        
+
         max_risk_scores = np.ones(len(risk_scores))
 
-        #max euclidean distance
+        # max euclidean distance
         max_euclidean_distance = np.linalg.norm(max_risk_scores - min_risk_scores)
         normalized_distance = euclidean_distance/max_euclidean_distance
         
@@ -306,13 +329,13 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
                 
         #descriptive statistics
         stats_dict = {
-            'mean': np.mean(risk_scores),
-            'std': np.std(risk_scores),
-            'min': np.min(risk_scores),
-            '25%': np.percentile(risk_scores, 25),
-            '50%': np.median(risk_scores),
-            '75%': np.percentile(risk_scores, 75),
-            'max': np.max(risk_scores)
+            "mean": np.mean(risk_scores),
+            "std": np.std(risk_scores),
+            "min": np.min(risk_scores),
+            "25%": np.percentile(risk_scores, 25),
+            "50%": np.median(risk_scores),
+            "75%": np.percentile(risk_scores, 75),
+            "max": np.max(risk_scores),
         }
         
         # Stage 5: Generate visualization (90-100%)
@@ -324,21 +347,22 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         
         x_label = ",".join(eval_cols)
         # Create a box plot
-        plt.figure(figsize=(8,8))
-        plt.boxplot(risk_scores, vert=True)  # vert=False for horizontal box plot
-        plt.title('Box Plot of Multiple Attribute Risk Scores')
-        plt.ylabel('Risk Score')
-        plt.xlabel('Feature Combination')
+        plt.figure(figsize=(8, 8))
+        # vert=False for horizontal box plot
+        plt.boxplot(risk_scores, vert=True)
+        plt.title("Box Plot of Multiple Attribute Risk Scores")
+        plt.ylabel("Risk Score")
+        plt.xlabel("Feature Combination")
         plt.xticks([1], [x_label])
 
         # Save the plot as a PNG image in memory
         image_stream = io.BytesIO()
-        plt.savefig(image_stream, format='png')
+        plt.savefig(image_stream, format="png")
         plt.close()
 
         # Convert the image to a base64 string
         image_stream.seek(0)
-        base64_image = base64.b64encode(image_stream.read()).decode('utf-8')
+        base64_image = base64.b64encode(image_stream.read()).decode("utf-8")
         image_stream.close()
 
         result_dict["Description"] = (
@@ -349,10 +373,11 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         )
         result_dict["Descriptive statistics of the risk scores"] = stats_dict
         result_dict["Multiple attribute risk scoring Visualization"] = base64_image
-        result_dict['Dataset Risk Score'] = normalized_distance
+        result_dict["Dataset Risk Score"] = normalized_distance
 
         return result_dict
-
+    except SoftTimeLimitExceeded:
+        raise Exception("Multiple Attribute Risk task timed out.")
     except Exception as e:
         result_dict["Error"] = str(e)
         # Ensure the visualization key is always present for frontend compatibility
@@ -360,8 +385,13 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         result_dict["Description"] = f"Error occurred: {str(e)}"
         result_dict["Graph interpretation"] = "No visualization available due to error."
         return result_dict
-        
-def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
+
+
+@shared_task(bind=True, ignore_result=False)
+def compute_k_anonymity(
+    self: Task, quasi_identifiers: List[str], file_info: tuple[str, str, str]
+):
+    data = read_file(file_info)
     result_dict = {}
     try:
         if data.empty:
@@ -371,39 +401,43 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
             if qi not in data.columns:
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
 
-        data.replace('?', pd.NA, inplace=True)
+        data.replace("?", pd.NA, inplace=True)
         clean_data = data.dropna(subset=quasi_identifiers)
         if clean_data.empty:
-            raise ValueError("No data left after dropping rows with missing quasi-identifiers.")
+            raise ValueError(
+                "No data left after dropping rows with missing quasi-identifiers."
+            )
 
-        equivalence_classes = clean_data.groupby(quasi_identifiers).size().reset_index(name='count')
+        equivalence_classes = (
+            clean_data.groupby(quasi_identifiers).size().reset_index(name="count")
+        )
         counts = equivalence_classes["count"]
-    
+
         # Compute k-anonymity
         k_anonymity = int(counts.min())
 
         # Descriptive statistics
         desc_stats = {
-            'min': int(counts.min()),
-            'max': int(counts.max()),
-            'mean': round(counts.mean(), 2),
-            'median': int(counts.median())
+            "min": int(counts.min()),
+            "max": int(counts.max()),
+            "mean": round(counts.mean(), 2),
+            "median": int(counts.median()),
         }
 
         # Histogram of equivalence class sizes
         hist_data = counts.value_counts().sort_index().to_dict()
         plt.figure(figsize=(8, 5))
-        plt.bar(hist_data.keys(), hist_data.values(), color='skyblue')
-        plt.xlabel('Equivalence Class Size (k)')
-        plt.ylabel('Number of Equivalence Classes')
-        plt.title('Distribution of Equivalence Class Sizes')
-        plt.grid(axis='y', alpha=0.75)
+        plt.bar(hist_data.keys(), hist_data.values(), color="skyblue")
+        plt.xlabel("Equivalence Class Size (k)")
+        plt.ylabel("Number of Equivalence Classes")
+        plt.title("Distribution of Equivalence Class Sizes")
+        plt.grid(axis="y", alpha=0.75)
         # Save histogram to base64
         img_stream = io.BytesIO()
-        plt.savefig(img_stream, format='png')
+        plt.savefig(img_stream, format="png")
         plt.close()
         img_stream.seek(0)
-        base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
+        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
         img_stream.close()
 
         # Final result
@@ -413,72 +447,90 @@ def compute_k_anonymity(data: pd.DataFrame, quasi_identifiers: List[str]):
             "histogram_data": hist_data,
             "k-Anonymity Visualization": base64_image,
             "Description": (
-                "k-anonymity measures the minimum group size sharing the same quasi-identifier values. Higher k values are preferred, as they indicate stronger anonymity."
+                "k-anonymity measures the minimum group size sharing the same quasi-identifier values. "
+                "Higher k values are preferred, as they indicate stronger anonymity."
             ),
             "Graph interpretation": (
-                "The histogram shows the distribution of equivalence class sizes. A shift toward larger class sizes (higher k) is desirable for privacy."
-            )
+                "The histogram shows the distribution of equivalence class sizes. A shift toward larger "
+                "class sizes (higher k) is desirable for privacy."
+            ),
         }
-
+    except SoftTimeLimitExceeded:
+        raise Exception("K anonymity task timed out.")
     except Exception as e:
         result_dict["error"] = str(e)
 
     return result_dict
 
-def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_column: str):
+
+@shared_task(bind=True, ignore_result=False)
+def compute_l_diversity(
+    self: Task,
+    quasi_identifiers: list,
+    sensitive_column: str,
+    file_info: tuple[str, str, str],
+):
+    data = read_file(file_info)
     result_dict = {}
     try:
         # Validate input DataFrame
         if data.empty:
             raise ValueError("Input DataFrame is empty.")
-        
+
         # Validate quasi-identifiers
         for qi in quasi_identifiers:
             if qi not in data.columns:
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
-        
+
         # Validate sensitive column presence
         if sensitive_column not in data.columns:
-            raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
+            raise ValueError(
+                f"Sensitive column '{sensitive_column}' not found in the dataset."
+            )
 
-        data = data.replace('?', pd.NA)
+        data = data.replace("?", pd.NA)
 
         # Drop rows with missing quasi-identifiers or sensitive values
         clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
         if clean_data.empty:
-            raise ValueError("No data left after dropping rows with missing quasi-identifiers or sensitive values.")
+            raise ValueError(
+                "No data left after dropping rows with missing quasi-identifiers or sensitive values."
+            )
 
         # Compute l-diversities: count of unique sensitive values per equivalence class
-        l_diversities = clean_data.groupby(quasi_identifiers)[sensitive_column].nunique()
+        l_diversities = clean_data.groupby(quasi_identifiers)[
+            sensitive_column
+        ].nunique()
 
         # Minimum l-diversity (lowest number of distinct sensitive values)
         min_l_diversity = int(l_diversities.min())
 
         # Descriptive statistics for l-diversity distribution
         desc_stats = {
-            'min': int(l_diversities.min()),
-            'max': int(l_diversities.max()),
-            'mean': round(l_diversities.mean(), 2),
-            'median': int(l_diversities.median())
+            "min": int(l_diversities.min()),
+            "max": int(l_diversities.max()),
+            "mean": round(l_diversities.mean(), 2),
+            "median": int(l_diversities.median()),
         }
 
         # Histogram plot of l-diversity counts
-        binned_l_diversities = l_diversities.round()  # or use: (l_diversities / 2).round() * 2 for bin size of 2
+        # or use: (l_diversities / 2).round() * 2 for bin size of 2
+        binned_l_diversities = l_diversities.round()
         hist_data = binned_l_diversities.value_counts().sort_index()
         plt.figure(figsize=(8, 8))
-        plt.bar(hist_data.index, hist_data.values, color='skyblue')
-        plt.xlabel('Number of Distinct Sensitive Values (l)')
-        plt.ylabel('Number of Equivalence Classes')
-        plt.title('Distribution of l-Diversity Across Equivalence Classes')
+        plt.bar(hist_data.index, hist_data.values, color="skyblue")
+        plt.xlabel("Number of Distinct Sensitive Values (l)")
+        plt.ylabel("Number of Equivalence Classes")
+        plt.title("Distribution of l-Diversity Across Equivalence Classes")
         plt.xticks(sorted(hist_data.index))
-        plt.grid(axis='y', alpha=0.75)
+        plt.grid(axis="y", alpha=0.75)
 
         # Save plot to base64 string
         img_stream = io.BytesIO()
-        plt.savefig(img_stream, format='png')
+        plt.savefig(img_stream, format="png")
         plt.close()
         img_stream.seek(0)
-        base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
+        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
         img_stream.close()
 
         # Compose result dictionary
@@ -488,19 +540,29 @@ def compute_l_diversity(data: pd.DataFrame, quasi_identifiers: list, sensitive_c
             "histogram_data": hist_data.to_dict(),
             "l-Diversity Visualization": base64_image,
             "Description": (
-                "l-diversity quantifies the diversity of sensitive attributes within each group. Higher l values are preferred, indicating less risk of attribute disclosure."
+                "l-diversity quantifies the diversity of sensitive attributes within each group. "
+                "Higher l values are preferred, indicating less risk of attribute disclosure."
             ),
             "Graph interpretation": (
                 "The histogram displays the spread of l-diversity values. A distribution concentrated at higher l values is optimal."
-            )
+            ),
         }
-
+    except SoftTimeLimitExceeded:
+        raise Exception("L Diversity task timed out.")
     except Exception as e:
         result_dict["error"] = str(e)
 
     return result_dict
 
-def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensitive_column: str):
+
+@shared_task(bind=True, ignore_result=False)
+def compute_t_closeness(
+    self: Task,
+    quasi_identifiers: List[str],
+    sensitive_column: str,
+    file_info: tuple[str, str, str],
+):
+    data = read_file(file_info)
     result_dict = {}
     try:
 
@@ -519,9 +581,11 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
 
         if sensitive_column not in data.columns:
-            raise ValueError(f"Sensitive column '{sensitive_column}' not found in the dataset.")
+            raise ValueError(
+                f"Sensitive column '{sensitive_column}' not found in the dataset."
+            )
 
-        data = data.replace('?', pd.NA)
+        data = data.replace("?", pd.NA)
         clean_data = data.dropna(subset=quasi_identifiers + [sensitive_column])
         if clean_data.empty:
             raise ValueError("No data left after dropping rows with missing values.")
@@ -543,23 +607,23 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
             "min": round(t_series.min(), 4),
             "max": max_t,
             "mean": round(t_series.mean(), 4),
-            "median": round(t_series.median(), 4)
+            "median": round(t_series.median(), 4),
         }
 
         # Histogram plot
         hist_data = t_series.round(2).value_counts().sort_index()
         plt.figure(figsize=(8, 5))
-        plt.bar(hist_data.index, hist_data.values, color='salmon')
-        plt.xlabel('t-Closeness Value (TVD)')
-        plt.ylabel('Number of Equivalence Classes')
-        plt.title('Distribution of T-Closeness Across Equivalence Classes')
-        plt.grid(axis='y', alpha=0.75)
+        plt.bar(hist_data.index, hist_data.values, color="salmon")
+        plt.xlabel("t-Closeness Value (TVD)")
+        plt.ylabel("Number of Equivalence Classes")
+        plt.title("Distribution of T-Closeness Across Equivalence Classes")
+        plt.grid(axis="y", alpha=0.75)
 
         img_stream = io.BytesIO()
-        plt.savefig(img_stream, format='png')
+        plt.savefig(img_stream, format="png")
         plt.close()
         img_stream.seek(0)
-        base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
+        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
         img_stream.close()
 
         result_dict = {
@@ -568,19 +632,26 @@ def compute_t_closeness(data: pd.DataFrame, quasi_identifiers: List[str], sensit
             "histogram_data": hist_data.to_dict(),
             "t-Closeness Visualization": base64_image,
             "Description": (
-                "t-closeness measures the distance between the distribution of sensitive attributes in a group and the overall distribution. Lower t values are preferred, indicating less information leakage."
+                "t-closeness measures the distance between the distribution of sensitive attributes "
+                "in a group and the overall distribution. Lower t values are preferred, indicating less information leakage."
             ),
             "Graph interpretation": (
                 "The histogram shows the distribution of t values. Lower t values across groups indicate stronger privacy."
-            )
+            ),
         }
-
+    except SoftTimeLimitExceeded:
+        raise Exception("T Closeness task timed out.")
     except Exception as e:
         result_dict["error"] = str(e)
 
     return result_dict
 
-def compute_entropy_risk(data, quasi_identifiers) :
+
+@shared_task(bind=True, ignore_result=False)
+def compute_entropy_risk(
+    self: Task, quasi_identifiers, file_info: tuple[str, str, str]
+):
+    data = read_file(file_info)
     result_dict = {}
 
     try:
@@ -591,7 +662,7 @@ def compute_entropy_risk(data, quasi_identifiers) :
             if qi not in data.columns:
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
 
-        data = data.replace('?', pd.NA)
+        data = data.replace("?", pd.NA)
         clean_data = data.dropna(subset=quasi_identifiers)
 
         if clean_data.empty:
@@ -614,24 +685,24 @@ def compute_entropy_risk(data, quasi_identifiers) :
         # Histogram plot of entropy values
         hist_data = entropy_series.round(2).value_counts().sort_index()
         plt.figure(figsize=(8, 5))
-        plt.bar(hist_data.index, hist_data.values, color='royalblue')
-        plt.xlabel('Entropy Value')
-        plt.ylabel('Number of Equivalence Classes')
-        plt.title('Distribution of Entropy Across Equivalence Classes')
-        plt.grid(axis='y', alpha=0.75)
+        plt.bar(hist_data.index, hist_data.values, color="royalblue")
+        plt.xlabel("Entropy Value")
+        plt.ylabel("Number of Equivalence Classes")
+        plt.title("Distribution of Entropy Across Equivalence Classes")
+        plt.grid(axis="y", alpha=0.75)
 
         img_stream = io.BytesIO()
-        plt.savefig(img_stream, format='png')
+        plt.savefig(img_stream, format="png")
         plt.close()
         img_stream.seek(0)
-        base64_image = base64.b64encode(img_stream.read()).decode('utf-8')
+        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
         img_stream.close()
 
         desc_stats = {
             "min": round(entropy_series.min(), 4),
             "max": round(entropy_series.max(), 4),
             "mean": round(entropy_series.mean(), 4),
-            "median": round(entropy_series.median(), 4)
+            "median": round(entropy_series.median(), 4),
         }
 
         result_dict = {
@@ -640,13 +711,16 @@ def compute_entropy_risk(data, quasi_identifiers) :
             "histogram_data": hist_data.to_dict(),
             "Entropy Risk Visualization": base64_image,
             "Description": (
-                "Entropy risk quantifies the uncertainty in identifying individuals within equivalence classes. Higher entropy values are preferred, indicating greater anonymity and lower re-identification risk."
+                "Entropy risk quantifies the uncertainty in identifying individuals within equivalence classes. "
+                "Higher entropy values are preferred, indicating greater anonymity and lower re-identification risk."
             ),
             "Graph interpretation": (
-                "The bar chart visualizes the distribution of entropy values. Higher bars on the right (higher entropy) indicate better privacy; left-skewed distributions suggest higher risk."
-            )
+                "The bar chart visualizes the distribution of entropy values. Higher bars on the right (higher entropy) "
+                "indicate better privacy; left-skewed distributions suggest higher risk."
+            ),
         }
-
+    except SoftTimeLimitExceeded:
+        raise Exception("Entropy Risk task timed out.")
     except Exception as e:
         result_dict["error"] = str(e)
 
