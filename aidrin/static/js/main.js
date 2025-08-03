@@ -136,8 +136,8 @@ function submitForm() {
 
       var visualizationContent = [];
 
-        // Check for each type of visualization
-        var visualizationTypes = [
+      // Check for each type of visualization
+      var visualizationTypes = [
             'Completeness', 'Outliers', 'Representation Rate', 'Statistical Rate', 
             'Correlations Analysis Categorical', 'Correlations Analysis Numerical',
             'Feature Relevance', 'Class Imbalance', 'DP Statistics', 
@@ -173,7 +173,13 @@ function submitForm() {
                     });
                     
                     // Start polling for this task
-                    console.log('Starting polling for task:', data[type]['task_id']);
+                    console.log('Starting polling for task:', data[type]['task_id'], 'for metric:', type);
+                    console.log('Task details:', {
+                        taskId: data[type]['task_id'],
+                        cacheKey: data[type]['cache_key'],
+                        metricName: type,
+                        status: data[type]['status']
+                    });
                     pollAsyncTask(data[type]['task_id'], data[type]['cache_key'], type);
                     
                 } else if (isKeyPresentAndDefined(data[type], type + ' Visualization')) {
@@ -229,10 +235,10 @@ function submitForm() {
                 }
             } else {
                 console.log('Type not found in data:', type);
-            }
-        });
-        // Boolean flag to track if heading has been added
-        var headingAdded = false;
+        }
+      });
+      // Boolean flag to track if heading has been added
+      var headingAdded = false;
 
       if (visualizationContent.length > 0) {
         // Add heading if not already added
@@ -265,8 +271,8 @@ function submitForm() {
                     const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
                     visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
                     <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
-                } else {
-                    // Display message for empty visualization
+                } else if (!content.isAsync) {
+                    // Display message for empty visualization (only for non-async tasks)
                     visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
                         No visualization available for this metric.
                     </div>`;
@@ -274,7 +280,10 @@ function submitForm() {
                 
                 // Special handling for Class Imbalance and Privacy metrics (your approach)
                 if (content.isAsync) {
-                    // Display async task status with progress bar
+                    // Create a unique ID for this async visualization
+                    const asyncId = `async-${content.taskId.replace(/[^a-zA-Z0-9]/g, '')}`;
+                    
+                    // Display async task status with progress bar in compatible structure
                     visualizationHtml += `<div class="async-task-status" 
                          data-task-id="${content.taskId}" 
                          data-cache-key="${content.cacheKey}"
@@ -290,7 +299,7 @@ function submitForm() {
                             <div class="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #2196F3, #64B5F6); border-radius: 10px; transition: width 0.3s ease; animation: pulse 2s infinite;"></div>
                         </div>
                         
-                        <div style="font-size: 12px; color: #888;">
+                        <div style="font-size: 12px; color: #000;">
                             <span id="task-status-${content.taskId}">Processing...</span>
                         </div>
                         
@@ -304,61 +313,61 @@ function submitForm() {
                     </div>`;
                 } else {
                     // Standard visualization display
-                    visualizationHtml += `
-                            ${content.riskScore !== 'N/A' ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
-                            ${content.riskLevel ? `<div><strong>Risk Level:</strong> <span style="color: ${content.riskColor}; font-weight: bold;">${content.riskLevel}</span></div>` : ''}
-                            ${content.value !== 'N/A' ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ''}
-                            ${content.description ? `<div><strong>Description:</strong> ${content.description}</div>` : ''}
-                            ${content.interpretation && content.title !== 'Class Imbalance' ? `<div><strong>Graph interpretation:</strong> ${content.interpretation} ${getDocsButton(content.title)}</div>` : ''}
-                        `;
-                    
-                    // Special handling for Class Imbalance: show Imbalance Degree Value
-                    if (content.title === 'Class Imbalance' && data['Class Imbalance'] && data['Class Imbalance']['Imbalance degree']) {
-                        const imbalanceData = data['Class Imbalance']['Imbalance degree'];
-                        if (imbalanceData['Imbalance Degree score'] !== undefined) {
-                            const score = imbalanceData['Imbalance Degree score'];
-                            visualizationHtml += `<div><strong>Imbalance Degree:</strong> ${score}</div>`;
-                            // Add graph interpretation below Imbalance Degree
-                            if (content.interpretation) {
-                                visualizationHtml += `<div><strong>Graph interpretation:</strong> ${content.interpretation} <a href="/class-imbalance-docs" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a></div>`;
-                            }
-                        } else if (imbalanceData['Error'] !== undefined) {
-                            const error = imbalanceData['Error'];
-                            visualizationHtml += `<div><strong>Imbalance Degree:</strong> <span style="color: red;">${error}</span></div>`;
+                visualizationHtml += `
+                            ${content.riskScore !== 'N/A' ? `<div style="color: var(--text-color, inherit);"><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
+                    ${content.riskLevel ? `<div style="color: var(--text-color, inherit);"><strong>Risk Level:</strong> <span style="color: ${content.riskColor}; font-weight: bold;">${content.riskLevel}</span></div>` : ''}
+                            ${content.value !== 'N/A' ? `<div style="color: var(--text-color, inherit);"><strong>${content.title}:</strong> ${content.value}</div>` : ''}
+                    ${content.description ? `<div style="color: var(--text-color, inherit);"><strong>Description:</strong> ${content.description}</div>` : ''}
+                    ${content.interpretation && content.title !== 'Class Imbalance' ? `<div style="color: var(--text-color, inherit);"><strong>Graph interpretation:</strong> ${content.interpretation} ${getDocsButton(content.title)}</div>` : ''}
+                `;
+                
+                // Special handling for Class Imbalance: show Imbalance Degree Value
+                if (content.title === 'Class Imbalance' && data['Class Imbalance'] && data['Class Imbalance']['Imbalance degree']) {
+                    const imbalanceData = data['Class Imbalance']['Imbalance degree'];
+                    if (imbalanceData['Imbalance Degree score'] !== undefined) {
+                        const score = imbalanceData['Imbalance Degree score'];
+                    visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>Imbalance Degree:</strong> ${score}</div>`;
+                        // Add graph interpretation below Imbalance Degree
+                        if (content.interpretation) {
+                            visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>Graph interpretation:</strong> ${content.interpretation} <a href="/class-imbalance-docs" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a></div>`;
                         }
-                    }
-                    
-                    // Special handling for Privacy Metrics: show specific values
-                    if (content.title === 'k-Anonymity' && data['k-Anonymity']) {
-                        const kData = data['k-Anonymity'];
-                        if (kData['k-Value'] !== undefined) {
-                            visualizationHtml += `<div><strong>k-Value:</strong> ${kData['k-Value']}</div>`;
-                        }
-                    }
-                    
-                    if (content.title === 'l-Diversity' && data['l-Diversity']) {
-                        const lData = data['l-Diversity'];
-                        if (lData['l-Value'] !== undefined) {
-                            visualizationHtml += `<div><strong>l-Value:</strong> ${lData['l-Value']}</div>`;
-                        }
-                    }
-                    
-                    if (content.title === 't-Closeness' && data['t-Closeness']) {
-                        const tData = data['t-Closeness'];
-                        if (tData['t-Value'] !== undefined) {
-                            visualizationHtml += `<div><strong>t-Value:</strong> ${tData['t-Value']}</div>`;
-                        }
-                    }
-                    
-                    if (content.title === 'Entropy Risk' && data['Entropy Risk']) {
-                        const entropyData = data['Entropy Risk'];
-                        if (entropyData['Entropy-Value'] !== undefined) {
-                            visualizationHtml += `<div><strong>Entropy Value:</strong> ${entropyData['Entropy-Value']}</div>`;
-                        }
+                    } else if (imbalanceData['Error'] !== undefined) {
+                        const error = imbalanceData['Error'];
+                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>Imbalance Degree:</strong> <span style="color: red;">${error}</span></div>`;
                     }
                 }
                 
-                visualizationHtml += `
+                // Special handling for Privacy Metrics: show specific values
+                if (content.title === 'k-Anonymity' && data['k-Anonymity']) {
+                    const kData = data['k-Anonymity'];
+                    if (kData['k-Value'] !== undefined) {
+                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>k-Value:</strong> ${kData['k-Value']}</div>`;
+                    }
+                }
+                
+                if (content.title === 'l-Diversity' && data['l-Diversity']) {
+                    const lData = data['l-Diversity'];
+                    if (lData['l-Value'] !== undefined) {
+                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>l-Value:</strong> ${lData['l-Value']}</div>`;
+                    }
+                }
+                
+                if (content.title === 't-Closeness' && data['t-Closeness']) {
+                    const tData = data['t-Closeness'];
+                    if (tData['t-Value'] !== undefined) {
+                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>t-Value:</strong> ${tData['t-Value']}</div>`;
+                    }
+                }
+                
+                if (content.title === 'Entropy Risk' && data['Entropy Risk']) {
+                    const entropyData = data['Entropy Risk'];
+                    if (entropyData['Entropy-Value'] !== undefined) {
+                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>Entropy Value:</strong> ${entropyData['Entropy-Value']}</div>`;
+                    }
+                }
+          }
+
+          visualizationHtml += `
                         </div>
                     </div>`;
 
@@ -380,7 +389,7 @@ function submitForm() {
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
-                    <div id="duplicity" style="display: none; text-align: center;">
+                    <div id="duplicity" style="display: none; text-align: center; color: var(--text-color, inherit);">
                         No duplicates found 
                     </div> 
                     
@@ -397,7 +406,7 @@ function submitForm() {
                         </div>
                     </div>
                     <div id="duplicity" style="display: none;">
-                        <p style="text-align:center">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
+                        <p style="text-align:center; color: var(--text-color, inherit);">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
                     </div>  
                     <    
                 </div>`;
@@ -627,36 +636,54 @@ function getDistanceMetricName() {
     return 'Distance Metric';
 }
 
-// Async task polling for MM risk score calculations (your approach)
+// Async task polling for MMrisk score calculations
 function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval = 1500) {
     let attempts = 0;
-    console.log(`Starting polling for ${metricName} task: ${taskId} (max ${maxAttempts} attempts, ${interval}ms intervals)`);
+    
+    console.log(`Starting polling for ${metricName} task: ${taskId}`);
     
     function checkTask() {
         attempts++;
         
-        console.log(`Polling attempt ${attempts}/${maxAttempts} for ${metricName}`);
-        
-        fetch(`/check_and_update_task/${taskId}/${encodeURIComponent(cacheKey)}`)
+        fetch(`/check_and_update_task/${taskId}/${encodeURIComponent(metricName)}`)
             .then(response => {
-                console.log(`📡 Poll response status: ${response.status} for ${metricName}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 return response.json();
             })
             .then(data => {
-                console.log(`Poll response data for ${metricName}:`, data);
+
                 
                 // Get DOM elements for progress bar and status
-                const progressBar = document.querySelector(`#task-status-${taskId}`).closest('.async-task-status').querySelector('.progress-bar');
-                const statusSpan = document.querySelector(`#task-status-${taskId}`);
+                const asyncTaskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+                const statusSpan = asyncTaskElement ? asyncTaskElement.querySelector(`#task-status-${taskId}`) : null;
+                const progressBar = asyncTaskElement ? asyncTaskElement.querySelector('.progress-bar') : null;
+                
+                if (data.status === 'completed' || data.status === 'SUCCESS') {
+
+                    
+                    // Task completed successfully, complete the progress bar
+                    if (progressBar) {
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = 'linear-gradient(90deg, #4CAF50, #8BC34A)';
+                    }
+                    
+                    if (statusSpan) {
+                        statusSpan.textContent = 'Calculation completed!';
+                    }
+                    
+                    // Wait a moment to show completion, then update with results
+                    setTimeout(() => {
+                        updateAsyncTaskWithResults(taskId, metricName, data.result);
+                    }, 1000);
+                    return; // Exit polling
+                }
                 
                 // Update progress bar and status from real Celery data
-                if (data.state === 'PROGRESS' && data.info) {
-                    // Use real progress from Celery
-                    const realProgress = data.info.current || 0;
-                    const realStatus = data.info.status || 'Processing...';
+                if (data.progress) {
+                    const realProgress = data.progress.current || 0;
+                    const realStatus = data.progress.status || 'Processing...';
                     
                     if (progressBar) {
                         progressBar.style.width = `${realProgress}%`;
@@ -676,76 +703,38 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                         const timeElapsed = Math.round((attempts * interval) / 1000);
                         statusSpan.textContent = `${realStatus} (${timeElapsed}s elapsed)`;
                     }
-                    
-                    console.log(`Real progress update: ${realProgress}% - ${realStatus}`);
-                } else {
-                    // Fallback for pending tasks without progress info
-                    if (statusSpan) {
-                        const timeElapsed = Math.round((attempts * interval) / 1000);
-                        statusSpan.textContent = `Processing... (${timeElapsed}s elapsed)`;
-                    }
                 }
                 
-                if (data.completed) {
-                    if (data.success) {
-                        // Task completed successfully, complete the progress bar
-                        if (progressBar) {
-                            progressBar.style.width = '100%';
-                            progressBar.style.background = 'linear-gradient(90deg, #4CAF50, #8BC34A)';
-                        }
-                        if (statusSpan) {
-                            statusSpan.textContent = 'Calculation completed!';
-                        }
-                        
-                        console.log(`${metricName} calculation completed successfully`);
-                        
-                        // Wait a moment to show completion, then update with results
-                        setTimeout(() => {
-                            updateAsyncTaskWithResults(taskId, metricName, data.result);
-                        }, 1000);
-                    } else {
-                        // Task failed
-                        if (progressBar) {
-                            progressBar.style.background = 'linear-gradient(90deg, #F44336, #E57373)';
-                        }
-                        if (statusSpan) {
-                            statusSpan.textContent = 'Calculation failed';
-                        }
-                        console.error(`${metricName} calculation failed:`, data.error);
-                        updateTaskStatus(taskId, metricName, 'FAILED', data.error || 'Task failed');
-                    }
+                // Continue polling if not complete
+                if (attempts < maxAttempts) {
+                    setTimeout(checkTask, interval);
                 } else {
-                    // Task still running, continue polling
-                    if (attempts < maxAttempts) {
-                        setTimeout(checkTask, interval);
-                    } else {
-                        // Timeout reached
-                        if (progressBar) {
-                            progressBar.style.background = 'linear-gradient(90deg, #FF9800, #FFB74D)';
-                        }
-                        if (statusSpan) {
-                            statusSpan.textContent = 'Taking longer than expected...';
-                        }
-                        console.warn(`${metricName} polling timeout reached. Task may still be running.`);
-                        updateTaskStatus(taskId, metricName, 'TIMEOUT', 'Polling timeout reached. The task may still be running in the background.');
+                    // Timeout reached
+                    if (progressBar) {
+                        progressBar.style.background = 'linear-gradient(90deg, #FF9800, #FFB74D)';
                     }
+                    if (statusSpan) {
+                        statusSpan.textContent = 'Taking longer than expected...';
+                    }
+                    console.warn(`${metricName} polling timeout reached. Task may still be running.`);
                 }
             })
             .catch(error => {
-                console.error(`🚨 Error polling ${metricName} task:`, error);
-                
+                console.error('Polling error:', error);
                 if (attempts < maxAttempts) {
-                    // Retry on error
                     setTimeout(checkTask, interval);
                 } else {
                     // Max retries reached
+                    const asyncTaskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+                    const progressBar = asyncTaskElement ? asyncTaskElement.querySelector('.progress-bar') : null;
+                    const statusSpan = asyncTaskElement ? asyncTaskElement.querySelector(`#task-status-${taskId}`) : null;
+                    
                     if (progressBar) {
                         progressBar.style.background = 'linear-gradient(90deg, #F44336, #E57373)';
                     }
                     if (statusSpan) {
                         statusSpan.textContent = 'Connection error';
                     }
-                    updateTaskStatus(taskId, metricName, 'ERROR', error.message);
                 }
             });
     }
@@ -755,96 +744,144 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
 }
 
 function updateAsyncTaskWithResults(taskId, metricName, results) {
-    console.log(`updateAsyncTaskWithResults called:`, { taskId, metricName, results });
-    
     // Find the async task placeholder
     const asyncElement = document.querySelector(`[data-task-id="${taskId}"]`);
-    console.log(`Found asyncElement:`, asyncElement);
+    updateTaskStatus(taskId, metricName, 'completed', 'Calculation completed!');
+    if (!asyncElement || !results) {
+        console.log('No async element or results found:', { taskId, metricName, results });
+        return;
+    }
+
+
+
+    // Build the completed visualization HTML
+    let completedHtml = '';
     
-    if (asyncElement) {
-        // Find the parent visualization container
-        const visualizationContainer = asyncElement.closest('.visualization-container');
-        console.log(`Found visualizationContainer:`, visualizationContainer);
-        
-        const visualizationId = visualizationContainer ? visualizationContainer.querySelector('.toggle').getAttribute('onclick').match(/'([^']+)'/)[1] : null;
-        console.log(`Extracted visualizationId:`, visualizationId);
-        
-        if (visualizationId) {
-            const contentDiv = document.getElementById(visualizationId);
-            console.log(`Found contentDiv:`, contentDiv);
-            
-            if (contentDiv && results) {
-                // Build the completed visualization HTML
-                let completedHtml = '';
-                
-                console.log(`Building HTML for results:`, Object.keys(results));
-                
-                // Check if there's an error
-                if (results['Error']) {
-                    console.log(`Error in results:`, results['Error']);
-                    completedHtml = `<div style="text-align: center; padding: 20px; color: #d32f2f;">
-                        <strong>Error:</strong> ${results['Error']}
-                    </div>`;
-                } else {
-                    // Add visualization image if present
-                    const vizKey = `${metricName} Visualization`;
-                    console.log(`Looking for visualization key:`, vizKey);
-                    console.log(`Available keys:`, Object.keys(results));
-                    console.log(`Visualization data length:`, results[vizKey] ? results[vizKey].length : 'Not found');
-                    
-                    if (results[vizKey] && results[vizKey].trim() !== "") {
-                        console.log(`Adding visualization image for ${metricName}`);
-                        const imageBlobUrl = `data:image/jpeg;base64,${results[vizKey]}`;
-                        completedHtml += `<img src="${imageBlobUrl}" alt="${metricName} Chart" style="max-width: 100%; height: auto;">
-                        <a href="${imageBlobUrl}" download="${metricName}.jpg" class="toggle metric-download" style="padding:0px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
-                                <path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/>
-                            </svg>
-                        </a>`;
-                    } else {
-                        console.log(`No visualization found for key: ${vizKey}`);
-                    }
-                }
-                
-                // Add risk score if present
-                if (results['Risk Score'] && results['Risk Score'] !== 'N/A') {
-                    completedHtml += `<div><strong>Risk Score:</strong> ${results['Risk Score']}</div>`;
-                }
-                
-                // Add risk level if present
-                if (results['Risk Level']) {
-                    const riskColor = results['Risk Color'] || '#000';
-                    completedHtml += `<div><strong>Risk Level:</strong> <span style="color: ${riskColor}; font-weight: bold;">${results['Risk Level']}</span></div>`;
-                }
-                
-                // Add dataset risk score for multiple attribute
-                if (results['Dataset Risk Score']) {
-                    completedHtml += `<div><strong>Dataset Risk Score:</strong> ${results['Dataset Risk Score']}</div>`;
-                }
-                
-                // Add description if present
-                if (results['Description']) {
-                    completedHtml += `<div><strong>Description:</strong> ${results['Description']}</div>`;
-                }
-                
-                // Add graph interpretation if present
-                if (results['Graph interpretation']) {
-                    completedHtml += `<div><strong>Graph interpretation:</strong> ${results['Graph interpretation']} ${getDocsButton(metricName)}</div>`;
-                }
-                
-                // Replace the async placeholder with the completed results
-                contentDiv.innerHTML = completedHtml;
-                
-                console.log(`Successfully updated ${metricName} with completed results`);
-                console.log(`Final HTML length:`, completedHtml.length);
-            } else {
-                console.error(`Could not find contentDiv or results missing:`, { contentDiv, results });
-            }
-        } else {
-            console.error(`Could not extract visualizationId from container`);
-        }
+    // Check if there's an error
+    if (results.error) {
+        completedHtml = `
+            <div style="text-align: center; padding: 20px; color: #d32f2f;">
+                <strong>Error:</strong> ${results.error}
+            </div>`;
     } else {
-        console.error(`Could not find async element for task ${taskId}`);
+        // Add visualization image if present - try multiple possible keys
+        const possibleVizKeys = [
+            `${metricName} Visualization`,
+            "Multiple attribute risk scoring Visualization",
+            "Single attribute risk scoring Visualization"
+        ];
+        
+
+        
+        let vizKey = null;
+        for (const key of possibleVizKeys) {
+            if (results[key] && results[key].trim() !== "") {
+                vizKey = key;
+
+                break;
+            }
+        }
+        
+        if (vizKey) {
+            completedHtml += `
+                <div class="visualization-container">
+                    <img src="data:image/png;base64,${results[vizKey]}" 
+                         alt="Risk Score Visualization" 
+                         style="max-width: 100%; height: auto;">
+                </div>`;
+        } else {
+
+        }
+
+        // Add description if present
+        if (results.Description) {
+            completedHtml += `<div style="color: inherit;"><strong>Description:</strong> ${results.Description}</div>`;
+        }
+
+        // Add graph interpretation if present
+        if (results["Graph interpretation"]) {
+            completedHtml += `<div style="color: inherit;"><strong>Graph interpretation:</strong> ${results["Graph interpretation"]}</div>`;
+        }
+
+        // Add statistics if present
+        if (results["Descriptive statistics of the risk scores"]) {
+            const stats = results["Descriptive statistics of the risk scores"];
+            
+            // Check if stats is for single attribute (object with feature names as keys) or multiple attribute (single object)
+            if (typeof stats === 'object' && stats !== null && !stats.hasOwnProperty('mean')) {
+                // Single attribute: stats is {feature1: {mean, std, ...}, feature2: {mean, std, ...}, ...}
+                completedHtml += `
+                    <div class="statistics-container" style="margin-bottom: 20px; color: inherit;">
+                        <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Descriptive Statistics</h4>
+                        <table class="table table-bordered" style="color: inherit; background-color: transparent; border-color: inherit;">
+                            <tr>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Feature</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Mean</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Std</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Min</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">25%</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">50%</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">75%</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Max</th>
+                            </tr>`;
+                
+                // Add a row for each feature
+                for (const [featureName, featureStats] of Object.entries(stats)) {
+                    completedHtml += `
+                        <tr>
+                            <td style="color: inherit; background-color: transparent; border-color: inherit;"><strong>${featureName}</strong></td>
+                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.mean.toFixed(3)}</td>
+                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.std.toFixed(3)}</td>
+                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.min.toFixed(3)}</td>
+                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["25%"].toFixed(3)}</td>
+                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["50%"].toFixed(3)}</td>
+                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["75%"].toFixed(3)}</td>
+                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.max.toFixed(3)}</td>
+                        </tr>`;
+                }
+                
+                completedHtml += `</table></div>`;
+            } else {
+                // Multiple attribute: stats is a single object {mean, std, min, ...}
+                completedHtml += `
+                    <div class="statistics-container" style="margin-bottom: 20px; color: inherit;">
+                        <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Descriptive Statistics</h4>
+                        <table class="table table-bordered" style="color: inherit; background-color: transparent; border-color: inherit;">
+                            <tr>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Mean</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Std</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Min</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">25%</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">50%</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">75%</th>
+                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Max</th>
+                            </tr>
+                            <tr>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.mean.toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.std.toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.min.toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["25%"].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["50%"].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["75%"].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.max.toFixed(3)}</td>
+                            </tr>
+                        </table>
+                    </div>`;
+            }
+        }
+    }
+
+    // Replace the progress bar with the completed content
+    if (completedHtml) {
+        // Remove the custom background styling so it inherits from the plot-container
+        asyncElement.style.background = 'none';
+        asyncElement.style.border = 'none';
+        asyncElement.style.borderRadius = '0';
+        asyncElement.style.padding = '0';
+        asyncElement.style.textAlign = 'left';
+        
+        // Replace the content
+        asyncElement.innerHTML = completedHtml;
     }
 }
 
@@ -933,7 +970,7 @@ function updateTaskStatus(taskId, metricName, status, message) {
 //                 <div class="visualization-container">
 //                     <img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
 //                     <a href="${imageBlobUrl}" download="Visualization_${index + 1}.jpg" class="download-button">Download</a>
-                    
+
 //                     <div>${content.description}</div>
 //                 </div>
 //             `);
@@ -1041,6 +1078,7 @@ function updateTaskStatus(taskId, metricName, status, message) {
 //         comparisonContent.style.display = 'flex';
 //         comparisonContent.style.flexDirection = 'column';
 
+
 //         // comparisonContent.style.alignItems = 'center';
 //         comparisonContent.style.border = '1px solid #ddd'; // Add a border
 //         comparisonContent.style.borderRadius = '8px'; // Add rounded corners
@@ -1069,7 +1107,7 @@ function updateTaskStatus(taskId, metricName, status, message) {
 //         stateRateVis.style.display = 'flex';
 //         stateRateVis.style.flexDirection = 'column';
 
-   
+
 //         // stateRateVis.style.display = 'flex';
 //         // stateRateVis.style.alignItems = 'center';
 //         stateRateVis.style.border = '1px solid #ddd'; // Add a border
@@ -1144,7 +1182,7 @@ function updateTaskStatus(taskId, metricName, status, message) {
 //         numCorrContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
 
-    
+
 //     var featureRelContent = document.getElementById('featureRelVis');
 //     if (featureRelContent) {
 
@@ -1230,7 +1268,7 @@ function updateTaskStatus(taskId, metricName, status, message) {
 //         noisyContent.querySelector('div').style.marginLeft = '10px'; // Adjust left margin
 //     }
 
-    
+
 //      // Show single attribute risk scores
 //      var singleRiskContent = document.getElementById('singleRiskVis');
 //     if (singleRiskContent) {
@@ -1377,41 +1415,41 @@ function toggleValue(checkbox) {
   const container = checkbox.closest(".checkboxContainerIndividual");
   console.log(container);
 
-  if (!container) {
-      return;
-  }
-  console.log("Container found:", container);
-  
-  // Toggle the metric-selected class to show/hide QI sections
-  if (checkbox.checked) {
-      container.classList.add('metric-selected');
-      console.log("Added metric-selected class - QI sections should be visible");
-  } else {
-      container.classList.remove('metric-selected');
-      console.log("Removed metric-selected class - QI sections should be hidden");
-  }
-  
-  // Find all select dropdowns within that container
-  const dropdowns = container.querySelectorAll("select");
-  const inputs = container.querySelectorAll("input.textWrapper");
-  const checkboxes = container.querySelectorAll("input.checkbox.individual");
-  // Enable or disable all dropdowns inside the container based on checkbox state
-  dropdowns.forEach(dropdown => {
-      dropdown.disabled = !checkbox.checked; 
-  });
-  inputs.forEach(input => {
-      input.disabled = !checkbox.checked; 
-  });
-  checkboxes.forEach(input => {
-     input.disabled = !checkbox.checked; 
- });
- // Toggle the value based on the checked state
- if (checkbox.checked) {
-     checkbox.value = "yes";
- } else {
-     checkbox.value = "no";
- }
- console.log("Checkbox value:", checkbox.value); // For debugging
+     if (!container) {
+         return;
+     }
+     console.log("Container found:", container);
+     
+     // Toggle the metric-selected class to show/hide QI sections
+     if (checkbox.checked) {
+         container.classList.add('metric-selected');
+         console.log("Added metric-selected class - QI sections should be visible");
+     } else {
+         container.classList.remove('metric-selected');
+         console.log("Removed metric-selected class - QI sections should be hidden");
+     }
+     
+     // Find all select dropdowns within that container
+     const dropdowns = container.querySelectorAll("select");
+     const inputs = container.querySelectorAll("input.textWrapper");
+     const checkboxes = container.querySelectorAll("input.checkbox.individual");
+     // Enable or disable all dropdowns inside the container based on checkbox state
+     dropdowns.forEach(dropdown => {
+         dropdown.disabled = !checkbox.checked; 
+     });
+     inputs.forEach(input => {
+         input.disabled = !checkbox.checked; 
+     });
+     checkboxes.forEach(input => {
+        input.disabled = !checkbox.checked; 
+    });
+    // Toggle the value based on the checked state
+    if (checkbox.checked) {
+        checkbox.value = "yes";
+    } else {
+        checkbox.value = "no";
+    }
+    console.log("Checkbox value:", checkbox.value); // For debugging
 }
 function toggleValueIndividual(checkbox) {
   // Toggle the value based on the checked state
@@ -1442,14 +1480,14 @@ function updateSelectAllState() {
 }
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function() {
-    // Get all checkboxes inside each checkboxContainer
+  // Get all checkboxes inside each checkboxContainer
     document.querySelectorAll(".checkboxContainer").forEach(container => {
-        const checkboxes = container.querySelectorAll("input[type='checkbox']");
+    const checkboxes = container.querySelectorAll("input[type='checkbox']");
         checkboxes.forEach(checkbox => {
-            console.log(checkbox);
-            // Set initial state of selects based on checkbox
-            toggleValue(checkbox);
-        });
+      console.log(checkbox);
+      // Set initial state of selects based on checkbox
+      toggleValue(checkbox);
+    });
     });
     
     // Also handle checkboxContainerIndividual containers for privacy preservation
@@ -1461,8 +1499,8 @@ document.addEventListener("DOMContentLoaded", function() {
             toggleValue(checkbox);
         });
     });
-    
-    // Auto-start polling for async tasks when page loads
+
+// Auto-start polling for async tasks when page loads
     console.log('DOMContentLoaded: Checking for async tasks...');
     
     // Check if there are any async tasks that need polling
@@ -1477,7 +1515,7 @@ document.addEventListener("DOMContentLoaded", function() {
         console.log('Script attributes:', { taskId, cacheKey, metricName });
         
         if (taskId && cacheKey && metricName) {
-            console.log(`Starting polling for ${metricName} task: ${taskId}`);
+    
             pollAsyncTask(taskId, cacheKey, metricName);
         }
     });

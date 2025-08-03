@@ -1,12 +1,13 @@
 import base64
 import io
 from typing import List
-from celery import current_task
+from celery import current_task, shared_task, Task
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from celery.exceptions import SoftTimeLimitExceeded
+from aidrin.file_handling.file_parser import read_file
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
     result_dict = {}
 
     try:
-        # Stage 1: Data validation & preprocessing (5%)
+        # Stage 1: Data validation & preprocessing (0-15%)
         if task:
             task.update_state(
                 state='PROGRESS',
@@ -40,9 +41,9 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         if missing_cols:
             raise ValueError(f"Columns not found in dataset: {missing_cols}")
 
-        # Check if the DataFrame is still non-empty after dropping missing values
-        if df.empty:
-            raise ValueError("After dropping missing values, the DataFrame is empty.")
+        # Validate id_col
+        if not id_col or id_col not in df.columns:
+            raise ValueError(f"ID column '{id_col}' not found in dataset")
 
         # Select the specified columns from the DataFrame
         selected_columns = [id_col] + eval_cols
@@ -51,10 +52,20 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         # Drop rows with missing values
         selected_df = selected_df.dropna()
 
+        # Check if DataFrame is still non-empty after dropping missing values
+        if selected_df.empty:
+            raise ValueError("After dropping missing values, the DataFrame is empty")
+
         # Convert the selected DataFrame to a NumPy array
         my_array = selected_df.to_numpy()
 
         # Stage 2: Calculate risk scores for each column (15-70%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 15, 'total': 100, 'status': 'Calculating risk scores...'}
+            )
+
         sing_res = {}
         total_columns = len(eval_cols)
         
@@ -128,7 +139,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         base64_image = base64.b64encode(image_stream.read()).decode("utf-8")
         image_stream.close()
 
-        result_dict["DescriptiveStatistics"] = descriptive_stats_dict
+        result_dict["Descriptive statistics of the risk scores"] = descriptive_stats_dict
         result_dict["Single attribute risk scoring Visualization"] = base64_image
         result_dict["Description"] = (
             "This metric quantifies the re-identification risk for each quasi-identifier. Lower values are preferred, indicating features that are less likely to uniquely identify individuals. High-risk features may require further anonymization or removal."
@@ -166,24 +177,19 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
             result_dict["Value Error"] = "Input dataframe is empty"
             return result_dict
 
-        # Debug: Print input parameters
-        print(f"DEBUG: id_col = {id_col}, type = {type(id_col)}")
-        print(f"DEBUG: eval_cols = {eval_cols}, type = {type(eval_cols)}")
-        print(f"DEBUG: DataFrame columns = {list(df.columns)}")
+
 
         # Handle eval_cols - it might be a string or list
         if isinstance(eval_cols, str):
             # If it's a string, split by comma and clean up
-            eval_cols = [col.strip() for col in eval_cols.split(",") if col.strip()]
-            print(f"DEBUG: After string processing, eval_cols = {eval_cols}")
+            eval_cols = [col.strip() for col in eval_cols.split(',') if col.strip()]
+
         elif isinstance(eval_cols, list):
             # If it's already a list, clean up each item
             eval_cols = [col.strip() for col in eval_cols if col.strip()]
-            print(f"DEBUG: After list processing, eval_cols = {eval_cols}")
+
         else:
-            raise ValueError(
-                f"eval_cols must be a string or list, got {type(eval_cols)}"
-            )
+            raise ValueError(f"eval_cols must be a string or list, got {type(eval_cols)}")
 
         # Check if eval_cols is empty after processing
         if not eval_cols:
@@ -198,24 +204,18 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         if not id_col or id_col not in df.columns:
             raise ValueError(f"ID column '{id_col}' not found in dataset")
 
-        print(f"DEBUG: Final eval_cols = {eval_cols}")
-        print(f"DEBUG: Final id_col = {id_col}")
-
-        # select specidied columns from dataframe
+        # Select specified columns from DataFrame
         selected_columns = [id_col] + eval_cols
-        print(f"DEBUG: selected_columns = {selected_columns}")
         selected_df = df[selected_columns]
 
         selected_df = selected_df.dropna()
 
-        # check if the dataframe is still non-empty after dropping missing values
+        #check if the dataframe is still non-empty after dropping missing values
         if selected_df.empty:
-            result_dict["Values Error"] = (
-                "After dropping missing values, the dataframe is empty"
-            )
+            result_dict["Values Error"] = "After dropping missing values, the dataframe is empty"
             return result_dict
-
-        # convert dataframe to numpy array
+            
+        #convert dataframe to numpy array
         my_array = selected_df.to_numpy()
 
         # Stage 2: Calculate risk scores for all rows (15-70%)
@@ -241,65 +241,49 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
     
             if len(my_array[0]) >2:
                 priv_prob_MM = 1
-
-                for i in range(2, len(my_array[0])):
-
-                    attr1_tot = np.count_nonzero(
-                        my_array[:, i - 1] == my_array[j][i - 1]
-                    )
-
-                    mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (
-                        my_array[:, i - 1] == my_array[j][i - 1]
-                    )
+        
+                for i in range(2,len(my_array[0])):    
+                    
+                    attr1_tot = np.count_nonzero(my_array[:,i-1] == my_array[j][i-1])
+            
+                    mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i-1] == my_array[j][i-1])
                     count_attr1_user = np.count_nonzero(mask_attr1_user)
-
-                    start_prob_attr1 = attr1_tot / len(my_array)  # 1
-
-                    obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)  # 2
-
-                    mask_attr1_attr2 = my_array[:, i - 1] == my_array[j][i - 1]
+                    
+                    start_prob_attr1 = attr1_tot/len(my_array)#1
+                    
+                    obs_prob_attr1 = 1 - (count_attr1_user/attr1_tot)#2
+                    
+                    mask_attr1_attr2 = (my_array[:, i-1] == my_array[j][i-1]) 
                     count_attr1_attr2 = np.count_nonzero(mask_attr1_attr2)
-
-                    mask2_attr1_attr2 = (my_array[:, i - 1] == my_array[j][i - 1]) & (
-                        my_array[:, i] == my_array[j][i]
-                    )
+            
+                    mask2_attr1_attr2 = (my_array[:, i-1] == my_array[j][i-1]) & (my_array[:, i] == my_array[j][i]) 
                     count2_attr1_attr2 = np.count_nonzero(mask2_attr1_attr2)
-
-                    trans_prob_attr1_attr2 = count2_attr1_attr2 / count_attr1_attr2  # 3
-
-                    attr2_tot = np.count_nonzero(my_array[:, i] == my_array[j][i])
-
-                    mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (
-                        my_array[:, i] == my_array[j][i]
-                    )
+                    
+                    trans_prob_attr1_attr2 = count2_attr1_attr2/count_attr1_attr2#3
+                    
+                    attr2_tot = np.count_nonzero(my_array[:,i]==my_array[j][i])
+            
+                    mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i] == my_array[j][i])
                     count_attr2_user = np.count_nonzero(mask_attr2_user)
-
-                    obs_prob_attr2 = 1 - (count_attr2_user / attr2_tot)  # 4
-
-                    priv_prob_MM = (
-                        priv_prob_MM
-                        * start_prob_attr1
-                        * obs_prob_attr1
-                        * trans_prob_attr1_attr2
-                        * obs_prob_attr2
-                    )
-                    worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)  # 5
+        
+                    obs_prob_attr2 = 1 - (count_attr2_user/attr2_tot)#4
+            
+                    priv_prob_MM = priv_prob_MM * start_prob_attr1*obs_prob_attr1*trans_prob_attr1_attr2*obs_prob_attr2
+                    worst_case_MM_risk_score = round(1 - priv_prob_MM,2)#5
                 risk_scores[j] = worst_case_MM_risk_score
             elif len(my_array[0]) == 2:
                 priv_prob_MM = 1
-                attr1_tot = np.count_nonzero(my_array[:, 1] == my_array[j][1])
-
-                mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (
-                    my_array[:, 1] == my_array[j][1]
-                )
+                attr1_tot = np.count_nonzero(my_array[:,1] == my_array[j][1])
+        
+                mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, 1] == my_array[j][1])
                 count_attr1_user = np.count_nonzero(mask_attr1_user)
-
-                start_prob_attr1 = attr1_tot / len(my_array)  # 1
-
-                obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)  # 2
-
-                priv_prob_MM = priv_prob_MM * start_prob_attr1 * obs_prob_attr1
-                worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)  # 5
+                
+                start_prob_attr1 = attr1_tot/len(my_array)#1
+                
+                obs_prob_attr1 = 1 - (count_attr1_user/attr1_tot)#2
+        
+                priv_prob_MM = priv_prob_MM * start_prob_attr1*obs_prob_attr1
+                worst_case_MM_risk_score = round(1 - priv_prob_MM,2)#5
                 risk_scores[j] = worst_case_MM_risk_score
 
         # Stage 3: Calculate dataset privacy level (70-80%)
@@ -313,10 +297,10 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         min_risk_scores = np.zeros(len(risk_scores))
         # Calculate the Euclidean distance
         euclidean_distance = np.linalg.norm(risk_scores - min_risk_scores)
-
+        
         max_risk_scores = np.ones(len(risk_scores))
 
-        # max euclidean distance
+        #max euclidean distance
         max_euclidean_distance = np.linalg.norm(max_risk_scores - min_risk_scores)
         normalized_distance = euclidean_distance/max_euclidean_distance
         
@@ -329,13 +313,13 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
                 
         #descriptive statistics
         stats_dict = {
-            "mean": np.mean(risk_scores),
-            "std": np.std(risk_scores),
-            "min": np.min(risk_scores),
-            "25%": np.percentile(risk_scores, 25),
-            "50%": np.median(risk_scores),
-            "75%": np.percentile(risk_scores, 75),
-            "max": np.max(risk_scores),
+            'mean': np.mean(risk_scores),
+            'std': np.std(risk_scores),
+            'min': np.min(risk_scores),
+            '25%': np.percentile(risk_scores, 25),
+            '50%': np.median(risk_scores),
+            '75%': np.percentile(risk_scores, 75),
+            'max': np.max(risk_scores)
         }
         
         # Stage 5: Generate visualization (90-100%)
@@ -347,22 +331,21 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         
         x_label = ",".join(eval_cols)
         # Create a box plot
-        plt.figure(figsize=(8, 8))
-        # vert=False for horizontal box plot
-        plt.boxplot(risk_scores, vert=True)
-        plt.title("Box Plot of Multiple Attribute Risk Scores")
-        plt.ylabel("Risk Score")
-        plt.xlabel("Feature Combination")
+        plt.figure(figsize=(8,8))
+        plt.boxplot(risk_scores, vert=True)  # vert=False for horizontal box plot
+        plt.title('Box Plot of Multiple Attribute Risk Scores')
+        plt.ylabel('Risk Score')
+        plt.xlabel('Feature Combination')
         plt.xticks([1], [x_label])
 
         # Save the plot as a PNG image in memory
         image_stream = io.BytesIO()
-        plt.savefig(image_stream, format="png")
+        plt.savefig(image_stream, format='png')
         plt.close()
 
         # Convert the image to a base64 string
         image_stream.seek(0)
-        base64_image = base64.b64encode(image_stream.read()).decode("utf-8")
+        base64_image = base64.b64encode(image_stream.read()).decode('utf-8')
         image_stream.close()
 
         result_dict["Description"] = (
@@ -373,11 +356,179 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         )
         result_dict["Descriptive statistics of the risk scores"] = stats_dict
         result_dict["Multiple attribute risk scoring Visualization"] = base64_image
-        result_dict["Dataset Risk Score"] = normalized_distance
+        result_dict['Dataset Risk Score'] = normalized_distance
 
         return result_dict
-    except SoftTimeLimitExceeded:
-        raise Exception("Multiple Attribute Risk task timed out.")
+
+    except Exception as e:
+        result_dict["Error"] = str(e)
+        # Ensure the visualization key is always present for frontend compatibility
+        result_dict["Multiple attribute risk scoring Visualization"] = ""
+        result_dict["Description"] = f"Error occurred: {str(e)}"
+        result_dict["Graph interpretation"] = "No visualization available due to error."
+        return result_dict
+    result_dict = {}
+
+    try:
+        
+        # Check if DataFrame is empty
+        if df.empty:
+            raise ValueError("Input DataFrame is empty.")
+
+        # Handle eval_cols - it might be a string or list
+        if isinstance(eval_cols, str):
+            eval_cols = [col.strip() for col in eval_cols.split(",") if col.strip()]
+        elif isinstance(eval_cols, list):
+            eval_cols = [col.strip() for col in eval_cols if col.strip()]
+        else:
+            raise ValueError("eval_cols must be a string or list")
+
+        # Check if eval_cols is empty after processing
+        if not eval_cols:
+            raise ValueError("No valid columns provided in eval_cols after processing")
+
+        # Validate that all columns exist in the dataframe
+        missing_cols = [col for col in eval_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Columns not found in dataset: {missing_cols}")
+
+        # Validate id_col
+        if not id_col or id_col not in df.columns:
+            raise ValueError(f"ID column '{id_col}' not found in dataset")
+
+        # Select specified columns from DataFrame
+        selected_columns = [id_col] + eval_cols
+        selected_df = df[selected_columns]
+        selected_df = selected_df.dropna()
+
+        # Check if DataFrame is still non-empty after dropping missing values
+        if selected_df.empty:
+            raise ValueError("After dropping missing values, the DataFrame is empty")
+
+        # Convert DataFrame to numpy array
+        my_array = selected_df.to_numpy()
+
+        # Stage 2: Calculate risk scores (15-70%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 25, 'total': 100, 'status': 'Calculating risk scores...'}
+            )
+
+        risk_scores = np.zeros(len(my_array))
+        total_rows = len(my_array)
+        
+        for j in range(len(my_array)):
+            # Update progress for every 10% of rows processed
+            if task and j % max(1, total_rows // 10) == 0:
+                progress = 25 + (j / total_rows) * 55  # 25% to 80%
+                task.update_state(
+                    state='PROGRESS',
+                    meta={'current': int(progress), 'total': 100, 'status': f'Calculating risk scores... ({j}/{total_rows} rows processed)'}
+                )
+    
+            if len(my_array[0]) > 2:
+                priv_prob_MM = 1
+                for i in range(2, len(my_array[0])):
+                    attr1_tot = np.count_nonzero(my_array[:, i - 1] == my_array[j][i - 1])
+                    mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i - 1] == my_array[j][i - 1])
+                    count_attr1_user = np.count_nonzero(mask_attr1_user)
+                    start_prob_attr1 = attr1_tot / len(my_array)
+                    obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)
+                    mask_attr1_attr2 = my_array[:, i - 1] == my_array[j][i - 1]
+                    count_attr1_attr2 = np.count_nonzero(mask_attr1_attr2)
+                    mask2_attr1_attr2 = (my_array[:, i - 1] == my_array[j][i - 1]) & (my_array[:, i] == my_array[j][i])
+                    count2_attr1_attr2 = np.count_nonzero(mask2_attr1_attr2)
+                    trans_prob_attr1_attr2 = count2_attr1_attr2 / count_attr1_attr2
+                    attr2_tot = np.count_nonzero(my_array[:, i] == my_array[j][i])
+                    mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i] == my_array[j][i])
+                    count_attr2_user = np.count_nonzero(mask_attr2_user)
+                    obs_prob_attr2 = 1 - (count_attr2_user / attr2_tot)
+                    priv_prob_MM = (
+                        priv_prob_MM
+                        * start_prob_attr1
+                        * obs_prob_attr1
+                        * trans_prob_attr1_attr2
+                        * obs_prob_attr2
+                    )
+                    worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)
+                risk_scores[j] = worst_case_MM_risk_score
+            elif len(my_array[0]) == 2:
+                priv_prob_MM = 1
+                attr1_tot = np.count_nonzero(my_array[:, 1] == my_array[j][1])
+                mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, 1] == my_array[j][1])
+                count_attr1_user = np.count_nonzero(mask_attr1_user)
+                start_prob_attr1 = attr1_tot / len(my_array)
+                obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)
+                priv_prob_MM = priv_prob_MM * start_prob_attr1 * obs_prob_attr1
+                worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)
+                risk_scores[j] = worst_case_MM_risk_score
+
+        # Stage 3: Calculate dataset privacy level (70-80%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 85, 'total': 100, 'status': 'Calculating dataset privacy level...'}
+            )
+
+        # Calculate the entire dataset privacy level
+        min_risk_scores = np.zeros(len(risk_scores))
+        euclidean_distance = np.linalg.norm(risk_scores - min_risk_scores)
+        max_risk_scores = np.ones(len(risk_scores))
+        max_euclidean_distance = np.linalg.norm(max_risk_scores - min_risk_scores)
+        normalized_distance = euclidean_distance/max_euclidean_distance
+        
+        # Stage 4: Calculate descriptive statistics (80-90%)
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 95, 'total': 100, 'status': 'Generating visualization...'}
+            )
+                
+        stats_dict = {
+            "mean": np.mean(risk_scores),
+            "std": np.std(risk_scores),
+            "min": np.min(risk_scores),
+            "25%": np.percentile(risk_scores, 25),
+            "50%": np.median(risk_scores),
+            "75%": np.percentile(risk_scores, 75),
+            "max": np.max(risk_scores),
+        }
+        
+    
+        
+        # Create a box plot - using same pattern as single attribute
+        plt.figure(figsize=(8, 8))
+        plt.boxplot([risk_scores], labels=[",".join(eval_cols)])
+        plt.title("Box Plot of Multiple Attribute Risk Scores")
+        plt.xlabel("Feature Combination")
+        plt.ylabel("Risk Score")
+
+        # Save the plot as a PNG image in memory - using same pattern as single attribute
+        image_stream = io.BytesIO()
+        plt.savefig(image_stream, format="png")
+        plt.close()
+
+        # Convert the image to a base64 string - using same pattern as single attribute
+        image_stream.seek(0)
+        base64_image = base64.b64encode(image_stream.read()).decode("utf-8")
+        image_stream.close()
+
+        # Store results in dictionary
+        result_dict["Description"] = (
+            "This metric evaluates the joint risk posed by combinations of quasi-identifiers. Lower values are preferred, as they indicate that the selected set of features does not easily allow re-identification."
+        )
+        result_dict["Graph interpretation"] = (
+            "The box plot shows the distribution of combined risk scores. A distribution concentrated at lower values indicates better privacy."
+        )
+        result_dict["Descriptive statistics of the risk scores"] = stats_dict
+        result_dict["Multiple attribute risk scoring Visualization"] = base64_image
+        result_dict["Dataset Risk Score"] = normalized_distance
+
+        
+        
+        return result_dict
+
     except Exception as e:
         result_dict["Error"] = str(e)
         # Ensure the visualization key is always present for frontend compatibility
@@ -387,11 +538,12 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         return result_dict
 
 
-@shared_task(bind=True, ignore_result=False)
-def compute_k_anonymity(
-    self: Task, quasi_identifiers: List[str], file_info: tuple[str, str, str]
-):
-    data = read_file(file_info)
+def compute_k_anonymity(quasi_identifiers: List[str], file_info):
+    # Handle both DataFrame and tuple inputs
+    if isinstance(file_info, tuple):
+        data = read_file(file_info)
+    else:
+        data = file_info
     result_dict = {}
     try:
         if data.empty:
@@ -463,14 +615,16 @@ def compute_k_anonymity(
     return result_dict
 
 
-@shared_task(bind=True, ignore_result=False)
 def compute_l_diversity(
-    self: Task,
     quasi_identifiers: list,
     sensitive_column: str,
-    file_info: tuple[str, str, str],
+    file_info,
 ):
-    data = read_file(file_info)
+    # Handle both DataFrame and tuple inputs
+    if isinstance(file_info, tuple):
+        data = read_file(file_info)
+    else:
+        data = file_info
     result_dict = {}
     try:
         # Validate input DataFrame
@@ -555,14 +709,16 @@ def compute_l_diversity(
     return result_dict
 
 
-@shared_task(bind=True, ignore_result=False)
 def compute_t_closeness(
-    self: Task,
     quasi_identifiers: List[str],
     sensitive_column: str,
-    file_info: tuple[str, str, str],
+    file_info,
 ):
-    data = read_file(file_info)
+    # Handle both DataFrame and tuple inputs
+    if isinstance(file_info, tuple):
+        data = read_file(file_info)
+    else:
+        data = file_info
     result_dict = {}
     try:
 
@@ -647,11 +803,12 @@ def compute_t_closeness(
     return result_dict
 
 
-@shared_task(bind=True, ignore_result=False)
-def compute_entropy_risk(
-    self: Task, quasi_identifiers, file_info: tuple[str, str, str]
-):
-    data = read_file(file_info)
+def compute_entropy_risk(quasi_identifiers, file_info):
+    # Handle both DataFrame and tuple inputs
+    if isinstance(file_info, tuple):
+        data = read_file(file_info)
+    else:
+        data = file_info
     result_dict = {}
 
     try:
@@ -728,9 +885,9 @@ def compute_entropy_risk(
 
 # Celery tasks for async processing
 try:
-    from aidrin.celery_app import celery_app
-    
-    @celery_app.task(bind=True)
+    from celery import shared_task
+
+    @shared_task(bind=True, time_limit=1200, soft_time_limit=900)
     def calculate_single_attribute_risk_score(self, df_data, id_col, eval_cols):
         """
         Celery task for calculating single attribute MM risk scores.
@@ -748,7 +905,7 @@ try:
             # Update progress
             self.update_state(
                 state='PROGRESS',
-                meta={'current': 25, 'total': 100, 'status': 'Data loaded, calculating risk scores...'}
+                meta={'current': 15, 'total': 100, 'status': 'Data loaded, calculating risk scores...'}
             )
             
             # Calculate risk scores using existing function
@@ -771,7 +928,7 @@ try:
             )
             raise
 
-    @celery_app.task(bind=True)
+    @shared_task(bind=True,time_limit=1200, soft_time_limit=900)
     def calculate_multiple_attribute_risk_score(self, df_data, id_col, eval_cols):
         """
         Celery task for calculating multiple attribute MM risk scores.
@@ -815,5 +972,3 @@ try:
 except ImportError:
     # Fallback for when running outside of the Flask app context
     pass
-
-    

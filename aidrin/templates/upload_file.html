@@ -70,7 +70,7 @@
                         document.getElementById("fileUploadContainer").style.borderBottom = "none";
                         
                     </script>
-                    <h2 id="FileUploadMessage">File Uploaded: {{uploaded_file_name}}</h2>
+                    <h2 id="FileUploadMessage">File Uploaded: {{uploaded_file_name or 'Unknown File'}}</h2>
                     {% else %}
                     <h2 id="FileUploadMessage" style="transition: all 0.3s;">Please Upload a File</h2>
                     {% endif %}
@@ -148,9 +148,9 @@
                     <span></span>
             </button>
         <script>
-            const preview = {{ file_preview | tojson | safe }};
+            const preview = {{ file_preview | tojson | safe if file_preview else 'null' }};
             
-            const currently_checked = {{ current_checked_keys | tojson | safe }}
+            const currently_checked = {{ current_checked_keys | tojson | safe if current_checked_keys else 'null' }}
             {% if session.get('minimize_preview') %}
                 document.getElementById("filePreview").classList.add("minimized");
             {% endif %}

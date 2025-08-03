@@ -14,7 +14,7 @@ def create_app():
     app.config["CELERY"] = {
         "broker_url": "redis://localhost:6379/0",  #
         "result_backend": "redis://localhost:6379/0",
-        "task_ignore_result": True,  # Do not store task results in backend, unless methods call for it
+        "task_ignore_result": False,  # Store task results in backend for status checking
         "task_soft_time_limit": 6,  # Task is soft killed
         "task_time_limit": 10,  # Task is force killed after this time
         "worker_hijack_root_logger": False,  # prevent default celery logging configuration

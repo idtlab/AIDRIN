@@ -17,9 +17,13 @@ def add_laplace_noise(data, epsilon):
     return data + noise
 
 
-@shared_task(bind=True, ignore_result=False)
-def return_noisy_stats(self: Task, add_noise_columns, epsilon, file_info):
-    df = read_file(file_info)
+def return_noisy_stats(add_noise_columns, epsilon, file_info):
+    # Convert JSON back to DataFrame if needed, otherwise use DataFrame directly
+    import pandas as pd
+    if isinstance(file_info, str):
+        df = pd.read_json(file_info)
+    else:
+        df = file_info
     df_drop_na = df.dropna()
     df_drop_na = df_drop_na.reset_index(inplace=False)
 
