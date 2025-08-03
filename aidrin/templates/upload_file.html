@@ -80,6 +80,7 @@
             {% if uploaded_file_path %}
                 <!-- clear button: visible when file is uploaded, change form style to match-->
                 <button type="button" class="clear-button" onclick="clearFile()">Clear Uploaded File</button>
+                <button type="button" class="clear-button" onclick="clearCache()" style="margin-top: 10px; background-color: #dc3545;">Clear Cache</button>
             {% endif %}
         </div>
         <div style="display: flex; flex-direction: column; margin-top: 10px; align-self: center; width: max-content;">
@@ -340,6 +341,30 @@
     window.addEventListener('scroll', positionPreview);
     window.addEventListener('resize', positionPreview);
     window.addEventListener('click',positionPreview)
+
+    // Clear cache function
+    function clearCache() {
+        if (confirm('Are you sure you want to clear all cached results? This will remove all stored calculations.')) {
+            fetch('/clear_cache', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while clearing the cache.');
+            });
+        }
+    }
 
 </script>
 </html>
