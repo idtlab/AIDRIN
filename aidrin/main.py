@@ -123,6 +123,41 @@ def clear_all_user_cache():
     return len(keys_to_remove)
 
 
+def cleanup_old_uploaded_files(max_age_hours=24):
+    """
+    Clean up uploaded files that are older than max_age_hours.
+    This prevents accumulation of old files on the server.
+    """
+    try:
+        upload_folder = current_app.config.get('UPLOAD_FOLDER')
+        if not upload_folder or not os.path.exists(upload_folder):
+            return 0
+        
+        current_time = time.time()
+        max_age_seconds = max_age_hours * 3600
+        files_removed = 0
+        
+        for filename in os.listdir(upload_folder):
+            file_path = os.path.join(upload_folder, filename)
+            if os.path.isfile(file_path):
+                file_age = current_time - os.path.getmtime(file_path)
+                if file_age > max_age_seconds:
+                    try:
+                        os.remove(file_path)
+                        files_removed += 1
+                        print(f"Cleaned up old file: {filename}")
+                    except Exception as e:
+                        print(f"Error removing old file {filename}: {e}")
+        
+        if files_removed > 0:
+            print(f"Cleanup completed: {files_removed} old files removed")
+        
+        return files_removed
+    except Exception as e:
+        print(f"Error during file cleanup: {e}")
+        return 0
+
+
 # Simple Routes
 
 
@@ -237,7 +272,9 @@ def dataQuality():
         # check for parameters
         # Completeness
         if request.form.get('completeness') == "yes":
-            compl_dict = completeness(file)
+            # Create file_info tuple for the completeness function
+            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+            compl_dict = completeness(file_info)
             compl_dict['Description'] = (
                 'Indicate the proportion of available data for each feature, with values '
                 'closer to 1 indicating high completeness, and values near 0 indicating '
@@ -247,7 +284,9 @@ def dataQuality():
             final_dict['Completeness'] = compl_dict
         # Outliers
         if request.form.get('outliers') == 'yes':
-            out_dict = outliers(file)
+            # Create file_info tuple for the outliers function
+            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+            out_dict = outliers(file_info)
             out_dict['Description'] = (
                 "Outlier scores are calculated for numerical columns using the "
                 "Interquartile Range (IQR) method, where a score of 1 indicates that "
@@ -257,7 +296,9 @@ def dataQuality():
             final_dict['Outliers'] = out_dict
         # Duplicity
         if request.form.get('duplicity') == 'yes':
-            dup_dict = duplicity(file)
+            # Create file_info tuple for the duplicity function
+            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+            dup_dict = duplicity(file_info)
             dup_dict['Description'] = (
                 "A value of 0 indicates no duplicates, and a value closer to 1 "
                 "signifies a higher proportion of duplicated data points in the dataset"
@@ -289,8 +330,10 @@ def fairness():
             # convert the string values a list
             rep_dict = {}
             list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(', ')]
-            rep_dict['Probability ratios'] = calculate_representation_rate(file, list_of_cols)
-            rep_dict['Representation Rate Visualization'] = create_representation_rate_vis(file, list_of_cols)
+            # Create file_info tuple for the representation rate functions
+            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+            rep_dict['Probability ratios'] = calculate_representation_rate(list_of_cols, file_info)
+            rep_dict['Representation Rate Visualization'] = create_representation_rate_vis(list_of_cols, file_info)
             rep_dict['Description'] = (
                 "Represent probability ratios that quantify the relative representation "
                 "of different categories within the sensitive features, highlighting "
@@ -307,8 +350,9 @@ def fairness():
                 sensitive_attribute_column = request.form.get('features for statistical rate')
 
                 print("Inputs:", y_true, sensitive_attribute_column)
-                # This function never completes?
-                sr_dict = calculate_statistical_rates(file, y_true, sensitive_attribute_column)
+                # Create file_info tuple for the calculate_statistical_rates function
+                file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+                sr_dict = calculate_statistical_rates(y_true, sensitive_attribute_column, file_info)
 
                 sr_dict['Description'] = (
                     'The graph illustrates the statistical rates of various classes across different sensitive attributes. '
@@ -378,7 +422,9 @@ def correlationAnalysis():
 
         if request.form.get('correlations') == 'yes':
             columns = request.form.getlist('all features for data transformation')
-            corr_dict = calc_correlations(file, columns)
+            # Create file_info tuple for the calc_correlations function
+            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+            corr_dict = calc_correlations(columns, file_info)
             # catch potential errors
             if 'Message' in corr_dict:
                 print("Correlation analysis failed:", corr_dict['Message'])
@@ -426,14 +472,17 @@ def featureRelevance():
                 if target in cat_cols or target in num_cols:
                     print("Error: Target is same as feature")
                     return jsonify({"trigger": "correlationError"}), 200
-                df = data_cleaning(file, cat_cols, num_cols, target)
-                print("Data cleaning returned df with shape:", df.shape if df is not None else "None")
+                # Create file_info tuple for the data_cleaning function
+                file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+                df = data_cleaning(cat_cols, num_cols, target, file_info)
+                print("Data cleaning returned df with type:", type(df) if df is not None else "None")
             except Exception as e:
                 print("Error occurred during data cleaning:", e)
                 df = None
 
             # Generate Pearson correlation
-            correlations = pearson_correlation(df, df.columns.difference([target]), target)
+            # df is now a dictionary from data_cleaning, not a DataFrame
+            correlations = pearson_correlation(df, target)
             # don't let the user check the same target and feature
             if correlations is None:
                 print("Error: Correlations is None")
@@ -1226,36 +1275,53 @@ def read_file():
     if not uploaded_file_path and uploaded_file_name:
         return redirect(request.url)
 
+    # Check if the file actually exists
+    if uploaded_file_path and not os.path.exists(uploaded_file_path):
+        # File doesn't exist, clear the session and redirect
+        print(f"File not found: {uploaded_file_path}")
+        session.pop('uploaded_file_path', None)
+        session.pop('uploaded_file_name', None)
+        session.pop('uploaded_file_type', None)
+        return redirect(url_for('upload_file'))
+
     # default result
     readFile = None
-    # csv
-    if uploaded_file_type == ('.csv'):
-        readFile = pd.read_csv(uploaded_file_path, index_col=False)
-    # npz
-    if uploaded_file_type == ('.npz'):
-        npz_data = np.load(uploaded_file_path, allow_pickle=True)
+    try:
+        # csv
+        if uploaded_file_type == ('.csv'):
+            readFile = pd.read_csv(uploaded_file_path, index_col=False)
+        # npz
+        elif uploaded_file_type == ('.npz'):
+            npz_data = np.load(uploaded_file_path, allow_pickle=True)
 
-        data_dict = {}
+            data_dict = {}
 
-        for key in npz_data.files:
-            array = npz_data[key]
+            for key in npz_data.files:
+                array = npz_data[key]
 
-            # Check dimensionality
-            if array.ndim == 1:
-                data_dict[key] = array
-            else:
-                # Flatten if it's a 2D array with only 1 column
-                if array.ndim == 2 and array.shape[1] == 1:
-                    data_dict[key] = array.flatten()
+                # Check dimensionality
+                if array.ndim == 1:
+                    data_dict[key] = array
                 else:
-                    # Otherwise, store the whole array as a column of objects (fallback)
-                    data_dict[key] = [row for row in array]
+                    # Flatten if it's a 2D array with only 1 column
+                    if array.ndim == 2 and array.shape[1] == 1:
+                        data_dict[key] = array.flatten()
+                    else:
+                        # Otherwise, store the whole array as a column of objects (fallback)
+                        data_dict[key] = [row for row in array]
 
-        # Now create the DataFrame safely
-        readFile = pd.DataFrame(data_dict)
-    # excel
-    if uploaded_file_type == ('.xls, .xlsb, .xlsx, .xlsm'):
-        readFile = pd.read_excel(uploaded_file_path)
+            # Now create the DataFrame safely
+            readFile = pd.DataFrame(data_dict)
+        # excel
+        elif uploaded_file_type == ('.xls, .xlsb, .xlsx, .xlsm'):
+            readFile = pd.read_excel(uploaded_file_path)
+    except Exception as e:
+        print(f"Error reading file {uploaded_file_path}: {e}")
+        # Clear session on error
+        session.pop('uploaded_file_path', None)
+        session.pop('uploaded_file_name', None)
+        session.pop('uploaded_file_type', None)
+        return redirect(url_for('upload_file'))
 
     return readFile, uploaded_file_path, uploaded_file_name
 

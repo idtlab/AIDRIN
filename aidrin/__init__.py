@@ -34,14 +34,27 @@ def create_app():
     UPLOAD_FOLDER = os.path.join(app.root_path, "data", "uploads")
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-    # clear uploads folder on app start
+    
+    # Clean up old uploaded files on app start (older than 1 hour)
+    import time
+    current_time = time.time()
+    max_age_seconds = 3600  # 1 hour
+    files_removed = 0
+    
     for filename in os.listdir(UPLOAD_FOLDER):
         file_path = os.path.join(UPLOAD_FOLDER, filename)
         try:
             if os.path.isfile(file_path):
-                os.remove(file_path)
+                file_age = current_time - os.path.getmtime(file_path)
+                if file_age > max_age_seconds:
+                    os.remove(file_path)
+                    files_removed += 1
+                    print(f"Cleaned up old file on startup: {filename}")
         except Exception as e:
             print(f"Failed to delete {file_path}: {e}")
+    
+    if files_removed > 0:
+        print(f"Startup cleanup completed: {files_removed} old files removed")
 
     return app
 
