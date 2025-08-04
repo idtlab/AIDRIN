@@ -1407,6 +1407,30 @@ def summary_histograms(df):
 #     return render_template('medical_image.html')
 
 
+@main.route('/my_cache', methods=['GET'])
+def my_cache():
+    """Show cache information for the current user."""
+    try:
+        user_id = get_current_user_id()
+        cache = current_app.TEMP_RESULTS_CACHE
+        # Get user-specific cache keys
+        user_cache_keys = [key for key in cache.keys() if key.startswith(f"user:{user_id}")]
+        # Calculate cache statistics
+        total_user_entries = len(user_cache_keys)
+        global_cache_size = len(cache)
+        user_cache_percentage = round((total_user_entries / global_cache_size * 100) if global_cache_size > 0 else 0, 2)
+        cache_info = {
+            'user_id': user_id,
+            'total_user_entries': total_user_entries,
+            'global_cache_size': global_cache_size,
+            'user_cache_percentage': user_cache_percentage,
+            'user_cache_keys': user_cache_keys
+        }
+        return render_template('my_cache.html', cache_info=cache_info)
+    except Exception as e:
+        return render_template('my_cache.html', cache_info=None, error=str(e))
+
+
 @main.route('/clear_cache', methods=['POST'])
 def clear_cache():
     """Clear all cache for the current user."""

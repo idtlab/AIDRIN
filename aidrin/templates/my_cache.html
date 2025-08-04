@@ -36,9 +36,33 @@
         {% else %}
             <p>No cache info available.</p>
         {% endif %}
-        <form method="post">
-            <button class="clear-btn" type="submit">Clear My Cache</button>
-        </form>
+        <button class="clear-btn" onclick="clearCache()">Clear My Cache</button>
+        <script>
+            function clearCache() {
+                if (confirm('Are you sure you want to clear all cached results? This will remove all stored calculations.')) {
+                    fetch('/clear_cache', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message);
+                            // Reload the page to show updated cache info
+                            window.location.reload();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while clearing the cache.');
+                    });
+                }
+            }
+        </script>
         <p><a href="/">&larr; Back to Homepage</a></p>
     </div>
 </body>
