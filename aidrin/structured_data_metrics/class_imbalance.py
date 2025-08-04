@@ -1,19 +1,19 @@
 import base64
 import io
+import warnings
 from math import sqrt
-
+from celery.exceptions import SoftTimeLimitExceeded
+import numpy as np
+# Configure matplotlib before importing pyplot
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
-import matplotlib.pyplot as plt
+
+import matplotlib.pyplot as plt  # noqa: E402
+
+
 plt.ioff()  # Turn off interactive mode
-import numpy as np
-from celery import Task, shared_task
-from celery.exceptions import SoftTimeLimitExceeded
-
-from aidrin.file_handling.file_parser import read_file
-
-import warnings
 warnings.filterwarnings('ignore')  # Suppress matplotlib warnings
+
 
 def imbalance_degree(classes, distance="EU"):
     """
@@ -37,8 +37,8 @@ def imbalance_degree(classes, distance="EU"):
 
     References
     ----------
-    .. [1] J. Ortigosa-Hernández, I. Inza, and J. A. Lozano, 
-            "Measuring the class-imbalance extent of multi-class problems," 
+    .. [1] J. Ortigosa-Hernández, I. Inza, and J. A. Lozano,
+            "Measuring the class-imbalance extent of multi-class problems,"
             Pattern Recognit. Lett., 2017.
     """
 
@@ -59,14 +59,15 @@ def imbalance_degree(classes, distance="EU"):
         distance value.
         """
         try:
-            summ = np.vectorize(lambda p : pow(p - _e, 2))(_d).sum()
+            summ = np.vectorize(lambda p: pow(p - _e, 2))(_d).sum()
             return sqrt(summ)
-        except Exception as e:
+        except Exception:
             return None
+
     def _ch(_d, _e):
         # Chebyshev distance: max absolute difference
         return np.max(np.abs(_d - _e))
-    
+
     def _kl(_d, _e):
         # Kullback-Leibler divergence: sum(p * log(p/q)), handle 0s
         # _d: empirical, _e: equiprobability (scalar)
@@ -76,29 +77,33 @@ def imbalance_degree(classes, distance="EU"):
             if not np.any(mask):
                 return None
             return np.sum(_d[mask] * np.log(_d[mask] / q[mask]))
-        except Exception as e:
+        except Exception:
             return None
+
     def _he(_d, _e):
         # Hellinger distance: sqrt(0.5 * sum((sqrt(p) - sqrt(q))^2))
         try:
             q = np.full_like(_d, _e)
             return sqrt(0.5 * np.sum((np.sqrt(_d) - np.sqrt(q)) ** 2))
-        except Exception as e:
+        except Exception:
             return None
+
     def _tv(_d, _e):
         # Total variation distance: 0.5 * sum(|p - q|)
         try:
             q = np.full_like(_d, _e)
             return 0.5 * np.sum(np.abs(_d - q))
-        except Exception as e:
+        except Exception:
             return None
+
     def _cs(_d, _e):
         # Chi-square divergence: sum((p - q)^2 / q)
         try:
             q = np.full_like(_d, _e)
-            return np.sum((( _d - q) ** 2) / q)
-        except Exception as e:
+            return np.sum(((_d - q) ** 2) / q)
+        except Exception:
             return None
+
     def _min_classes(_d, _e):
         """
         Calculates the number of minority classes. We call minority class to
@@ -145,23 +150,23 @@ def imbalance_degree(classes, distance="EU"):
             elif _m == _K:
                 # All classes are minority, return equiprobability
                 return np.array([1/_K] * _K)
-            
+
             # Standard case: m minority classes with zero probability
             min_i = np.zeros(_m)
             maj_i = np.ones((_K - _m - 1)) * (1 / _K)
             maj = np.array([1 - (_K - _m - 1) / _K])
             result = np.concatenate((min_i, maj_i, maj))
-            
+
             # Ensure the distribution sums to 1
             if abs(np.sum(result) - 1.0) > 1e-10:
                 # Normalize if needed
                 result = result / np.sum(result)
-            
+
             return result
-        except Exception as e:
+        except Exception:
             # Return equiprobability distribution as fallback
             return np.array([1/_K] * _K)
-    
+
     def _dist_fn():
         """
         Selects the distance function according to the distance paramenter.
@@ -184,72 +189,73 @@ def imbalance_degree(classes, distance="EU"):
             return _cs
         else:
             raise ValueError("Bad distance function parameter. Should be one in EU, CH, KL, HE, TV, or CS")
-    
+
     _, class_counts = np.unique(classes, return_counts=True)
-    
+
     # Validate input data
     if len(class_counts) == 0:
         return None
-    
+
     if len(class_counts) == 1:
         return 0.0
-    
+
     empirical_distribution = class_counts / class_counts.sum()
     K = len(class_counts)
     e = 1 / K
     m = _min_classes(empirical_distribution, e)
     i_m = _i_m(K, m)
     dfn = _dist_fn()
-    
+
     try:
         dist_ed = dfn(empirical_distribution, e)
         dist_im = dfn(i_m, e)
-        
+
         # Check if distance calculations returned None
         if dist_ed is None or dist_im is None:
             return None
-            
+
         # Handle the case where empirical distribution is already uniform (perfect balance)
         if dist_ed == 0:
             return 0.0
-            
+
         # Avoid division by zero
         if dist_im == 0:
             # If reference distance is 0, it means the reference distribution is uniform
             # This can happen when m=0 (no minority classes) or m=K (all classes are minority)
             # In both cases, the imbalance degree should be 0 (perfect balance)
             return 0.0
-            
+
         result = (dist_ed / dist_im) + (m - 1)
         return result
-    except Exception as e:
+    except Exception:
         return None
+
 
 def class_distribution_plot(df, column):
     try:
         # Ensure column exists and has data
         if column not in df.columns:
             return ""
-        
+
         # Get data and handle NaN values
         column_data = df[column].dropna()
         if len(column_data) == 0:
             return ""
-        
+
         # Calculate class frequencies
         class_counts = column_data.value_counts()
-        
+
         # Check if we have any data to plot
         if len(class_counts) == 0:
             return ""
-        
+
         # Debug: Check if we have valid data
         if class_counts.sum() == 0:
             return ""
-        
+
         # Debug: Print some info about the data
         print(f"Class distribution plot - Column: {column}, Unique values: {len(class_counts)}, Total: {class_counts.sum()}")
-        
+
         # Convert labels to strings and handle truncation safely
         class_labels_modified = []
         for label in class_counts.index:
@@ -261,18 +267,18 @@ def class_distribution_plot(df, column):
         # Set the figure size
         try:
             fig, ax = plt.subplots(figsize=(8, 8))
-        except Exception as e:
+        except Exception:
             return ""
-        
+
         # Ensure we have valid data for pie chart
         if len(class_counts) == 0 or class_counts.sum() == 0:
             plt.close()
             return ""
-        
+
         # Plotting a pie chart without labels
         try:
             wedges, _ = ax.pie(class_counts.values, startangle=90)
-        except Exception as e:
+        except Exception:
             plt.close()
             return ""
 
@@ -282,7 +288,7 @@ def class_distribution_plot(df, column):
         for label, count in zip(class_labels_modified, class_counts):
             percentage = (count / total) * 100
             legend_labels.append(f'{label}: {percentage:.1f}%')
-        
+
         ax.legend(wedges, legend_labels, title="Classes", loc="center left", bbox_to_anchor=(1, 0.5), fontsize=12)
 
         plt.title(f'Distribution of Each Class in {column}')
@@ -303,7 +309,7 @@ def class_distribution_plot(df, column):
                 plt.close()
                 buf.close()
                 return ""
-        except Exception as e:
+        except Exception:
             plt.close()
             buf.close()
             return ""
@@ -315,11 +321,12 @@ def class_distribution_plot(df, column):
         return plot_base64
     except SoftTimeLimitExceeded:
         raise Exception("Class Distribution Plot task timed out.")
-    except Exception as e:
+    except Exception:
         # Handle errors and return empty string for visualization
         return ""
 
-#imbalance degree calculation with default distance metric to be Euclidean
+
+# imbalance degree calculation with default distance metric to be Euclidean
 def calc_imbalance_degree(df, column, dist_metric='EU'):
     res = {}
 
@@ -329,10 +336,23 @@ def calc_imbalance_degree(df, column, dist_metric='EU'):
         id = imbalance_degree(classes, dist_metric)
 
         if id is None:
-            res['Error'] = f"Could not calculate imbalance degree using {dist_metric} distance metric. This may be due to invalid data or mathematical constraints."
+            res['Error'] = (
+                f"Could not calculate imbalance degree using {dist_metric} "
+                f"distance metric. This may be due to invalid data or "
+                f"mathematical constraints."
+            )
         else:
             res['Imbalance Degree score'] = id
-            res['Description'] = "The Imbalance Degree (ID) is a ratio that quantifies class imbalance by comparing the observed distribution to both uniform and perfectly skewed distributions. It's calculated as: (distance from empirical to uniform) / (distance from perfectly skewed to uniform) + (number of minority classes - 1). A value of 0 indicates perfect balance, while higher values indicate greater imbalance relative to the worst possible scenario for that number of minority classes."
+            res['Description'] = (
+                "The Imbalance Degree (ID) is a ratio that quantifies class "
+                "imbalance by comparing the observed distribution to both "
+                "uniform and perfectly skewed distributions. It's calculated "
+                "as: (distance from empirical to uniform) / (distance from "
+                "perfectly skewed to uniform) + (number of minority classes - 1). "
+                "A value of 0 indicates perfect balance, while higher values "
+                "indicate greater imbalance relative to the worst possible "
+                "scenario for that number of minority classes."
+            )
 
     except Exception as e:
         # Handle errors and store the error message in the result

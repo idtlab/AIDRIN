@@ -218,7 +218,7 @@ def retrieve_uploaded_file():
 def clear_file():
     # remove file path/name
     file_path = session.pop('uploaded_file_path', None)
-    _ = session.pop('uploaded_file_name', None)  # Unused variable
+    _ = session.pop('uploaded_file_name', None)
     if file_path and os.path.exists(file_path):
         os.remove(file_path)  # Delete the uploaded file from the server
     return redirect(url_for('upload_file'))  # Redirect back to the homepage to reset the form
@@ -983,7 +983,7 @@ def privacyPreservation():
                 print(f"Cached Entropy Risk for key: {cache_key}")
 
         end_time = time.time()
-        _ = end_time - start_time  # Unused variable
+        _ = end_time - start_time
         # print("Final Dict Privacy:", final_dict)
         return store_result('privacyPreservation', final_dict)
 
