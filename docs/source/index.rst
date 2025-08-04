@@ -36,5 +36,5 @@ Key Features
 
    installation
    appfl_integration
+   contributing
    publications
-
