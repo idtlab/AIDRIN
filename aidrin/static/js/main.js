@@ -1564,6 +1564,7 @@ const disableDarkmode = () => {
     localStorage.setItem('darkmode',null)
     
 }
+let datalogPopup;
 document.addEventListener('DOMContentLoaded', (event) => {
     const themeSwitch = document.getElementById('theme-switch')
     //on document load check if darkmode is active
@@ -1577,4 +1578,73 @@ document.addEventListener('DOMContentLoaded', (event) => {
         toggleSlidesColor();
 
     })
+
+    //data log handlers
+    const dataLogButton = document.getElementById("datalog-button"); //navbar button
+
+    const radioButtons = document.querySelectorAll('input[name="tableSwitch"]');
+    const tableContainers = document.querySelectorAll(".scrollable-container");
+    // popping up current log
+    dataLogButton.addEventListener("click", () => {
+        datalogPopup = document.getElementById("datalog-popup");
+        const datalogContent = document.getElementById("datalog-content");
+
+        //open popup
+        datalogPopup.classList.add("open-popup");
+
+        fetch("/view_logs")
+            .then((response) => response.json())
+            .then((data) => {
+                const tbodyMaster = document.querySelector("#masterLogTable tbody");
+                const tbodyFile = document.querySelector("#fileUploadLogTable");
+                const tbodyMetric = document.querySelector("#metricLogTable");
+                tbodyMaster.innerHTML = "";
+
+                data.forEach((row) => {
+                    const tr = document.createElement("tr");
+
+                    ["timestamp", "logger", "message"].forEach((key) => {
+                        const td = document.createElement("td");
+                        td.textContent = row[key];
+                        tr.appendChild(td);
+                    });
+                    tbodyMaster.appendChild(tr);
+
+                    // row without logger
+                    const trNoLogger = document.createElement("tr");
+                    ["timestamp", "message"].forEach((key) => {
+                        const td = document.createElement("td");
+                        td.textContent = row[key];
+                        trNoLogger.appendChild(td);
+                    });
+
+                    if (row.logger === "file_upload") {
+                        tbodyFile.appendChild(trNoLogger);
+                    } else if (row.logger === "metric") {
+                        tbodyMetric.appendChild(trNoLogger);
+                    }
+                });
+            })
+            .catch((error) => {
+                console.error("Error loading log:", error);
+                openErrorPopup("Error loading log:", error);
+            });
+    });
+    // switching between logs
+    radioButtons.forEach((radio) => {
+        radio.addEventListener("change", () => {
+            tableContainers.forEach((container) =>
+                container.classList.remove("active")
+            );
+            document.getElementById(radio.value).classList.add("active");
+        });
+    });
 });
+function closeDatalogPopup() {
+    //close datalog popup has to be present in the DOM for the function to call already
+    datalogPopup.classList.remove("open-popup");
+}
+function closeErrorPopup() {
+    //error popup has to be present in the DOM for the function to call already
+    errorPopup.classList.remove("open-popup");
+}

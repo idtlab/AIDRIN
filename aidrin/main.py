@@ -18,6 +18,7 @@ from aidrin.structured_data_metrics.privacy_measure import (
 )
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
 from aidrin.file_handling.file_parser import read_file as read_file_parser, SUPPORTED_FILE_TYPES
+from aidrin.logging import setup_logging
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,13 +34,16 @@ import base64
 # Create Blueprint
 main = Blueprint('main', __name__)
 
+# Setup logging
+setup_logging()  # sets log config
+file_upload_time_log = logging.getLogger("file_upload")  # file upload related logs
+metric_time_log = logging.getLogger("metric")  # metric parsing related logs
+
 # Time Logging
 
 TIMEOUT_DURATION = 60  # seconds
 
 time_log = logging.getLogger('aidrin')
-file_upload_time_log = logging.getLogger('aidrin.file_upload')
-metric_time_log = logging.getLogger('aidrin.metric')
 
 # Caching Functions
 
@@ -177,6 +181,40 @@ def publications():
     return render_template('publications.html')
 
 
+# for viewing data logs
+@main.route("/view_logs")
+def view_logs():
+    log_path = os.path.join(os.path.dirname(__file__), "data", "logs", "aidrin.log")
+
+    log_rows = []
+    if os.path.exists(log_path):
+        with open(log_path, "r") as f:
+            for line in f:
+                parts = line.strip().split(" | ", maxsplit=3)
+                if len(parts) == 4:
+                    timestamp, logger, level, message = parts
+                    log_rows.append(
+                        {
+                            "timestamp": timestamp,
+                            "logger": logger,
+                            "level": level,
+                            "message": message,
+                        }
+                    )
+                else:
+                    log_rows.append(
+                        {
+                            "timestamp": "",
+                            "logger": "",
+                            "level": "",
+                            "message": line.strip(),
+                        }
+                    )
+
+            return jsonify(log_rows)
+    return jsonify({"error": "Log file not found."}), 404
+
+
 @main.route('/class-imbalance-docs')
 def class_imbalance_docs():
     return render_template('documentation/classImbalanceDocs.html')
@@ -237,81 +275,116 @@ def upload_file():
 
 @main.route('/retrieve_uploaded_file', methods=['GET'])
 def retrieve_uploaded_file():
-    uploaded_file_path = session.get('uploaded_file_path')
+    file_upload_time_log.info("Retrieving File")
 
+    uploaded_file_path = session.get('uploaded_file_path')
     if uploaded_file_path:
         # Ensure the file exists at the given path
         if os.path.exists(uploaded_file_path):
+            file_upload_time_log.info("File Successfully Found")
             return send_file(uploaded_file_path, as_attachment=True)
         else:
-            return jsonify({"error": "File not found"}), 404
+            file_upload_time_log.info("File not found in os")
+            return jsonify({"error": "File not found in os"}), 404
     else:
-        return jsonify({"error": "No file uploaded yet"}), 404
+        file_upload_time_log.info("No file path found")
+        return jsonify({"error": "No file path found"}), 404
 
 
 @main.route('/clear', methods=['GET', 'POST'])
 def clear_file():
+    file_upload_time_log.info("Clearing File")
     # remove file path/name
-    file_path = session.pop('uploaded_file_path', None)
-    _ = session.pop('uploaded_file_name', None)
-    if file_path and os.path.exists(file_path):
-        os.remove(file_path)  # Delete the uploaded file from the server
-    return redirect(url_for('upload_file'))  # Redirect back to the homepage to reset the form
+    session.pop("uploaded_file_path", None)
+    session.pop("uploaded_file_name", None)
+    session.pop("uploaded_file_type", None)
+    session.pop("minimize_preview", None)
+    session.clear()
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    try:
+        for filename in os.listdir(upload_folder):
+            file_path = os.path.join(upload_folder, filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+    except Exception as e:
+        file_upload_time_log.info("File Clear Failure: Unable to clear folder")
+        return jsonify({"success": False, "error": str(e)}), 500
+    return redirect(url_for("upload_file"))
 
 
 # Metric Page Routes
 
 @main.route('/dataQuality', methods=['GET', 'POST'])
 def dataQuality():
-    start_time = time.time()
+
     final_dict = {}
+    # get file info
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = (file_path, file_name, file_type)
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
-
-    if request.method == 'POST':
+    if request.method == "POST":
+        start_time = time.time()
+        metric_time_log.info("Data quality Request Started")
         # check for parameters
         # Completeness
-        if request.form.get('completeness') == "yes":
-            # Create file_info tuple for the completeness function
-            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
-            compl_dict = completeness(file_info)
-            compl_dict['Description'] = (
-                'Indicate the proportion of available data for each feature, with values '
-                'closer to 1 indicating high completeness, and values near 0 indicating '
-                'low completeness. If the visualization is empty, it means that all '
-                'features are complete.'
-            )
-            final_dict['Completeness'] = compl_dict
-        # Outliers
-        if request.form.get('outliers') == 'yes':
-            # Create file_info tuple for the outliers function
-            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
-            out_dict = outliers(file_info)
-            out_dict['Description'] = (
-                "Outlier scores are calculated for numerical columns using the "
-                "Interquartile Range (IQR) method, where a score of 1 indicates that "
-                "all data points in a column are identified as outliers, a score of 0 "
-                "signifies no outliers are detected"
-            )
-            final_dict['Outliers'] = out_dict
-        # Duplicity
-        if request.form.get('duplicity') == 'yes':
-            # Create file_info tuple for the duplicity function
-            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
-            dup_dict = duplicity(file_info)
-            dup_dict['Description'] = (
-                "A value of 0 indicates no duplicates, and a value closer to 1 "
-                "signifies a higher proportion of duplicated data points in the dataset"
-            )
-            final_dict['Duplicity'] = dup_dict
-
+        try:
+            if request.form.get("completeness") == "yes":
+                start_time_completeness = time.time()
+                completeness_result = completeness(file_info)
+                compl_dict = completeness_result
+                compl_dict["Description"] = (
+                    "Indicate the proportion of available data for each feature, "
+                    "with values closer to 1 indicating high completeness, and values near "
+                    "0 indicating low completeness. If the visualization is empty, it means "
+                    "that all features are complete."
+                )
+                final_dict["Completeness"] = compl_dict
+                metric_time_log.info(
+                    "Completeness took %.2f seconds",
+                    time.time() - start_time_completeness,
+                )
+            # Outliers
+            if request.form.get("outliers") == "yes":
+                start_time_outliers = time.time()
+                outliers_result = outliers(file_info)
+                out_dict = outliers_result
+                out_dict["Description"] = (
+                    "Outlier scores are calculated for numerical columns using the Interquartile"
+                    " Range (IQR) method, where a score of 1 indicates that all data points in a "
+                    "column are identified as outliers, a score of 0 signifies no outliers are detected"
+                )
+                final_dict["Outliers"] = out_dict
+                metric_time_log.info(
+                    "Outliers took %.2f seconds", time.time() - start_time_outliers
+                )
+            # Duplicity
+            if request.form.get("duplicity") == "yes":
+                start_time_duplicity = time.time()
+                duplicity_result = duplicity(file_info)
+                dup_dict = duplicity_result
+                dup_dict["Description"] = (
+                    "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher "
+                    "proportion of duplicated data points in the dataset"
+                )
+                final_dict["Duplicity"] = dup_dict
+                metric_time_log.info(
+                    "Duplicity took %.2f seconds",
+                    time.time() - start_time_duplicity,
+                )
+        except Exception as e:
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
         end_time = time.time()
         execution_time = end_time - start_time
-        print(f"Execution time: {execution_time} seconds")
+        metric_time_log.info(
+            f"Data Quality Execution time: {execution_time:.2f} seconds"
+        )
 
-        return store_result('dataQuality', final_dict)
+        return store_result("dataQuality", final_dict)
 
-    return get_result_or_default('dataQuality', uploaded_file_path, uploaded_file_name)
+    return get_result_or_default("dataQuality", file_path, file_name)
 
 
 @main.route('/fairness', methods=['GET', 'POST'])
@@ -604,12 +677,18 @@ def classImbalance():
 
 @main.route('/privacyPreservation', methods=['GET', 'POST'])
 def privacyPreservation():
-    start_time = time.time()
+
     final_dict = {}
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = (file_path, file_name, file_type)
+    file = read_file_parser(file_info)
 
-    if request.method == 'POST':
+    if request.method == "POST":
+        metric_time_log.info("Privacy Preservation Request Started")
+        start_time = time.time()
         # check for parameters
         # differential privacy
         if request.form.get("differential privacy") == "yes":
@@ -1032,11 +1111,13 @@ def privacyPreservation():
                 print(f"Cached Entropy Risk for key: {cache_key}")
 
         end_time = time.time()
-        _ = end_time - start_time
-        # print("Final Dict Privacy:", final_dict)
-        return store_result('privacyPreservation', final_dict)
+        execution_time = end_time - start_time
+        metric_time_log.info(
+            f"Privacy Preservation Execution time: {execution_time:.2f} seconds"
+        )
+        return store_result("privacyPreservation", final_dict)
 
-    return get_result_or_default('privacyPreservation', uploaded_file_path, uploaded_file_name)
+    return get_result_or_default("privacyPreservation", file_path, file_name)
 
 
 @main.route('/FAIR', methods=['GET', 'POST'])
