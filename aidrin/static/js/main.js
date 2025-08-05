@@ -126,8 +126,8 @@ function submitForm() {
 
             // Check for each type of visualization
             var visualizationTypes = [
-                'Completeness', 'Outliers', 'Representation Rate', 'Statistical Rate',
-                'Correlations Analysis', 'Correlations Analysis',
+                'Completeness', 'Outliers', 'Duplicity', 'Representation Rate',
+                'Statistical Rate', 'Correlations Analysis',
                 'Feature Relevance', 'Class Imbalance', 'DP Statistics',
                 'Single attribute risk scoring', 'Multiple attribute risk scoring',
                 'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
@@ -140,8 +140,8 @@ function submitForm() {
                     console.log('Type data keys:', Object.keys(data[type]));
                     // Create placeholder for async task
                     function createVisualizationPlaceholder(data, type, taskId, cacheKey) {
-                        console.log('Adding async task placeholder:', type);
                         var title = type;
+                        console.log('Adding async task placeholder:', title);
                         var jsonData = JSON.stringify(data);
 
                         visualizationContent.push({
@@ -150,7 +150,7 @@ function submitForm() {
                             riskLevel: data[type]?.riskLevel || null,
                             riskColor: data[type]?.riskColor || null,
                             value: data[type]?.value || 'N/A',
-                            description: data[type]?.description || 'N/A',
+                            description: data[type]?.description || null,
                             interpretation: '',
                             title: title,
                             jsonData: jsonData,
@@ -159,22 +159,35 @@ function submitForm() {
                             taskId: taskId,
                             cacheKey: cacheKey
                         });
-
-                        // Start polling for this task
-                        console.log('Starting polling for task:', taskId);
-                        pollAsyncTask(taskId, cacheKey, type);
                     }
-                    //special case for Correlation Analysis: Two Visualizations
+
                     const taskId = Object.entries(data[type]).find(([key, _]) => key.startsWith("task_id"))?.[1] || null;
                     const cacheKey = data[type]['cache_key'];
+                    if (type == "Correlations Analysis") {
+                        subtypes = ["Categorical", "Numerical"];
+                        createVisualizationPlaceholder(data, type, taskId, cacheKey);
+                        subtypes.forEach(subtype => {
+                            var title = type + " " + subtype;
 
+                            // Start polling for this task
+                            console.log('Starting polling for task:', title);
+                            pollAsyncTask(taskId, cacheKey, title);
+                        });
+                    } else {
+                        createVisualizationPlaceholder(data, type, taskId, cacheKey);
+                        // Start polling for this task
+                        console.log('Starting polling for task:', type);
+                        pollAsyncTask(taskId, cacheKey, type);
+                    }
                 } else {
                     console.log('Type not found in data:', type);
                 }
             });
             // Boolean flag to track if heading has been added
             var headingAdded = false;
-
+            function isKeyPresentAndDefined(obj, key) {
+                return obj && obj[key] !== undefined;
+            }
             if (visualizationContent.length > 0) {
 
 
@@ -187,7 +200,7 @@ function submitForm() {
 
                 // Add each visualization to the metric visualization section
                 visualizationContent.forEach(function (content, index) {
-                    //check if vizualization is duplicity with score=0 (no dublicates)
+
 
                     const visualizationId = `visualization_${index}`;
                     let visualizationHtml = `<div class="visualization-container">
@@ -309,15 +322,6 @@ function submitForm() {
                     metrics.innerHTML += visualizationHtml;
                 });
 
-                //check if duplicity is present and 0 (no duplicity)
-                if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
-                    metrics.innerHTML += `<div class="visualization-container">
-                    <div class="toggle" onclick="toggleVisualization('duplicity')">Duplicity</div>
-                    <div id="duplicity" style="display: block; text-align: center;">
-                        No duplicates found 
-                    </div>      
-                </div>`;
-                }
 
 
 
@@ -330,18 +334,7 @@ function submitForm() {
 
 
             } else {
-                //check if duplicity is present and 0 (no duplicity)
-                if (isKeyPresentAndDefined(data, 'Duplicity') && isKeyPresentAndDefined(data['Duplicity'], 'Duplicity scores') && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] === 0) {
-                    metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
-                    metrics.innerHTML += `<div class="visualization-container">
-                    <div class="toggle" onclick="toggleVisualization('duplicity')">Duplicity</div>
-                    <div id="duplicity" style="display: block; text-align: center;">
-                        No duplicates found 
-                    </div>      
-                </div>`;
-                } else {
-                    metrics.innerHTML = '<h3 style="text-align:center;">No visualizations available.</h3>';
-                }
+
                 // Assuming 'data' is your dictionary
                 const modifiedData = removeVisualizationKey(data);
                 const jsonBlobUrl = `data:application/json,${encodeURIComponent(JSON.stringify(modifiedData))}`;
@@ -746,21 +739,46 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
                 } else {
                     // Add visualization image if present
                     const vizKey = `${metricName} Visualization`;
+
                     console.log(`Looking for visualization key:`, vizKey);
                     console.log(`Available keys:`, Object.keys(results));
-                    console.log(`Visualization data length:`, results[vizKey] ? results[vizKey].length : 'Not found');
-
-                    if (results[vizKey] && results[vizKey].trim() !== "") {
-                        console.log(`Adding visualization image for ${metricName}`);
-                        const imageBlobUrl = `data:image/jpeg;base64,${results[vizKey]}`;
-                        completedHtml += `<div style="display:block;"><img src="${imageBlobUrl}" alt="${metricName} Chart" style="max-width: 100%; height: auto;">
+                    //special case Correlations Analysis: Two visualizations present
+                    if (metricName == "Correlations Analysis Categorical" || metricName == "Correlations Analysis Numerical"
+                    ) {
+                        console.log(`Visualization data length:`, results[metricName][vizKey] ? results[metricName][vizKey].length : 'Not found');
+                        if (results[metricName][vizKey] && results[metricName][vizKey].trim() !== "") {
+                            console.log(`Adding visualization image for ${metricName}`);
+                            const imageBlobUrl = `data:image/jpeg;base64,${results[metricName][vizKey]}`;
+                            completedHtml += `<p style="font-size: 1.1em;font-weight: bold;text-align: center;">${metricName}</p><div style="display:block;"><img src="${imageBlobUrl}" alt="${metricName} Chart" style="max-width: 100%; height: auto;">
                         <a href="${imageBlobUrl}" download="${metricName}.jpg" class="toggle metric-download" style="padding:0px;border-radius: 0 0 10px 10px">
                             <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
                                 <path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/>
                             </svg>
                         </a></div>`;
+                            completedHtml += `<div><strong>Description:</strong> ${results[metricName]['Description']}</div>`;
+                        } else {
+                            console.log(`No visualization found for key: ${vizKey}`);
+                        }
+                    } else if (metricName == "Duplicity") {
+                        // SPECIAL CASE Duplicity: No visualizations present
+                        const duplicateEval = results["Duplicity Scores"] || "No duplicates found";
+                        completedHtml += `<div id="duplicity" style="display: block; text-align: center; font-size:1.1em;padding:20px;">${duplicateEval} </div>`;
+
                     } else {
-                        console.log(`No visualization found for key: ${vizKey}`);
+                        console.log(`Visualization data length:`, results[vizKey] ? results[vizKey].length : 'Not found');
+
+                        if (results[vizKey] && results[vizKey].trim() !== "") {
+                            console.log(`Adding visualization image for ${metricName}`);
+                            const imageBlobUrl = `data:image/jpeg;base64,${results[vizKey]}`;
+                            completedHtml += `<div style="display:block;"><img src="${imageBlobUrl}" alt="${metricName} Chart" style="max-width: 100%; height: auto;">
+                        <a href="${imageBlobUrl}" download="${metricName}.jpg" class="toggle metric-download" style="padding:0px;border-radius: 0 0 10px 10px">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
+                                <path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/>
+                            </svg>
+                        </a></div>`;
+                        } else {
+                            console.log(`No visualization found for key: ${vizKey}`);
+                        }
                     }
                 }
 
@@ -791,12 +809,14 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
                 }
 
                 // Replace the async placeholder with the completed results
-                progressBar = document.getElementById(`async-task-status-${taskId}`)
+                const progressBar = document.querySelector(`[data-task-id="${taskId}"]`);
                 progressBar.style.display = "none";
                 contentDiv.innerHTML = completedHtml + contentDiv.innerHTML;
 
                 console.log(`Successfully updated ${metricName} with completed results`);
                 console.log(`Final HTML length:`, completedHtml.length);
+
+
             } else {
                 console.error(`Could not find contentDiv or results missing:`, { contentDiv, results });
             }

@@ -406,7 +406,7 @@ def fairness():
                     list_of_cols, file_info)
 
                 rep_dict = {
-                    "task_id_rep_rate": rep_rate_result.id,
+                    "secondary_task_id_rep_rate": rep_rate_result.id,
                     "result_rep_rate": "",
                     "task_id_rep_rate_vis": rep_rate_vis_result.id,
                     "result_representation_rep_rate_vis": "",
@@ -626,9 +626,9 @@ def classImbalance():
                 ci_dict = {
                     "task_id_class_imbalance_vis": class_distrib_plot_result.id,
                     "result_class_imbalance_vis": "",
-                    "task_id_calc_imbalance_degree": calc_imbalance_degree_result.id,
+                    "secondary_task_id_calc_imbalance_degree": calc_imbalance_degree_result.id,
                     "result_calc_imbalance_degree": "",
-                    "Description": "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class.",
+                    "description": "The chart displays the distribution of classes within the specified feature, providing a visual representation of the relative proportions of each class.",
 
                 }
                 final_dict['Class Imbalance'] = ci_dict

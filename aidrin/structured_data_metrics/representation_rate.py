@@ -84,8 +84,9 @@ def create_representation_rate_vis(self: Task, columns, file_info):
             img_buf.close()
 
             plt.close()  # Close the plot to free up resources
-
-            return img_base64
+            result_dict = {}
+            result_dict["Representation Rate Visualization"] = img_base64
+            return result_dict
     except SoftTimeLimitExceeded:
         raise Exception("Representation Rate Vis task timed out.")
     except Exception as e:
