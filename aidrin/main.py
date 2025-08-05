@@ -521,7 +521,11 @@ def featureRelevance():
     start_time = time.time()
     final_dict = {}
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    read_result = read_file()
+    # Check if read_file returned a redirect response (error case)
+    if hasattr(read_result, 'status_code'):  # It's a Response object
+        return read_result
+    file, uploaded_file_path, uploaded_file_name = read_result
 
     if request.method == 'POST':
         # check for parameters
@@ -532,8 +536,8 @@ def featureRelevance():
             raw_num_cols = request.form.get("numerical features for feature relevancy", "")
 
             # Clean each list by removing empty strings and whitespace-only entries
-            cat_cols = [col.strip() for col in raw_cat_cols.split(", ") if col.strip()]
-            num_cols = [col.strip() for col in raw_num_cols.split(", ") if col.strip()]
+            cat_cols = [col.strip() for col in raw_cat_cols.split(",") if col.strip()]
+            num_cols = [col.strip() for col in raw_num_cols.split(",") if col.strip()]
 
             print(cat_cols)
             print(num_cols)
@@ -547,21 +551,23 @@ def featureRelevance():
                     return jsonify({"trigger": "correlationError"}), 200
                 # Create file_info tuple for the data_cleaning function
                 file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
-                df = data_cleaning(cat_cols, num_cols, target, file_info)
-                print("Data cleaning returned df with type:", type(df) if df is not None else "None")
+                data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
+                df_json = data_cleaning_result.get()  # json serialized
+                print("Data cleaning returned df with shape:", (pd.DataFrame.from_dict(df_json).shape if df_json is not None else "None"))
             except Exception as e:
                 print("Error occurred during data cleaning:", e)
-                df = None
+                df_json = None
 
             # Generate Pearson correlation
-            # df is now a dictionary from data_cleaning, not a DataFrame
-            correlations = pearson_correlation(df, target)
+            pearson_corr_result = pearson_correlation.delay(df_json, target)
+            correlations = pearson_corr_result.get()
             # don't let the user check the same target and feature
-            if correlations is None:
-                print("Error: Correlations is None")
+            if correlations is None or len(correlations) == 0:
+                print("Error: Correlations is None or empty")
                 return jsonify({"trigger": "correlationError"}), 200
 
-            f_plot = plot_features(correlations, target)
+            plot_features_result = plot_features.delay(correlations, target)
+            f_plot = plot_features_result.get()
             f_dict = {}
 
             f_dict['Pearson Correlation to Target'] = correlations
