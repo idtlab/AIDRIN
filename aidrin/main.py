@@ -96,24 +96,60 @@ def view_logs():
 ##### Result Polling #####
 
 
-@main.get("/result/<id>")
-def result(id: str):
-    result = AsyncResult(id)
-    ready = result.ready()
-    successful = result.successful() if ready else None
-
+@main.route('/check_and_update_task/<task_id>/<cache_key>', methods=['GET'])
+def check_and_update_task(task_id, cache_key):
+    """Check if a Celery task is complete and update the cache with results."""
     try:
-        value = result.get(timeout=1) if ready else result.result
-    except TimeoutError:
-        value = {"error": "Task did not return in time"}
+        task = AsyncResult(task_id)
+
+        if task.state == 'SUCCESS':
+            # Task completed, update cache with actual results
+            result = task.result
+            # current_app.TEMP_RESULTS_CACHE[cache_key] = {
+            #     'data': result,
+            #     'timestamp': time.time(),
+            #     'expires_at': time.time() + (30 * 60)
+            # }
+            return jsonify({
+                'success': True,
+                'completed': True,
+                'result': result
+            })
+        elif task.state == 'FAILURE':
+            # Task failed
+            error_result = {
+                "Error": f"Task failed: {str(task.info)}",
+                "Single attribute risk scoring Visualization": "",
+                "Description": "Task execution failed.",
+                "Graph interpretation": "Please try again.",
+                "Risk Score": "N/A",
+                "Risk Level": "N/A",
+                "Risk Color": "N/A"
+            }
+            # current_app.TEMP_RESULTS_CACHE[cache_key] = {
+            #     'data': error_result,
+            #     'timestamp': time.time(),
+            #     'expires_at': time.time() + (30 * 60)
+            # }
+            return jsonify({
+                'success': False,
+                'completed': True,
+                'error': str(task.info)
+            })
+        else:
+            # Task still pending or in progress
+            return jsonify({
+                'success': True,
+                'completed': False,
+                'state': task.state,
+                'info': task.info if task.state == 'PROGRESS' else {'status': 'Task is pending...'}
+            })
+
     except Exception as e:
-        value = {"error": str(e)}
-    file_upload_time_log.info(f"value: %s", value)
-    return jsonify({
-        "ready": ready,
-        "successful": successful,
-        "value": value,
-    })
+        return jsonify({
+            'success': False,
+            'error': f'Error checking task: {str(e)}'
+        }), 500
 
 ######### Uploading, Retrieving, Clearing File Routes ############
 
@@ -634,8 +670,11 @@ def privacyPreservation():
                     epsilon = 0.1  # Assign a default value for epsilon
                 noisy_stat_results = return_noisy_stats.delay(
                     feature_to_add_noise, float(epsilon), file_info)
-                noisy_stat = noisy_stat_results.get()
-                final_dict['DP Statistics'] = noisy_stat
+
+                final_dict['DP Statistics'] = {
+                    "task_id_noisy_stat": noisy_stat_results.id,
+                    "results_noisy_stat": ""
+                }
                 metric_time_log.info(
                     "Differential privacy took %.2f seconds", time.time()-start_time_diffPrivacy)
 
@@ -668,7 +707,7 @@ def privacyPreservation():
                         id_feature, eval_features, file_info)
                     final_dict["Single attribute risk scoring"] = {
                         "task_id_single_attr_risk": single_attribute_result.id,
-                        "result_single_attr_risk": "",
+                        "result_single_attr_risk": ""
                     }
 
                 metric_time_log.info(
@@ -702,11 +741,11 @@ def privacyPreservation():
                         id_feature, eval_features, file_info)
                     final_dict["Multiple attribute risk scoring"] = {
                         "task_id_mult_attr_risk": multiple_attribute_result.id,
-                        "result_mult_attr_risk": "",
+                        "result_mult_attr_risk": ""
                     }
 
                 metric_time_log.info(
-                    "Differential privacy took %.2f seconds", time.time()-start_time_multAttributeRisk)
+                    "Multiple Attribute Risk took %.2f seconds", time.time()-start_time_multAttributeRisk)
             # k-Anonymity
             if request.form.get("k-anonymity") == "yes":
                 k_qis = request.form.getlist(

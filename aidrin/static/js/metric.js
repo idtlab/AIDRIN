@@ -56,13 +56,16 @@ const toggleSlidesColor = () => {
 /************ Taken out of metric data download pop up *************/
 function toggleVisualization(id) {
     var element = document.getElementById(id);
+    var toggle = document.getElementById(id + '-toggle')
     var toggleArrow = document.getElementById(id + '-toggle-arrow');
     if (element.style.display === 'none' || element.style.display === '') {
         element.style.display = 'block';
-        toggleArrow.style.transform = 'rotate(180deg)'; // Rotate arrow when open
+        toggle.style.borderRadius = "10px 10px 0 0";
+        toggleArrow.style.transform = 'rotate(0deg)'; // Rotate arrow when open
     } else {
         element.style.display = 'none';
-        toggleArrow.style.transform = 'rotate(0deg)'; // Reset arrow when closed
+        toggle.style.borderRadius = "10px";
+        toggleArrow.style.transform = 'rotate(180deg)'; // Reset arrow when closed
     }
 }
 

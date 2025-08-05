@@ -60,16 +60,70 @@
                             </button>
                 </div>
             </form>
-            <div id="progressBarContainer" class = "progress-bar-container">
-                <div id="progressBar" style="align-self:center; text-align:center; width:80%;">
-                    <progress id="progress" style="width:100%; height:30px;" value=0></progress>
-                    <span id="progressText" style="font-size:1.2em;">Processing...</span>
-                </div>
-            </div>
         </div>
         
         <!-- Results -->
-        <div id="resultContainer" style="display:none;"></div>
+        {% block results %}
+            {% if formatted_final_dict %}
+            <div id="results-display">
+                {% for metric_name, metric_data in formatted_final_dict.items() %}
+                    <div class="metric-result" data-metric="{{ metric_name }}">
+                        <h3>{{ metric_name }}</h3>
+                        
+                        {% if metric_data.is_async %}
+                            <!-- Async task in progress -->
+                            <div class="async-task-status" 
+                                    data-task-id="{{ metric_data.task_id }}" 
+                                    data-cache-key="{{ metric_data.cache_key }}"
+                                    data-metric-name="{{ metric_name }}">
+                                <p><strong>Status:</strong> {{ metric_data.status }}</p>
+                                <p><em>{{ metric_data.message }}</em></p>
+                                <div class="progress-indicator">
+                                    <div class="spinner"></div>
+                                    <span>Processing in background...</span>
+                                </div>
+                            </div>
+                        {% else %}
+                            <!-- Regular metric result -->
+                            {% for key, value in metric_data.items() %}
+                                {% if key not in ['is_async', 'task_id', 'cache_key', 'status', 'message', 'DescriptiveStatistics', 'Descriptive statistics of the risk scores'] %}
+                                    <div class="metric-item">
+                                        <strong>{{ key }}:</strong>
+                                        {% if key.endswith('Visualization') and value %}
+                                            <div class="visualization">
+                                                <img src="data:image/png;base64,{{ value }}" alt="{{ key }}" style="max-width: 100%; height: auto;">
+                                            </div>
+                                        {% elif value is mapping %}
+                                            <ul>
+                                                {% for sub_key, sub_value in value.items() %}
+                                                    <li><strong>{{ sub_key }}:</strong> {{ sub_value }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <span>{{ value }}</span>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    <hr>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if formatted_final_dict %}
+                {% for metric_name, metric_data in formatted_final_dict.items() %}
+                    {% if metric_data.is_async %}
+                        <script data-task-id="{{ metric_data.task_id }}" 
+                                data-cache-key="{{ metric_data.cache_key }}" 
+                                data-metric-name="{{ metric_name }}">
+                            // Auto-polling will be handled by the main.js DOMContentLoaded event
+                            console.log('Async task detected for {{ metric_name }}: {{ metric_data.task_id }}');
+                        </script>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endblock %}
         <!-- Data summary table -->
         <div id="summaryStatistics"></div>
         <!-- Container for summary plots and statistics -->

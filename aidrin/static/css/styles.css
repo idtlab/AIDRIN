@@ -8,7 +8,7 @@
   --secondaryColorHalfOpacity: #fbfbf281;
 
   --tertiaryColor: #8F8F8F;
-
+  --quaternaryColor: #646464;
   --darkAccent: rgb(71, 71, 71);
   --nav-bar: #212121;
 
@@ -33,6 +33,7 @@
   --secondaryColorHalfOpacity: #49505786;
 
   --tertiaryColor: #c2c4c7;
+  --quaternaryColor: #c2c4c7;
   --darkAccent: rgb(198, 198, 198);
   --nav-bar: #212121;
   --spanColor: #212121;
@@ -877,13 +878,16 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
 
 .visualization-container {
   margin-bottom: 20px;
+  border-radius: 10px;
+  background-color: var(--quaternaryColor);
+  color: var(--oppositeTextColor);
 }
 
 .visualization-container img {
 
   max-width: 100%;
-  border-radius: 4px;
-  margin-bottom: 10px;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: 0px;
 }
 
 .download-button {
@@ -921,7 +925,8 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
 }
 
 .metric-download {
-  background-color: var(--tertiaryColor);
+  background-color: #5491d2;
+
 }
 
 .toggle:hover {
@@ -1133,4 +1138,56 @@ thead th {
 
 .darkmode .navbar-buttons svg:last-child {
   display: block;
+}
+
+/* Progress Bar Styles */
+.async-task-status {
+  padding: 15px;
+  background-color: #f0f8ff;
+  border: 1px solid #007bff;
+  border-radius: 5px;
+  margin: 10px 0;
+}
+
+.progress-indicator {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 10px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.metric-result {
+  margin: 20px 0;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+}
+
+.metric-item {
+  margin: 10px 0;
+}
+
+.visualization {
+  text-align: center;
+  margin: 15px 0;
 }
