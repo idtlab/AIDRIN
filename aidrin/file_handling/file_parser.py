@@ -1,10 +1,10 @@
+import logging
 
 from aidrin.file_handling.readers.csv_reader import csvReader
-from aidrin.file_handling.readers.npz_reader import npzReader
 from aidrin.file_handling.readers.excel_reader import excelReader
-from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
-import logging
+from aidrin.file_handling.readers.json_reader import jsonReader
+from aidrin.file_handling.readers.npz_reader import npzReader
 
 # Notes:
 # To add support for new file types:
@@ -15,27 +15,27 @@ import logging
 
 # Reader Map. Used to create file type specific parsing
 READER_MAP = {
-    '.csv': csvReader,
-    '.npz': npzReader,
-    '.xls, .xlsb, .xlsx, .xlsm': excelReader,
-    '.json': jsonReader,
-    '.h5': hdf5Reader,
+    ".csv": csvReader,
+    ".npz": npzReader,
+    ".xls, .xlsb, .xlsx, .xlsm": excelReader,
+    ".json": jsonReader,
+    ".h5": hdf5Reader,
     # Add additonal file types here
 }
 
 # Supported file types. Read on front end to create select features.
 SUPPORTED_FILE_TYPES = [
-    ('.csv', 'CSV'),
-    ('.xls, .xlsb, .xlsx, .xlsm', 'Excel'),
-    ('.json', 'JSON'),
-    ('.npz', 'NumPy'),
-    ('.h5', 'HDF5')
+    (".csv", "CSV"),
+    (".xls, .xlsb, .xlsx, .xlsm", "Excel"),
+    (".json", "JSON"),
+    (".npz", "NumPy"),
+    (".h5", "HDF5"),
     # Add additional file types here using the format:
     # (file_type,file_type_name)
 ]
 
 # logger config
-file_upload_time_log = logging.getLogger('file_upload')
+file_upload_time_log = logging.getLogger("file_upload")
 
 
 def parse_file(file_info):
@@ -60,8 +60,7 @@ def parse_file(file_info):
     file_upload_time_log.info("Parsing File for keys...")
     try:
         if file_type in READER_MAP:
-            keys = READER_MAP[file_type](
-                file_path, file_upload_time_log).parse()
+            keys = READER_MAP[file_type](file_path, file_upload_time_log).parse()
             return keys
         else:
             file_upload_time_log.warning(f"Unsupported file type: {file_type}")
@@ -93,14 +92,16 @@ def filter_file(file_info, kept_keys):
     file_upload_time_log.info(f"Filtering file on Keys: {kept_keys}")
     if file_type in READER_MAP:
         filtered_data_path = READER_MAP[file_type](
-            file_path, file_upload_time_log).filter(kept_keys)
-        file_upload_time_log.info(
-            f"Filtered File saved to: {filtered_data_path}")
+            file_path, file_upload_time_log
+        ).filter(kept_keys)
+        file_upload_time_log.info(f"Filtered File saved to: {filtered_data_path}")
     else:
         file_upload_time_log.warning(f"Unsupported file type: {file_type}")
         return None
 
     return filtered_data_path
+
+
 # Parses the uploaded file into a pandas database
 
 

@@ -1,11 +1,12 @@
-from flask import Flask, session
-from celery import Celery, Task
-from .main import main as main_blueprint
 import os
 
+from celery import Celery, Task
+from flask import Flask
+
+from .main import main as main_blueprint
+
+
 # create app config
-
-
 def create_app():
     app = Flask(__name__)
     app.secret_key = "aidrin"
@@ -22,9 +23,14 @@ def create_app():
         "result_expires": 600  # Delete results from db after 10 min
     }
     app.config.from_prefixed_env()
+
+    # initialize in-memory cache
+    app.TEMP_RESULTS_CACHE = {}
+
     celery_init_app(app)
-    app.register_blueprint(main_blueprint, url_prefix="",
-                           name="")  # register main blueprint
+    app.register_blueprint(
+        main_blueprint, url_prefix="", name=""
+    )  # register main blueprint
 
     # Create upload folder (Disc storage)
     UPLOAD_FOLDER = os.path.join(app.root_path, "data", "uploads")

@@ -1,55 +1,106 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-
     <title>Publications</title>
-</head>
-<body>
-    {% include 'universalComponents.html'%}
-    <h1>Publications</h1>
-      <div class="h2-container">
-            <h2>
-                <a href="https://dl.acm.org/doi/10.1145/3722214">Data Readiness for AI: A 360-Degree Survey</a>
-            </h2>
-            <p>
-                <strong>Authors:</strong> Kaveen Hiniduma, Suren Byna, Jean Luca Bez
-                <br>
-                <strong>Published:</strong> 24 February 2025
-                <br><br>
-            </p>
-            <strong style="text-align:center">Abstract</strong>
-            <p style="text-indent: 60px;"> 
-                
-                Artificial Intelligence (AI) applications critically depend on data. Poor quality data produces inaccurate and ineffective AI models that may lead to incorrect or unsafe use. Evaluation of data readiness is a crucial step in improving the quality and appropriateness of data usage for AI. R&D efforts have been spent on improving data quality. However, standardized metrics for evaluating data readiness for use in AI training are still evolving. In this study, we perform a comprehensive survey of metrics used to verify data readiness for AI training. This survey examines more than 140 papers published by ACM Digital Library, IEEE Xplore, journals such as Nature, Springer, and Science Direct, and online articles published by prominent AI experts. This survey aims to propose a taxonomy of data readiness for AI (DRAI) metrics for structured and unstructured datasets. We anticipate that this taxonomy will lead to new standards for DRAI metrics that would be used for enhancing the quality, accuracy, and fairness of AI training and inference.
-            </p>
+  </head>
+  <body>
+    {% include 'universalComponents.html' %}
+    <main class="publications-main">
+      <h1 class="page-title">Publications</h1>
+
+      <section class="publication-card">
+        <h2>
+          <a href="https://dl.acm.org/doi/10.1145/3722214" target="_blank">
+            Data Readiness for AI: A 360-Degree Survey
+          </a>
+        </h2>
+        <p>
+          <strong>Authors:</strong> Kaveen Hiniduma, Suren Byna, Jean Luca
+          Bez<br />
+          <strong>Published:</strong> 24 February 2025
+        </p>
+        <div class="abstract">
+          <strong>Abstract</strong>
+          <p>
+            Artificial Intelligence (AI) applications critically depend on data.
+            Poor quality data produces inaccurate and ineffective AI models that
+            may lead to incorrect or unsafe use. Evaluation of data readiness is
+            a crucial step in improving the quality and appropriateness of data
+            usage for AI. R&D efforts have been spent on improving data quality.
+            However, standardized metrics for evaluating data readiness for use
+            in AI training are still evolving. In this study, we perform a
+            comprehensive survey of metrics used to verify data readiness for AI
+            training. This survey examines more than 140 papers published by ACM
+            Digital Library, IEEE Xplore, journals such as Nature, Springer, and
+            Science Direct, and online articles published by prominent AI
+            experts. This survey aims to propose a taxonomy of data readiness
+            for AI (DRAI) metrics for structured and unstructured datasets. We
+            anticipate that this taxonomy will lead to new standards for DRAI
+            metrics that would be used for enhancing the quality, accuracy, and
+            fairness of AI training and inference.
+          </p>
         </div>
-        <div class="h2-container">
-            <h2>
-                <a href="https://dl.acm.org/doi/10.1145/3676288.3676296">AI Data Readiness Inspector (AIDRIN) for Quantitative Assessment of Data Readiness for AI</a>
-            </h2>
-            <p >
-                <strong>Authors:</strong> Kaveen Hiniduma, Suren Byna, Jean Luca Bez, Ravi Madduri
-                <br>
-                <strong>Published:</strong> 23 August 2024
-                <br><br>
-                </p>
-                <strong style="text-align:center">Abstract</strong>
-                <p style="text-indent: 60px;">
-                    Garbage In Garbage Out is a universally agreed quote by computer scientists from various domains, including Artificial Intelligence (AI). As data is the fuel for AI, models trained on low-quality, biased data are often ineffective. Computer scientists who use AI invest a considerable amount of time and effort in preparing the data for AI. However, there are no standard methods or frameworks for assessing the “readiness” of data for AI. To provide a quantifiable assessment of the readiness of data for AI processes, we define parameters of AI data readiness and introduce AIDRIN (AI Data Readiness INspector). AIDRIN is a framework covering a broad range of readiness dimensions available in the literature that aid in evaluating the readiness of data quantitatively and qualitatively. AIDRIN uses metrics in traditional data quality assessment such as completeness, outliers, and duplicates for data evaluation. Furthermore, AIDRIN uses metrics specific to assess data for AI, such as feature importance, feature correlations, class imbalance, fairness, privacy, and FAIR (Findability, Accessibility, Interoperability, and Reusability) principle compliance. AIDRIN provides visualizations and reports to assist data scientists in further investigating the readiness of data. The AIDRIN framework enhances the efficiency of the machine learning pipeline to make informed decisions on data readiness for AI applications.
-                </p>
-            <br>
+      </section>
+
+      <section class="publication-card">
+        <h2>
+          <a
+            href="https://dl.acm.org/doi/10.1145/3676288.3676296"
+            target="_blank"
+          >
+            AI Data Readiness Inspector (AIDRIN) for Quantitative Assessment of
+            Data Readiness for AI
+          </a>
+        </h2>
+        <p>
+          <strong>Authors:</strong> Kaveen Hiniduma, Suren Byna, Jean Luca Bez,
+          Ravi Madduri<br />
+          <strong>Published:</strong> 23 August 2024
+        </p>
+        <div class="abstract">
+          <strong>Abstract</strong>
+          <p>
+            Garbage In Garbage Out is a universally agreed quote by computer
+            scientists from various domains, including Artificial Intelligence
+            (AI). As data is the fuel for AI, models trained on low-quality,
+            biased data are often ineffective. Computer scientists who use AI
+            invest a considerable amount of time and effort in preparing the
+            data for AI. However, there are no standard methods or frameworks
+            for assessing the “readiness” of data for AI. To provide a
+            quantifiable assessment of the readiness of data for AI processes,
+            we define parameters of AI data readiness and introduce AIDRIN (AI
+            Data Readiness INspector). AIDRIN is a framework covering a broad
+            range of readiness dimensions available in the literature that aid
+            in evaluating the readiness of data quantitatively and
+            qualitatively. AIDRIN uses metrics in traditional data quality
+            assessment such as completeness, outliers, and duplicates for data
+            evaluation. Furthermore, AIDRIN uses metrics specific to assess data
+            for AI, such as feature importance, feature correlations, class
+            imbalance, fairness, privacy, and FAIR (Findability, Accessibility,
+            Interoperability, and Reusability) principle compliance. AIDRIN
+            provides visualizations and reports to assist data scientists in
+            further investigating the readiness of data. The AIDRIN framework
+            enhances the efficiency of the machine learning pipeline to make
+            informed decisions on data readiness for AI applications.
+          </p>
         </div>
-    <div id = "formbuttonsContainer">
-        <button class="animated-button return" type="button" onclick="location.href='{{url_for("upload_file")}}'">
-            <span>Return</span>
-            <span></span>
-        </button>
-    </div>
-</body>
+      </section>
+
+      <div class="form-buttons-container">
+        <button class="animated-button return" type="button"
+        onclick="location.href='{{ url_for("upload_file") }}'">
+        <span>Return</span>
+        <span></span>
+      </div>
+    </main>
+  </body>
+</html>

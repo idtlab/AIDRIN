@@ -1,16 +1,15 @@
 function togglePillarDropdown(id) {
     const container = document.getElementById(id); //
-    const subElements = container.querySelectorAll('.toggle-button');
+    const subElements = container.querySelectorAll(".toggle-button");
 
     const header = document.querySelector(`h3[onclick*="${id}"]`);
     const svg = header.querySelector("svg");
-    subElements.forEach(element => {
-        if (element.style.display === 'none' || element.style.display === '') {
-            element.style.display = 'flex';
+    subElements.forEach((element) => {
+        if (element.style.display === "none" || element.style.display === "") {
+            element.style.display = "flex";
             svg.innerHTML = '<path d="M480-360 280-559.33h400L480-360Z"/>';
-
         } else {
-            element.style.display = 'none';
+            element.style.display = "none";
             svg.innerHTML = '<path d="M400-280v-400l200 200-200 200Z"/>';
         }
     });
@@ -24,17 +23,17 @@ function uploadForm() {
 }
 //to clear
 function clearFile() {
-    fetch('/clear', {
-        method: 'POST',
+    fetch("/clear", {
+        method: "POST",
     })
-        .then(response => {
+        .then((response) => {
             if (response.redirected) {
                 // Redirect to the specified location
                 window.location.href = response.url;
             }
         })
-        .catch(error => {
-            console.error('Error:', error);
+        .catch((error) => {
+            console.error("Error:", error);
             openErrorPopup("File Clear", error); // call error popup
         });
 }
@@ -52,7 +51,11 @@ document.addEventListener("DOMContentLoaded", function () {
     updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage);
 });
 //changes file upload ability
-function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage) {
+function updateFileInputBasedOnType(
+    fileTypeElement,
+    fileInput,
+    fileUploadMessage
+) {
     const fileType = fileTypeElement.value;
     //if a filetype is present, set to that filetype only, otherwise disable
     if (fileType) {
@@ -68,21 +71,29 @@ function updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessag
     }
 }
 
-
 function submitForm() {
-
-    var form = document.getElementById('uploadForm');
+    var form = document.getElementById("uploadForm");
     var formData = new FormData(form);
 
     // Get the values of the checkboxes and concatenate them with a comma
-    var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
-    var numFeaCheckboxValues = Array.from(formData.getAll('numerical features for feature relevancy')).join(',');
-    var catFeaCheckboxValues = Array.from(formData.getAll('categorical features for feature relevancy')).join(',');
+    var checkboxValues = Array.from(formData.getAll("checkboxValues")).join(",");
+    var numFeaCheckboxValues = Array.from(
+        formData.getAll("numerical features for feature relevancy")
+    ).join(",");
+    var catFeaCheckboxValues = Array.from(
+        formData.getAll("categorical features for feature relevancy")
+    ).join(",");
 
     // Add the concatenated checkbox values to the form data
-    formData.set('correlation columns', checkboxValues);
-    formData.set("numerical features for feature relevancy", numFeaCheckboxValues);
-    formData.set("categorical features for feature relevancy", catFeaCheckboxValues);
+    formData.set("correlation columns", checkboxValues);
+    formData.set(
+        "numerical features for feature relevancy",
+        numFeaCheckboxValues
+    );
+    formData.set(
+        "categorical features for feature relevancy",
+        catFeaCheckboxValues
+    );
 
     // Note: We don't need to modify the quasi-identifier fields as they should remain as lists
     // The backend will handle both string and list formats
@@ -352,10 +363,10 @@ function submitForm() {
 
 function removeVisualizationKey(data) {
     for (let key in data) {
-        if (typeof data[key] === 'object' && data[key] !== null) {
+        if (typeof data[key] === "object" && data[key] !== null) {
             // If the value is an object, recursively call removeVisualizationKey
             data[key] = removeVisualizationKey(data[key]);
-        } else if (key.endsWith(' Visualization')) {
+        } else if (key.endsWith(" Visualization")) {
             // If the key is 'Completeness Visualization', remove it
             delete data[key];
         }
@@ -383,16 +394,16 @@ function downloadJSON() {
     var jsonData = JSON.stringify(resp_data, null, 2);
 
     // Create a Blob with the JSON data
-    var blob = new Blob([jsonData], { type: 'application/json' });
+    var blob = new Blob([jsonData], { type: "application/json" });
 
     // Create a link element
-    var link = document.createElement('a');
+    var link = document.createElement("a");
 
     // Set the link's href attribute to a data URL containing the Blob
     link.href = window.URL.createObjectURL(blob);
 
     // Set the link's download attribute to specify the file name
-    link.download = 'result.json';
+    link.download = "result.json";
 
     // Append the link to the document
     document.body.appendChild(link);
@@ -408,11 +419,11 @@ function showResults() {
     // Show Completeness Visualization content if it exists
     var duplicityScoreResult = document.getElementById('duplicityScoreResult');
     if (duplicityScoreResult) {
-        duplicityScoreResult.style.display = 'block';
+        duplicityScoreResult.style.display = "block";
     }
-    var imbalanceScoreResult = document.getElementById('imbalanceScoreResult');
+    var imbalanceScoreResult = document.getElementById("imbalanceScoreResult");
     if (imbalanceScoreResult) {
-        imbalanceScoreResult.style.display = 'block';
+        imbalanceScoreResult.style.display = "block";
     }
 }
 
@@ -475,13 +486,13 @@ function toggleValue(checkbox) {
     const inputs = container.querySelectorAll("input.textWrapper");
     const checkboxes = container.querySelectorAll("input.checkbox.individual");
     // Enable or disable all dropdowns inside the container based on checkbox state
-    dropdowns.forEach(dropdown => {
+    dropdowns.forEach((dropdown) => {
         dropdown.disabled = !checkbox.checked;
     });
-    inputs.forEach(input => {
+    inputs.forEach((input) => {
         input.disabled = !checkbox.checked;
     });
-    checkboxes.forEach(input => {
+    checkboxes.forEach((input) => {
         input.disabled = !checkbox.checked;
     });
     // Toggle the value based on the checked state
@@ -498,7 +509,6 @@ function toggleValueIndividual(checkbox) {
         const label = checkbox.closest("label");
         const text = label.textContent.trim();
         checkbox.value = text;
-
     } else {
         checkbox.value = "no";
     }
@@ -507,12 +517,11 @@ function toggleValueIndividual(checkbox) {
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function () {
     // Get all checkboxes inside each checkboxContainer
-    document.querySelectorAll(".checkboxContainer").forEach(container => {
-
+    document.querySelectorAll(".checkboxContainer").forEach((container) => {
         // For each container, get the checkbox inside and set the initial state
 
         const checkboxes = container.querySelectorAll("input[type='checkbox']");
-        checkboxes.forEach(checkbox => {
+        checkboxes.forEach((checkbox) => {
             console.log(checkbox);
             // Set initial state of selects based on checkbox
             toggleValue(checkbox);
@@ -532,13 +541,12 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 //********** Darkmode Toggle *******
-let darkmode = localStorage.getItem('darkmode')
+let darkmode = localStorage.getItem("darkmode");
 //add a darkmode class to the body
 const enableDarkmode = () => {
-    document.body.classList.add('darkmode')
-    localStorage.setItem('darkmode', 'active')
-
-}
+    document.body.classList.add("darkmode");
+    localStorage.setItem("darkmode", "active");
+};
 //remove the darkmode class from the body
 const disableDarkmode = () => {
     document.body.classList.remove('darkmode')
@@ -548,9 +556,10 @@ const disableDarkmode = () => {
 document.addEventListener('DOMContentLoaded', (event) => {
     const themeSwitch = document.getElementById('theme-switch')
     //on document load check if darkmode is active
-    if (darkmode === "active") enableDarkmode()
+    if (darkmode === "active") enableDarkmode();
     //add a click event listener to the theme switch
     themeSwitch.addEventListener("click", () => {
+        darkmode = localStorage.getItem("darkmode");
 
         darkmode = localStorage.getItem('darkmode')
 

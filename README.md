@@ -1,89 +1,127 @@
-# AIDRIN - AI Data Readiness Inspector
+# AIDRIN – AI Data Readiness Inspector
 
-
-**AIDRIN** is a tool developed to assess the readiness of datasets for artificial intelligence applications. It helps users quickly evaluate the quality, structure, and completeness of their data to ensure it meets the foundational requirements for machine learning and other AI workflows.
+**AIDRIN** (AI Data Readiness Inspector) is a lightweight tool that helps users assess how ready their datasets are for AI and machine learning workflows. It provides an interactive web interface to evaluate the quality, completeness, and structure of datasets using quantitative metrics.
 
 ---
 
 ## Features
 
-- Evaluate dataset readiness for AI applications
-- Web-based interface for interactive analysis
-- Lightweight and easy to install
-- Open-source and customizable
+- Evaluate dataset readiness for AI applications  
+- Interactive web interface for exploration  
+- Lightweight, open-source, and customizable  
+- Built with Flask, Celery, and Redis  
 
 ---
 
-## Installation (Using Conda)
+## Quickstart Guide
+
+> Works on **macOS**, **Linux**, and **Windows** (via WSL or Anaconda)
+
+---
+
+## Prerequisites
+
+- [Python 3.10](https://www.python.org/downloads/release/python-3100/)  
+- [Conda (Anaconda or Miniconda)](https://docs.conda.io/en/latest/miniconda.html)   
+
+---
+
+## Installation
 
 ### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/idtlab/AIDRIN.git
 cd AIDRIN
-```
+````
 
-### 2. Terminal 1: Create and Activate the Conda Environment
+---
 
-AIDRIN uses Conda for environment control. If you don't have Conda installed, we recommend installing
-Miniconda.
-Miniconda download for your operating system can be found at the link below:
-https://www.anaconda.com/download/success
+### 2. Create and Activate the Conda Environment
 
 ```bash
-conda create -n aidrin-env python==3.10 -y
+conda create -n aidrin-env python=3.10 -y
 conda activate aidrin-env
-pip install -e .
+python -m pip install -e .
 ```
 
-### 3. Start Redis using Docker
+---
 
-#### Download and install Docker Desktop:
+## Required Services
 
-The backend and broker hosted on Redis require access to specific local ports. We recommend using Docker 
-as the container service for ease of use. If you choose to use a different container solution, refer to 
-the docker-compose.yml file to identify the required port mappings.
-Docker Desktop download for your operating system can be found at the link below:
-https://www.docker.com/products/docker-desktop/
+AIDRIN uses **Redis** as a message broker for background task management, and **Celery** to run those tasks asynchronously.
 
-## Verify Docker Installation
+### Install Redis Locally (No Docker Needed)
 
-Run the following commands to ensure Docker and Docker Compose are available:
+#### On macOS (using Homebrew):
 
 ```bash
-docker --version
-docker compose version
+brew install redis
 ```
 
-## Start Redis
+#### On Ubuntu/Debian:
 
 ```bash
-docker compose --file aidrin/docker-compose.yml up -d
+sudo apt update
+sudo apt install redis-server
 ```
 
-### 4. Terminal 2: Start the Celery Worker
+#### On Windows:
 
-In a seperate terminal, enable the conda environment and Start the Celery Worker
+* Use [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/install) and follow Linux instructions
+* Or download and install Redis from [Microsoft’s archive](https://github.com/microsoftarchive/redis/releases)
+
+Make sure Redis server is running on port 6379 (default).
+
+---
+
+## Starting the Application
+
+You will need **three terminal windows/tabs** open:
+
+---
+
+### Terminal 1: Start Redis Server
+
+Make sure Redis is running locally:
+
+```bash
+redis-server --port 6379
+```
+
+---
+
+### Terminal 2: Start Celery Worker
+
+From within the AIDRIN directory:
 
 ```bash
 conda activate aidrin-env
 PYTHONPATH=. celery -A aidrin.make_celery worker --loglevel=info
 ```
 
-## Terminal 1: Running the App
+Wait until you see ``ready`` or ``waiting for tasks`` in the Celery logs. This may take 30 to 40 seconds.
 
-To start the development server:
+---
+
+### Terminal 3: Run Flask Application
+
+From within the AIDRIN directory:
 
 ```bash
+conda activate aidrin-env
 flask --app aidrin run --debug
 ```
 
-After the server starts, open your browser and navigate to: http://127.0.0.1:5000
+Open your browser and visit:
+**[http://127.0.0.1:5000](http://127.0.0.1:5000)**
+
 
 ## Citation
-If you use AIDRIN in your research or publication, please cite as:
 
-```
+If you use AIDRIN in your work, please cite:
+
+```bibtex
 @inproceedings{10.1145/3676288.3676296,
 author = {Hiniduma, Kaveen and Byna, Suren and Bez, Jean Luca and Madduri, Ravi},
 title = {AI Data Readiness Inspector (AIDRIN) for Quantitative Assessment of Data Readiness for AI},

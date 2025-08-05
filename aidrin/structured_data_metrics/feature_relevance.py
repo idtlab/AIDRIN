@@ -1,14 +1,13 @@
-import pandas as pd
-import numpy as np
-import shap
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error
-import matplotlib.pyplot as plt
-import io
 import base64
-from celery import shared_task, Task
+import io
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
+from sklearn.preprocessing import LabelEncoder
+
 from aidrin.file_handling.file_parser import read_file
 
 # def calc_shapley(df, cat_cols, num_cols, target_col):
@@ -178,26 +177,29 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
             df = read_file(file_info)
         except Exception as e:
             print(f"Error reading file: {e}")
-            return {"Error": "Failed to read the file. Please check the file path and type."}
+            return {
+                "Error": "Failed to read the file. Please check the file path and type."
+            }
         # Filter DataFrame to include only the specified columns
         # Make a copy to avoid SettingWithCopyWarning
         df_filtered = df[[target_col] + cat_cols + num_cols].copy()
         # Fill missing values
         df_filtered.loc[:, cat_cols] = df_filtered[cat_cols].fillna(
-            'Missing')  # Use .loc to set values
+            "Missing"
+        )  # Use .loc to set values
         df_filtered.loc[:, num_cols] = df_filtered[num_cols].fillna(
-            df_filtered[num_cols].mean())  # Use .loc to set values
+            df_filtered[num_cols].mean()
+        )  # Use .loc to set values
 
         # One-hot encode categorical columns
         df_filtered = pd.get_dummies(df_filtered, columns=cat_cols)
 
         # Encode target variable if categorical
-        if df_filtered[target_col].dtype == 'object':
+        if df_filtered[target_col].dtype == "object":
             le_target = LabelEncoder()
-            df_filtered[target_col] = le_target.fit_transform(
-                df_filtered[target_col])
+            df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
         # need to make json serializable to be passed by celery
-        return df_filtered.to_dict(orient='list')
+        return df_filtered.to_dict(orient="list")
     except SoftTimeLimitExceeded:
         raise Exception("Data Cleaning task timed out.")
     except Exception as e:
@@ -222,7 +224,8 @@ def pearson_correlation(df_json, target_col) -> dict:
                     correlations[col] = corr
                 except TypeError:
                     print(
-                        f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values.")
+                        f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values."
+                    )
         return correlations
     except SoftTimeLimitExceeded:
         raise Exception("Pearson Correlation task timed out.")
@@ -235,27 +238,28 @@ def plot_features(correlations, target_col):
         corr_values = list(correlations.values())
 
         plt.figure(figsize=(8, 8))
-        plt.bar(features, corr_values, color='skyblue')  # Vertical bar plot
+        plt.bar(features, corr_values, color="skyblue")  # Vertical bar plot
         # Add a horizontal line at y=0
-        plt.axhline(y=0, color='black', linewidth=0.5)
-        plt.title(f'Correlation of Features with {target_col}')
-        plt.xlabel('Features')
-        plt.ylabel('Correlation')
+        plt.axhline(y=0, color="black", linewidth=0.5)
+        plt.title(f"Correlation of Features with {target_col}")
+        plt.xlabel("Features")
+        plt.ylabel("Correlation")
 
         # Angle the xticks
-        plt.xticks(rotation=45, ha='right')
+        plt.xticks(rotation=45, ha="right")
 
         # Add leading dots to xticks longer than 8 characters
-        formatted_features = [feat if len(
-            feat) <= 8 else feat[:5] + '...' for feat in features]
+        formatted_features = [
+            feat if len(feat) <= 8 else feat[:5] + "..." for feat in features
+        ]
         plt.xticks(range(len(features)), formatted_features)
 
         # Save the plot to a BytesIO object and encode it as base64
         buf = io.BytesIO()
-        plt.savefig(buf, format='png')
+        plt.savefig(buf, format="png")
         plt.close()
         buf.seek(0)
-        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         return image_base64
     except SoftTimeLimitExceeded:
         raise Exception("Plot Features task timed out.")
