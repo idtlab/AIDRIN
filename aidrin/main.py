@@ -136,11 +136,11 @@ def cleanup_old_uploaded_files(max_age_hours=24):
         upload_folder = current_app.config.get('UPLOAD_FOLDER')
         if not upload_folder or not os.path.exists(upload_folder):
             return 0
-        
+
         current_time = time.time()
         max_age_seconds = max_age_hours * 3600
         files_removed = 0
-        
+
         for filename in os.listdir(upload_folder):
             file_path = os.path.join(upload_folder, filename)
             if os.path.isfile(file_path):
@@ -152,10 +152,10 @@ def cleanup_old_uploaded_files(max_age_hours=24):
                         print(f"Cleaned up old file: {filename}")
                     except Exception as e:
                         print(f"Error removing old file {filename}: {e}")
-        
+
         if files_removed > 0:
             print(f"Cleanup completed: {files_removed} old files removed")
-        
+
         return files_removed
     except Exception as e:
         print(f"Error during file cleanup: {e}")
@@ -700,7 +700,7 @@ def privacyPreservation():
 
             # Generate cache key for differential privacy
             cache_key = generate_metric_cache_key(
-                uploaded_file_name,
+                file_name,
                 "dp",
                 features=feature_to_add_noise,
                 epsilon=epsilon
@@ -763,7 +763,7 @@ def privacyPreservation():
             else:
                 # Generate cache key for single attribute risk scoring
                 cache_key = generate_metric_cache_key(
-                    uploaded_file_name,
+                    file_name,
                     "single",
                     id_feature=id_feature,
                     qis=eval_features
@@ -846,7 +846,7 @@ def privacyPreservation():
             else:
                 # Generate cache key for multiple attribute risk scoring
                 cache_key = generate_metric_cache_key(
-                    uploaded_file_name,
+                    file_name,
                     "multiple",
                     id_feature=id_feature,
                     qis=eval_features
@@ -916,7 +916,7 @@ def privacyPreservation():
 
             # Generate cache key for k-anonymity
             cache_key = generate_metric_cache_key(
-                uploaded_file_name,
+                file_name,
                 "kanon",
                 qis=k_qis
             )
@@ -966,7 +966,7 @@ def privacyPreservation():
 
             # Generate cache key for l-diversity
             cache_key = generate_metric_cache_key(
-                uploaded_file_name,
+                file_name,
                 "ldiv",
                 qis=l_qis,
                 sensitive=l_sensitive
@@ -1017,7 +1017,7 @@ def privacyPreservation():
 
             # Generate cache key for t-closeness
             cache_key = generate_metric_cache_key(
-                uploaded_file_name,
+                file_name,
                 "tclose",
                 qis=t_qis,
                 sensitive=t_sensitive
@@ -1067,7 +1067,7 @@ def privacyPreservation():
 
             # Generate cache key for entropy risk
             cache_key = generate_metric_cache_key(
-                uploaded_file_name,
+                file_name,
                 "entropy",
                 qis=entropy_qis
             )

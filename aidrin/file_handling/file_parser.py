@@ -131,12 +131,12 @@ def read_file(file_info):
     if not file_path and file_name:
         file_upload_time_log.error("Missing file path or file name.")
         return None
-    
+
     # Check if the file actually exists
     if file_path and not os.path.exists(file_path):
         file_upload_time_log.error(f"File not found: {file_path}")
         return f"File not found: {file_path}"
-    
+
     try:
         df = None
         if file_type in READER_MAP:
