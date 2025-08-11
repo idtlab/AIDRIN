@@ -4,8 +4,15 @@ from celery import Celery, Task
 from flask import Flask
 
 from .main import main as main_blueprint
-from aidrin.structured_data_metrics.completeness import completeness  # noqa: F401
-from aidrin.structured_data_metrics.class_imbalance import class_distribution_plot, calc_imbalance_degree  # noqa: F401
+from aidrin.structured_data_metrics.completeness import calculate_completeness  # noqa: F401
+from aidrin.structured_data_metrics.class_imbalance import calculate_class_distribution  # noqa: F401
+from aidrin.structured_data_metrics.correlation_score import calculate_correlations  # noqa: F401
+from aidrin.structured_data_metrics.duplicity import calculate_duplicates  # noqa: F401
+from aidrin.structured_data_metrics.feature_relevance import calculate_feature_relevance  # noqa: F401
+from aidrin.structured_data_metrics.outliers import calculate_outliers  # noqa: F401
+from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates  # noqa: F401
+from aidrin.structured_data_metrics.privacy_measure import compute_k_anonymity, compute_l_diversity, \
+        compute_t_closeness, compute_entropy_risk  # noqa: F401
 
 
 # create app config
@@ -60,4 +67,3 @@ def celery_init_app(app: Flask) -> Celery:
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app
-

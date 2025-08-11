@@ -5,7 +5,7 @@ from aidrin.file_handling.file_parser import read_file
 
 
 @shared_task(bind=True, ignore_result=False)
-def duplicity(self: Task, file_info):
+def calculate_duplicates(self: Task, file_info):
     try:
         file = read_file(file_info)
         dup_dict = {}

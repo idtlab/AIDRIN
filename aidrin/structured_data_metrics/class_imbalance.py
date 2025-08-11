@@ -70,7 +70,7 @@ def imbalance_degree(classes, distance="EU"):
 
         Returns
         -------
-        Number of minority clases.
+        Number of minority classes.
         """
         return len(_d[_d < _e])
 
@@ -95,13 +95,13 @@ def imbalance_degree(classes, distance="EU"):
         A list with the i_m distribution.
         """
         min_i = np.zeros(_m)
-        maj_i = np.ones((_K - _m - 1)) * (1 / _K)
+        maj_i = np.ones(_K - _m - 1) * (1 / _K)
         maj = np.array([1 - (_K - _m - 1) / _K])
         return np.concatenate((min_i, maj_i, maj)).tolist()
 
     def _dist_fn():
         """
-        Selects the distance function according to the distance paramenter.
+        Selects the distance function according to the distance parameter.
 
         Returns
         -------
@@ -127,18 +127,30 @@ def imbalance_degree(classes, distance="EU"):
 
 
 @shared_task(bind=True, ignore_result=False)
-def class_distribution_plot(self: Task, column: str, file_info: dict, return_base64: bool = True):
+def class_distribution_plot(
+    self: Task, column: str, file_info: dict
+):
+    """
+    Generates a pie chart showing the distribution of each class in a specified column.
+
+    Args:
+        column (str): Column to analyze.
+        file_info (dict): Info to read the file into a DataFrame.
+        return_base64 (bool): If True, return chart as Base64 PNG string (for Flask/prod).
+                              If False, return matplotlib Figure object (for local/PyPI use).
+
+    Returns:
+        str | matplotlib.figure.Figure: Base64 string or Figure object.
+    """
     try:
-        # Read the DataFrame
         df = read_file(file_info)
         if column not in df.columns:
             raise ValueError(f"Column '{column}' not found in the dataset.")
 
-        # Drop NaNs and get value counts
         class_counts = df[column].dropna().value_counts()
         class_labels = class_counts.index.tolist()
 
-        # Shorten long labels
+        # Shorten labels > 8 characters
         class_labels_modified = [
             str(label)[:9] + "..." if len(str(label)) > 8 else str(label)
             for label in class_labels
@@ -158,21 +170,13 @@ def class_distribution_plot(self: Task, column: str, file_info: dict, return_bas
 
         plt.title(f"Distribution of Each Class in '{column}'")
         plt.axis("equal")
-
-        if return_base64:
-            # Return image as base64 string
-            buf = io.BytesIO()
-            plt.savefig(buf, format="png")
-            buf.seek(0)
-            plot_base64 = base64.b64encode(buf.read()).decode("utf-8")
-            buf.close()
-            plt.close()
-            return plot_base64
-        else:
-            # Show the plot directly
-            plt.show()
-            plt.close()
-            return None
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        buf.seek(0)
+        plot_base64 = base64.b64encode(buf.read()).decode("utf-8")
+        buf.close()
+        plt.close()
+        return plot_base64
 
     except SoftTimeLimitExceeded:
         raise Exception("Class Distribution Plot task timed out.")
@@ -183,7 +187,7 @@ def class_distribution_plot(self: Task, column: str, file_info: dict, return_bas
 
 
 @shared_task(bind=True, ignore_result=False)
-def calc_imbalance_degree(self: Task, column, file_info, dist_metric="EU"):
+def calculate_imbalance_degree(self: Task, column, file_info, dist_metric="EU"):
     df = read_file(file_info)
     res = {}
 
@@ -209,3 +213,68 @@ def calc_imbalance_degree(self: Task, column, file_info, dist_metric="EU"):
         res["Error"] = str(e)
 
     return res
+
+
+def calculate_class_distribution(column: str, file_info: dict, dist_metric: str = "EU"):
+    """
+    Analyzes class distribution and imbalance degree for a given column in a dataset.
+
+    Args:
+        column (str): Column name to analyze.
+        file_info (dict): Information to read the file into a DataFrame.
+        dist_metric (str): Distance metric for imbalance degree calculation (default "EU" = Euclidean).
+
+    Returns:
+        dict: {
+            'imbalance_degree_score': float,
+            'imbalance_description': str,
+            'class_distribution_plot': matplotlib.figure.Figure,
+        }
+
+    Raises:
+        ValueError: If the column is not found in the dataset.
+    """
+    df = read_file(file_info)
+    if column not in df.columns:
+        raise ValueError(f"Column '{column}' not found in dataset.")
+
+    class_counts = df[column].dropna().value_counts()
+    class_labels = class_counts.index.tolist()
+
+    # Shorten long labels
+    class_labels_modified = [
+        str(label)[:9] + "..." if len(str(label)) > 8 else str(label)
+        for label in class_labels
+    ]
+
+    # Calculate imbalance degree
+    classes = np.array(df[column].dropna())
+    imbalance_score = imbalance_degree(classes, dist_metric)
+
+    description = (
+        "The Imbalance Degree (ID) quantifies class imbalance in datasets by comparing "
+        "the observed class distribution to an idealized balanced state. A value of 0 "
+        "indicates perfect balance; higher values signify increased imbalance. "
+        "Calculated using a distance or similarity function."
+    )
+
+    # Create pie chart figure
+    fig, ax = plt.subplots(figsize=(8, 8))
+    patches, texts, _ = ax.pie(
+        class_counts,
+        labels=class_labels_modified,
+        startangle=90,
+        autopct=lambda p: f"{p:.1f}%" if p >= 10 else None,
+    )
+    for text in texts:
+        text.set_fontsize(12)
+
+    ax.set_title(f"Distribution of Each Class in '{column}'")
+    ax.axis("equal")
+    plt.tight_layout()
+    plt.show()
+
+    return {
+        "imbalance_degree_score": imbalance_score,
+        "imbalance_description": description,
+    }

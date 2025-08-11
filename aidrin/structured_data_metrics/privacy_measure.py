@@ -325,7 +325,7 @@ def generate_multiple_attribute_MM_risk_scores(
 
 @shared_task(bind=True, ignore_result=False)
 def compute_k_anonymity(
-    self: Task, quasi_identifiers: List[str], file_info: tuple[str, str, str]
+    self: Task, quasi_identifiers: List[str], file_info: tuple[str, str, str], return_base64: bool = False
 ):
     data = read_file(file_info)
     result_dict = {}
@@ -362,45 +362,44 @@ def compute_k_anonymity(
 
         # Histogram of equivalence class sizes
         hist_data = counts.value_counts().sort_index().to_dict()
-        plt.figure(figsize=(8, 5))
-        plt.bar(hist_data.keys(), hist_data.values(), color="skyblue")
-        plt.xlabel("Equivalence Class Size (k)")
-        plt.ylabel("Number of Equivalence Classes")
-        plt.title("Distribution of Equivalence Class Sizes")
-        plt.grid(axis="y", alpha=0.75)
-        # Save histogram to base64
-        img_stream = io.BytesIO()
-        plt.savefig(img_stream, format="png")
-        plt.close()
-        img_stream.seek(0)
-        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
-        img_stream.close()
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.bar(hist_data.keys(), hist_data.values(), color="skyblue")
+        ax.set_xlabel("Equivalence Class Size (k)")
+        ax.set_ylabel("Number of Equivalence Classes")
+        ax.set_title("Distribution of Equivalence Class Sizes")
+        ax.grid(axis="y", alpha=0.75)
+
+        if return_base64:
+            img_stream = io.BytesIO()
+            plt.savefig(img_stream, format="png")
+            plt.close(fig)
+            img_stream.seek(0)
+            base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
+            img_stream.close()
+            plot_result = base64_image
+        else:
+            plt.tight_layout()
+            plt.show()
+            plot_result = fig  # Return the Figure object for local or PyPI use
 
         # Risk scoring based on k value
-        # Normalize risk: Higher k = lower risk, scale it from 0 to 1
-        # Example: if k=1 => high risk (1.0), if k>=50 => very low risk (~0.0)
         dataset_size = clean_data.shape[0]
 
         if dataset_size < 150:
-            # 5% of dataset or at least 3
             max_safe_k = max(3, int(dataset_size * 0.05))
         elif dataset_size < 1500:
-            max_safe_k = max(10, int(dataset_size * 0.01))  # 1% or at least 10
+            max_safe_k = max(10, int(dataset_size * 0.01))
         else:
-            max_safe_k = min(100, int(dataset_size * 0.01))  # Cap at 100
+            max_safe_k = min(100, int(dataset_size * 0.01))
 
-        if k_anonymity == 1:
-            risk_score = 1.0
-        else:
-            risk_score = min(1.0, round(1 - min(k_anonymity / max_safe_k, 1.0), 2))
+        risk_score = 1.0 if k_anonymity == 1 else min(1.0, round(1 - min(k_anonymity / max_safe_k, 1.0), 2))
 
-        # Final result
         result_dict = {
             "Value": k_anonymity,
             "Risk Score": risk_score,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data,
-            "k-Anonymity Visualization": base64_image,
+            "k-Anonymity Visualization": plot_result,
             "Description": (
                 "k-anonymity measures the minimum group size sharing the same quasi-identifier values. "
                 "Higher k values are preferred, as they indicate stronger anonymity."
@@ -424,6 +423,7 @@ def compute_l_diversity(
     quasi_identifiers: list,
     sensitive_column: str,
     file_info: tuple[str, str, str],
+    return_base64: bool = False,
 ):
     data = read_file(file_info)
     result_dict = {}
@@ -469,24 +469,28 @@ def compute_l_diversity(
         }
 
         # Histogram plot of l-diversity counts
-        # or use: (l_diversities / 2).round() * 2 for bin size of 2
         binned_l_diversities = l_diversities.round()
         hist_data = binned_l_diversities.value_counts().sort_index()
-        plt.figure(figsize=(8, 8))
-        plt.bar(hist_data.index, hist_data.values, color="skyblue")
-        plt.xlabel("Number of Distinct Sensitive Values (l)")
-        plt.ylabel("Number of Equivalence Classes")
-        plt.title("Distribution of l-Diversity Across Equivalence Classes")
-        plt.xticks(sorted(hist_data.index))
-        plt.grid(axis="y", alpha=0.75)
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.bar(hist_data.index, hist_data.values, color="skyblue")
+        ax.set_xlabel("Number of Distinct Sensitive Values (l)")
+        ax.set_ylabel("Number of Equivalence Classes")
+        ax.set_title("Distribution of l-Diversity Across Equivalence Classes")
+        ax.set_xticks(sorted(hist_data.index))
+        ax.grid(axis="y", alpha=0.75)
 
-        # Save plot to base64 string
-        img_stream = io.BytesIO()
-        plt.savefig(img_stream, format="png")
-        plt.close()
-        img_stream.seek(0)
-        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
-        img_stream.close()
+        if return_base64:
+            img_stream = io.BytesIO()
+            plt.savefig(img_stream, format="png")
+            plt.close(fig)
+            img_stream.seek(0)
+            base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
+            img_stream.close()
+            plot_result = base64_image
+        else:
+            plt.tight_layout()
+            plt.show()
+            plot_result = fig  # Return matplotlib Figure object
 
         # Calculate risk score based on min l-diversity
         dataset_size = clean_data.shape[0]
@@ -505,7 +509,7 @@ def compute_l_diversity(
             "Risk Score": risk_score,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
-            "l-Diversity Visualization": base64_image,
+            "l-Diversity Visualization": plot_result,
             "Description": (
                 "l-diversity quantifies the diversity of sensitive attributes within each group. "
                 "Higher l values are preferred, indicating less risk of attribute disclosure."
@@ -528,6 +532,7 @@ def compute_t_closeness(
     quasi_identifiers: List[str],
     sensitive_column: str,
     file_info: tuple[str, str, str],
+    return_base64: bool = False,
 ):
     data = read_file(file_info)
     result_dict = {}
@@ -579,19 +584,25 @@ def compute_t_closeness(
 
         # Histogram plot
         hist_data = t_series.round(2).value_counts().sort_index()
-        plt.figure(figsize=(8, 5))
-        plt.bar(hist_data.index, hist_data.values, color="salmon")
-        plt.xlabel("t-Closeness Value (TVD)")
-        plt.ylabel("Number of Equivalence Classes")
-        plt.title("Distribution of T-Closeness Across Equivalence Classes")
-        plt.grid(axis="y", alpha=0.75)
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.bar(hist_data.index, hist_data.values, color="salmon")
+        ax.set_xlabel("t-Closeness Value (TVD)")
+        ax.set_ylabel("Number of Equivalence Classes")
+        ax.set_title("Distribution of T-Closeness Across Equivalence Classes")
+        ax.grid(axis="y", alpha=0.75)
 
-        img_stream = io.BytesIO()
-        plt.savefig(img_stream, format="png")
-        plt.close()
-        img_stream.seek(0)
-        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
-        img_stream.close()
+        if return_base64:
+            img_stream = io.BytesIO()
+            plt.savefig(img_stream, format="png")
+            plt.close(fig)
+            img_stream.seek(0)
+            base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
+            img_stream.close()
+            plot_result = base64_image
+        else:
+            plt.tight_layout()
+            plt.show()
+            plot_result = fig  # Return matplotlib Figure object
 
         # Risk Score: Higher t_closeness → higher privacy loss → higher risk
         if max_t <= 0.1:
@@ -606,7 +617,7 @@ def compute_t_closeness(
             "Risk Score": risk_score,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
-            "t-Closeness Visualization": base64_image,
+            "t-Closeness Visualization": plot_result,
             "Description": (
                 "t-closeness measures the distance between the distribution of sensitive attributes "
                 "in a group and the overall distribution. Lower t values are preferred, indicating less information leakage."
@@ -625,7 +636,7 @@ def compute_t_closeness(
 
 @shared_task(bind=True, ignore_result=False)
 def compute_entropy_risk(
-    self: Task, quasi_identifiers, file_info: tuple[str, str, str]
+    self: Task, quasi_identifiers, file_info: tuple[str, str, str], return_base64: bool = False
 ):
     data = read_file(file_info)
     result_dict = {}
@@ -660,19 +671,25 @@ def compute_entropy_risk(
 
         # Histogram plot of entropy values
         hist_data = entropy_series.round(2).value_counts().sort_index()
-        plt.figure(figsize=(8, 5))
-        plt.bar(hist_data.index, hist_data.values, color="royalblue")
-        plt.xlabel("Entropy Value")
-        plt.ylabel("Number of Equivalence Classes")
-        plt.title("Distribution of Entropy Across Equivalence Classes")
-        plt.grid(axis="y", alpha=0.75)
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.bar(hist_data.index, hist_data.values, color="royalblue")
+        ax.set_xlabel("Entropy Value")
+        ax.set_ylabel("Number of Equivalence Classes")
+        ax.set_title("Distribution of Entropy Across Equivalence Classes")
+        ax.grid(axis="y", alpha=0.75)
 
-        img_stream = io.BytesIO()
-        plt.savefig(img_stream, format="png")
-        plt.close()
-        img_stream.seek(0)
-        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
-        img_stream.close()
+        if return_base64:
+            img_stream = io.BytesIO()
+            plt.savefig(img_stream, format="png")
+            plt.close(fig)
+            img_stream.seek(0)
+            base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
+            img_stream.close()
+            plot_result = base64_image
+        else:
+            plt.tight_layout()
+            plt.show()
+            plot_result = fig  # Return matplotlib Figure object
 
         desc_stats = {
             "min": round(entropy_series.min(), 4),
@@ -689,7 +706,7 @@ def compute_entropy_risk(
             "Risk Score": risk_score,
             "descriptive_statistics": desc_stats,
             "histogram_data": hist_data.to_dict(),
-            "Entropy Risk Visualization": base64_image,
+            "Entropy Risk Visualization": plot_result,
             "Description": (
                 "Entropy risk quantifies the uncertainty in identifying individuals within equivalence classes. "
                 "Higher entropy values are preferred, indicating greater anonymity and lower re-identification risk."

@@ -345,3 +345,75 @@ def plot_features(self: Task, correlations, target_col):
 # Example usage:
 # combined_plot = generate_combined_plot_to_base64(your_dataframe, ['cat_col1', 'cat_col2'], ['num_col1', 'num_col2'], 'target_col')
 # print(combined_plot)
+
+def calculate_feature_relevance(file_info: dict, target_col: str):
+    """
+    Reads data, cleans it, calculates Pearson correlations of features with the target,
+    and returns a matplotlib Figure with a bar plot of feature relevance.
+
+    Args:
+        file_info (dict): Information to load the dataset.
+        target_col (str): Target column name.
+
+    Returns:
+        matplotlib.figure.Figure: Bar plot figure of feature correlations with target.
+    """
+    # Read file
+    df = read_file(file_info)
+
+    # Separate categorical and numerical columns (excluding target)
+    cat_cols = df.select_dtypes(include="object").columns.tolist()
+    num_cols = df.select_dtypes(exclude="object").columns.tolist()
+
+    # Remove target column from cat_cols and num_cols if present
+    if target_col in cat_cols:
+        cat_cols.remove(target_col)
+    if target_col in num_cols:
+        num_cols.remove(target_col)
+
+    # Filter dataframe to relevant columns + target
+    df_filtered = df[[target_col] + cat_cols + num_cols].copy()
+
+    # Fill missing values
+    df_filtered.loc[:, cat_cols] = df_filtered[cat_cols].fillna("Missing")
+    df_filtered.loc[:, num_cols] = df_filtered[num_cols].fillna(df_filtered[num_cols].mean())
+
+    # One-hot encode categorical columns
+    df_filtered = pd.get_dummies(df_filtered, columns=cat_cols)
+
+    # Encode target if categorical
+    if df_filtered[target_col].dtype == "object":
+        le_target = LabelEncoder()
+        df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
+
+    # Calculate Pearson correlation of each feature with target
+    correlations = {}
+    features = df_filtered.columns.difference([target_col])
+    for feature in features:
+        try:
+            cov = np.cov(df_filtered[feature], df_filtered[target_col], ddof=0)[0, 1]
+            std_feature = np.std(df_filtered[feature], ddof=0)
+            std_target = np.std(df_filtered[target_col], ddof=0)
+            corr = cov / (std_feature * std_target)
+            correlations[feature] = corr
+        except Exception:
+            # Skip non-numeric or invalid correlations
+            continue
+
+    # Plot correlations
+    fig, ax = plt.subplots(figsize=(8, 8))
+    features_list = list(correlations.keys())
+    corr_values = list(correlations.values())
+
+    # Shorten long feature names
+    formatted_features = [f if len(f) <= 8 else f[:5] + "..." for f in features_list]
+
+    ax.bar(formatted_features, corr_values, color="skyblue")
+    ax.axhline(y=0, color="black", linewidth=0.5)
+    ax.set_title(f"Feature Correlation with {target_col}")
+    ax.set_xlabel("Features")
+    ax.set_ylabel("Pearson Correlation")
+    plt.xticks(rotation=45, ha="right")
+
+    plt.tight_layout()
+    plt.show()

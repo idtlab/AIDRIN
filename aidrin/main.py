@@ -3,6 +3,8 @@ import logging
 import os
 import time
 import uuid
+# import matplotlib
+# matplotlib.use("Agg")
 
 import pandas as pd
 import redis
@@ -16,19 +18,19 @@ from aidrin.file_handling.file_parser import (SUPPORTED_FILE_TYPES,
 from aidrin.logging import setup_logging
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import (
-    calc_imbalance_degree, class_distribution_plot)
-from aidrin.structured_data_metrics.completeness import completeness
+    calculate_imbalance_degree, class_distribution_plot)
+from aidrin.structured_data_metrics.completeness import calculate_completeness
 from aidrin.structured_data_metrics.conditional_demo_disp import \
     conditional_demographic_disparity
-from aidrin.structured_data_metrics.correlation_score import calc_correlations
-from aidrin.structured_data_metrics.duplicity import duplicity
+from aidrin.structured_data_metrics.correlation_score import calculate_correlations
+from aidrin.structured_data_metrics.duplicity import calculate_duplicates
 from aidrin.structured_data_metrics.FAIRness_datacite import \
     categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
     categorize_metadata, extract_keys_and_values)
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning, pearson_correlation, plot_features)
-from aidrin.structured_data_metrics.outliers import outliers
+from aidrin.structured_data_metrics.outliers import calculate_outliers
 from aidrin.structured_data_metrics.privacy_measure import (
     compute_entropy_risk, compute_k_anonymity, compute_l_diversity,
     compute_t_closeness, generate_multiple_attribute_MM_risk_scores,
@@ -48,9 +50,6 @@ redis_client = redis.StrictRedis(host="localhost", port=6379, db=0)
 setup_logging()  # sets log config
 file_upload_time_log = logging.getLogger("file_upload")  # file upload related logs
 metric_time_log = logging.getLogger("metric")  # metric parsing related logs
-
-
-# Simple Routes ########
 
 
 @main.route("/images/<path:filename>")
@@ -78,7 +77,7 @@ def view_logs():
 
     log_rows = []
     if os.path.exists(log_path):
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             for line in f:
                 parts = line.strip().split(" | ", maxsplit=3)
                 if len(parts) == 4:
@@ -301,7 +300,7 @@ def dataQuality():
         try:
             if request.form.get("completeness") == "yes":
                 start_time_completeness = time.time()
-                completeness_result = completeness.delay(file_info)
+                completeness_result = calculate_completeness.delay(file_info, return_base64=True)
                 compl_dict = completeness_result.get()
                 compl_dict["Description"] = (
                     "Indicate the proportion of available data for each feature, "
@@ -317,7 +316,7 @@ def dataQuality():
             # Outliers
             if request.form.get("outliers") == "yes":
                 start_time_outliers = time.time()
-                outliers_result = outliers.delay(file_info)
+                outliers_result = calculate_outliers.delay(file_info, return_base64=True)
                 out_dict = outliers_result.get()
                 out_dict["Description"] = (
                     "Outlier scores are calculated for numerical columns using the Interquartile"
@@ -331,7 +330,7 @@ def dataQuality():
             # Duplicity
             if request.form.get("duplicity") == "yes":
                 start_time_duplicity = time.time()
-                duplicity_result = duplicity.delay(file_info)
+                duplicity_result = calculate_duplicates.delay(file_info)
                 dup_dict = duplicity_result.get()
                 dup_dict["Description"] = (
                     "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher "
@@ -422,7 +421,7 @@ def fairness():
                     print("Inputs:", y_true, sensitive_attribute_column)
                     # This function never completes (loads numpy in which is not supported)?
                     stat_rate_result = calculate_statistical_rates.delay(
-                        y_true, sensitive_attribute_column, file_info
+                        y_true, sensitive_attribute_column, file_info, return_base64=True
                     )
                     sr_dict = stat_rate_result.get()
 
@@ -502,7 +501,8 @@ def correlationAnalysis():
             if request.form.get("correlations") == "yes":
                 start_time_correlations = time.time()
                 columns = request.form.getlist("all features for data transformation")
-                correlations_result = calc_correlations.delay(columns, file_info)
+                print("Columns for correlation analysis:", columns)
+                correlations_result = calculate_correlations.delay(columns, file_info, base_64=True)
                 corr_dict = correlations_result.get()
                 # catch potential errors
                 if "Message" in corr_dict:
@@ -656,7 +656,7 @@ def classImbalance():
                     "The chart displays the distribution of classes within the specified feature, "
                     "providing a visual representation of the relative proportions of each class."
                 )
-                calc_imbalance_degree_result = calc_imbalance_degree.delay(
+                calc_imbalance_degree_result = calculate_imbalance_degree.delay(
                     classes, file_info, dist_metric="EU"
                 )  # By default the distance metric is euclidean distance
                 ci_dict["Imbalance degree score"] = calc_imbalance_degree_result.get()
@@ -806,7 +806,7 @@ def privacyPreservation():
             # k-Anonymity
             if request.form.get("k-anonymity") == "yes":
                 k_qis = request.form.getlist("quasi identifiers for k-anonymity")
-                k_anonymity_result = compute_k_anonymity.delay(k_qis, file_info)
+                k_anonymity_result = compute_k_anonymity.delay(k_qis, file_info, return_base64=True)
                 final_dict["k-Anonymity"] = k_anonymity_result.get()
 
             # l-Diversity
@@ -814,7 +814,7 @@ def privacyPreservation():
                 l_qis = request.form.getlist("quasi identifiers for l-diversity")
                 l_sensitive = request.form.get("sensitive attribute for l-diversity")
                 l_diversity_result = compute_l_diversity.delay(
-                    l_qis, l_sensitive, file_info
+                    l_qis, l_sensitive, file_info, return_base64=True
                 )
                 final_dict["l-Diversity"] = l_diversity_result.get()
 
@@ -823,14 +823,14 @@ def privacyPreservation():
                 t_qis = request.form.getlist("quasi identifiers for t-closeness")
                 t_sensitive = request.form.get("sensitive attribute for t-closeness")
                 t_closeness_result = compute_t_closeness.delay(
-                    t_qis, t_sensitive, file_info
+                    t_qis, t_sensitive, file_info, return_base64=True
                 )
                 final_dict["t-Closeness"] = t_closeness_result.get()
 
             # Entropy Risk
             if request.form.get("entropy risk") == "yes":
                 entropy_qis = request.form.getlist("quasi identifiers for entropy risk")
-                entropy_risk_result = compute_entropy_risk.delay(entropy_qis, file_info)
+                entropy_risk_result = compute_entropy_risk.delay(entropy_qis, file_info, return_base64=True)
                 final_dict["Entropy Risk"] = entropy_risk_result.get()
         except Exception as e:
             metric_time_log.error(f"Error: {e}")
