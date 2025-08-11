@@ -171,6 +171,19 @@ def serve_image(filename):
     return send_from_directory(os.path.join(root_dir, 'images'), filename)
 
 
+@main.route('/docs/<path:filename>')
+def serve_docs(filename):
+    """Serve Sphinx documentation files"""
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(os.path.join(root_dir, '..', 'docs'), filename)
+
+
+@main.route('/docs')
+def docs_index():
+    """Redirect to main Sphinx documentation index"""
+    return redirect('/docs/build/html/index.html')
+
+
 @main.route('/')
 def homepage():
     return render_template('homepage.html')
@@ -217,12 +230,12 @@ def view_logs():
 
 @main.route('/class-imbalance-docs')
 def class_imbalance_docs():
-    return render_template('documentation/classImbalanceDocs.html')
+    return redirect('/docs/build/html/class_imbalance.html')
 
 
 @main.route('/privacy-metrics-docs')
 def privacy_metrics_docs():
-    return render_template('documentation/privacyMetricsDocs.html')
+    return redirect('/docs/build/html/privacy_metrics.html')
 
 
 # Uploading, Retrieving, Clearing File Routes
