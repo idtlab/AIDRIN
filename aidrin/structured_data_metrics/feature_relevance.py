@@ -1,12 +1,14 @@
-import pandas as pd
-import numpy as np
-import shap
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error
-import matplotlib.pyplot as plt
-import io
 import base64
+import io
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from celery import Task, shared_task
+from celery.exceptions import SoftTimeLimitExceeded
+from sklearn.preprocessing import LabelEncoder
+
+from aidrin.file_handling.file_parser import read_file
 
 # def calc_shapley(df, cat_cols, num_cols, target_col):
 #     """
@@ -145,79 +147,105 @@ import base64
 
 #     return final_dict
 
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import LabelEncoder
 
-def data_cleaning(df, cat_cols, num_cols, target_col):
+@shared_task(bind=True, ignore_result=False)
+def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
     try:
+        try:
+            df = read_file(file_info)
+        except Exception as e:
+            print(f"Error reading file: {e}")
+            return {
+                "Error": "Failed to read the file. Please check the file path and type."
+            }
         # Filter DataFrame to include only the specified columns
-        df_filtered = df[[target_col] + cat_cols + num_cols].copy()  # Make a copy to avoid SettingWithCopyWarning
+        # Make a copy to avoid SettingWithCopyWarning
+        df_filtered = df[[target_col] + cat_cols + num_cols].copy()
         # Fill missing values
-        df_filtered.loc[:, cat_cols] = df_filtered[cat_cols].fillna('Missing')  # Use .loc to set values
-        df_filtered.loc[:, num_cols] = df_filtered[num_cols].fillna(df_filtered[num_cols].mean())  # Use .loc to set values
-        
+        df_filtered.loc[:, cat_cols] = df_filtered[cat_cols].fillna(
+            "Missing"
+        )  # Use .loc to set values
+        df_filtered.loc[:, num_cols] = df_filtered[num_cols].fillna(
+            df_filtered[num_cols].mean()
+        )  # Use .loc to set values
+
         # One-hot encode categorical columns
         df_filtered = pd.get_dummies(df_filtered, columns=cat_cols)
-        
+
         # Encode target variable if categorical
-        if df_filtered[target_col].dtype == 'object':
+        if df_filtered[target_col].dtype == "object":
             le_target = LabelEncoder()
             df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
-        return df_filtered
+        # need to make json serializable to be passed by celery
+        return df_filtered.to_dict(orient="list")
+    except SoftTimeLimitExceeded:
+        raise Exception("Data Cleaning task timed out.")
     except Exception as e:
         print(f"Error occurred during data cleaning: {e}")
 
-def pearson_correlation(df, cols, target_col):
-    correlations = {}
-    for col in cols:
-        if col != target_col:
-            try:
-                # Calculate covariance
-                cov = np.cov(df[col], df[target_col], ddof=0)[0, 1]
-                # Calculate standard deviations
-                std_dev_col = np.std(df[col], ddof=0)
-                std_dev_target = np.std(df[target_col], ddof=0)
-                # Calculate Pearson correlation coefficient
-                corr = cov / (std_dev_col * std_dev_target)
-                correlations[col] = corr
-            except TypeError:
-                print(f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values.")
-    return correlations
 
-def plot_features(correlations, target_col):
+@shared_task(bind=True, ignore_result=False)
+def pearson_correlation(self: Task, df_json, target_col) -> dict:
+    try:
+        df = pd.DataFrame.from_dict(df_json)
+        cols = df.columns.difference([target_col])
+        correlations = {}
+        for col in cols:
+            if col != target_col:
+                try:
+                    # Calculate covariance
+                    cov = np.cov(df[col], df[target_col], ddof=0)[0, 1]
+                    # Calculate standard deviations
+                    std_dev_col = np.std(df[col], ddof=0)
+                    std_dev_target = np.std(df[target_col], ddof=0)
+                    # Calculate Pearson correlation coefficient
+                    corr = cov / (std_dev_col * std_dev_target)
+                    correlations[col] = corr
+                except TypeError:
+                    print(
+                        f"Warning: Skipping correlation calculation for column '{col}' due to non-numeric values."
+                    )
+        return correlations
+    except SoftTimeLimitExceeded:
+        raise Exception("Pearson Correlation task timed out.")
+
+
+@shared_task(bind=True, ignore_result=False)
+def plot_features(self: Task, correlations, target_col):
     try:
         # Extract features and correlation values
         features = list(correlations.keys())
         corr_values = list(correlations.values())
-        
+
         plt.figure(figsize=(8, 8))
-        plt.bar(features, corr_values, color='skyblue')  # Vertical bar plot
-        plt.axhline(y=0, color='black', linewidth=0.5)  # Add a horizontal line at y=0
-        plt.title(f'Correlation of Features with {target_col}')
-        plt.xlabel('Features')
-        plt.ylabel('Correlation')
+        plt.bar(features, corr_values, color="skyblue")  # Vertical bar plot
+        # Add a horizontal line at y=0
+        plt.axhline(y=0, color="black", linewidth=0.5)
+        plt.title(f"Correlation of Features with {target_col}")
+        plt.xlabel("Features")
+        plt.ylabel("Correlation")
 
         # Angle the xticks
-        plt.xticks(rotation=45, ha='right')
+        plt.xticks(rotation=45, ha="right")
 
         # Add leading dots to xticks longer than 8 characters
-        formatted_features = [feat if len(feat) <= 8 else feat[:5] + '...' for feat in features]
+        formatted_features = [
+            feat if len(feat) <= 8 else feat[:5] + "..." for feat in features
+        ]
         plt.xticks(range(len(features)), formatted_features)
 
         # Save the plot to a BytesIO object and encode it as base64
         buf = io.BytesIO()
-        plt.savefig(buf, format='png')
+        plt.savefig(buf, format="png")
         plt.close()
         buf.seek(0)
-        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         return image_base64
+    except SoftTimeLimitExceeded:
+        raise Exception("Plot Features task timed out.")
     except Exception as e:
         print(f"Error occurred during plotting: {e}")
         return None
-
-
 
 
 # import io
@@ -272,7 +300,7 @@ def plot_features(correlations, target_col):
 #                 plt.title(f'{cat_col} vs {target_col}')
 #                 plt.xticks(rotation=45)
 #                 plt.legend().remove()  # Remove legend
-            
+
 #             # Perform chi-squared test for independence
 #             chi2_scores = {}
 #             for cat_col in cat_cols:
@@ -317,4 +345,3 @@ def plot_features(correlations, target_col):
 # Example usage:
 # combined_plot = generate_combined_plot_to_base64(your_dataframe, ['cat_col1', 'cat_col2'], ['num_col1', 'num_col2'], 'target_col')
 # print(combined_plot)
-
