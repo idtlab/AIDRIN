@@ -9,12 +9,12 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
-    
+
     <title>Structured Data Readiness</title>
 </head>
 <body>
     {% include 'universalComponents.html'%}
-    
+
     <h1 style="text-align:center; margin-bottom:1%;">Structured Data Readiness</h1>
     <div style="width: 100%; display: block;">
         <p style="
@@ -31,7 +31,7 @@
           Upload a supported structured dataset to evaluate it on the metrics available below
     </p>
     </div>
-    
+
     <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: row; ">
         <div style="display: flex; width: 35%; flex-direction:column;">
             <select id="fileTypeSelector" name="fileTypeSelector" class="fileType" style="margin:0; border-radius: 10px 10px 0 0; padding: 15px; width:100%; max-width:none; text-align:center; font-size:1.5em;">
@@ -41,7 +41,7 @@
                         {{ label }} ({{ ext }})
                     </option>
                 {% endfor %}
-                <!-- 
+                <!--
                 Add additional supported file types here using the following template:
                     <option value="new_file_type"{%if file_type=='new_file_type'%}selected{%endif%}>File Type Name (new_file_type)</option>
                 -->
@@ -68,14 +68,14 @@
                         document.getElementById("fileUploadContainer").style.borderRadius = "0px 0px 0px 0px";
                         document.getElementById("fileUploadContainer").style.border = "2px  #e8e8e8 solid";
                         document.getElementById("fileUploadContainer").style.borderBottom = "none";
-                        
+
                     </script>
                     <h2 id="FileUploadMessage">File Uploaded: {{uploaded_file_name or 'Unknown File'}}</h2>
                     {% else %}
                     <h2 id="FileUploadMessage" style="transition: all 0.3s;">Please Upload a File</h2>
                     {% endif %}
                 </div>
-                
+
             </label>
             {% if uploaded_file_path %}
                 <!-- My Cache button positioned at top right of upload container -->
@@ -142,17 +142,17 @@
     </form>
     <!-- Filled with detected keys when Hierarchical data is detected -->
     <form id="filePreview" class="preview" {% if not file_preview %}style="display:none"{% endif %}  enctype="multipart/form-data">
-        <h3 style="margin-left:0px; display:block; text-align:center; margin-bottom:0px;">Hierarchical Data Detected</h1>    
+        <h3 style="margin-left:0px; display:block; text-align:center; margin-bottom:0px;">Hierarchical Data Detected</h1>
         <p>The following keys were detected. Select the keys you wish to parse.<p>
-            <table id="file_preview"></table>  
+            <table id="file_preview"></table>
             <button class="animated-button" style="display:flex; align-self:center; justify-content:center;" type="submit" onclick="modifyFile();">
                     <span>Save</span>
                     <span></span>
             </button>
         <script>
-            const preview = {{ file_preview | tojson | safe if file_preview else 'null' }};
-            
-            const currently_checked = {{ current_checked_keys | tojson | safe if current_checked_keys else 'null' }}
+            const preview = {{ file_preview | tojson | safe }};
+
+            const currently_checked = {{ current_checked_keys | tojson | safe }}
             {% if session.get('minimize_preview') %}
                 document.getElementById("filePreview").classList.add("minimized");
             {% endif %}
@@ -181,7 +181,7 @@
         fileTypeElement.addEventListener("change", function () {
             updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage);
         });
-        // Call it once on page load 
+        // Call it once on page load
         updateFileInputBasedOnType(fileTypeElement, fileInput,fileUploadMessage);
 
         if (window.renderPreview) {
@@ -238,7 +238,7 @@
                 checkboxes.forEach(cb => {
                     const label = cb.closest("label");
                     const text = label.textContent.trim();
-                    
+
                     if (checked.includes(text)) {
                         cb.checked = true;
                         cb.value = text;
@@ -265,7 +265,7 @@
             } else {
                 cb.value = "no";
             }
-            console.log("Checkbox value:", cb.value); // For debugging 
+            console.log("Checkbox value:", cb.value); // For debugging
         });
     }
 
@@ -274,7 +274,7 @@
         var formData = new FormData(form);
         var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
         console.log("Checkbox Values:",checkboxValues);
-        
+
 
         fetch('/filter_file', {
             method: 'POST',
@@ -286,7 +286,7 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                
+
                 window.location.href = '/upload_file?minimize_preview=true';  // Now reload to get preview data
             } else {
                 openErrorPopup('Filtering Error', data.error || 'Unknown error');
@@ -304,8 +304,8 @@
 
         const uploadFormRect = uploadContainer.getBoundingClientRect();
         filePreview.style.position = 'absolute';
-    
-        
+
+
         filePreview.style.width = `${uploadFormRect.width}px`;
         filePreview.style.height = `${uploadFormRect.height}px`;
         filePreview.style.left = `${uploadFormRect.left + window.scrollX}px`;
@@ -322,11 +322,11 @@
             editSelections.style.width = `${uploadFormRect.width}px`;
             editSelections.style.height = `${height}px`;
             editSelections.style.display = 'flex';
-        
+
 
 
         }
-        
+
         filePreview.style.opacity='1';
     };
     function editSelections(){

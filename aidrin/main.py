@@ -28,13 +28,17 @@ import json
 import logging
 import time
 import uuid
+import redis
 import io
 import base64
+from celery.result import AsyncResult, TimeoutError
+from aidrin.structured_data_metrics.summary_statistics import summary_histograms
 
-# Create Blueprint
-main = Blueprint('main', __name__)
-
-# Setup logging
+# Setup #####
+main = Blueprint("main", __name__)  # register main blueprint
+# initialize Redis client for result storage
+redis_client = redis.StrictRedis(host="localhost", port=6379, db=0)
+# Logging ###
 setup_logging()  # sets log config
 file_upload_time_log = logging.getLogger("file_upload")  # file upload related logs
 metric_time_log = logging.getLogger("metric")  # metric parsing related logs
@@ -201,7 +205,7 @@ def view_logs():
 
     log_rows = []
     if os.path.exists(log_path):
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             for line in f:
                 parts = line.strip().split(" | ", maxsplit=3)
                 if len(parts) == 4:
@@ -244,10 +248,10 @@ def privacy_metrics_docs():
 @main.route('/upload_file', methods=['GET', 'POST'])
 def upload_file():
 
-    file_upload_time_log.info("File upload initiated")
-    uploaded_file_path = None
-
-    if request.method == 'POST':
+    if request.method == "POST":
+        # Log file processing request
+        file_upload_time_log.info("File upload initiated")
+        
         file = request.files['file']
 
         if file:
@@ -329,7 +333,6 @@ def clear_file():
 
 @main.route('/dataQuality', methods=['GET', 'POST'])
 def dataQuality():
-
     final_dict = {}
     # get file info
     file_path = session.get("uploaded_file_path")
@@ -402,12 +405,13 @@ def dataQuality():
 
 @main.route('/fairness', methods=['GET', 'POST'])
 def fairness():
-    start_time = time.time()
+
     final_dict = {}
 
     file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
+        start_time = time.time()
         # check for parameters
         # Representation Rate
         if (request.form.get('representation rate') == "yes" and
@@ -432,6 +436,7 @@ def fairness():
                 request.form.get('features for statistical rate') is not None and
                 request.form.get('target for statistical rate') is not None):
             try:
+                start_time_statRate = time.time()
                 y_true = request.form.get('target for statistical rate')
                 sensitive_attribute_column = request.form.get('features for statistical rate')
 
@@ -440,39 +445,52 @@ def fairness():
                 file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
                 sr_dict = calculate_statistical_rates(y_true, sensitive_attribute_column, file_info)
 
-                sr_dict['Description'] = (
-                    'The graph illustrates the statistical rates of various classes across different sensitive attributes. '
-                    'Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds '
-                    'to a class, with the height indicating the proportion of that sensitive attribute within that particular class'
+                sr_dict["Description"] = (
+                    "The graph illustrates the statistical rates of various classes across different sensitive attributes. "
+                    "Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds "
+                    "to a class, with the height indicating the proportion of that sensitive attribute within that particular class"
                 )
                 final_dict["Statistical Rate"] = sr_dict
-                print("Statistical Rate analysis complete")
-
+                metric_time_log.info(
+                    "Statistical Rate analysis took %.2f seconds",
+                    time.time() - start_time_statRate,
+                )
             except Exception as e:
                 print("Error during Statistical Rate analysis:", e)
+
         # conditional demographic disparity
-        if request.form.get('conditional demographic disparity') == 'yes':
-            print("Running Conditional demograpic disparity anaylsis")
+        if request.form.get("conditional demographic disparity") == "yes":
+            start_time_condDemoDisp = time.time()
             cdd_dict = {}
-            target = request.form.get('target for conditional demographic disparity')
-            sensitive = request.form.get('sensitive for conditional demographic disparity')
-            accepted_value = request.form.get('target value for conditional demographic disparity')
-            cdd_dict = conditional_demographic_disparity(file[target].to_list(), file[sensitive].to_list(), accepted_value)
-            cdd_dict['Description'] = (
-                'The conditional demographic disparity metric evaluates the distribution '
-                'of outcomes categorized as positive and negative across various '
-                'sensitive groups. The user specifies which outcome category is '
-                'considered "positive" for the analysis, with all other outcome '
-                'categories classified as "negative". The metric calculates the '
-                'proportion of outcomes classified as "positive" and "negative" within '
-                'each sensitive group. A resulting disparity value of True indicates '
-                'that within a specific sensitive group, the proportion of outcomes '
-                'classified as "negative" exceeds the proportion classified as '
-                '"positive". This metric provides insights into potential disparities '
-                'in outcome distribution across sensitive groups based on the '
-                'user-defined positive outcome criterion.'
+            target = request.form.get(
+                "target for conditional demographic disparity"
             )
-            final_dict['Conditional Demographic Disparity'] = cdd_dict
+            sensitive = request.form.get(
+                "sensitive for conditional demographic disparity"
+            )
+            accepted_value = request.form.get(
+                "target value for conditional demographic disparity"
+            )
+            cond_demo_disp_result = conditional_demographic_disparity.delay(
+                file[target].to_list(), file[sensitive].to_list(), accepted_value
+            )
+            cdd_dict = cond_demo_disp_result.get()
+            cdd_dict["Description"] = (
+                'The conditional demographic disparity metric evaluates the distribution '
+                'of outcomes categorized as positive and negative across various sensitive groups. '
+                'The user specifies which outcome category is considered "positive" for the analysis, '
+                'with all other outcome categories classified as "negative". The metric calculates the '
+                'proportion of outcomes classified as "positive" and "negative" within each sensitive group.'
+                ' A resulting disparity value of True indicates that within a specific sensitive group, '
+                'the proportion of outcomes classified as "negative" exceeds the proportion classified as'
+                ' "positive". This metric provides insights into potential disparities in outcome distribution '
+                'across sensitive groups based on the user-defined positive outcome criterion.'
+            )
+            final_dict["Conditional Demographic Disparity"] = cdd_dict
+            metric_time_log.info(
+                "Conditional Demographic Disparity took %.2f seconds",
+                time.time() - start_time_condDemoDisp,
+            )
 
         end_time = time.time()
         execution_time = end_time - start_time
@@ -485,41 +503,43 @@ def fairness():
 
 @main.route('/correlationAnalysis', methods=['GET', 'POST'])
 def correlationAnalysis():
-    start_time = time.time()
+
     final_dict = {}
 
     file, uploaded_file_path, uploaded_file_name = read_file()
 
-    if request.method == 'POST':
-        # check for parameters
-        # correlations
-        # Note: This section references undefined variables rep_dict and rrr_dict
-        # if request.form.get('compare real to dataset') == 'yes':
-        #     comp_dict = compare_rep_rates(rep_dict['Probability ratios'], rrr_dict["Probability ratios"])
-        #     comp_dict["Description"] = (
-        #         "The stacked bar graph visually compares the proportions of specific "
-        #         "sensitive attributes within both the real-world population and the "
-        #         "given dataset. Each stack in the graph represents the combined ratio "
-        #         "of these attributes, allowing for an immediate comparison of their "
-        #         "distribution between the observed dataset and the broader demographic "
-        #         "context"
-        #     )
-        #     final_dict['Representation Rate Comparison with Real World'] = comp_dict
+    if request.method == "POST":
+        metric_time_log.info("Correlation Analysis Request Started")
+        start_time = time.time()
+        try:
+            # check for parameters
+            # correlations
 
-        if request.form.get('correlations') == 'yes':
-            columns = request.form.getlist('all features for data transformation')
-            # Create file_info tuple for the calc_correlations function
-            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
-            corr_dict = calc_correlations(columns, file_info)
-            # catch potential errors
-            if 'Message' in corr_dict:
-                print("Correlation analysis failed:", corr_dict['Message'])
-                final_dict['Error'] = corr_dict['Message']
-            else:
-
-                final_dict['Correlations Analysis Categorical'] = corr_dict['Correlations Analysis Categorical']
-                final_dict['Correlations Analysis Numerical'] = corr_dict['Correlations Analysis Numerical']
-
+            if request.form.get("correlations") == "yes":
+                start_time_correlations = time.time()
+                columns = request.form.getlist("all features for data transformation")
+                # Create file_info tuple for the calc_correlations function
+                file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+                correlations_result = calc_correlations.delay(columns, file_info)
+                corr_dict = correlations_result.get()
+                # catch potential errors
+                if "Message" in corr_dict:
+                    print("Correlation analysis failed:", corr_dict["Message"])
+                    final_dict["Error"] = corr_dict["Message"]
+                else:
+                    final_dict["Correlations Analysis Categorical"] = corr_dict[
+                        "Correlations Analysis Categorical"
+                    ]
+                    final_dict["Correlations Analysis Numerical"] = corr_dict[
+                        "Correlations Analysis Numerical"
+                    ]
+                metric_time_log.info(
+                    "Correlations took %.2f seconds",
+                    time.time() - start_time_correlations,
+                )
+        except Exception as e:
+            metric_time_log.error(f"Error: {e}")
+            return jsonify({"error": str(e)}), 200
         end_time = time.time()
         execution_time = end_time - start_time
         print(f"Execution time: {execution_time} seconds")
@@ -531,7 +551,7 @@ def correlationAnalysis():
 
 @main.route('/featureRelevance', methods=['GET', 'POST'])
 def featureRelevance():
-    start_time = time.time()
+
     final_dict = {}
 
     read_result = read_file()
@@ -541,6 +561,7 @@ def featureRelevance():
     file, uploaded_file_path, uploaded_file_name = read_result
 
     if request.method == 'POST':
+        start_time = time.time()
         # check for parameters
         # feature relevancy
         if request.form.get("feature relevancy") == "yes":
@@ -606,12 +627,13 @@ def featureRelevance():
 
 @main.route('/classImbalance', methods=['GET', 'POST'])
 def classImbalance():
-    start_time = time.time()
+
     final_dict = {}
 
     file, uploaded_file_path, uploaded_file_name = read_file()
 
     if request.method == 'POST':
+        start_time = time.time()
         # check for parameters
         if request.form.get("class imbalance") == "yes":
             classes = request.form.get("features for class imbalance")
@@ -696,7 +718,6 @@ def classImbalance():
 
 @main.route('/privacyPreservation', methods=['GET', 'POST'])
 def privacyPreservation():
-
     final_dict = {}
 
     file_path = session.get("uploaded_file_path")
@@ -706,8 +727,8 @@ def privacyPreservation():
     file = read_file_parser(file_info)
 
     if request.method == "POST":
-        metric_time_log.info("Privacy Preservation Request Started")
         start_time = time.time()
+        metric_time_log.info("Privacy Preservation Request Started")
         # check for parameters
         # differential privacy
         if request.form.get("differential privacy") == "yes":
@@ -761,7 +782,7 @@ def privacyPreservation():
                     'timestamp': time.time(),
                     'expires_at': time.time() + (30 * 60)
                 }
-                print("Cached DP Statistics for key: {cache_key}")
+                print(f"Cached DP Statistics for key: {cache_key}")
 
         # single attribute risk scores using markov model (ASYNC)
         if request.form.get("single attribute risk score") == "yes":
@@ -1141,7 +1162,7 @@ def privacyPreservation():
 
 @main.route('/FAIR', methods=['GET', 'POST'])
 def FAIR():
-    start_tiime = time.time()
+    start_time = time.time()
     try:
         if request.method == 'POST':
             # Check if the 'metadata' field exists in the form data
@@ -1187,7 +1208,7 @@ def FAIR():
                 return jsonify(data)
 
             end_time = time.time()
-            print(f"Execution time: {end_time - start_tiime} seconds")
+            print(f"Execution time: {end_time - start_time} seconds")
             # Render the form for a GET request
             return render_template("metricTemplates/upload_meta.html")
 
@@ -1215,6 +1236,7 @@ def handle_summary_statistics():
 @main.route('/summary_statistics', methods=['GET'])
 def get_summary_statistics():
     try:
+        start_time = time.time()
         df, uploaded_file_path, uploaded_file_name = read_file()
         # Extract summary statistics
         summary_statistics = df.describe().applymap(
@@ -1321,6 +1343,7 @@ def check_task_status(task_id, metric_name):
 @main.route('/feature_set', methods=['POST'])
 def extract_features():
     try:
+        start_time = time.time()
         df, uploaded_file_path, uploaded_file_name = read_file()
 
         file_path = session.get("uploaded_file_path")

@@ -6,12 +6,12 @@
   --backgroundColor: #D9DAD7;
   --secondaryColor: #FBFBF2;
   --secondaryColorHalfOpacity: #fbfbf281;
-  
+
   --tertiaryColor: #8F8F8F;
 
   --darkAccent: rgb(71, 71, 71);
   --nav-bar: #212121;
-  
+
 
   --dotColor: #505050;
   --spanColor: #ffffff;
@@ -60,7 +60,7 @@ body {
   align-items: center;
 }
 li{
-  display:flex; 
+  display:flex;
   flex-direction:row;
 }
 form {
@@ -73,7 +73,7 @@ form {
     padding: 20px;
     border-radius: 10px;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-    max-width: 2000px; 
+    max-width: 2000px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -159,10 +159,10 @@ h3 {
   color:var(--disabledOverlayText);
 }
 .h2-container {
-    
+
     display: flex;
     flex-direction: column;
-   
+
     flex-shrink: 1;
     padding:20px;
 
@@ -261,7 +261,7 @@ input[type="checkbox"] {
     margin-left: 25%;
     margin-bottom: 5px;
     display: none;
-    
+
     align-items: center;
     font-size: 16px;
     color: var(--textColorSecondary);
@@ -297,7 +297,7 @@ input[type="checkbox"] {
 
 button,
 input[type="reset"] {
-    width: 10%; 
+    width: 10%;
     padding: 10px;
     box-sizing: border-box;
 }
@@ -305,7 +305,7 @@ input[type="reset"] {
 #buttonsContainer {
     display: flex;
     justify-content: center;
-    margin-top: 20px; 
+    margin-top: 20px;
 }
 
 #buttonsContainer button {
@@ -321,13 +321,13 @@ input[type="reset"] {
     }
 
     #buttonsContainer button {
-        width: 100%; 
+        width: 100%;
         margin-bottom: 10px;
     }
 }
 .checkboxContainer {
  display:block;
-    
+
 }
 
 .info-icon {
@@ -424,7 +424,7 @@ input[type="reset"] {
     font-size: 12px;
     color: var(--tertiaryColor);
 }
-/* Make the bullet points stick w/ the text instead of staying on left of containter */
+/* Make the bullet points stick w/ the text instead of staying on left of container */
 ul {
     list-style-position: inside;
 }
@@ -433,7 +433,7 @@ ul {
   .material-checkbox {
     display: flex;
     align-items:center;
-    
+
     pointer-events: auto;
     gap: 20px;
     cursor: pointer;
@@ -444,14 +444,14 @@ ul {
     border: 1px solid var(--tertiaryColor);
     cursor: not-allowed;
   }
-  
+
   .material-checkbox input[type="checkbox"] {
     position: absolute;
     opacity: 0;
     width: 0;
     height: 0;
   }
-  
+
   .checkmark {
     position: relative;
     display: inline-block;
@@ -463,12 +463,12 @@ ul {
     transition: all 0.3s;
 
   }
-  
+
   .material-checkbox input[type="checkbox"]:checked ~ .checkmark {
     background-color: var(--darkAccent);
     border-color: var(--textColor);
   }
-  
+
   .material-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
     content: "";
     position: absolute;
@@ -480,11 +480,11 @@ ul {
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
   }
-  
+
   .material-checkbox input[type="checkbox"]:focus ~ .checkmark {
     box-shadow: 0 0 0 2px var(--textColor);
   }
-  
+
   .material-checkbox:hover input[type="checkbox"] ~ .checkmark {
     border-color: var(--tertiaryColor);
   }
@@ -498,7 +498,7 @@ ul {
     background-color: var(--textColor);
     cursor: not-allowed;
 }
-  
+
 
 
 
@@ -552,7 +552,7 @@ ul {
     position: relative;
     z-index: 1;
   }
-  
+
   .animated-button:hover {
     box-shadow: 0 0 0 5px #4caf4f5e;
     color: #ffffff;
@@ -564,7 +564,7 @@ ul {
   .animated-button:active {
     scale: 0.95;
   }
-  
+
   .animated-button:hover span:last-child {
     width: 150px;
     height: 150px;
@@ -572,7 +572,7 @@ ul {
   }
 
 
-/* Custom File upload from uiverse */ 
+/* Custom File upload from uiverse */
   .custum-file-upload {
     height:80%;
     max-width:100%;
@@ -594,23 +594,23 @@ ul {
     align-items: center;
     justify-content: center;
   }
-  
+
   .custum-file-upload .icon svg {
     height: 140px;
     fill: #e8e8e8;
   }
-  
+
   .custum-file-upload .text {
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  
+
   .custum-file-upload .text span {
     font-weight: 400;
     color: #e8e8e8;
   }
-  
+
   .custum-file-upload input {
     display: none;
   }
@@ -668,14 +668,14 @@ ul {
   }
 
   .metric-download-gui{
-    
+
     position: fixed;
     top: 10px;
     right: 20px;
     display: flex;
     flex-direction: column;
     align-self: flex-end;
-    
+
     justify-self: center;
     max-width: 80%;
     z-index: 10;
@@ -694,7 +694,7 @@ ul {
     background-color: var(--secondaryColor);
     border-radius: 10px 10px 0px 0px;
   }
-  
+
   /* Image Carousel */
 .slideshow-container {
   max-width: 1000px;
@@ -794,7 +794,7 @@ ul {
   margin-bottom: 20px;
 }
 .visualization-container img {
-  
+
   max-width: 100%;
   border-radius: 4px;
   margin-bottom: 10px;
@@ -867,7 +867,7 @@ ul {
   display: flex;
   align-self: flex-end;
   align-items: center;
-  
+
   height:4em;
   max-width: 80%;
   z-index: 10;
@@ -927,7 +927,7 @@ ul {
   border-radius: 20px;
   text-align: center;
   width:fit-content;
-  
+
   word-wrap: break-word;
   padding: 0 30px;
   position: fixed;
@@ -956,7 +956,7 @@ ul {
 }
 .datalog-popup .scrollable-container{
   display:none;
-  overflow-y:auto; 
+  overflow-y:auto;
   max-height:25vh;
   margin-bottom:10px;
 }
@@ -983,7 +983,7 @@ thead th{
   border-radius: 0px;
   border:2px solid white;
   opacity:0;
-}  
+}
 .preview table {
   overflow-y: scroll;
   height:200px;

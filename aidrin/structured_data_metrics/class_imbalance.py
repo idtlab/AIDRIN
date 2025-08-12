@@ -118,7 +118,7 @@ def imbalance_degree(classes, distance="EU"):
 
         Returns
         -------
-        Number of minority clases.
+        Number of minority classes.
         """
         return len(_d[_d < _e])
 
@@ -142,34 +142,14 @@ def imbalance_degree(classes, distance="EU"):
         -------
         A numpy array with the i_m distribution.
         """
-        try:
-            # Handle edge cases
-            if _m == 0:
-                # No minority classes, return equiprobability
-                return np.array([1/_K] * _K)
-            elif _m == _K:
-                # All classes are minority, return equiprobability
-                return np.array([1/_K] * _K)
-
-            # Standard case: m minority classes with zero probability
-            min_i = np.zeros(_m)
-            maj_i = np.ones((_K - _m - 1)) * (1 / _K)
-            maj = np.array([1 - (_K - _m - 1) / _K])
-            result = np.concatenate((min_i, maj_i, maj))
-
-            # Ensure the distribution sums to 1
-            if abs(np.sum(result) - 1.0) > 1e-10:
-                # Normalize if needed
-                result = result / np.sum(result)
-
-            return result
-        except Exception:
-            # Return equiprobability distribution as fallback
-            return np.array([1/_K] * _K)
+        min_i = np.zeros(_m)
+        maj_i = np.ones(_K - _m - 1) * (1 / _K)
+        maj = np.array([1 - (_K - _m - 1) / _K])
+        return np.concatenate((min_i, maj_i, maj)).tolist()
 
     def _dist_fn():
         """
-        Selects the distance function according to the distance paramenter.
+        Selects the distance function according to the distance parameter.
 
         Returns
         -------

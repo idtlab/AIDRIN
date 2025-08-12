@@ -234,20 +234,13 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
 
         # risk scoring
         for j in range(len(my_array)):
-            # Update progress for every 10% of rows processed
-            if task and j % max(1, total_rows // 10) == 0:
-                progress = 15 + (j / total_rows) * 55  # 15% to 70%
-                task.update_state(
-                    state='PROGRESS',
-                    meta={'current': int(progress), 'total': 100, 'status': f'Calculating risk scores... ({j}/{total_rows} rows processed)'}
-                )
-
             if len(my_array[0]) > 2:
                 priv_prob_MM = 1
 
                 for i in range(2, len(my_array[0])):
-
-                    attr1_tot = np.count_nonzero(my_array[:, i-1] == my_array[j][i-1])
+                    attr1_tot = np.count_nonzero(
+                        my_array[:, i - 1] == my_array[j][i - 1]
+                    )
 
                     mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i-1] == my_array[j][i-1])
                     count_attr1_user = np.count_nonzero(mask_attr1_user)
@@ -726,7 +719,6 @@ def compute_t_closeness(
         data = file_info
     result_dict = {}
     try:
-
         # TVD computation
         def tvd(p, q):
             all_keys = set(p.index).union(set(q.index))

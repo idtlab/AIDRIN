@@ -18,6 +18,22 @@ function togglePillarDropdown(id) {
 //for uploads
 function uploadForm() {
   const form = document.getElementById("uploadForm");
+  const fileTypeSelector = document.getElementById("fileTypeSelector");
+  const fileInput = document.getElementById("file");
+  
+  // Check if file type is selected
+  if (!fileTypeSelector.value) {
+    alert("Please select a file type first");
+    return;
+  }
+  
+  // Check if file is selected
+  if (!fileInput.files || fileInput.files.length === 0) {
+    alert("Please select a file to upload");
+    return;
+  }
+  
+  // Submit the form normally
   form.submit();
 }
 
@@ -313,63 +329,30 @@ function submitForm() {
                     </div>`;
                 } else {
                     // Standard visualization display
-                visualizationHtml += `
-                            ${content.riskScore !== 'N/A' ? `<div style="color: var(--text-color, inherit);"><strong>Risk Score:</strong> ${content.riskScore}</div>` : ''}
-                    ${content.riskLevel ? `<div style="color: var(--text-color, inherit);"><strong>Risk Level:</strong> <span style="color: ${content.riskColor}; font-weight: bold;">${content.riskLevel}</span></div>` : ''}
-                            ${content.value !== 'N/A' ? `<div style="color: var(--text-color, inherit);"><strong>${content.title}:</strong> ${content.value}</div>` : ''}
-                    ${content.description ? `<div style="color: var(--text-color, inherit);"><strong>Description:</strong> ${content.description}</div>` : ''}
-                    ${content.interpretation && content.title !== 'Class Imbalance' ? `<div style="color: var(--text-color, inherit);"><strong>Graph interpretation:</strong> ${content.interpretation} ${getDocsButton(content.title)}</div>` : ''}
-                `;
-                
-                // Special handling for Class Imbalance: show Imbalance Degree Value
-                if (content.title === 'Class Imbalance' && data['Class Imbalance'] && data['Class Imbalance']['Imbalance degree']) {
-                    const imbalanceData = data['Class Imbalance']['Imbalance degree'];
-                    if (imbalanceData['Imbalance Degree score'] !== undefined) {
-                        const score = imbalanceData['Imbalance Degree score'];
-                    visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>Imbalance Degree:</strong> ${score}</div>`;
-                        // Add graph interpretation below Imbalance Degree
-                        if (content.interpretation) {
-                            visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>Graph interpretation:</strong> ${content.interpretation} <a href="/class-imbalance-docs" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a></div>`;
-                        }
-                    } else if (imbalanceData['Error'] !== undefined) {
-                        const error = imbalanceData['Error'];
-                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>Imbalance Degree:</strong> <span style="color: red;">${error}</span></div>`;
-                    }
-                }
-                
-                // Special handling for Privacy Metrics: show specific values
-                if (content.title === 'k-Anonymity' && data['k-Anonymity']) {
-                    const kData = data['k-Anonymity'];
-                    if (kData['k-Value'] !== undefined) {
-                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>k-Value:</strong> ${kData['k-Value']}</div>`;
-                    }
-                }
-                
-                if (content.title === 'l-Diversity' && data['l-Diversity']) {
-                    const lData = data['l-Diversity'];
-                    if (lData['l-Value'] !== undefined) {
-                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>l-Value:</strong> ${lData['l-Value']}</div>`;
-                    }
-                }
-                
-                if (content.title === 't-Closeness' && data['t-Closeness']) {
-                    const tData = data['t-Closeness'];
-                    if (tData['t-Value'] !== undefined) {
-                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>t-Value:</strong> ${tData['t-Value']}</div>`;
-                    }
-                }
-                
-                if (content.title === 'Entropy Risk' && data['Entropy Risk']) {
-                    const entropyData = data['Entropy Risk'];
-                    if (entropyData['Entropy-Value'] !== undefined) {
-                        visualizationHtml += `<div style="color: var(--text-color, inherit);"><strong>Entropy Value:</strong> ${entropyData['Entropy-Value']}</div>`;
-                    }
-                }
-          }
+                    visualizationHtml += `
+                            ${
+                              content.riskScore !== "N/A"
+                                ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>`
+                                : ""
+                            }
+                            ${
+                              content.value !== "N/A"
+                                ? `<div><strong>${content.title}:</strong> ${content.value}</div>`
+                                : ""
+                            }
+                           <div><strong>Description:</strong> ${
+                             content.description
+                           }</div>
+                           ${
+                             content.interpretation
+                               ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>`
+                               : ""
+                           }
 
-          visualizationHtml += `
                         </div>
+
                     </div>`;
+                }
 
           metrics.innerHTML += visualizationHtml;
         });
@@ -384,15 +367,14 @@ function submitForm() {
         ) {
           metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
+                        <div style="display: flex; justify-content:space-between; align-items: center;">
                             <div>Duplicity</div>
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
-                    <div id="duplicity" style="display: none; text-align: center; color: var(--text-color, inherit);">
-                        No duplicates found 
-                    </div> 
-                    
+                    <div id="duplicity" style="display: none;">
+                        <p style="text-align:center">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
+                    </div>
                 </div>`;
         } else if (
           isKeyPresentAndDefined(data, "Duplicity") &&
@@ -400,15 +382,14 @@ function submitForm() {
         ) {
           metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
+                        <div style="display: flex; justify-content:space-between; align-items: center;">
                             <div>Duplicity</div>
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
                     <div id="duplicity" style="display: none;">
-                        <p style="text-align:center; color: var(--text-color, inherit);">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
-                    </div>  
-                    <    
+                        <p style="text-align:center">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
+                    </div>
                 </div>`;
         }
 
@@ -433,14 +414,14 @@ function submitForm() {
           metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
           metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
+                        <div style="display: flex; justify-content:space-between; align-items: center;">
                             <div>Duplicity</div>
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
-                    <div id="duplicity" style="display: none; text-align: center;">
-                        No duplicates found 
-                    </div>      
+                    <div id="duplicity" style="display: none;">
+                        No duplicates found
+                    </div>
                 </div>`;
           metrics.scrollIntoView({ behavior: "smooth" });
         } else {

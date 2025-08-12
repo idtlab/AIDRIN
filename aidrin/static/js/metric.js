@@ -212,7 +212,7 @@ $(document).ready(function () {
     document
       .getElementById("uploadForm")
       .addEventListener("submit", function (event) {
-        event.preventDefault(); // In order to prevent autoreload on sumbit, so that visualization data can be added.
+        event.preventDefault(); // In order to prevent autoreload on submit, so that visualization data can be added.
       });
 
     var formData = new FormData();
