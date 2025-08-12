@@ -14,12 +14,12 @@ matplotlib==3.8.3
 numpy==1.26.4
 packaging==23.2
 pandas==2.2.1
-pillow==10.2.0
+pillow==10.3.0
 psutil==5.9.8
 pyparsing==3.1.1
 python-dateutil==2.8.2
 pytz==2024.1
-scikit-learn==1.4.1.post1
+scikit-learn==1.5.0
 scipy==1.12.0
 seaborn==0.13.2
 six==1.16.0
