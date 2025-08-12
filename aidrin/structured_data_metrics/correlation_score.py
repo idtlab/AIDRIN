@@ -82,10 +82,10 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             result_dict["Correlations Analysis Categorical"][
                 "Correlations Analysis Categorical Visualization"
             ] = base64_image_cat
-            result_dict["Correlations Analysis Categorical"][
-                "Description"
-            ] = "Categorical correlations are calculated using Theil's U, with values ranging from 0 to 1. " \
+            result_dict["Correlations Analysis Categorical"]["Description"] = (
+                "Categorical correlations are calculated using Theil's U, with values ranging from 0 to 1. "
                 "A value of 1 indicates a perfect correlation, while a value of 0 indicates no correlation"
+            )
 
         # Check if there are numerical features
         if not numerical_columns.empty:
@@ -119,11 +119,11 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             result_dict["Correlations Analysis Numerical"][
                 "Correlations Analysis Numerical Visualization"
             ] = base64_image_num
-            result_dict["Correlations Analysis Numerical"][
-                "Description"
-            ] = "Numerical correlations are calculated using Pearson's correlation coefficient, with values " \
-                "ranging from -1 to 1. A value of 1 indicates a perfect positive correlation, -1 indicates a perfect " \
+            result_dict["Correlations Analysis Numerical"]["Description"] = (
+                "Numerical correlations are calculated using Pearson's correlation coefficient, with values "
+                "ranging from -1 to 1. A value of 1 indicates a perfect positive correlation, -1 indicates a perfect "
                 "negative correlation, and 0 indicates no correlation"
+            )
 
         # Create and return a dictionary with correlation scores and plots
         correlation_dict = {}

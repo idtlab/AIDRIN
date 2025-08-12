@@ -24,20 +24,20 @@
                         <option value="" disabled selected>No features available for this dataset</option>
                         <!-- Options will be added dynamically using JavaScript -->
                     </select>
-            
+
                 </li>
             </ul>
         </div>
         <div class="checkboxContainerIndividual">
             <label class="material-checkbox">
-                <input  type="checkbox" name="statistical rate" onchange="toggleValue(this)"> 
+                <input  type="checkbox" name="statistical rate" onchange="toggleValue(this)">
                 <span class="checkmark"></span>
                 Check statistical rate
                 <span class="info-icon">
                     i
                     <span class="info-text">
                         This option calculates the proportions of each sensitive attribute within each category of the selected target feature and presents the results as a bar chart. This visual helps identify imbalances or disparities in the data.
-                    </span>   
+                    </span>
                 </span>
             </label>
             <ul>
@@ -53,12 +53,12 @@
                         <option value="" disabled selected>No features available for this dataset</option>
                     </select><br>
                 </li>
-                
+
             </ul>
         </div>
-                    
+
         <!-- <input style="margin-left: 40px;" type="checkbox" name="real representation rate" value="yes"> Check real world representation rate<br> -->
-        
+
         <!-- <ul>
             <li style="margin-left: 40px;">
                 <label for="real column">Sensitive Feature:</label>
@@ -78,14 +78,14 @@
             </li>
         </ul> -->
 
-        
-        
-        
-        
+
+
+
+
         <!-- <input style="margin-left: 40px;" type="checkbox" name="compare real to dataset" value="yes"> Compare real world to dataset representation rates<br> -->
         <div class="checkboxContainerIndividual">
             <label class="material-checkbox">
-                <input  type="checkbox" name="conditional demographic disparity" onchange="toggleValue(this)"> 
+                <input  type="checkbox" name="conditional demographic disparity" onchange="toggleValue(this)">
                 <span class="checkmark"></span>
                 Conditional Demographic Disparity
                 <span class="info-icon">
@@ -104,7 +104,7 @@
                 </li>
                 <li >
                     <label class="listLabel" for="target for conditional demographic disparity">Target feature:</label>
-                    
+
                     <select name="target for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis2" required>
                         <option value="" disabled selected>No features available for this dataset</option>
                     </select><br>
@@ -116,7 +116,5 @@
                 </li>
             </ul>
         </div>
-    </div> 
+    </div>
 {% endblock %}
-
-

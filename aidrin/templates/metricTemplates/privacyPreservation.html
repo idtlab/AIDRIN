@@ -4,10 +4,10 @@
 {% set page_route = "privacyPreservation" %}
 
 {% block metricContent %}
-    <div id="checkboxContainer_privacy" class="checkboxContainer"><br> 
+    <div id="checkboxContainer_privacy" class="checkboxContainer"><br>
         <div class="checkboxContainerIndividual">
             <label class="material-checkbox">
-                <input  type="checkbox" name="differential privacy" onchange="toggleValue(this)"> 
+                <input  type="checkbox" name="differential privacy" onchange="toggleValue(this)">
                 <span class="checkmark"></span>
                 Differential privacy by adding laplacian noise:<br>
             </label>
@@ -51,7 +51,7 @@
                     <span class="info-icon">i
                         <span class="info-text">Measures the risk of re-identification based on individual attributes, helping identify which features might lead to privacy breaches.</span>
                     </span>
-                    
+
                 </span>
                 </label>
                 <ul>
@@ -68,14 +68,14 @@
                 </li>
             </ul>
         </div>
-        
+
         <div class="checkboxContainerIndividual">
             <label class="material-checkbox">
-                <input type="checkbox" name="multiple attribute risk score" onchange="toggleValue(this)"> 
+                <input type="checkbox" name="multiple attribute risk score" onchange="toggleValue(this)">
                 <span class="checkmark"></span>
                 Evaluate multiple attribute risks:<br>
             </label>
-            
+
             <ul>
                 <li >
                     <label for="id feature to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">ID feature</label>
@@ -89,10 +89,10 @@
                     </li>
                 </ul>
             </div>
-            
+
             <div class="checkboxContainerIndividual">
                 <label class="material-checkbox" style="position: relative;">
-                <input type="checkbox" name="multiple attribute risk score" onchange="toggleValue(this)"> 
+                <input type="checkbox" name="multiple attribute risk score" onchange="toggleValue(this)">
                 <span class="checkmark"></span>
                 <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <span>Evaluate multiple attribute risks:</span>
@@ -102,7 +102,7 @@
 
                 </span>
                 </label>
-                
+
                 <ul>
                     <li >
                         <label for="id feature to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">ID feature</label>
@@ -125,7 +125,7 @@
                 <span class="info-icon">i
                     <span class="info-text">Estimates privacy risk by calculating the entropy of equivalence classes formed by selected quasi-identifiers. Used to assess the likelihood of re-identifying individuals.</span>
                 </span>
-                
+
             </span>
             </label>
             <ul>
@@ -146,7 +146,7 @@
                 <span class="info-icon">i
                     <span class="info-text"> Ensures each individual is indistinguishable from at least <i>k</i> others based on quasi-identifiers.</span>
                 </span>
-                
+
             </span>
             </label>
 
@@ -154,7 +154,7 @@
             <ul>
                 <li>
                     <label for="quasi identifiers for k-anonymity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
-                    <div id="kAnonymityQIsCheckbox"></div> 
+                    <div id="kAnonymityQIsCheckbox"></div>
                     </li>
             </ul>
         </div>
@@ -168,7 +168,7 @@
                 <span class="info-icon">i
                     <span class="info-text"> Strengthens k-anonymity by requiring diverse sensitive values in each equivalence class.</span>
                 </span>
-                
+
             </span>
             </label>
 
@@ -187,7 +187,7 @@
         </div>
 
         <div class="checkboxContainerIndividual">
-            
+
             <label class="material-checkbox" style="position: relative;">
             <input type="checkbox" name="t-closeness" onchange="toggleValue(this)">
             <span class="checkmark"></span>
@@ -214,6 +214,3 @@
         </div>
     </div>
 {% endblock %}
-
-
-    

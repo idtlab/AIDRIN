@@ -28,13 +28,13 @@ class jsonReader(BaseFileReader):
             recurse(data)
             return pd.DataFrame(rows)
 
-        with open(self.file_path, "r") as f:
+        with open(self.file_path) as f:
             data = json.load(f)
         df = flatten_json(data)
         return df
 
     def parse(self):
-        with open(self.file_path, "r") as f:
+        with open(self.file_path) as f:
             data = json.load(f)
             # only parse hierarchical data
             if isinstance(data, dict):
@@ -42,7 +42,7 @@ class jsonReader(BaseFileReader):
                 return list(data.keys())
 
     def filter(self, kept_keys):
-        with open(self.file_path, "r") as f:
+        with open(self.file_path) as f:
             data = json.load(f)
         # fix str passing
         if isinstance(kept_keys, str):
