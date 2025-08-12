@@ -21,6 +21,11 @@ Whether validating training data for machine learning models, ensuring responsib
 
 Built with a modern technology stack including Flask, Celery, and Redis, AIDRIN is lightweight yet powerful. Its asynchronous architecture supports scalable data processing, and its interactive design ensures accessibility for users across technical levels.
 
+.. image:: _static/pillars.png
+   :alt: Pillars of Data Readiness for AI
+   :align: center
+   :width: 80%
+
 Key Features
 ------------
 
@@ -35,6 +40,7 @@ Key Features
    :caption: Contents:
 
    installation
+   usage
    appfl_integration
    contributing
    publications
