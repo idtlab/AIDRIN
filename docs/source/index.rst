@@ -35,8 +35,8 @@ Key Features
    :caption: Contents:
 
    installation
-   privacy_metrics
    class_imbalance
+   privacy_metrics
    appfl_integration
    publications
 

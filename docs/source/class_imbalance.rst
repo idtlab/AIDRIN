@@ -1,5 +1,5 @@
 Class Imbalance Metrics Guide
-============================
+=============================
 
 Comprehensive Guide to Quantifying and Assessing Class Distribution Imbalance in Machine Learning Datasets
 
@@ -7,12 +7,12 @@ Comprehensive Guide to Quantifying and Assessing Class Distribution Imbalance in
    :local:
 
 What is Class Imbalance?
------------------------
+------------------------
 
 Class imbalance represents a fundamental challenge in machine learning where the distribution of class labels exhibits significant skewness, with certain classes being substantially more prevalent than others. This phenomenon can introduce systematic biases in model training, leading to suboptimal generalization performance, particularly for underrepresented classes. Systematic quantification of imbalance severity enables informed decisions regarding data preprocessing strategies and algorithm selection.
 
 Distance Metrics for Imbalance Degree Calculation
------------------------------------------------
+-------------------------------------------------
 
 The **Imbalance Degree** constitutes a sophisticated ratio-based metric that systematically compares observed class distributions against both idealized balanced (uniform) distributions and perfectly skewed reference distributions. The mathematical formulation is:
 
@@ -21,7 +21,7 @@ The **Imbalance Degree** constitutes a sophisticated ratio-based metric that sys
 This formulation yields a normalized measure where zero indicates perfect balance and higher values signify progressively greater imbalance relative to the theoretical worst-case scenario for the given number of minority classes.
 
 Total Variation Distance (TVD)
------------------------------
+------------------------------
 
 .. math::
 
@@ -44,7 +44,7 @@ Total Variation Distance (TVD)
 **Real-world analogy:** Think of it as measuring how much "work" is needed to redistribute resources evenly across all classes.
 
 Euclidean Distance
------------------
+------------------
 
 .. math::
 
@@ -149,26 +149,26 @@ Chi-Squared Distance
 **Real-world analogy:** Like a quality control system that pays extra attention to rare defects because they might indicate systematic problems in the manufacturing process.
 
 Summary Table
-------------
+-------------
 
 +------------------------+--------------------------------+-----------+-----------+------------------+------------------+
-| Metric                 | Formula                        | Range     | Symmetric?| Robust to Zeros?| Interpretation   |
+| Metric                 | Formula                        | Range     | Symmetric?| Robust to Zeros? | Interpretation   |
 +========================+================================+===========+===========+==================+==================+
-| Total Variation        | 0.5 ∑|p_i-u_i|                | [0,1]     | Yes       | Yes              | Simple, intuitive|
+| Total Variation        | 0.5 ∑|p_i-u_i|                 | [0,1]     | Yes       | Yes              | Simple, intuitive|
 | Distance (TVD)         |                                |           |           |                  |                  |
 +------------------------+--------------------------------+-----------+-----------+------------------+------------------+
-| Euclidean Distance     | sqrt(∑(p_i-u_i)²)             | [0,∞)     | Yes       | Yes              | Penalizes large  |
-|                        |                                |           |           |                  | deviations        |
+| Euclidean Distance     | sqrt(∑(p_i-u_i)²)              | [0,∞)     | Yes       | Yes              | Penalizes large  |
+|                        |                                |           |           |                  | deviations       |
 +------------------------+--------------------------------+-----------+-----------+------------------+------------------+
 | Chebyshev              | max|p_i-u_i|                   | [0,1]     | Yes       | Yes              | Focuses on worst |
 |                        |                                |           |           |                  | class            |
 +------------------------+--------------------------------+-----------+-----------+------------------+------------------+
-| Hellinger              | sqrt(0.5 ∑(√p_i-√u_i)²)      | [0,1]     | Yes       | Yes              | Geometric        |
+| Hellinger              | sqrt(0.5 ∑(√p_i-√u_i)²)        | [0,1]     | Yes       | Yes              | Geometric        |
 |                        |                                |           |           |                  | difference       |
 +------------------------+--------------------------------+-----------+-----------+------------------+------------------+
-| KL                     | ∑ p_i log(p_i/u_i)            | [0,∞)     | No        | No               | Information loss |
+| KL                     | ∑ p_i log(p_i/u_i)             | [0,∞)     | No        | No               | Information loss |
 +------------------------+--------------------------------+-----------+-----------+------------------+------------------+
-| Chi-Squared            | ∑(p_i-u_i)²/u_i               | [0,∞)     | Yes       | No               | Statistical test |
+| Chi-Squared            | ∑(p_i-u_i)²/u_i                | [0,∞)     | Yes       | No               | Statistical test |
 +------------------------+--------------------------------+-----------+-----------+------------------+------------------+
 
 References

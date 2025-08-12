@@ -19,10 +19,10 @@ This collaboration is described in the following publication:
 .. code-block:: bibtex
 
    @inproceedings{10.1145/3676288.3676296,
-   author = {Hiniduma, Kaveen and Li, Z. and Sinha, A. and Madduri, Ravi and Byna, Suren},
-   title = {CADRE: Customizable Assurance of Data Readiness in Privacy-Preserving Federated Learning},
-   year = {2025},
-   publisher = {IEEE},
-   url = {https://arxiv.org/pdf/2505.23849},
-   booktitle = {Proceedings of the 21st IEEE International Conference on e-Science (e-Science '25)},
+      author = {Hiniduma, Kaveen and Li, Z. and Sinha, A. and Madduri, Ravi and Byna, Suren},
+      title = {CADRE: Customizable Assurance of Data Readiness in Privacy-Preserving Federated Learning},
+      year = {2025},
+      publisher = {IEEE},
+      url = {https://arxiv.org/pdf/2505.23849},
+      booktitle = {Proceedings of the 21st IEEE International Conference on e-Science (e-Science '25)},
    }

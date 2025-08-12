@@ -1,5 +1,5 @@
 Privacy Metrics Guide
-====================
+=====================
 
 Comprehensive Guide to Privacy Preservation Techniques and Risk Assessment in AIDRIN
 
@@ -7,12 +7,12 @@ Comprehensive Guide to Privacy Preservation Techniques and Risk Assessment in AI
    :local:
 
 Differential Privacy
--------------------
+--------------------
 
 Differential privacy represents a rigorous mathematical framework designed to provide provable privacy guarantees through the systematic addition of carefully calibrated noise to computational outputs. This approach ensures that the inclusion or exclusion of any individual record in the dataset has a statistically bounded impact on the results, thereby preventing the identification of specific individuals while maintaining the utility of aggregate statistics.
 
 Mathematical Foundation
-~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 .. math::
 
@@ -26,7 +26,7 @@ Where:
 - **δ**: Failure probability (typically very small, e.g., 10^-5)
 
 Applications and Use Cases
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Statistical Analysis and Reporting**
    Publication of aggregate statistics from sensitive datasets while maintaining individual privacy
@@ -41,7 +41,7 @@ Applications and Use Cases
    Meeting stringent privacy requirements under frameworks such as GDPR, HIPAA, or CCPA
 
 Parameter Selection Guidelines
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
 
@@ -50,30 +50,30 @@ Parameter Selection Guidelines
 Privacy Budget (ε) Recommendations by Sector
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| ε Range     | Privacy Level    | Sector & Applications                                                                 |
-+=============+==================+========================================================================================+
-| ε ≤ 0.1     | Very High Privacy| Healthcare: Medical records, clinical trials, patient data, pharmaceutical research,  |
-|             |                  | genetic data, mental health records                                                    |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| 0.1 < ε ≤ 0.5| High Privacy     | Finance: Banking records, credit scores, financial transactions, insurance data,      |
-|             |                  | investment portfolios, tax records                                                     |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| 0.5 < ε ≤ 1.0| Moderate-High    | Education: Student records, academic performance, enrollment data, disciplinary       |
-|             | Privacy          | records, special needs information                                                     |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| 1.0 < ε ≤ 2.0| Moderate Privacy | Research: Academic studies, survey responses, public datasets, social science        |
-|             |                  | research, market research data                                                        |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| 2.0 < ε ≤ 5.0| Moderate Privacy | General Use: Public datasets, non-sensitive analytics, open data initiatives,        |
-|             |                  | government statistics                                                                 |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| ε > 5.0     | Low Privacy      | Avoid for sensitive data - provides minimal privacy guarantees and should not be      |
-|             |                  | used for personal information                                                          |
-+-------------+------------------+----------------------------------------------------------------------------------------+
++---------------+------------------+----------------------------------------------------------------------------------------+
+| ε Range       | Privacy Level    | Sector & Applications                                                                  |
++===============+==================+========================================================================================+
+| ε ≤ 0.1       | Very High Privacy| Healthcare: Medical records, clinical trials, patient data, pharmaceutical research,   |
+|               |                  | genetic data, mental health records                                                    |
++---------------+------------------+----------------------------------------------------------------------------------------+
+| 0.1 < ε ≤ 0.5 | High Privacy     | Finance: Banking records, credit scores, financial transactions, insurance data,       |
+|               |                  | investment portfolios, tax records                                                     |
++---------------+------------------+----------------------------------------------------------------------------------------+
+| 0.5 < ε ≤ 1.0 | Moderate-High    | Education: Student records, academic performance, enrollment data, disciplinary        |
+|               | Privacy          | records, special needs information                                                     |
++---------------+------------------+----------------------------------------------------------------------------------------+
+| 1.0 < ε ≤ 2.0 | Moderate Privacy | Research: Academic studies, survey responses, public datasets, social science          |
+|               |                  | research, market research data                                                         |
++---------------+------------------+----------------------------------------------------------------------------------------+
+| 2.0 < ε ≤ 5.0 | Moderate Privacy | General Use: Public datasets, non-sensitive analytics, open data initiatives,          |
+|               |                  | government statistics                                                                  |
++---------------+------------------+----------------------------------------------------------------------------------------+
+| ε > 5.0       | Low Privacy      | Avoid for sensitive data - provides minimal privacy guarantees and should not be       |
+|               |                  | used for personal information                                                          |
++---------------+------------------+----------------------------------------------------------------------------------------+
 
 Implementation Details
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Current Implementation:** The AIDRIN system implements differential privacy through Laplace noise addition to numerical features. The implementation:
 
@@ -85,7 +85,7 @@ Implementation Details
 **Note:** This implementation focuses on data perturbation rather than risk score computation. The noise addition provides privacy guarantees while maintaining data utility for analysis purposes.
 
 Optimization Strategies and Mitigation Approaches
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Privacy Budget Optimization Strategies:**
 
@@ -102,7 +102,7 @@ Optimization Strategies and Mitigation Approaches
 - **Post-processing techniques:** Apply smoothing algorithms or filtering methods to improve result accuracy
 
 Limitations and Applicability Constraints
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
 
@@ -123,7 +123,7 @@ Limitations and Applicability Constraints
    - **High ε values (ε > 10):** Privacy guarantees become substantially weakened
 
 References and Credits
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Foundational Work:**
 
@@ -131,15 +131,15 @@ References and Credits
 - Dwork, C., McSherry, F., Nissim, K., & Smith, A. (2006). "Calibrating noise to sensitivity in private data analysis." In Theory of Cryptography Conference (TCC).
 
 Single Attribute Risk Score
---------------------------
+---------------------------
 
 What is Single Attribute Risk Score?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Single attribute risk score measures the probability of re-identifying an individual based on a single attribute or feature. It helps identify which attributes pose the highest privacy risk when considered in isolation, providing a baseline assessment of re-identification vulnerability.
 
 Risk Calculation
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 .. math::
 
@@ -171,32 +171,32 @@ When to Use Single Attribute Risk Score
    Making informed decisions about which attributes can be safely published
 
 Risk Level Recommendations by Sector
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| Risk Range       | Risk Level       | Sector & Applications                                                                 |
-+==================+==================+========================================================================================+
-| Risk ≤ 0.01      | Very Low Risk    | Healthcare: Medical records, patient identifiers, clinical trial data, pharmaceutical |
-|                  |                  | research, genetic information, mental health records                                   |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| 0.01 < Risk ≤ 0.02| Low Risk         | Finance: Banking records, financial identifiers, credit scores, insurance data,       |
-|                  |                  | investment portfolios, tax records                                                     |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| 0.02 < Risk ≤ 0.05| Low-Moderate Risk| Education: Student records, academic identifiers, enrollment data, disciplinary       |
-|                  |                  | records, special needs information, performance metrics                               |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| 0.05 < Risk ≤ 0.1| Moderate Risk    | Research: Survey responses, public datasets, academic studies, social science        |
-|                  |                  | research, market research data                                                        |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| 0.1 < Risk ≤ 0.2| Moderate-High    | General Use: Non-sensitive analytics, open data initiatives, government statistics,   |
-|                  | Risk             | public datasets                                                                       |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| Risk > 0.2       | High Risk        | Requires immediate attention and anonymization - poses significant re-identification  |
-|                  |                  | threat                                                                                |
-+------------------+------------------+----------------------------------------------------------------------------------------+
++--------------------+------------------+----------------------------------------------------------------------------------------+
+| Risk Range         | Risk Level       | Sector & Applications                                                                  |
++====================+==================+========================================================================================+
+| Risk ≤ 0.01        | Very Low Risk    | Healthcare: Medical records, patient identifiers, clinical trial data, pharmaceutical  |
+|                    |                  | research, genetic information, mental health records                                   |
++--------------------+------------------+----------------------------------------------------------------------------------------+
+| 0.01 < Risk ≤ 0.02 | Low Risk         | Finance: Banking records, financial identifiers, credit scores, insurance data,        |
+|                    |                  | investment portfolios, tax records                                                     |
++--------------------+------------------+----------------------------------------------------------------------------------------+
+| 0.02 < Risk ≤ 0.05 | Low-Moderate Risk| Education: Student records, academic identifiers, enrollment data, disciplinary        |
+|                    |                  | records, special needs information, performance metrics                                |
++--------------------+------------------+----------------------------------------------------------------------------------------+
+| 0.05 < Risk ≤ 0.1  | Moderate Risk    | Research: Survey responses, public datasets, academic studies, social science          |
+|                    |                  | research, market research data                                                         |
++--------------------+------------------+----------------------------------------------------------------------------------------+
+| 0.1 < Risk ≤ 0.2   | Moderate-High    | General Use: Non-sensitive analytics, open data initiatives, government statistics,    |
+|                    | Risk             | public datasets                                                                        |
++--------------------+------------------+----------------------------------------------------------------------------------------+
+| Risk > 0.2         | High Risk        | Requires immediate attention and anonymization - poses significant re-identification   |
+|                    |                  | threat                                                                                 |
++--------------------+------------------+----------------------------------------------------------------------------------------+
 
 Implementation Details
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Current Implementation:** The AIDRIN system computes single attribute risk scores using a Markov Model approach:
 
@@ -247,20 +247,20 @@ Limitations and When It's Not Suitable
    - **When external data exists:** Risk depends on linkage with other datasets
 
 References and Credits
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 - Vatsalan, D., et al. (2023). "Privacy risk quantification in education data using Markov model." British Journal of Educational Technology.
 
 Multiple Attribute Risk Score
-----------------------------
+-----------------------------
 
 What is Multiple Attribute Risk Score?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Multiple attribute risk score evaluates the combined risk of re-identification when multiple attributes are considered together. This provides a more realistic assessment of privacy risk, as attackers often use multiple pieces of information to identify individuals. It addresses the fundamental limitation of single attribute assessment by modeling real-world attack scenarios.
 
 Risk Calculation
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 .. math::
 
@@ -296,36 +296,36 @@ When to Use Multiple Attribute Risk Score
    Ensuring data meets regulatory privacy requirements
 
 Risk Level Recommendations by Sector
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| Risk Range       | Risk Level       | Sector & Applications                                                                 |
-+==================+==================+========================================================================================+
-| Risk ≤ 0.005     | Very Low Risk    | Healthcare: Medical records, patient combinations, clinical trial data, pharmaceutical |
-|                  |                  | research, genetic information, mental health records                                   |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| 0.005 < Risk ≤ 0.01| Low Risk         | Finance: Banking records, financial combinations, credit scores, insurance data,       |
-|                  |                  | investment portfolios, tax records                                                     |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| 0.01 < Risk ≤ 0.02| Low-Moderate Risk| Education: Student records, academic combinations, enrollment data, disciplinary       |
-|                  |                  | records, special needs information, performance metrics                               |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| 0.02 < Risk ≤ 0.05| Moderate Risk    | Research: Survey responses, dataset combinations, academic studies, social science     |
-|                  |                  | research, market research data                                                        |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| 0.05 < Risk ≤ 0.1| Moderate-High    | General Use: Public datasets, non-sensitive analytics, open data initiatives,        |
-|                  | Risk             | government statistics                                                                 |
-+------------------+------------------+----------------------------------------------------------------------------------------+
-| Risk > 0.1       | High Risk        | Requires immediate attention and anonymization - poses significant re-identification  |
-|                  |                  | threat                                                                                |
-+------------------+------------------+----------------------------------------------------------------------------------------+
++---------------------+------------------+----------------------------------------------------------------------------------------+
+| Risk Range          | Risk Level       | Sector & Applications                                                                  |
++=====================+==================+========================================================================================+
+| Risk ≤ 0.005        | Very Low Risk    | Healthcare: Medical records, patient combinations, clinical trial data, pharmaceutical |
+|                     |                  | research, genetic information, mental health records                                   |
++---------------------+------------------+----------------------------------------------------------------------------------------+
+| 0.005 < Risk ≤ 0.01 | Low Risk         | Finance: Banking records, financial combinations, credit scores, insurance data,       |
+|                     |                  | investment portfolios, tax records                                                     |
++---------------------+------------------+----------------------------------------------------------------------------------------+
+| 0.01 < Risk ≤ 0.02  | Low-Moderate Risk| Education: Student records, academic combinations, enrollment data, disciplinary       |
+|                     |                  | records, special needs information, performance metrics                                |
++---------------------+------------------+----------------------------------------------------------------------------------------+
+| 0.02 < Risk ≤ 0.05  | Moderate Risk    | Research: Survey responses, dataset combinations, academic studies, social science     |
+|                     |                  | research, market research data                                                         |
++---------------------+------------------+----------------------------------------------------------------------------------------+
+| 0.05 < Risk ≤ 0.1   | Moderate-High    | General Use: Public datasets, non-sensitive analytics, open data initiatives,          |
+|                     | Risk             | government statistics                                                                  |
++---------------------+------------------+----------------------------------------------------------------------------------------+
+| Risk > 0.1          | High Risk        | Requires immediate attention and anonymization - poses significant re-identification   |
+|                     |                  | threat                                                                                 |
++---------------------+------------------+----------------------------------------------------------------------------------------+
 
 .. warning::
 
    **Note:** Multiple attribute risks are typically higher than single attribute risks due to the increased re-identification potential from attribute combinations.
 
 Implementation Details
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Current Implementation:** The AIDRIN system computes multiple attribute risk scores using an extended Markov Model approach:
 
@@ -380,12 +380,12 @@ Limitations and When It's Not Suitable
    - **Real-time applications:** When computational overhead is prohibitive
 
 References and Credits
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 - Vatsalan, D., et al. (2023). "Privacy risk quantification in education data using Markov model." British Journal of Educational Technology.
 
 Entropy Risk
------------
+------------
 
 Definition
 ~~~~~~~~~~
@@ -393,7 +393,7 @@ Definition
 Entropy risk measures the uncertainty in identifying individuals based on the entropy of equivalence classes formed by quasi-identifiers. Higher entropy indicates lower re-identification risk.
 
 Mathematical Foundation
-~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 .. math::
 
@@ -402,32 +402,32 @@ Mathematical Foundation
 Where H(X) is the entropy of random variable X, and p(x) is the probability of value x.
 
 Key Parameters
-~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 **Configuration Options**
 
 **Quasi-Identifiers:** Attributes used to form equivalence classes
 
 Entropy Level Recommendations by Sector
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 +------------------+------------------+----------------------------------------------------------------------------------------+
-| Entropy Range    | Privacy Level    | Sector & Applications                                                                 |
+| Entropy Range    | Privacy Level    | Sector & Applications                                                                  |
 +==================+==================+========================================================================================+
-| Entropy ≥ 3.0    | Very High Privacy| Healthcare: Medical records, patient data, clinical trial information, pharmaceutical |
-|                  |                  | research, genetic data, mental health records, diagnostic information                 |
+| Entropy ≥ 3.0    | Very High Privacy| Healthcare: Medical records, patient data, clinical trial information, pharmaceutical  |
+|                  |                  | research, genetic data, mental health records, diagnostic information                  |
 +------------------+------------------+----------------------------------------------------------------------------------------+
-| Entropy ≥ 2.5    | High Privacy     | Finance: Banking records, financial data, credit scores, insurance information,       |
+| Entropy ≥ 2.5    | High Privacy     | Finance: Banking records, financial data, credit scores, insurance information,        |
 |                  |                  | investment portfolios, tax records, transaction history                                |
 +------------------+------------------+----------------------------------------------------------------------------------------+
-| Entropy ≥ 2.0    | Moderate-High    | Education: Student records, academic data, enrollment information, disciplinary       |
+| Entropy ≥ 2.0    | Moderate-High    | Education: Student records, academic data, enrollment information, disciplinary        |
 |                  | Privacy          | records, special needs data, performance metrics, attendance records                   |
 +------------------+------------------+----------------------------------------------------------------------------------------+
-| Entropy ≥ 1.5    | Moderate Privacy | Research: Survey responses, public datasets, academic studies, social science        |
-|                  |                  | research, market research data, demographic information                               |
+| Entropy ≥ 1.5    | Moderate Privacy | Research: Survey responses, public datasets, academic studies, social science          |
+|                  |                  | research, market research data, demographic information                                |
 +------------------+------------------+----------------------------------------------------------------------------------------+
-| Entropy ≥ 1.0    | Moderate Privacy | General Use: Public datasets, general analytics, open data initiatives, government   |
-|                  |                  | statistics, non-sensitive information                                                 |
+| Entropy ≥ 1.0    | Moderate Privacy | General Use: Public datasets, general analytics, open data initiatives, government     |
+|                  |                  | statistics, non-sensitive information                                                  |
 +------------------+------------------+----------------------------------------------------------------------------------------+
 
 .. warning::
@@ -447,7 +447,7 @@ Use Cases
    Assessing effectiveness of privacy techniques
 
 Implementation Details
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Current Implementation:** The AIDRIN system computes entropy risk based on equivalence class distributions:
 
@@ -501,7 +501,7 @@ Limitations and When It's Not Suitable
    - **Binary sensitive attributes:** When sensitive values have limited variety
 
 References and Credits
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Foundational Work:**
 
@@ -509,15 +509,15 @@ References and Credits
 - Agrawal, R., & Srikant, R. (2000). "Privacy-preserving data mining." In Proceedings of the 2000 ACM SIGMOD international conference on Management of data.
 
 k-Anonymity
-----------
+-----------
 
 What is k-Anonymity?
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 k-Anonymity ensures that each individual in a dataset is indistinguishable from at least k-1 other individuals with respect to quasi-identifiers. This provides protection against re-identification attacks by making it impossible to uniquely identify any individual based on their quasi-identifier values.
 
 Mathematical Definition
-~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 .. math::
 
@@ -544,7 +544,7 @@ When to Use k-Anonymity
    Making government or organizational data publicly available
 
 Parameter Guidelines
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
 
@@ -554,26 +554,26 @@ k-Value Recommendations by Sector
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 +-------------+------------------+----------------------------------------------------------------------------------------+
-| k Range     | Protection Level | Sector & Applications                                                                 |
+| k Range     | Protection Level | Sector & Applications                                                                  |
 +=============+==================+========================================================================================+
-| k ≥ 20      | Very High       | Healthcare: Medical records, patient data, clinical trial information, pharmaceutical |
-|             | Protection      | research, genetic data, mental health records, diagnostic information                 |
+| k ≥ 20      | Very High        | Healthcare: Medical records, patient data, clinical trial information, pharmaceutical  |
+|             | Protection       | research, genetic data, mental health records, diagnostic information                  |
 +-------------+------------------+----------------------------------------------------------------------------------------+
-| k ≥ 15      | High Protection | Finance: Banking records, financial data, credit scores, insurance information,       |
+| k ≥ 15      | High Protection  | Finance: Banking records, financial data, credit scores, insurance information,        |
 |             |                  | investment portfolios, tax records, transaction history                                |
 +-------------+------------------+----------------------------------------------------------------------------------------+
-| k ≥ 10      | Moderate-High   | Education: Student records, academic data, enrollment information, disciplinary       |
-|             | Protection      | records, special needs data, performance metrics, attendance records                   |
+| k ≥ 10      | Moderate-High    | Education: Student records, academic data, enrollment information, disciplinary        |
+|             | Protection       | records, special needs data, performance metrics, attendance records                   |
 +-------------+------------------+----------------------------------------------------------------------------------------+
-| k ≥ 5       | Moderate        | Research: Survey responses, public datasets, academic studies, social science        |
-|             | Protection      | research, market research data, demographic information                               |
+| k ≥ 5       | Moderate         | Research: Survey responses, public datasets, academic studies, social science          |
+|             | Protection       | research, market research data, demographic information                                |
 +-------------+------------------+----------------------------------------------------------------------------------------+
-| k ≥ 3       | Minimal         | General Use: Public datasets, general analytics, open data initiatives, government   |
-|             | Protection      | statistics, low-risk scenarios                                                        |
+| k ≥ 3       | Minimal          | General Use: Public datasets, general analytics, open data initiatives, government     |
+|             | Protection       | statistics, low-risk scenarios                                                         |
 +-------------+------------------+----------------------------------------------------------------------------------------+
 
 Implementation Details
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Current Implementation:** The AIDRIN system computes k-anonymity as follows:
 
@@ -627,22 +627,22 @@ Limitations and When It's Not Suitable
    - **Real-time applications:** When computational overhead is prohibitive
 
 References and Credits
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Foundational Work:**
 
 - Sweeney, L. (2002). "k-ANONYMITY: A MODEL FOR PROTECTING PRIVACY." International Journal of Uncertainty, Fuzziness and Knowledge-Based Systems.
 
 l-Diversity
-----------
+-----------
 
 What is l-Diversity?
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 l-Diversity extends k-anonymity by requiring that each equivalence class contains at least l different values for the sensitive attribute. This protects against homogeneity attacks where all records in a class have the same sensitive value, providing stronger privacy guarantees than k-anonymity alone.
 
 Mathematical Definition
-~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 .. math::
 
@@ -669,7 +669,7 @@ When to Use l-Diversity
    When sensitive outcomes need protection in research datasets
 
 Parameter Guidelines
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
 
@@ -678,24 +678,24 @@ Parameter Guidelines
 l-Value Recommendations by Sector
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| l Range     | Diversity Level  | Sector & Applications                                                                 |
-+=============+==================+========================================================================================+
++-------------+------------------+-----------------------------------------------------------------------------------------+
+| l Range     | Diversity Level  | Sector & Applications                                                                   |
++=============+==================+=========================================================================================+
 | l ≥ 5       | Very High        | Healthcare: Medical records, patient diagnoses, clinical trial outcomes, pharmaceutical |
 |             | Diversity        | research results, genetic information, mental health assessments                        |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| l ≥ 4       | High Diversity   | Finance: Banking records, financial status, credit ratings, insurance claims,          |
-|             |                  | investment performance, income levels, debt status                                     |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| l ≥ 3       | Moderate-High    | Education: Student records, academic performance, enrollment status, disciplinary      |
++-------------+------------------+-----------------------------------------------------------------------------------------+
+| l ≥ 4       | High Diversity   | Finance: Banking records, financial status, credit ratings, insurance claims,           |
+|             |                  | investment performance, income levels, debt status                                      |
++-------------+------------------+-----------------------------------------------------------------------------------------+
+| l ≥ 3       | Moderate-High    | Education: Student records, academic performance, enrollment status, disciplinary       |
 |             | Diversity        | actions, special needs classifications, attendance patterns                             |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| l ≥ 2       | Minimum Diversity| Research: Survey responses, public datasets, academic studies, social science         |
-|             |                  | research, market research data, demographic information                               |
-+-------------+------------------+----------------------------------------------------------------------------------------+
++-------------+------------------+-----------------------------------------------------------------------------------------+
+| l ≥ 2       | Minimum Diversity| Research: Survey responses, public datasets, academic studies, social science           |
+|             |                  | research, market research data, demographic information                                 |
++-------------+------------------+-----------------------------------------------------------------------------------------+
 
 Implementation Details
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Current Implementation:** The AIDRIN system computes l-diversity as follows:
 
@@ -750,22 +750,22 @@ Limitations and When It's Not Suitable
    - **Real-time applications:** When computational overhead is prohibitive
 
 References and Credits
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Foundational Work:**
 
 - Machanavajjhala, A., Kifer, D., Gehrke, J., & Venkitasubramaniam, M. (2007). "l-diversity: Privacy beyond k-anonymity." ACM Transactions on Knowledge Discovery from Data.
 
 t-Closeness
-----------
+-----------
 
 What is t-Closeness?
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 t-Closeness ensures that the distribution of sensitive attribute values within each equivalence class is close to the overall distribution in the dataset. This prevents skewness attacks where certain sensitive values are overrepresented in specific groups, providing protection against distribution-based privacy breaches.
 
 Mathematical Definition
-~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 .. math::
 
@@ -792,7 +792,7 @@ When to Use t-Closeness
    Meeting requirements for distribution-based privacy protection
 
 Parameter Guidelines
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
 
@@ -801,28 +801,28 @@ Parameter Guidelines
 t-Value Recommendations by Sector
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| t Range     | Closeness Level  | Sector & Applications                                                                 |
-+=============+==================+========================================================================================+
-| t ≤ 0.1     | Very Close       | Healthcare: Medical records, patient distributions, clinical trial outcomes,           |
-|             |                  | pharmaceutical research results, genetic information, mental health assessments,       |
-|             |                  | diagnostic distributions                                                               |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| 0.1 < t ≤ 0.15| Close            | Finance: Banking records, financial distributions, credit ratings, insurance claims,   |
-|             |                  | investment performance, income distributions, debt status patterns                     |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| 0.15 < t ≤ 0.2| Moderate         | Education: Student records, academic distributions, enrollment patterns, disciplinary  |
-|             |                  | actions, special needs classifications, attendance distributions                        |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| 0.2 < t ≤ 0.25| Moderate         | Research: Survey responses, dataset distributions, academic studies, social science   |
-|             |                  | research, market research data, demographic patterns                                   |
-+-------------+------------------+----------------------------------------------------------------------------------------+
-| 0.25 < t ≤ 0.3| Loose            | General Use: Public datasets, general distributions, open data initiatives,           |
-|             |                  | government statistics, non-sensitive information patterns                              |
-+-------------+------------------+----------------------------------------------------------------------------------------+
++----------------+------------------+----------------------------------------------------------------------------------------+
+| t Range        | Closeness Level  | Sector & Applications                                                                  |
++================+==================+========================================================================================+
+| t ≤ 0.1        | Very Close       | Healthcare: Medical records, patient distributions, clinical trial outcomes,           |
+|                |                  | pharmaceutical research results, genetic information, mental health assessments,       |
+|                |                  | diagnostic distributions                                                               |
++----------------+------------------+----------------------------------------------------------------------------------------+
+| 0.1 < t ≤ 0.15 | Close            | Finance: Banking records, financial distributions, credit ratings, insurance claims,   |
+|                |                  | investment performance, income distributions, debt status patterns                     |
++----------------+------------------+----------------------------------------------------------------------------------------+
+| 0.15 < t ≤ 0.2 | Moderate         | Education: Student records, academic distributions, enrollment patterns, disciplinary  |
+|                |                  | actions, special needs classifications, attendance distributions                       |
++-------------+------------------+-------------------------------------------------------------------------------------------+
+| 0.2 < t ≤ 0.25 | Moderate         | Research: Survey responses, dataset distributions, academic studies, social science    |
+|                |                  | research, market research data, demographic patterns                                   |
++----------------+------------------+----------------------------------------------------------------------------------------+
+| 0.25 < t ≤ 0.3 | Loose            | General Use: Public datasets, general distributions, open data initiatives,            |
+|                |                  | government statistics, non-sensitive information patterns                              |
++----------------+------------------+----------------------------------------------------------------------------------------+
 
 Implementation Details
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Current Implementation:** The AIDRIN system computes t-closeness as follows:
 
@@ -877,7 +877,7 @@ Limitations and When It's Not Suitable
    - **Binary sensitive attributes:** When sensitive values have limited variety
 
 Advantages & Limitations
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
 
@@ -894,7 +894,7 @@ Advantages & Limitations
    - Computationally intensive
 
 References and Credits
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 **Foundational Work:**
 
