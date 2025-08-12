@@ -16,6 +16,7 @@ from aidrin.structured_data_metrics.privacy_measure import (
     compute_entropy_risk, calculate_single_attribute_risk_score,
     calculate_multiple_attribute_risk_score
 )
+from celery.result import AsyncResult
 from aidrin.structured_data_metrics.conditional_demo_disp import conditional_demographic_disparity
 from aidrin.file_handling.file_parser import read_file as read_file_parser, SUPPORTED_FILE_TYPES
 from aidrin.logging import setup_logging
@@ -31,8 +32,6 @@ import uuid
 import redis
 import io
 import base64
-from celery.result import AsyncResult, TimeoutError
-from aidrin.structured_data_metrics.summary_statistics import summary_histograms
 
 # Setup #####
 main = Blueprint("main", __name__)  # register main blueprint
@@ -251,7 +250,6 @@ def upload_file():
     if request.method == "POST":
         # Log file processing request
         file_upload_time_log.info("File upload initiated")
-        
         file = request.files['file']
 
         if file:
@@ -1236,7 +1234,6 @@ def handle_summary_statistics():
 @main.route('/summary_statistics', methods=['GET'])
 def get_summary_statistics():
     try:
-        start_time = time.time()
         df, uploaded_file_path, uploaded_file_name = read_file()
         # Extract summary statistics
         summary_statistics = df.describe().applymap(
@@ -1293,7 +1290,6 @@ def get_summary_statistics():
 def check_task_status(task_id, metric_name):
     """Check the status of an async task and return results if complete."""
     try:
-        from celery.result import AsyncResult
         task_result = AsyncResult(task_id)
 
         if task_result.ready():
@@ -1343,7 +1339,6 @@ def check_task_status(task_id, metric_name):
 @main.route('/feature_set', methods=['POST'])
 def extract_features():
     try:
-        start_time = time.time()
         df, uploaded_file_path, uploaded_file_name = read_file()
 
         file_path = session.get("uploaded_file_path")
