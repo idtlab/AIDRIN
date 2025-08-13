@@ -83,11 +83,9 @@ def imbalance_degree(classes, distance="EU"):
             epsilon = 1e-10
             _d_safe = _d + epsilon
             q_safe = q + epsilon
-            
             # Normalize to ensure probabilities sum to 1
             _d_safe = _d_safe / _d_safe.sum()
             q_safe = q_safe / q_safe.sum()
-            
             # Calculate KL divergence
             kl_div = np.sum(_d_safe * np.log(_d_safe / q_safe))
             return kl_div
@@ -347,9 +345,7 @@ def calc_imbalance_degree(df, column, dist_metric='EU'):
             res['Description'] = (
                 "The Imbalance Degree (ID) is a ratio that quantifies class "
                 "imbalance by comparing the observed distribution to both "
-                "uniform and perfectly skewed distributions. It's calculated "
-                "as: (distance from empirical to uniform) / (distance from "
-                "perfectly skewed to uniform) + (number of minority classes - 1). "
+                "uniform and perfectly skewed distributions."
                 "A value of 0 indicates perfect balance, while higher values "
                 "indicate greater imbalance relative to the worst possible "
                 "scenario for that number of minority classes."
