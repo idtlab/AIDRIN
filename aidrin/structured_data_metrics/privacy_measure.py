@@ -133,7 +133,8 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
 
         # Save the plot as a PNG image in memory
         image_stream = io.BytesIO()
-        plt.savefig(image_stream, format="png")
+        plt.tight_layout()  
+        plt.savefig(image_stream, format="png", bbox_inches='tight', dpi=300)
         plt.close()
 
         # Convert the image to a base64 string
@@ -336,7 +337,8 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
 
         # Save the plot as a PNG image in memory
         image_stream = io.BytesIO()
-        plt.savefig(image_stream, format='png')
+        plt.tight_layout()  
+        plt.savefig(image_stream, format='png', bbox_inches='tight', dpi=300)
         plt.close()
 
         # Convert the image to a base64 string
@@ -584,7 +586,8 @@ def compute_k_anonymity(quasi_identifiers: List[str], file_info):
         plt.grid(axis="y", alpha=0.75)
         # Save histogram to base64
         img_stream = io.BytesIO()
-        plt.savefig(img_stream, format="png")
+        plt.tight_layout()  
+        plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
         plt.close()
         img_stream.seek(0)
         base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
@@ -679,7 +682,8 @@ def compute_l_diversity(
 
         # Save plot to base64 string
         img_stream = io.BytesIO()
-        plt.savefig(img_stream, format="png")
+        plt.tight_layout()  
+        plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
         plt.close()
         img_stream.seek(0)
         base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
@@ -773,7 +777,8 @@ def compute_t_closeness(
         plt.grid(axis="y", alpha=0.75)
 
         img_stream = io.BytesIO()
-        plt.savefig(img_stream, format="png")
+        plt.tight_layout()  
+        plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
         plt.close()
         img_stream.seek(0)
         base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
@@ -846,7 +851,8 @@ def compute_entropy_risk(quasi_identifiers, file_info):
         plt.grid(axis="y", alpha=0.75)
 
         img_stream = io.BytesIO()
-        plt.savefig(img_stream, format="png")
+        plt.tight_layout()  
+        plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
         plt.close()
         img_stream.seek(0)
         base64_image = base64.b64encode(img_stream.read()).decode("utf-8")

@@ -279,7 +279,8 @@ def class_distribution_plot(df, column):
 
         # Save the plot to a BytesIO buffer
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+        plt.tight_layout() 
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=300)
         buf.seek(0)
 
         # Encode the buffer to base64
