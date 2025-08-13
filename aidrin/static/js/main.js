@@ -205,9 +205,40 @@ function submitForm() {
                     if (typeof image !== 'string') {
                         image = image ? String(image) : "";
                     }
-                    var value = data[type]['Value'] || 'N/A'; 
-                    var description = data[type]['Description'] || '';
-                    var interpretation = data[type]['Graph interpretation'] || '';
+                    // Handle specific field names for privacy metrics and class imbalance
+                    var value = 'N/A';
+                    if (type === 'k-Anonymity' && data[type]['k-Value'] !== undefined) {
+                        value = data[type]['k-Value'];
+                    } else if (type === 'l-Diversity' && data[type]['l-Value'] !== undefined) {
+                        value = data[type]['l-Value'];
+                    } else if (type === 't-Closeness' && data[type]['t-Value'] !== undefined) {
+                        value = data[type]['t-Value'];
+                    } else if (type === 'Entropy Risk' && data[type]['Entropy-Value'] !== undefined) {
+                        value = data[type]['Entropy-Value'];
+                    } else if (type === 'Class Imbalance' && data[type]['Imbalance degree'] && data[type]['Imbalance degree']['Imbalance Degree score'] !== undefined) {
+                        value = data[type]['Imbalance degree']['Imbalance Degree score'];
+                    } else if (data[type]['Value'] !== undefined) {
+                        value = data[type]['Value'];
+                    } 
+                    // Handle specific field names for privacy metrics descriptions and class imbalance
+                    var description = '';
+                    var interpretation = '';
+                    
+                    if (type === 'k-Anonymity' || type === 'l-Diversity' || type === 't-Closeness' || type === 'Entropy Risk') {
+                        description = data[type]['Description'] || '';
+                        interpretation = data[type]['Graph interpretation'] || '';
+                    } else if (type === 'Class Imbalance') {
+                        // Class Imbalance has nested structure for description
+                        description = data[type]['Description'] || '';
+                        if (data[type]['Imbalance degree'] && data[type]['Imbalance degree']['Description']) {
+                            interpretation = data[type]['Imbalance degree']['Description'] || '';
+                        } else {
+                            interpretation = '';
+                        }
+                    } else {
+                        description = data[type]['Description'] || '';
+                        interpretation = data[type]['Graph interpretation'] || '';
+                    }
                     var riskScore = data[type]['Risk Score'] || 'N/A'; 
                     var riskLevel = data[type]['Risk Level'] || null;
                     var riskColor = data[type]['Risk Color'] || null;
