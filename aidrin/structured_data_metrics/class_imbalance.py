@@ -59,6 +59,7 @@ def imbalance_degree(classes, distance="EU"):
         distance value.
         """
         try:
+            _d = np.array(_d)
             summ = np.vectorize(lambda p: pow(p - _e, 2))(_d).sum()
             return sqrt(summ)
         except Exception:
@@ -66,23 +67,37 @@ def imbalance_degree(classes, distance="EU"):
 
     def _ch(_d, _e):
         # Chebyshev distance: max absolute difference
-        return np.max(np.abs(_d - _e))
+        try:
+            _d = np.array(_d)
+            return np.max(np.abs(_d - _e))
+        except Exception:
+            return None
 
     def _kl(_d, _e):
         # Kullback-Leibler divergence: sum(p * log(p/q)), handle 0s
         # _d: empirical, _e: equiprobability (scalar)
         try:
+            _d = np.array(_d)
             q = np.full_like(_d, _e)
-            mask = (_d > 0) & (q > 0)
-            if not np.any(mask):
-                return None
-            return np.sum(_d[mask] * np.log(_d[mask] / q[mask]))
+            # Add small epsilon to avoid log(0) issues
+            epsilon = 1e-10
+            _d_safe = _d + epsilon
+            q_safe = q + epsilon
+            
+            # Normalize to ensure probabilities sum to 1
+            _d_safe = _d_safe / _d_safe.sum()
+            q_safe = q_safe / q_safe.sum()
+            
+            # Calculate KL divergence
+            kl_div = np.sum(_d_safe * np.log(_d_safe / q_safe))
+            return kl_div
         except Exception:
             return None
 
     def _he(_d, _e):
         # Hellinger distance: sqrt(0.5 * sum((sqrt(p) - sqrt(q))^2))
         try:
+            _d = np.array(_d)
             q = np.full_like(_d, _e)
             return sqrt(0.5 * np.sum((np.sqrt(_d) - np.sqrt(q)) ** 2))
         except Exception:
@@ -91,6 +106,7 @@ def imbalance_degree(classes, distance="EU"):
     def _tv(_d, _e):
         # Total variation distance: 0.5 * sum(|p - q|)
         try:
+            _d = np.array(_d)
             q = np.full_like(_d, _e)
             return 0.5 * np.sum(np.abs(_d - q))
         except Exception:
@@ -99,8 +115,12 @@ def imbalance_degree(classes, distance="EU"):
     def _cs(_d, _e):
         # Chi-square divergence: sum((p - q)^2 / q)
         try:
+            _d = np.array(_d)
             q = np.full_like(_d, _e)
-            return np.sum(((_d - q) ** 2) / q)
+            # Add small epsilon to avoid division by zero
+            epsilon = 1e-10
+            q_safe = q + epsilon
+            return np.sum(((_d - q) ** 2) / q_safe)
         except Exception:
             return None
 
@@ -145,7 +165,7 @@ def imbalance_degree(classes, distance="EU"):
         min_i = np.zeros(_m)
         maj_i = np.ones(_K - _m - 1) * (1 / _K)
         maj = np.array([1 - (_K - _m - 1) / _K])
-        return np.concatenate((min_i, maj_i, maj)).tolist()
+        return np.concatenate((min_i, maj_i, maj))
 
     def _dist_fn():
         """
