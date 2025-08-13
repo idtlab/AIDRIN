@@ -43,4 +43,5 @@ Key Features
    usage
    appfl_integration
    contributing
+   limitations
    publications

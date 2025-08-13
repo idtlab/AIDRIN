@@ -31,7 +31,7 @@ This displays the installed version (e.g., ``0.9.7``).
 Using AIDRIN Functions
 ~~~~~~~~~~~~~~~~~~~~~~
 
-AIDRIN provides functions for data readiness and privacy analysis on datasets (e.g., CSV files). Below, we outline the key functions, their purpose, and what they return, using a sample dataset (``adult.csv``) as an example.
+AIDRIN provides functions for data readiness and privacy analysis on datasets (e.g., CSV files). Below, we outline the key functions, their purpose, and what they return, using a sample dataset (``adult.csv``) as an example. You can download this dataset from the `UCI Machine Learning Repository <https://archive.ics.uci.edu/ml/datasets/adult>`_.
 
 Setting Up File Information
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -215,8 +215,8 @@ Web Application Workflow
 To use the AIDRIN web application:
 
 1. **Upload a Data File**:
-   - Navigate to the file upload page at `aidrin.io <https://aidrin.io/upload_file>`_.
-   - Upload a dataset (e.g., CSV file like ``adult.csv``) via the web interface.
+   - Navigate to the file upload page at `aidrin.io <https://aidrin.io/upload_file>`_. or `https://127.0.0.1:5000/upload_file` if running locally.
+   - Upload a dataset (e.g., CSV file like ``adult.csv``) via the web interface. You can download the sample dataset from the `UCI Machine Learning Repository <https://archive.ics.uci.edu/ml/datasets/adult>`_.
    - The file is processed server-side.
 
 2. **Select a Data Readiness Dimension**:
@@ -244,17 +244,20 @@ Data Quality
 Evaluates the quality of the dataset through metrics that assess completeness, duplicates, and outliers.
 
 - **Completeness**:
+
   - **Method**: Calculates the proportion of non-missing values in the dataset. The overall completeness score is the average proportion of non-missing values across all columns.
   - **Parameters**: None (uses entire dataset).
   - **Result**: A chart with values ranging from 0 (all values missing) to 1 (no missing values) for each column in the dataset, and an overall completeness score.
 
 - **Duplicates**:
+
   - **Method**: Identifies duplicate rows by comparing all column values. The duplicity score is the proportion of duplicate rows in the dataset.
   - **Parameters**: None (uses entire dataset).
   - **Result**: A duplicity score (0 for no duplicates).
 
 
 - **Outliers**:
+
   - **Method**: Uses the Interquartile Range (IQR) method, calculating Q1 (first quartile), Q3 (third quartile), and IQR (Q3 - Q1). Outliers are values below `Q1 - 1.5 * IQR` or above `Q3 + 1.5 * IQR`. The outlier score is the proportion of outliers per numerical column, with an overall score averaged across columns.
   - **Parameters**: None (applies to all numerical columns).
   - **Result**: Bar chart of outlier scores per numerical column and an overall outlier score.
@@ -265,11 +268,13 @@ Impact of Data on AI
 Assesses how dataset features influence AI through correlation and feature relevance analysis.
 
 - **Correlation Analysis**:
+
   - **Method**: For numerical columns, computes Pearson’s correlation coefficient (ranging from -1 to 1). For categorical columns, uses Theil's U statistic to measure association.
   - **Parameters**: Select columns for analysis (numerical and/or categorical).
   - **Result**: Heatmap visualization of correlation coefficients.
 
 - **Feature Relevance**:
+
   - **Method**: Encodes categorical features using one-hot encoding and uses numerical features as-is. Computes the Pearson correlation coefficient between each feature and the target column.
   - **Parameters**: Select a target column (e.g., `'income'`) and features to analyze.
   - **Result**: Bar chart of feature importance scores relative to the target column.
@@ -280,21 +285,25 @@ Fairness and Bias
 Evaluates potential biases in the dataset, particularly for classification tasks, through class imbalance and demographic metrics.
 
 - **Class Imbalance**:
+
   - **Method**: Measures the distance between the actual class distribution and a perfectly balanced distribution using an imbalance degree score. You can select the distance metric from the provided options (e.g., Euclidean distance). Also you will have to specify the target column for analysis.
   - **Parameters**: Target column name (e.g., `'income'`). Distance metric (e.g., `'euclidean'`).
   - **Result**: Pie chart of class distribution. JSON report with imbalance degree score.
 
 - **Representation Rates**:
+
   - **Method**: Calculates the proportion of each group (defined by a sensitive attribute) in the dataset.
   - **Parameters**: Sensitive attribute column (e.g., `'sex'`).
   - **Result**: Bar chart of representation rates.
 
 - **Statistical Rates**:
+
   - **Method**: Computes proportions of groups (defined by a sensitive attribute) across class labels.
   - **Parameters**: Sensitive attribute column (e.g., `'sex'`) and class label column (e.g., `'income'`).
   - **Result**: Bar chart of proportions subdivided by class labels.
 
 - **Conditional Demographic Disparity**:
+
   - **Method**: Measures disparity in outcomes across demographic groups, conditioned on other variables, to identify potential bias.
   - **Parameters**: Sensitive attribute column and class label column.
   - **Result**: Bar chart of disparity scores.
@@ -305,21 +314,25 @@ Data Governance
 Focuses on privacy preservation through metrics that assess anonymity and disclosure risk.
 
 - **k-Anonymity**:
+
   - **Method**: Calculates the minimum group size (k) sharing the same quasi-identifier values. A higher k indicates lower re-identification risk.
   - **Parameters**: List of quasi-identifier columns (e.g., `['sex', 'race']`).
   - **Result**: Histogram of equivalence class sizes.
 
 - **l-Diversity**:
+
   - **Method**: Quantifies the diversity of sensitive attribute values within groups defined by quasi-identifiers. A higher l value indicates better protection against attribute disclosure.
   - **Parameters**: Quasi-identifier columns (e.g., `['sex']`) and sensitive column (e.g., `'race'`).
   - **Result**: Histogram of l-diversity values.
 
 - **t-Closeness**:
+
   - **Method**: Measures the distance between the distribution of a sensitive attribute in a group and the overall dataset distribution. A lower t value indicates better privacy.
   - **Parameters**: Quasi-identifier columns (e.g., `['sex']`) and sensitive column (e.g., `'sex'`).
   - **Result**: Histogram of t-closeness values.
 
 - **Entropy Risk**:
+
   - **Method**: Measures the uncertainty in identifying individuals based on quasi-identifiers. A higher entropy value indicates lower re-identification risk.
   - **Parameters**: Quasi-identifier columns (e.g., `['sex']`).
   - **Result**: Bar chart of entropy values.
@@ -331,20 +344,20 @@ This feature evaluates dataset metadata for compliance with the **FAIR principle
 It ensures your dataset is well-documented, discoverable, and reusable by others.
 
 FAIR Compliance Report
-~~~~~~~~~~~~~~~~~~~~~~
+'''''''''''''''''''''''
 
 The **FAIR Compliance Report** analyzes your dataset’s metadata file (in **DCAT** or **DataCite JSON** format)
 and provides a detailed assessment against the FAIR criteria.
 
 How it Works
-""""""""""""
+''''''''''''''
 
 1. Navigate to the `FAIR Compliance Report upload page <https://aidrin.io/FAIR>`_.
 2. Upload your metadata file (**DCAT** or **DataCite JSON**).
 3. The system evaluates the file against the FAIR principles and generates a structured report.
 
 FAIR Principles and Criteria
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+'''''''''''''''''''''''''''''
 
 The evaluation checks for the presence and quality of specific metadata elements grouped under each FAIR principle:
 

@@ -1,0 +1,78 @@
+a {
+	color: #627fe7;
+}
+
+.btn {
+	border-radius: 10px;
+}
+
+.wy-side-nav-search input[type=text] {
+	border-radius: 10px;
+	border-color: #e1e4e5;
+}
+
+div.wy-nav-content {
+	max-width: 1024px;
+}
+
+nav.wy-nav-side, div.wy-side-nav-search,
+div.ethical-dark-theme .ethical-sidebar,
+div.rst-versions .rst-current-version {
+	background: #efefef;
+}
+
+div.wy-side-nav-search > a img.logo {
+	margin: 40px auto;
+}
+
+div.wy-menu-vertical p.caption {
+	color: #627fe7;
+}
+
+div.wy-menu-vertical a {
+	color: #404040;
+}
+
+div.wy-menu-vertical a:hover {
+	background-color: #ffffff;
+}
+
+.rst-content div[class^=highlight], .rst-content pre.literal-block {
+	border-radius: 5px;
+  background: #efefef;
+}
+
+.admonition note {
+	border-radius: 5px;
+}
+
+.admonition-title {
+	border-radius: 5px 5px 0 0;
+}
+
+div.rst-versions span.rst-current-version {
+	color: #344f90;
+}
+
+div.rst-versions span.fa {
+	color: #404040!important;
+}
+
+div.ethical-dark-theme a, div.ethical-dark-theme a:visited {
+	color: #404040!important;
+}
+
+div.rst-versions {
+	color: #404040;
+}
+
+div.rst-content dl dt {
+	border-radius: 3px;
+	display: block;
+}
+
+.cpp .function > dt.cpp {
+    background: #efe7fa;
+    color: #65419d;
+    border-left: 3px solid #65419d;
+}
