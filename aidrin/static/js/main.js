@@ -276,9 +276,9 @@ function submitForm() {
                                ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>`
                                : ""
                            }
-                            
+
                         </div>
-                    
+
                     </div>`;
 
           metrics.innerHTML += visualizationHtml;
@@ -294,15 +294,15 @@ function submitForm() {
         ) {
           metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
+                        <div style="display: flex; justify-content:space-between; align-items: center;">
                             <div>Duplicity</div>
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
                     <div id="duplicity" style="display: none; text-align: center;">
-                        No duplicates found 
-                    </div> 
-                    
+                        No duplicates found
+                    </div>
+
                 </div>`;
         } else if (
           isKeyPresentAndDefined(data, "Duplicity") &&
@@ -310,15 +310,15 @@ function submitForm() {
         ) {
           metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
+                        <div style="display: flex; justify-content:space-between; align-items: center;">
                             <div>Duplicity</div>
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
                     <div id="duplicity" style="display: none;">
                         <p style="text-align:center">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
-                    </div>  
-                    <    
+                    </div>
+                    <
                 </div>`;
         }
 
@@ -343,14 +343,14 @@ function submitForm() {
           metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
           metrics.innerHTML += `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('duplicity')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">  
+                        <div style="display: flex; justify-content:space-between; align-items: center;">
                             <div>Duplicity</div>
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
                     <div id="duplicity" style="display: none; text-align: center;">
-                        No duplicates found 
-                    </div>      
+                        No duplicates found
+                    </div>
                 </div>`;
           metrics.scrollIntoView({ behavior: "smooth" });
         } else {

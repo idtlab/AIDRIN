@@ -7,38 +7,62 @@ import uuid
 import pandas as pd
 import redis
 from celery.result import AsyncResult, TimeoutError
-from flask import (Blueprint, current_app, jsonify, redirect, render_template,
-                   request, send_file, send_from_directory, session, url_for)
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    send_from_directory,
+    session,
+    url_for,
+)
 
-from aidrin.file_handling.file_parser import (SUPPORTED_FILE_TYPES,
-                                              filter_file, parse_file,
-                                              read_file)
+from aidrin.file_handling.file_parser import (
+    SUPPORTED_FILE_TYPES,
+    filter_file,
+    parse_file,
+    read_file,
+)
 from aidrin.logging import setup_logging
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import (
-    calc_imbalance_degree, class_distribution_plot)
+    calc_imbalance_degree,
+    class_distribution_plot,
+)
 from aidrin.structured_data_metrics.completeness import completeness
-from aidrin.structured_data_metrics.conditional_demo_disp import \
-    conditional_demographic_disparity
+from aidrin.structured_data_metrics.conditional_demo_disp import (
+    conditional_demographic_disparity,
+)
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
-from aidrin.structured_data_metrics.FAIRness_datacite import \
-    categorize_keys_fair
+from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
-    categorize_metadata, extract_keys_and_values)
+    categorize_metadata,
+    extract_keys_and_values,
+)
 from aidrin.structured_data_metrics.feature_relevance import (
-    data_cleaning, pearson_correlation, plot_features)
+    data_cleaning,
+    pearson_correlation,
+    plot_features,
+)
 from aidrin.structured_data_metrics.outliers import outliers
 from aidrin.structured_data_metrics.privacy_measure import (
-    compute_entropy_risk, compute_k_anonymity, compute_l_diversity,
-    compute_t_closeness, generate_multiple_attribute_MM_risk_scores,
-    generate_single_attribute_MM_risk_scores)
+    compute_entropy_risk,
+    compute_k_anonymity,
+    compute_l_diversity,
+    compute_t_closeness,
+    generate_multiple_attribute_MM_risk_scores,
+    generate_single_attribute_MM_risk_scores,
+)
 from aidrin.structured_data_metrics.representation_rate import (
-    calculate_representation_rate, create_representation_rate_vis)
-from aidrin.structured_data_metrics.statistical_rate import \
-    calculate_statistical_rates
-from aidrin.structured_data_metrics.summary_statistics import \
-    summary_histograms
+    calculate_representation_rate,
+    create_representation_rate_vis,
+)
+from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
+from aidrin.structured_data_metrics.summary_statistics import summary_histograms
 
 # Setup #####
 main = Blueprint("main", __name__)  # register main blueprint
@@ -78,7 +102,7 @@ def view_logs():
 
     log_rows = []
     if os.path.exists(log_path):
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             for line in f:
                 parts = line.strip().split(" | ", maxsplit=3)
                 if len(parts) == 4:
@@ -133,7 +157,6 @@ def result(id: str):
 
 @main.route("/upload_file", methods=["GET", "POST"])
 def upload_file():
-
     if request.method == "POST":
         # Log file processing request
         file_upload_time_log.info("File upload initiated")
@@ -285,7 +308,6 @@ def refine_file():
 
 @main.route("/dataQuality", methods=["GET", "POST"])
 def dataQuality():
-
     final_dict = {}
     # get file info
     file_path = session.get("uploaded_file_path")
@@ -357,7 +379,6 @@ def dataQuality():
 
 @main.route("/fairness", methods=["GET", "POST"])
 def fairness():
-
     final_dict = {}
     # get file info
     file_path = session.get("uploaded_file_path")
@@ -456,15 +477,15 @@ def fairness():
                 )
                 cdd_dict = cond_demo_disp_result.get()
                 cdd_dict["Description"] = (
-                    'The conditional demographic disparity metric evaluates the distribution '
-                    'of outcomes categorized as positive and negative across various sensitive groups. '
+                    "The conditional demographic disparity metric evaluates the distribution "
+                    "of outcomes categorized as positive and negative across various sensitive groups. "
                     'The user specifies which outcome category is considered "positive" for the analysis, '
                     'with all other outcome categories classified as "negative". The metric calculates the '
                     'proportion of outcomes classified as "positive" and "negative" within each sensitive group.'
-                    ' A resulting disparity value of True indicates that within a specific sensitive group, '
+                    " A resulting disparity value of True indicates that within a specific sensitive group, "
                     'the proportion of outcomes classified as "negative" exceeds the proportion classified as'
                     ' "positive". This metric provides insights into potential disparities in outcome distribution '
-                    'across sensitive groups based on the user-defined positive outcome criterion.'
+                    "across sensitive groups based on the user-defined positive outcome criterion."
                 )
                 final_dict["Conditional Demographic Disparity"] = cdd_dict
                 metric_time_log.info(
@@ -485,7 +506,6 @@ def fairness():
 
 @main.route("/correlationAnalysis", methods=["GET", "POST"])
 def correlationAnalysis():
-
     final_dict = {}
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
@@ -509,7 +529,6 @@ def correlationAnalysis():
                     print("Correlation analysis failed:", corr_dict["Message"])
                     final_dict["Error"] = corr_dict["Message"]
                 else:
-
                     final_dict["Correlations Analysis Categorical"] = corr_dict[
                         "Correlations Analysis Categorical"
                     ]
@@ -536,7 +555,6 @@ def correlationAnalysis():
 
 @main.route("/featureRelevance", methods=["GET", "POST"])
 def featureRelevance():
-
     final_dict = {}
 
     file_path = session.get("uploaded_file_path")
@@ -629,7 +647,6 @@ def featureRelevance():
 
 @main.route("/classImbalance", methods=["GET", "POST"])
 def classImbalance():
-
     final_dict = {}
 
     file_path = session.get("uploaded_file_path")
@@ -677,7 +694,6 @@ def classImbalance():
 
 @main.route("/privacyPreservation", methods=["GET", "POST"])
 def privacyPreservation():
-
     final_dict = {}
 
     file_path = session.get("uploaded_file_path")

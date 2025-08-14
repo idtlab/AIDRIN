@@ -195,12 +195,10 @@ def generate_multiple_attribute_MM_risk_scores(
         risk_scores = np.zeros(len(my_array))
         # risk scoring
         for j in range(len(my_array)):
-
             if len(my_array[0]) > 2:
                 priv_prob_MM = 1
 
                 for i in range(2, len(my_array[0])):
-
                     attr1_tot = np.count_nonzero(
                         my_array[:, i - 1] == my_array[j][i - 1]
                     )
@@ -532,7 +530,6 @@ def compute_t_closeness(
     data = read_file(file_info)
     result_dict = {}
     try:
-
         # TVD computation
         def tvd(p, q):
             all_keys = set(p.index).union(set(q.index))
