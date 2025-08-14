@@ -414,7 +414,7 @@ def fairness():
         # Representation Rate
         if (request.form.get('representation rate') == "yes" and
                 request.form.get('features for representation rate') is not None):
-            print("Running Representation Rate anaylsis")
+            print("Running Representation Rate analysis")
             # convert the string values a list
             rep_dict = {}
             list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(', ')]
@@ -1237,7 +1237,7 @@ def get_summary_statistics():
         df, uploaded_file_path, uploaded_file_name = read_file()
         # Extract summary statistics
         summary_statistics = df.describe().applymap(
-            lambda x: "{x:.2e}" if abs(x) < 0.01 else round(x, 2)
+            lambda x: f"{x:.2e}" if abs(x) < 0.001 else round(x, 2)
         ).to_dict()
 
         # Calculate probability distributions
