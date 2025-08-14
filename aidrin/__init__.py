@@ -13,6 +13,9 @@ from aidrin.structured_data_metrics.outliers import calculate_outliers  # noqa: 
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates  # noqa: F401
 from aidrin.structured_data_metrics.privacy_measure import compute_k_anonymity, compute_l_diversity, \
         compute_t_closeness, compute_entropy_risk  # noqa: F401
+from aidrin.structured_data_metrics.FAIRness_dcat import analyze_dcat_fair  # noqa: F401
+from aidrin.structured_data_metrics.FAIRness_datacite import analyze_datacite_fair  # noqa: F401
+from ._version import __version__  # noqa: F401
 
 
 # create app config
