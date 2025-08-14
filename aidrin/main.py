@@ -63,7 +63,6 @@ from aidrin.structured_data_metrics.representation_rate import (
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 from aidrin.structured_data_metrics.summary_statistics import summary_histograms
-
 # Setup #####
 main = Blueprint("main", __name__)  # register main blueprint
 # initialize Redis client for result storage

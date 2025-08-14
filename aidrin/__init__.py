@@ -9,6 +9,11 @@ from .main import main as main_blueprint
 # create app config
 def create_app():
     app = Flask(__name__)
+    __version__ = "2025.08"  # Version of the app
+
+    @app.context_processor
+    def inject_version():
+        return dict(app_version=__version__)  # global variable to access version in templates
     app.secret_key = "aidrin"
     # Celery Config
     app.config["CELERY"] = {
