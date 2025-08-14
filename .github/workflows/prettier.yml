@@ -1,0 +1,26 @@
+name: prettier
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+
+jobs:
+  prettier:
+    name: Prettier
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Install prettier
+        run: npm install prettier
+
+      - name: Run prettier
+        run: npx prettier --check aidrin/static/css
