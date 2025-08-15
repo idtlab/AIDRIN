@@ -1,17 +1,16 @@
 :root {
-  font-family: 'Roboto', sans-serif;
+  font-family: "Roboto", sans-serif;
   --textColor: #212121;
-  --oppositeTextColor: #FBFBF2;
+  --oppositeTextColor: #fbfbf2;
   --textColorSecondary: #696868;
-  --backgroundColor: #D9DAD7;
-  --secondaryColor: #FBFBF2;
+  --backgroundColor: #d9dad7;
+  --secondaryColor: #fbfbf2;
   --secondaryColorHalfOpacity: #fbfbf281;
 
-  --tertiaryColor: #8F8F8F;
+  --tertiaryColor: #8f8f8f;
 
   --darkAccent: rgb(71, 71, 71);
   --nav-bar: #212121;
-
 
   --dotColor: #505050;
   --spanColor: #ffffff;
@@ -25,7 +24,7 @@
 }
 
 .darkmode {
-  --textColor: #FBFBF2;
+  --textColor: #fbfbf2;
   --oppositeTextColor: #212121;
   --textColorSecondary: #c8c8c5;
   --backgroundColor: #212529;
@@ -156,7 +155,6 @@ select:disabled {
   margin: 10px;
   /* Margin so successive selects don't touch */
   transition: all 0.3s;
-
 }
 
 .textWrapper:disabled {
@@ -166,7 +164,6 @@ select:disabled {
   border: 1px solid #aaa;
   cursor: not-allowed;
 }
-
 
 p {
   padding: 5px;
@@ -196,7 +193,6 @@ h3 {
 }
 
 .h2-container {
-
   display: flex;
   flex-direction: column;
 
@@ -245,14 +241,13 @@ td {
 
 .statName {
   background-color: var(--secondaryColorHalfOpacity);
-
 }
 
 th {
   border-bottom: 1px solid var(--darkAccent);
   background-color: var(--secondaryColor);
 
-  color: var(--textColor)
+  color: var(--textColor);
 }
 
 #Statresult {
@@ -290,7 +285,6 @@ button {
   font-size: 20px;
 }
 
-
 input[type="checkbox"] {
   width: 20px;
   height: 20px;
@@ -325,14 +319,13 @@ input[type="checkbox"] {
   font-size: 20px;
   cursor: pointer;
   color: var(--textColor);
-  transition: color 0.3s ease
-    /* smooth animation */
+  transition: color 0.3s ease;
+  /* smooth animation */
 }
 
 .Switch-toggle-button:hover {
   color: #ff6262b4;
 }
-
 
 #formbuttonsContainer {
   display: flex;
@@ -374,7 +367,6 @@ input[type="reset"] {
 
 .checkboxContainer {
   display: block;
-
 }
 
 .info-icon {
@@ -476,7 +468,6 @@ ul {
   border: 2px solid var(--textColor);
   border-radius: 4px;
   transition: all 0.3s;
-
 }
 
 .material-checkbox input[type="checkbox"]:checked~.checkmark {
@@ -515,9 +506,6 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   cursor: not-allowed;
 }
 
-
-
-
 /* Custom animated submit button from uiverse */
 .animated-button {
   position: relative;
@@ -535,7 +523,7 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   cursor: pointer;
   overflow: hidden;
   margin: 10px;
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.320, 1);
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .animated-button span {
@@ -552,7 +540,7 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   background-color: #4caf50;
   border-radius: 50%;
   opacity: 0;
-  transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .return span:last-child {
@@ -565,7 +553,7 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   background-color: #4691ee;
   border-radius: 50%;
   opacity: 0;
-  transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .animated-button span:first-child {
@@ -592,7 +580,6 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   height: 150px;
   opacity: 1;
 }
-
 
 /* Custom File upload from uiverse */
 .custum-file-upload {
@@ -695,7 +682,6 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
 }
 
 .metric-download-gui {
-
   position: fixed;
   top: 10px;
   right: 20px;
@@ -706,7 +692,6 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   justify-self: center;
   max-width: 80%;
   z-index: 10;
-
 }
 
 .metric-download-gui-fileName {
@@ -738,7 +723,6 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
 .active {
   display: block;
 }
-
 
 /* Caption text */
 .text {
@@ -778,11 +762,11 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
 
 @keyframes fade {
   from {
-    opacity: .4
+    opacity: 0.4;
   }
 
   to {
-    opacity: 1
+    opacity: 1;
   }
 }
 
@@ -811,12 +795,11 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
 }
 
 #navbar a:hover .tooltip {
-
-  animation: toolTipIn .5s ease-in-out forwards;
+  animation: toolTipIn 0.5s ease-in-out forwards;
 }
 
 #navbar .tooltip {
-  animation: toolTipOut .5s ease-in-out forwards;
+  animation: toolTipOut 0.5s ease-in-out forwards;
 }
 
 .tooltip {
@@ -828,7 +811,7 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   margin-top: 5px;
   padding: 5px 10px 5px 10px;
   font-size: 1.5em;
-  border-radius: .5em;
+  border-radius: 0.5em;
   opacity: 0;
 
   pointer-events: none;
@@ -938,7 +921,6 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   background: var(--secondaryColor);
   display: flex;
   align-items: center;
-
 }
 
 #navbar a {
@@ -951,16 +933,14 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
 
 #navbar a:hover {
   background: var(--accent);
-
 }
 
 #navbar a:hover .tooltip {
-
-  animation: toolTipIn .5s ease-in-out forwards;
+  animation: toolTipIn 0.5s ease-in-out forwards;
 }
 
 #navbar .tooltip {
-  animation: toolTipOut .5s ease-in-out forwards;
+  animation: toolTipOut 0.5s ease-in-out forwards;
 }
 
 .version-container {
@@ -978,7 +958,7 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
   margin-top: 5px;
   padding: 5px 10px 5px 10px;
   font-size: 1.5em;
-  border-radius: .5em;
+  border-radius: 0.5em;
 
   pointer-events: none;
 }
@@ -1038,7 +1018,9 @@ thead th {
 .open-popup {
   visibility: visible;
   transform: translate(-50%, -50%) scale(1);
-  transition: transform 0.15s ease-in-out, visibility 0.15s ease-in-out;
+  transition:
+    transform 0.15s ease-in-out,
+    visibility 0.15s ease-in-out;
 }
 
 .preview {
@@ -1083,7 +1065,9 @@ thead th {
 }
 
 .navbar-buttons:hover {
-  color: linear-gradient(135deg, rgba(216, 100, 112, 0.7), rgba(68, 133, 244, 0.7));
+  color: linear-gradient(135deg,
+      rgba(216, 100, 112, 0.7),
+      rgba(68, 133, 244, 0.7));
 }
 
 .navbar-buttons svg:last-child {
