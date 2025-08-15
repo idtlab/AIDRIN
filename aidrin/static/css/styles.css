@@ -969,3 +969,91 @@ thead th {
 .darkmode .navbar-buttons svg:last-child {
   display: block;
 }
+
+.sampleDataContainer {
+  overflow: hidden;
+  height: 0;
+  color: var(--textColor);
+  transition: all 3s ease;
+}
+
+.sampleDataContainer.visible {
+  height: auto;
+}
+
+.sampleDataContainer .filter-section {
+  margin-bottom: 16px;
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--secondaryColor);
+  border-radius: 8px;
+}
+
+.sampleDataContainer label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.sampleDataContainer select {
+  width: 100%;
+  max-width: 300px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.sampleDataContainer select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.sampleDataContainer .file-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sampleDataContainer .file-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: var(--secondaryColor);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.sampleDataContainer .file-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.sampleDataContainer .file-item.notHighlighted {
+  background: var(--secondaryColorHalfOpacity);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.15);
+}
+
+.sampleDataContainer .file-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.sampleDataContainer .file-type {
+  padding: 2px 8px;
+  background: var(--dotColor);
+  color: var(--oppositeTextColor);
+  border-radius: 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.sampleDataContainer .file-item.highlighted .file-type {
+  background: #3b82f6;
+  color: white;
+}
