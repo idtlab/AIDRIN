@@ -2,16 +2,13 @@ import os
 
 from celery import Celery, Task
 from flask import Flask
-
+from ._version import __version__
 from .main import main as main_blueprint
 
 
 # create app config
 def create_app():
     app = Flask(__name__)
-
-    with open("VERSION.txt", "r") as f:
-        __version__ = f.read().strip()
 
     @app.context_processor
     def inject_version():
