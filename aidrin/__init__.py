@@ -9,7 +9,9 @@ from .main import main as main_blueprint
 # create app config
 def create_app():
     app = Flask(__name__)
-    __version__ = "2025.08"  # Version of the app
+
+    with open("VERSION.txt", "r") as f:
+        __version__ = f.read().strip()
 
     @app.context_processor
     def inject_version():
