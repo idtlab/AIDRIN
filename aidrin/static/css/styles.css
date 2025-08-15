@@ -470,12 +470,12 @@ ul {
   transition: all 0.3s;
 }
 
-.material-checkbox input[type="checkbox"]:checked~.checkmark {
+.material-checkbox input[type="checkbox"]:checked ~ .checkmark {
   background-color: var(--darkAccent);
   border-color: var(--textColor);
 }
 
-.material-checkbox input[type="checkbox"]:checked~.checkmark:after {
+.material-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
   content: "";
   position: absolute;
   top: 1px;
@@ -487,20 +487,20 @@ ul {
   transform: rotate(45deg);
 }
 
-.material-checkbox input[type="checkbox"]:focus~.checkmark {
+.material-checkbox input[type="checkbox"]:focus ~ .checkmark {
   box-shadow: 0 0 0 2px var(--textColor);
 }
 
-.material-checkbox:hover input[type="checkbox"]~.checkmark {
+.material-checkbox:hover input[type="checkbox"] ~ .checkmark {
   border-color: var(--tertiaryColor);
 }
 
-s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
+s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.material-checkbox input:disabled~.checkmark {
+.material-checkbox input:disabled ~ .checkmark {
   opacity: 0.25;
   background-color: var(--textColor);
   cursor: not-allowed;
@@ -824,7 +824,6 @@ s .material-checkbox input[type="checkbox"]:disabled~.checkmark {
 }
 
 .visualization-container img {
-
   max-width: 100%;
   border-radius: 4px;
   margin-bottom: 10px;
@@ -1065,9 +1064,11 @@ thead th {
 }
 
 .navbar-buttons:hover {
-  color: linear-gradient(135deg,
-      rgba(216, 100, 112, 0.7),
-      rgba(68, 133, 244, 0.7));
+  color: linear-gradient(
+    135deg,
+    rgba(216, 100, 112, 0.7),
+    rgba(68, 133, 244, 0.7)
+  );
 }
 
 .navbar-buttons svg:last-child {
