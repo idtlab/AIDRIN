@@ -21,3 +21,8 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
+
+  - repo: https://github.com/prettier/pre-commit
+    rev: v3.6.2
+    hooks:
+      - id: prettier
