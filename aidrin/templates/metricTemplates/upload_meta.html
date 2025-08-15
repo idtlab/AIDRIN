@@ -1,253 +1,341 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/metric.js') }}"></script>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
 
     <title>Upload JSON File</title>
     <style>
-
-        #uploadForm {
-            max-width: 400px;
-            margin-top: 100px;
-
-        }
-        #uploadForm label {
-            display: block;
-            margin-bottom: 8px;
-        }
+      #uploadForm {
+        max-width: 400px;
+        margin-top: 100px;
+      }
+      #uploadForm label {
+        display: block;
+        margin-bottom: 8px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <!-- Include universal elements -->
     {% include 'universalComponents.html'%}
-    <h1 style="text-align:center;">FAIR Compliance Evaluation</h1>
-    <form id="uploadForm" style="align-self:center; margin-top:0px;" method="post" enctype="multipart/form-data">
-        <label id="fileUploadContainer" for="file" class="custum-file-upload" style="border-radius:10px;">
-            <div class="icon" style="display: flex; justify-content: center; align-items: center;">
-                <!-- hide the second image until a file is chosen -->
-                 <svg id="uploadIcon"  xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"  fill="#212121"><path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg>
-                 <svg id="uploadedIcon" style="display:none" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#212121"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
-            </div>
-            <div class="text" style="position:relative; padding-top:10%;">
-               <span id="fileLabel">Upload Metadata File (JSON)</span>
-               </div>
-               <input id="file" type="file" name="metadata" accept=".json" required>
-        </label>
-        <!--clear button for file (initially hidden)-->
-        <button type="button" id="clearButton" class="clear-button" style="margin:0px; margin-bottom:5px;display:none" onclick="clearFile()">Clear Uploaded File</button>
-
-
-        <label for="metadata type">Select the metadata type:</label>
-        <select name="metadata type" style="margin:0px;" id="metadata type" required>
-            <option value="DCAT">DCAT</option>
-            <option value="Datacite">Datacite</option>
-            <!-- Add more options as needed -->
-        </select>
-        <div id = "formbuttonsContainer">
-            <button class="animated-button" type="button" onclick="submitForm()">
-                <span>Submit</span>
-                <span></span>
-                </button>
-            <button class="animated-button return" type="button" onclick="location.href='{{url_for("upload_file")}}'">
-                <span>Return</span>
-                <span></span>
-            </button>
+    <h1 style="text-align: center;">FAIR Compliance Evaluation</h1>
+    <form
+      id="uploadForm"
+      style="align-self: center; margin-top: 0px;"
+      method="post"
+      enctype="multipart/form-data"
+    >
+      <label
+        id="fileUploadContainer"
+        for="file"
+        class="custum-file-upload"
+        style="border-radius: 10px;"
+      >
+        <div
+          class="icon"
+          style="display: flex; justify-content: center; align-items: center;"
+        >
+          <!-- hide the second image until a file is chosen -->
+          <svg
+            id="uploadIcon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 -960 960 960"
+            fill="#212121"
+          >
+            <path
+              d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"
+            />
+          </svg>
+          <svg
+            id="uploadedIcon"
+            style="display: none;"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 -960 960 960"
+            fill="#212121"
+          >
+            <path
+              d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"
+            />
+          </svg>
         </div>
+        <div class="text" style="position: relative; padding-top: 10%;">
+          <span id="fileLabel">Upload Metadata File (JSON)</span>
+        </div>
+        <input id="file" type="file" name="metadata" accept=".json" required />
+      </label>
+      <!--clear button for file (initially hidden)-->
+      <button
+        type="button"
+        id="clearButton"
+        class="clear-button"
+        style="margin: 0px; margin-bottom: 5px; display: none;"
+        onclick="clearFile()"
+      >
+        Clear Uploaded File
+      </button>
+
+      <label for="metadata type">Select the metadata type:</label>
+      <select
+        name="metadata type"
+        style="margin: 0px;"
+        id="metadata type"
+        required
+      >
+        <option value="DCAT">DCAT</option>
+        <option value="Datacite">Datacite</option>
+        <!-- Add more options as needed -->
+      </select>
+      <div id="formbuttonsContainer">
+        <button class="animated-button" type="button" onclick="submitForm()">
+          <span>Submit</span>
+          <span></span>
+        </button>
+        <button
+          class="animated-button return"
+          type="button"
+          onclick="location.href='{{ url_for('upload_file') }}'"
+        >
+          <span>Return</span>
+          <span></span>
+        </button>
+      </div>
     </form>
 
     <div id="resultContainer"></div>
 
     <script>
-        function getLightColor(key) {
-            switch (key) {
-                case 'Findable':
-                    return '#ADD8E6';  // Light blue
-                case 'Accessible':
-                    return '#98FB98';  // Pale green
-                case 'Interoperable':
-                    return '#FFD700';  // Gold
-                case 'Reusable':
-                    return '#FFA07A';  // Light salmon
-                case 'FAIR Compliance Checks':
-                    return '#DDA0DD';  // Plum
-                case 'Original Metadata':
-                    return '#87CEFA';  // Light sky blue
-                case 'Other':
-                    return '#FFC0CB';  // Pink
-                // Add more cases for other keys as needed
-            }
+      function getLightColor(key) {
+        switch (key) {
+          case "Findable":
+            return "#ADD8E6"; // Light blue
+          case "Accessible":
+            return "#98FB98"; // Pale green
+          case "Interoperable":
+            return "#FFD700"; // Gold
+          case "Reusable":
+            return "#FFA07A"; // Light salmon
+          case "FAIR Compliance Checks":
+            return "#DDA0DD"; // Plum
+          case "Original Metadata":
+            return "#87CEFA"; // Light sky blue
+          case "Other":
+            return "#FFC0CB"; // Pink
+          // Add more cases for other keys as needed
         }
+      }
     </script>
-    </form>
 
     <div id="resultContainer"></div>
 
     <script>
-        function submitForm() {
-            var form = document.getElementById('uploadForm');
-            var formData = new FormData(form);
+      function submitForm() {
+        var form = document.getElementById("uploadForm");
+        var formData = new FormData(form);
 
-            //clear previous result
-            document.getElementById('resultContainer').innerHTML = '';
+        //clear previous result
+        document.getElementById("resultContainer").innerHTML = "";
 
+        fetch("/FAIR", {
+          method: "POST",
+          body: formData,
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            var resultContainer = document.getElementById("resultContainer");
 
-            fetch('/FAIR', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                var resultContainer = document.getElementById('resultContainer');
+            // Check if there is an image data
+            if (data && data["Pie chart"]) {
+              var imageContainer = document.createElement("div");
+              imageContainer.style.display = "flex";
+              imageContainer.style.justifyContent = "center";
+              imageContainer.style.margin = "20px 0";
+              imageContainer.innerHTML =
+                '<img src="data:image/png;base64,' +
+                data["Pie chart"] +
+                '" alt="Pie Chart" style="max-width:100%; height:auto;">';
+              resultContainer.appendChild(imageContainer);
+            }
 
-                // Check if there is an image data
-                if (data && data["Pie chart"]) {
-                    var imageContainer = document.createElement('div');
-                    imageContainer.innerHTML = '<img src="data:image/png;base64,' + data["Pie chart"] + '" alt="Pie Chart">';
-                    resultContainer.appendChild(imageContainer);
-                }
+            resultContainer.innerHTML += displayKeyValuePairs(data);
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+      }
 
-                resultContainer.innerHTML += displayKeyValuePairs(data);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
+      //handle input file ui
+      const fileInput = document.getElementById("file");
+      const clearBtn = document.getElementById("clearButton");
+      const uploadIcon = document.getElementById("uploadIcon");
+      const uploadedIcon = document.getElementById("uploadedIcon");
+      const container = document.getElementById("fileUploadContainer");
+      const fileLabel = document.getElementById("fileLabel");
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files.length) {
+          // a file is chosen
+          container.style.borderRadius = "10px 10px 0 0";
+          container.style.border = "2px solid #e8e8e8";
+          container.style.borderBottom = "none";
+          container.style.marginBottom = "0px";
+          uploadIcon.style.display = "none";
+          uploadedIcon.style.display = "block";
+          clearBtn.style.display = "inline-block";
+          fileLabel.textContent = "File Uploaded: " + fileInput.files[0].name;
+        } else {
+          // cleared / no file
+          resetUI();
         }
+      });
 
-        //handle input file ui
-        const fileInput   = document.getElementById('file');
-        const clearBtn    = document.getElementById('clearButton');
-        const uploadIcon  = document.getElementById('uploadIcon');
-        const uploadedIcon    = document.getElementById('uploadedIcon');
-        const container   = document.getElementById('fileUploadContainer');
-        const fileLabel   = document.getElementById('fileLabel');
-        fileInput.addEventListener('change', () => {
-        if (fileInput.files.length) {           // a file is chosen
-            container.style.borderRadius = '10px 10px 0 0';
-            container.style.border       = '2px solid #e8e8e8';
-            container.style.borderBottom = 'none';
-            container.style.marginBottom = '0px';
-            uploadIcon.style.display     = 'none';
-            uploadedIcon.style.display       = 'block';
-            clearBtn.style.display       = 'inline-block';
-            fileLabel.textContent        = 'File Uploaded: '+fileInput.files[0].name;
-        } else {                                // cleared / no file
-            resetUI();
-        }
-        });
-
-        function clearFile() {
+      function clearFile() {
         //clear file input and reset box
-        fileInput.value = '';
-        container.style.border       = '';
-        container.style.borderRadius = '10px';
-        uploadIcon.style.display     = 'block';
-        uploadedIcon.style.display       = 'none';
-        clearBtn.style.display       = 'none';
-        fileLabel.textContent        = 'Upload Metadata File (JSON)';
+        fileInput.value = "";
+        container.style.border = "";
+        container.style.borderRadius = "10px";
+        uploadIcon.style.display = "block";
+        uploadedIcon.style.display = "none";
+        clearBtn.style.display = "none";
+        fileLabel.textContent = "Upload Metadata File (JSON)";
 
         // Clear the result container
-        document.getElementById('resultContainer').innerHTML = '';
+        document.getElementById("resultContainer").innerHTML = "";
+      }
+
+      function getLightColor(key) {
+        switch (key) {
+          case "Findable":
+            return "#ADD8E6"; // Light blue
+          case "Accessible":
+            return "#98FB98"; // Pale green
+          case "Interoperable":
+            return "#FFD700"; // Gold
+          case "Reusable":
+            return "#FFA07A"; // Light salmon
+          case "Original Metadata":
+            return "#87CEFA"; // Light sky blue
+          case "Other":
+            return "#FFC0CB"; // Pink
+          // Add more cases for other keys as needed
+          default:
+            return "#FFFFFF"; // White as default
+        }
+      }
+
+      function toggleCollapse(button, key) {
+        var nestedList = button.nextElementSibling;
+        if (nestedList.style.display === "none") {
+          nestedList.style.display = "block";
+          button.innerHTML = key;
+        } else {
+          nestedList.style.display = "none";
+          button.innerHTML = key;
+        }
+      }
+
+      function displayKeyValuePairs(obj) {
+        var fairKeys = ["Findable", "Accessible", "Interoperable", "Reusable"];
+        var resultHTML = "";
+
+        // FAIR Table
+        var tableHTML =
+          '<table border="1" style="border-collapse: collapse; width: 100%; text-align: left;">';
+        tableHTML += "<tr>";
+        fairKeys.forEach(function (key) {
+          tableHTML += `<th style="background-color:${getLightColor(
+            key
+          )}; padding:8px;">${key}</th>`;
+        });
+        tableHTML += "</tr>";
+
+        // Row
+        tableHTML += "<tr>";
+        fairKeys.forEach(function (key) {
+          let cellContent = "—";
+          if (obj.hasOwnProperty(key) && typeof obj[key] !== "object") {
+            cellContent = obj[key];
+          } else if (obj.hasOwnProperty(key) && typeof obj[key] === "object") {
+            cellContent = formatObjectToHTML(obj[key]);
+          }
+          tableHTML += `<td style="padding:8px; vertical-align:middle; line-height:1.4em;">${cellContent}</td>`;
+        });
+        tableHTML += "</tr>";
+        tableHTML += "</table>";
+
+        resultHTML += tableHTML;
+
+        // Keep Other toggle
+        if (obj.hasOwnProperty("Other")) {
+          resultHTML += `<button onclick="toggleCollapse(this,'Other')"
+                    style="width: 100%; background-color: ${getLightColor(
+                      "Other"
+                    )}; color: black; padding: 14px 20px;
+                    margin: 8px 0; border: none; cursor: pointer; border-radius: 4px; font-size: 30px;">Other</button>`;
+          resultHTML += `<ul class="nested" style="display: none;">${displayKeyValuePairsNested(
+            obj["Other"]
+          )}</ul>`;
         }
 
-
-        function getLightColor(key) {
-            switch (key) {
-                case 'Findable':
-                    return '#ADD8E6';  // Light blue
-                case 'Accessible':
-                    return '#98FB98';  // Pale green
-                case 'Interoperable':
-                    return '#FFD700';  // Gold
-                case 'Reusable':
-                    return '#FFA07A';  // Light salmon
-                case 'Original Metadata':
-                    return '#87CEFA';  // Light sky blue
-                case 'Other':
-                    return '#FFC0CB';  // Pink
-                // Add more cases for other keys as needed
-                default:
-                    return '#FFFFFF';  // White as default
-            }
+        // Keep Original Metadata toggle
+        if (obj.hasOwnProperty("Original Metadata")) {
+          resultHTML += `<button onclick="toggleCollapse(this,'Original Metadata')"
+                    style="width: 100%; background-color: ${getLightColor(
+                      "Original Metadata"
+                    )}; color: black; padding: 14px 20px;
+                    margin: 8px 0; border: none; cursor: pointer; border-radius: 4px; font-size: 30px;">Original Metadata</button>`;
+          resultHTML += `<ul class="nested" style="display: none;">${displayKeyValuePairsNested(
+            obj["Original Metadata"]
+          )}</ul>`;
         }
 
-        function toggleCollapse(button,key) {
-            var nestedList = button.nextElementSibling;
-            if (nestedList.style.display === "none") {
-                nestedList.style.display = "block";
-                button.innerHTML = key;
-            } else {
-                nestedList.style.display = "none";
-                button.innerHTML = key;
-            }
+        return resultHTML;
+      }
+
+      function formatObjectToHTML(obj) {
+        let html = '<ul style="list-style:none; margin:0; padding-left:0;">';
+        for (let key in obj) {
+          if (typeof obj[key] === "object") {
+            html += `<li style="margin:0; padding:2px 0; line-height:1.4em; vertical-align:middle;">
+                                <strong>${key}:</strong> ${formatObjectToHTML(
+              obj[key]
+            )}
+                            </li>`;
+          } else {
+            html += `<li style="margin:0; padding:2px 0; line-height:1.4em; vertical-align:middle;">
+                                <strong>${key}:</strong> <span style="display:inline-block; vertical-align:middle;">${obj[key]}</span>
+                            </li>`;
+          }
         }
+        html += "</ul>";
+        return html;
+      }
 
-        function displayKeyValuePairs(obj) {
-            var predefinedOrder = ["Findable", "Accessible", "Interoperable", "Reusable", "Other", "Original Metadata"];
-            var result = '';
-
-            predefinedOrder.forEach(function(key) {
-                if (obj.hasOwnProperty(key) && key !== "Pie chart" && key !== "FAIR Compliance Checks") {
-                    var value = obj[key];
-
-                    if (key === "Accessible" || key === "Interoperable" || key === "Reusable" || key === "Findable" || key === "Other" || key === "Original Metadata") {
-                        result += "<ul>";
-                    } else {
-                        result += '<ul><strong>' + key + ':</strong> ';
-                    }
-
-                    if (typeof value === 'object') {
-                        result += '<button onclick="toggleCollapse(this,\'' + key + '\')" style="width: 100%; background-color: ' + getLightColor(key) + '; color: black; padding: 14px 20px; margin: 8px 0; border: none; cursor: pointer; border-radius: 4px; font-size: 30px;">'+key+'</button>';
-
-                        result += '<ul class="nested" style="display: none;">' + displayKeyValuePairs(value) + '</ul>';
-                    } else {
-                        if (key === "identifier") {
-                            result += '<ul><strong>' + key + ':</strong> <span style="color: red;">' + value + '</span></ul>';
-                            result += '<a href="https://www.google.com/search?q=' + encodeURIComponent(value) + '" target="_blank" style="color: blue; text-decoration: none;"> (Google Search) </a></ul>';
-
-                        } else {
-                            result += value;
-                        }
-                    }
-
-                    result += '</ul>';
-
-
-                }
-            });
-
-            // Display remaining keys in alphabetical order
-            Object.keys(obj).sort().forEach(function(key) {
-                if (!predefinedOrder.includes(key) && key !== "Pie chart" && key !== "FAIR Compliance Checks") {
-                    var value = obj[key];
-
-                    if (typeof value === 'object') {
-                        result += '<ul><strong>' + key + ':</strong> ';
-                        result += '<ul class="nested">' + displayKeyValuePairs(value) + '</ul>';
-                        result += '</ul>';
-                    } else {
-                        if (key === "identifier") {
-                            result += '<ul><strong>' + key + ':</strong> <span style="color: red;">' + value + '</span>';
-                            result += '<a href="https://www.google.com/search?q=' + encodeURIComponent(value) + '" target="_blank" style="color: blue; text-decoration: none;"> (Google Search) </a></ul>';
-
-                        } else {
-                            result += '<ul><strong>' + key + ':</strong> ' + value + '</ul>';
-                        }
-                    }
-                }
-            });
-
-            return result;
+      // For nested toggle content (Other, Original Metadata)
+      function displayKeyValuePairsNested(obj) {
+        let html = "";
+        for (let key in obj) {
+          if (typeof obj[key] === "object") {
+            html += `<li><strong>${key}</strong><ul>${displayKeyValuePairsNested(
+              obj[key]
+            )}</ul></li>`;
+          } else {
+            html += `<li><strong>${key}</strong>: ${obj[key]}</li>`;
+          }
         }
+        return html;
+      }
 
-        function resetPage() {
-            location.reload();
-        }
+      function resetPage() {
+        location.reload();
+      }
     </script>
-</body>
+  </body>
 </html>
