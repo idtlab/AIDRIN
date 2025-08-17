@@ -9,20 +9,30 @@ import numpy as np
 
 
 def add_laplace_noise(data, epsilon):
-    scale = 1 / epsilon
-    noise = np.random.laplace(0, scale, len(data))
-    return data + noise
-
+    try:
+        scale = 1 / epsilon
+        noise = np.random.laplace(0, scale, len(data))
+        return data + noise
+    except ZeroDivisionError:
+        raise Exception("Epsilon cannot be 0")
 
 def return_noisy_stats(add_noise_columns, epsilon, file_info):
     # Convert JSON back to DataFrame if needed, otherwise use DataFrame directly
     import pandas as pd
+
+    if epsilon <= 0:
+        raise Exception("Epsilon must be greater than 0")
+
     if isinstance(file_info, str):
         df = pd.read_json(file_info)
     else:
         df = file_info
     df_drop_na = df.dropna()
     df_drop_na = df_drop_na.reset_index(inplace=False)
+
+
+    if df_drop_na.empty:
+        raise Exception("Dataset is empty")
 
     stat_dict = {}
 
@@ -98,6 +108,7 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info):
     # Encode the combined image as base64
     combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode("utf-8")
     img_buf.close()
+
 
     try:
         # Create the new directory

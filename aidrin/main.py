@@ -763,6 +763,65 @@ def privacyPreservation():
                 else:
                     print("Privacy - DP Cache is EXPIRED, recalculating")
                     current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                    try:
+                        noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), file)
+                        final_dict['DP Statistics'] = noisy_stat
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': noisy_stat,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached DP Statistics for key: {cache_key}")
+                    except Exception as e:
+                        error_message = str(e)
+                        
+                        if "Epsilon must be greater than 0" in error_message:
+                            error_response = {
+                                "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
+                                "Description": "Please choose a positive epsilon value (typically between 0.1 and 10).",
+                                "DP Statistics Visualization": "",
+                                "Graph interpretation": "No visualization available due to invalid parameters.",
+                                "Mean of feature (before noise)": "N/A",
+                                "Variance of feature (before noise)": "N/A",
+                                "Mean of feature (after noise)": "N/A",
+                                "Variance of feature (after noise)": "N/A",
+                                "Noisy file saved": "Failed - Invalid parameters"
+                            }
+                        elif "Dataset is empty" in error_message:
+                            error_response = {
+                                "Error": "Dataset is empty after removing null values or contains no valid data.",
+                                "Description": "The selected features contain no data after removing null values. Please select features with valid numerical data.",
+                                "DP Statistics Visualization": "",
+                                "Graph interpretation": "No visualization available - insufficient data.",
+                                "Mean of feature (before noise)": "N/A",
+                                "Variance of feature (before noise)": "N/A",
+                                "Mean of feature (after noise)": "N/A",
+                                "Variance of feature (after noise)": "N/A",
+                                "Noisy file saved": "Failed - No data to process"
+                            }
+                        else:
+                            error_response = {
+                                "Error": f"Error in differential privacy calculation: {error_message}",
+                                "Description": "An error occurred while processing your request. Please check your input parameters and try again.",
+                                "DP Statistics Visualization": "",
+                                "Graph interpretation": "No visualization available due to processing error.",
+                                "Mean of feature (before noise)": "N/A",
+                                "Variance of feature (before noise)": "N/A",
+                                "Mean of feature (after noise)": "N/A",
+                                "Variance of feature (after noise)": "N/A",
+                                "Noisy file saved": "Failed - Processing error"
+                            }
+                        
+                        final_dict['DP Statistics'] = error_response
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': error_response,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached DP Statistics Error for key: {cache_key}")
+            else:
+                print("Privacy - DP Cache MISS for key: {cache_key}")
+                try:
                     noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), file)
                     final_dict['DP Statistics'] = noisy_stat
                     current_app.TEMP_RESULTS_CACHE[cache_key] = {
@@ -770,17 +829,54 @@ def privacyPreservation():
                         'timestamp': time.time(),
                         'expires_at': time.time() + (30 * 60)
                     }
-                    print("Cached DP Statistics for key: {cache_key}")
-            else:
-                print("Privacy - DP Cache MISS for key: {cache_key}")
-                noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), file)
-                final_dict['DP Statistics'] = noisy_stat
-                current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                    'data': noisy_stat,
-                    'timestamp': time.time(),
-                    'expires_at': time.time() + (30 * 60)
-                }
-                print(f"Cached DP Statistics for key: {cache_key}")
+                    print(f"Cached DP Statistics for key: {cache_key}")
+                except Exception as e:
+                    error_message = str(e)
+                    
+                    if "Epsilon must be greater than 0" in error_message:
+                        error_response = {
+                            "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
+                            "Description": "Please choose a positive epsilon value (typically between 0.1 and 10).",
+                            "DP Statistics Visualization": "",
+                            "Graph interpretation": "No visualization available due to invalid parameters.",
+                            "Mean of feature (before noise)": "N/A",
+                            "Variance of feature (before noise)": "N/A",
+                            "Mean of feature (after noise)": "N/A",
+                            "Variance of feature (after noise)": "N/A",
+                            "Noisy file saved": "Failed - Invalid parameters"
+                        }
+                    elif "Dataset is empty" in error_message:
+                        error_response = {
+                            "Error": "Dataset is empty after removing null values or contains no valid data.",
+                            "Description": "The selected features contain no data after removing null values. Please select features with valid numerical data.",
+                            "DP Statistics Visualization": "",
+                            "Graph interpretation": "No visualization available - insufficient data.",
+                            "Mean of feature (before noise)": "N/A",
+                            "Variance of feature (before noise)": "N/A",
+                            "Mean of feature (after noise)": "N/A",
+                            "Variance of feature (after noise)": "N/A",
+                            "Noisy file saved": "Failed - No data to process"
+                        }
+                    else:
+                        error_response = {
+                            "Error": f"Error in differential privacy calculation: {error_message}",
+                            "Description": "An error occurred while processing your request. Please check your input parameters and try again.",
+                            "DP Statistics Visualization": "",
+                            "Graph interpretation": "No visualization available due to processing error.",
+                            "Mean of feature (before noise)": "N/A",
+                            "Variance of feature (before noise)": "N/A",
+                            "Mean of feature (after noise)": "N/A",
+                            "Variance of feature (after noise)": "N/A",
+                            "Noisy file saved": "Failed - Processing error"
+                        }
+                    
+                    final_dict['DP Statistics'] = error_response
+                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                        'data': error_response,
+                        'timestamp': time.time(),
+                        'expires_at': time.time() + (30 * 60)
+                    }
+                    print(f"Cached DP Statistics Error for key: {cache_key}")
 
         # single attribute risk scores using markov model (ASYNC)
         if request.form.get("single attribute risk score") == "yes":
