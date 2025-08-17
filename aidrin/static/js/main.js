@@ -81,9 +81,17 @@ function updateFileInputBasedOnType(
 
 // Add these functions before the submitForm function
 
+
+
 // Function to categorize error types for DP Statistics
 function getDPStatisticsErrorType(errorMessage) {
-    if (errorMessage.includes("Epsilon must be greater than 0")) {
+    if (errorMessage.includes("No numerical features selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("Invalid numerical features selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("Epsilon must be greater than 0")) {
+        return "Parameter Error";
+    } else if (errorMessage.includes("Invalid epsilon value format")) {
         return "Parameter Error";
     } else if (errorMessage.includes("Dataset is empty")) {
         return "Data Error";
@@ -94,34 +102,38 @@ function getDPStatisticsErrorType(errorMessage) {
     }
 }
 
-// Function to provide helpful suggestions based on error type
-function getDPStatisticsErrorSuggestions(errorMessage) {
-    if (errorMessage.includes("Epsilon must be greater than 0")) {
-        return [
-            "Choose a positive epsilon value between 0.1 and 10",
-            "Lower epsilon values provide stronger privacy but more noise",
-            "Higher epsilon values provide less noise but weaker privacy"
-        ];
+
+
+// Function to categorize error types for Single Attribute Risk Scoring
+function getSingleAttributeRiskErrorType(errorMessage) {
+    if (errorMessage.includes("No quasi-identifiers selected")) {
+        return "Selection Error";
     } else if (errorMessage.includes("Dataset is empty")) {
-        return [
-            "Ensure your dataset contains data",
-            "Check if the file was uploaded correctly",
-            "Verify the file format is supported"
-        ];
-    } else if (errorMessage.includes("No numerical features selected")) {
-        return [
-            "Select at least one numerical column for analysis",
-            "Ensure the selected columns contain numeric data",
-            "Check if your data has numerical features"
-        ];
+        return "Data Error";
+    } else if (errorMessage.includes("not found in dataset")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("must contain unique values")) {
+        return "Data Error";
+    } else if (errorMessage.includes("appear to be numerical")) {
+        return "Data Error";
+    } else if (errorMessage.includes("no data remains")) {
+        return "Data Error";
+    } else if (errorMessage.includes("More than 50% of data was removed")) {
+        return "Data Quality Error";
+    } else if (errorMessage.includes("has only one unique value")) {
+        return "Data Error";
+    } else if (errorMessage.includes("already a perfect identifier")) {
+        return "Data Error";
+    } else if (errorMessage.includes("causing division by zero")) {
+        return "Processing Error";
+    } else if (errorMessage.includes("task timed out")) {
+        return "Timeout Error";
     } else {
-        return [
-            "Try refreshing the page and uploading again",
-            "Check if your file format is supported",
-            "Ensure your data is properly formatted"
-        ];
+        return "Processing Error";
     }
 }
+
+
 
 
 
@@ -208,6 +220,49 @@ function submitForm() {
             'Single attribute risk scoring', 'Multiple attribute risk scoring',
             'k-Anonymity', 'l-Diversity', 't-Closeness', 'Entropy Risk'
         ];
+        
+        // First, check for validation errors and show popups immediately
+        visualizationTypes.forEach(function(type) {
+            if (isKeyPresentAndDefined(data, type) && data[type]['Error']) {
+                console.log('Validation/Processing error in', type, ':', data[type]['Error']);
+                
+                // Show error popup immediately for all error types
+                if (type === 'DP Statistics') {
+                    const errorType = getDPStatisticsErrorType(data[type]['Error']);
+                    openErrorPopup(
+                        errorType,
+                        data[type]['Error'] 
+                    );
+                } else if (type === 'Single attribute risk scoring') {
+                    const errorType = getSingleAttributeRiskErrorType(data[type]['Error']);
+                    openErrorPopup(
+                        errorType,
+                        data[type]['Error'] 
+                    );
+                } else {
+                    // For other metrics, show generic error popup
+                    openErrorPopup(
+                        'Error',
+                        data[type]['Error'] 
+                    );
+                }
+            }
+        });
+        
+        // Debug: Log the entire data structure to see what we're receiving
+        console.log('DEBUG: Full data structure received:', data);
+        console.log('DEBUG: Checking for Single attribute risk scoring errors...');
+        if (data['Single attribute risk scoring']) {
+            console.log('DEBUG: Single attribute risk scoring data:', data['Single attribute risk scoring']);
+            if (data['Single attribute risk scoring']['Error']) {
+                console.log('DEBUG: Found error in Single attribute risk scoring:', data['Single attribute risk scoring']['Error']);
+            } else {
+                console.log('DEBUG: No error found in Single attribute risk scoring');
+            }
+        } else {
+            console.log('DEBUG: Single attribute risk scoring not found in data');
+        }
+        
         visualizationTypes.forEach(function(type) {
             console.log('Checking type:', type);
             if (isKeyPresentAndDefined(data, type)) {
@@ -301,14 +356,11 @@ function submitForm() {
                         if (type === 'DP Statistics') {
                             // Enhanced error handling for DP Statistics - show as popup
                             const errorType = getDPStatisticsErrorType(data[type]['Error']);
-                            const suggestions = getDPStatisticsErrorSuggestions(data[type]['Error']);
                             
                             // Show error popup immediately
                             openErrorPopup(
                                 errorType,
-                                data[type]['Error'],
-                                data[type]['Description'] || 'Error occurred during processing',
-                                suggestions.join('<br>• ')
+                                data[type]['Error'] 
                             );
                             
                             // Add to visualization content with minimal error display
@@ -318,16 +370,43 @@ function submitForm() {
                                 riskLevel: null,
                                 riskColor: null,
                                 value: 'N/A',
-                                description: 'Error occurred - see popup for details',
-                                interpretation: 'No visualization available due to error',
+                                description: '',
+                                interpretation: '',
                                 title: title,
                                 jsonData: jsonData,
                                 hasError: true,
                                 isDPStatistics: true,
                                 errorDetails: {
                                     errorMessage: data[type]['Error'],
-                                    errorType: errorType,
-                                    suggestions: suggestions
+                                    errorType: errorType
+                                }
+                            });
+                        } else if (type === 'Single attribute risk scoring') {
+                            // Enhanced error handling for Single Attribute Risk Scoring - show as popup
+                            const errorType = getSingleAttributeRiskErrorType(data[type]['Error']);
+                            
+                            // Show error popup immediately
+                            openErrorPopup(
+                                errorType,
+                                data[type]['Error'] 
+                            );
+                            
+                            // Add to visualization content with minimal error display
+                            visualizationContent.push({
+                                image: "",
+                                riskScore: 'N/A',
+                                riskLevel: null,
+                                riskColor: null,
+                                value: 'N/A',
+                                description: '',
+                                interpretation: '',
+                                title: title,
+                                jsonData: jsonData,
+                                hasError: true,
+                                isSingleAttributeRisk: true,
+                                errorDetails: {
+                                    errorMessage: data[type]['Error'],
+                                    errorType: errorType
                                 }
                             });
                         } else {
@@ -413,8 +492,27 @@ function submitForm() {
                                 <strong>Error:</strong> ${content.errorDetails.errorMessage}
                             </p>
                         </div>
+                    </div>
+                `;
+            } else if (content.isSingleAttributeRisk) {
+                // Simple error display for Single Attribute Risk Scoring (detailed info shown in popup)
+                visualizationHtml += `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in Single Attribute Risk Scoring</h4>
+                        </div>
                         
-
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing single attribute risk scores.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                            </p>
+                        </div>
                     </div>
                 `;
             } else {
@@ -479,11 +577,13 @@ function submitForm() {
                         ? `<div><strong>${content.title}:</strong> ${content.value}</div>`
                         : ""
                     }
-                   <div><strong>Description:</strong> ${
-                     content.description
-                   }</div>
                    ${
-                     content.interpretation
+                     !content.hasError && content.description
+                       ? `<div><strong>Description:</strong> ${content.description}</div>`
+                       : ""
+                   }
+                   ${
+                     !content.hasError && content.interpretation
                        ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>`
                        : ""
                    }

@@ -26,7 +26,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
 
         # Check if the DataFrame is empty
         if df.empty:
-            raise ValueError("Input DataFrame is empty.")
+            raise ValueError("Dataset is empty. Please upload a dataset with data.")
 
         # Handle eval_cols - it might be a string or list
         if isinstance(eval_cols, str):
@@ -36,27 +36,48 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
             # If it's already a list, clean up each item
             eval_cols = [col.strip() for col in eval_cols if col.strip()]
         else:
-            raise ValueError("eval_cols must be a string or list")
+            raise ValueError("Quasi-identifiers must be provided as a string or list.")
+
+        # Check if eval_cols is empty after processing
+        if not eval_cols:
+            raise ValueError("No valid quasi-identifiers provided.")
 
         # Validate that all columns exist in the dataframe
         missing_cols = [col for col in eval_cols if col not in df.columns]
         if missing_cols:
-            raise ValueError(f"Columns not found in dataset: {missing_cols}")
+            raise ValueError(f"Quasi-identifier columns not found in dataset: {', '.join(missing_cols)}")
 
         # Validate id_col
         if not id_col or id_col not in df.columns:
-            raise ValueError(f"ID column '{id_col}' not found in dataset")
+            raise ValueError(f"ID column '{id_col}' not found in dataset.")
+
+        # Check if ID column has unique values
+        if df[id_col].nunique() != len(df):
+            raise ValueError(f"ID column '{id_col}' must contain unique values for each row.")
 
         # Select the specified columns from the DataFrame
         selected_columns = [id_col] + eval_cols
         selected_df = df[selected_columns]
 
-        # Drop rows with missing values
-        selected_df = selected_df.dropna()
+        # Check data types - ensure quasi-identifiers are categorical or string
+        non_categorical_cols = []
+        for col in eval_cols:
+            if df[col].dtype in ['int64', 'float64'] and df[col].nunique() > 100:
+                non_categorical_cols.append(col)
+        
+        if non_categorical_cols:
+            raise ValueError(f"Columns {', '.join(non_categorical_cols)} appear to be numerical with too many unique values. Quasi-identifiers should be categorical.")
 
-        # Check if DataFrame is still non-empty after dropping missing values
-        if selected_df.empty:
-            raise ValueError("After dropping missing values, the DataFrame is empty")
+        # Drop rows with missing values
+        initial_rows = len(selected_df)
+        selected_df = selected_df.dropna()
+        rows_after_dropna = len(selected_df)
+        
+        if rows_after_dropna == 0:
+            raise ValueError("After removing missing values, no data remains. Please check your data quality or select different columns.")
+        
+        if rows_after_dropna < initial_rows * 0.5:
+            raise ValueError(f"More than 50% of data was removed due to missing values ({initial_rows - rows_after_dropna}/{initial_rows} rows). Please check data quality.")
 
         # Convert the selected DataFrame to a NumPy array
         my_array = selected_df.to_numpy()
@@ -81,11 +102,24 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
                 )
 
             risk_scores = np.zeros(len(my_array))
+            
+            # Check if column has sufficient variation
+            unique_values = np.unique(my_array[:, col_idx + 1])
+            if len(unique_values) == 1:
+                raise ValueError(f"Column '{col}' has only one unique value, making risk assessment meaningless.")
+            
+            if len(unique_values) == len(my_array):
+                raise ValueError(f"Column '{col}' has unique values for every row, indicating it's already a perfect identifier.")
+
             for j in range(len(my_array)):
                 attr1_tot = np.count_nonzero(my_array[:, col_idx + 1] == my_array[j, col_idx + 1])
 
                 mask_attr1_user = (my_array[:, 0] == my_array[j, 0]) & (my_array[:, col_idx + 1] == my_array[j, col_idx + 1])
                 count_attr1_user = np.count_nonzero(mask_attr1_user)
+
+                # Prevent division by zero
+                if attr1_tot == 0:
+                    raise ValueError(f"Column '{col}' has unexpected data structure causing division by zero.")
 
                 start_prob_attr1 = attr1_tot / len(my_array)
                 obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)
@@ -156,13 +190,21 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         )
 
     except SoftTimeLimitExceeded:
-        raise Exception("Single Attribute Risk task timed out.")
-    except Exception as e:
-        result_dict["Error"] = str(e)
-        # Ensure the visualization key is always present for frontend compatibility
+        raise Exception("Single Attribute Risk task timed out. The dataset may be too large or complex.")
+    except ValueError as ve:
+        # Handle specific validation errors
+        result_dict["Error"] = str(ve)
         result_dict["Single attribute risk scoring Visualization"] = ""
-        result_dict["Description"] = f"Error occurred: {str(e)}"
-        result_dict["Graph interpretation"] = "No visualization available due to error."
+        result_dict["Description"] = f"Validation Error: {str(ve)}"
+        result_dict["Graph interpretation"] = "No visualization available due to validation error."
+        result_dict["ErrorType"] = "Validation Error"
+    except Exception as e:
+        # Handle other unexpected errors
+        result_dict["Error"] = f"Processing error: {str(e)}"
+        result_dict["Single attribute risk scoring Visualization"] = ""
+        result_dict["Description"] = f"Processing Error: {str(e)}"
+        result_dict["Graph interpretation"] = "No visualization available due to processing error."
+        result_dict["ErrorType"] = "Processing Error"
 
     return result_dict
 

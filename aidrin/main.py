@@ -730,55 +730,62 @@ def privacyPreservation():
         # check for parameters
         # differential privacy
         if request.form.get("differential privacy") == "yes":
-
-            feature_to_add_noise = request.form.get("numerical features to add noise").split(", ")
-            epsilon = request.form.get("privacy budget")
-            if epsilon is None or epsilon == "":
-                epsilon = 0.1  # Assign a default value for epsilon
-
-            # Generate cache key for differential privacy
-            cache_key = generate_metric_cache_key(
-                file_name,
-                "dp",
-                features=feature_to_add_noise,
-                epsilon=epsilon
-            )
-
-            print("Privacy - DP Generated cache key: {cache_key}")
-
-            # Check if this calculation has been cached
-            if cache_key in current_app.TEMP_RESULTS_CACHE:
-                print("Privacy - DP Cache HIT for key: {cache_key}")
-                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
-                if is_metric_cache_valid(cached_entry):
-                    print("Privacy - DP Cache is VALID, using cached result")
-                    final_dict['DP Statistics'] = cached_entry['data']
-                    # Reset expiration time when using cached result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': cached_entry['data'],
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
+            
+            # Get numerical features and validate
+            numerical_features_raw = request.form.get("numerical features to add noise")
+            
+            # Edge case 1: No features selected
+            if not numerical_features_raw or numerical_features_raw.strip() == "":
+                final_dict['DP Statistics'] = {
+                    "Error": "No numerical features selected for differential privacy.",
+                    "DP Statistics Visualization": "",
+                    "Graph interpretation": "No visualization available - no features selected.",
+                    "Mean of feature (before noise)": "N/A",
+                    "Variance of feature (before noise)": "N/A",
+                    "Mean of feature (after noise)": "N/A",
+                    "Variance of feature (after noise)": "N/A",
+                    "Noisy file saved": "Failed - No features selected"
+                }
+            else:
+                # Edge case 2: Check if features contain valid data after splitting
+                feature_to_add_noise = [f.strip() for f in numerical_features_raw.split(",") if f.strip()]
+                
+                if not feature_to_add_noise:
+                    final_dict['DP Statistics'] = {
+                        "Error": "Invalid numerical features selected.",
+                        "DP Statistics Visualization": "",
+                        "Graph interpretation": "No visualization available - invalid features.",
+                        "Mean of feature (before noise)": "N/A",
+                        "Variance of feature (before noise)": "N/A",
+                        "Mean of feature (after noise)": "N/A",
+                        "Variance of feature (after noise)": "N/A",
+                        "Noisy file saved": "Failed - Invalid features"
                     }
-                    print("Using cached DP Statistics for key: {cache_key} (expiration reset)")
                 else:
-                    print("Privacy - DP Cache is EXPIRED, recalculating")
-                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
-                    try:
-                        noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), file)
-                        final_dict['DP Statistics'] = noisy_stat
-                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                            'data': noisy_stat,
-                            'timestamp': time.time(),
-                            'expires_at': time.time() + (30 * 60)
-                        }
-                        print(f"Cached DP Statistics for key: {cache_key}")
-                    except Exception as e:
-                        error_message = str(e)
-                        
-                        if "Epsilon must be greater than 0" in error_message:
-                            error_response = {
-                                "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
-                                "Description": "Please choose a positive epsilon value (typically between 0.1 and 10).",
+                    # Edge case 3: Validate epsilon value
+                    epsilon_raw = request.form.get("privacy budget")
+                    epsilon = 0.1  # Default value
+                    
+                    if epsilon_raw and epsilon_raw.strip() != "":
+                        try:
+                            epsilon = float(epsilon_raw)
+                            if epsilon <= 0:
+                                final_dict['DP Statistics'] = {
+                                    "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
+                                    "DP Statistics Visualization": "",
+                                    "Graph interpretation": "No visualization available due to invalid parameters.",
+                                    "Mean of feature (before noise)": "N/A",
+                                    "Variance of feature (before noise)": "N/A",
+                                    "Mean of feature (after noise)": "N/A",
+                                    "Variance of feature (after noise)": "N/A",
+                                    "Noisy file saved": "Failed - Invalid parameters"
+                                }
+                            else:
+                                # All validations passed, proceed with processing
+                                process_differential_privacy(file_name, feature_to_add_noise, epsilon, file, final_dict, current_app)
+                        except ValueError:
+                            final_dict['DP Statistics'] = {
+                                "Error": "Invalid epsilon value format.",
                                 "DP Statistics Visualization": "",
                                 "Graph interpretation": "No visualization available due to invalid parameters.",
                                 "Mean of feature (before noise)": "N/A",
@@ -787,96 +794,9 @@ def privacyPreservation():
                                 "Variance of feature (after noise)": "N/A",
                                 "Noisy file saved": "Failed - Invalid parameters"
                             }
-                        elif "Dataset is empty" in error_message:
-                            error_response = {
-                                "Error": "Dataset is empty after removing null values or contains no valid data.",
-                                "Description": "The selected features contain no data after removing null values. Please select features with valid numerical data.",
-                                "DP Statistics Visualization": "",
-                                "Graph interpretation": "No visualization available - insufficient data.",
-                                "Mean of feature (before noise)": "N/A",
-                                "Variance of feature (before noise)": "N/A",
-                                "Mean of feature (after noise)": "N/A",
-                                "Variance of feature (after noise)": "N/A",
-                                "Noisy file saved": "Failed - No data to process"
-                            }
-                        else:
-                            error_response = {
-                                "Error": f"Error in differential privacy calculation: {error_message}",
-                                "Description": "An error occurred while processing your request. Please check your input parameters and try again.",
-                                "DP Statistics Visualization": "",
-                                "Graph interpretation": "No visualization available due to processing error.",
-                                "Mean of feature (before noise)": "N/A",
-                                "Variance of feature (before noise)": "N/A",
-                                "Mean of feature (after noise)": "N/A",
-                                "Variance of feature (after noise)": "N/A",
-                                "Noisy file saved": "Failed - Processing error"
-                            }
-                        
-                        final_dict['DP Statistics'] = error_response
-                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                            'data': error_response,
-                            'timestamp': time.time(),
-                            'expires_at': time.time() + (30 * 60)
-                        }
-                        print(f"Cached DP Statistics Error for key: {cache_key}")
-            else:
-                print("Privacy - DP Cache MISS for key: {cache_key}")
-                try:
-                    noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), file)
-                    final_dict['DP Statistics'] = noisy_stat
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': noisy_stat,
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Cached DP Statistics for key: {cache_key}")
-                except Exception as e:
-                    error_message = str(e)
-                    
-                    if "Epsilon must be greater than 0" in error_message:
-                        error_response = {
-                            "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
-                            "Description": "Please choose a positive epsilon value (typically between 0.1 and 10).",
-                            "DP Statistics Visualization": "",
-                            "Graph interpretation": "No visualization available due to invalid parameters.",
-                            "Mean of feature (before noise)": "N/A",
-                            "Variance of feature (before noise)": "N/A",
-                            "Mean of feature (after noise)": "N/A",
-                            "Variance of feature (after noise)": "N/A",
-                            "Noisy file saved": "Failed - Invalid parameters"
-                        }
-                    elif "Dataset is empty" in error_message:
-                        error_response = {
-                            "Error": "Dataset is empty after removing null values or contains no valid data.",
-                            "Description": "The selected features contain no data after removing null values. Please select features with valid numerical data.",
-                            "DP Statistics Visualization": "",
-                            "Graph interpretation": "No visualization available - insufficient data.",
-                            "Mean of feature (before noise)": "N/A",
-                            "Variance of feature (before noise)": "N/A",
-                            "Mean of feature (after noise)": "N/A",
-                            "Variance of feature (after noise)": "N/A",
-                            "Noisy file saved": "Failed - No data to process"
-                        }
                     else:
-                        error_response = {
-                            "Error": f"Error in differential privacy calculation: {error_message}",
-                            "Description": "An error occurred while processing your request. Please check your input parameters and try again.",
-                            "DP Statistics Visualization": "",
-                            "Graph interpretation": "No visualization available due to processing error.",
-                            "Mean of feature (before noise)": "N/A",
-                            "Variance of feature (before noise)": "N/A",
-                            "Mean of feature (after noise)": "N/A",
-                            "Variance of feature (after noise)": "N/A",
-                            "Noisy file saved": "Failed - Processing error"
-                        }
-                    
-                    final_dict['DP Statistics'] = error_response
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': error_response,
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Cached DP Statistics Error for key: {cache_key}")
+                        # Use default epsilon value
+                        process_differential_privacy(file_name, feature_to_add_noise, epsilon, file, final_dict, current_app)
 
         # single attribute risk scores using markov model (ASYNC)
         if request.form.get("single attribute risk score") == "yes":
@@ -889,10 +809,10 @@ def privacyPreservation():
             # Validate that user has selected quasi-identifiers
             if not eval_features or (len(eval_features) == 1 and eval_features[0] == ''):
                 final_dict["Single attribute risk scoring"] = {
-                    "Error": "No quasi-identifiers selected. Please select at least one quasi-identifier for single attribute risk scoring.",
+                    "Error": "No quasi-identifiers selected for single attribute risk scoring.",
                     "Single attribute risk scoring Visualization": "",
-                    "Description": "No quasi-identifiers were selected for analysis.",
-                    "Graph interpretation": "Please select quasi-identifiers and try again."
+                    "Graph interpretation": "No visualization available - no quasi-identifiers selected.",
+                    "ErrorType": "Selection Error"
                 }
             else:
                 # Generate cache key for single attribute risk scoring
@@ -922,6 +842,115 @@ def privacyPreservation():
                     else:
                         print("Privacy - Single Attribute Risk Score Cache is EXPIRED, starting new task")
                         current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                        try:
+                            # Convert DataFrame to JSON for async processing
+                            df_json = file.to_json()
+                            # Start async task
+                            task = calculate_single_attribute_risk_score.delay(df_json, id_feature, eval_features)
+                            final_dict["Single attribute risk scoring"] = {
+                                "task_id": task.id,
+                                "status": "processing",
+                                "message": "Single attribute risk scoring is being processed asynchronously. Please check back later.",
+                                "is_async": True,
+                                "cache_key": cache_key
+                            }
+                            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                                'data': final_dict["Single attribute risk scoring"],
+                                'timestamp': time.time(),
+                                'expires_at': time.time() + (30 * 60),
+                                'task_id': task.id
+                            }
+                            print(f"Started new Celery task for Single attribute risk scoring: {task.id}")
+                        except Exception as e:
+                            error_message = str(e)
+                            if "Dataset is empty" in error_message:
+                                error_response = {
+                                    "Error": "Dataset is empty. Please upload a dataset with data.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to empty dataset.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "No valid quasi-identifiers" in error_message:
+                                error_response = {
+                                    "Error": "No valid quasi-identifiers provided for single attribute risk scoring.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to invalid quasi-identifiers.",
+                                    "ErrorType": "Selection Error"
+                                }
+                            elif "not found in dataset" in error_message:
+                                error_response = {
+                                    "Error": f"Selected columns not found in dataset: {error_message}",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to missing columns.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "must contain unique values" in error_message:
+                                error_response = {
+                                    "Error": "One or more quasi-identifiers have only one unique value.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to non-unique ID values.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "appear to be numerical" in error_message:
+                                error_response = {
+                                    "Error": "Selected quasi-identifiers appear to be numerical with too many unique values.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to unsuitable column types.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "no data remains" in error_message:
+                                error_response = {
+                                    "Error": "After removing missing values, no data remains.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to insufficient data.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "More than 50% of data was removed" in error_message:
+                                error_response = {
+                                    "Error": "More than 50% of data was removed due to missing values.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to poor data quality.",
+                                    "ErrorType": "Data Quality Error"
+                                }
+                            elif "has only one unique value" in error_message:
+                                error_response = {
+                                    "Error": "One or more quasi-identifiers have only one unique value.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to insufficient column variation.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "already a perfect identifier" in error_message:
+                                error_response = {
+                                    "Error": "One or more quasi-identifiers are already perfect identifiers.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to perfect identification.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "causing division by zero" in error_message:
+                                error_response = {
+                                    "Error": "Unexpected data structure causing division by zero.",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to data structure issues.",
+                                    "ErrorType": "Processing Error"
+                                }
+                            elif "task timed out" in error_message:
+                                error_response = {
+                                    "Error": "Single Attribute Risk task timed out. The dataset may be too large or complex.",
+                                    "ErrorType": "Timeout Error"
+                                }
+                            else:
+                                error_response = {
+                                    "Error": f"Processing error: {error_message}",
+                                    "Single attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to processing error.",
+                                    "ErrorType": "Processing Error"
+                                }
+                            
+                            final_dict["Single attribute risk scoring"] = error_response
+                            print(f"Error in Single attribute risk scoring: {error_message}")
+                else:
+                    print(f"Privacy - Single Attribute Risk Score Cache MISS for key: {cache_key}")
+                    try:
                         # Convert DataFrame to JSON for async processing
                         df_json = file.to_json()
                         # Start async task
@@ -940,26 +969,94 @@ def privacyPreservation():
                             'task_id': task.id
                         }
                         print(f"Started new Celery task for Single attribute risk scoring: {task.id}")
-                else:
-                    print(f"Privacy - Single Attribute Risk Score Cache MISS for key: {cache_key}")
-                    # Convert DataFrame to JSON for async processing
-                    df_json = file.to_json()
-                    # Start async task
-                    task = calculate_single_attribute_risk_score.delay(df_json, id_feature, eval_features)
-                    final_dict["Single attribute risk scoring"] = {
-                        "task_id": task.id,
-                        "status": "processing",
-                        "message": "Single attribute risk scoring is being processed asynchronously. Please check back later.",
-                        "is_async": True,
-                        "cache_key": cache_key
-                    }
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': final_dict["Single attribute risk scoring"],
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60),
-                        'task_id': task.id
-                    }
-                    print(f"Started new Celery task for Single attribute risk scoring: {task.id}")
+                    except Exception as e:
+                        error_message = str(e)
+                        if "Dataset is empty" in error_message:
+                            error_response = {
+                                "Error": "Dataset is empty. Please upload a dataset with data.",
+                                "Description": "The uploaded dataset contains no data rows.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to empty dataset.",
+                                "ErrorType": "Data Error"
+                            }
+                        elif "No valid quasi-identifiers" in error_message:
+                            error_response = {
+                                "Error": "No valid quasi-identifiers provided for single attribute risk scoring.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to invalid quasi-identifiers.",
+                                "ErrorType": "Selection Error"
+                            }
+                        elif "not found in dataset" in error_message:
+                            error_response = {
+                                "Error": f"Selected columns not found in dataset: {error_message}",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to missing columns.",
+                                "ErrorType": "Data Error"
+                            }
+                        elif "must contain unique values" in error_message:
+                            error_response = {
+                                "Error": "One or more quasi-identifiers have only one unique value.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to non-unique ID values.",
+                                "ErrorType": "Data Error"
+                            }
+                        elif "appear to be numerical" in error_message:
+                            error_response = {
+                                "Error": "Selected quasi-identifiers appear to be numerical with too many unique values.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to unsuitable column types.",
+                                "ErrorType": "Data Error"
+                            }
+                        elif "no data remains" in error_message:
+                            error_response = {
+                                "Error": "After removing missing values, no data remains.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to insufficient data.",
+                                "ErrorType": "Data Error"
+                            }
+                        elif "More than 50% of data was removed" in error_message:
+                            error_response = {
+                                "Error": "More than 50% of data was removed due to missing values.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to poor data quality.",
+                                "ErrorType": "Data Quality Error"
+                            }
+                        elif "has only one unique value" in error_message:
+                            error_response = {
+                                "Error": "One or more quasi-identifiers have only one unique value.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to insufficient column variation.",
+                                "ErrorType": "Data Error"
+                            }
+                        elif "already a perfect identifier" in error_message:
+                            error_response = {
+                                "Error": "One or more quasi-identifiers are already perfect identifiers.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to perfect identification.",
+                                "ErrorType": "Data Error"
+                            }
+                        elif "causing division by zero" in error_message:
+                            error_response = {
+                                "Error": "Unexpected data structure causing division by zero.",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to data structure issues.",
+                                "ErrorType": "Processing Error"
+                            }
+                        elif "task timed out" in error_message:
+                            error_response = {
+                                "Error": "Single Attribute Risk task timed out. The dataset may be too large or complex.",
+                                "ErrorType": "Timeout Error"
+                            }
+                        else:
+                            error_response = {
+                                "Error": f"Processing error: {error_message}",
+                                "Single attribute risk scoring Visualization": "",
+                                "Graph interpretation": "No visualization available due to processing error.",
+                                "ErrorType": "Processing Error"
+                            }
+                        
+                        final_dict["Single attribute risk scoring"] = error_response
+                        print(f"Error in Single attribute risk scoring: {error_message}")
 
         # multiple attribute risk score using markov model (ASYNC)
         if request.form.get("multiple attribute risk score") == "yes":
@@ -972,10 +1069,9 @@ def privacyPreservation():
             # Validate that user has selected quasi-identifiers
             if not eval_features or (len(eval_features) == 1 and eval_features[0] == ''):
                 final_dict["Multiple attribute risk scoring"] = {
-                    "Error": "No quasi-identifiers selected. Please select at least one quasi-identifier for multiple attribute risk scoring.",
+                    "Error": "No quasi-identifiers selected for multiple attribute risk scoring.",
                     "Multiple attribute risk scoring Visualization": "",
-                    "Description": "No quasi-identifiers were selected for analysis.",
-                    "Graph interpretation": "Please select quasi-identifiers and try again."
+                    "Graph interpretation": "No visualization available - no quasi-identifiers selected."
                 }
             else:
                 # Generate cache key for multiple attribute risk scoring
@@ -1726,6 +1822,148 @@ def clear_cache():
             'success': False,
             'message': f'Error clearing cache: {str(e)}'
         }), 500
+
+
+def process_differential_privacy(file_name, feature_to_add_noise, epsilon, file, final_dict, current_app):
+    """Helper function to process differential privacy with caching and error handling"""
+    
+    # Generate cache key for differential privacy
+    cache_key = generate_metric_cache_key(
+        file_name,
+        "dp",
+        features=feature_to_add_noise,
+        epsilon=epsilon
+    )
+
+    print(f"Privacy - DP Generated cache key: {cache_key}")
+
+    # Check if this calculation has been cached
+    if cache_key in current_app.TEMP_RESULTS_CACHE:
+        print(f"Privacy - DP Cache HIT for key: {cache_key}")
+        cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+        if is_metric_cache_valid(cached_entry):
+            print("Privacy - DP Cache is VALID, using cached result")
+            final_dict['DP Statistics'] = cached_entry['data']
+            # Reset expiration time when using cached result
+            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                'data': cached_entry['data'],
+                'timestamp': time.time(),
+                'expires_at': time.time() + (30 * 60)
+            }
+            print(f"Using cached DP Statistics for key: {cache_key} (expiration reset)")
+        else:
+            print("Privacy - DP Cache is EXPIRED, recalculating")
+            current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+            try:
+                noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), file)
+                final_dict['DP Statistics'] = noisy_stat
+                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                    'data': noisy_stat,
+                    'timestamp': time.time(),
+                    'expires_at': time.time() + (30 * 60)
+                }
+                print(f"Cached DP Statistics for key: {cache_key}")
+            except Exception as e:
+                error_message = str(e)
+                
+                if "Epsilon must be greater than 0" in error_message:
+                    error_response = {
+                        "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
+                        "DP Statistics Visualization": "",
+                        "Graph interpretation": "No visualization available due to invalid parameters.",
+                        "Mean of feature (before noise)": "N/A",
+                        "Variance of feature (before noise)": "N/A",
+                        "Mean of feature (after noise)": "N/A",
+                        "Variance of feature (after noise)": "N/A",
+                        "Noisy file saved": "Failed - Invalid parameters"
+                    }
+                elif "Dataset is empty" in error_message:
+                    error_response = {
+                        "Error": "Dataset is empty after removing null values or contains no valid data.",
+                        "DP Statistics Visualization": "",
+                        "Graph interpretation": "No visualization available - insufficient data.",
+                        "Mean of feature (before noise)": "N/A",
+                        "Variance of feature (before noise)": "N/A",
+                        "Mean of feature (after noise)": "N/A",
+                        "Variance of feature (after noise)": "N/A",
+                        "Noisy file saved": "Failed - No data to process"
+                    }
+                else:
+                    error_response = {
+                        "Error": f"Processing error: {error_message}",
+                        "DP Statistics Visualization": "",
+                        "Graph interpretation": "No visualization available due to processing error.",
+                        "Mean of feature (before noise)": "N/A",
+                        "Variance of feature (before noise)": "N/A",
+                        "Mean of feature (after noise)": "N/A",
+                        "Variance of feature (after noise)": "N/A",
+                        "Noisy file saved": "Failed - Processing error"
+                    }
+                
+                final_dict['DP Statistics'] = error_response
+                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                    'data': error_response,
+                    'timestamp': time.time(),
+                    'expires_at': time.time() + (30 * 60)
+                }
+                print(f"Cached DP Statistics Error for key: {cache_key}")
+    else:
+        print(f"Privacy - DP Cache MISS for key: {cache_key}")
+        try:
+            noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), file)
+            final_dict['DP Statistics'] = noisy_stat
+            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                'data': noisy_stat,
+                'timestamp': time.time(),
+                'expires_at': time.time() + (30 * 60)
+            }
+            print(f"Cached DP Statistics for key: {cache_key}")
+        except Exception as e:
+            error_message = str(e)
+            
+            if "Epsilon must be greater than 0" in error_message:
+                error_response = {
+                    "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
+                    "DP Statistics Visualization": "",
+                    "Graph interpretation": "No visualization available due to invalid parameters.",
+                    "Mean of feature (before noise)": "N/A",
+                    "Variance of feature (before noise)": "N/A",
+                    "Mean of feature (after noise)": "N/A",
+                    "Variance of feature (after noise)": "N/A",
+                    "Noisy file saved": "Failed - Invalid parameters"
+                }
+            elif "Dataset is empty" in error_message:
+                error_response = {
+                    "Error": "Dataset is empty after removing null values or contains no valid data.",
+                    "DP Statistics Visualization": "",
+                    "Graph interpretation": "No visualization available - insufficient data.",
+                    "Mean of feature (before noise)": "N/A",
+                    "Variance of feature (before noise)": "N/A",
+                    "Mean of feature (after noise)": "N/A",
+                    "Variance of feature (after noise)": "N/A",
+                    "Noisy file saved": "Failed - No data to process"
+                }
+            else:
+                error_response = {
+                    "Error": f"Processing error: {error_message}",
+                    "DP Statistics Visualization": "",
+                    "Graph interpretation": "No visualization available due to processing error.",
+                    "Mean of feature (before noise)": "N/A",
+                    "Variance of feature (before noise)": "N/A",
+                    "Mean of feature (after noise)": "N/A",
+                    "Variance of feature (after noise)": "N/A",
+                    "Noisy file saved": "Failed - Processing error"
+                }
+            
+            final_dict['DP Statistics'] = error_response
+            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                'data': error_response,
+                'timestamp': time.time(),
+                'expires_at': time.time() + (30 * 60)
+            }
+            print(f"Cached DP Statistics Error for key: {cache_key}")
+
+        # single attribute risk scores using markov model (ASYNC)
 
 
 if __name__ == '__main__':
