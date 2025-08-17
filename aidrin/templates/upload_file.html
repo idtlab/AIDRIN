@@ -168,6 +168,12 @@
         <strong onclick="location.href='{{url_for("publications")}}'" class="clickable" style="text-align: center; font-size: 1.5em; display:flex; align-items:center; align-self:center">Publications  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"/></svg></strong>
     </div>
     <div id="sampleDataContainer" class="sampleDataContainer">
+        <div class="download-header">
+            <svg class="download-header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                </svg>
+                <span class="download-header-text">Click any file below to download it instantly</span>
+        </div>
         <div class="filter-section">
             <label for="fileTypeSelect">Filter by File Type:</label>
             <select id="fileTypeSelect">
@@ -359,23 +365,35 @@
     window.addEventListener('scroll', positionPreview);
     window.addEventListener('resize', positionPreview);
     window.addEventListener('click',positionPreview)
-    // Sample Files defined here 
-    const sampleFiles = [
-        { name: 'adult.csv', type: 'csv' },
-        { name: 'adult.h5', type: 'h5' },
-        { name: 'adult.json', type: 'json' },
-        { name: 'adult.npz', type: 'npz' },
-        { name: 'adult.xlsx', type: 'xlsx' },
-        { name: 'BUTTER-E.json', type: 'dcat' },
-        { name: 'EGS_Collab_Experiment.json', type: 'dcat' },
-        { name: 'employees.h5', type: 'h5' },
-        { name: 'employees.json', type: 'json' },
-        { name: 'employees.xlsx', type: 'xlsx' },
-        { name: 'smallSample.csv', type: 'csv' },
-    ];
 
         
     /* SAMPLE FILE RENDERING */
+    function toggleSampleData() {
+        const sampleDataContainer = document.getElementById('sampleDataContainer');
+        const sampleDataArrow = document.getElementById('sampleDataArrow');
+        sampleDataContainer.classList.toggle('visible');
+        if (sampleDataContainer.classList.contains('visible')) {
+            sampleDataArrow.style.transform = 'rotate(180deg)';
+        } else {
+            sampleDataArrow.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    // Sample Files defined here 
+    const sampleFiles = [
+        { name: 'adult.csv', type: 'csv', size: '3.7 MB' },
+        { name: 'adult.h5', type: 'h5', size: '3.7 MB' },
+        { name: 'adult.json', type: 'json', size: '13.4 MB' },
+        { name: 'adult.npz', type: 'npz', size: '484 KB' },
+        { name: 'adult.xlsx', type: 'xlsx', size: '2.1 MB' },
+        { name: 'BUTTER-E.json', type: 'dcat', size: '5 KB' },
+        { name: 'EGS_Collab_Experiment.json', type: 'dcat', size: '6 KB' },
+        { name: 'employees.h5', type: 'h5', size: '1.1 MB' },
+        { name: 'employees.json', type: 'json', size: '2 KB' },
+        { name: 'employees.xlsx', type: 'xlsx', size: '5 KB' },
+        { name: 'smallSample.csv', type: 'csv', size: '29 bytes' },
+    ];
+
     function toggleSampleData() {
         const sampleDataContainer = document.getElementById('sampleDataContainer');
         const sampleDataArrow = document.getElementById('sampleDataArrow');
@@ -397,12 +415,26 @@
             fileItem.dataset.type = file.type;
 
             fileItem.innerHTML = `
-                <div class="file-name">${file.name}</div>
-                <div class="file-type">${file.type}</div>
+                <div class="file-content">
+                    <div class="file-name">
+                        ${file.name}
+                        <span class="file-size">${file.size || ''}</span>
+                    </div>
+                    <div class="file-type">${file.type}</div>
+                </div>
+                <svg class="download-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                </svg>
             `;
 
             // When the div is clicked, trigger download
             fileItem.addEventListener('click', () => {
+                // Add visual feedback
+                fileItem.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    fileItem.style.transform = '';
+                }, 150);
+
                 const link = document.createElement('a');
                 link.href = `/static/datasets/test_data/${file.type}/${file.name}`;
                 link.download = file.name;
@@ -410,6 +442,7 @@
                 link.click();
                 document.body.removeChild(link);
             });
+
             fileList.appendChild(fileItem);
         });
 
@@ -439,7 +472,6 @@
         });
         
         if (selectedType) {
-            // Filter and highlight files of selected type
             const filteredFiles = sampleFiles.filter(file => file.type === selectedType);
             
             allFiles.forEach(item => {
@@ -452,7 +484,6 @@
             
             updateStats(filteredFiles);
         } else {
-            // Show all files
             updateStats(sampleFiles);
         }
     }
@@ -460,10 +491,7 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         renderFiles();
-        
-        // Add event listener for filter
         document.getElementById('fileTypeSelect').addEventListener('change', filterFiles);
-        
     });
 </script>
 </html>

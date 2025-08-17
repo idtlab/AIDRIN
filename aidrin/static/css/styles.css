@@ -1100,7 +1100,6 @@ thead th {
 
 .sampleDataContainer .filter-section {
   margin-bottom: 16px;
-  margin-top: 16px;
   padding: 16px;
   background: var(--secondaryColor);
   border-radius: 8px;
@@ -1133,20 +1132,37 @@ thead th {
   display: grid;
   gap: 8px;
 }
-
 .sampleDataContainer .file-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 12px 16px;
   border-radius: 6px;
   background: var(--secondaryColor);
+  border: 2px dashed transparent;
   transition: all 0.2s ease;
   cursor: pointer;
+  position: relative;
 }
 
 .sampleDataContainer .file-item:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-color: #3b82f6;
+  border-style: dashed;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  background: #f0f8ff;
+}
+
+.sampleDataContainer .file-item:hover::before {
+  content: "Click to download";
+  position: absolute;
+  top: -8px;
+  right: 16px;
+  background: #3b82f6;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  z-index: 10;
 }
 
 .sampleDataContainer .file-item.notHighlighted {
@@ -1155,9 +1171,23 @@ thead th {
   box-shadow: 0 4px 8px rgba(59, 130, 246, 0.15);
 }
 
+.sampleDataContainer .file-item.highlighted {
+  border-color: #3b82f6;
+  border-style: solid;
+  background: #f0f8ff;
+  color: #212121;
+}
+
+/* File content area */
+.sampleDataContainer .file-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
 .sampleDataContainer .file-name {
   flex: 1;
-  font-weight: 500;
+  margin-right: 12px;
 }
 
 .sampleDataContainer .file-type {
@@ -1165,12 +1195,54 @@ thead th {
   background: var(--dotColor);
   color: var(--oppositeTextColor);
   border-radius: 12px;
-  font-size: 12px;
   text-transform: uppercase;
-  font-weight: 600;
+  margin-right: 12px;
 }
 
 .sampleDataContainer .file-item.highlighted .file-type {
   background: #3b82f6;
   color: white;
+}
+
+/* Download icon */
+.download-icon {
+  width: 20px;
+  height: 20px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+.file-item:hover .download-icon {
+  opacity: 1;
+  color: #3b82f6;
+}
+
+/* Header with download instruction */
+.download-header {
+  background: #e0f2fe;
+  border: 1px solid #b3e5fc;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.download-header-icon {
+  width: 24px;
+  height: 24px;
+  color: #0277bd;
+}
+
+.download-header-text {
+  color: #01579b;
+}
+
+.file-size {
+  color: #6b7280;
+  margin-left: 8px;
+  font-size: 0.8em;
 }
