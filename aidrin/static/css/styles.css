@@ -22,6 +22,7 @@
 
   transition: all 0.3s ease;
 }
+
 .darkmode {
   --textColor: #fbfbf2;
   --oppositeTextColor: #212121;
@@ -37,6 +38,7 @@
   --dotColor: #ffffff;
   --visitedColor: rgb(198, 115, 219);
 }
+
 body {
   display: flex;
   flex-direction: column;
@@ -53,15 +55,18 @@ body {
     background-repeat: no-repeat;
     background-attachment: fixed; */
 }
+
 .listLabel {
   display: flex;
   width: 150px;
   align-items: center;
 }
+
 li {
   display: flex;
   flex-direction: row;
 }
+
 form {
   display: block;
   /* blur background */
@@ -76,57 +81,85 @@ form {
   width: 100%;
   box-sizing: border-box;
 }
+
 a:visited {
-  color: var(--visitedColor); /* Change the color of visited links */
+  color: var(--visitedColor);
+  /* Change the color of visited links */
 }
+
 /* Style for the select element*/
 select {
   appearance: none;
   -webkit-appearaance: none;
 
   box-sizing: border-box;
-  outline: none; /* Undo natural click outline */
-  padding: 5px; /* Add padding */
-  border: 2px solid var(--textColor); /* Border style */
-  border-radius: 10px; /* Rounded corners */
-  background-color: var(--selectColor); /* Background color */
+  outline: none;
+  /* Undo natural click outline */
+  padding: 5px;
+  /* Add padding */
+  border: 2px solid var(--textColor);
+  /* Border style */
+  border-radius: 10px;
+  /* Rounded corners */
+  background-color: var(--selectColor);
+  /* Background color */
   color: #212121;
-  cursor: pointer; /* Pointer cursor */
-  width: 100%; /* Full width */
-  max-width: 400px; /* Maximum width */
-  box-shadow: 0 2px 4px var(--shadowColor); /* Subtle shadow */
-  margin: 10px; /* Margin so successive selects don't touch */
+  cursor: pointer;
+  /* Pointer cursor */
+  width: 100%;
+  /* Full width */
+  max-width: 400px;
+  /* Maximum width */
+  box-shadow: 0 2px 4px var(--shadowColor);
+  /* Subtle shadow */
+  margin: 10px;
+  /* Margin so successive selects don't touch */
   transition: all 0.3s;
 }
+
 select:disabled {
-  background-color: var(--disabledOverlay); /* Darker overlay */
+  background-color: var(--disabledOverlay);
+  /* Darker overlay */
   color: gray;
   border: 1px solid #aaa;
   cursor: not-allowed;
 }
+
 .fileType {
   background-color: var(--textColor);
   border-color: #ffffff;
   color: var(--backgroundColor);
   border-radius: 10px;
 }
+
 /* Style for Text Input */
 .textWrapper {
   box-sizing: border-box;
-  padding: 5px; /* Add padding */
-  border: 2px solid var(--textColor); /* Border style */
-  border-radius: 10px; /* Rounded corners */
-  background-color: #ffffff; /* Background color */
+  padding: 5px;
+  /* Add padding */
+  border: 2px solid var(--textColor);
+  /* Border style */
+  border-radius: 10px;
+  /* Rounded corners */
+  background-color: #ffffff;
+  /* Background color */
   color: #212121;
-  cursor: pointer; /* Pointer cursor */
-  width: 100%; /* Full width */
-  max-width: 400px; /* Maximum width */
-  box-shadow: 0 2px 4px var(--shadowColor); /* Subtle shadow */
-  margin: 10px; /* Margin so successive selects don't touch */
+  cursor: pointer;
+  /* Pointer cursor */
+  width: 100%;
+  /* Full width */
+  max-width: 400px;
+  /* Maximum width */
+  box-shadow: 0 2px 4px var(--shadowColor);
+  /* Subtle shadow */
+  margin: 10px;
+  /* Margin so successive selects don't touch */
   transition: all 0.3s;
 }
+
 .textWrapper:disabled {
-  background-color: var(--disabledOverlayText); /* Darker overlay */
+  background-color: var(--disabledOverlayText);
+  /* Darker overlay */
   color: gray;
   border: 1px solid #aaa;
   cursor: not-allowed;
@@ -141,6 +174,7 @@ h1 {
   text-align: center;
   color: var(--textColor);
 }
+
 h3 {
   margin-left: 20%;
   font-size: 1.3em;
@@ -150,11 +184,14 @@ h3 {
   cursor: pointer;
   display: flex;
   align-items: center;
-  white-space: nowrap; /* Prevent text from wrapping */
+  white-space: nowrap;
+  /* Prevent text from wrapping */
 }
+
 .noUpload {
   color: var(--disabledOverlayText);
 }
+
 .h2-container {
   display: flex;
   flex-direction: column;
@@ -177,7 +214,8 @@ h3 {
 
 #summaryStatistics {
   max-width: 100%;
-  overflow: auto; /* Change to 'auto' for scrolling */
+  overflow: auto;
+  /* Change to 'auto' for scrolling */
 }
 
 #summaryStatistics h3 {
@@ -194,11 +232,13 @@ th {
   padding: 8px;
   text-align: left;
 }
+
 td {
   border-bottom: 1px solid var(--darkAccent);
   padding: 8px;
   text-align: left;
 }
+
 .statName {
   background-color: var(--secondaryColorHalfOpacity);
 }
@@ -229,6 +269,7 @@ span {
   padding: 20px;
   background-color: var(--secondaryColor);
 }
+
 .plot-container img {
   object-fit: cover;
   width: fit-content;
@@ -259,8 +300,10 @@ input[type="checkbox"] {
   align-items: center;
   font-size: 16px;
   color: var(--textColorSecondary);
-  transition: all 0.9s ease; /* smooth animation */
+  transition: all 0.9s ease;
+  /* smooth animation */
 }
+
 /* change Dropdown color while hovering */
 .clickable:hover {
   cursor: pointer;
@@ -276,8 +319,10 @@ input[type="checkbox"] {
   font-size: 20px;
   cursor: pointer;
   color: var(--textColor);
-  transition: color 0.3s ease; /* smooth animation */
+  transition: color 0.3s ease;
+  /* smooth animation */
 }
+
 .Switch-toggle-button:hover {
   color: #ff6262b4;
 }
@@ -309,7 +354,8 @@ input[type="reset"] {
 
 @media (max-width: 767px) {
   #buttonsContainer {
-    flex-direction: column; /* Stack buttons vertically on smaller screens */
+    flex-direction: column;
+    /* Stack buttons vertically on smaller screens */
     align-items: center;
   }
 
@@ -318,6 +364,7 @@ input[type="reset"] {
     margin-bottom: 10px;
   }
 }
+
 .checkboxContainer {
   display: block;
 }
@@ -340,32 +387,40 @@ input[type="reset"] {
 .info-icon:hover .info-text {
   display: block;
 }
+
 .metric-info:hover .metric-info-text {
   display: block;
 }
+
 .metric-info-text {
   font-size: 50%;
   color: var(--backgroundColor);
   display: none;
   position: absolute;
   right: 5%;
-  background-color: var(--darkAccent); /* text bubble color*/
+  background-color: var(--darkAccent);
+  /* text bubble color*/
   padding: 5px 10px;
   border-radius: 3px;
-  white-space: normal; /* Allow text to wrap */
+  white-space: normal;
+  /* Allow text to wrap */
   z-index: 1;
 }
+
 .info-text {
   display: none;
   position: absolute;
   top: 20px;
   left: 0;
-  background-color: var(--tertiaryColor); /* text bubble color*/
+  background-color: var(--tertiaryColor);
+  /* text bubble color*/
   color: var(--secondaryColor);
   padding: 5px 10px;
   border-radius: 3px;
-  white-space: normal; /* Allow text to wrap */
-  width: 400px; /* Set a maximum width */
+  white-space: normal;
+  /* Allow text to wrap */
+  width: 400px;
+  /* Set a maximum width */
   z-index: 1;
 }
 
@@ -373,6 +428,7 @@ input[type="reset"] {
   font-size: 12px;
   color: var(--tertiaryColor);
 }
+
 /* Make the bullet points stick w/ the text instead of staying on left of container */
 ul {
   list-style-position: inside;
@@ -387,8 +443,10 @@ ul {
   gap: 20px;
   cursor: pointer;
 }
+
 .material-checkbox:disabled {
-  background-color: var(--disabledOverlay); /* Darker overlay */
+  background-color: var(--disabledOverlay);
+  /* Darker overlay */
   color: var(--tertiaryColor);
   border: 1px solid var(--tertiaryColor);
   cursor: not-allowed;
@@ -436,10 +494,12 @@ ul {
 .material-checkbox:hover input[type="checkbox"] ~ .checkmark {
   border-color: var(--tertiaryColor);
 }
+
 s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .material-checkbox input:disabled ~ .checkmark {
   opacity: 0.25;
   background-color: var(--textColor);
@@ -465,9 +525,11 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   margin: 10px;
   transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
+
 .animated-button span {
   color: var(--spanColor);
 }
+
 .animated-button span:last-child {
   position: absolute;
   top: 50%;
@@ -480,6 +542,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   opacity: 0;
   transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
 }
+
 .return span:last-child {
   position: absolute;
   top: 50%;
@@ -492,6 +555,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   opacity: 0;
   transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
 }
+
 .animated-button span:first-child {
   position: relative;
   z-index: 1;
@@ -501,10 +565,12 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   box-shadow: 0 0 0 5px #4caf4f5e;
   color: #ffffff;
 }
+
 .return:hover {
   box-shadow: 0 0 0 5px #3958925e;
   color: #ffffff;
 }
+
 .animated-button:active {
   scale: 0.95;
 }
@@ -531,6 +597,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   border-radius: 0px 0px 10px 10px;
   transition: all 0.3s;
 }
+
 .custum-file-upload .custum-file-upload .icon {
   display: flex;
   align-items: center;
@@ -556,6 +623,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
 .custum-file-upload input {
   display: none;
 }
+
 .edit-button {
   position: absolute;
   font-size: 1em;
@@ -569,9 +637,11 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   display: none;
   transition: background-color 0.3s;
 }
+
 .edit-button:hover {
   background-color: rgb(126, 155, 229);
 }
+
 .clear-button {
   display: flex;
   width: 100%;
@@ -589,9 +659,11 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   border-top: none;
   transition: all 0.3s;
 }
+
 .clear-button:hover {
   background-color: rgb(234, 102, 102);
 }
+
 .redirect-upload-button {
   display: flex;
   width: 100%;
@@ -621,6 +693,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   max-width: 80%;
   z-index: 10;
 }
+
 .metric-download-gui-fileName {
   display: flex;
   width: 100%;
@@ -641,10 +714,12 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   position: relative;
   margin: auto;
 }
+
 /* Hide the images by default */
 .mySlides {
   display: none;
 }
+
 .active {
   display: block;
 }
@@ -659,6 +734,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   width: 100%;
   text-align: center;
 }
+
 /* Dot switches */
 .dot {
   cursor: pointer;
@@ -672,19 +748,23 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   transition: background-color 0.6s ease;
   z-index: 35;
 }
+
 .activeDot,
 .dot:hover {
   background-color: var(--dotColor);
 }
+
 /* Fading animation */
 .fade {
   animation-name: fade;
   animation-duration: 1.5s;
 }
+
 @keyframes fade {
   from {
     opacity: 0.4;
   }
+
   to {
     opacity: 1;
   }
@@ -695,27 +775,33 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
     transform: translate(0, 0);
     opacity: 0;
   }
+
   to {
     transform: translate(0, 30px);
     opacity: 1;
   }
 }
+
 @keyframes toolTipOut {
   from {
     transform: translate(0, 30px);
     opacity: 1;
   }
+
   to {
     transform: translate(0, 0);
     opacity: 0;
   }
 }
+
 #navbar a:hover .tooltip {
   animation: toolTipIn 0.5s ease-in-out forwards;
 }
+
 #navbar .tooltip {
   animation: toolTipOut 0.5s ease-in-out forwards;
 }
+
 .tooltip {
   position: absolute;
   top: 50%;
@@ -736,6 +822,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
 .visualization-container {
   margin-bottom: 20px;
 }
+
 .visualization-container img {
   max-width: 100%;
   border-radius: 4px;
@@ -752,10 +839,12 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   border-radius: 4px;
   font-size: 14px;
 }
+
 .toggle-container {
   display: flex;
   justify-content: center;
 }
+
 .toggle {
   background-color: var(--darkAccent);
   min-width: fit-content;
@@ -773,18 +862,22 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   align-self: center;
   justify-content: center;
 }
+
 .metric-download {
   background-color: var(--tertiaryColor);
 }
+
 .toggle:hover {
   background-color: #0056b3;
 }
+
 .heading {
   font-size: 24px;
   font-weight: bold;
   margin-bottom: 20px;
   text-align: center;
 }
+
 .back-button {
   background-color: #007bff;
   color: white;
@@ -796,6 +889,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   cursor: pointer;
   margin-bottom: 20px;
 }
+
 .back-button:hover {
   background-color: #0056b3;
 }
@@ -839,12 +933,21 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
 #navbar a:hover {
   background: var(--accent);
 }
+
 #navbar a:hover .tooltip {
   animation: toolTipIn 0.5s ease-in-out forwards;
 }
+
 #navbar .tooltip {
   animation: toolTipOut 0.5s ease-in-out forwards;
 }
+
+.version-container {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+}
+
 .tooltip {
   position: absolute;
   top: 50%;
@@ -858,6 +961,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
 
   pointer-events: none;
 }
+
 .error-popup {
   top: 50%;
   left: 50%;
@@ -874,6 +978,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   transform: translate(-50%, -50%) scale(0.1);
   visibility: hidden;
 }
+
 .datalog-popup {
   top: 50%;
   left: 50%;
@@ -893,18 +998,22 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   transform: translate(-50%, -50%) scale(0.1);
   visibility: hidden;
 }
+
 .datalog-popup .scrollable-container {
   display: none;
   overflow-y: auto;
   max-height: 25vh;
   margin-bottom: 10px;
 }
+
 .datalog-popup .scrollable-container.active {
   display: flex;
 }
+
 thead th {
   border: none;
 }
+
 .open-popup {
   visibility: visible;
   transform: translate(-50%, -50%) scale(1);
@@ -912,6 +1021,7 @@ thead th {
     transform 0.15s ease-in-out,
     visibility 0.15s ease-in-out;
 }
+
 .preview {
   background: var(--secondaryColorHalfOpacity);
   display: flex;
@@ -925,15 +1035,18 @@ thead th {
   border: 2px solid white;
   opacity: 0;
 }
+
 .preview table {
   overflow-y: scroll;
   height: 200px;
   display: block;
 }
+
 .radio-group {
   font-size: large;
   margin: 15px;
 }
+
 .navbar-buttons {
   height: 64px;
   width: 64px;
@@ -945,6 +1058,7 @@ thead th {
   justify-content: center;
   align-items: center;
 }
+
 .navbar-buttons svg {
   fill: var(--textColor);
 }
@@ -956,9 +1070,11 @@ thead th {
     rgba(68, 133, 244, 0.7)
   );
 }
+
 .navbar-buttons svg:last-child {
   display: none;
 }
+
 .navbar-buttons svg:first-child {
   display: block;
 }
@@ -966,6 +1082,7 @@ thead th {
 .darkmode .navbar-buttons svg:first-child {
   display: none;
 }
+
 .darkmode .navbar-buttons svg:last-child {
   display: block;
 }
