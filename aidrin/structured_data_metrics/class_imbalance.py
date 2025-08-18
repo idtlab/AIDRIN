@@ -231,25 +231,38 @@ def imbalance_degree(classes, distance="EU"):
 
 def class_distribution_plot(df, column):
     try:
-        # Ensure column exists and has data
+        # Validate input parameters
+        if df is None or df.empty:
+            raise ValueError("Dataset is empty or None")
+
+        if column is None or column == "":
+            raise ValueError("No target feature selected for visualization")
+
         if column not in df.columns:
-            return ""
+            raise ValueError(f"Target feature '{column}' not found in the dataset")
 
         # Get data and handle NaN values
         column_data = df[column].dropna()
         if len(column_data) == 0:
-            return ""
+            raise ValueError(f"No valid data found in column '{column}' after removing missing values")
+
+        if len(column_data) < 2:
+            raise ValueError(f"Column '{column}' has insufficient data for visualization (minimum 2 samples required)")
 
         # Calculate class frequencies
         class_counts = column_data.value_counts()
 
         # Check if we have any data to plot
         if len(class_counts) == 0:
-            return ""
+            raise ValueError(f"No class data found in column '{column}'")
 
-        # Debug: Check if we have valid data
-        if class_counts.sum() == 0:
-            return ""
+        # Check if we have multiple classes
+        unique_classes = np.unique(column_data)
+        if len(unique_classes) < 2:
+            raise ValueError(f"Column '{column}' has only one class ({unique_classes[0]}). Visualization requires at least 2 different classes.")
+
+        if len(unique_classes) > 50:
+            raise ValueError(f"Column '{column}' has too many classes ({len(unique_classes)}). Visualization works best with fewer than 50 classes.")
 
         # Debug: Print some info about the data
         print(f"Class distribution plot - Column: {column}, Unique values: {len(class_counts)}, Total: {class_counts.sum()}")
@@ -262,23 +275,24 @@ def class_distribution_plot(df, column):
                 class_labels_modified.append(label_str[:9] + '...')
             else:
                 class_labels_modified.append(label_str)
+
         # Set the figure size
         try:
             fig, ax = plt.subplots(figsize=(8, 8))
-        except Exception:
-            return ""
+        except Exception as e:
+            raise Exception(f"Failed to create plot figure: {str(e)}")
 
         # Ensure we have valid data for pie chart
         if len(class_counts) == 0 or class_counts.sum() == 0:
             plt.close()
-            return ""
+            raise ValueError("No valid data available for plotting")
 
         # Plotting a pie chart without labels
         try:
             wedges, _ = ax.pie(class_counts.values, startangle=90)
-        except Exception:
+        except Exception as e:
             plt.close()
-            return ""
+            raise Exception(f"Failed to create pie chart: {str(e)}")
 
         # Create legend labels with class name and percentage only
         total = class_counts.sum()
@@ -307,22 +321,26 @@ def class_distribution_plot(df, column):
             if not plot_base64:
                 plt.close()
                 buf.close()
-                return ""
-        except Exception:
+                raise ValueError("Failed to encode plot image")
+        except Exception as e:
             plt.close()
             buf.close()
-            return ""
+            raise Exception(f"Failed to encode plot image: {str(e)}")
 
         # Close the plot and buffer to free up resources
         plt.close()
         buf.close()
 
         return plot_base64
+
     except SoftTimeLimitExceeded:
         raise Exception("Class Distribution Plot task timed out.")
-    except Exception:
-        # Handle errors and return empty string for visualization
-        return ""
+    except ValueError as ve:
+        # Re-raise validation errors
+        raise ve
+    except Exception as e:
+        # Handle other unexpected errors
+        raise Exception(f"Visualization error: {str(e)}")
 
 
 # imbalance degree calculation with default distance metric to be Euclidean
@@ -330,12 +348,50 @@ def calc_imbalance_degree(df, column, dist_metric='EU'):
     res = {}
 
     try:
+        # Validate input parameters
+        if df is None or df.empty:
+            raise ValueError("Dataset is empty or None")
+
+        if column is None or column == "":
+            raise ValueError("No target feature selected for class imbalance analysis")
+
+        if column not in df.columns:
+            raise ValueError(f"Target feature '{column}' not found in the dataset")
+
+        # Check if the column has categorical data
+        if df[column].dtype in ['int64', 'float64'] and df[column].nunique() > 100:
+            raise ValueError(
+                f"Column '{column}' appears to be numerical with too many unique values ({df[column].nunique()})."
+                "Class imbalance analysis requires categorical data with fewer unique values."
+            )
+
         # Calculate the Imbalance Degree
         classes = np.array(df[column].dropna())
+
+        if len(classes) == 0:
+            raise ValueError(f"No valid data found in column '{column}' after removing missing values")
+
+        if len(classes) < 2:
+            raise ValueError(f"Column '{column}' has insufficient data for class imbalance analysis (minimum 2 samples required)")
+
+        # Check if we have multiple classes
+        unique_classes = np.unique(classes)
+        if len(unique_classes) < 2:
+            raise ValueError(
+                f"Column '{column}' has only one class ({unique_classes[0]})."
+                "Class imbalance analysis requires at least 2 different classes."
+            )
+
+        if len(unique_classes) > 50:
+            raise ValueError(
+                f"Column '{column}' has too many classes ({len(unique_classes)}). "
+                "Class imbalance analysis works best with fewer than 50 classes."
+            )
+
         id = imbalance_degree(classes, dist_metric)
 
         if id is None:
-            res['Error'] = (
+            raise ValueError(
                 f"Could not calculate imbalance degree using {dist_metric} "
                 f"distance metric. This may be due to invalid data or "
                 f"mathematical constraints."
@@ -345,14 +401,19 @@ def calc_imbalance_degree(df, column, dist_metric='EU'):
             res['Description'] = (
                 "The Imbalance Degree (ID) is a ratio that quantifies class "
                 "imbalance by comparing the observed distribution to both "
-                "uniform and perfectly skewed distributions."
+                "uniform and perfectly skewed distributions. "
                 "A value of 0 indicates perfect balance, while higher values "
                 "indicate greater imbalance relative to the worst possible "
                 "scenario for that number of minority classes."
             )
 
+    except ValueError as ve:
+        # Handle specific validation errors
+        res["Error"] = str(ve)
+        res["ErrorType"] = "Validation Error"
     except Exception as e:
-        # Handle errors and store the error message in the result
-        res["Error"] = str(e)
+        # Handle other unexpected errors
+        res["Error"] = f"Processing error: {str(e)}"
+        res["ErrorType"] = "Processing Error"
 
     return res

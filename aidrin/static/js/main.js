@@ -252,6 +252,33 @@ function getTClosenessErrorType(errorMessage) {
     }
 }
 
+// Function to categorize error types for Class Imbalance
+function getClassImbalanceErrorType(errorMessage) {
+    if (errorMessage.includes("No target feature selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("not found in the dataset")) {
+        return "Data Error";
+    } else if (errorMessage.includes("appears to be numerical with too many unique values")) {
+        return "Data Error";
+    } else if (errorMessage.includes("No valid data found")) {
+        return "Data Error";
+    } else if (errorMessage.includes("insufficient data")) {
+        return "Data Error";
+    } else if (errorMessage.includes("has only one class")) {
+        return "Data Error";
+    } else if (errorMessage.includes("has too many classes")) {
+        return "Data Error";
+    } else if (errorMessage.includes("Could not calculate imbalance degree")) {
+        return "Processing Error";
+    } else if (errorMessage.includes("Dataset is empty")) {
+        return "Data Error";
+    } else if (errorMessage.includes("Processing error")) {
+        return "Processing Error";
+    } else {
+        return "Error";
+    }
+}
+
 
 
 
@@ -698,6 +725,34 @@ function submitForm() {
                                     errorType: errorType
                                 }
                             });
+                        } else if (type === 'Class Imbalance') {
+                            // Enhanced error handling for Class Imbalance - show as popup
+                            const errorType = getClassImbalanceErrorType(data[type]['Error']);
+                            
+                            // Show error popup immediately
+                            openErrorPopup(
+                                errorType,
+                                data[type]['Error'] 
+                            );
+                            
+                            // Add to visualization content with minimal error display
+                            visualizationContent.push({
+                                image: "",
+                                riskScore: 'N/A',
+                                riskLevel: null,
+                                riskColor: null,
+                                value: 'N/A',
+                                description: '',
+                                interpretation: '',
+                                title: title,
+                                jsonData: jsonData,
+                                hasError: true,
+                                isClassImbalance: true,
+                                errorDetails: {
+                                    errorMessage: data[type]['Error'],
+                                    errorType: errorType
+                                }
+                            });
                         } else {
                             // Standard error handling for other metrics
                         visualizationContent.push({
@@ -902,6 +957,27 @@ function submitForm() {
                         <div style="margin-bottom: 15px;">
                             <p style="margin: 10px 0; font-size: 14px; color: #333;">
                                 An error occurred while processing t-Closeness.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            } else if (content.isClassImbalance) {
+                // Simple error display for Class Imbalance (detailed info shown in popup) - Updated to match DP Statistics styling
+                visualizationHtml += `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in Class Imbalance</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing class imbalance analysis.
                             </p>
                             <p style="margin: 10px 0; font-size: 14px; color: #666;">
                                 <strong>Error:</strong> ${content.errorDetails.errorMessage}

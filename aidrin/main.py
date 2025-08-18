@@ -673,13 +673,68 @@ def classImbalance():
                     print("Class Imbalance - Cache is EXPIRED, recalculating")
                     current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
                     ci_dict = {}
+
+                    try:
+                        # Generate visualization
+                        ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file, classes)
+                        ci_dict['Description'] = (
+                            "The chart displays the distribution of classes within the "
+                            "specified feature, providing a visual representation of the "
+                            "relative proportions of each class."
+                        )
+
+                        # Calculate imbalance degree
+                        imbalance_result = calc_imbalance_degree(file, classes, dist_metric=dist_metric)
+
+                        # Check if there was an error in imbalance calculation
+                        if 'Error' in imbalance_result:
+                            ci_dict['Error'] = imbalance_result['Error']
+                            ci_dict['ErrorType'] = imbalance_result.get('ErrorType', 'Processing Error')
+                            ci_dict['Class Imbalance Visualization'] = ""
+                            ci_dict['Description'] = f"Error: {imbalance_result['Error']}"
+                        else:
+                            ci_dict['Imbalance degree'] = imbalance_result
+
+                        final_dict['Class Imbalance'] = ci_dict
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': ci_dict,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached Class Imbalance for key: {cache_key}")
+
+                    except Exception as e:
+                        error_msg = str(e)
+                        print(f"Class Imbalance - Error: {error_msg}")
+                        ci_dict['Error'] = error_msg
+                        ci_dict['ErrorType'] = 'Processing Error'
+                        ci_dict['Class Imbalance Visualization'] = ""
+                        ci_dict['Description'] = f"Error: {error_msg}"
+                        final_dict['Class Imbalance'] = ci_dict
+            else:
+                print(f"Class Imbalance - Cache MISS for key: {cache_key}")
+                ci_dict = {}
+
+                try:
+                    # Generate visualization
                     ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file, classes)
                     ci_dict['Description'] = (
                         "The chart displays the distribution of classes within the "
                         "specified feature, providing a visual representation of the "
                         "relative proportions of each class."
                     )
-                    ci_dict['Imbalance degree'] = calc_imbalance_degree(file, classes, dist_metric=dist_metric)
+                    # Calculate imbalance degree
+                    imbalance_result = calc_imbalance_degree(file, classes, dist_metric=dist_metric)
+
+                    # Check if there was an error in imbalance calculation
+                    if 'Error' in imbalance_result:
+                        ci_dict['Error'] = imbalance_result['Error']
+                        ci_dict['ErrorType'] = imbalance_result.get('ErrorType', 'Processing Error')
+                        ci_dict['Class Imbalance Visualization'] = ""
+                        ci_dict['Description'] = f"Error: {imbalance_result['Error']}"
+                    else:
+                        ci_dict['Imbalance degree'] = imbalance_result
+
                     final_dict['Class Imbalance'] = ci_dict
                     current_app.TEMP_RESULTS_CACHE[cache_key] = {
                         'data': ci_dict,
@@ -687,23 +742,15 @@ def classImbalance():
                         'expires_at': time.time() + (30 * 60)
                     }
                     print(f"Cached Class Imbalance for key: {cache_key}")
-            else:
-                print(f"Class Imbalance - Cache MISS for key: {cache_key}")
-                ci_dict = {}
-                ci_dict['Class Imbalance Visualization'] = class_distribution_plot(file, classes)
-                ci_dict['Description'] = (
-                    "The chart displays the distribution of classes within the "
-                    "specified feature, providing a visual representation of the "
-                    "relative proportions of each class."
-                )
-                ci_dict['Imbalance degree'] = calc_imbalance_degree(file, classes, dist_metric=dist_metric)
-                final_dict['Class Imbalance'] = ci_dict
-                current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                    'data': ci_dict,
-                    'timestamp': time.time(),
-                    'expires_at': time.time() + (30 * 60)
-                }
-                print(f"Cached Class Imbalance for key: {cache_key}")
+
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"Class Imbalance - Error: {error_msg}")
+                    ci_dict['Error'] = error_msg
+                    ci_dict['ErrorType'] = 'Processing Error'
+                    ci_dict['Class Imbalance Visualization'] = ""
+                    ci_dict['Description'] = f"Error: {error_msg}"
+                    final_dict['Class Imbalance'] = ci_dict
 
         end_time = time.time()
         execution_time = end_time - start_time
