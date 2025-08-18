@@ -1008,6 +1008,7 @@ function toggleValue(checkbox) {
   const dropdowns = container.querySelectorAll("select");
   const inputs = container.querySelectorAll("input.textWrapper");
   const checkboxes = container.querySelectorAll("input.checkbox.individual");
+  const selectAllCheckboxs = container.querySelectorAll("input.checkbox.select-all");
   // Enable or disable all dropdowns inside the container based on checkbox state
   dropdowns.forEach((dropdown) => {
     dropdown.disabled = !checkbox.checked;
@@ -1016,6 +1017,11 @@ function toggleValue(checkbox) {
     input.disabled = !checkbox.checked;
   });
   checkboxes.forEach((input) => {
+
+    input.disabled = !checkbox.checked;
+  });
+  //toggle select all checkboxes state
+  selectAllCheckboxs.forEach((input) => {
     input.disabled = !checkbox.checked;
   });
   // Toggle the value based on the checked state
@@ -1035,23 +1041,7 @@ function toggleValueIndividual(checkbox) {
   } else {
     checkbox.value = "no";
   }
-  updateSelectAllState();
   console.log("Checkbox value:", checkbox.value); // For debugging
-}
-function updateSelectAllState() {
-  const checkboxes = document.querySelectorAll(".checkbox.individual");
-  const selectAll = document.getElementById("selectAllCheckbox");
-
-  const total = checkboxes.length;
-  const checked = Array.from(checkboxes).filter((cb) => cb.checked).length;
-
-  if (checked === 0) {
-    selectAll.checked = false;
-  } else if (checked === total) {
-    selectAll.checked = true;
-  } else {
-    selectAll.checked = false;
-  }
 }
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function () {

@@ -457,26 +457,81 @@ $(document).ready(function () {
   });
 
   function createCheckboxContainer(features, tableId, nameTag) {
-    var table = $("#" + tableId);
-    table.empty(); // Clear previous content
+    var $table = $("#" + tableId);
+    $table.empty(); // Clear previous content
     var columns = 4; // Maximum number of columns
+
+    // Return early if no features with message
+    if (!features || features.length === 0 || features[0] === "{") {
+      $table.append($("<tr>").append($("<td colspan='4'>").text("No features available for selection")));
+      return;
+    }
+    function updateSelectAllState(tableId) {
+      const checkboxes = $table.find(".checkbox.individual");
+      console.log("tableId: ",tableId);
+      const selectAll = document.getElementById(tableId + "-select-all");
+      console.log("selectAll: ",selectAll);
+
+      const total = checkboxes.length;
+      console.log("total:",total)
+
+      const checked = Array.from(checkboxes).filter((cb) => cb.checked).length;
+      console.log("checked: ",checked);
+      if (checked === 0) {
+        selectAll.checked = false;
+      } else if (checked === total) {
+        selectAll.checked = true;
+      } else {
+        selectAll.checked = false;
+      }
+    }
+    //create selectAll checkbox
+    var $selectAllRow = $("<tr>")
+    var selectAllId = tableId + "-select-all";
+    var $selectAllCell = $("<td>").attr({
+      colspan: columns,
+    });
+    var $selectAllCheckbox = $("<input>")
+      .attr({
+        type: "checkbox",
+        class: "checkbox select-all",
+        id: selectAllId,
+        disabled: true,
+      });
+    var selectAllLabel = $("<label>")
+      .attr("for", selectAllId)
+      .attr("class", "material-checkbox selectAll")
+      .attr("style", "display:flex;flex-direction:row;min-width:125px;align-items:center;")
+      .attr("data-tooltip", "Warning: Selecting all features may significantly increase processing time.")
+      .append($selectAllCheckbox)
+      .append($("<span>").addClass("checkmark"))
+      .append("Select All");
+
+    $selectAllCell.append(selectAllLabel)
+    $selectAllRow.append($selectAllCell);
+    $table.append($selectAllRow);
+          
     for (var i = 0; i < features.length && features[0] != "{"; i++) {
       if (i % columns === 0) {
         var row = $("<tr>");
-        table.append(row);
+        $table.append(row);
       }
 
       var checkbox = $("<input>").attr({
         type: "checkbox",
         class: "checkbox individual",
         style: "margin-right:10px",
-        onchange: "toggleValueIndividual(this)",
         id: tableId + "checkbox_" + i, // Generate unique ids so all buttons work
         name: nameTag, // Set the name attribute
         value: features[i],
         disabled: true,
       });
-
+      checkbox.on("change", function () {
+        if (typeof toggleValueIndividual === "function") {
+          toggleValueIndividual(this);
+        }
+        updateSelectAllState(tableId);
+      });
       var span = $("<span>").addClass("checkmark");
 
       var label = $("<label>")
@@ -494,8 +549,16 @@ $(document).ready(function () {
 
       row.append(cell);
     }
+    $("#" + selectAllId).on("change", function () {
+      const checked = this.checked;
+      $table.find(".checkbox.individual").prop("checked", checked).trigger("change");
+      updateSelectAllState(tableId); // ensure state is correct even if no change event fires
+    });
   }
+  
 });
+
+
 function updateCrossDisable() {
   // Get selected quasi-identifiers for each metric separately
   // This allows users to select the same feature for different metrics when appropriate

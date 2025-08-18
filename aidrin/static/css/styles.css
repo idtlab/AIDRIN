@@ -505,7 +505,31 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   background-color: var(--textColor);
   cursor: not-allowed;
 }
+.selectAll {
+  position: relative;
+  cursor: pointer;
+}
+.selectAll::after {
+  content: attr(data-tooltip); /* text from attribute */
+  position: absolute;
+  bottom: 0%; 
+  left: 69%;
+  width:max-content;
+  transform: translateX(-50%);
+  background-color: var(--darkAccent);
+  color: var(--oppositeTextColor);
+  padding: 4px 8px;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 100;
+}
 
+/* Show tooltip on hover */
+.selectAll:hover::after {
+  opacity: 1;
+}
 /* Custom animated submit button from uiverse */
 .animated-button {
   position: relative;
