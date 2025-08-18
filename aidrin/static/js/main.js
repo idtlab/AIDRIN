@@ -2291,6 +2291,16 @@ function toggleValue(checkbox) {
          console.log("Removed metric-selected class - QI sections should be hidden");
      }
      
+     // Find and show/hide the metric inputs (QI and sensitive attribute sections)
+     const metricInputs = container.querySelectorAll(".metric-inputs");
+     metricInputs.forEach(inputSection => {
+         if (checkbox.checked) {
+             inputSection.style.display = "block";
+         } else {
+             inputSection.style.display = "none";
+         }
+     });
+     
      // Find all select dropdowns within that container
      const dropdowns = container.querySelectorAll("select");
      const inputs = container.querySelectorAll("input.textWrapper");
@@ -2359,6 +2369,14 @@ document.addEventListener("DOMContentLoaded", function() {
             console.log(checkbox);
             // Set initial state of selects based on checkbox
             toggleValue(checkbox);
+            
+            // Ensure metric inputs are hidden by default if checkbox is unchecked
+            if (!checkbox.checked) {
+                const metricInputs = container.querySelectorAll(".metric-inputs");
+                metricInputs.forEach(inputSection => {
+                    inputSection.style.display = "none";
+                });
+            }
         });
     });
 

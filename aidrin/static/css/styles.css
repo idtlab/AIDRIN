@@ -99,6 +99,111 @@ select {
     margin:10px; /* Margin so successive selects don't touch */
     transition: all 0.3s;
 }
+
+/* Privacy metrics input sections */
+.metric-inputs {
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.metric-inputs li {
+    margin: 10px 0;
+    padding: 5px 0;
+}
+
+/* Add spacing between privacy metric checkboxes */
+.checkboxContainerIndividual {
+    margin-bottom: 20px;
+    padding: 15px 0;
+}
+
+.checkboxContainerIndividual label {
+    margin-bottom: 10px;
+    display: block;
+}
+
+/* Add spacing between the checkbox and the label text */
+.checkboxContainerIndividual .material-checkbox {
+    margin-bottom: 15px;
+    display: block;
+}
+
+/* Add scrollbars for privacy metrics QI sections */
+.checkboxContainerIndividual .metric-inputs {
+    border: 1px solid var(--tertiaryColor);
+    border-radius: 8px;
+    padding: 10px;
+    background-color: var(--secondaryColor);
+}
+
+/* Individual scrollbars for specific checkbox containers */
+#numFeaturesCheckbox2,
+#catFeaturesCheckbox2,
+#catFeaturesCheckbox3,
+#entropyRiskQIsCheckbox,
+#kAnonymityQIsCheckbox,
+#lDiversityQIsCheckbox,
+#tClosenessQIsCheckbox {
+    max-height: 200px;
+    max-width: 100%;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid var(--tertiaryColor);
+    border-radius: 6px;
+    padding: 8px;
+    background-color: var(--secondaryColor);
+    margin-top: 5px;
+}
+
+/* Style the scrollbars for privacy metrics */
+#numFeaturesCheckbox2::-webkit-scrollbar,
+#catFeaturesCheckbox2::-webkit-scrollbar,
+#catFeaturesCheckbox3::-webkit-scrollbar,
+#entropyRiskQIsCheckbox::-webkit-scrollbar,
+#kAnonymityQIsCheckbox::-webkit-scrollbar,
+#lDiversityQIsCheckbox::-webkit-scrollbar,
+#tClosenessQIsCheckbox::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+#numFeaturesCheckbox2::-webkit-scrollbar-track,
+#catFeaturesCheckbox2::-webkit-scrollbar-track,
+#catFeaturesCheckbox3::-webkit-scrollbar-track,
+#entropyRiskQIsCheckbox::-webkit-scrollbar-track,
+#kAnonymityQIsCheckbox::-webkit-scrollbar-track,
+#lDiversityQIsCheckbox::-webkit-scrollbar-track,
+#tClosenessQIsCheckbox::-webkit-scrollbar-track {
+    background: var(--backgroundColor);
+    border-radius: 4px;
+}
+
+#numFeaturesCheckbox2::-webkit-scrollbar-thumb,
+#catFeaturesCheckbox2::-webkit-scrollbar-thumb,
+#catFeaturesCheckbox3::-webkit-scrollbar-thumb,
+#entropyRiskQIsCheckbox::-webkit-scrollbar-thumb,
+#kAnonymityQIsCheckbox::-webkit-scrollbar-thumb,
+#lDiversityQIsCheckbox::-webkit-scrollbar-thumb,
+#tClosenessQIsCheckbox::-webkit-scrollbar-thumb {
+    background: var(--tertiaryColor);
+    border-radius: 4px;
+}
+
+#numFeaturesCheckbox2::-webkit-scrollbar-thumb:hover,
+#catFeaturesCheckbox2::-webkit-scrollbar-thumb:hover,
+#catFeaturesCheckbox3::-webkit-scrollbar-thumb:hover,
+#entropyRiskQIsCheckbox::-webkit-scrollbar-thumb:hover,
+#kAnonymityQIsCheckbox::-webkit-scrollbar-thumb:hover,
+#lDiversityQIsCheckbox::-webkit-scrollbar-thumb:hover,
+#tClosenessQIsCheckbox::-webkit-scrollbar-thumb:hover {
+    background: var(--darkAccent);
+}
+
+/* Ensure the checkbox containers don't overflow */
+.checkboxContainerIndividual {
+    max-width: 100%;
+    overflow: hidden;
+}
 select:disabled {
   background-color: var(--disabledOverlay); /* Darker overlay */
   color: gray;
