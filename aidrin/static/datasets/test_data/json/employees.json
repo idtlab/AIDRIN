@@ -1,0 +1,92 @@
+[
+  {
+    "EmployeeID":101,
+    "Name":"John Smith",
+    "Department":"Engineering",
+    "Age":28,
+    "Salary":75000,
+    "StartDate":"2019-06-15",
+    "PerformanceRating":3
+  },
+  {
+    "EmployeeID":102,
+    "Name":"Alice Johnson",
+    "Department":"Marketing",
+    "Age":34,
+    "Salary":68000,
+    "StartDate":"2018-03-01",
+    "PerformanceRating":4
+  },
+  {
+    "EmployeeID":103,
+    "Name":"Bob Lee",
+    "Department":"Engineering",
+    "Age":25,
+    "Salary":71000,
+    "StartDate":"2021-08-12",
+    "PerformanceRating":2
+  },
+  {
+    "EmployeeID":104,
+    "Name":"Karen Davis",
+    "Department":"HR",
+    "Age":45,
+    "Salary":80000,
+    "StartDate":"2010-11-23",
+    "PerformanceRating":5
+  },
+  {
+    "EmployeeID":105,
+    "Name":"Mike Brown",
+    "Department":"Sales",
+    "Age":30,
+    "Salary":65000,
+    "StartDate":"2020-01-20",
+    "PerformanceRating":3
+  },
+  {
+    "EmployeeID":106,
+    "Name":"Sarah Wilson",
+    "Department":"Marketing",
+    "Age":29,
+    "Salary":69000,
+    "StartDate":"2017-05-30",
+    "PerformanceRating":4
+  },
+  {
+    "EmployeeID":107,
+    "Name":"David Garcia",
+    "Department":"Engineering",
+    "Age":39,
+    "Salary":85000,
+    "StartDate":"2015-09-17",
+    "PerformanceRating":5
+  },
+  {
+    "EmployeeID":108,
+    "Name":"Emma Thompson",
+    "Department":"HR",
+    "Age":32,
+    "Salary":72000,
+    "StartDate":"2016-07-11",
+    "PerformanceRating":4
+  },
+  {
+    "EmployeeID":108,
+    "Name":"Emma Thompson",
+    "Department":"HR",
+    "Age":32,
+    "Salary":72000,
+    "StartDate":"2016-07-11",
+    "PerformanceRating":4
+  },
+  {
+    "EmployeeID":108,
+    "Name":"Emma Thompson",
+    "Department":"HR",
+    "Age":32,
+    "Salary":72000,
+    "StartDate":"2016-07-11",
+    "PerformanceRating":4
+  }
+]
