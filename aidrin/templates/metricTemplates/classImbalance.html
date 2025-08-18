@@ -1,40 +1,70 @@
-{% extends 'metricTemplates/metricBase.html' %}
+{% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Class
+Imbalance" %} {% set page_route = "classImbalance" %} {% block metricContent %}
+<div id="checkboxContainer_classImbalance" class="checkboxContainer">
+  <br />
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox">
+      <input
+        type="checkbox"
+        name="class imbalance"
+        value="yes"
+        onchange="toggleValue(this)"
+      />
+      <span class="checkmark"></span>
+      Check class imbalance
+      <span class="info-icon"
+        >i
+        <span class="info-text"
+          >This option checks the distribution of the target feature and
+          displays a pie chart highlighting the class imbalance in the dataset.
+          <a
+            href="{{ url_for('class_imbalance_docs') }}"
+            target="_blank"
+            style="color: #4a90e2; font-style: italic;"
+            >See documentation</a
+          ></span
+        >
+      </span>
+    </label>
 
-{% set page_title = "Class Imbalance" %}
-{% set page_route = "classImbalance" %}
-
-{% block metricContent %}
-    <div id="checkboxContainer_classImbalance" class="checkboxContainer"><br>
-        <div class="checkboxContainerIndividual">
-            <label class="material-checkbox">
-                <input type="checkbox" name="class imbalance" value="yes" onchange="toggleValue(this)">
-                <span class="checkmark"></span>
-                Check class imbalance
-                <span class="info-icon">i
-                    <span class="info-text">This option checks the distribution of the target feature and displays a pie chart highlighting the class imbalance in the dataset. <a href="{{ url_for('class_imbalance_docs') }}" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span>
-                </span>
-            </label>
-            
-            <ul>
-                <li >
-                    <label for="features for class imbalance" style="padding:10px; padding-left:15px;">Target feature:</label>
-                    <select name="features for class imbalance" id = "allFeaturesDropdownClIm" required>
-                        <option value="" disabled selected>No features available for this dataset</option>
-                        <!-- Options added dynamically using JavaScript -->
-                    </select>
-                </li>
-                <li >
-                    <label for="distance metric for class imbalance" style="padding:10px; padding-left:15px;">Distance metric:</label>
-                    <select name="distance metric for class imbalance" id="distanceMetricDropdown" required>
-                        <option value="EU" selected>Euclidean Distance (EU)</option>
-                        <option value="CH">Chebyshev Distance (CH)</option>
-                        <option value="KL">Kullback-Leibler Divergence (KL)</option>
-                        <option value="HE">Hellinger Distance (HE)</option>
-                        <option value="TV">Total Variation Distance (TV)</option>
-                        <option value="CS">Chi-square Divergence (CS)</option>
-                    </select>
-                </li>
-            </ul>
-        </div>
-    </div>
+    <ul>
+      <li>
+        <label
+          for="features for class imbalance"
+          style="padding: 10px; padding-left: 15px;"
+          >Target feature:</label
+        >
+        <select
+          name="features for class imbalance"
+          id="allFeaturesDropdownClIm"
+          required
+        >
+          <option value="" disabled selected
+            >No features available for this dataset</option
+          >
+          <!-- Options added dynamically using JavaScript -->
+        </select>
+      </li>
+      <li>
+        <label
+          for="distance metric for class imbalance"
+          style="padding: 10px; padding-left: 15px;"
+          >Distance metric:</label
+        >
+        <select
+          name="distance metric for class imbalance"
+          id="distanceMetricDropdown"
+          required
+        >
+          <option value="EU" selected>Euclidean Distance (EU)</option>
+          <option value="CH">Chebyshev Distance (CH)</option>
+          <option value="KL">Kullback-Leibler Divergence (KL)</option>
+          <option value="HE">Hellinger Distance (HE)</option>
+          <option value="TV">Total Variation Distance (TV)</option>
+          <option value="CS">Chi-square Divergence (CS)</option>
+        </select>
+      </li>
+    </ul>
+  </div>
+</div>
 {% endblock %}

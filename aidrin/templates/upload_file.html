@@ -368,7 +368,7 @@
     window.addEventListener('resize', positionPreview);
     window.addEventListener('click',positionPreview)
 
-        
+
     /* SAMPLE FILE RENDERING */
     function toggleSampleData() {
         const sampleDataContainer = document.getElementById('sampleDataContainer');
@@ -381,7 +381,7 @@
         }
     }
 
-    // Sample Files defined here 
+    // Sample Files defined here
     const sampleFiles = [
         { name: 'adult.csv', type: 'csv', size: '3.7 MB' },
         { name: 'adult.h5', type: 'h5', size: '3.7 MB' },
@@ -454,28 +454,28 @@
     function updateStats(files) {
         const totalFiles = files.length;
         const typeCount = {};
-        
+
         files.forEach(file => {
             typeCount[file.type] = (typeCount[file.type] || 0) + 1;
         });
-        
+
         const typeStats = Object.entries(typeCount)
             .map(([type, count]) => `${count} ${type.toUpperCase()}`)
-            .join(', ');  
+            .join(', ');
     }
 
     function filterFiles() {
         const selectedType = document.getElementById('fileTypeSelect').value;
         const allFiles = document.querySelectorAll('.file-item');
-        
+
         allFiles.forEach(item => {
             item.classList.remove('notHighlighted');
             item.classList.remove('highlighted');
         });
-        
+
         if (selectedType) {
             const filteredFiles = sampleFiles.filter(file => file.type === selectedType);
-            
+
             allFiles.forEach(item => {
                 if (item.dataset.type !== selectedType) {
                     item.classList.add('notHighlighted');
@@ -483,7 +483,7 @@
                     item.classList.add('highlighted');
                 }
             });
-            
+
             updateStats(filteredFiles);
         } else {
             updateStats(sampleFiles);

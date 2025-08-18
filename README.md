@@ -127,9 +127,11 @@ Visit [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser to access A
 To shut down AIDRIN and release system resources, follow the steps below in order:
 
 ### 1. Stop the Flask Application (Terminal 3)
+
 Press `Ctrl+C` in the terminal running the Flask application.
 
 ### 2. Stop the Celery Worker (Terminal 2)
+
 Press `Ctrl+C` in the terminal running the Celery worker. Wait a few seconds for a graceful shutdown.
 
 ### 3. Stop the Redis Server (Terminal 1)
@@ -147,6 +149,7 @@ sudo systemctl stop redis
 ```
 
 ### 4. Verify All Processes Are Terminated
+
 Check for any remaining processes:
 
 ```bash
