@@ -1074,33 +1074,61 @@ def privacyPreservation():
                     "Graph interpretation": "No visualization available - no quasi-identifiers selected."
                 }
             else:
-                # Generate cache key for multiple attribute risk scoring
-                cache_key = generate_metric_cache_key(
-                    file_name,
-                    "multiple",
-                    id_feature=id_feature,
-                    qis=eval_features
-                )
+                # Validate that ID feature is selected
+                if not id_feature or id_feature.strip() == '':
+                    final_dict["Multiple attribute risk scoring"] = {
+                        "Error": "No ID feature selected for multiple attribute risk scoring.",
+                        "Multiple attribute risk scoring Visualization": "",
+                        "Graph interpretation": "No visualization available - no ID feature selected."
+                    }
+                else:
+                    # Generate cache key for multiple attribute risk scoring
+                    cache_key = generate_metric_cache_key(
+                        file_name,
+                        "multiple",
+                        id_feature=id_feature,
+                        qis=eval_features
+                    )
 
-                print(f"Privacy - Multiple Attribute Risk Score Generated cache key: {cache_key}")
+                    print(f"Privacy - Multiple Attribute Risk Score Generated cache key: {cache_key}")
 
-                # Check if this calculation has been cached
-                if cache_key in current_app.TEMP_RESULTS_CACHE:
-                    print(f"Privacy - Multiple Attribute Risk Score Cache HIT for key: {cache_key}")
-                    cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
-                    if is_metric_cache_valid(cached_entry):
-                        print("Privacy - Multiple Attribute Risk Score Cache is VALID, using cached result")
-                        final_dict["Multiple attribute risk scoring"] = cached_entry['data']
-                        # Reset expiration time when using cached result
-                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                            'data': cached_entry['data'],
-                            'timestamp': time.time(),
-                            'expires_at': time.time() + (30 * 60)
-                        }
-                        print(f"Using cached Multiple attribute risk scoring for key: {cache_key} (expiration reset)")
+                    # Check if this calculation has been cached
+                    if cache_key in current_app.TEMP_RESULTS_CACHE:
+                        print(f"Privacy - Multiple Attribute Risk Score Cache HIT for key: {cache_key}")
+                        cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                        if is_metric_cache_valid(cached_entry):
+                            print("Privacy - Multiple Attribute Risk Score Cache is VALID, using cached result")
+                            final_dict["Multiple attribute risk scoring"] = cached_entry['data']
+                            # Reset expiration time when using cached result
+                            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                                'data': cached_entry['data'],
+                                'timestamp': time.time(),
+                                'expires_at': time.time() + (30 * 60)
+                            }
+                            print(f"Using cached Multiple attribute risk scoring for key: {cache_key} (expiration reset)")
+                        else:
+                            print("Privacy - Multiple Attribute Risk Score Cache is EXPIRED, starting new task")
+                            current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                            # Convert DataFrame to JSON for async processing
+                            df_json = file.to_json()
+                            # Start async task
+                            task = calculate_multiple_attribute_risk_score.delay(df_json, id_feature, eval_features)
+                            final_dict["Multiple attribute risk scoring"] = {
+                                "task_id": task.id,
+                                "status": "processing",
+                                "message": "Multiple attribute risk scoring is being processed asynchronously. Please check back later.",
+                                "is_async": True,
+                                "cache_key": cache_key
+                            }
+                            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                                'data': final_dict["Multiple attribute risk scoring"],
+                                'timestamp': time.time(),
+                                'expires_at': time.time() + (30 * 60),
+                                'task_id': task.id
+                            }
+                            print(f"Started new Celery task for Multiple attribute risk scoring: {task.id}")
                     else:
-                        print("Privacy - Multiple Attribute Risk Score Cache is EXPIRED, starting new task")
-                        current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                        print(f"Privacy - Multiple Attribute Risk Score Cache MISS for key: {cache_key}")
                         # Convert DataFrame to JSON for async processing
                         df_json = file.to_json()
                         # Start async task
@@ -1119,226 +1147,522 @@ def privacyPreservation():
                             'task_id': task.id
                         }
                         print(f"Started new Celery task for Multiple attribute risk scoring: {task.id}")
-                else:
-                    print(f"Privacy - Multiple Attribute Risk Score Cache MISS for key: {cache_key}")
-                    # Convert DataFrame to JSON for async processing
-                    df_json = file.to_json()
-                    # Start async task
-                    task = calculate_multiple_attribute_risk_score.delay(df_json, id_feature, eval_features)
-                    final_dict["Multiple attribute risk scoring"] = {
-                        "task_id": task.id,
-                        "status": "processing",
-                        "message": "Multiple attribute risk scoring is being processed asynchronously. Please check back later.",
-                        "is_async": True,
-                        "cache_key": cache_key
-                    }
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': final_dict["Multiple attribute risk scoring"],
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60),
-                        'task_id': task.id
-                    }
-                    print(f"Started new Celery task for Multiple attribute risk scoring: {task.id}")
 
         # k-Anonymity
         if request.form.get("k-anonymity") == "yes":
             k_qis = request.form.getlist("quasi identifiers for k-anonymity")
 
-            # Generate cache key for k-anonymity
-            cache_key = generate_metric_cache_key(
-                file_name,
-                "kanon",
-                qis=k_qis
-            )
-
-            print(f"Privacy - k-Anonymity Generated cache key: {cache_key}")
-
-            # Check if this calculation has been cached
-            if cache_key in current_app.TEMP_RESULTS_CACHE:
-                print(f"Privacy - k-Anonymity Cache HIT for key: {cache_key}")
-                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
-                if is_metric_cache_valid(cached_entry):
-                    print("Privacy - k-Anonymity Cache is VALID, using cached result")
-                    final_dict["k-Anonymity"] = cached_entry['data']
-                    # Reset expiration time when using cached result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': cached_entry['data'],
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Using cached k-Anonymity for key: {cache_key} (expiration reset)")
-                else:
-                    print("Privacy - k-Anonymity Cache is EXPIRED, recalculating")
-                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
-                    result = compute_k_anonymity(k_qis, file)
-                    final_dict["k-Anonymity"] = result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': result,
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Cached k-Anonymity for key: {cache_key}")
-            else:
-                print(f"Privacy - k-Anonymity Cache MISS for key: {cache_key}")
-                result = compute_k_anonymity(k_qis, file)
-                final_dict["k-Anonymity"] = result
-                current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                    'data': result,
-                    'timestamp': time.time(),
-                    'expires_at': time.time() + (30 * 60)
+            # Validate that user has selected quasi-identifiers
+            if not k_qis or (len(k_qis) == 1 and k_qis[0] == ''):
+                final_dict["k-Anonymity"] = {
+                    "Error": "No quasi-identifiers selected for k-anonymity calculation.",
+                    "k-Anonymity Visualization": "",
+                    "Graph interpretation": "No visualization available - no quasi-identifiers selected."
                 }
-                print(f"Cached k-Anonymity for key: {cache_key}")
+            else:
+                # Generate cache key for k-anonymity
+                cache_key = generate_metric_cache_key(
+                    file_name,
+                    "kanon",
+                    qis=k_qis
+                )
+
+                print(f"Privacy - k-Anonymity Generated cache key: {cache_key}")
+
+                # Check if this calculation has been cached
+                if cache_key in current_app.TEMP_RESULTS_CACHE:
+                    print(f"Privacy - k-Anonymity Cache HIT for key: {cache_key}")
+                    cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                    if is_metric_cache_valid(cached_entry):
+                        print("Privacy - k-Anonymity Cache is VALID, using cached result")
+                        final_dict["k-Anonymity"] = cached_entry['data']
+                        # Reset expiration time when using cached result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': cached_entry['data'],
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Using cached k-Anonymity for key: {cache_key} (expiration reset)")
+                    else:
+                        print("Privacy - k-Anonymity Cache is EXPIRED, recalculating")
+                        current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                        try:
+                            result = compute_k_anonymity(k_qis, file)
+                            final_dict["k-Anonymity"] = result
+                            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                                'data': result,
+                                'timestamp': time.time(),
+                                'expires_at': time.time() + (30 * 60)
+                            }
+                            print(f"Cached k-Anonymity for key: {cache_key}")
+                        except Exception as e:
+                            error_message = str(e)
+                            if "Input DataFrame is empty" in error_message:
+                                error_response = {
+                                    "Error": "The uploaded dataset contains no data rows.",
+                                    "k-Anonymity Visualization": "",
+                                    "Graph interpretation": "No visualization available due to empty dataset."
+                                }
+                            elif "not found in the dataset" in error_message:
+                                error_response = {
+                                    "Error": f"Selected columns not found in dataset: {error_message}",
+                                    "k-Anonymity Visualization": "",
+                                    "Graph interpretation": "No visualization available due to missing columns."
+                                }
+                            elif "No data left after dropping rows with missing quasi-identifiers" in error_message:
+                                error_response = {
+                                    "Error": "After removing missing values, no data remains.",
+                                    "k-Anonymity Visualization": "",
+                                    "Graph interpretation": "No visualization available due to insufficient data."
+                                }
+                            elif "K anonymity task timed out" in error_message:
+                                error_response = {
+                                    "Error": "K-Anonymity task timed out. The dataset may be too large or complex."
+                                }
+                            else:
+                                error_response = {
+                                    "Error": f"Processing error: {error_message}",
+                                    "k-Anonymity Visualization": "",
+                                    "Graph interpretation": "No visualization available due to processing error."
+                                }
+                            
+                            final_dict["k-Anonymity"] = error_response
+                            print(f"Error in k-Anonymity: {error_message}")
+                else:
+                    print(f"Privacy - k-Anonymity Cache MISS for key: {cache_key}")
+                    try:
+                        result = compute_k_anonymity(k_qis, file)
+                        final_dict["k-Anonymity"] = result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': result,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached k-Anonymity for key: {cache_key}")
+                    except Exception as e:
+                        error_message = str(e)
+                        if "Input DataFrame is empty" in error_message:
+                            error_response = {
+                                "Error": "The uploaded dataset contains no data rows.",
+                                "k-Anonymity Visualization": "",
+                                "Graph interpretation": "No visualization available due to empty dataset."
+                            }
+                        elif "not found in the dataset" in error_message:
+                            error_response = {
+                                "Error": f"Selected columns not found in dataset: {error_message}",
+                                "k-Anonymity Visualization": "",
+                                "Graph interpretation": "No visualization available due to missing columns."
+                            }
+                        elif "No data left after dropping rows with missing quasi-identifiers" in error_message:
+                            error_response = {
+                                "Error": "After removing missing values, no data remains.",
+                                "k-Anonymity Visualization": "",
+                                "Graph interpretation": "No visualization available due to insufficient data."
+                            }
+                        elif "K anonymity task timed out" in error_message:
+                            error_response = {
+                                "Error": "K-Anonymity task timed out. The dataset may be too large or complex."
+                            }
+                        else:
+                            error_response = {
+                                "Error": f"Processing error: {error_message}",
+                                "k-Anonymity Visualization": "",
+                                "Graph interpretation": "No visualization available due to processing error."
+                            }
+                        
+                        final_dict["k-Anonymity"] = error_response
+                        print(f"Error in k-Anonymity: {error_message}")
 
         # l-Diversity
         if request.form.get("l-diversity") == "yes":
             l_qis = request.form.getlist("quasi identifiers for l-diversity")
             l_sensitive = request.form.get("sensitive attribute for l-diversity")
 
-            # Generate cache key for l-diversity
-            cache_key = generate_metric_cache_key(
-                file_name,
-                "ldiv",
-                qis=l_qis,
-                sensitive=l_sensitive
-            )
-
-            print(f"Privacy - l-Diversity Generated cache key: {cache_key}")
-
-            # Check if this calculation has been cached
-            if cache_key in current_app.TEMP_RESULTS_CACHE:
-                print(f"Privacy - l-Diversity Cache HIT for key: {cache_key}")
-                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
-                if is_metric_cache_valid(cached_entry):
-                    print("Privacy - l-Diversity Cache is VALID, using cached result")
-                    final_dict["l-Diversity"] = cached_entry['data']
-                    # Reset expiration time when using cached result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': cached_entry['data'],
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Using cached l-Diversity for key: {cache_key} (expiration reset)")
-                else:
-                    print("Privacy - l-Diversity Cache is EXPIRED, recalculating")
-                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
-                    result = compute_l_diversity(l_qis, l_sensitive, file)
-                    final_dict["l-Diversity"] = result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': result,
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Cached l-Diversity for key: {cache_key}")
-            else:
-                print(f"Privacy - l-Diversity Cache MISS for key: {cache_key}")
-                result = compute_l_diversity(l_qis, l_sensitive, file)
-                final_dict["l-Diversity"] = result
-                current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                    'data': result,
-                    'timestamp': time.time(),
-                    'expires_at': time.time() + (30 * 60)
+            # Validate that user has selected quasi-identifiers
+            if not l_qis or (len(l_qis) == 1 and l_qis[0] == ''):
+                final_dict["l-Diversity"] = {
+                    "Error": "No quasi-identifiers selected for l-diversity calculation.",
+                    "l-Diversity Visualization": "",
+                    "Graph interpretation": "No visualization available - no quasi-identifiers selected."
                 }
-                print(f"Cached l-Diversity for key: {cache_key}")
+            elif not l_sensitive or l_sensitive.strip() == '':
+                final_dict["l-Diversity"] = {
+                    "Error": "No sensitive attribute selected for l-diversity calculation.",
+                    "l-Diversity Visualization": "",
+                    "Graph interpretation": "No visualization available - no sensitive attribute selected."
+                }
+            else:
+                # Generate cache key for l-diversity
+                cache_key = generate_metric_cache_key(
+                    file_name,
+                    "ldiv",
+                    qis=l_qis,
+                    sensitive=l_sensitive
+                )
+
+                print(f"Privacy - l-Diversity Generated cache key: {cache_key}")
+
+                # Check if this calculation has been cached
+                if cache_key in current_app.TEMP_RESULTS_CACHE:
+                    print(f"Privacy - l-Diversity Cache HIT for key: {cache_key}")
+                    cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                    if is_metric_cache_valid(cached_entry):
+                        print("Privacy - l-Diversity Cache is VALID, using cached result")
+                        final_dict["l-Diversity"] = cached_entry['data']
+                        # Reset expiration time when using cached result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': cached_entry['data'],
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Using cached l-Diversity for key: {cache_key} (expiration reset)")
+                    else:
+                        print("Privacy - l-Diversity Cache is EXPIRED, recalculating")
+                        current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                        try:
+                            result = compute_l_diversity(l_qis, l_sensitive, file)
+                            final_dict["l-Diversity"] = result
+                            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                                'data': result,
+                                'timestamp': time.time(),
+                                'expires_at': time.time() + (30 * 60)
+                            }
+                            print(f"Cached l-Diversity for key: {cache_key}")
+                        except Exception as e:
+                            error_message = str(e)
+                            if "Input DataFrame is empty" in error_message:
+                                error_response = {
+                                    "Error": "The uploaded dataset contains no data rows.",
+                                    "l-Diversity Visualization": "",
+                                    "Graph interpretation": "No visualization available due to empty dataset."
+                                }
+                            elif "not found in the dataset" in error_message:
+                                error_response = {
+                                    "Error": f"Selected columns not found in dataset: {error_message}",
+                                    "l-Diversity Visualization": "",
+                                    "Graph interpretation": "No visualization available due to missing columns."
+                                }
+                            elif "No data left after dropping rows with missing quasi-identifiers or sensitive values" in error_message:
+                                error_response = {
+                                    "Error": "After removing missing values, no data remains.",
+                                    "l-Diversity Visualization": "",
+                                    "Graph interpretation": "No visualization available due to insufficient data."
+                                }
+                            elif "L Diversity task timed out" in error_message:
+                                error_response = {
+                                    "Error": "L-Diversity task timed out. The dataset may be too large or complex."
+                                }
+                            else:
+                                error_response = {
+                                    "Error": f"Processing error: {error_message}",
+                                    "l-Diversity Visualization": "",
+                                    "Graph interpretation": "No visualization available due to processing error."
+                                }
+                            
+                            final_dict["l-Diversity"] = error_response
+                            print(f"Error in l-Diversity: {error_message}")
+                else:
+                    print(f"Privacy - l-Diversity Cache MISS for key: {cache_key}")
+                    try:
+                        result = compute_l_diversity(l_qis, l_sensitive, file)
+                        final_dict["l-Diversity"] = result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': result,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached l-Diversity for key: {cache_key}")
+                    except Exception as e:
+                        error_message = str(e)
+                        if "Input DataFrame is empty" in error_message:
+                            error_response = {
+                                "Error": "The uploaded dataset contains no data rows.",
+                                "l-Diversity Visualization": "",
+                                "Graph interpretation": "No visualization available due to empty dataset."
+                            }
+                        elif "not found in the dataset" in error_message:
+                            error_response = {
+                                "Error": f"Selected columns not found in dataset: {error_message}",
+                                "l-Diversity Visualization": "",
+                                "Graph interpretation": "No visualization available due to missing columns."
+                            }
+                        elif "No data left after dropping rows with missing quasi-identifiers or sensitive values" in error_message:
+                            error_response = {
+                                "Error": "After removing missing values, no data remains.",
+                                "l-Diversity Visualization": "",
+                                "Graph interpretation": "No visualization available due to insufficient data."
+                            }
+                        elif "L Diversity task timed out" in error_message:
+                            error_response = {
+                                "Error": "L-Diversity task timed out. The dataset may be too large or complex."
+                            }
+                        else:
+                            error_response = {
+                                "Error": f"Processing error: {error_message}",
+                                "l-Diversity Visualization": "",
+                                "Graph interpretation": "No visualization available due to processing error."
+                            }
+                        
+                        final_dict["l-Diversity"] = error_response
+                        print(f"Error in l-Diversity: {error_message}")
 
         # t-Closeness
         if request.form.get("t-closeness") == "yes":
             t_qis = request.form.getlist("quasi identifiers for t-closeness")
             t_sensitive = request.form.get("sensitive attribute for t-closeness")
 
-            # Generate cache key for t-closeness
-            cache_key = generate_metric_cache_key(
-                file_name,
-                "tclose",
-                qis=t_qis,
-                sensitive=t_sensitive
-            )
-
-            print(f"Privacy - t-Closeness Generated cache key: {cache_key}")
-
-            # Check if this calculation has been cached
-            if cache_key in current_app.TEMP_RESULTS_CACHE:
-                print(f"Privacy - t-Closeness Cache HIT for key: {cache_key}")
-                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
-                if is_metric_cache_valid(cached_entry):
-                    print("Privacy - t-Closeness Cache is VALID, using cached result")
-                    final_dict["t-Closeness"] = cached_entry['data']
-                    # Reset expiration time when using cached result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': cached_entry['data'],
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Using cached t-Closeness for key: {cache_key} (expiration reset)")
-                else:
-                    print("Privacy - t-Closeness Cache is EXPIRED, recalculating")
-                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
-                    result = compute_t_closeness(t_qis, t_sensitive, file)
-                    final_dict["t-Closeness"] = result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': result,
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Cached t-Closeness for key: {cache_key}")
-            else:
-                print(f"Privacy - t-Closeness Cache MISS for key: {cache_key}")
-                result = compute_t_closeness(t_qis, t_sensitive, file)
-                final_dict["t-Closeness"] = result
-                current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                    'data': result,
-                    'timestamp': time.time(),
-                    'expires_at': time.time() + (30 * 60)
+            # Validate that user has selected quasi-identifiers
+            if not t_qis or (len(t_qis) == 1 and t_qis[0] == ''):
+                final_dict["t-Closeness"] = {
+                    "Error": "No quasi-identifiers selected for t-closeness calculation.",
+                    "t-Closeness Visualization": "",
+                    "Graph interpretation": "No visualization available - no quasi-identifiers selected."
                 }
-                print(f"Cached t-Closeness for key: {cache_key}")
+            elif not t_sensitive or t_sensitive.strip() == '':
+                final_dict["t-Closeness"] = {
+                    "Error": "No sensitive attribute selected for t-closeness calculation.",
+                    "t-Closeness Visualization": "",
+                    "Graph interpretation": "No visualization available - no sensitive attribute selected."
+                }
+            else:
+                # Generate cache key for t-closeness
+                cache_key = generate_metric_cache_key(
+                    file_name,
+                    "tclose",
+                    qis=t_qis,
+                    sensitive=t_sensitive
+                )
+
+                print(f"Privacy - t-Closeness Generated cache key: {cache_key}")
+
+                # Check if this calculation has been cached
+                if cache_key in current_app.TEMP_RESULTS_CACHE:
+                    print(f"Privacy - t-Closeness Cache HIT for key: {cache_key}")
+                    cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                    if is_metric_cache_valid(cached_entry):
+                        print("Privacy - t-Closeness Cache is VALID, using cached result")
+                        final_dict["t-Closeness"] = cached_entry['data']
+                        # Reset expiration time when using cached result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': cached_entry['data'],
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Using cached t-Closeness for key: {cache_key} (expiration reset)")
+                    else:
+                        print("Privacy - t-Closeness Cache is EXPIRED, recalculating")
+                        current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                        try:
+                            result = compute_t_closeness(t_qis, t_sensitive, file)
+                            final_dict["t-Closeness"] = result
+                            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                                'data': result,
+                                'timestamp': time.time(),
+                                'expires_at': time.time() + (30 * 60)
+                            }
+                            print(f"Cached t-Closeness for key: {cache_key}")
+                        except Exception as e:
+                            error_message = str(e)
+                            if "Input DataFrame is empty" in error_message:
+                                error_response = {
+                                    "Error": "The uploaded dataset contains no data rows.",
+                                    "t-Closeness Visualization": "",
+                                    "Graph interpretation": "No visualization available due to empty dataset."
+                                }
+                            elif "not found in the dataset" in error_message:
+                                error_response = {
+                                    "Error": f"Selected columns not found in dataset: {error_message}",
+                                    "t-Closeness Visualization": "",
+                                    "Graph interpretation": "No visualization available due to missing columns."
+                                }
+                            elif "No data left after dropping rows with missing values" in error_message:
+                                error_response = {
+                                    "Error": "After removing missing values, no data remains.",
+                                    "t-Closeness Visualization": "",
+                                    "Graph interpretation": "No visualization available due to insufficient data."
+                                }
+                            elif "T Closeness task timed out" in error_message:
+                                error_response = {
+                                    "Error": "T-Closeness task timed out. The dataset may be too large or complex."
+                                }
+                            else:
+                                error_response = {
+                                    "Error": f"Processing error: {error_message}",
+                                    "t-Closeness Visualization": "",
+                                    "Graph interpretation": "No visualization available due to processing error."
+                                }
+                            
+                            final_dict["t-Closeness"] = error_response
+                            print(f"Error in t-Closeness: {error_message}")
+                else:
+                    print(f"Privacy - t-Closeness Cache MISS for key: {cache_key}")
+                    try:
+                        result = compute_t_closeness(t_qis, t_sensitive, file)
+                        final_dict["t-Closeness"] = result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': result,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached t-Closeness for key: {cache_key}")
+                    except Exception as e:
+                        error_message = str(e)
+                        if "Input DataFrame is empty" in error_message:
+                            error_response = {
+                                "Error": "The uploaded dataset contains no data rows.",
+                                "t-Closeness Visualization": "",
+                                "Graph interpretation": "No visualization available due to empty dataset."
+                            }
+                        elif "not found in the dataset" in error_message:
+                            error_response = {
+                                "Error": f"Selected columns not found in dataset: {error_message}",
+                                "t-Closeness Visualization": "",
+                                "Graph interpretation": "No visualization available due to missing columns."
+                            }
+                        elif "No data left after dropping rows with missing values" in error_message:
+                            error_response = {
+                                "Error": "After removing missing values, no data remains.",
+                                "t-Closeness Visualization": "",
+                                "Graph interpretation": "No visualization available due to insufficient data."
+                            }
+                        elif "T Closeness task timed out" in error_message:
+                            error_response = {
+                                "Error": "T-Closeness task timed out. The dataset may be too large or complex."
+                            }
+                        else:
+                            error_response = {
+                                "Error": f"Processing error: {error_message}",
+                                "t-Closeness Visualization": "",
+                                "Graph interpretation": "No visualization available due to processing error."
+                            }
+                        
+                        final_dict["t-Closeness"] = error_response
+                        print(f"Error in t-Closeness: {error_message}")
 
         # Entropy Risk
         if request.form.get("entropy risk") == "yes":
             entropy_qis = request.form.getlist("quasi identifiers for entropy risk")
 
-            # Generate cache key for entropy risk
-            cache_key = generate_metric_cache_key(
-                file_name,
-                "entropy",
-                qis=entropy_qis
-            )
-
-            print(f"Privacy - Entropy Risk Generated cache key: {cache_key}")
-
-            # Check if this calculation has been cached
-            if cache_key in current_app.TEMP_RESULTS_CACHE:
-                print(f"Privacy - Entropy Risk Cache HIT for key: {cache_key}")
-                cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
-                if is_metric_cache_valid(cached_entry):
-                    print("Privacy - Entropy Risk Cache is VALID, using cached result")
-                    final_dict["Entropy Risk"] = cached_entry['data']
-                    # Reset expiration time when using cached result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': cached_entry['data'],
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Using cached Entropy Risk for key: {cache_key} (expiration reset)")
-                else:
-                    print("Privacy - Entropy Risk Cache is EXPIRED, recalculating")
-                    current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
-                    result = compute_entropy_risk(entropy_qis, file)
-                    final_dict["Entropy Risk"] = result
-                    current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                        'data': result,
-                        'timestamp': time.time(),
-                        'expires_at': time.time() + (30 * 60)
-                    }
-                    print(f"Cached Entropy Risk for key: {cache_key}")
-            else:
-                print(f"Privacy - Entropy Risk Cache MISS for key: {cache_key}")
-                result = compute_entropy_risk(entropy_qis, file)
-                final_dict["Entropy Risk"] = result
-                current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                    'data': result,
-                    'timestamp': time.time(),
-                    'expires_at': time.time() + (30 * 60)
+            # Validate that user has selected quasi-identifiers
+            if not entropy_qis or (len(entropy_qis) == 1 and entropy_qis[0] == ''):
+                final_dict["Entropy Risk"] = {
+                    "Error": "No quasi-identifiers selected for entropy risk calculation.",
+                    "Entropy Risk Visualization": "",
+                    "Graph interpretation": "No visualization available - no quasi-identifiers selected."
                 }
-                print(f"Cached Entropy Risk for key: {cache_key}")
+            else:
+                # Generate cache key for entropy risk
+                cache_key = generate_metric_cache_key(
+                    file_name,
+                    "entropy",
+                    qis=entropy_qis
+                )
+
+                print(f"Privacy - Entropy Risk Generated cache key: {cache_key}")
+
+                # Check if this calculation has been cached
+                if cache_key in current_app.TEMP_RESULTS_CACHE:
+                    print(f"Privacy - Entropy Risk Cache HIT for key: {cache_key}")
+                    cached_entry = current_app.TEMP_RESULTS_CACHE[cache_key]
+                    if is_metric_cache_valid(cached_entry):
+                        print("Privacy - Entropy Risk Cache is VALID, using cached result")
+                        final_dict["Entropy Risk"] = cached_entry['data']
+                        # Reset expiration time when using cached result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': cached_entry['data'],
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Using cached Entropy Risk for key: {cache_key} (expiration reset)")
+                    else:
+                        print("Privacy - Entropy Risk Cache is EXPIRED, recalculating")
+                        current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                        try:
+                            result = compute_entropy_risk(entropy_qis, file)
+                            final_dict["Entropy Risk"] = result
+                            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                                'data': result,
+                                'timestamp': time.time(),
+                                'expires_at': time.time() + (30 * 60)
+                            }
+                            print(f"Cached Entropy Risk for key: {cache_key}")
+                        except Exception as e:
+                            error_message = str(e)
+                            if "Input DataFrame is empty" in error_message:
+                                error_response = {
+                                    "Error": "The uploaded dataset contains no data rows.",
+                                    "Entropy Risk Visualization": "",
+                                    "Graph interpretation": "No visualization available due to empty dataset."
+                                }
+                            elif "not found in the dataset" in error_message:
+                                error_response = {
+                                    "Error": f"Selected columns not found in dataset: {error_message}",
+                                    "Entropy Risk Visualization": "",
+                                    "Graph interpretation": "No visualization available due to missing columns."
+                                }
+                            elif "No data left after dropping rows with missing values" in error_message:
+                                error_response = {
+                                    "Error": "After removing missing values, no data remains.",
+                                    "Entropy Risk Visualization": "",
+                                    "Graph interpretation": "No visualization available due to insufficient data."
+                                }
+                            elif "Entropy Risk task timed out" in error_message:
+                                error_response = {
+                                    "Error": "Entropy Risk task timed out. The dataset may be too large or complex."
+                                }
+                            else:
+                                error_response = {
+                                    "Error": f"Processing error: {error_message}",
+                                    "Entropy Risk Visualization": "",
+                                    "Graph interpretation": "No visualization available due to processing error."
+                                }
+                            
+                            final_dict["Entropy Risk"] = error_response
+                            print(f"Error in Entropy Risk: {error_message}")
+                else:
+                    print(f"Privacy - Entropy Risk Cache MISS for key: {cache_key}")
+                    try:
+                        result = compute_entropy_risk(entropy_qis, file)
+                        final_dict["Entropy Risk"] = result
+                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                            'data': result,
+                            'timestamp': time.time(),
+                            'expires_at': time.time() + (30 * 60)
+                        }
+                        print(f"Cached Entropy Risk for key: {cache_key}")
+                    except Exception as e:
+                        error_message = str(e)
+                        if "Input DataFrame is empty" in error_message:
+                            error_response = {
+                                "Error": "The uploaded dataset contains no data rows.",
+                                "Entropy Risk Visualization": "",
+                                "Graph interpretation": "No visualization available due to empty dataset."
+                            }
+                        elif "not found in the dataset" in error_message:
+                            error_response = {
+                                "Error": f"Selected columns not found in dataset: {error_message}",
+                                "Entropy Risk Visualization": "",
+                                "Graph interpretation": "No visualization available due to missing columns."
+                            }
+                        elif "No data left after dropping rows with missing values" in error_message:
+                            error_response = {
+                                "Error": "After removing missing values, no data remains.",
+                                "Entropy Risk Visualization": "",
+                                "Graph interpretation": "No visualization available due to insufficient data."
+                            }
+                        elif "Entropy Risk task timed out" in error_message:
+                            error_response = {
+                                "Error": "Entropy Risk task timed out. The dataset may be too large or complex."
+                            }
+                        else:
+                            error_response = {
+                                "Error": f"Processing error: {error_message}",
+                                "Entropy Risk Visualization": "",
+                                "Graph interpretation": "No visualization available due to processing error."
+                            }
+                        
+                        final_dict["Entropy Risk"] = error_response
+                        print(f"Error in Entropy Risk: {error_message}")
 
         end_time = time.time()
         execution_time = end_time - start_time

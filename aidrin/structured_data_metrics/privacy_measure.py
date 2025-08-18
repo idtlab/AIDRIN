@@ -220,22 +220,17 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
                 meta={'current': 5, 'total': 100, 'status': 'Data validation & preprocessing...'}
             )
 
-        # check if dataframe is empty
+        # Check if DataFrame is empty
         if df.empty:
-            result_dict["Value Error"] = "Input dataframe is empty"
-            return result_dict
+            raise ValueError("Input DataFrame is empty.")
 
         # Handle eval_cols - it might be a string or list
         if isinstance(eval_cols, str):
-            # If it's a string, split by comma and clean up
             eval_cols = [col.strip() for col in eval_cols.split(',') if col.strip()]
-
         elif isinstance(eval_cols, list):
-            # If it's already a list, clean up each item
             eval_cols = [col.strip() for col in eval_cols if col.strip()]
-
         else:
-            raise ValueError(f"eval_cols must be a string or list, got {type(eval_cols)}")
+            raise ValueError("eval_cols must be a string or list")
 
         # Check if eval_cols is empty after processing
         if not eval_cols:
@@ -250,16 +245,28 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         if not id_col or id_col not in df.columns:
             raise ValueError(f"ID column '{id_col}' not found in dataset")
 
+        # Check if ID column has unique values
+        if df[id_col].nunique() != len(df):
+            raise ValueError(f"ID column '{id_col}' must contain unique values for each row.")
+
         # Select specified columns from DataFrame
         selected_columns = [id_col] + eval_cols
         selected_df = df[selected_columns]
 
+        # Check data quality for quasi-identifiers
+        for col in eval_cols:
+            if col in df.columns:
+                unique_values = df[col].nunique()
+                if unique_values == 1:
+                    raise ValueError(f"Column '{col}' has only one unique value, making risk assessment meaningless.")
+                if unique_values == len(df):
+                    raise ValueError(f"Column '{col}' is a perfect identifier, making it unsuitable for risk assessment.")
+
         selected_df = selected_df.dropna()
 
-        # check if the dataframe is still non-empty after dropping missing values
+        # Check if DataFrame is still non-empty after dropping missing values
         if selected_df.empty:
-            result_dict["Values Error"] = "After dropping missing values, the dataframe is empty"
-            return result_dict
+            raise ValueError("After dropping missing values, the DataFrame is empty")
 
         # convert dataframe to numpy array
         my_array = selected_df.to_numpy()
@@ -285,6 +292,9 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
                         my_array[:, i - 1] == my_array[j][i - 1]
                     )
 
+                    if attr1_tot == 0:
+                        raise ValueError(f"Column '{eval_cols[i-2] if i-2 < len(eval_cols) else 'unknown'}' has unexpected data structure causing division by zero.")
+
                     mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i-1] == my_array[j][i-1])
                     count_attr1_user = np.count_nonzero(mask_attr1_user)
 
@@ -302,6 +312,9 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
 
                     attr2_tot = np.count_nonzero(my_array[:, i] == my_array[j][i])
 
+                    if attr2_tot == 0:
+                        raise ValueError(f"Column '{eval_cols[i-1] if i-1 < len(eval_cols) else 'unknown'}' has unexpected data structure causing division by zero.")
+
                     mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i] == my_array[j][i])
                     count_attr2_user = np.count_nonzero(mask_attr2_user)
 
@@ -313,6 +326,9 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
             elif len(my_array[0]) == 2:
                 priv_prob_MM = 1
                 attr1_tot = np.count_nonzero(my_array[:, 1] == my_array[j][1])
+
+                if attr1_tot == 0:
+                    raise ValueError(f"Column '{eval_cols[0] if eval_cols else 'unknown'}' has unexpected data structure causing division by zero.")
 
                 mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, 1] == my_array[j][1])
                 count_attr1_user = np.count_nonzero(mask_attr1_user)
@@ -403,180 +419,19 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
 
         return result_dict
 
-    except Exception as e:
-        result_dict["Error"] = str(e)
-        # Ensure the visualization key is always present for frontend compatibility
+    except SoftTimeLimitExceeded:
+        raise Exception("Multiple Attribute Risk task timed out.")
+    except ValueError as ve:
+        result_dict["Error"] = str(ve)
         result_dict["Multiple attribute risk scoring Visualization"] = ""
-        result_dict["Description"] = f"Error occurred: {str(e)}"
-        result_dict["Graph interpretation"] = "No visualization available due to error."
+        result_dict["Graph interpretation"] = "No visualization available due to validation error."
+        result_dict["ErrorType"] = "Validation Error"
         return result_dict
-    result_dict = {}
-
-    try:
-
-        # Check if DataFrame is empty
-        if df.empty:
-            raise ValueError("Input DataFrame is empty.")
-
-        # Handle eval_cols - it might be a string or list
-        if isinstance(eval_cols, str):
-            eval_cols = [col.strip() for col in eval_cols.split(",") if col.strip()]
-        elif isinstance(eval_cols, list):
-            eval_cols = [col.strip() for col in eval_cols if col.strip()]
-        else:
-            raise ValueError("eval_cols must be a string or list")
-
-        # Check if eval_cols is empty after processing
-        if not eval_cols:
-            raise ValueError("No valid columns provided in eval_cols after processing")
-
-        # Validate that all columns exist in the dataframe
-        missing_cols = [col for col in eval_cols if col not in df.columns]
-        if missing_cols:
-            raise ValueError(f"Columns not found in dataset: {missing_cols}")
-
-        # Validate id_col
-        if not id_col or id_col not in df.columns:
-            raise ValueError(f"ID column '{id_col}' not found in dataset")
-
-        # Select specified columns from DataFrame
-        selected_columns = [id_col] + eval_cols
-        selected_df = df[selected_columns]
-        selected_df = selected_df.dropna()
-
-        # Check if DataFrame is still non-empty after dropping missing values
-        if selected_df.empty:
-            raise ValueError("After dropping missing values, the DataFrame is empty")
-
-        # Convert DataFrame to numpy array
-        my_array = selected_df.to_numpy()
-
-        # Stage 2: Calculate risk scores (15-70%)
-        if task:
-            task.update_state(
-                state='PROGRESS',
-                meta={'current': 25, 'total': 100, 'status': 'Calculating risk scores...'}
-            )
-
-        risk_scores = np.zeros(len(my_array))
-        total_rows = len(my_array)
-
-        for j in range(len(my_array)):
-            # Update progress for every 10% of rows processed
-            if task and j % max(1, total_rows // 10) == 0:
-                progress = 25 + (j / total_rows) * 55  # 25% to 80%
-                task.update_state(
-                    state='PROGRESS',
-                    meta={'current': int(progress), 'total': 100, 'status': f'Calculating risk scores... ({j}/{total_rows} rows processed)'}
-                )
-
-            if len(my_array[0]) > 2:
-                priv_prob_MM = 1
-                for i in range(2, len(my_array[0])):
-                    attr1_tot = np.count_nonzero(my_array[:, i - 1] == my_array[j][i - 1])
-                    mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i - 1] == my_array[j][i - 1])
-                    count_attr1_user = np.count_nonzero(mask_attr1_user)
-                    start_prob_attr1 = attr1_tot / len(my_array)
-                    obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)
-                    mask_attr1_attr2 = my_array[:, i - 1] == my_array[j][i - 1]
-                    count_attr1_attr2 = np.count_nonzero(mask_attr1_attr2)
-                    mask2_attr1_attr2 = (my_array[:, i - 1] == my_array[j][i - 1]) & (my_array[:, i] == my_array[j][i])
-                    count2_attr1_attr2 = np.count_nonzero(mask2_attr1_attr2)
-                    trans_prob_attr1_attr2 = count2_attr1_attr2 / count_attr1_attr2
-                    attr2_tot = np.count_nonzero(my_array[:, i] == my_array[j][i])
-                    mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i] == my_array[j][i])
-                    count_attr2_user = np.count_nonzero(mask_attr2_user)
-                    obs_prob_attr2 = 1 - (count_attr2_user / attr2_tot)
-                    priv_prob_MM = (
-                        priv_prob_MM
-                        * start_prob_attr1
-                        * obs_prob_attr1
-                        * trans_prob_attr1_attr2
-                        * obs_prob_attr2
-                    )
-                    worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)
-                risk_scores[j] = worst_case_MM_risk_score
-            elif len(my_array[0]) == 2:
-                priv_prob_MM = 1
-                attr1_tot = np.count_nonzero(my_array[:, 1] == my_array[j][1])
-                mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, 1] == my_array[j][1])
-                count_attr1_user = np.count_nonzero(mask_attr1_user)
-                start_prob_attr1 = attr1_tot / len(my_array)
-                obs_prob_attr1 = 1 - (count_attr1_user / attr1_tot)
-                priv_prob_MM = priv_prob_MM * start_prob_attr1 * obs_prob_attr1
-                worst_case_MM_risk_score = round(1 - priv_prob_MM, 2)
-                risk_scores[j] = worst_case_MM_risk_score
-
-        # Stage 3: Calculate dataset privacy level (70-80%)
-        if task:
-            task.update_state(
-                state='PROGRESS',
-                meta={'current': 85, 'total': 100, 'status': 'Calculating dataset privacy level...'}
-            )
-
-        # Calculate the entire dataset privacy level
-        min_risk_scores = np.zeros(len(risk_scores))
-        euclidean_distance = np.linalg.norm(risk_scores - min_risk_scores)
-        max_risk_scores = np.ones(len(risk_scores))
-        max_euclidean_distance = np.linalg.norm(max_risk_scores - min_risk_scores)
-        normalized_distance = euclidean_distance/max_euclidean_distance
-
-        # Stage 4: Calculate descriptive statistics (80-90%)
-        if task:
-            task.update_state(
-                state='PROGRESS',
-                meta={'current': 95, 'total': 100, 'status': 'Generating visualization...'}
-            )
-
-        stats_dict = {
-            "mean": np.mean(risk_scores),
-            "std": np.std(risk_scores),
-            "min": np.min(risk_scores),
-            "25%": np.percentile(risk_scores, 25),
-            "50%": np.median(risk_scores),
-            "75%": np.percentile(risk_scores, 75),
-            "max": np.max(risk_scores),
-        }
-
-        # Create a box plot - using same pattern as single attribute
-        plt.figure(figsize=(8, 8))
-        plt.boxplot([risk_scores], labels=[",".join(eval_cols)])
-        plt.title("Box Plot of Multiple Attribute Risk Scores")
-        plt.xlabel("Feature Combination")
-        plt.ylabel("Risk Score")
-
-        # Save the plot as a PNG image in memory - using same pattern as single attribute
-        image_stream = io.BytesIO()
-        plt.savefig(image_stream, format="png")
-        plt.close()
-
-        # Convert the image to a base64 string - using same pattern as single attribute
-        image_stream.seek(0)
-        base64_image = base64.b64encode(image_stream.read()).decode("utf-8")
-        image_stream.close()
-
-        # Store results in dictionary
-        result_dict["Description"] = (
-            "This metric evaluates the joint risk posed by combinations of "
-            "quasi-identifiers. Lower values are preferred, as they indicate "
-            "that the selected set of features does not easily allow "
-            "re-identification."
-        )
-        result_dict["Graph interpretation"] = (
-            "The box plot shows the distribution of combined risk scores. A distribution concentrated at lower values indicates better privacy."
-        )
-        result_dict["Descriptive statistics of the risk scores"] = stats_dict
-        result_dict["Multiple attribute risk scoring Visualization"] = base64_image
-        result_dict["Dataset Risk Score"] = normalized_distance
-
-        return result_dict
-
     except Exception as e:
-        result_dict["Error"] = str(e)
-        # Ensure the visualization key is always present for frontend compatibility
+        result_dict["Error"] = f"Processing error: {str(e)}"
         result_dict["Multiple attribute risk scoring Visualization"] = ""
-        result_dict["Description"] = f"Error occurred: {str(e)}"
-        result_dict["Graph interpretation"] = "No visualization available due to error."
+        result_dict["Graph interpretation"] = "No visualization available due to processing error."
+        result_dict["ErrorType"] = "Processing Error"
         return result_dict
 
 
@@ -652,8 +507,18 @@ def compute_k_anonymity(quasi_identifiers: List[str], file_info):
         }
     except SoftTimeLimitExceeded:
         raise Exception("K anonymity task timed out.")
+    except ValueError as ve:
+        result_dict["Error"] = str(ve)
+        result_dict["k-Anonymity Visualization"] = ""
+        result_dict["Graph interpretation"] = "No visualization available due to validation error."
+        result_dict["ErrorType"] = "Validation Error"
+        return result_dict
     except Exception as e:
-        result_dict["error"] = str(e)
+        result_dict["Error"] = f"Processing error: {str(e)}"
+        result_dict["k-Anonymity Visualization"] = ""
+        result_dict["Graph interpretation"] = "No visualization available due to processing error."
+        result_dict["ErrorType"] = "Processing Error"
+        return result_dict
 
     return result_dict
 
@@ -747,8 +612,18 @@ def compute_l_diversity(
         }
     except SoftTimeLimitExceeded:
         raise Exception("L Diversity task timed out.")
+    except ValueError as ve:
+        result_dict["Error"] = str(ve)
+        result_dict["l-Diversity Visualization"] = ""
+        result_dict["Graph interpretation"] = "No visualization available due to validation error."
+        result_dict["ErrorType"] = "Validation Error"
+        return result_dict
     except Exception as e:
-        result_dict["error"] = str(e)
+        result_dict["Error"] = f"Processing error: {str(e)}"
+        result_dict["l-Diversity Visualization"] = ""
+        result_dict["Graph interpretation"] = "No visualization available due to processing error."
+        result_dict["ErrorType"] = "Processing Error"
+        return result_dict
 
     return result_dict
 
@@ -841,8 +716,18 @@ def compute_t_closeness(
         }
     except SoftTimeLimitExceeded:
         raise Exception("T Closeness task timed out.")
+    except ValueError as ve:
+        result_dict["Error"] = str(ve)
+        result_dict["t-Closeness Visualization"] = ""
+        result_dict["Graph interpretation"] = "No visualization available due to validation error."
+        result_dict["ErrorType"] = "Validation Error"
+        return result_dict
     except Exception as e:
-        result_dict["error"] = str(e)
+        result_dict["Error"] = f"Processing error: {str(e)}"
+        result_dict["t-Closeness Visualization"] = ""
+        result_dict["Graph interpretation"] = "No visualization available due to processing error."
+        result_dict["ErrorType"] = "Processing Error"
+        return result_dict
 
     return result_dict
 
@@ -923,8 +808,18 @@ def compute_entropy_risk(quasi_identifiers, file_info):
         }
     except SoftTimeLimitExceeded:
         raise Exception("Entropy Risk task timed out.")
+    except ValueError as ve:
+        result_dict["Error"] = str(ve)
+        result_dict["Entropy Risk Visualization"] = ""
+        result_dict["Graph interpretation"] = "No visualization available due to validation error."
+        result_dict["ErrorType"] = "Validation Error"
+        return result_dict
     except Exception as e:
-        result_dict["error"] = str(e)
+        result_dict["Error"] = f"Processing error: {str(e)}"
+        result_dict["Entropy Risk Visualization"] = ""
+        result_dict["Graph interpretation"] = "No visualization available due to processing error."
+        result_dict["ErrorType"] = "Processing Error"
+        return result_dict
 
     return result_dict
 

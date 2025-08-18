@@ -89,16 +89,16 @@ function getDPStatisticsErrorType(errorMessage) {
         return "Selection Error";
     } else if (errorMessage.includes("Invalid numerical features selected")) {
         return "Selection Error";
-    } else if (errorMessage.includes("Epsilon must be greater than 0")) {
+    } else if (errorMessage.includes("Invalid epsilon value")) {
         return "Parameter Error";
     } else if (errorMessage.includes("Invalid epsilon value format")) {
         return "Parameter Error";
     } else if (errorMessage.includes("Dataset is empty")) {
         return "Data Error";
-    } else if (errorMessage.includes("No numerical features selected")) {
-        return "Selection Error";
-    } else {
+    } else if (errorMessage.includes("Processing error")) {
         return "Processing Error";
+    } else {
+        return "Error";
     }
 }
 
@@ -108,18 +108,16 @@ function getDPStatisticsErrorType(errorMessage) {
 function getSingleAttributeRiskErrorType(errorMessage) {
     if (errorMessage.includes("No quasi-identifiers selected")) {
         return "Selection Error";
-    } else if (errorMessage.includes("Dataset is empty")) {
-        return "Data Error";
-    } else if (errorMessage.includes("not found in dataset")) {
+    } else if (errorMessage.includes("No valid quasi-identifiers provided")) {
         return "Selection Error";
+    } else if (errorMessage.includes("not found in dataset")) {
+        return "Data Error";
     } else if (errorMessage.includes("must contain unique values")) {
         return "Data Error";
     } else if (errorMessage.includes("appear to be numerical")) {
         return "Data Error";
     } else if (errorMessage.includes("no data remains")) {
         return "Data Error";
-    } else if (errorMessage.includes("More than 50% of data was removed")) {
-        return "Data Quality Error";
     } else if (errorMessage.includes("has only one unique value")) {
         return "Data Error";
     } else if (errorMessage.includes("already a perfect identifier")) {
@@ -128,8 +126,129 @@ function getSingleAttributeRiskErrorType(errorMessage) {
         return "Processing Error";
     } else if (errorMessage.includes("task timed out")) {
         return "Timeout Error";
-    } else {
+    } else if (errorMessage.includes("Processing error")) {
         return "Processing Error";
+    } else {
+        return "Error";
+    }
+}
+
+
+
+// Function to categorize error types for Multiple Attribute Risk Scoring
+function getMultipleAttributeRiskErrorType(errorMessage) {
+    if (errorMessage.includes("No quasi-identifiers selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("No ID feature selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("Input DataFrame is empty")) {
+        return "Data Error";
+    } else if (errorMessage.includes("must be a string or list")) {
+        return "Parameter Error";
+    } else if (errorMessage.includes("No valid columns provided")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("Columns not found in dataset")) {
+        return "Data Error";
+    } else if (errorMessage.includes("not found in dataset")) {
+        return "Data Error";
+    } else if (errorMessage.includes("must contain unique values")) {
+        return "Data Error";
+    } else if (errorMessage.includes("has only one unique value")) {
+        return "Data Error";
+    } else if (errorMessage.includes("is a perfect identifier")) {
+        return "Data Error";
+    } else if (errorMessage.includes("After dropping missing values")) {
+        return "Data Error";
+    } else if (errorMessage.includes("causing division by zero")) {
+        return "Processing Error";
+    } else if (errorMessage.includes("Multiple Attribute Risk task timed out")) {
+        return "Timeout Error";
+    } else if (errorMessage.includes("Processing error")) {
+        return "Processing Error";
+    } else {
+        return "Error";
+    }
+}
+
+
+
+// Function to categorize error types for Entropy Risk
+function getEntropyRiskErrorType(errorMessage) {
+    if (errorMessage.includes("No quasi-identifiers selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("Input DataFrame is empty")) {
+        return "Data Error";
+    } else if (errorMessage.includes("not found in the dataset")) {
+        return "Data Error";
+    } else if (errorMessage.includes("No data left after dropping rows")) {
+        return "Data Error";
+    } else if (errorMessage.includes("Entropy Risk task timed out")) {
+        return "Timeout Error";
+    } else if (errorMessage.includes("Processing error")) {
+        return "Processing Error";
+    } else {
+        return "Error";
+    }
+}
+
+// Function to categorize error types for k-Anonymity
+function getKAnonymityErrorType(errorMessage) {
+    if (errorMessage.includes("No quasi-identifiers selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("Input DataFrame is empty")) {
+        return "Data Error";
+    } else if (errorMessage.includes("not found in the dataset")) {
+        return "Data Error";
+    } else if (errorMessage.includes("No data left after dropping rows")) {
+        return "Data Error";
+    } else if (errorMessage.includes("K-Anonymity task timed out")) {
+        return "Timeout Error";
+    } else if (errorMessage.includes("Processing error")) {
+        return "Processing Error";
+    } else {
+        return "Error";
+    }
+}
+
+// Function to categorize error types for L-Diversity
+function getLDiversityErrorType(errorMessage) {
+    if (errorMessage.includes("No quasi-identifiers selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("No sensitive attribute selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("Input DataFrame is empty")) {
+        return "Data Error";
+    } else if (errorMessage.includes("not found in the dataset")) {
+        return "Data Error";
+    } else if (errorMessage.includes("No data left after dropping rows")) {
+        return "Data Error";
+    } else if (errorMessage.includes("L-Diversity task timed out")) {
+        return "Timeout Error";
+    } else if (errorMessage.includes("Processing error")) {
+        return "Processing Error";
+    } else {
+        return "Error";
+    }
+}
+
+// Function to categorize error types for T-Closeness
+function getTClosenessErrorType(errorMessage) {
+    if (errorMessage.includes("No quasi-identifiers selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("No sensitive attribute selected")) {
+        return "Selection Error";
+    } else if (errorMessage.includes("Input DataFrame is empty")) {
+        return "Data Error";
+    } else if (errorMessage.includes("not found in the dataset")) {
+        return "Data Error";
+    } else if (errorMessage.includes("No data left after dropping rows")) {
+        return "Data Error";
+    } else if (errorMessage.includes("T-Closeness task timed out")) {
+        return "Timeout Error";
+    } else if (errorMessage.includes("Processing error")) {
+        return "Processing Error";
+    } else {
+        return "Error";
     }
 }
 
@@ -235,6 +354,36 @@ function submitForm() {
                     );
                 } else if (type === 'Single attribute risk scoring') {
                     const errorType = getSingleAttributeRiskErrorType(data[type]['Error']);
+                    openErrorPopup(
+                        errorType,
+                        data[type]['Error'] 
+                    );
+                } else if (type === 'Multiple attribute risk scoring') {
+                    const errorType = getMultipleAttributeRiskErrorType(data[type]['Error']);
+                    openErrorPopup(
+                        errorType,
+                        data[type]['Error'] 
+                    );
+                } else if (type === 'Entropy Risk') {
+                    const errorType = getEntropyRiskErrorType(data[type]['Error']);
+                    openErrorPopup(
+                        errorType,
+                        data[type]['Error'] 
+                    );
+                } else if (type === 'k-Anonymity') {
+                    const errorType = getKAnonymityErrorType(data[type]['Error']);
+                    openErrorPopup(
+                        errorType,
+                        data[type]['Error'] 
+                    );
+                } else if (type === 'l-Diversity') {
+                    const errorType = getLDiversityErrorType(data[type]['Error']);
+                    openErrorPopup(
+                        errorType,
+                        data[type]['Error'] 
+                    );
+                } else if (type === 't-Closeness') {
+                    const errorType = getTClosenessErrorType(data[type]['Error']);
                     openErrorPopup(
                         errorType,
                         data[type]['Error'] 
@@ -409,6 +558,146 @@ function submitForm() {
                                     errorType: errorType
                                 }
                             });
+                        } else if (type === 'Multiple attribute risk scoring') {
+                            // Enhanced error handling for Multiple Attribute Risk Scoring - show as popup
+                            const errorType = getMultipleAttributeRiskErrorType(data[type]['Error']);
+                            
+                            // Show error popup immediately
+                            openErrorPopup(
+                                errorType,
+                                data[type]['Error'] 
+                            );
+                            
+                            // Add to visualization content with minimal error display
+                            visualizationContent.push({
+                                image: "",
+                                riskScore: 'N/A',
+                                riskLevel: null,
+                                riskColor: null,
+                                value: 'N/A',
+                                description: '',
+                                interpretation: '',
+                                title: title,
+                                jsonData: jsonData,
+                                hasError: true,
+                                isMultipleAttributeRisk: true,
+                                errorDetails: {
+                                    errorMessage: data[type]['Error'],
+                                    errorType: errorType
+                                }
+                            });
+                        } else if (type === 'Entropy Risk') {
+                            // Enhanced error handling for Entropy Risk - show as popup
+                            const errorType = getEntropyRiskErrorType(data[type]['Error']);
+                            
+                            // Show error popup immediately
+                            openErrorPopup(
+                                errorType,
+                                data[type]['Error'] 
+                            );
+                            
+                            // Add to visualization content with minimal error display
+                            visualizationContent.push({
+                                image: "",
+                                riskScore: 'N/A',
+                                riskLevel: null,
+                                riskColor: null,
+                                value: 'N/A',
+                                description: '',
+                                interpretation: '',
+                                title: title,
+                                jsonData: jsonData,
+                                hasError: true,
+                                isEntropyRisk: true,
+                                errorDetails: {
+                                    errorMessage: data[type]['Error'],
+                                    errorType: errorType
+                                }
+                            });
+                        } else if (type === 'k-Anonymity') {
+                            // Enhanced error handling for k-Anonymity - show as popup
+                            const errorType = getKAnonymityErrorType(data[type]['Error']);
+                            
+                            // Show error popup immediately
+                            openErrorPopup(
+                                errorType,
+                                data[type]['Error'] 
+                            );
+                            
+                            // Add to visualization content with minimal error display
+                            visualizationContent.push({
+                                image: "",
+                                riskScore: 'N/A',
+                                riskLevel: null,
+                                riskColor: null,
+                                value: 'N/A',
+                                description: '',
+                                interpretation: '',
+                                title: title,
+                                jsonData: jsonData,
+                                hasError: true,
+                                isKAnonymity: true,
+                                errorDetails: {
+                                    errorMessage: data[type]['Error'],
+                                    errorType: errorType
+                                }
+                            });
+                        } else if (type === 'l-Diversity') {
+                            // Enhanced error handling for l-Diversity - show as popup
+                            const errorType = getLDiversityErrorType(data[type]['Error']);
+                            
+                            // Show error popup immediately
+                            openErrorPopup(
+                                errorType,
+                                data[type]['Error'] 
+                            );
+                            
+                            // Add to visualization content with minimal error display
+                            visualizationContent.push({
+                                image: "",
+                                riskScore: 'N/A',
+                                riskLevel: null,
+                                riskColor: null,
+                                value: 'N/A',
+                                description: '',
+                                interpretation: '',
+                                title: title,
+                                jsonData: jsonData,
+                                hasError: true,
+                                isLDiversity: true,
+                                errorDetails: {
+                                    errorMessage: data[type]['Error'],
+                                    errorType: errorType
+                                }
+                            });
+                        } else if (type === 't-Closeness') {
+                            // Enhanced error handling for t-Closeness - show as popup
+                            const errorType = getTClosenessErrorType(data[type]['Error']);
+                            
+                            // Show error popup immediately
+                            openErrorPopup(
+                                errorType,
+                                data[type]['Error'] 
+                            );
+                            
+                            // Add to visualization content with minimal error display
+                            visualizationContent.push({
+                                image: "",
+                                riskScore: 'N/A',
+                                riskLevel: null,
+                                riskColor: null,
+                                value: 'N/A',
+                                description: '',
+                                interpretation: '',
+                                title: title,
+                                jsonData: jsonData,
+                                hasError: true,
+                                isTCloseness: true,
+                                errorDetails: {
+                                    errorMessage: data[type]['Error'],
+                                    errorType: errorType
+                                }
+                            });
                         } else {
                             // Standard error handling for other metrics
                             visualizationContent.push({
@@ -508,6 +797,111 @@ function submitForm() {
                         <div style="margin-bottom: 15px;">
                             <p style="margin: 10px 0; font-size: 14px; color: #333;">
                                 An error occurred while processing single attribute risk scores.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            } else if (content.isMultipleAttributeRisk) {
+                // Simple error display for Multiple Attribute Risk Scoring (detailed info shown in popup)
+                visualizationHtml += `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in Multiple Attribute Risk Scoring</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing multiple attribute risk scores.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            } else if (content.isEntropyRisk) {
+                // Simple error display for Entropy Risk (detailed info shown in popup)
+                visualizationHtml += `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in Entropy Risk</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing entropy risk.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            } else if (content.isKAnonymity) {
+                // Simple error display for k-Anonymity (detailed info shown in popup)
+                visualizationHtml += `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in k-Anonymity</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing k-Anonymity.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            } else if (content.isLDiversity) {
+                // Simple error display for l-Diversity (detailed info shown in popup)
+                visualizationHtml += `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in l-Diversity</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing l-Diversity.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            } else if (content.isTCloseness) {
+                // Simple error display for t-Closeness (detailed info shown in popup)
+                visualizationHtml += `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in t-Closeness</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing t-Closeness.
                             </p>
                             <p style="margin: 10px 0; font-size: 14px; color: #666;">
                                 <strong>Error:</strong> ${content.errorDetails.errorMessage}
