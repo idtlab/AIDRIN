@@ -64,20 +64,19 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         for col in eval_cols:
             if df[col].dtype in ['int64', 'float64'] and df[col].nunique() > 100:
                 non_categorical_cols.append(col)
-        
+
         if non_categorical_cols:
-            raise ValueError(f"Columns {', '.join(non_categorical_cols)} appear to be numerical with too many unique values. Quasi-identifiers should be categorical.")
+            raise ValueError(
+                f"Columns {', '.join(non_categorical_cols)} appear to be numerical with too many unique values."
+                "Quasi-identifiers should be categorical."
+            )
 
         # Drop rows with missing values
-        initial_rows = len(selected_df)
         selected_df = selected_df.dropna()
         rows_after_dropna = len(selected_df)
         print(rows_after_dropna)
         if rows_after_dropna == 0:
             raise ValueError("After removing missing values, no data remains. Please check your data quality or select different columns.")
-        
-        #if rows_after_dropna < initial_rows * 0.5:
-        #    raise ValueError(f"More than 50% of data was removed due to missing values ({initial_rows - rows_after_dropna}/{initial_rows} rows). Please check data quality.")
 
         # Convert the selected DataFrame to a NumPy array
         my_array = selected_df.to_numpy()
@@ -102,13 +101,11 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
                 )
 
             risk_scores = np.zeros(len(my_array))
-            
+
             # Check if column has sufficient variation
             unique_values = np.unique(my_array[:, col_idx + 1])
             if len(unique_values) == 1:
                 raise ValueError(f"Column '{col}' has only one unique value, making risk assessment meaningless.")
-            
-            
 
             for j in range(len(my_array)):
                 attr1_tot = np.count_nonzero(my_array[:, col_idx + 1] == my_array[j, col_idx + 1])
@@ -243,14 +240,14 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         # Validate id_col
         if not id_col or id_col not in df.columns:
             raise ValueError(f"ID column '{id_col}' not found in dataset")
-        
+
+        # Select specified columns from DataFrame
         selected_columns = [id_col] + eval_cols
         selected_df = df[selected_columns]
         selected_df = selected_df.dropna()
 
         # Check if DataFrame is still non-empty after dropping missing values
         rows_after_dropna = len(selected_df)
-        
 
         if rows_after_dropna == 0:
             print("DEBUG: About to raise ValueError - no data remains after dropna")
@@ -262,13 +259,11 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
                 unique_values = df[col].nunique()
                 if unique_values == 1:
                     raise ValueError(f"Column '{col}' has only one unique value, making risk assessment meaningless.")
-                
+
         # Check if ID column has unique values
         if df[id_col].nunique() != len(df):
             raise ValueError(f"ID column '{id_col}' must contain unique values for each row.")
 
-        # Select specified columns from DataFrame
-        
         # convert dataframe to numpy array
         my_array = selected_df.to_numpy()
 
@@ -281,7 +276,6 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
 
         # array to store risk scores of each data point
         risk_scores = np.zeros(len(my_array))
-        total_rows = len(my_array)
 
         # risk scoring
         for j in range(len(my_array)):
@@ -294,7 +288,10 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
                     )
 
                     if attr1_tot == 0:
-                        raise ValueError(f"Column '{eval_cols[i-2] if i-2 < len(eval_cols) else 'unknown'}' has unexpected data structure causing division by zero.")
+                        raise ValueError(
+                            f"Column '{eval_cols[i-2] if i-2 < len(eval_cols) else 'unknown'}'"
+                            "has unexpected data structure causing division by zero."
+                        )
 
                     mask_attr1_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i-1] == my_array[j][i-1])
                     count_attr1_user = np.count_nonzero(mask_attr1_user)
@@ -314,7 +311,10 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
                     attr2_tot = np.count_nonzero(my_array[:, i] == my_array[j][i])
 
                     if attr2_tot == 0:
-                        raise ValueError(f"Column '{eval_cols[i-1] if i-1 < len(eval_cols) else 'unknown'}' has unexpected data structure causing division by zero.")
+                        raise ValueError(
+                            f"Column '{eval_cols[i-1] if i-1 < len(eval_cols) else 'unknown'}'"
+                            "has unexpected data structure causing division by zero."
+                        )
 
                     mask_attr2_user = (my_array[:, 0] == my_array[j][0]) & (my_array[:, i] == my_array[j][i])
                     count_attr2_user = np.count_nonzero(mask_attr2_user)
@@ -421,7 +421,7 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
     except SoftTimeLimitExceeded:
         raise Exception("Multiple Attribute Risk task timed out. The dataset may be too large or complex.")
     except ValueError as ve:
-        # Handle specific validation errors 
+        # Handle specific validation errors
         result_dict["Error"] = str(ve)
         result_dict["Multiple attribute risk scoring Visualization"] = ""
         result_dict["Description"] = f"Validation Error: {str(ve)}"

@@ -730,10 +730,10 @@ def privacyPreservation():
         # check for parameters
         # differential privacy
         if request.form.get("differential privacy") == "yes":
-            
+
             # Get numerical features and validate
             numerical_features_raw = request.form.get("numerical features to add noise")
-            
+
             # Edge case 1: No features selected
             if not numerical_features_raw or numerical_features_raw.strip() == "":
                 final_dict['DP Statistics'] = {
@@ -749,7 +749,7 @@ def privacyPreservation():
             else:
                 # Edge case 2: Check if features contain valid data after splitting
                 feature_to_add_noise = [f.strip() for f in numerical_features_raw.split(",") if f.strip()]
-                
+
                 if not feature_to_add_noise:
                     final_dict['DP Statistics'] = {
                         "Error": "Invalid numerical features selected.",
@@ -765,7 +765,7 @@ def privacyPreservation():
                     # Edge case 3: Validate epsilon value
                     epsilon_raw = request.form.get("privacy budget")
                     epsilon = 0.1  # Default value
-                    
+
                     if epsilon_raw and epsilon_raw.strip() != "":
                         try:
                             epsilon = float(epsilon_raw)
@@ -945,7 +945,7 @@ def privacyPreservation():
                                     "Graph interpretation": "No visualization available due to processing error.",
                                     "ErrorType": "Processing Error"
                                 }
-                            
+
                             final_dict["Single attribute risk scoring"] = error_response
                             print(f"Error in Single attribute risk scoring: {error_message}")
                 else:
@@ -1054,7 +1054,7 @@ def privacyPreservation():
                                 "Graph interpretation": "No visualization available due to processing error.",
                                 "ErrorType": "Processing Error"
                             }
-                        
+
                         final_dict["Single attribute risk scoring"] = error_response
                         print(f"Error in Single attribute risk scoring: {error_message}")
 
@@ -1217,7 +1217,7 @@ def privacyPreservation():
                                         "Graph interpretation": "No visualization available due to processing error.",
                                         "ErrorType": "Processing Error"
                                     }
-                                
+
                                 final_dict["Multiple attribute risk scoring"] = error_response
                                 print(f"Error in Multiple attribute risk scoring: {error_message}")
                     else:
@@ -1328,7 +1328,7 @@ def privacyPreservation():
                                     "Graph interpretation": "No visualization available due to processing error.",
                                     "ErrorType": "Processing Error"
                                 }
-                            
+
                             final_dict["Multiple attribute risk scoring"] = error_response
                             print(f"Error in Multiple attribute risk scoring: {error_message}")
 
@@ -1409,7 +1409,7 @@ def privacyPreservation():
                                     "k-Anonymity Visualization": "",
                                     "Graph interpretation": "No visualization available due to processing error."
                                 }
-                            
+
                             final_dict["k-Anonymity"] = error_response
                             print(f"Error in k-Anonymity: {error_message}")
                 else:
@@ -1453,7 +1453,7 @@ def privacyPreservation():
                                 "k-Anonymity Visualization": "",
                                 "Graph interpretation": "No visualization available due to processing error."
                             }
-                        
+
                         final_dict["k-Anonymity"] = error_response
                         print(f"Error in k-Anonymity: {error_message}")
 
@@ -1542,7 +1542,7 @@ def privacyPreservation():
                                     "l-Diversity Visualization": "",
                                     "Graph interpretation": "No visualization available due to processing error."
                                 }
-                            
+
                             final_dict["l-Diversity"] = error_response
                             print(f"Error in l-Diversity: {error_message}")
                 else:
@@ -1586,7 +1586,7 @@ def privacyPreservation():
                                 "l-Diversity Visualization": "",
                                 "Graph interpretation": "No visualization available due to processing error."
                             }
-                        
+
                         final_dict["l-Diversity"] = error_response
                         print(f"Error in l-Diversity: {error_message}")
 
@@ -1675,7 +1675,7 @@ def privacyPreservation():
                                     "t-Closeness Visualization": "",
                                     "Graph interpretation": "No visualization available due to processing error."
                                 }
-                            
+
                             final_dict["t-Closeness"] = error_response
                             print(f"Error in t-Closeness: {error_message}")
                 else:
@@ -1719,7 +1719,7 @@ def privacyPreservation():
                                 "t-Closeness Visualization": "",
                                 "Graph interpretation": "No visualization available due to processing error."
                             }
-                        
+
                         final_dict["t-Closeness"] = error_response
                         print(f"Error in t-Closeness: {error_message}")
 
@@ -1800,7 +1800,7 @@ def privacyPreservation():
                                     "Entropy Risk Visualization": "",
                                     "Graph interpretation": "No visualization available due to processing error."
                                 }
-                            
+
                             final_dict["Entropy Risk"] = error_response
                             print(f"Error in Entropy Risk: {error_message}")
                 else:
@@ -1844,7 +1844,7 @@ def privacyPreservation():
                                 "Entropy Risk Visualization": "",
                                 "Graph interpretation": "No visualization available due to processing error."
                             }
-                        
+
                         final_dict["Entropy Risk"] = error_response
                         print(f"Error in Entropy Risk: {error_message}")
 
@@ -2334,7 +2334,7 @@ def clear_cache():
 
 def process_differential_privacy(file_name, feature_to_add_noise, epsilon, file, final_dict, current_app):
     """Helper function to process differential privacy with caching and error handling"""
-    
+
     # Generate cache key for differential privacy
     cache_key = generate_metric_cache_key(
         file_name,
@@ -2373,7 +2373,7 @@ def process_differential_privacy(file_name, feature_to_add_noise, epsilon, file,
                 print(f"Cached DP Statistics for key: {cache_key}")
             except Exception as e:
                 error_message = str(e)
-                
+
                 if "Epsilon must be greater than 0" in error_message:
                     error_response = {
                         "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
@@ -2407,7 +2407,7 @@ def process_differential_privacy(file_name, feature_to_add_noise, epsilon, file,
                         "Variance of feature (after noise)": "N/A",
                         "Noisy file saved": "Failed - Processing error"
                     }
-                
+
                 final_dict['DP Statistics'] = error_response
                 current_app.TEMP_RESULTS_CACHE[cache_key] = {
                     'data': error_response,
@@ -2428,7 +2428,7 @@ def process_differential_privacy(file_name, feature_to_add_noise, epsilon, file,
             print(f"Cached DP Statistics for key: {cache_key}")
         except Exception as e:
             error_message = str(e)
-            
+
             if "Epsilon must be greater than 0" in error_message:
                 error_response = {
                     "Error": "Invalid epsilon value. Epsilon must be greater than 0.",
@@ -2462,7 +2462,7 @@ def process_differential_privacy(file_name, feature_to_add_noise, epsilon, file,
                     "Variance of feature (after noise)": "N/A",
                     "Noisy file saved": "Failed - Processing error"
                 }
-            
+
             final_dict['DP Statistics'] = error_response
             current_app.TEMP_RESULTS_CACHE[cache_key] = {
                 'data': error_response,
@@ -2470,8 +2470,6 @@ def process_differential_privacy(file_name, feature_to_add_noise, epsilon, file,
                 'expires_at': time.time() + (30 * 60)
             }
             print(f"Cached DP Statistics Error for key: {cache_key}")
-
-        # single attribute risk scores using markov model (ASYNC)
 
 
 if __name__ == '__main__':
