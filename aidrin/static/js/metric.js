@@ -230,6 +230,41 @@ $(document).ready(function () {
                 "tClosenessSensitiveDropdown"
               );
 
+              document.querySelectorAll(".checkboxContainerIndividual").forEach(container => {
+                const dropdown = container.querySelector("select");
+
+                const updateTargetCheckbox = () => {
+                    const selectedTarget = dropdown.value;
+                    // Find the target checkbox
+                    const targetCheckbox = container.querySelector(`input.checkbox.individual[value="${selectedTarget}"]`);
+                    if (!targetCheckbox) return;
+                    // Remove previous target-feature class and enable all checkboxes
+                    container.querySelectorAll("input.checkbox.individual").forEach(cb => {
+                      if(cb.classList.contains("target-feature")){
+                        cb.classList.remove("target-feature");
+                        cb.disabled = false;
+                      }
+                    });
+
+                    // Uncheck, mark, and disable the target checkbox
+                    targetCheckbox.checked = false;
+                    targetCheckbox.classList.add("target-feature");
+                    targetCheckbox.disabled = true;
+
+                    // Uncheck the select-all checkbox for the group containing this target
+                    const parentDiv = targetCheckbox.closest("div"); 
+                    if (parentDiv) {
+                        const selectAll = parentDiv.querySelector("input.checkbox.select-all");
+                        if (selectAll) selectAll.checked = false;
+                    }
+                };
+                // Call once on page load
+                updateTargetCheckbox();
+                // Call on dropdown change
+                dropdown.addEventListener("change", updateTargetCheckbox);
+              });
+
+
               // Initialize main metric checkbox states first
               updateMetricCheckboxState("k-anonymity");
               updateMetricCheckboxState("l-diversity");
@@ -467,24 +502,15 @@ $(document).ready(function () {
       return;
     }
     function updateSelectAllState(tableId) {
-      const checkboxes = $table.find(".checkbox.individual");
-      console.log("tableId: ",tableId);
+      const checkboxes = $table.find(".checkbox.individual").not(".target-feature");
       const selectAll = document.getElementById(tableId + "-select-all");
-      console.log("selectAll: ",selectAll);
 
       const total = checkboxes.length;
-      console.log("total:",total)
+      const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
 
-      const checked = Array.from(checkboxes).filter((cb) => cb.checked).length;
-      console.log("checked: ",checked);
-      if (checked === 0) {
-        selectAll.checked = false;
-      } else if (checked === total) {
-        selectAll.checked = true;
-      } else {
-        selectAll.checked = false;
-      }
+      selectAll.checked = checked === total;
     }
+
     //create selectAll checkbox
     var $selectAllRow = $("<tr>")
     var selectAllId = tableId + "-select-all";
@@ -526,10 +552,8 @@ $(document).ready(function () {
         value: features[i],
         disabled: true,
       });
-      checkbox.on("change", function () {
-        if (typeof toggleValueIndividual === "function") {
-          toggleValueIndividual(this);
-        }
+      checkbox.on("change", function () {     
+        toggleValueIndividual(this);
         updateSelectAllState(tableId);
       });
       var span = $("<span>").addClass("checkmark");
@@ -551,13 +575,10 @@ $(document).ready(function () {
     }
     $("#" + selectAllId).on("change", function () {
       const checked = this.checked;
-      $table.find(".checkbox.individual").prop("checked", checked).trigger("change");
-      updateSelectAllState(tableId); // ensure state is correct even if no change event fires
+      $table.find(".checkbox.individual").not(".target-feature").prop("checked", checked).trigger("change");
     });
   }
-  
 });
-
 
 function updateCrossDisable() {
   // Get selected quasi-identifiers for each metric separately
@@ -702,6 +723,7 @@ function updateCrossDisable() {
     );
   });
 }
+
 $(document).ready(function () {
   // Trigger when main metric checkboxes change
   $(document).on(

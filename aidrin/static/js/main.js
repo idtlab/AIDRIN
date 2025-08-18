@@ -1007,7 +1007,7 @@ function toggleValue(checkbox) {
   // Find all select dropdowns within that container
   const dropdowns = container.querySelectorAll("select");
   const inputs = container.querySelectorAll("input.textWrapper");
-  const checkboxes = container.querySelectorAll("input.checkbox.individual");
+  const checkboxes = container.querySelectorAll("input.checkbox.individual:not(.target-feature)");
   const selectAllCheckboxs = container.querySelectorAll("input.checkbox.select-all");
   // Enable or disable all dropdowns inside the container based on checkbox state
   dropdowns.forEach((dropdown) => {
