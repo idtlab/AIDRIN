@@ -1071,7 +1071,8 @@ def privacyPreservation():
                 final_dict["Multiple attribute risk scoring"] = {
                     "Error": "No quasi-identifiers selected for multiple attribute risk scoring.",
                     "Multiple attribute risk scoring Visualization": "",
-                    "Graph interpretation": "No visualization available - no quasi-identifiers selected."
+                    "Graph interpretation": "No visualization available - no quasi-identifiers selected.",
+                    "ErrorType": "Selection Error"
                 }
             else:
                 # Validate that ID feature is selected
@@ -1079,7 +1080,8 @@ def privacyPreservation():
                     final_dict["Multiple attribute risk scoring"] = {
                         "Error": "No ID feature selected for multiple attribute risk scoring.",
                         "Multiple attribute risk scoring Visualization": "",
-                        "Graph interpretation": "No visualization available - no ID feature selected."
+                        "Graph interpretation": "No visualization available - no ID feature selected.",
+                        "ErrorType": "Selection Error"
                     }
                 else:
                     # Generate cache key for multiple attribute risk scoring
@@ -1109,6 +1111,118 @@ def privacyPreservation():
                         else:
                             print("Privacy - Multiple Attribute Risk Score Cache is EXPIRED, starting new task")
                             current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                            try:
+                                # Convert DataFrame to JSON for async processing
+                                df_json = file.to_json()
+                                # Start async task
+                                task = calculate_multiple_attribute_risk_score.delay(df_json, id_feature, eval_features)
+                                final_dict["Multiple attribute risk scoring"] = {
+                                    "task_id": task.id,
+                                    "status": "processing",
+                                    "message": "Multiple attribute risk scoring is being processed asynchronously. Please check back later.",
+                                    "is_async": True,
+                                    "cache_key": cache_key
+                                }
+                                current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                                    'data': final_dict["Multiple attribute risk scoring"],
+                                    'timestamp': time.time(),
+                                    'expires_at': time.time() + (30 * 60),
+                                    'task_id': task.id
+                                }
+                                print(f"Started new Celery task for Multiple attribute risk scoring: {task.id}")
+                            except Exception as e:
+                                error_message = str(e)
+                                if "Dataset is empty" in error_message:
+                                    error_response = {
+                                        "Error": "Dataset is empty. Please upload a dataset with data.",
+                                        "Description": "The uploaded dataset contains no data rows.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to empty dataset.",
+                                        "ErrorType": "Data Error"
+                                    }
+                                elif "No valid quasi-identifiers" in error_message:
+                                    error_response = {
+                                        "Error": "No valid quasi-identifiers provided for multiple attribute risk scoring.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to invalid quasi-identifiers.",
+                                        "ErrorType": "Selection Error"
+                                    }
+                                elif "not found in dataset" in error_message:
+                                    error_response = {
+                                        "Error": f"Selected columns not found in dataset: {error_message}",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to missing columns.",
+                                        "ErrorType": "Data Error"
+                                    }
+                                elif "must contain unique values" in error_message:
+                                    error_response = {
+                                        "Error": "One or more quasi-identifiers have only one unique value.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to non-unique ID values.",
+                                        "ErrorType": "Data Error"
+                                    }
+                                elif "appear to be numerical" in error_message:
+                                    error_response = {
+                                        "Error": "Selected quasi-identifiers appear to be numerical with too many unique values.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to unsuitable column types.",
+                                        "ErrorType": "Data Error"
+                                    }
+                                elif "no data remains" in error_message:
+                                    error_response = {
+                                        "Error": "After removing missing values, no data remains.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to insufficient data.",
+                                        "ErrorType": "Data Error"
+                                    }
+                                elif "More than 50% of data was removed" in error_message:
+                                    error_response = {
+                                        "Error": "More than 50% of data was removed due to missing values.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to poor data quality.",
+                                        "ErrorType": "Data Quality Error"
+                                    }
+                                elif "has only one unique value" in error_message:
+                                    error_response = {
+                                        "Error": "One or more quasi-identifiers have only one unique value.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to insufficient column variation.",
+                                        "ErrorType": "Data Error"
+                                    }
+                                elif "already a perfect identifier" in error_message:
+                                    error_response = {
+                                        "Error": "One or more quasi-identifiers are already perfect identifiers.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to perfect identification.",
+                                        "ErrorType": "Data Error"
+                                    }
+                                elif "causing division by zero" in error_message:
+                                    error_response = {
+                                        "Error": "Unexpected data structure causing division by zero.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to data structure issues.",
+                                        "ErrorType": "Processing Error"
+                                    }
+                                elif "task timed out" in error_message:
+                                    error_response = {
+                                        "Error": "Multiple Attribute Risk task timed out. The dataset may be too large or complex.",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to timeout.",
+                                        "ErrorType": "Timeout Error"
+                                    }
+                                else:
+                                    error_response = {
+                                        "Error": f"Processing error: {error_message}",
+                                        "Multiple attribute risk scoring Visualization": "",
+                                        "Graph interpretation": "No visualization available due to processing error.",
+                                        "ErrorType": "Processing Error"
+                                    }
+                                
+                                final_dict["Multiple attribute risk scoring"] = error_response
+                                print(f"Error in Multiple attribute risk scoring: {error_message}")
+                    else:
+                        print(f"Privacy - Multiple Attribute Risk Score Cache MISS for key: {cache_key}")
+                        try:
                             # Convert DataFrame to JSON for async processing
                             df_json = file.to_json()
                             # Start async task
@@ -1127,26 +1241,96 @@ def privacyPreservation():
                                 'task_id': task.id
                             }
                             print(f"Started new Celery task for Multiple attribute risk scoring: {task.id}")
-                    else:
-                        print(f"Privacy - Multiple Attribute Risk Score Cache MISS for key: {cache_key}")
-                        # Convert DataFrame to JSON for async processing
-                        df_json = file.to_json()
-                        # Start async task
-                        task = calculate_multiple_attribute_risk_score.delay(df_json, id_feature, eval_features)
-                        final_dict["Multiple attribute risk scoring"] = {
-                            "task_id": task.id,
-                            "status": "processing",
-                            "message": "Multiple attribute risk scoring is being processed asynchronously. Please check back later.",
-                            "is_async": True,
-                            "cache_key": cache_key
-                        }
-                        current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                            'data': final_dict["Multiple attribute risk scoring"],
-                            'timestamp': time.time(),
-                            'expires_at': time.time() + (30 * 60),
-                            'task_id': task.id
-                        }
-                        print(f"Started new Celery task for Multiple attribute risk scoring: {task.id}")
+                        except Exception as e:
+                            error_message = str(e)
+                            if "Dataset is empty" in error_message:
+                                error_response = {
+                                    "Error": "Dataset is empty. Please upload a dataset with data.",
+                                    "Description": "The uploaded dataset contains no data rows.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to empty dataset.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "No valid quasi-identifiers" in error_message:
+                                error_response = {
+                                    "Error": "No valid quasi-identifiers provided for multiple attribute risk scoring.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to invalid quasi-identifiers.",
+                                    "ErrorType": "Selection Error"
+                                }
+                            elif "not found in dataset" in error_message:
+                                error_response = {
+                                    "Error": f"Selected columns not found in dataset: {error_message}",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to missing columns.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "must contain unique values" in error_message:
+                                error_response = {
+                                    "Error": "One or more quasi-identifiers have only one unique value.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to non-unique ID values.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "appear to be numerical" in error_message:
+                                error_response = {
+                                    "Error": "Selected quasi-identifiers appear to be numerical with too many unique values.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to unsuitable column types.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "no data remains" in error_message:
+                                error_response = {
+                                    "Error": "After removing missing values, no data remains.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to insufficient data.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "More than 50% of data was removed" in error_message:
+                                error_response = {
+                                    "Error": "More than 50% of data was removed due to missing values.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to poor data quality.",
+                                    "ErrorType": "Data Quality Error"
+                                }
+                            elif "has only one unique value" in error_message:
+                                error_response = {
+                                    "Error": "One or more quasi-identifiers have only one unique value.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to insufficient column variation.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "already a perfect identifier" in error_message:
+                                error_response = {
+                                    "Error": "One or more quasi-identifiers are already perfect identifiers.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to perfect identification.",
+                                    "ErrorType": "Data Error"
+                                }
+                            elif "causing division by zero" in error_message:
+                                error_response = {
+                                    "Error": "Unexpected data structure causing division by zero.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to data structure issues.",
+                                    "ErrorType": "Processing Error"
+                                }
+                            elif "task timed out" in error_message:
+                                error_response = {
+                                    "Error": "Multiple Attribute Risk task timed out. The dataset may be too large or complex.",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to timeout.",
+                                    "ErrorType": "Timeout Error"
+                                }
+                            else:
+                                error_response = {
+                                    "Error": f"Processing error: {error_message}",
+                                    "Multiple attribute risk scoring Visualization": "",
+                                    "Graph interpretation": "No visualization available due to processing error.",
+                                    "ErrorType": "Processing Error"
+                                }
+                            
+                            final_dict["Multiple attribute risk scoring"] = error_response
+                            print(f"Error in Multiple attribute risk scoring: {error_message}")
 
         # k-Anonymity
         if request.form.get("k-anonymity") == "yes":

@@ -1267,15 +1267,48 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                 return response.json();
             })
             .then(data => {
-
+                console.log(`DEBUG: Received response for ${metricName}:`, data);
                 
                 // Get DOM elements for progress bar and status
                 const asyncTaskElement = document.querySelector(`[data-task-id="${taskId}"]`);
                 const statusSpan = asyncTaskElement ? asyncTaskElement.querySelector(`#task-status-${taskId}`) : null;
                 const progressBar = asyncTaskElement ? asyncTaskElement.querySelector('.progress-bar') : null;
                 
+                // Check for various error states
+                if (data.status === 'failed' || data.status === 'FAILURE' || data.error || data.result?.error) {
+                    console.log('DEBUG: Task failed with status:', data.status, 'error:', data.error || data.result?.error);
+                    
+                    // Update progress bar to show failure
+                    if (progressBar) {
+                        progressBar.style.background = 'linear-gradient(90deg, #F44336, #E57373)';
+                    }
+                    
+                    if (statusSpan) {
+                        statusSpan.textContent = 'Task failed';
+                    }
+                    
+                    // Extract error message from various possible locations
+                    let errorMessage = 'Task failed';
+                    if (data.error) {
+                        errorMessage = data.error;
+                    } else if (data.result && data.result.error) {
+                        errorMessage = data.result.error;
+                    } else if (data.meta && data.meta.error) {
+                        errorMessage = data.meta.error;
+                    }
+                    
+                    console.log('DEBUG: Extracted error message:', errorMessage);
+                    
+                    // Create error result and update with error display
+                    const errorResult = { error: errorMessage };
+                    setTimeout(() => {
+                        updateAsyncTaskWithResults(taskId, metricName, errorResult);
+                    }, 1000);
+                    return; // Exit polling
+                }
+                
                 if (data.status === 'completed' || data.status === 'SUCCESS') {
-
+                    console.log('DEBUG: Task completed successfully');
                     
                     // Task completed successfully, complete the progress bar
                     if (progressBar) {
@@ -1290,6 +1323,38 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                     // Wait a moment to show completion, then update with results
                     setTimeout(() => {
                         updateAsyncTaskWithResults(taskId, metricName, data.result);
+                    }, 1000);
+                    return; // Exit polling
+                }
+                
+                // Check if this is actually an error result disguised as a "successful" result
+                if (data.result && (data.result.error || data.result.Error || 
+                    (data.result.Description && data.result.Description.includes('Error')))) {
+                    console.log('DEBUG: Detected error in result data:', data.result);
+                    
+                    // Update progress bar to show failure
+                    if (progressBar) {
+                        progressBar.style.background = 'linear-gradient(90deg, #F44336, #E57373)';
+                    }
+                    
+                    if (statusSpan) {
+                        statusSpan.textContent = 'Task failed';
+                    }
+                    
+                    // Extract error message
+                    let errorMessage = 'Task failed';
+                    if (data.result.error) {
+                        errorMessage = data.result.error;
+                    } else if (data.result.Error) {
+                        errorMessage = data.result.Error;
+                    } else if (data.result.Description) {
+                        errorMessage = data.result.Description;
+                    }
+                    
+                    // Create error result and update with error display
+                    const errorResult = { error: errorMessage };
+                    setTimeout(() => {
+                        updateAsyncTaskWithResults(taskId, metricName, errorResult);
                     }, 1000);
                     return; // Exit polling
                 }
@@ -1339,6 +1404,8 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                     setTimeout(checkTask, interval);
                 } else {
                     // Max retries reached
+                    console.log('DEBUG: Max retries reached for', metricName, 'creating error result');
+                    
                     const asyncTaskElement = document.querySelector(`[data-task-id="${taskId}"]`);
                     const progressBar = asyncTaskElement ? asyncTaskElement.querySelector('.progress-bar') : null;
                     const statusSpan = asyncTaskElement ? asyncTaskElement.querySelector(`#task-status-${taskId}`) : null;
@@ -1349,6 +1416,13 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
                     if (statusSpan) {
                         statusSpan.textContent = 'Connection error';
                     }
+                    
+                    // Create error result for connection/polling failures
+                    const errorResult = { error: `Connection error: ${error.message}` };
+                    console.log('DEBUG: Calling updateAsyncTaskWithResults with connection error for', metricName);
+                    setTimeout(() => {
+                        updateAsyncTaskWithResults(taskId, metricName, errorResult);
+                    }, 1000);
                 }
             });
     }
@@ -1358,6 +1432,8 @@ function pollAsyncTask(taskId, cacheKey, metricName, maxAttempts = 800, interval
 }
 
 function updateAsyncTaskWithResults(taskId, metricName, results) {
+    console.log(`DEBUG: updateAsyncTaskWithResults called for ${metricName} with:`, { taskId, results });
+    
     // Find the async task placeholder
     const asyncElement = document.querySelector(`[data-task-id="${taskId}"]`);
     updateTaskStatus(taskId, metricName, 'completed', 'Calculation completed!');
@@ -1366,120 +1442,292 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
         return;
     }
 
-
-
     // Build the completed visualization HTML
     let completedHtml = '';
     
-    // Check if there's an error
+    // Check if there's an error - use the same template as other metrics
     if (results.error) {
-        completedHtml = `
-            <div style="text-align: center; padding: 20px; color: #d32f2f;">
-                <strong>Error:</strong> ${results.error}
-            </div>`;
-    } else {
-        // Add visualization image if present - try multiple possible keys
-        const possibleVizKeys = [
-            `${metricName} Visualization`,
-            "Multiple attribute risk scoring Visualization",
-            "Single attribute risk scoring Visualization"
-        ];
+        console.log('DEBUG: Async task failed with error:', results.error);
         
-
-        
-        let vizKey = null;
-        for (const key of possibleVizKeys) {
-            if (results[key] && results[key].trim() !== "") {
-                vizKey = key;
-
-                break;
-            }
+        // Trigger error popup for failed async tasks
+        let errorType = 'Error';
+        if (metricName === 'Single attribute risk scoring') {
+            errorType = getSingleAttributeRiskErrorType(results.error);
+        } else if (metricName === 'Multiple attribute risk scoring') {
+            errorType = getMultipleAttributeRiskErrorType(results.error);
         }
         
-        if (vizKey) {
-            completedHtml += `
-                <div class="visualization-container">
-                    <img src="data:image/png;base64,${results[vizKey]}" 
-                         alt="Risk Score Visualization" 
-                         style="max-width: 100%; height: auto;">
+        console.log('DEBUG: Error type determined:', errorType);
+        
+        // Show error popup
+        openErrorPopup(errorType, results.error);
+        
+        // Use the same error template as other metrics
+        if (metricName === 'Single attribute risk scoring') {
+            completedHtml = `
+                <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                    <div style="color: #d32f2f; margin-bottom: 15px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                            <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                        </svg>
+                        <h4 style="margin: 0; color: #d32f2f;">Error in Single Attribute Risk Scoring</h4>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                            An error occurred while processing single attribute risk scores.
+                        </p>
+                        <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                            <strong>Error:</strong> ${results.error}
+                        </p>
+                    </div>
+                </div>`;
+        } else if (metricName === 'Multiple attribute risk scoring') {
+            completedHtml = `
+                <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                    <div style="color: #d32f2f; margin-bottom: 15px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                            <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                        </svg>
+                        <h4 style="margin: 0; color: #d32f2f;">Error in Multiple Attribute Risk Scoring</h4>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                            An error occurred while processing multiple attribute risk scores.
+                        </p>
+                        <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                            <strong>Error:</strong> ${results.error}
+                        </p>
+                    </div>
                 </div>`;
         } else {
-
+            // Generic error template for other async metrics
+            completedHtml = `
+                <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                    <div style="color: #d32f2f; margin-bottom: 15px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                            <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                        </svg>
+                        <h4 style="margin: 0; color: #d32f2f;">Error in ${metricName}</h4>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                            An error occurred while processing ${metricName.toLowerCase()}.
+                        </p>
+                        <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                            <strong>Error:</strong> ${results.error}
+                        </p>
+                    </div>
+                </div>`;
         }
-
-        // Add description if present
-        if (results.Description) {
-            completedHtml += `<div style="color: inherit;"><strong>Description:</strong> ${results.Description}</div>`;
-        }
-
-        // Add graph interpretation if present
-        if (results["Graph interpretation"]) {
-            completedHtml += `<div style="color: inherit;"><strong>Graph interpretation:</strong> ${results["Graph interpretation"]}</div>`;
-        }
-
-        // Add statistics if present
-        if (results["Descriptive statistics of the risk scores"]) {
-            const stats = results["Descriptive statistics of the risk scores"];
+        
+        console.log('DEBUG: Generated error HTML for', metricName);
+    } else {
+        // Check if this is actually an error result disguised as a "successful" result
+        // Validation errors often come with Description and Graph interpretation fields
+        if (results.Description && results.Description.includes('Error occurred') || 
+            results.Description && results.Description.includes('Error:') ||
+            results.Description && results.Description.includes('not found in dataset') ||
+            results.Description && results.Description.includes('not found in the dataset')) {
             
-            // Check if stats is for single attribute (object with feature names as keys) or multiple attribute (single object)
-            if (typeof stats === 'object' && stats !== null && !stats.hasOwnProperty('mean')) {
-                // Single attribute: stats is {feature1: {mean, std, ...}, feature2: {mean, std, ...}, ...}
-                completedHtml += `
-                    <div class="statistics-container" style="margin-bottom: 20px; color: inherit;">
-                        <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Descriptive Statistics</h4>
-                        <table class="table table-bordered" style="color: inherit; background-color: transparent; border-color: inherit;">
-                            <tr>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Feature</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Mean</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Std</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Min</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">25%</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">50%</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">75%</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Max</th>
-                            </tr>`;
-                
-                // Add a row for each feature
-                for (const [featureName, featureStats] of Object.entries(stats)) {
-                    completedHtml += `
-                        <tr>
-                            <td style="color: inherit; background-color: transparent; border-color: inherit;"><strong>${featureName}</strong></td>
-                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.mean.toFixed(3)}</td>
-                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.std.toFixed(3)}</td>
-                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.min.toFixed(3)}</td>
-                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["25%"].toFixed(3)}</td>
-                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["50%"].toFixed(3)}</td>
-                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["75%"].toFixed(3)}</td>
-                            <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.max.toFixed(3)}</td>
-                        </tr>`;
-                }
-                
-                completedHtml += `</table></div>`;
+            console.log('DEBUG: Detected validation error in results:', results.Description);
+            
+            // Extract the actual error message
+            let errorMessage = results.Description;
+            if (results.Description.includes('Error occurred:')) {
+                errorMessage = results.Description.split('Error occurred:')[1].trim();
+            } else if (results.Description.includes('Error:')) {
+                errorMessage = results.Description.split('Error:')[1].trim();
+            }
+            
+            // Trigger error popup for validation errors
+            let errorType = 'Error';
+            if (metricName === 'Single attribute risk scoring') {
+                errorType = getSingleAttributeRiskErrorType(errorMessage);
+            } else if (metricName === 'Multiple attribute risk scoring') {
+                errorType = getMultipleAttributeRiskErrorType(errorMessage);
+            }
+            
+            // Show error popup
+            openErrorPopup(errorType, errorMessage);
+            
+            // Use the same error template as other metrics
+            if (metricName === 'Single attribute risk scoring') {
+                completedHtml = `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in Single Attribute Risk Scoring</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing single attribute risk scores.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${errorMessage}
+                            </p>
+                        </div>
+                    </div>`;
+            } else if (metricName === 'Multiple attribute risk scoring') {
+                completedHtml = `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in Multiple Attribute Risk Scoring</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing multiple attribute risk scores.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${errorMessage}
+                            </p>
+                        </div>
+                    </div>`;
             } else {
-                // Multiple attribute: stats is a single object {mean, std, min, ...}
+                // Generic error template for other async metrics
+                completedHtml = `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in ${metricName}</h4>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing ${metricName.toLowerCase()}.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${errorMessage}
+                            </p>
+                        </div>
+                    </div>`;
+            }
+        } else {
+            // Add visualization image if present - try multiple possible keys
+            const possibleVizKeys = [
+                `${metricName} Visualization`,
+                "Multiple attribute risk scoring Visualization",
+                "Single attribute risk scoring Visualization"
+            ];
+            
+
+            
+            let vizKey = null;
+            for (const key of possibleVizKeys) {
+                if (results[key] && results[key].trim() !== "") {
+                    vizKey = key;
+
+                    break;
+                }
+            }
+            
+            if (vizKey) {
                 completedHtml += `
-                    <div class="statistics-container" style="margin-bottom: 20px; color: inherit;">
-                        <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Descriptive Statistics</h4>
-                        <table class="table table-bordered" style="color: inherit; background-color: transparent; border-color: inherit;">
+                    <div class="visualization-container">
+                        <img src="data:image/png;base64,${results[vizKey]}" 
+                             alt="Risk Score Visualization" 
+                             style="max-width: 100%; height: auto;">
+                    </div>`;
+            } else {
+
+            }
+
+            // Add description if present (only for successful results, not errors)
+            if (results.Description && !results.Description.includes('Error')) {
+                completedHtml += `<div style="color: inherit;"><strong>Description:</strong> ${results.Description}</div>`;
+            }
+
+            // Add graph interpretation if present (only for successful results, not errors)
+            if (results["Graph interpretation"] && !results["Graph interpretation"].includes('No visualization available due to error')) {
+                completedHtml += `<div style="color: inherit;"><strong>Graph interpretation:</strong> ${results["Graph interpretation"]}</div>`;
+            }
+
+            // Add statistics if present
+            if (results["Descriptive statistics of the risk scores"]) {
+                const stats = results["Descriptive statistics of the risk scores"];
+                
+                // Check if stats is for single attribute (object with feature names as keys) or multiple attribute (single object)
+                if (typeof stats === 'object' && stats !== null && !stats.hasOwnProperty('mean')) {
+                    // Single attribute: stats is {feature1: {mean, std, ...}, feature2: {mean, std, ...}, ...}
+                    completedHtml += `
+                        <div class="statistics-container" style="margin-bottom: 20px; color: inherit;">
+                            <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Descriptive Statistics</h4>
+                            <table class="table table-bordered" style="color: inherit; background-color: transparent; border-color: inherit;">
+                                <tr>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Feature</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Mean</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Std</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Min</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">25%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">50%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">75%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Max</th>
+                                </tr>`;
+                    
+                    // Add a row for each feature
+                    for (const [featureName, featureStats] of Object.entries(stats)) {
+                        completedHtml += `
                             <tr>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Mean</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Std</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Min</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">25%</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">50%</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">75%</th>
-                                <th style="color: inherit; background-color: transparent; border-color: inherit;">Max</th>
-                            </tr>
-                            <tr>
-                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.mean.toFixed(3)}</td>
-                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.std.toFixed(3)}</td>
-                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.min.toFixed(3)}</td>
-                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["25%"].toFixed(3)}</td>
-                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["50%"].toFixed(3)}</td>
-                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["75%"].toFixed(3)}</td>
-                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.max.toFixed(3)}</td>
-                            </tr>
-                        </table>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;"><strong>${featureName}</strong></td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.mean.toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.std.toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.min.toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["25%"].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["50%"].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats["75%"].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.max.toFixed(3)}</td>
+                            </tr>`;
+                    }
+                    
+                    completedHtml += `</table></div>`;
+                } else {
+                    // Multiple attribute: stats is a single object {mean, std, min, ...}
+                    completedHtml += `
+                        <div class="statistics-container" style="margin-bottom: 20px; color: inherit;">
+                            <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Descriptive Statistics</h4>
+                            <table class="table table-bordered" style="color: inherit; background-color: transparent; border-color: inherit;">
+                                <tr>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Mean</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Std</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Min</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">25%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">50%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">75%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Max</th>
+                                </tr>
+                                <tr>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.mean.toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.std.toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.min.toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["25%"].toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["50%"].toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats["75%"].toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.max.toFixed(3)}</td>
+                                </tr>
+                            </table>
+                        </div>`;
+                }
+            }
+
+            // Add dataset risk score if present (for multiple attribute)
+            if (results['Dataset Risk Score'] !== undefined) {
+                completedHtml += `
+                    <div style="margin-bottom: 20px; color: inherit;">
+                        <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Dataset Risk Score</h4>
+                        <p style="color: inherit; font-size: 16px;">
+                            <strong>Overall Risk:</strong> ${results['Dataset Risk Score'].toFixed(4)}
+                        </p>
                     </div>`;
             }
         }

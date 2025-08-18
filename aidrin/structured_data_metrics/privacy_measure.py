@@ -72,12 +72,12 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         initial_rows = len(selected_df)
         selected_df = selected_df.dropna()
         rows_after_dropna = len(selected_df)
-        
+        print(rows_after_dropna)
         if rows_after_dropna == 0:
             raise ValueError("After removing missing values, no data remains. Please check your data quality or select different columns.")
         
-        if rows_after_dropna < initial_rows * 0.5:
-            raise ValueError(f"More than 50% of data was removed due to missing values ({initial_rows - rows_after_dropna}/{initial_rows} rows). Please check data quality.")
+        #if rows_after_dropna < initial_rows * 0.5:
+        #    raise ValueError(f"More than 50% of data was removed due to missing values ({initial_rows - rows_after_dropna}/{initial_rows} rows). Please check data quality.")
 
         # Convert the selected DataFrame to a NumPy array
         my_array = selected_df.to_numpy()
@@ -108,8 +108,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
             if len(unique_values) == 1:
                 raise ValueError(f"Column '{col}' has only one unique value, making risk assessment meaningless.")
             
-            if len(unique_values) == len(my_array):
-                raise ValueError(f"Column '{col}' has unique values for every row, indicating it's already a perfect identifier.")
+            
 
             for j in range(len(my_array)):
                 attr1_tot = np.count_nonzero(my_array[:, col_idx + 1] == my_array[j, col_idx + 1])
@@ -244,14 +243,18 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         # Validate id_col
         if not id_col or id_col not in df.columns:
             raise ValueError(f"ID column '{id_col}' not found in dataset")
-
-        # Check if ID column has unique values
-        if df[id_col].nunique() != len(df):
-            raise ValueError(f"ID column '{id_col}' must contain unique values for each row.")
-
-        # Select specified columns from DataFrame
+        
         selected_columns = [id_col] + eval_cols
         selected_df = df[selected_columns]
+        selected_df = selected_df.dropna()
+
+        # Check if DataFrame is still non-empty after dropping missing values
+        rows_after_dropna = len(selected_df)
+        
+
+        if rows_after_dropna == 0:
+            print("DEBUG: About to raise ValueError - no data remains after dropna")
+            raise ValueError("After removing missing values, no data remains. Please check your data quality or select different columns.")
 
         # Check data quality for quasi-identifiers
         for col in eval_cols:
@@ -259,15 +262,13 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
                 unique_values = df[col].nunique()
                 if unique_values == 1:
                     raise ValueError(f"Column '{col}' has only one unique value, making risk assessment meaningless.")
-                if unique_values == len(df):
-                    raise ValueError(f"Column '{col}' is a perfect identifier, making it unsuitable for risk assessment.")
+                
+        # Check if ID column has unique values
+        if df[id_col].nunique() != len(df):
+            raise ValueError(f"ID column '{id_col}' must contain unique values for each row.")
 
-        selected_df = selected_df.dropna()
-
-        # Check if DataFrame is still non-empty after dropping missing values
-        if selected_df.empty:
-            raise ValueError("After dropping missing values, the DataFrame is empty")
-
+        # Select specified columns from DataFrame
+        
         # convert dataframe to numpy array
         my_array = selected_df.to_numpy()
 
@@ -417,22 +418,24 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         result_dict["Multiple attribute risk scoring Visualization"] = base64_image
         result_dict['Dataset Risk Score'] = normalized_distance
 
-        return result_dict
-
     except SoftTimeLimitExceeded:
-        raise Exception("Multiple Attribute Risk task timed out.")
+        raise Exception("Multiple Attribute Risk task timed out. The dataset may be too large or complex.")
     except ValueError as ve:
+        # Handle specific validation errors 
         result_dict["Error"] = str(ve)
         result_dict["Multiple attribute risk scoring Visualization"] = ""
+        result_dict["Description"] = f"Validation Error: {str(ve)}"
         result_dict["Graph interpretation"] = "No visualization available due to validation error."
         result_dict["ErrorType"] = "Validation Error"
-        return result_dict
     except Exception as e:
+        # Handle other unexpected errors
         result_dict["Error"] = f"Processing error: {str(e)}"
         result_dict["Multiple attribute risk scoring Visualization"] = ""
+        result_dict["Description"] = f"Processing Error: {str(e)}"
         result_dict["Graph interpretation"] = "No visualization available due to processing error."
         result_dict["ErrorType"] = "Processing Error"
-        return result_dict
+
+    return result_dict
 
 
 def compute_k_anonymity(quasi_identifiers: List[str], file_info):
@@ -862,11 +865,14 @@ try:
 
         except Exception as e:
             logger.error(f"Error in single attribute risk calculation: {str(e)}")
-            self.update_state(
-                state='FAILURE',
-                meta={'error': str(e)}
-            )
-            raise
+            # Return error result instead of raising exception
+            error_result = {
+                "Error": str(e),
+                "Single attribute risk scoring Visualization": "",
+                "Graph interpretation": "No visualization available due to processing error.",
+                "ErrorType": "Processing Error"
+            }
+            return error_result
 
     @shared_task(bind=True, time_limit=1200, soft_time_limit=900)
     def calculate_multiple_attribute_risk_score(self, df_data, id_col, eval_cols):
@@ -903,11 +909,14 @@ try:
 
         except Exception as e:
             logger.error(f"Error in multiple attribute risk calculation: {str(e)}")
-            self.update_state(
-                state='FAILURE',
-                meta={'error': str(e)}
-            )
-            raise
+            # Return error result instead of raising exception
+            error_result = {
+                "Error": str(e),
+                "Multiple attribute risk scoring Visualization": "",
+                "Graph interpretation": "No visualization available due to processing error.",
+                "ErrorType": "Processing Error"
+            }
+            return error_result
 
 except ImportError:
     # Fallback for when running outside of the Flask app context
