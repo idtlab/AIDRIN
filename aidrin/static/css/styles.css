@@ -204,6 +204,52 @@ select {
     max-width: 100%;
     overflow: hidden;
 }
+
+/* Ensure tooltips are never clipped by parent containers */
+.checkboxContainerIndividual .info-icon {
+    overflow: visible;
+    position: relative;
+}
+
+.checkboxContainerIndividual .info-text {
+    overflow: visible;
+    position: absolute;
+    z-index: 9999;
+    max-width: 400px;
+    word-wrap: break-word;
+    white-space: normal;
+    top: 0;
+    left: 100%;
+    margin-left: 10px;
+    /* Remove any positioning that might conflict with JavaScript */
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+    /* Ensure stable positioning */
+    display: none;
+    background-color: #f5f5f5;
+    color: #333;
+    padding: 15px 20px;
+    border-radius: 3px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Override any parent container overflow restrictions for tooltips */
+.checkboxContainerIndividual,
+.checkboxContainer,
+.metric-inputs {
+    overflow: visible !important;
+}
+
+/* Ensure tooltips can extend beyond any container boundaries */
+.info-text {
+    position: absolute;
+    z-index: 9999;
+    overflow: visible !important;
+    clip: auto !important;
+    clip-path: none !important;
+}
 select:disabled {
   background-color: var(--disabledOverlay); /* Darker overlay */
   color: gray;
@@ -488,19 +534,24 @@ input[type="reset"] {
 .info-text {
     display: none;
     position: absolute;
-    top: 20px;
-    left: 0;
     background-color: #f5f5f5; /* Light grey background for better visibility in light mode */
     color: #333; /* Dark text for good contrast */
     padding: 15px 20px; /* Increased padding for better hover area */
     border-radius: 3px;
     white-space: normal; /* Allow text to wrap */
     width: 400px; /* Set a maximum width */
-    z-index: 100; /* High z-index to appear above most elements */
+    z-index: 9999;
     pointer-events: auto !important; /* Always interactive */
     cursor: default; /* Show default cursor */
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow for better visibility */
     border: 1px solid rgba(0, 0, 0, 0.1); /* Add subtle border */
+    overflow: visible !important;
+    clip: auto !important;
+    clip-path: none !important;
+    /* Prevent any CSS conflicts with JavaScript positioning */
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
 }
 
 /* Dark mode override for info-text */

@@ -2379,6 +2379,9 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     });
+    
+    // Setup tooltip positioning for privacy metrics
+    setupTooltipPositioning();
 
 // Auto-start polling for async tasks when page loads
     console.log('DOMContentLoaded: Checking for async tasks...');
@@ -2527,4 +2530,51 @@ function closeDatalogPopup() {
 function closeErrorPopup() {
     //error popup has to be present in the DOM for the function to call already
     errorPopup.classList.remove("open-popup");
+}
+
+// Function to setup tooltip positioning for privacy metrics
+function setupTooltipPositioning() {
+    // Find all info icons in privacy metrics
+    const infoIcons = document.querySelectorAll('.checkboxContainerIndividual .info-icon');
+    
+    infoIcons.forEach(icon => {
+        const tooltip = icon.querySelector('.info-text');
+        if (tooltip) {
+            let isHoveringIcon = false;
+            let isHoveringTooltip = false;
+            
+            // Show tooltip when entering icon
+            icon.addEventListener('mouseenter', function() {
+                tooltip.style.display = 'block';
+                isHoveringIcon = true;
+            });
+            
+            // Hide tooltip when leaving icon
+            icon.addEventListener('mouseleave', function(e) {
+                isHoveringIcon = false;
+                // Check if mouse is moving to the tooltip
+                const relatedTarget = e.relatedTarget;
+                if (!relatedTarget || !tooltip.contains(relatedTarget)) {
+                    // If not moving to tooltip, hide after a short delay
+                    setTimeout(() => {
+                        if (!isHoveringIcon && !isHoveringTooltip) {
+                            tooltip.style.display = 'none';
+                        }
+                    }, 50);
+                }
+            });
+            
+            // Keep tooltip visible when hovering over it
+            tooltip.addEventListener('mouseenter', function() {
+                isHoveringTooltip = true;
+                tooltip.style.display = 'block';
+            });
+            
+            // Hide tooltip when leaving tooltip
+            tooltip.addEventListener('mouseleave', function() {
+                isHoveringTooltip = false;
+                tooltip.style.display = 'none';
+            });
+        }
+    });
 }
