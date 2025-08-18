@@ -509,8 +509,7 @@ function updateCrossDisable() {
     // AND ensure they're disabled if the main metric checkbox is not checked
     $('input[name="quasi identifiers for k-anonymity"]').each(function() {
         const val = $(this).val();
-        const isSelectedAsSensitive = $('#lDiversitySensitiveDropdown').val() === val || $('#tClosenessSensitiveDropdown').val() === val;
-        $(this).prop('disabled', !kAnonymityEnabled || isSelectedAsSensitive);
+        $(this).prop('disabled', !kAnonymityEnabled);
     });
     
     $('input[name="quasi identifiers for l-diversity"]').each(function() {
