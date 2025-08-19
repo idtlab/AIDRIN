@@ -512,9 +512,9 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
 .selectAll::after {
   content: attr(data-tooltip); /* text from attribute */
   position: absolute;
-  bottom: 0%; 
+  bottom: 0%;
   left: 69%;
-  width:max-content;
+  width: max-content;
   transform: translateX(-50%);
   background-color: var(--darkAccent);
   color: var(--oppositeTextColor);
