@@ -229,7 +229,7 @@ $(document).ready(function () {
                 response.all_features,
                 "tClosenessSensitiveDropdown"
               );
-
+              // Disable Target feature checkboxes
               document.querySelectorAll(".checkboxContainerIndividual").forEach(container => {
                 const dropdown = container.querySelector("select");
 

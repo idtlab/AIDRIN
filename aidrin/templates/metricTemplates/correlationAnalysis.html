@@ -1,29 +1,48 @@
-{% extends 'metricTemplates/metricBase.html' %}
+{% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Correlation
+Analysis" %} {% set page_route = "correlationAnalysis" %} {% block metricContent
+%}
+<div id="checkboxContainer_correlation" class="checkboxContainer">
+  <br />
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox">
+      <input
+        type="checkbox"
+        name="correlations"
+        value="yes"
+        onchange="toggleValue(this)"
+      />
+      <span class="checkmark"></span>
+      Perform Correlation Analysis
+      <span class="info-icon">
+        i
+        <span class="info-text">
+          This option calculates feature correlations using Pearson correlation
+          for numerical features and Theil's U for categorical features. It
+          returns a visualization of the correlation matrix.
+        </span>
+      </span>
+    </label>
+    <ul>
+      <li>
+        <label
+          for="categorical features for correlation analysis"
+          style="padding: 10px; padding-left: 15px; min-width: 175px"
+          >Categorical features:</label
+        >
+        <div id="catFeaturesCheckbox1"></div>
+        <br />
+      </li>
 
-{% set page_title = "Correlation Analysis" %}
-{% set page_route = "correlationAnalysis" %}
-
-{% block metricContent %}
-    <div id="checkboxContainer_correlation" class="checkboxContainer"><br>
-        <div class="checkboxContainerIndividual">
-            <label class="material-checkbox">
-                <input  type="checkbox" name="correlations" value = 'yes' onchange="toggleValue(this)">
-                <span class="checkmark"></span>
-                Perform Correlation Analysis
-                <span class="info-icon">
-                    i
-                    <span class="info-text">
-                        This option calculates feature correlations using Pearson correlation for numerical features and Theil's U for categorical features. It returns a visualization of the correlation matrix.
-                    </span>
-                </span>
-            </label>
-            <ul>
-                <li >
-                    <label for="correlationColumns" style="padding:10px; padding-left:15px;">Features:</label>
-                    <!-- Checkboxes for correlations (yet to be added?) -->
-                    <div id="correlationCheckboxContainer"></div>
-                </li>
-            </ul>
-        </div>
-    </div>
+      <li>
+        <label
+          for="numerical features for correlation analysis"
+          style="padding: 10px; padding-left: 15px; min-width: 175px"
+          >Numerical features:</label
+        >
+        <div id="numFeaturesCheckbox1"></div>
+        <br />
+      </li>
+    </ul>
+  </div>
+</div>
 {% endblock %}

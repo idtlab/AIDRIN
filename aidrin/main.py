@@ -520,7 +520,26 @@ def correlationAnalysis():
 
             if request.form.get("correlations") == "yes":
                 start_time_correlations = time.time()
-                columns = request.form.getlist("all features for data transformation")
+                # Get raw input from form and sanitize
+                raw_cat_cols = request.form.get(
+                    "categorical features", ""
+                )
+                raw_num_cols = request.form.get(
+                    "numerical features", ""
+                )
+                print(raw_cat_cols)
+                print(raw_num_cols)
+                # Clean each list by removing empty strings and whitespace-only entries
+                cat_cols = [
+                    col.strip() for col in raw_cat_cols.split(",") if col.strip()
+                ]
+                num_cols = [
+                    col.strip() for col in raw_num_cols.split(",") if col.strip()
+                ]
+                print(cat_cols)
+                print(num_cols)
+                columns = cat_cols + num_cols
+                print(columns)
                 correlations_result = calc_correlations.delay(columns, file_info)
                 corr_dict = correlations_result.get()
                 # catch potential errors
@@ -570,10 +589,10 @@ def featureRelevance():
             if request.form.get("feature relevancy") == "yes":
                 # Get raw input from form and sanitize
                 raw_cat_cols = request.form.get(
-                    "categorical features for feature relevancy", ""
+                    "categorical features", ""
                 )
                 raw_num_cols = request.form.get(
-                    "numerical features for feature relevancy", ""
+                    "numerical features", ""
                 )
 
                 # Clean each list by removing empty strings and whitespace-only entries

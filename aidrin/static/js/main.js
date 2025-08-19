@@ -79,11 +79,11 @@ function submitForm() {
   // Add the concatenated checkbox values to the form data
   formData.set("correlation columns", checkboxValues);
   formData.set(
-    "numerical features for feature relevancy",
+    "numerical features",
     numFeaCheckboxValues
   );
   formData.set(
-    "categorical features for feature relevancy",
+    "categorical features",
     catFeaCheckboxValues
   );
 
