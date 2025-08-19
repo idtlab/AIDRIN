@@ -1,6 +1,11 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+
 [project]
 name = "aidrin"
-version = "0.1"
+version = ["version"]
 readme = "README.md"
 description="A tool to evaluate the readiness of data for AI"
 maintainers = [{name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"},{name = "Suren Byna", email = "byna.1@osu.edu"}]
@@ -16,12 +21,8 @@ dependencies = [
     "flower"
 ]
 
-[build-system]
-requires = ["flit_core<4"]
-build-backend = "flit_core.buildapi"
-
-[tool.flit.module]
-name = "aidrin"
+[tool.setuptools.dynamic]
+version = {attr = "aidrin._version.__version__"}
 
 [tool.coverage.run]
 branch = true
