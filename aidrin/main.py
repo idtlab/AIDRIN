@@ -3,6 +3,11 @@ import logging
 import os
 import time
 import uuid
+from werkzeug.utils import secure_filename
+import sys
+from .custom_metrics.base_dr import BaseDRAgent
+import inspect
+import importlib
 
 import pandas as pd
 import redis
@@ -18,6 +23,7 @@ from flask import (
     send_from_directory,
     session,
     url_for,
+    make_response
 )
 
 from aidrin.file_handling.file_parser import (
@@ -859,6 +865,215 @@ def privacyPreservation():
         return store_result("privacyPreservation", final_dict)
 
     return get_result_or_default("privacyPreservation", file_path, file_name)
+
+# Helper function to check allowed file extensions
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in current_app.config["ALLOWED_EXTENSIONS"]
+
+
+@main.route('/save_custom_metric', methods=['POST'])
+def upload_metric():
+    try:
+        # Check if a file is included in the request
+        if 'custom_dr_file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+
+        file = request.files['custom_dr_file']
+
+        # Check if a file was selected
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        # Validate file extension
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type. Only .py files are allowed'}), 400
+
+        # Secure the filename to prevent path traversal attacks
+        filename = secure_filename(file.filename)
+        base, ext = os.path.splitext(filename)
+        filename = f"{base}_{int(time.time())}{ext}"
+
+        # Save the file to the custom_metrics directory
+        file_path = os.path.join(current_app.config["CUSTOM_METRICS_FOLDER"], filename)
+        file.save(file_path)
+
+        # Store custom metric file info in session
+        session['custom_metric_file_path'] = file_path
+        session['custom_metric_file_name'] = filename
+
+        return jsonify({'message': 'File uploaded successfully'}), 200
+
+    except Exception as e:
+        # Log the error for debugging
+        metric_time_log.error(f"Error uploading file: {str(e)}")
+        return jsonify({'error': 'An error occurred while uploading the file'}), 500
+
+
+@main.route('/cancel-custom-metric', methods=['POST'])
+def cancel_custom_metric():
+    try:
+        # Retrieve custom metric file info from session
+        custom_metric_file_path = session.get('custom_metric_file_path')
+
+        if not custom_metric_file_path or not os.path.exists(custom_metric_file_path):
+            return jsonify({'message': 'No custom metric file to cancel'}), 200
+
+        # Delete the file
+        try:
+            os.remove(custom_metric_file_path)
+            metric_time_log.info(f"Successfully removed custom metric file: {custom_metric_file_path}")
+        except Exception as e:
+            metric_time_log.error(f"Failed to remove custom metric file {custom_metric_file_path}: {str(e)}")
+            return jsonify({'error': f"Failed to remove custom metric file: {str(e)}"}), 500
+
+        # Clear session variables
+        session.pop('custom_metric_file_path', None)
+        session.pop('custom_metric_file_name', None)
+
+        return jsonify({'message': 'Custom metric file removed successfully'}), 200
+
+    except Exception as e:
+        metric_time_log.error(f"Error canceling custom metric: {str(e)}")
+        return jsonify({'error': 'An error occurred while canceling the upload'}), 500
+
+
+@main.route("/customMetrics", methods=["GET", "POST"])
+def customMetrics():
+    final_dict = {}
+
+    # Retrieve data file info (for dataset)
+    data_file_path = session.get("uploaded_file_path")
+    data_file_name = session.get("uploaded_file_name")
+    data_file_type = session.get("uploaded_file_type")
+    file_info = (data_file_path, data_file_name, data_file_type)
+
+    # Retrieve custom metric module info
+    custom_metric_file_path = session.get("custom_metric_file_path")
+    custom_metric_file_name = session.get("custom_metric_file_name")
+
+    if request.method == "POST":
+        metric_time_log.info("Custom Metric Evaluation Request Started")
+        start_time = time.time()
+        try:
+            # Check if custom metric file is provided
+            if not custom_metric_file_path or not os.path.exists(custom_metric_file_path):
+                return jsonify({"error": "No custom metric file provided"}), 400
+            if not custom_metric_file_name.endswith('.py'):
+                return jsonify({"error": "Invalid custom metric file type. Only .py files are allowed"}), 400
+
+            # Load dataset from data file
+            df = read_file(file_info)  # Assumes read_file is defined elsewhere
+
+            final_dict["Custom Metric Evaluation"] = {}
+
+            # Import the custom metric module
+            module_name = custom_metric_file_name[:-3]  # Remove .py extension
+            try:
+                custom_metric_module = importlib.import_module(f'aidrin.custom_metrics.{module_name}')
+            except ImportError as e:
+                raise ImportError(f"Could not load module aidrin.custom_metrics.{module_name}: {str(e)}")
+
+            # Find the class that inherits from BaseDRAgent
+            custom_metric_class = None
+            for name, obj in inspect.getmembers(custom_metric_module, inspect.isclass):
+                if issubclass(obj, BaseDRAgent) and obj is not BaseDRAgent:
+                    custom_metric_class = obj
+                    break
+
+            if custom_metric_class is None:
+                return jsonify({"error": f"No class inheriting from BaseDRAgent found in module {module_name}"}), 400
+
+            # Initialize the custom metric class with the dataset
+            custom_metric_instance = custom_metric_class(dataset=df)
+
+            # Call the metric method to get results
+            metric_results = custom_metric_instance.metric()
+            if not isinstance(metric_results, dict):
+                return jsonify({"error": f"{custom_metric_class.__name__}.metric() must return a dictionary"}), 400
+
+            # Store the results in the final_dict
+            final_dict["Custom Metric Evaluation"] = metric_results
+
+            # Clean up sys.modules to prevent memory leaks
+            if f'aidrin.custom_metrics.{module_name}' in sys.modules:
+                del sys.modules[f'aidrin.custom_metrics.{module_name}']
+
+        except Exception as e:
+            metric_time_log.error(f"Error: {str(e)}")
+            return jsonify({"error": str(e)}), 200
+
+        finally:
+            # Safely remove the custom metric file
+            if custom_metric_file_path and os.path.exists(custom_metric_file_path):
+                try:
+                    os.remove(custom_metric_file_path)
+                    metric_time_log.info(f"Successfully removed custom metric file: {custom_metric_file_path}")
+                except Exception as e:
+                    metric_time_log.error(f"Failed to remove custom metric file {custom_metric_file_path}: {str(e)}")
+
+            # Clear session variables
+            session.pop('custom_metric_file_path', None)
+            session.pop('custom_metric_file_name', None)
+
+            # Clean up sys.modules to prevent memory leaks
+            if module_name and f'aidrin.custom_metrics.{module_name}' in sys.modules:
+                del sys.modules[f'aidrin.custom_metrics.{module_name}']
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+        metric_time_log.info(
+            f"Custom Metric Evaluation Execution time: {execution_time:.2f} seconds"
+        )
+
+        return store_result("customMetrics", final_dict)
+
+    return get_result_or_default("customMetrics", data_file_path, data_file_name)
+
+
+@main.route('/generate-template', methods=['POST'])
+def generate_template():
+    try:
+        class_name = request.form.get('class_name')
+        if not class_name:
+            return jsonify({'error': 'No class name provided'}), 400
+
+        # Basic validation
+        if not class_name.isidentifier():
+            return jsonify({'error': 'Invalid class name'}), 400
+
+        filename = f"{class_name}.py"
+        template = f"""from .base_dr import BaseDRAgent
+from typing import Any
+
+class {class_name}(BaseDRAgent):
+    def __init__(self, dataset: Any, **kwargs):
+        # Initialize the parent class with dataset and additional arguments
+        super().__init__(dataset, **kwargs)
+
+        # Ensure dataset is initialized
+        self.dataset = dataset
+
+    def metric(self) -> dict[str, Any]:
+        \"\"\"
+        Implement your custom metric logic here.
+        Must return a dictionary of results.
+        \"\"\"
+        # Example implementation:
+        return {{
+            "metric_results": "metric not defined"
+        }}
+"""
+
+        response = make_response(template)
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        response.mimetype = 'text/x-python'
+        return response
+
+    except Exception as e:
+        metric_time_log.error(f"Error generating template: {str(e)}")
+        return jsonify({'error': 'An error occurred while generating the template'}), 500
 
 
 @main.route("/FAIR", methods=["GET", "POST"])

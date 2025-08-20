@@ -1,0 +1,177 @@
+<!-- See metricBase.html and universalComponents.html for included components -->
+{% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Define
+Custom Metric" %} {% set page_route = "customMetrics" %} {% block metricContent
+%}
+<div
+  style="
+    margin-left: 3%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  "
+>
+  <!-- Existing Input Fields -->
+  <p style="margin-bottom: 15px;">
+    1. Enter a valid metric name (letters, numbers, underscores; no spaces) in
+    the field below and click "Download Metric Template" to get a Python (.py)
+    file..
+  </p>
+  <br />
+  <div
+    style="
+      display: flex;
+      flex-direction: row;
+      width: max-content;
+      margin-bottom: 3%;
+    "
+  >
+    <input
+      class="textWrapper"
+      type="text"
+      style="min-width: 220px;"
+      name="class_name"
+      placeholder="Enter metric name"
+      required
+    />
+    <button
+      class="animated-button"
+      type="button"
+      style="width: max-content; flex-shrink: 0; flex-grow: 0;"
+      onclick="downloadTemplate()"
+    >
+      Download Metric Template
+    </button>
+  </div>
+  <p style="margin-bottom: 15px;">
+    2. Open the downloaded .py file in a text editor. Modify the
+    <code>metric</code> method to define your custom metric logic, ensuring it
+    returns a dictionary. Do not change the import or class structure.
+  </p>
+  <p style="margin-bottom: 15px;">
+    3. Select your edited .py file and click "Upload Metric". You’ll see a
+    confirmation if successful.
+  </p>
+  <div
+    style="
+      display: flex;
+      flex-direction: row;
+      width: max-content;
+      align-items: center;
+      margin-bottom: 1%;
+    "
+  >
+    <input
+      style="width: 220px; margin-right: 10px;"
+      type="file"
+      name="custom_dr_file"
+      accept=".py"
+      required
+    />
+    <button
+      class="animated-button"
+      type="button"
+      style="width: max-content; flex-shrink: 0; flex-grow: 0;"
+      onclick="uploadMetric()"
+    >
+      Upload Metric
+    </button>
+    <button
+      class="animated-button"
+      type="button"
+      style="width: max-content; flex-shrink: 0; flex-grow: 0;"
+      onclick="cancelUpload()"
+    >
+      Cancel Upload
+    </button>
+  </div>
+  <p style="margin-bottom: 15px;">
+    4. Click the <strong>SUBMIT</strong> button (below) to run your metric on
+    the uploaded dataset. Results will display below
+  </p>
+</div>
+
+<script>
+  function downloadTemplate() {
+    const input = document.querySelector('input[name="class_name"]');
+    const metricName = input.value.trim();
+
+    if (!metricName) {
+      alert("Please enter a metric name before downloading the template.");
+      input.focus();
+      return;
+    }
+
+    fetch("/generate-template", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ class_name: metricName }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Network error");
+        return response.blob();
+      })
+      .then((blob) => {
+        // trigger browser download
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${metricName}.py`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((err) => {
+        console.error(err);
+        alert("Failed to download template.");
+      });
+  }
+
+  function uploadMetric() {
+    const fileInput = document.querySelector('input[name="custom_dr_file"]');
+    const file = fileInput.files[0];
+    if (!file) {
+      alert("Please select a .py file to upload.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("custom_dr_file", file);
+
+    fetch("/save_custom_metric", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => {
+        if (response.ok) {
+          alert(
+            "Custom metric uploaded successfully to the server. Please press SUBMIT when you are ready to see the results."
+          );
+        } else {
+          alert("Error uploading file.");
+        }
+      })
+      .catch((error) => {
+        console.error("Upload error:", error);
+        alert("An error occurred while uploading the file.");
+      });
+  }
+
+  function cancelUpload() {
+    fetch("/cancel-custom-metric", {
+      method: "POST",
+    })
+      .then((response) => {
+        if (response.ok) {
+          alert("Uploaded metric file has been removed.");
+        } else {
+          return response.json().then((data) => {
+            throw new Error(data.error || "Error canceling upload");
+          });
+        }
+      })
+      .catch((error) => {
+        console.error("Cancel upload error:", error);
+        alert("An error occurred while canceling the upload: " + error.message);
+      });
+  }
+</script>
+{% endblock %}

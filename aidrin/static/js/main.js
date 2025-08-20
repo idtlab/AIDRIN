@@ -154,6 +154,7 @@ function submitForm() {
         "l-Diversity",
         "t-Closeness",
         "Entropy Risk",
+        "Custom Metric Evaluation",
       ];
       visualizationTypes.forEach((type) => {
         if (data[type]) {
@@ -162,7 +163,18 @@ function submitForm() {
       });
       visualizationTypes.forEach(function (type) {
         if (isKeyPresentAndDefined(data, type)) {
-          if (isKeyPresentAndDefined(data[type], type + " Visualization")) {
+          if (type === "Custom Metric Evaluation") {
+            // Special handling for Custom Metric Evaluation: display raw JSON
+            console.log("Adding Custom Metric Evaluation:", type);
+            var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
+            visualizationContent.push({
+              title: type,
+              jsonData: jsonData,
+              isCustomMetric: true,
+            });
+          } else if (
+            isKeyPresentAndDefined(data[type], type + " Visualization")
+          ) {
             console.log("Adding visualization:", type);
             var image = data[type][type + " Visualization"];
             var value = data[type]["Value"] || "N/A";
@@ -219,13 +231,11 @@ function submitForm() {
         // Add heading if not already added
         if (!headingAdded) {
           metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
-
           headingAdded = true;
         }
         console.log("Visualization content:", visualizationContent);
         // Add each visualization to the metric visualization section
         visualizationContent.forEach(function (content, index) {
-          const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
           const visualizationId = `visualization_${index}`;
           let visualizationHtml = `<div class="visualization-container">
                     <div class="toggle" style="display:block" onclick="toggleVisualization('${visualizationId}')">
@@ -234,9 +244,12 @@ function submitForm() {
                             <svg id="${visualizationId}-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
-                        <div id="${visualizationId}" style="display: none;">`;
+                    <div id="${visualizationId}" style="display: none;">`;
 
-          if (content.hasError) {
+          if (content.isCustomMetric) {
+            // Display raw JSON for Custom Metric Evaluation
+            visualizationHtml += `<pre style="text-align: left; padding: 20px; background: #f5f5f5; border: 1px solid #ddd; overflow-x: auto;">${content.jsonData}</pre>`;
+          } else if (content.hasError) {
             // Display error message instead of image
             visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
                         <strong>Error:</strong> ${content.description}
@@ -257,7 +270,8 @@ function submitForm() {
                     </div>`;
           }
 
-          visualizationHtml += `
+          if (!content.isCustomMetric) {
+            visualizationHtml += `
                             ${
                               content.riskScore !== "N/A"
                                 ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>`
@@ -276,15 +290,16 @@ function submitForm() {
                                ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>`
                                : ""
                            }
-
                         </div>
-
                     </div>`;
+          } else {
+            visualizationHtml += `</div></div>`;
+          }
 
           metrics.innerHTML += visualizationHtml;
         });
 
-        //check if duplicity is present and 0 (no duplicity)
+        // Check if duplicity is present and 0 (no duplicity)
         if (
           isKeyPresentAndDefined(data, "Duplicity") &&
           isKeyPresentAndDefined(data["Duplicity"], "Duplicity scores") &&
@@ -302,7 +317,6 @@ function submitForm() {
                     <div id="duplicity" style="display: none; text-align: center;">
                         No duplicates found
                     </div>
-
                 </div>`;
         } else if (
           isKeyPresentAndDefined(data, "Duplicity") &&
@@ -318,7 +332,6 @@ function submitForm() {
                     <div id="duplicity" style="display: none;">
                         <p style="text-align:center">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
                     </div>
-                    <
                 </div>`;
         }
 
@@ -332,7 +345,7 @@ function submitForm() {
 
         metrics.scrollIntoView({ behavior: "smooth" });
       } else {
-        //check if duplicity is present and 0 (no duplicity)
+        // Check if duplicity is present and 0 (no duplicity)
         if (
           isKeyPresentAndDefined(data, "Duplicity") &&
           isKeyPresentAndDefined(data["Duplicity"], "Duplicity scores") &&
@@ -369,132 +382,6 @@ function submitForm() {
     .catch((error) => {
       console.error("Error:", error);
       openErrorPopup("Visualization Error", error); // call error popup
-
-      // Check if "Completeness Visualization" key is present
-      // if (isKeyPresentAndDefined(data, 'Completeness') && isKeyPresentAndDefined(data['Completeness'], 'Completeness Visualization')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="complVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Completeness']['Completeness Visualization'] + '" alt="Completeness Chart">' +
-      //         '<div style="margin-left: 10px;">' +data['Completeness']['Description'] + '</div>' +
-      //         '</div>';
-      // }
-
-      // Check if "Outliers Visualization" key is present
-      // if (isKeyPresentAndDefined(data, 'Outliers') && isKeyPresentAndDefined(data['Outliers'], 'Outliers Visualization')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="outVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Outliers']['Outliers Visualization'] + '" alt="Outliers Chart">' +
-      //         '<div style="margin-left: 10px;">' +data['Outliers']['Description'] + '</div>' +
-      //         '</div>';
-      // }
-
-      // if (
-      //     isKeyPresentAndDefined(data, 'Representation Rate') &&
-      //     isKeyPresentAndDefined(data['Representation Rate'], 'Representation Rate Visualization')
-      // ) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="repVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate']['Representation Rate Chart']+ '" alt="Representation Rate Chart">' +
-      //         '<div style="margin-left: 10px;">' +data['Representation Rate']['Description'] + '</div>' +
-      //         '</div>';
-      // }
-
-      // if (isKeyPresentAndDefined(data, 'Statistical Rate') && isKeyPresentAndDefined(data['Statistical Rate'], 'Visualization')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="statRateVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Statistical Rate']['class_proportions_plot'] + '" alt="Statistical rate bar plot">' +
-      //         '<div style="margin-left: 10px;">' +data['Statistical Rate']['Description'] + '</div>' +
-      //         '</div>';
-      // }
-
-      // Check if "Representation Rate Comparison with Real World" key and "Comparisons" key are present
-      // if (
-      //     isKeyPresentAndDefined(data, 'Representation Rate Comparison with Real World') &&
-      //     isKeyPresentAndDefined(data['Representation Rate Comparison with Real World']['Comparisons'], 'Comparison Visualization')
-      // ) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="compVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Representation Rate Comparison with Real World']['Comparisons']['Comparison Visualization'] + '" alt="Comparisons Chart">' +
-      //         '<div style="margin-left: 10px;">' +data['Representation Rate Comparison with Real World']['Description'] + '</div>' +
-      //         '</div>';
-      // }
-
-      // if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Categorical-Categorical Visualization')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="catCorrVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Categorical-Categorical Correlation Matrix'] + '" alt="Categorical-Categorical Correlation Matrix">' +
-      //         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['cat_description'] + '</div>' +
-      //         '</div>';
-
-      // }
-
-      // if (isKeyPresentAndDefined(data, 'Correlations Analysis') && isKeyPresentAndDefined(data['Correlations Analysis'], 'Numerical-Numerical Visualization')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="numCorrVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Correlations Analysis']['Numerical-Numerical Correlation Matrix'] + '" alt="Numerical-Numerical Correlation Matrix">' +
-      //         '<div style="margin-left: 10px;">' +data['Correlations Analysis']['num_description'] + '</div>' +
-      //         '</div>';
-
-      // }
-
-      // if (isKeyPresentAndDefined(data, 'Feature relevance') && isKeyPresentAndDefined(data['Feature relevance'], 'Feature relevance Visualization')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="featureRelVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Feature relevance']['summary plot'] + '" alt="Shapley value plot">' +
-      //         '<div style="margin-left: 10px;">' +data['Feature relevance']['Description'] + '</div>' +
-      //         '</div>';
-      // }
-      // if (isKeyPresentAndDefined(data, 'Class imbalance') && isKeyPresentAndDefined(data['Class imbalance'], 'Class distribution plot')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="classDisVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Class imbalance']['Class distribution plot'] + '" alt="Class distribution plot">' +
-      //         '<div style="margin-left: 10px;">' +data['Class imbalance']['Description'] + '</div>' +
-      //         '</div>';
-      // }
-
-      // if (isKeyPresentAndDefined(data, 'DP statistics') && isKeyPresentAndDefined(data['DP statistics'], 'Combined Plots')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="noisyVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['DP statistics']['Combined Plots'] + '" alt="Normal vs Noisy Feature Box Plots">' +
-      //         '<div style="margin-left: 10px;">' +data['DP statistics']['Description'] + '</div>' +
-      //         '</div>';
-      // }
-
-      // if (isKeyPresentAndDefined(data, 'Single attribute risk scoring') && isKeyPresentAndDefined(data['Single attribute risk scoring'], 'BoxPlot')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="singleRiskVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Single attribute risk scoring']['BoxPlot'] + '" alt="Single attribute risk score box plots">'+
-      //         '<div style="margin-left: 10px;">' +data['Single attribute risk scoring']['Description'] + '</div>' +
-      //         '</div>'
-
-      // }
-      // if (isKeyPresentAndDefined(data, 'Multiple attribute risk scoring') && isKeyPresentAndDefined(data['Multiple attribute risk scoring'], 'Box Plot')) {
-      //     // Display the chart image and description in a single div
-      //     resultContainer.innerHTML += '<div id="multipleRiskVis" style="display:none; text-align: left;">' +
-      //         '<img style="margin-right: 10px;" src="data:image/png;base64,' + data['Multiple attribute risk scoring']['Box Plot'] + '" alt="Multiple attribute risk score box plots">'+
-      //         '<div style="margin-left: 10px;">' +data['Multiple attribute risk scoring']['Description'] + '</div>' +
-      //         '</div>'
-
-      // }
-
-      //Display other result information as JSON
-      // if (data['Duplicity'] && data['Duplicity']['Duplicity scores'] && data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] !== undefined) {
-      //     resultContainer.innerHTML += '<div id="duplicityScoreResult" style="display:none"> <h3> Duplicity Scores </h3>'+
-      //         '<pre> Overall Duplicity: ' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>' +
-      //         '</div>';
-      // }
-
-      // if (data['Class imbalance'] && data['Class imbalance']['Imbalance degree'] && data['Class imbalance']['Imbalance degree']['Imbalance degree score'] !== undefined) {
-      //     resultContainer.innerHTML += '<div id="imbalanceScoreResult" style="display:none"> <h3> Class Imbalance Scores </h3>'+
-      //         '<pre> Imbalance degree: ' + data['Class imbalance']['Imbalance degree']['Imbalance degree score'] + '</pre>' +
-      //         '</div>';
-      // }
-
-      // resultContainer.innerHTML += '<pre id="scoreResult" style="display:none;">' + data['Duplicity']['Duplicity scores']['Overall duplicity of the dataset'] + '</pre>';
-    })
-    .catch((error) => {
-      console.error("Error:", error);
-      openErrorPopup("", error); // call error popup
     });
 }
 

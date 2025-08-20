@@ -109,6 +109,8 @@
             <h3 onclick="togglePillarDropdown('DataStructureDropdown')">Data Structure and Organization<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
                 <div id="DataStructureDropdown">
                     <strong class="toggle-button">No metrics available for this pillar yet</strong>
+            <h3 onclick="location.href='{{url_for("customMetrics")}}'">Define Custom Metrics<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+
                 </div>
 
         {% else %}
@@ -135,6 +137,7 @@
                     <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("FAIR")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
             <h3 class="noUpload metric-info">Data Structure and Organization<span class="metric-info-text">Please upload a file</span></h3>
+            <h3 class="noUpload metric-info">Define Custom Metrics<span class="metric-info-text">Please upload a file</span></h3>
         {% endif %}
         </div>
     </form>
@@ -366,7 +369,7 @@
     window.addEventListener('resize', positionPreview);
     window.addEventListener('click',positionPreview)
 
-        
+
     /* SAMPLE FILE RENDERING */
     function toggleSampleData() {
         const sampleDataContainer = document.getElementById('sampleDataContainer');
@@ -379,7 +382,7 @@
         }
     }
 
-    // Sample Files defined here 
+    // Sample Files defined here
     const sampleFiles = [
         { name: 'adult.csv', type: 'csv', size: '3.7 MB' },
         { name: 'adult.h5', type: 'h5', size: '3.7 MB' },
@@ -452,28 +455,28 @@
     function updateStats(files) {
         const totalFiles = files.length;
         const typeCount = {};
-        
+
         files.forEach(file => {
             typeCount[file.type] = (typeCount[file.type] || 0) + 1;
         });
-        
+
         const typeStats = Object.entries(typeCount)
             .map(([type, count]) => `${count} ${type.toUpperCase()}`)
-            .join(', ');  
+            .join(', ');
     }
 
     function filterFiles() {
         const selectedType = document.getElementById('fileTypeSelect').value;
         const allFiles = document.querySelectorAll('.file-item');
-        
+
         allFiles.forEach(item => {
             item.classList.remove('notHighlighted');
             item.classList.remove('highlighted');
         });
-        
+
         if (selectedType) {
             const filteredFiles = sampleFiles.filter(file => file.type === selectedType);
-            
+
             allFiles.forEach(item => {
                 if (item.dataset.type !== selectedType) {
                     item.classList.add('notHighlighted');
@@ -481,7 +484,7 @@
                     item.classList.add('highlighted');
                 }
             });
-            
+
             updateStats(filteredFiles);
         } else {
             updateStats(sampleFiles);
