@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+        auto-update-conda: true
+        auto-activate-base: true
+        environment-file: environment.yml
+        channels: conda-forge
+
+    - name: Conda info
+      run: conda info
+
+    - name: Conda list
+      run: conda list
+
+    - name: Install
+      run: |
+        pip install -e .
