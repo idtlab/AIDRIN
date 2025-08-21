@@ -35,10 +35,12 @@ function showSlides(n) {
 
   dots[slideIndex - 1].className += " activeDot";
 }
+
 function clearDropdown(dropdownId) {
   var dropdown = document.getElementById(dropdownId);
   dropdown.selectedIndex = 0;
 }
+
 /* Toggles Dark Mode for Histogram Plots */
 const toggleSlidesColor = () => {
   const slidesLight = document.getElementById("slideshow-container-light");
@@ -51,6 +53,7 @@ const toggleSlidesColor = () => {
     slidesDark.style.display = "none";
   }
 };
+
 /************ Taken out of metric data download pop up *************/
 function toggleVisualization(id) {
   var element = document.getElementById(id);
@@ -210,7 +213,10 @@ $(document).ready(function () {
                 response.all_features,
                 "allFeaturesDropdownFeaRel"
               );
-              createDropdown(response.all_features, "allFeaturesDropdownClIm");
+              createDropdown(
+                response.class_imbalance_features,
+                "allFeaturesDropdownClIm"
+              );
               createDropdown(response.all_features, "allFeaturesDropdownMMS");
               createDropdown(response.all_features, "allFeaturesDropdownMMM");
               createDropdown(
@@ -595,10 +601,7 @@ function updateCrossDisable() {
   // AND ensure they're disabled if the main metric checkbox is not checked
   $('input[name="quasi identifiers for k-anonymity"]').each(function () {
     const val = $(this).val();
-    const isSelectedAsSensitive =
-      $("#lDiversitySensitiveDropdown").val() === val ||
-      $("#tClosenessSensitiveDropdown").val() === val;
-    $(this).prop("disabled", !kAnonymityEnabled || isSelectedAsSensitive);
+    $(this).prop("disabled", !kAnonymityEnabled);
   });
 
   $('input[name="quasi identifiers for l-diversity"]').each(function () {

@@ -1,50 +1,65 @@
+{% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Data
+Quality" %} {% set page_route = "dataQuality" %} {% block metricContent %}
+<div id="checkboxContainer_quality" class="checkboxContainer">
+  <br />
+  <input type="file" id="file" name="file" style="display: none;" />
+  <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+    <div class="checkboxContainerIndividual">
+      <label class="material-checkbox">
+        <input
+          type="checkbox"
+          name="completeness"
+          id="toggleButton_completeness"
+          onchange="toggleValue(this)"
+        />
+        <span class="checkmark"></span>
+        Check completeness
+        <span class="info-icon">
+          i
+          <span class="info-text">
+            This option checks the proportion of NaN values in each feature and
+            displays a bar chart highlighting features with only missing values.
+          </span>
+        </span>
+      </label>
 
-{% extends 'metricTemplates/metricBase.html' %}
+      <label class="material-checkbox">
+        <input
+          type="checkbox"
+          name="outliers"
+          style="margin-right: 10px;"
+          onchange="toggleValue(this)"
+        />
+        <span class="checkmark"></span>
+        Check outliers
+        <span class="info-icon">
+          i
+          <span class="info-text">
+            This option checks for outliers in numerical features using the
+            Inter Quartile Range (IQR) method and displays a bar chart
+            highlighting features with outliers.
+          </span>
+        </span>
+      </label>
 
-{% set page_title = "Data Quality" %}
-{% set page_route = "dataQuality" %}
-
-{% block metricContent %}
-    <div id="checkboxContainer_quality" class="checkboxContainer"><br>
-        <input type="file" id="file" name="file" style="display:none;" >
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <div class="checkboxContainerIndividual">
-                <label class="material-checkbox">
-                    <input type="checkbox"  name="completeness" id="toggleButton_completeness" onchange="toggleValue(this)">
-                    <span class="checkmark"></span>
-                        Check completeness
-                    <span class="info-icon">
-                        i
-                        <span class="info-text">
-                            This option checks the proportion of NaN values in each feature and displays a bar chart highlighting features with only missing values.
-                        </span>
-                    </span>
-                    </label>
-
-                    <label class="material-checkbox">
-                        <input type="checkbox" name="outliers" style="margin-right: 10px;"  onchange="toggleValue(this)">
-                        <span class="checkmark"></span>
-                        Check outliers
-                        <span class="info-icon">
-                            i
-                            <span class="info-text">
-                                This option checks for outliers in numerical features using the Inter Quartile Range (IQR) method and displays a bar chart highlighting features with outliers.
-                            </span>
-                        </span>
-                    </label>
-
-                    <label class="material-checkbox">
-                        <input type="checkbox" name="duplicity" style="margin-right: 10px;" onchange="toggleValue(this)">
-                        <span class="checkmark"></span>
-                        Check duplicity
-                        <span class="info-icon">
-                            i
-                            <span class="info-text">
-                                This option checks for duplicate rows in the dataset and display the proportion of overall duplicates in the dataset.
-                            </span>
-                        </span>
-                    </label>
-            </div>
-        </div>
+      <label class="material-checkbox">
+        <input
+          type="checkbox"
+          name="duplicity"
+          style="margin-right: 10px;"
+          onchange="toggleValue(this)"
+        />
+        <span class="checkmark"></span>
+        Check duplicity
+        <span class="info-icon">
+          i
+          <span class="info-text">
+            This option checks for duplicate rows in the dataset and display the
+            proportion of overall duplicates in the dataset.
+          </span>
+        </span>
+      </label>
     </div>
+  </div>
+</div>
 {% endblock %}

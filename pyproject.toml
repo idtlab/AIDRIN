@@ -17,7 +17,8 @@ dependencies = [
     "shap",
     "h5py",
     "celery",
-    "redis"
+    "redis",
+    "flower"
 ]
 
 [tool.setuptools.dynamic]
