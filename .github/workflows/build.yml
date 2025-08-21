@@ -22,7 +22,6 @@ jobs:
         python-version: ${{ matrix.python-version }}
         auto-update-conda: true
         auto-activate-base: true
-        environment-file: environment.yml
         channels: conda-forge
 
     - name: Conda info
