@@ -171,3 +171,4 @@ noisy/
 **/.DS_Store
 
 dump.rdb
+celerybeat-schedule.db

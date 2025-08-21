@@ -1047,6 +1047,7 @@ def generate_template():
         template = f"""from .base_dr import BaseDRAgent
 from typing import Any
 
+
 class {class_name}(BaseDRAgent):
     def __init__(self, dataset: Any, **kwargs):
         # Initialize the parent class with dataset and additional arguments
