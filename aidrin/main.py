@@ -870,7 +870,7 @@ def privacyPreservation():
 
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in current_app.config["ALLOWED_EXTENSIONS"]
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in current_app.config["CUSTOM_ALLOWED_EXTENSIONS"]
 
 
 @main.route('/save_custom_metric', methods=['POST'])
@@ -957,6 +957,8 @@ def customMetrics():
         metric_time_log.info("Custom Metric Evaluation Request Started")
         start_time = time.time()
         try:
+
+
             # Check if custom metric file is provided
             if not custom_metric_file_path or not os.path.exists(custom_metric_file_path):
                 return jsonify({"error": "No custom metric file provided"}), 400
@@ -999,6 +1001,9 @@ def customMetrics():
             # Clean up sys.modules to prevent memory leaks
             if f'aidrin.custom_metrics.{module_name}' in sys.modules:
                 del sys.modules[f'aidrin.custom_metrics.{module_name}']
+
+            if request.form.get("apply_remedy") == "yes":
+                final_dict['Custom Metric Evaluation']['apply_remedy'] = data_file_path
 
         except Exception as e:
             metric_time_log.error(f"Error: {str(e)}")

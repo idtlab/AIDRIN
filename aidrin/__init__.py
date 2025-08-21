@@ -58,7 +58,7 @@ def create_app():
     CUSTOM_METRICS_FOLDER = os.path.join(app.root_path, "custom_metrics")
     os.makedirs(CUSTOM_METRICS_FOLDER, exist_ok=True)
     app.config["CUSTOM_METRICS_FOLDER"] = CUSTOM_METRICS_FOLDER
-    app.config["ALLOWED_EXTENSIONS"] = {'py'}  # Allowed file extensions for custom metrics
+    app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {'py'}  # Allowed file extensions for custom metrics
 
     return app
 
