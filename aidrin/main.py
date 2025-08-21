@@ -527,8 +527,6 @@ def correlationAnalysis():
                 raw_num_cols = request.form.get(
                     "numerical features", ""
                 )
-                print(raw_cat_cols)
-                print(raw_num_cols)
                 # Clean each list by removing empty strings and whitespace-only entries
                 cat_cols = [
                     col.strip() for col in raw_cat_cols.split(",") if col.strip()
