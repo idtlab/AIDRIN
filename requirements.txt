@@ -1,6 +1,7 @@
 celery
 shap
 h5py
+redis
 blinker==1.7.0
 click==8.1.7
 contourpy==1.2.0
