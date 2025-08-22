@@ -534,10 +534,9 @@ def correlationAnalysis():
                 num_cols = [
                     col.strip() for col in raw_num_cols.split(",") if col.strip()
                 ]
-                print(cat_cols)
-                print(num_cols)
+                metric_time_log.debug(cat_cols)
+                metric_time_log.debug(num_cols)
                 columns = cat_cols + num_cols
-                print(columns)
                 correlations_result = calc_correlations.delay(columns, file_info)
                 corr_dict = correlations_result.get()
                 # catch potential errors
