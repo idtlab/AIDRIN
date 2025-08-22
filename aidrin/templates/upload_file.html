@@ -8,39 +8,13 @@
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
 
     <title>Structured Data Readiness</title>
 </head>
 <body>
-    <!-- error handling popup -->
-    <div id="error-popup" class="error-popup">
-        <svg style="padding-top:5%" xmlns="http://www.w3.org/2000/svg" height="96px" viewBox="0 -960 960 960" width="96px" fill="currentColor"><path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>
-        <h2 id="error-type" style="margin-top:0">Error: Placeholder Type</h2>
-        <p id="error-message">Placeholder Error Details</p>
-        <br>
-        <button id="close-popup" onclick="closeErrorPopup()" style="width:30%;">Ok</button>
-    </div>
-    
-    <div class="top-left-container">
-       
-        <div id="navbar">
-            <a class="home" href="/">
-                <img style="max-width:48px; max-height:48px;" src="images/logoNoBackground.png" alt="Aidrin Logo">
-            </a>
-            <button id="theme-switch">
-                <svg xmlns="http://www.w3.org/2000/svg" height="48px" viewBox="0 -960 960 960" width="48px" fill="#5f6368">
-                    <path
-                        d="M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Z" />
-                </svg>
-                <svg xmlns="http://www.w3.org/2000/svg" height="3em" viewBox="0 -960 960 960" width="3em" fill="#5f6368">
-                    <path
-                        d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Z" />
-                </svg>
-            </button>
-        </div>
-    </div>
+    {% include 'universalComponents.html'%}
+
     <h1 style="text-align:center; margin-bottom:1%;">Structured Data Readiness</h1>
     <div style="width: 100%; display: block;">
         <p style="
@@ -56,16 +30,22 @@
         ">
           Upload a supported structured dataset to evaluate it on the metrics available below
     </p>
-      </div>
-      
+    </div>
+
     <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: row; ">
         <div style="display: flex; width: 35%; flex-direction:column;">
             <select id="fileTypeSelector" name="fileTypeSelector" class="fileType" style="margin:0; border-radius: 10px 10px 0 0; padding: 15px; width:100%; max-width:none; text-align:center; font-size:1.5em;">
-                <option value="" {% if not file_type %}selected{% endif %}>Select a File Type</option>
-                <option value=".csv" {% if file_type == '.csv' %}selected{% endif %}>CSV (.csv)</option>
-                <option value=".npz"{% if file_type == '.npz' %}selected{% endif %}>NumPy (.npz)</option>
-                <option value=".xls,.xlsb,.xlsx,.xlsm" {% if file_type == '.xls,.xlsb,.xlsx,.xlsm' %}selected{% endif %}>Excel (.xls, .xlsb, .xlsx, .xlsm) </option>
-                
+                <option disabled value="" {% if not file_type%}selected{% endif %}>Select a File Type</option>
+                {% for ext, label in supported_file_types %}
+                    <option value="{{ ext }}" {% if file_type == ext %}selected{% endif %}>
+                        {{ label }} ({{ ext }})
+                    </option>
+                {% endfor %}
+                <!--
+                Add additional supported file types here using the following template:
+                    <option value="new_file_type"{%if file_type=='new_file_type'%}selected{%endif%}>File Type Name (new_file_type)</option>
+                -->
+
             </select>
 
 
@@ -73,38 +53,39 @@
             <label id="fileUploadContainer" for="file" class="custum-file-upload" required>
                 <div class="icon">
                 <!--Credit for the image-->
-                {% if session.get('uploaded_file_path') %}
+                {% if uploaded_file_path %}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#212121"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
                 {% else %}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"  fill="#212121"><path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg>
                 {% endif %}
                 </div>
 
-                <input id="file" name="file" type="file"  required onchange="uploadForm();">
+                <input id="file" name="file" type="file"  required onchange="uploadForm(); positionPreview();">
                 <br>
                 <div id="fileLabel" style="color:#ffffff">
-                    {% if session.get('uploaded_file_path') %}
+                    {% if uploaded_file_path %}
                     <script>
                         document.getElementById("fileUploadContainer").style.borderRadius = "0px 0px 0px 0px";
                         document.getElementById("fileUploadContainer").style.border = "2px  #e8e8e8 solid";
                         document.getElementById("fileUploadContainer").style.borderBottom = "none";
-                        
+
                     </script>
-                    <h2>File Uploaded: {{session.get('uploaded_file_name')}}</h2>
+                    <h2 id="FileUploadMessage">File Uploaded: {{uploaded_file_name or 'Unknown File'}}</h2>
                     {% else %}
-                    <h2 id="FileUploadMessage" style="transition: all 0.3s">Please Upload a File</h2>
+                    <h2 id="FileUploadMessage" style="transition: all 0.3s;">Please Upload a File</h2>
                     {% endif %}
                 </div>
-                
+
             </label>
-            {% if session.get('uploaded_file_path') %}
+            {% if uploaded_file_path %}
+                <!-- My Cache button positioned at top right of upload container -->
+                <button type="button" class="clear-button" onclick="location.href='{{ url_for('my_cache') }}'" style="background-color: #dc3545; position: absolute; top: 10px; right: 10px; z-index: 10; padding: 8px 16px; border-radius: 4px; font-size: 14px; border: none; color: white; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); width: auto; margin: 0; display: inline-block;">My Cache</button>
                 <!-- clear button: visible when file is uploaded, change form style to match-->
                 <button type="button" class="clear-button" onclick="clearFile()">Clear Uploaded File</button>
             {% endif %}
-        
         </div>
         <div style="display: flex; flex-direction: column; margin-top: 10px; align-self: center; width: max-content;">
-        {% if session.get('uploaded_file_path') %}
+        {% if uploaded_file_path %}
             <h3 onclick="togglePillarDropdown('dataQualityDropdown')">Data Quality<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
                 <div id="dataQualityDropdown">
                     <strong id="toggleButton_quality" class="toggle-button clickable" onclick="location.href='{{url_for("dataQuality")}}'"> Data Quality Metrics<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
@@ -156,9 +137,363 @@
                     <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("FAIR")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
             <h3 class="noUpload metric-info">Data Structure and Organization<span class="metric-info-text">Please upload a file</span></h3>
-    {% endif %}
+        {% endif %}
         </div>
     </form>
-   <strong onclick="location.href='{{url_for("publications")}}'" class="clickable" style="text-align: center; font-size: 1.5em; display:flex; align-items:center; align-self:center">Publications  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"/></svg></strong>
-           
+    <!-- Filled with detected keys when Hierarchical data is detected -->
+    <form id="filePreview" class="preview" {% if not file_preview %}style="display:none"{% endif %}  enctype="multipart/form-data">
+        <h3 style="margin-left:0px; display:block; text-align:center; margin-bottom:0px;">Hierarchical Data Detected</h1>
+        <p>The following keys were detected. Select the keys you wish to parse.<p>
+            <table id="file_preview"></table>
+            <button class="animated-button" style="display:flex; align-self:center; justify-content:center;" type="submit" onclick="modifyFile();">
+                    <span>Save</span>
+                    <span></span>
+            </button>
+        <script>
+            const preview = {{ file_preview | tojson | safe }};
+
+            const currently_checked = {{ current_checked_keys | tojson | safe }}
+            {% if session.get('minimize_preview') %}
+                document.getElementById("filePreview").classList.add("minimized");
+            {% endif %}
+            window.renderPreview = function() {
+                return {
+                    preview: preview,
+                    checked: currently_checked,
+                };
+            };
+        </script>
+    </form>
+    <button id="SelectionEdit" type="button" class="edit-button" onclick="editSelections()">Edit Selections</button>
+    <div style="display:flex; justify-content:space-between; width:98%; margin-left:1%; margin-right:1%;">
+        <strong onclick="toggleSampleData()" class="clickable" style="text-align: center; font-size: 1.5em; display:flex; align-items:center; align-self:center;">Sample Data<div id="sampleDataArrow" style="display:flex;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg></div></strong>
+        <strong onclick="location.href='{{url_for("publications")}}'" class="clickable" style="text-align: center; font-size: 1.5em; display:flex; align-items:center; align-self:center">Publications  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"/></svg></strong>
+    </div>
+    <div id="sampleDataContainer" class="sampleDataContainer">
+        <div class="download-header">
+            <svg class="download-header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                </svg>
+                <span class="download-header-text">Click any file below to download it instantly</span>
+        </div>
+        <div class="filter-section">
+            <label for="fileTypeSelect">Filter by File Type:</label>
+            <select id="fileTypeSelect">
+                <option value="">All Files</option>
+                <option value="csv">CSV Files</option>
+                <option value="dcat">DCAT Files</option>
+                <option value="json">JSON Files</option>
+                <option value="npz">NPZ Files</option>
+                <option value="xlsx">Excel Files</option>
+                <option value="h5">HDF5 Files</option>
+            </select>
+        </div>
+        <div class="file-list" id="fileList">
+            <!-- populated by JS -->
+        </div>
+    </div>
 </body>
+<script>
+
+    //get file type from user
+    document.addEventListener("DOMContentLoaded", function () {
+        //file type selector and file input field
+        const fileTypeElement = document.getElementById("fileTypeSelector");
+        const fileInput = document.getElementById("file");
+        const fileUploadMessage = document.getElementById("FileUploadMessage");
+        const fileTypeSelector = document.getElementById("fileTypeSelector");
+        // Bind select to function
+        fileTypeElement.addEventListener("change", function () {
+            updateFileInputBasedOnType(fileTypeElement, fileInput, fileUploadMessage);
+        });
+        // Call it once on page load
+        updateFileInputBasedOnType(fileTypeElement, fileInput,fileUploadMessage);
+
+        if (window.renderPreview) {
+            const { preview, checked } = window.renderPreview();
+
+            // Get table element by ID
+            const table = $('#file_preview');
+            table.empty();
+            // Add Select All
+            const selectAllRow = $('<tr>');
+            const selectAllCheckbox = $('<input>').attr({
+                type: 'checkbox',
+                id: 'selectAllCheckbox',
+                style: 'margin-right:10px',
+                onchange: 'toggleSelectAll(this)'
+            });
+            const selectAllLabel = $('<label>')
+                .attr('style', 'display: flex; flex-direction: row; min-width: 125px; align-items: center;margin-left:10px;')
+                .addClass('material-checkbox')
+                .append(selectAllCheckbox)
+                .append($('<span>').addClass('checkmark'))
+                .append('Select All');
+
+            const selectAllCell = $('<td style="border-bottom:0px;">').append(selectAllLabel);
+            selectAllRow.append(selectAllCell);
+            table.append(selectAllRow);
+            for (let i = 0; i < preview.length; i++) {
+                const row = $('<tr>');
+                table.append(row);
+
+                const checkbox = $('<input>').attr({
+                    type: 'checkbox',
+                    class: 'checkbox individual',
+                    style: 'margin-right:10px',
+                    onchange: 'toggleValueIndividual(this)',
+                    name: 'checkboxValues',
+                    id: preview[i] + 'checkbox_' + i,
+                    value: preview[i],
+                });
+
+                const span = $('<span>').addClass('checkmark');
+
+                const label = $('<label>')
+                    .attr('style', 'display: flex; flex-direction: row; min-width: 125px; align-items: center;margin-left:30px;')
+                    .attr('class', 'material-checkbox')
+                    .attr('id', preview[i] + 'checkbox_' + i);
+
+                label.append(checkbox).append(span).append(preview[i]);
+                const cell = $('<td style="border-bottom:0px;">').append(label);
+                row.append(cell);
+            }
+            const checkboxes = document.querySelectorAll('.checkbox.individual');
+            if(checked){
+                checkboxes.forEach(cb => {
+                    const label = cb.closest("label");
+                    const text = label.textContent.trim();
+
+                    if (checked.includes(text)) {
+                        cb.checked = true;
+                        cb.value = text;
+                    } else {
+                        cb.checked = false;
+                        cb.value = "no";
+                    }
+
+                    console.log("Checkbox value:", cb.value); // For debugging
+                });
+                updateSelectAllState();
+            }
+        }
+    });
+    //select all functionality
+    function toggleSelectAll(source) {
+        const checkboxes = document.querySelectorAll('.checkbox.individual');
+        checkboxes.forEach(cb => {
+            cb.checked = source.checked;
+            if (cb.checked) {
+                const label = cb.closest("label");
+                const text = label.textContent.trim();
+                cb.value = text;
+            } else {
+                cb.value = "no";
+            }
+            console.log("Checkbox value:", cb.value); // For debugging
+        });
+    }
+
+    function modifyFile(){
+        var form = document.getElementById('filePreview');
+        var formData = new FormData(form);
+        var checkboxValues = Array.from(formData.getAll('checkboxValues')).join(',');
+        console.log("Checkbox Values:",checkboxValues);
+
+
+        fetch('/filter_file', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ keys: checkboxValues })  // Send as JSON list
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+
+                window.location.href = '/upload_file?minimize_preview=true';  // Now reload to get preview data
+            } else {
+                openErrorPopup('Filtering Error', data.error || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            openErrorPopup('Network Error', error);
+        });
+    }
+    // Set hierarchical file selection tab relative to upload_form
+    function positionPreview() {
+        const uploadContainer = document.getElementById("fileUploadContainer");
+        const filePreview = document.getElementById("filePreview");
+        const editSelections = document.getElementById("SelectionEdit");
+
+        const uploadFormRect = uploadContainer.getBoundingClientRect();
+        filePreview.style.position = 'absolute';
+
+
+        filePreview.style.width = `${uploadFormRect.width}px`;
+        filePreview.style.height = `${uploadFormRect.height}px`;
+        filePreview.style.left = `${uploadFormRect.left + window.scrollX}px`;
+        filePreview.style.top = `${uploadFormRect.top + window.scrollY}px`;
+        if(filePreview.classList.contains('minimized')){
+            const height = 40.5;
+            const top = uploadFormRect.top + uploadFormRect.height - height + window.scrollY;
+            const left = uploadFormRect.left + window.scrollX;
+            filePreview.style.top = `${top}px`;
+            filePreview.style.height = `${height}px`;
+
+            editSelections.style.top = `${top}px`;
+            editSelections.style.left = `${left}px`;
+            editSelections.style.width = `${uploadFormRect.width}px`;
+            editSelections.style.height = `${height}px`;
+            editSelections.style.display = 'flex';
+
+
+
+        }
+
+        filePreview.style.opacity='1';
+    };
+    function editSelections(){
+        const filePreview = document.getElementById("filePreview");
+        const editSelections = document.getElementById("SelectionEdit");
+        filePreview.classList.remove("minimized");
+        editSelections.style.display = 'none';
+        positionPreview();
+    }
+    document.addEventListener("DOMContentLoaded",function(){
+        positionPreview();
+    });
+    window.addEventListener('scroll', positionPreview);
+    window.addEventListener('resize', positionPreview);
+    window.addEventListener('click',positionPreview)
+
+
+    /* SAMPLE FILE RENDERING */
+    function toggleSampleData() {
+        const sampleDataContainer = document.getElementById('sampleDataContainer');
+        const sampleDataArrow = document.getElementById('sampleDataArrow');
+        sampleDataContainer.classList.toggle('visible');
+        if (sampleDataContainer.classList.contains('visible')) {
+            sampleDataArrow.style.transform = 'rotate(180deg)';
+        } else {
+            sampleDataArrow.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    // Sample Files defined here
+    const sampleFiles = [
+        { name: 'adult.csv', type: 'csv', size: '3.7 MB' },
+        { name: 'adult.h5', type: 'h5', size: '3.7 MB' },
+        { name: 'adult.json', type: 'json', size: '13.4 MB' },
+        { name: 'adult.npz', type: 'npz', size: '484 KB' },
+        { name: 'adult.xlsx', type: 'xlsx', size: '2.1 MB' },
+        { name: 'BUTTER-E.json', type: 'dcat', size: '5 KB' },
+        { name: 'EGS_Collab_Experiment.json', type: 'dcat', size: '6 KB' },
+        { name: 'employees.h5', type: 'h5', size: '1.1 MB' },
+        { name: 'employees.json', type: 'json', size: '2 KB' },
+        { name: 'employees.xlsx', type: 'xlsx', size: '5 KB' },
+        { name: 'smallSample.csv', type: 'csv', size: '29 bytes' },
+    ];
+
+    function toggleSampleData() {
+        const sampleDataContainer = document.getElementById('sampleDataContainer');
+        const sampleDataArrow = document.getElementById('sampleDataArrow');
+        sampleDataContainer.classList.toggle('visible');
+        if (sampleDataContainer.classList.contains('visible')) {
+            sampleDataArrow.style.transform = 'rotate(180deg)';
+        } else {
+            sampleDataArrow.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    function renderFiles(files = sampleFiles) {
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = '';
+
+        files.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.dataset.type = file.type;
+
+            fileItem.innerHTML = `
+                <div class="file-content">
+                    <div class="file-name">
+                        ${file.name}
+                        <span class="file-size">${file.size || ''}</span>
+                    </div>
+                    <div class="file-type">${file.type}</div>
+                </div>
+                <svg class="download-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                </svg>
+            `;
+
+            // When the div is clicked, trigger download
+            fileItem.addEventListener('click', () => {
+                // Add visual feedback
+                fileItem.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    fileItem.style.transform = '';
+                }, 150);
+
+                const link = document.createElement('a');
+                link.href = `/static/datasets/test_data/${file.type}/${file.name}`;
+                link.download = file.name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+
+            fileList.appendChild(fileItem);
+        });
+
+        updateStats(files);
+    }
+
+    function updateStats(files) {
+        const totalFiles = files.length;
+        const typeCount = {};
+
+        files.forEach(file => {
+            typeCount[file.type] = (typeCount[file.type] || 0) + 1;
+        });
+
+        const typeStats = Object.entries(typeCount)
+            .map(([type, count]) => `${count} ${type.toUpperCase()}`)
+            .join(', ');
+    }
+
+    function filterFiles() {
+        const selectedType = document.getElementById('fileTypeSelect').value;
+        const allFiles = document.querySelectorAll('.file-item');
+
+        allFiles.forEach(item => {
+            item.classList.remove('notHighlighted');
+            item.classList.remove('highlighted');
+        });
+
+        if (selectedType) {
+            const filteredFiles = sampleFiles.filter(file => file.type === selectedType);
+
+            allFiles.forEach(item => {
+                if (item.dataset.type !== selectedType) {
+                    item.classList.add('notHighlighted');
+                } else {
+                    item.classList.add('highlighted');
+                }
+            });
+
+            updateStats(filteredFiles);
+        } else {
+            updateStats(sampleFiles);
+        }
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        renderFiles();
+        document.getElementById('fileTypeSelect').addEventListener('change', filterFiles);
+    });
+</script>
+</html>

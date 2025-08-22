@@ -1,9 +1,0 @@
-Authors:
-
-Kaveen Hiniduma, The Ohio State University
-Suren Byna, The Ohio State University
-Dylan Ryan, The Ohio State University
-
-Collaborators:
-Jean Luca Bez, Lawrence Berkeley National Laboratory
-Ravi Madduri, Argonne National Laboratory
