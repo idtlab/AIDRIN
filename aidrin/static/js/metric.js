@@ -436,32 +436,46 @@ $(document).ready(function () {
 
   //generate dropdown when features of the dataset are required to select
   $(document).ready(function () {
+    var formData = new FormData();
     fetch(retrieveFileUrl)
       .then((response) => {
         if (!response.ok) {
           throw new Error("File not found or server error");
         }
-        return response.blob(); // Convert response to a Blob
+        return response.blob();
       })
-      .then((blob) => {
-        var reader = new FileReader();
-        reader.onload = function (e) {
-          var content = e.target.result;
-          var lines = content.split("\n");
-          if (lines.length > 0) {
-            var columns = lines[0].split(",");
-            console.log(columns);
+      .then((fileBlob) => {
+        formData.append("file", fileBlob, "filename");
+        $.ajax({
+          url: "/feature_set",
+          type: "POST",
+          data: formData,
+          contentType: false,
+          processData: false,
+          success: function (response) {
+            if (response.success) {
+              // Use all_features for correlationCheckboxContainer
+              createCheckboxContainer(
+                response.all_features,
+                "correlationCheckboxContainer",
+                "all features for data transformation"
+              );
+            } else {
+              console.error("Error:", response.message);
+              alert("Error: " + response.message);
+            }
+          },
+          error: function (error) {
+            console.error("Error fetching features:", error);
+            alert("Error fetching features: " + error);
           }
-          createCheckboxContainer(
-            columns,
-            "correlationCheckboxContainer",
-            "all features for data transformation"
-          );
-        };
-        reader.readAsText(blob);
+        });
+      })
+      .catch((error) => {
+        console.error("Error fetching file:", error);
+        alert("Error fetching file: " + error);
       });
   });
-
   function createCheckboxContainer(features, tableId, nameTag) {
     var table = $("#" + tableId);
     table.empty(); // Clear previous content
