@@ -70,7 +70,7 @@ class hdf5Reader(BaseFileReader):
                                                     basic_row[str(col)] = value.item()
                                                 else:
                                                     basic_row[str(col)] = str(value)
-                                            except:
+                                            except Exception:
                                                 basic_row[str(col)] = str(value)
                                         rows.append(basic_row)
                                     except Exception as e2:
