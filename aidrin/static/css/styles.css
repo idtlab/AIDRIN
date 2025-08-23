@@ -117,6 +117,156 @@ select {
   transition: all 0.3s;
 }
 
+/* Privacy metrics input sections */
+.metric-inputs {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.metric-inputs li {
+  margin: 10px 0;
+  padding: 5px 0;
+}
+
+/* Add spacing between privacy metric checkboxes */
+.checkboxContainerIndividual {
+  margin-bottom: 20px;
+  padding: 15px 0;
+}
+
+.checkboxContainerIndividual label {
+  margin-bottom: 10px;
+  display: block;
+}
+
+/* Add spacing between the checkbox and the label text */
+.checkboxContainerIndividual .material-checkbox {
+  margin-bottom: 15px;
+  display: block;
+}
+
+/* Add scrollbars for privacy metrics QI sections */
+.checkboxContainerIndividual .metric-inputs {
+  border: 1px solid var(--tertiaryColor);
+  border-radius: 8px;
+  padding: 10px;
+  background-color: var(--secondaryColor);
+}
+
+/* Individual scrollbars for specific checkbox containers */
+#numFeaturesCheckbox2,
+#catFeaturesCheckbox2,
+#catFeaturesCheckbox3,
+#entropyRiskQIsCheckbox,
+#kAnonymityQIsCheckbox,
+#lDiversityQIsCheckbox,
+#tClosenessQIsCheckbox {
+  max-height: 200px;
+  max-width: 100%;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid var(--tertiaryColor);
+  border-radius: 6px;
+  padding: 8px;
+  background-color: var(--secondaryColor);
+  margin-top: 5px;
+}
+
+/* Style the scrollbars for privacy metrics */
+#numFeaturesCheckbox2::-webkit-scrollbar,
+#catFeaturesCheckbox2::-webkit-scrollbar,
+#catFeaturesCheckbox3::-webkit-scrollbar,
+#entropyRiskQIsCheckbox::-webkit-scrollbar,
+#kAnonymityQIsCheckbox::-webkit-scrollbar,
+#lDiversityQIsCheckbox::-webkit-scrollbar,
+#tClosenessQIsCheckbox::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#numFeaturesCheckbox2::-webkit-scrollbar-track,
+#catFeaturesCheckbox2::-webkit-scrollbar-track,
+#catFeaturesCheckbox3::-webkit-scrollbar-track,
+#entropyRiskQIsCheckbox::-webkit-scrollbar-track,
+#kAnonymityQIsCheckbox::-webkit-scrollbar-track,
+#lDiversityQIsCheckbox::-webkit-scrollbar-track,
+#tClosenessQIsCheckbox::-webkit-scrollbar-track {
+  background: var(--backgroundColor);
+  border-radius: 4px;
+}
+
+#numFeaturesCheckbox2::-webkit-scrollbar-thumb,
+#catFeaturesCheckbox2::-webkit-scrollbar-thumb,
+#catFeaturesCheckbox3::-webkit-scrollbar-thumb,
+#entropyRiskQIsCheckbox::-webkit-scrollbar-thumb,
+#kAnonymityQIsCheckbox::-webkit-scrollbar-thumb,
+#lDiversityQIsCheckbox::-webkit-scrollbar-thumb,
+#tClosenessQIsCheckbox::-webkit-scrollbar-thumb {
+  background: var(--tertiaryColor);
+  border-radius: 4px;
+}
+
+#numFeaturesCheckbox2::-webkit-scrollbar-thumb:hover,
+#catFeaturesCheckbox2::-webkit-scrollbar-thumb:hover,
+#catFeaturesCheckbox3::-webkit-scrollbar-thumb:hover,
+#entropyRiskQIsCheckbox::-webkit-scrollbar-thumb:hover,
+#kAnonymityQIsCheckbox::-webkit-scrollbar-thumb:hover,
+#lDiversityQIsCheckbox::-webkit-scrollbar-thumb:hover,
+#tClosenessQIsCheckbox::-webkit-scrollbar-thumb:hover {
+  background: var(--darkAccent);
+}
+
+/* Ensure the checkbox containers don't overflow */
+.checkboxContainerIndividual {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Ensure tooltips are never clipped by parent containers */
+.checkboxContainerIndividual .info-icon {
+  overflow: visible;
+  position: relative;
+}
+
+.checkboxContainerIndividual .info-text {
+  overflow: visible;
+  position: absolute;
+  z-index: 9999;
+  max-width: 400px;
+  word-wrap: break-word;
+  white-space: normal;
+  top: 0;
+  left: 100%;
+  margin-left: 10px;
+  /* Remove any positioning that might conflict with JavaScript */
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+  /* Ensure stable positioning */
+  display: none;
+  background-color: #f5f5f5;
+  color: #333;
+  padding: 15px 20px;
+  border-radius: 3px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Override any parent container overflow restrictions for tooltips */
+.checkboxContainerIndividual,
+.checkboxContainer,
+.metric-inputs {
+  overflow: visible !important;
+}
+
+/* Ensure tooltips can extend beyond any container boundaries */
+.info-text {
+  position: absolute;
+  z-index: 9999;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+}
 select:disabled {
   background-color: var(--disabledOverlay);
   /* Darker overlay */
@@ -382,10 +532,24 @@ input[type="reset"] {
   cursor: pointer;
   margin-left: 8px;
   position: relative;
+  pointer-events: auto !important; /* Always interactive */
+  z-index: 1; /* Same level as tooltip to ensure hover works */
 }
 
-.info-icon:hover .info-text {
-  display: block;
+/* Ensure tooltip stays visible when hovering over it */
+.info-icon:hover .info-text,
+.info-text:hover {
+  display: block !important;
+}
+
+.info-text a {
+  color: #2196f3 !important;
+  text-decoration: underline !important;
+  font-weight: bold !important;
+}
+
+.info-text a:hover {
+  color: #1976d2 !important;
 }
 
 .metric-info:hover .metric-info-text {
@@ -398,30 +562,63 @@ input[type="reset"] {
   display: none;
   position: absolute;
   right: 5%;
-  background-color: var(--darkAccent);
-  /* text bubble color*/
+  background-color: var(--darkAccent); /* text bubble color*/
   padding: 5px 10px;
   border-radius: 3px;
-  white-space: normal;
-  /* Allow text to wrap */
+  white-space: normal; /* Allow text to wrap */
   z-index: 1;
 }
 
 .info-text {
   display: none;
   position: absolute;
-  top: 20px;
-  left: 0;
-  background-color: var(--tertiaryColor);
-  /* text bubble color*/
-  color: var(--secondaryColor);
-  padding: 5px 10px;
+  background-color: #f5f5f5; /* Light grey background for better visibility in light mode */
+  color: #333; /* Dark text for good contrast */
+  padding: 15px 20px; /* Increased padding for better hover area */
   border-radius: 3px;
-  white-space: normal;
-  /* Allow text to wrap */
-  width: 400px;
-  /* Set a maximum width */
-  z-index: 1;
+  white-space: normal; /* Allow text to wrap */
+  width: 400px; /* Set a maximum width */
+  z-index: 9999;
+  pointer-events: auto !important; /* Always interactive */
+  cursor: default; /* Show default cursor */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow for better visibility */
+  border: 1px solid rgba(0, 0, 0, 0.1); /* Add subtle border */
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  /* Prevent any CSS conflicts with JavaScript positioning */
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Dark mode override for info-text */
+.darkmode .info-text {
+  background-color: var(
+    --tertiaryColor
+  ); /* Use original dark mode background */
+  color: var(--secondaryColor); /* Use original dark mode text color */
+}
+
+/* Make links in tooltips more clickable */
+.info-text a {
+  color: #2196f3 !important;
+  text-decoration: underline !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  padding: 2px 4px; /* Add padding around links for easier clicking */
+  border-radius: 2px; /* Slight border radius for visual feedback */
+  transition: background-color 0.2s ease; /* Smooth hover effect */
+}
+
+.info-text a:hover {
+  color: #1976d2 !important;
+  background-color: rgba(
+    33,
+    150,
+    243,
+    0.1
+  ); /* Light blue background on hover */
 }
 
 .hint {

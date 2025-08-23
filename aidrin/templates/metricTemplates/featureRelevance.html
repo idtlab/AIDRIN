@@ -1,42 +1,66 @@
-{% extends 'metricTemplates/metricBase.html' %}
+{% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Feature
+Relevance" %} {% set page_route = "featureRelevance" %} {% block metricContent
+%}
+<div id="checkboxContainer_featureRelevance" class="checkboxContainer">
+  <br />
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox">
+      <input
+        type="checkbox"
+        name="feature relevancy"
+        onchange="toggleValue(this)"
+      />
+      <span class="checkmark"></span>
+      Check feature relavancy against target
+      <span class="info-icon">
+        i
+        <span class="info-text">
+          Calculates Pearson correlation coefficients between each feature and
+          the target variable after minimal data cleaning (dropping missing
+          values, one-hot encoding categorical features, and label encoding the
+          target feature). A coefficient of 1 indicates a perfect positive
+          correlation, while -1 indicates a perfect negative correlation.
+        </span>
+      </span>
+    </label>
 
-{% set page_title = "Feature Relevance" %}
-{% set page_route = "featureRelevance" %}
+    <ul>
+      <li>
+        <label
+          for="categorical features for feature relevancy"
+          style="padding: 10px; padding-left: 15px; min-width: 175px;"
+          >Categorical features:</label
+        >
+        <div id="catFeaturesCheckbox1"></div>
+        <br />
+      </li>
 
-{% block metricContent %}
-    <div id="checkboxContainer_featureRelevance" class="checkboxContainer"><br>
-        <div class="checkboxContainerIndividual">
-            <label class="material-checkbox">
-                <input  type="checkbox" name="feature relevancy" onchange="toggleValue(this)">
-                <span class="checkmark"></span>
-                Check feature relavancy against target
-                <span class="info-icon">
-                    i
-                    <span class="info-text">
-                        Calculates Pearson correlation coefficients between each feature and the target variable after minimal data cleaning (dropping missing values, one-hot encoding categorical features, and label encoding the target feature). A coefficient of 1 indicates a perfect positive correlation, while -1 indicates a perfect negative correlation.
-                    </span>
-                </span>
-            </label>
+      <li>
+        <label
+          for="numerical features for feature relevancy"
+          style="padding: 10px; padding-left: 15px; min-width: 175px;"
+          >Numerical features:</label
+        >
+        <div id="numFeaturesCheckbox1"></div>
+        <br />
+      </li>
 
-            <ul>
-                <li >
-                    <label  for="categorical features for feature relevancy" style="padding:10px; padding-left:15px; min-width:175px;">Categorical features:</label>
-                    <div id ="catFeaturesCheckbox1"></div><br>
-                </li>
-
-                <li >
-                    <label  for="numerical features for feature relevancy" style="padding:10px; padding-left:15px;  min-width:175px;">Numerical features:</label>
-                    <div  id ="numFeaturesCheckbox1"></div><br>
-                </li>
-
-                <li >
-                    <label  for="target for feature relevance" style="padding:10px; padding-left:15px;  min-width:175px;">Target feature:</label>
-                    <select name="target for feature relevance" id = "allFeaturesDropdownFeaRel"required>
-                        <option value="" disabled selected>Select a feature</option>
-                        <!-- Options will be added dynamically using JavaScript -->
-                    </select><br>
-                </li>
-            </ul>
-        </div>
-    </div>
+      <li>
+        <label
+          for="target for feature relevance"
+          style="padding: 10px; padding-left: 15px; min-width: 175px;"
+          >Target feature:</label
+        >
+        <select
+          name="target for feature relevance"
+          id="allFeaturesDropdownFeaRel"
+          required
+        >
+          <option value="" disabled selected>Select a feature</option>
+          <!-- Options will be added dynamically using JavaScript --> </select
+        ><br />
+      </li>
+    </ul>
+  </div>
+</div>
 {% endblock %}

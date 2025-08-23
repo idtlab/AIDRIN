@@ -45,7 +45,10 @@ Custom Metric" %} {% set page_route = "customMetrics" %} {% block metricContent
   <p style="margin-bottom: 15px;">
     2. Open the downloaded .py file in a text editor. Modify the
     <code>metric</code> method to define your custom metric logic, ensuring it
-    returns a dictionary. Do not change the import or class structure.
+    returns a dictionary. Then, update the <code>remedy</code> method to implement
+    your remediation logic, using the output of the <code>metric</code> function
+    to address data issues. If you are only interested in evaluation, you may leave
+    the <code>remedy</code> method unchanged. Do not modify the import statements or the class structure.
   </p>
   <p style="margin-bottom: 15px;">
     3. Select your edited .py file and click "Upload Metric". You’ll see a
@@ -84,16 +87,19 @@ Custom Metric" %} {% set page_route = "customMetrics" %} {% block metricContent
       Cancel Upload
     </button>
   </div>
-
+  <p style="margin-bottom: 15px;">
+    4. If you defined a <code> remedy </code> function in the custom upload file above, enable the
+    checkbox below to apply the remedy. If you do not wish to apply the remedy, leave it unchecked.
+  </p>
     <div style="margin-top: 20px;">
             <label style="display: flex; align-items: center; gap: 10px;">
                 <input type="checkbox" id="apply_remedy" name="apply_remedy" value="yes" />
                 Apply Remedy
             </label>
     </div>
-
+    <br>
   <p style="margin-bottom: 15px;">
-    4. Click the <strong>SUBMIT</strong> button (below) to run your metric on
+    5. Click the <strong>SUBMIT</strong> button (below) to run your metric on
     the uploaded dataset. Results will display below
   </p>
 </div>

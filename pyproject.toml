@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aidrin"
-version = ["version"]
+dynamic = ["version"]
 readme = "README.md"
 description="A tool to evaluate the readiness of data for AI"
 maintainers = [{name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"},{name = "Suren Byna", email = "byna.1@osu.edu"}]
@@ -17,7 +17,8 @@ dependencies = [
     "shap",
     "h5py",
     "celery",
-    "redis"
+    "redis",
+    "flower"
 ]
 
 [tool.setuptools.dynamic]

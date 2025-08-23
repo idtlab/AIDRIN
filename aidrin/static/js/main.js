@@ -18,6 +18,22 @@ function togglePillarDropdown(id) {
 //for uploads
 function uploadForm() {
   const form = document.getElementById("uploadForm");
+  const fileTypeSelector = document.getElementById("fileTypeSelector");
+  const fileInput = document.getElementById("file");
+
+  // Check if file type is selected
+  if (!fileTypeSelector.value) {
+    alert("Please select a file type first");
+    return;
+  }
+
+  // Check if file is selected
+  if (!fileInput.files || fileInput.files.length === 0) {
+    alert("Please select a file to upload");
+    return;
+  }
+
+  // Submit the form normally
   form.submit();
 }
 
@@ -60,6 +76,200 @@ function updateFileInputBasedOnType(
     fileUploadMessage.style.fontSize = "0px";
     fileTypeSelector.style.fontSize = "1.75em";
     console.log("FILE UPLOAD DISABLED");
+  }
+}
+
+// Add these functions before the submitForm function
+
+// Function to categorize error types for DP Statistics
+function getDPStatisticsErrorType(errorMessage) {
+  if (errorMessage.includes("No numerical features selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("Invalid numerical features selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("Invalid epsilon value")) {
+    return "Parameter Error";
+  } else if (errorMessage.includes("Invalid epsilon value format")) {
+    return "Parameter Error";
+  } else if (errorMessage.includes("Dataset is empty")) {
+    return "Data Error";
+  } else if (errorMessage.includes("Processing error")) {
+    return "Processing Error";
+  } else {
+    return "Error";
+  }
+}
+
+// Function to categorize error types for Single Attribute Risk Scoring
+function getSingleAttributeRiskErrorType(errorMessage) {
+  if (errorMessage.includes("No quasi-identifiers selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("No valid quasi-identifiers provided")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("not found in dataset")) {
+    return "Data Error";
+  } else if (errorMessage.includes("must contain unique values")) {
+    return "Data Error";
+  } else if (errorMessage.includes("appear to be numerical")) {
+    return "Data Error";
+  } else if (errorMessage.includes("no data remains")) {
+    return "Data Error";
+  } else if (errorMessage.includes("has only one unique value")) {
+    return "Data Error";
+  } else if (errorMessage.includes("already a perfect identifier")) {
+    return "Data Error";
+  } else if (errorMessage.includes("causing division by zero")) {
+    return "Processing Error";
+  } else if (errorMessage.includes("task timed out")) {
+    return "Timeout Error";
+  } else if (errorMessage.includes("Processing error")) {
+    return "Processing Error";
+  } else {
+    return "Error";
+  }
+}
+
+// Function to categorize error types for Multiple Attribute Risk Scoring
+function getMultipleAttributeRiskErrorType(errorMessage) {
+  if (errorMessage.includes("No quasi-identifiers selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("No ID feature selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("Input DataFrame is empty")) {
+    return "Data Error";
+  } else if (errorMessage.includes("must be a string or list")) {
+    return "Parameter Error";
+  } else if (errorMessage.includes("No valid columns provided")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("Columns not found in dataset")) {
+    return "Data Error";
+  } else if (errorMessage.includes("not found in dataset")) {
+    return "Data Error";
+  } else if (errorMessage.includes("must contain unique values")) {
+    return "Data Error";
+  } else if (errorMessage.includes("has only one unique value")) {
+    return "Data Error";
+  } else if (errorMessage.includes("is a perfect identifier")) {
+    return "Data Error";
+  } else if (errorMessage.includes("After dropping missing values")) {
+    return "Data Error";
+  } else if (errorMessage.includes("causing division by zero")) {
+    return "Processing Error";
+  } else if (errorMessage.includes("Multiple Attribute Risk task timed out")) {
+    return "Timeout Error";
+  } else if (errorMessage.includes("Processing error")) {
+    return "Processing Error";
+  } else {
+    return "Error";
+  }
+}
+
+// Function to categorize error types for Entropy Risk
+function getEntropyRiskErrorType(errorMessage) {
+  if (errorMessage.includes("No quasi-identifiers selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("Input DataFrame is empty")) {
+    return "Data Error";
+  } else if (errorMessage.includes("not found in the dataset")) {
+    return "Data Error";
+  } else if (errorMessage.includes("No data left after dropping rows")) {
+    return "Data Error";
+  } else if (errorMessage.includes("Entropy Risk task timed out")) {
+    return "Timeout Error";
+  } else if (errorMessage.includes("Processing error")) {
+    return "Processing Error";
+  } else {
+    return "Error";
+  }
+}
+
+// Function to categorize error types for k-Anonymity
+function getKAnonymityErrorType(errorMessage) {
+  if (errorMessage.includes("No quasi-identifiers selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("Input DataFrame is empty")) {
+    return "Data Error";
+  } else if (errorMessage.includes("not found in the dataset")) {
+    return "Data Error";
+  } else if (errorMessage.includes("No data left after dropping rows")) {
+    return "Data Error";
+  } else if (errorMessage.includes("K-Anonymity task timed out")) {
+    return "Timeout Error";
+  } else if (errorMessage.includes("Processing error")) {
+    return "Processing Error";
+  } else {
+    return "Error";
+  }
+}
+
+// Function to categorize error types for L-Diversity
+function getLDiversityErrorType(errorMessage) {
+  if (errorMessage.includes("No quasi-identifiers selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("No sensitive attribute selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("Input DataFrame is empty")) {
+    return "Data Error";
+  } else if (errorMessage.includes("not found in the dataset")) {
+    return "Data Error";
+  } else if (errorMessage.includes("No data left after dropping rows")) {
+    return "Data Error";
+  } else if (errorMessage.includes("L-Diversity task timed out")) {
+    return "Timeout Error";
+  } else if (errorMessage.includes("Processing error")) {
+    return "Processing Error";
+  } else {
+    return "Error";
+  }
+}
+
+// Function to categorize error types for T-Closeness
+function getTClosenessErrorType(errorMessage) {
+  if (errorMessage.includes("No quasi-identifiers selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("No sensitive attribute selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("Input DataFrame is empty")) {
+    return "Data Error";
+  } else if (errorMessage.includes("not found in the dataset")) {
+    return "Data Error";
+  } else if (errorMessage.includes("No data left after dropping rows")) {
+    return "Data Error";
+  } else if (errorMessage.includes("T-Closeness task timed out")) {
+    return "Timeout Error";
+  } else if (errorMessage.includes("Processing error")) {
+    return "Processing Error";
+  } else {
+    return "Error";
+  }
+}
+
+// Function to categorize error types for Class Imbalance
+function getClassImbalanceErrorType(errorMessage) {
+  if (errorMessage.includes("No target feature selected")) {
+    return "Selection Error";
+  } else if (errorMessage.includes("not found in the dataset")) {
+    return "Data Error";
+  } else if (
+    errorMessage.includes("appears to be numerical with too many unique values")
+  ) {
+    return "Data Error";
+  } else if (errorMessage.includes("No valid data found")) {
+    return "Data Error";
+  } else if (errorMessage.includes("insufficient data")) {
+    return "Data Error";
+  } else if (errorMessage.includes("has only one class")) {
+    return "Data Error";
+  } else if (errorMessage.includes("has too many classes")) {
+    return "Data Error";
+  } else if (errorMessage.includes("Could not calculate imbalance degree")) {
+    return "Processing Error";
+  } else if (errorMessage.includes("Dataset is empty")) {
+    return "Data Error";
+  } else if (errorMessage.includes("Processing error")) {
+    return "Processing Error";
+  } else {
+    return "Error";
   }
 }
 
@@ -140,7 +350,6 @@ function submitForm() {
       var visualizationTypes = [
         "Completeness",
         "Outliers",
-        "Duplicity",
         "Representation Rate",
         "Statistical Rate",
         "Correlations Analysis Categorical",
@@ -156,74 +365,238 @@ function submitForm() {
         "Entropy Risk",
         "Custom Metric Evaluation",
       ];
-      visualizationTypes.forEach((type) => {
-        if (data[type]) {
-          console.log(`${type}:`, Object.keys(data[type]));
-        }
-      });
-      visualizationTypes.forEach(function (type) {
-        if (isKeyPresentAndDefined(data, type)) {
-          if (type === "Custom Metric Evaluation") {
-            // Special handling for Custom Metric Evaluation: display raw JSON
-            console.log("Adding Custom Metric Evaluation:", type);
-            var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
-            visualizationContent.push({
-              title: type,
-              jsonData: jsonData,
-              isCustomMetric: true,
-            });
-          } else if (
-            isKeyPresentAndDefined(data[type], type + " Visualization")
-          ) {
-            console.log("Adding visualization:", type);
-            var image = data[type][type + " Visualization"];
-            var value = data[type]["Value"] || "N/A";
-            var description = data[type]["Description"] || "";
-            var interpretation = data[type]["Graph interpretation"] || "";
-            var riskScore = data[type]["Risk Score"] || "N/A";
-            var title = type;
-            var jsonData = JSON.stringify(data);
 
-            // Check if there's an error or if the image is empty
-            if (data[type]["Error"]) {
-              console.log("Error in", type, ":", data[type]["Error"]);
-              // Still add to visualization content but with error message
-              visualizationContent.push({
-                image: image || "",
-                riskScore: riskScore,
-                value: value,
-                description: description,
-                interpretation: interpretation,
-                title: title,
-                jsonData: jsonData,
-                hasError: true,
-              });
-            } else if (image && image.trim() !== "") {
-              visualizationContent.push({
-                image: image,
-                riskScore: riskScore,
-                value: value,
-                description: description,
-                interpretation: interpretation,
-                title: title,
-                jsonData: jsonData,
-                hasError: false,
-              });
-            } else {
-              console.log("Empty visualization for:", type);
-            }
-          } else {
-            console.log(
-              "Missing visualization key for:",
-              type,
-              "Expected:",
-              type + " Visualization"
+      // First, check for validation errors and show popups immediately
+      visualizationTypes.forEach(function (type) {
+        if (isKeyPresentAndDefined(data, type) && data[type]["Error"]) {
+          console.log(
+            "Validation/Processing error in",
+            type,
+            ":",
+            data[type]["Error"]
+          );
+
+          // Show error popup immediately for all error types
+          if (type === "DP Statistics") {
+            const errorType = getDPStatisticsErrorType(data[type]["Error"]);
+            openErrorPopup(errorType, data[type]["Error"]);
+          } else if (type === "Single attribute risk scoring") {
+            const errorType = getSingleAttributeRiskErrorType(
+              data[type]["Error"]
             );
+            openErrorPopup(errorType, data[type]["Error"]);
+          } else if (type === "Multiple attribute risk scoring") {
+            const errorType = getMultipleAttributeRiskErrorType(
+              data[type]["Error"]
+            );
+            openErrorPopup(errorType, data[type]["Error"]);
+          } else if (type === "Entropy Risk") {
+            const errorType = getEntropyRiskErrorType(data[type]["Error"]);
+            openErrorPopup(errorType, data[type]["Error"]);
+          } else if (type === "k-Anonymity") {
+            const errorType = getKAnonymityErrorType(data[type]["Error"]);
+            openErrorPopup(errorType, data[type]["Error"]);
+          } else if (type === "l-Diversity") {
+            const errorType = getLDiversityErrorType(data[type]["Error"]);
+            openErrorPopup(errorType, data[type]["Error"]);
+          } else if (type === "t-Closeness") {
+            const errorType = getTClosenessErrorType(data[type]["Error"]);
+            openErrorPopup(errorType, data[type]["Error"]);
+          } else {
+            // For other metrics, show generic error popup
+            openErrorPopup("Error", data[type]["Error"]);
           }
-        } else {
-          console.log("Type not found in data:", type);
         }
       });
+
+      // Debug: Log the entire data structure to see what we're receiving
+      console.log("DEBUG: Full data structure received:", data);
+      console.log(
+        "DEBUG: Checking for Single attribute risk scoring errors..."
+      );
+      if (data["Single attribute risk scoring"]) {
+        console.log(
+          "DEBUG: Single attribute risk scoring data:",
+          data["Single attribute risk scoring"]
+        );
+        if (data["Single attribute risk scoring"]["Error"]) {
+          console.log(
+            "DEBUG: Found error in Single attribute risk scoring:",
+            data["Single attribute risk scoring"]["Error"]
+          );
+        } else {
+          console.log("DEBUG: No error found in Single attribute risk scoring");
+        }
+      } else {
+        console.log("DEBUG: Single attribute risk scoring not found in data");
+      }
+
+      visualizationTypes.forEach(function (type) {
+        console.log("Checking type:", type);
+        if (isKeyPresentAndDefined(data, type)) {
+            if (type === "Custom Metric Evaluation") {
+                // Handle Custom Metric Evaluation (from HEAD)
+                console.log("Adding Custom Metric Evaluation:", type);
+                var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
+                visualizationContent.push({
+                    title: type,
+                    jsonData: jsonData,
+                    isCustomMetric: true,
+                    riskScore: "N/A",
+                    value: "N/A"
+                });
+            } else if (data[type]["is_async"]) {
+                // Handle async tasks (from develop)
+                console.log("Adding async task placeholder:", type);
+                var title = type;
+                var jsonData = JSON.stringify(data);
+                visualizationContent.push({
+                    image: "",
+                    riskScore: "N/A",
+                    riskLevel: null,
+                    riskColor: null,
+                    value: "N/A",
+                    description: "",
+                    interpretation: "",
+                    title: title,
+                    jsonData: jsonData,
+                    hasError: false,
+                    isAsync: true,
+                    taskId: data[type]["task_id"],
+                    cacheKey: data[type]["cache_key"],
+                });
+                console.log("Starting polling for task:", data[type]["task_id"], "for metric:", type);
+                pollAsyncTask(data[type]["task_id"], data[type]["cache_key"], type);
+            } else if (isKeyPresentAndDefined(data[type], type + " Visualization")) {
+                console.log("Adding visualization:", type);
+                var image = data[type][type + " Visualization"];
+                // Ensure image is a string
+                if (typeof image !== "string") {
+                    image = image ? String(image) : "";
+                }
+                // Handle specific field names for privacy metrics and class imbalance
+                var value = "N/A";
+                if (type === "k-Anonymity" && data[type]["k-Value"] !== undefined) {
+                    value = data[type]["k-Value"];
+                } else if (type === "l-Diversity" && data[type]["l-Value"] !== undefined) {
+                    value = data[type]["l-Value"];
+                } else if (type === "t-Closeness" && data[type]["t-Value"] !== undefined) {
+                    value = data[type]["t-Value"];
+                } else if (type === "Entropy Risk" && data[type]["Entropy-Value"] !== undefined) {
+                    value = data[type]["Entropy-Value"];
+                } else if (
+                    type === "Class Imbalance" &&
+                    data[type]["Imbalance degree"] &&
+                    data[type]["Imbalance degree"]["Imbalance Degree score"] !== undefined
+                ) {
+                    value = data[type]["Imbalance degree"]["Imbalance Degree score"];
+                } else if (data[type]["Value"] !== undefined) {
+                    value = data[type]["Value"];
+                }
+                // Handle specific field names for privacy metrics descriptions and class imbalance
+                var description = "";
+                var interpretation = "";
+                if (type === "k-Anonymity" || type === "l-Diversity" || type === "t-Closeness" || type === "Entropy Risk") {
+                    description = data[type]["Description"] || "";
+                    interpretation = data[type]["Graph interpretation"] || "";
+                } else if (type === "Class Imbalance") {
+                    description = data[type]["Description"] || "";
+                    interpretation = data[type]["Imbalance degree"] && data[type]["Imbalance degree"]["Description"] ? data[type]["Imbalance degree"]["Description"] : "";
+                } else {
+                    description = data[type]["Description"] || "";
+                    interpretation = data[type]["Graph interpretation"] || "";
+                }
+                var riskScore = data[type]["Risk Score"] || "N/A";
+                var riskLevel = data[type]["Risk Level"] || null;
+                var riskColor = data[type]["Risk Color"] || null;
+                var title = type;
+                var jsonData = JSON.stringify(data);
+
+                // Check if there's an error or if the image is empty
+                if (data[type]["Error"]) {
+                    console.log("Error in", type, ":", data[type]["Error"]);
+                    // Enhanced error handling for specific metrics (from develop)
+                    let errorType = "Error";
+                    let isSpecificError = false;
+                    let errorMetricFlag = {};
+
+                    if (type === "DP Statistics") {
+                        errorType = getDPStatisticsErrorType(data[type]["Error"]);
+                        isSpecificError = true;
+                        errorMetricFlag.isDPStatistics = true;
+                    } else if (type === "Single attribute risk scoring") {
+                        errorType = getSingleAttributeRiskErrorType(data[type]["Error"]);
+                        isSpecificError = true;
+                        errorMetricFlag.isSingleAttributeRisk = true;
+                    } else if (type === "Multiple attribute risk scoring") {
+                        errorType = getMultipleAttributeRiskErrorType(data[type]["Error"]);
+                        isSpecificError = true;
+                        errorMetricFlag.isMultipleAttributeRisk = true;
+                    } else if (type === "Entropy Risk") {
+                        errorType = getEntropyRiskErrorType(data[type]["Error"]);
+                        isSpecificError = true;
+                        errorMetricFlag.isEntropyRisk = true;
+                    } else if (type === "k-Anonymity") {
+                        errorType = getKAnonymityErrorType(data[type]["Error"]);
+                        isSpecificError = true;
+                        errorMetricFlag.isKAnonymity = true;
+                    } else if (type === "l-Diversity") {
+                        errorType = getLDiversityErrorType(data[type]["Error"]);
+                        isSpecificError = true;
+                        errorMetricFlag.isLDiversity = true;
+                    } else if (type === "t-Closeness") {
+                        errorType = getTClosenessErrorType(data[type]["Error"]);
+                        isSpecificError = true;
+                        errorMetricFlag.isTCloseness = true;
+                    } else if (type === "Class Imbalance") {
+                        errorType = getClassImbalanceErrorType(data[type]["Error"]);
+                        isSpecificError = true;
+                        errorMetricFlag.isClassImbalance = true;
+                    }
+
+                    // Show error popup immediately
+                    openErrorPopup(errorType, data[type]["Error"]);
+
+                    visualizationContent.push({
+                        image: "",
+                        riskScore: "N/A",
+                        riskLevel: null,
+                        riskColor: null,
+                        value: "N/A",
+                        description: "",
+                        interpretation: "",
+                        title: title,
+                        jsonData: jsonData,
+                        hasError: true,
+                        ...errorMetricFlag,
+                        errorDetails: {
+                            errorMessage: data[type]["Error"],
+                            errorType: errorType,
+                        },
+                    });
+                } else if (image && image.trim() !== "") {
+                    visualizationContent.push({
+                        image: image,
+                        riskScore: riskScore,
+                        riskLevel: riskLevel,
+                        riskColor: riskColor,
+                        value: value,
+                        description: description,
+                        interpretation: interpretation,
+                        title: title,
+                        jsonData: jsonData,
+                        hasError: false,
+                    });
+                } else {
+                    console.log("Empty visualization for:", type);
+                }
+            } else {
+                console.log("Missing visualization key for:", type, "Expected:", type + " Visualization");
+            }
+        } else {
+            console.log("Type not found in data:", type);
+        }
+    });
       // Boolean flag to track if heading has been added
       var headingAdded = false;
 
@@ -238,66 +611,217 @@ function submitForm() {
         visualizationContent.forEach(function (content, index) {
           const visualizationId = `visualization_${index}`;
           let visualizationHtml = `<div class="visualization-container">
-                    <div class="toggle" style="display:block" onclick="toggleVisualization('${visualizationId}')">
-                        <div style="display: flex; justify-content:space-between; align-items: center;">
-                            <div>${content.title}</div>
-                            <svg id="${visualizationId}-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
-                        </div>
-                    </div>
-                    <div id="${visualizationId}" style="display: none;">`;
+                      <div class="toggle" style="display:block" onclick="toggleVisualization('${visualizationId}')">
+                          <div style="display: flex; justify-content:space-between; align-items: center;">
+                              <div>${content.title}</div>
+                              <svg id="${visualizationId}-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
+                          </div>
+                      </div>
+                      <div id="${visualizationId}" style="display: none;">`;
 
           if (content.isCustomMetric) {
-            // Display raw JSON for Custom Metric Evaluation
-            visualizationHtml += `<pre style="text-align: left; padding: 20px; background: #f5f5f5; border: 1px solid #ddd; overflow-x: auto;">${content.jsonData}</pre>`;
+              // Handle Custom Metric Evaluation (from HEAD)
+              visualizationHtml += `<pre style="text-align: left; padding: 20px; background: #f5f5f5; border: 1px solid #ddd; overflow-x: auto;">${content.jsonData}</pre>`;
+          } else if (content.isAsync) {
+              // Handle async task placeholder (from develop)
+              const asyncId = `async-${content.taskId.replace(/[^a-zA-Z0-9]/g, "")}`;
+              visualizationHtml += `<div class="async-task-status"
+                          data-task-id="${content.taskId}"
+                          data-cache-key="${content.cacheKey}"
+                          data-metric-name="${content.title}"
+                          style="text-align: center; padding: 20px; border: 2px solid #2196F3; border-radius: 8px; background-color: #f8f9fa;">
+                          <div style="margin-bottom: 15px;">
+                              <h4 style="color: #1976D2; margin: 0 0 10px 0;">Results are being calculated...</h4>
+                              <p style="color: #666; margin: 0; font-size: 14px;">This may take a few minutes. Please wait.</p>
+                          </div>
+                          <div class="progress-container" style="width: 100%; background-color: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; margin-bottom: 15px;">
+                              <div class="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #2196F3, #64B5F6); border-radius: 10px; transition: width 0.3s ease; animation: pulse 2s infinite;"></div>
+                          </div>
+                          <div style="font-size: 12px; color: #000;">
+                              <span id="task-status-${content.taskId}">Processing...</span>
+                          </div>
+                          <style>
+                              @keyframes pulse {
+                                  0% { opacity: 0.7; }
+                                  50% { opacity: 1; }
+                                  100% { opacity: 0.7; }
+                              }
+                          </style>
+                      </div>`;
           } else if (content.hasError) {
-            // Display error message instead of image
-            visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
-                        <strong>Error:</strong> ${content.description}
-                    </div>`;
+              // Enhanced error handling (from develop)
+              if (content.isDPStatistics) {
+                  visualizationHtml += `
+                      <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                          <div style="color: #d32f2f; margin-bottom: 15px;">
+                              <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                              </svg>
+                              <h4 style="margin: 0; color: #d32f2f;">Error in DP Statistics</h4>
+                          </div>
+                          <div style="margin-bottom: 15px;">
+                              <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                  An error occurred while processing differential privacy statistics.
+                              </p>
+                              <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                  <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                              </p>
+                          </div>
+                      </div>`;
+              } else if (content.isSingleAttributeRisk) {
+                  visualizationHtml += `
+                      <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                          <div style="color: #d32f2f; margin-bottom: 15px;">
+                              <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                              </svg>
+                              <h4 style="margin: 0; color: #d32f2f;">Error in Single Attribute Risk Scoring</h4>
+                          </div>
+                          <div style="margin-bottom: 15px;">
+                              <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                  An error occurred while processing single attribute risk scores.
+                              </p>
+                              <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                  <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                              </p>
+                          </div>
+                      </div>`;
+              } else if (content.isMultipleAttributeRisk) {
+                  visualizationHtml += `
+                      <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                          <div style="color: #d32f2f; margin-bottom: 15px;">
+                              <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                              </svg>
+                              <h4 style="margin: 0; color: #d32f2f;">Error in Multiple Attribute Risk Scoring</h4>
+                          </div>
+                          <div style="margin-bottom: 15px;">
+                              <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                  An error occurred while processing multiple attribute risk scores.
+                              </p>
+                              <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                  <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                              </p>
+                          </div>
+                      </div>`;
+              } else if (content.isEntropyRisk) {
+                  visualizationHtml += `
+                      <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                          <div style="color: #d32f2f; margin-bottom: 15px;">
+                              <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                              </svg>
+                              <h4 style="margin: 0; color: #d32f2f;">Error in Entropy Risk</h4>
+                          </div>
+                          <div style="margin-bottom: 15px;">
+                              <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                  An error occurred while processing entropy risk.
+                              </p>
+                              <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                  <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                              </p>
+                          </div>
+                      </div>`;
+              } else if (content.isKAnonymity) {
+                  visualizationHtml += `
+                      <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                          <div style="color: #d32f2f; margin-bottom: 15px;">
+                              <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                              </svg>
+                              <h4 style="margin: 0; color: #d32f2f;">Error in k-Anonymity</h4>
+                          </div>
+                          <div style="margin-bottom: 15px;">
+                              <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                  An error occurred while processing k-Anonymity.
+                              </p>
+                              <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                  <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                              </p>
+                          </div>
+                      </div>`;
+              } else if (content.isLDiversity) {
+                  visualizationHtml += `
+                      <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                          <div style="color: #d32f2f; margin-bottom: 15px;">
+                              <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                              </svg>
+                              <h4 style="margin: 0; color: #d32f2f;">Error in l-Diversity</h4>
+                          </div>
+                          <div style="margin-bottom: 15px;">
+                              <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                  An error occurred while processing l-Diversity.
+                              </p>
+                              <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                  <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                              </p>
+                          </div>
+                      </div>`;
+              } else if (content.isTCloseness) {
+                  visualizationHtml += `
+                      <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                          <div style="color: #d32f2f; margin-bottom: 15px;">
+                              <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                              </svg>
+                              <h4 style="margin: 0; color: #d32f2f;">Error in t-Closeness</h4>
+                          </div>
+                          <div style="margin-bottom: 15px;">
+                              <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                  An error occurred while processing t-Closeness.
+                              </p>
+                              <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                  <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                              </p>
+                          </div>
+                      </div>`;
+              } else if (content.isClassImbalance) {
+                  visualizationHtml += `
+                      <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                          <div style="color: #d32f2f; margin-bottom: 15px;">
+                              <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                              </svg>
+                              <h4 style="margin: 0; color: #d32f2f;">Error in Class Imbalance</h4>
+                          </div>
+                          <div style="margin-bottom: 15px;">
+                              <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                  An error occurred while processing class imbalance analysis.
+                              </p>
+                              <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                  <strong>Error:</strong> ${content.errorDetails.errorMessage}
+                              </p>
+                          </div>
+                      </div>`;
+              } else {
+                  visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
+                      <strong>Error:</strong> ${content.description}
+                  </div>`;
+              }
           } else if (content.image && content.image.trim() !== "") {
-            // Display normal visualization
-            const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
-            visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${
-              index + 1
-            } Chart">
-                    <a href="${imageBlobUrl}" download="${
-              content.title
-            }.jpg" class="toggle  metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
-          } else {
-            // Display message for empty visualization
-            visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
-                        No visualization available for this metric.
-                    </div>`;
+              // Handle valid visualization image
+              const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
+              visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
+                      <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
+          } else if (!content.isAsync) {
+              // Display message for empty visualization (only for non-async tasks)
+              visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
+                      No visualization available for this metric.
+                  </div>`;
           }
 
-          if (!content.isCustomMetric) {
-            visualizationHtml += `
-                            ${
-                              content.riskScore !== "N/A"
-                                ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>`
-                                : ""
-                            }
-                            ${
-                              content.value !== "N/A"
-                                ? `<div><strong>${content.title}:</strong> ${content.value}</div>`
-                                : ""
-                            }
-                           <div><strong>Description:</strong> ${
-                             content.description
-                           }</div>
-                           ${
-                             content.interpretation
-                               ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>`
-                               : ""
-                           }
-                        </div>
-                    </div>`;
-          } else {
-            visualizationHtml += `</div></div>`;
-          }
+          // Add metric details (Risk Score, Value, Description, Interpretation)
+          visualizationHtml += `
+              ${content.riskScore !== "N/A" ? `<div><strong>Risk Score:</strong> ${content.riskScore}</div>` : ""}
+              ${content.value !== "N/A" ? `<div><strong>${content.title}:</strong> ${content.value}</div>` : ""}
+              ${!content.hasError && content.description ? `<div><strong>Description:</strong> ${content.description}</div>` : ""}
+              ${!content.hasError && content.interpretation ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>` : ""}
+              </div>
+          </div>`;
 
           metrics.innerHTML += visualizationHtml;
-        });
+      });
 
         // Check if duplicity is present and 0 (no duplicity)
         if (
@@ -314,8 +838,8 @@ function submitForm() {
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
-                    <div id="duplicity" style="display: none; text-align: center;">
-                        No duplicates found
+                    <div id="duplicity" style="display: none;">
+                        <p style="text-align:center">Overall Duplicity: ${data["Duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"]}</p>
                     </div>
                 </div>`;
         } else if (
@@ -361,7 +885,7 @@ function submitForm() {
                             <svg id="duplicity-toggle-arrow" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="36px" fill="currentColor"><path d="M480-360 280-560h400L480-360Z"/></svg>
                         </div>
                     </div>
-                    <div id="duplicity" style="display: none; text-align: center;">
+                    <div id="duplicity" style="display: none;">
                         No duplicates found
                     </div>
                 </div>`;
@@ -396,6 +920,671 @@ function removeVisualizationKey(data) {
     }
   }
   return data;
+}
+
+// Documentation button function for privacy metrics (your approach)
+function getDocsButton(title) {
+  const anchorMap = {
+    "DP Statistics": "#differential-privacy",
+    "Single attribute risk scoring": "#single-attribute-risk",
+    "Multiple attribute risk scoring": "#multiple-attribute-risk",
+    "Entropy Risk": "#entropy-risk",
+    "k-Anonymity": "#k-anonymity",
+    "l-Diversity": "#l-diversity",
+    "t-Closeness": "#t-closeness",
+  };
+  const anchor = anchorMap[title] || "";
+  if (!anchor) return "";
+  return `<a href="/privacy-metrics-docs${anchor}" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a>`;
+}
+
+// Distance metric name function for Class Imbalance (your approach)
+function getDistanceMetricName() {
+  // Get the selected distance metric from the form
+  const distanceSelect = document.getElementById("distance-metric");
+  if (distanceSelect) {
+    const selectedValue = distanceSelect.value;
+    const metricNames = {
+      EU: "Euclidean Distance",
+      CH: "Chebyshev Distance",
+      KL: "KL Divergence",
+      HE: "Hellinger Distance",
+      TV: "Total Variation Distance",
+      CS: "Chi-Squared Distance",
+    };
+    return metricNames[selectedValue] || "Distance Metric";
+  }
+  return "Distance Metric";
+}
+
+// Async task polling for MMrisk score calculations
+function pollAsyncTask(
+  taskId,
+  cacheKey,
+  metricName,
+  maxAttempts = 800,
+  interval = 1500
+) {
+  let attempts = 0;
+
+  console.log(`Starting polling for ${metricName} task: ${taskId}`);
+
+  function checkTask() {
+    attempts++;
+
+    fetch(`/check_and_update_task/${taskId}/${encodeURIComponent(metricName)}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        console.log(`DEBUG: Received response for ${metricName}:`, data);
+
+        // Get DOM elements for progress bar and status
+        const asyncTaskElement = document.querySelector(
+          `[data-task-id="${taskId}"]`
+        );
+        const statusSpan = asyncTaskElement
+          ? asyncTaskElement.querySelector(`#task-status-${taskId}`)
+          : null;
+        const progressBar = asyncTaskElement
+          ? asyncTaskElement.querySelector(".progress-bar")
+          : null;
+
+        // Check for various error states
+        if (
+          data.status === "failed" ||
+          data.status === "FAILURE" ||
+          data.error ||
+          data.result?.error
+        ) {
+          console.log(
+            "DEBUG: Task failed with status:",
+            data.status,
+            "error:",
+            data.error || data.result?.error
+          );
+
+          // Update progress bar to show failure
+          if (progressBar) {
+            progressBar.style.background =
+              "linear-gradient(90deg, #F44336, #E57373)";
+          }
+
+          if (statusSpan) {
+            statusSpan.textContent = "Task failed";
+          }
+
+          // Extract error message from various possible locations
+          let errorMessage = "Task failed";
+          if (data.error) {
+            errorMessage = data.error;
+          } else if (data.result && data.result.error) {
+            errorMessage = data.result.error;
+          } else if (data.meta && data.meta.error) {
+            errorMessage = data.meta.error;
+          }
+
+          console.log("DEBUG: Extracted error message:", errorMessage);
+
+          // Create error result and update with error display
+          const errorResult = { error: errorMessage };
+          setTimeout(() => {
+            updateAsyncTaskWithResults(taskId, metricName, errorResult);
+          }, 1000);
+          return; // Exit polling
+        }
+
+        if (data.status === "completed" || data.status === "SUCCESS") {
+          console.log("DEBUG: Task completed successfully");
+
+          // Task completed successfully, complete the progress bar
+          if (progressBar) {
+            progressBar.style.width = "100%";
+            progressBar.style.background =
+              "linear-gradient(90deg, #4CAF50, #8BC34A)";
+          }
+
+          if (statusSpan) {
+            statusSpan.textContent = "Calculation completed!";
+          }
+
+          // Wait a moment to show completion, then update with results
+          setTimeout(() => {
+            updateAsyncTaskWithResults(taskId, metricName, data.result);
+          }, 1000);
+          return; // Exit polling
+        }
+
+        // Check if this is actually an error result disguised as a "successful" result
+        if (
+          data.result &&
+          (data.result.error ||
+            data.result.Error ||
+            (data.result.Description &&
+              data.result.Description.includes("Error")))
+        ) {
+          console.log("DEBUG: Detected error in result data:", data.result);
+
+          // Update progress bar to show failure
+          if (progressBar) {
+            progressBar.style.background =
+              "linear-gradient(90deg, #F44336, #E57373)";
+          }
+
+          if (statusSpan) {
+            statusSpan.textContent = "Task failed";
+          }
+
+          // Extract error message
+          let errorMessage = "Task failed";
+          if (data.result.error) {
+            errorMessage = data.result.error;
+          } else if (data.result.Error) {
+            errorMessage = data.result.Error;
+          } else if (data.result.Description) {
+            errorMessage = data.result.Description;
+          }
+
+          // Create error result and update with error display
+          const errorResult = { error: errorMessage };
+          setTimeout(() => {
+            updateAsyncTaskWithResults(taskId, metricName, errorResult);
+          }, 1000);
+          return; // Exit polling
+        }
+
+        // Update progress bar and status from real Celery data
+        if (data.progress) {
+          const realProgress = data.progress.current || 0;
+          const realStatus = data.progress.status || "Processing...";
+
+          if (progressBar) {
+            progressBar.style.width = `${realProgress}%`;
+            // Update progress bar color based on stage
+            if (realProgress < 30) {
+              progressBar.style.background =
+                "linear-gradient(90deg, #2196F3, #64B5F6)"; // Blue - preprocessing
+            } else if (realProgress < 70) {
+              progressBar.style.background =
+                "linear-gradient(90deg, #FF9800, #FFB74D)"; // Orange - calculation
+            } else if (realProgress < 90) {
+              progressBar.style.background =
+                "linear-gradient(90deg, #9C27B0, #BA68C8)"; // Purple - statistics
+            } else {
+              progressBar.style.background =
+                "linear-gradient(90deg, #4CAF50, #8BC34A)"; // Green - visualization
+            }
+          }
+
+          if (statusSpan) {
+            const timeElapsed = Math.round((attempts * interval) / 1000);
+            statusSpan.textContent = `${realStatus} (${timeElapsed}s elapsed)`;
+          }
+        }
+
+        // Continue polling if not complete
+        if (attempts < maxAttempts) {
+          setTimeout(checkTask, interval);
+        } else {
+          // Timeout reached
+          if (progressBar) {
+            progressBar.style.background =
+              "linear-gradient(90deg, #FF9800, #FFB74D)";
+          }
+          if (statusSpan) {
+            statusSpan.textContent = "Taking longer than expected...";
+          }
+          console.warn(
+            `${metricName} polling timeout reached. Task may still be running.`
+          );
+        }
+      })
+      .catch((error) => {
+        console.error("Polling error:", error);
+        if (attempts < maxAttempts) {
+          setTimeout(checkTask, interval);
+        } else {
+          // Max retries reached
+          console.log(
+            "DEBUG: Max retries reached for",
+            metricName,
+            "creating error result"
+          );
+
+          const asyncTaskElement = document.querySelector(
+            `[data-task-id="${taskId}"]`
+          );
+          const progressBar = asyncTaskElement
+            ? asyncTaskElement.querySelector(".progress-bar")
+            : null;
+          const statusSpan = asyncTaskElement
+            ? asyncTaskElement.querySelector(`#task-status-${taskId}`)
+            : null;
+
+          if (progressBar) {
+            progressBar.style.background =
+              "linear-gradient(90deg, #F44336, #E57373)";
+          }
+          if (statusSpan) {
+            statusSpan.textContent = "Connection error";
+          }
+
+          // Create error result for connection/polling failures
+          const errorResult = { error: `Connection error: ${error.message}` };
+          console.log(
+            "DEBUG: Calling updateAsyncTaskWithResults with connection error for",
+            metricName
+          );
+          setTimeout(() => {
+            updateAsyncTaskWithResults(taskId, metricName, errorResult);
+          }, 1000);
+        }
+      });
+  }
+
+  // Start polling
+  checkTask();
+}
+
+function updateAsyncTaskWithResults(taskId, metricName, results) {
+  console.log(
+    `DEBUG: updateAsyncTaskWithResults called for ${metricName} with:`,
+    { taskId, results }
+  );
+
+  // Find the async task placeholder
+  const asyncElement = document.querySelector(`[data-task-id="${taskId}"]`);
+  updateTaskStatus(taskId, metricName, "completed", "Calculation completed!");
+  if (!asyncElement || !results) {
+    console.log("No async element or results found:", {
+      taskId,
+      metricName,
+      results,
+    });
+    return;
+  }
+
+  // Build the completed visualization HTML
+  let completedHtml = "";
+
+  // Check if there's an error - use the same template as other metrics
+  if (results.error) {
+    console.log("DEBUG: Async task failed with error:", results.error);
+
+    // Trigger error popup for failed async tasks
+    let errorType = "Error";
+    if (metricName === "Single attribute risk scoring") {
+      errorType = getSingleAttributeRiskErrorType(results.error);
+    } else if (metricName === "Multiple attribute risk scoring") {
+      errorType = getMultipleAttributeRiskErrorType(results.error);
+    }
+
+    console.log("DEBUG: Error type determined:", errorType);
+
+    // Show error popup
+    openErrorPopup(errorType, results.error);
+
+    // Use the same error template as other metrics
+    if (metricName === "Single attribute risk scoring") {
+      completedHtml = `
+                <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                    <div style="color: #d32f2f; margin-bottom: 15px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                            <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                        </svg>
+                        <h4 style="margin: 0; color: #d32f2f;">Error in Single Attribute Risk Scoring</h4>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                            An error occurred while processing single attribute risk scores.
+                        </p>
+                        <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                            <strong>Error:</strong> ${results.error}
+                        </p>
+                    </div>
+                </div>`;
+    } else if (metricName === "Multiple attribute risk scoring") {
+      completedHtml = `
+                <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                    <div style="color: #d32f2f; margin-bottom: 15px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                            <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                        </svg>
+                        <h4 style="margin: 0; color: #d32f2f;">Error in Multiple Attribute Risk Scoring</h4>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                            An error occurred while processing multiple attribute risk scores.
+                        </p>
+                        <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                            <strong>Error:</strong> ${results.error}
+                        </p>
+                    </div>
+                </div>`;
+    } else {
+      // Generic error template for other async metrics
+      completedHtml = `
+                <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                    <div style="color: #d32f2f; margin-bottom: 15px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                            <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                        </svg>
+                        <h4 style="margin: 0; color: #d32f2f;">Error in ${metricName}</h4>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                            An error occurred while processing ${metricName.toLowerCase()}.
+                        </p>
+                        <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                            <strong>Error:</strong> ${results.error}
+                        </p>
+                    </div>
+                </div>`;
+    }
+
+    console.log("DEBUG: Generated error HTML for", metricName);
+  } else {
+    // Check if this is actually an error result disguised as a "successful" result
+    // Validation errors often come with Description and Graph interpretation fields
+    if (
+      (results.Description && results.Description.includes("Error occurred")) ||
+      (results.Description && results.Description.includes("Error:")) ||
+      (results.Description &&
+        results.Description.includes("not found in dataset")) ||
+      (results.Description &&
+        results.Description.includes("not found in the dataset"))
+    ) {
+      console.log(
+        "DEBUG: Detected validation error in results:",
+        results.Description
+      );
+
+      // Extract the actual error message
+      let errorMessage = results.Description;
+      if (results.Description.includes("Error occurred:")) {
+        errorMessage = results.Description.split("Error occurred:")[1].trim();
+      } else if (results.Description.includes("Error:")) {
+        errorMessage = results.Description.split("Error:")[1].trim();
+      }
+
+      // Trigger error popup for validation errors
+      let errorType = "Error";
+      if (metricName === "Single attribute risk scoring") {
+        errorType = getSingleAttributeRiskErrorType(errorMessage);
+      } else if (metricName === "Multiple attribute risk scoring") {
+        errorType = getMultipleAttributeRiskErrorType(errorMessage);
+      }
+
+      // Show error popup
+      openErrorPopup(errorType, errorMessage);
+
+      // Use the same error template as other metrics
+      if (metricName === "Single attribute risk scoring") {
+        completedHtml = `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in Single Attribute Risk Scoring</h4>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing single attribute risk scores.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${errorMessage}
+                            </p>
+                        </div>
+                    </div>`;
+      } else if (metricName === "Multiple attribute risk scoring") {
+        completedHtml = `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in Multiple Attribute Risk Scoring</h4>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing multiple attribute risk scores.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${errorMessage}
+                            </p>
+                        </div>
+                    </div>`;
+      } else {
+        // Generic error template for other async metrics
+        completedHtml = `
+                    <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
+                        <div style="color: #d32f2f; margin-bottom: 15px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
+                                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-197q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                            </svg>
+                            <h4 style="margin: 0; color: #d32f2f;">Error in ${metricName}</h4>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 10px 0; font-size: 14px; color: #333;">
+                                An error occurred while processing ${metricName.toLowerCase()}.
+                            </p>
+                            <p style="margin: 10px 0; font-size: 14px; color: #666;">
+                                <strong>Error:</strong> ${errorMessage}
+                            </p>
+                        </div>
+                    </div>`;
+      }
+    } else {
+      // Add visualization image if present - try multiple possible keys
+      const possibleVizKeys = [
+        `${metricName} Visualization`,
+        "Multiple attribute risk scoring Visualization",
+        "Single attribute risk scoring Visualization",
+      ];
+
+      let vizKey = null;
+      for (const key of possibleVizKeys) {
+        if (results[key] && results[key].trim() !== "") {
+          vizKey = key;
+
+          break;
+        }
+      }
+
+      if (vizKey) {
+        completedHtml += `
+                    <div class="visualization-container">
+                        <img src="data:image/png;base64,${results[vizKey]}"
+                             alt="Risk Score Visualization"
+                             style="max-width: 100%; height: auto;">
+                    </div>`;
+      } else {
+      }
+
+      // Add description if present (only for successful results, not errors)
+      if (results.Description && !results.Description.includes("Error")) {
+        completedHtml += `<div style="color: inherit;"><strong>Description:</strong> ${results.Description}</div>`;
+      }
+
+      // Add graph interpretation if present (only for successful results, not errors)
+      if (
+        results["Graph interpretation"] &&
+        !results["Graph interpretation"].includes(
+          "No visualization available due to error"
+        )
+      ) {
+        completedHtml += `<div style="color: inherit;"><strong>Graph interpretation:</strong> ${results["Graph interpretation"]}</div>`;
+      }
+
+      // Add statistics if present
+      if (results["Descriptive statistics of the risk scores"]) {
+        const stats = results["Descriptive statistics of the risk scores"];
+
+        // Check if stats is for single attribute (object with feature names as keys) or multiple attribute (single object)
+        if (
+          typeof stats === "object" &&
+          stats !== null &&
+          !stats.hasOwnProperty("mean")
+        ) {
+          // Single attribute: stats is {feature1: {mean, std, ...}, feature2: {mean, std, ...}, ...}
+          completedHtml += `
+                        <div class="statistics-container" style="margin-bottom: 20px; color: inherit;">
+                            <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Descriptive Statistics</h4>
+                            <table class="table table-bordered" style="color: inherit; background-color: transparent; border-color: inherit;">
+                                <tr>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Feature</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Mean</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Std</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Min</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">25%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">50%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">75%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Max</th>
+                                </tr>`;
+
+          // Add a row for each feature
+          for (const [featureName, featureStats] of Object.entries(stats)) {
+            completedHtml += `
+                            <tr>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;"><strong>${featureName}</strong></td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.mean.toFixed(
+                                  3
+                                )}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.std.toFixed(
+                                  3
+                                )}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.min.toFixed(
+                                  3
+                                )}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats[
+                                  "25%"
+                                ].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats[
+                                  "50%"
+                                ].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats[
+                                  "75%"
+                                ].toFixed(3)}</td>
+                                <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.max.toFixed(
+                                  3
+                                )}</td>
+                            </tr>`;
+          }
+
+          completedHtml += `</table></div>`;
+        } else {
+          // Multiple attribute: stats is a single object {mean, std, min, ...}
+          completedHtml += `
+                        <div class="statistics-container" style="margin-bottom: 20px; color: inherit;">
+                            <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Descriptive Statistics</h4>
+                            <table class="table table-bordered" style="color: inherit; background-color: transparent; border-color: inherit;">
+                                <tr>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Mean</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Std</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Min</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">25%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">50%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">75%</th>
+                                    <th style="color: inherit; background-color: transparent; border-color: inherit;">Max</th>
+                                </tr>
+                                <tr>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.mean.toFixed(
+                                      3
+                                    )}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.std.toFixed(
+                                      3
+                                    )}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.min.toFixed(
+                                      3
+                                    )}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats[
+                                      "25%"
+                                    ].toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats[
+                                      "50%"
+                                    ].toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats[
+                                      "75%"
+                                    ].toFixed(3)}</td>
+                                    <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.max.toFixed(
+                                      3
+                                    )}</td>
+                                </tr>
+                            </table>
+                        </div>`;
+        }
+      }
+
+      // Add dataset risk score if present (for multiple attribute)
+      if (results["Dataset Risk Score"] !== undefined) {
+        completedHtml += `
+                    <div style="margin-bottom: 20px; color: inherit;">
+                        <h4 style="color: inherit; margin-bottom: 10px; font-weight: bold;">Dataset Risk Score</h4>
+                        <p style="color: inherit; font-size: 16px;">
+                            <strong>Overall Risk:</strong> ${results[
+                              "Dataset Risk Score"
+                            ].toFixed(4)}
+                        </p>
+                    </div>`;
+      }
+    }
+  }
+
+  // Replace the progress bar with the completed content
+  if (completedHtml) {
+    // Remove the custom background styling so it inherits from the plot-container
+    asyncElement.style.background = "none";
+    asyncElement.style.border = "none";
+    asyncElement.style.borderRadius = "0";
+    asyncElement.style.padding = "0";
+    asyncElement.style.textAlign = "left";
+
+    // Replace the content
+    asyncElement.innerHTML = completedHtml;
+  }
+}
+
+function updateTaskStatus(taskId, metricName, status, message) {
+  // Find the async task status element for this metric
+  const asyncElements = document.querySelectorAll(
+    `[data-metric-name="${metricName}"]`
+  );
+
+  if (asyncElements.length > 0) {
+    asyncElements.forEach((element) => {
+      // Update the status display
+      const statusP = element.querySelector("p:first-child");
+      const messageP = element.querySelector("p:nth-child(2)");
+
+      if (statusP) {
+        statusP.innerHTML = `<strong>Status:</strong> ${status}`;
+      }
+      if (messageP) {
+        messageP.innerHTML = `<em>${message}</em>`;
+      }
+
+      // If task completed successfully, hide the spinner
+      if (status === "SUCCESS" || status === "COMPLETED") {
+        const spinner = element.querySelector(".progress-indicator");
+        if (spinner) {
+          spinner.style.display = "none";
+        }
+      }
+    });
+  } else {
+    // Final fallback: add status to page
+    console.log(`Task Status Update - ${metricName}: ${status} - ${message}`);
+  }
 }
 
 // Modify the function to accept an array of visualization content
@@ -891,6 +2080,26 @@ function toggleValue(checkbox) {
     return;
   }
   console.log("Container found:", container);
+
+  // Toggle the metric-selected class to show/hide QI sections
+  if (checkbox.checked) {
+    container.classList.add("metric-selected");
+    console.log("Added metric-selected class - QI sections should be visible");
+  } else {
+    container.classList.remove("metric-selected");
+    console.log("Removed metric-selected class - QI sections should be hidden");
+  }
+
+  // Find and show/hide the metric inputs (QI and sensitive attribute sections)
+  const metricInputs = container.querySelectorAll(".metric-inputs");
+  metricInputs.forEach((inputSection) => {
+    if (checkbox.checked) {
+      inputSection.style.display = "block";
+    } else {
+      inputSection.style.display = "none";
+    }
+  });
+
   // Find all select dropdowns within that container
   const dropdowns = container.querySelectorAll("select");
   const inputs = container.querySelectorAll("input.textWrapper");
@@ -944,14 +2153,92 @@ function updateSelectAllState() {
 document.addEventListener("DOMContentLoaded", function () {
   // Get all checkboxes inside each checkboxContainer
   document.querySelectorAll(".checkboxContainer").forEach((container) => {
-    // For each container, get the checkbox inside and set the initial state
-
     const checkboxes = container.querySelectorAll("input[type='checkbox']");
     checkboxes.forEach((checkbox) => {
       console.log(checkbox);
       // Set initial state of selects based on checkbox
       toggleValue(checkbox);
     });
+  });
+
+  // Also handle checkboxContainerIndividual containers for privacy preservation
+  document
+    .querySelectorAll(".checkboxContainerIndividual")
+    .forEach((container) => {
+      const checkboxes = container.querySelectorAll("input[type='checkbox']");
+      checkboxes.forEach((checkbox) => {
+        console.log(checkbox);
+        // Set initial state of selects based on checkbox
+        toggleValue(checkbox);
+
+        // Ensure metric inputs are hidden by default if checkbox is unchecked
+        if (!checkbox.checked) {
+          const metricInputs = container.querySelectorAll(".metric-inputs");
+          metricInputs.forEach((inputSection) => {
+            inputSection.style.display = "none";
+          });
+        }
+      });
+    });
+
+  // Setup tooltip positioning for privacy metrics
+  setupTooltipPositioning();
+
+  // Auto-start polling for async tasks when page loads
+  console.log("DOMContentLoaded: Checking for async tasks...");
+
+  // Check if there are any async tasks that need polling
+  const scripts = document.querySelectorAll("script[data-task-id]");
+  console.log("Found", scripts.length, "scripts with task IDs");
+
+  scripts.forEach((script) => {
+    const taskId = script.getAttribute("data-task-id");
+    const cacheKey = script.getAttribute("data-cache-key");
+    const metricName = script.getAttribute("data-metric-name");
+
+    console.log("Script attributes:", { taskId, cacheKey, metricName });
+
+    if (taskId && cacheKey && metricName) {
+      pollAsyncTask(taskId, cacheKey, metricName);
+    }
+  });
+
+  // Also check for any elements that contain async task information in the results
+  const resultElements = document.querySelectorAll("[data-task-id]");
+  console.log("Found", resultElements.length, "result elements with task IDs");
+
+  resultElements.forEach((element) => {
+    const taskId = element.getAttribute("data-task-id");
+    const cacheKey = element.getAttribute("data-cache-key");
+    const metricName =
+      element.getAttribute("data-metric-name") || "MMrisk Score";
+
+    if (taskId && cacheKey) {
+      console.log(
+        `Starting polling for ${metricName} from result element: ${taskId}`
+      );
+      pollAsyncTask(taskId, cacheKey, metricName);
+    }
+  });
+
+  // Also check for async task status elements specifically
+  const asyncStatusElements = document.querySelectorAll(
+    ".async-task-status[data-task-id]"
+  );
+  console.log("Found", asyncStatusElements.length, "async status elements");
+
+  asyncStatusElements.forEach((element) => {
+    const taskId = element.getAttribute("data-task-id");
+    const cacheKey = element.getAttribute("data-cache-key");
+    const metricName =
+      element.getAttribute("data-metric-name") || "MMrisk Score";
+
+    if (taskId && cacheKey) {
+      console.log(
+        `Starting polling for ${metricName} from async status element: ${taskId}`
+      );
+      pollAsyncTask(taskId, cacheKey, metricName);
+    }
   });
 });
 
@@ -1049,24 +2336,52 @@ function closeErrorPopup() {
   //error popup has to be present in the DOM for the function to call already
   errorPopup.classList.remove("open-popup");
 }
-// Catch resource loading errors by adding an event listener to the window
-window.addEventListener(
-  "error",
-  function (e) {
-    if (
-      e.target &&
-      (e.target.tagName === "IMG" ||
-        e.target.tagName === "SCRIPT" ||
-        e.target.tagName === "LINK")
-    ) {
-      console.error("Resource failed to load:", e.target.src || e.target.href);
-      openErrorPopup(
-        "Resource Load Error",
-        `Failed to load ${e.target.tagName.toLowerCase()} from: ${
-          e.target.src || e.target.href
-        }`
-      );
+
+// Function to setup tooltip positioning for privacy metrics
+function setupTooltipPositioning() {
+  // Find all info icons in privacy metrics
+  const infoIcons = document.querySelectorAll(
+    ".checkboxContainerIndividual .info-icon"
+  );
+
+  infoIcons.forEach((icon) => {
+    const tooltip = icon.querySelector(".info-text");
+    if (tooltip) {
+      let isHoveringIcon = false;
+      let isHoveringTooltip = false;
+
+      // Show tooltip when entering icon
+      icon.addEventListener("mouseenter", function () {
+        tooltip.style.display = "block";
+        isHoveringIcon = true;
+      });
+
+      // Hide tooltip when leaving icon
+      icon.addEventListener("mouseleave", function (e) {
+        isHoveringIcon = false;
+        // Check if mouse is moving to the tooltip
+        const relatedTarget = e.relatedTarget;
+        if (!relatedTarget || !tooltip.contains(relatedTarget)) {
+          // If not moving to tooltip, hide after a short delay
+          setTimeout(() => {
+            if (!isHoveringIcon && !isHoveringTooltip) {
+              tooltip.style.display = "none";
+            }
+          }, 50);
+        }
+      });
+
+      // Keep tooltip visible when hovering over it
+      tooltip.addEventListener("mouseenter", function () {
+        isHoveringTooltip = true;
+        tooltip.style.display = "block";
+      });
+
+      // Hide tooltip when leaving tooltip
+      tooltip.addEventListener("mouseleave", function () {
+        isHoveringTooltip = false;
+        tooltip.style.display = "none";
+      });
     }
-  },
-  true
-);
+  });
+}

@@ -19,77 +19,34 @@ def completeness(self: Task, file_info):
 
         result_dict = {}
 
-        if overall_completeness != 0 and overall_completeness != 1:
-            # Filter out columns with completeness score of 1
-            incomplete_columns = {k: v for k, v in completeness_scores.items() if v < 1}
+        # Always include completeness scores for all features
+        result_dict["Completeness scores"] = completeness_scores
+        result_dict["Overall Completeness"] = overall_completeness
 
-            if incomplete_columns:
-                # Add completeness scores to the dictionary
-                result_dict["Completeness scores"] = incomplete_columns
+        # Create a bar chart for all features
+        plt.figure(figsize=(8, 6))
+        plt.bar(completeness_scores.keys(), completeness_scores.values(), color="blue")
+        plt.title("Feature-wise Completeness Scores", fontsize=16)
+        plt.xlabel("Features", fontsize=14)
+        plt.ylabel("Completeness Score", fontsize=14)
+        plt.ylim(0, 1)
 
-                # Create a bar chart
-                plt.figure(figsize=(8, 8))
-                plt.bar(
-                    incomplete_columns.keys(), incomplete_columns.values(), color="blue"
-                )
-                plt.title("Completeness Scores", fontsize=16)
-                plt.xlabel("Columns", fontsize=14)
-                plt.ylabel("Completeness Score", fontsize=14)
-                # Setting y-axis limit between 0 and 1 for completeness scores
-                plt.ylim(0, 1)
+        # Rotate x-axis tick labels for readability
+        plt.xticks(rotation=45, ha="right", fontsize=12)
+        plt.tight_layout()
 
-                # Rotate x-axis tick labels
-                plt.xticks(rotation=45, ha="right", fontsize=12)
+        # Save the chart to a BytesIO object
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format="png")
+        img_buf.seek(0)
 
-                plt.subplots_adjust(bottom=0.5)
-                plt.tight_layout()
+        # Encode the image as base64
+        img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
 
-                # Save the chart to a BytesIO object
-                img_buf = io.BytesIO()
-                plt.savefig(img_buf, format="png")
-                img_buf.seek(0)
-
-                # Encode the image as base64
-                img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
-
-                # Add the base64-encoded image to the dictionary under a separate key
-                result_dict["Completeness Visualization"] = img_base64
-
-                plt.close()  # Close the plot to free up resources
-
-            # Add overall completeness to the dictionary
-            result_dict["Overall Completeness"] = overall_completeness
-
-        elif overall_completeness == 1:
-            # Create a bar chart for 0 completeness
-            plt.figure(figsize=(8, 4))
-            plt.bar(["Overall Missingness"], [0], color="red")
-            plt.title("Missingness of the Dataset")
-            plt.xlabel("Dataset")
-            plt.ylabel("Missingness Score")
-            # Setting y-axis limit between 0 and 1 for completeness scores
-            plt.ylim(0, 1)
-
-            plt.tight_layout()
-
-            # Save the chart to a BytesIO object
-            img_buf = io.BytesIO()
-            plt.savefig(img_buf, format="png")
-            img_buf.seek(0)
-
-            # Encode the image as base64
-            img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
-
-            # Add the base64-encoded image to the dictionary under a separate key
-            result_dict["Completeness Visualization"] = img_base64
-
-            plt.close()  # Close the plot to free up resources
-
-            # Add overall completeness to the dictionary
-            result_dict["Overall Completeness"] = 1
-        else:
-            result_dict["Overall Completeness of Dataset"] = "Error"
+        result_dict["Completeness Visualization"] = img_base64
+        plt.close()
 
         return result_dict
+
     except SoftTimeLimitExceeded:
         raise Exception("Completeness task timed out.")

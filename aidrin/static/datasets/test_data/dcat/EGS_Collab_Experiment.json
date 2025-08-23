@@ -1,1 +1,115 @@
-{"@type": "dcat:Dataset", "DOI": "10.15121/1632061", "accessLevel": "public", "bureauCode": ["019:20"], "contactPoint": {"@type": "vcard:Contact", "fn": "Chengping Chai", "hasEmail": "mailto:chaic@ornl.gov"}, "dataQuality": true, "description": "This package contains a 3D Seismic velocity model and an updated microseismic catalog associated with a proceedings paper (Chai et al., 2020) published in the 45th Workshop on Geothermal Reservoir Engineering. The 3D_seismic_velocity_model text file contains x (m), y(m), z(m), P-wave velocity (km/s), P-wave velocity quality indicator (1 for well-constrained; 0 for poorly constrained), S-wave velocity (km/s), and S-wave velocity quality indicator (1 for well-constrained; 0 for poorly constrained). The Updated_MEQ_catalog text file contains event origin time, x(m), y(m), z(m), error in x (m), error in y (m), error in z (m), and RMS misfit (millisecond). The 3D_seismic_P-wave_velocity_model animation file shows slices of the 3D P-wave velocity model. The 3D_seismic_S-wave_velocity_model animation file shows slices of the 3D S-wave velocity model. The Interactive_MEQ_locations API file is an interactive visualization of the updated microseismic event locations. The visualization allows users to view the event locations by dragging, rotating, and zooming in. \n\nReferences:\nChai, C., Maceira, M., Santos-Villalobos, H. J., Venkatakrishnan, S. V., Schoenball, M., and EGS Collab Team, 2020, Automatic Seismic Phase Picking Using Deep Learning for the EGS Collab Project, in PROCEEDINGS, 45th Workshop on Geothermal Reservoir Engineering, edited, Stanford University, Stanford, California, 45, 1266-1276.", "distribution": [{"@type": "dcat:Distribution", "accessURL": "https://gdr.openei.org/files/1214/Updated_MEQ_catalog.csv", "description": "This file contains seismic event origin time, x(m), y(m), z(m), error in x (m), error in y (m), error in z (m), and RMS misfit (millisecond).", "format": "csv", "mediaType": "text/csv", "title": "Updated_MEQ_catalog.csv"}, {"@type": "dcat:Distribution", "accessURL": "https://gdr.openei.org/files/1214/3D_seismic_velocity_model.csv", "description": "This file contains x (m), y(m), z(m), P-wave velocity (km/s), P-wave velocity quality indicator (1 for well-constrained; 0 for poorly constrained), S-wave velocity (km/s), and S-wave velocity quality indicator (1 for well-constrained; 0 for poorly constrained).", "format": "csv", "mediaType": "text/csv", "title": "3D_seismic_velocity_model.csv"}, {"@type": "dcat:Distribution", "accessURL": "https://gdr.openei.org/files/1214/Interactive_MEQ_locations.html", "description": "This file is an interactive visualization of the updated microseismic event locations. The visualization allows users to view the event locations by dragging, rotating, and zooming in. Clicking a legend will switch the clicked symbols between visible and invisible.", "format": "html", "mediaType": "text/html", "title": "Interactive_MEQ_locations.html"}, {"@type": "dcat:Distribution", "accessURL": "https://gdr.openei.org/files/1214/3D_seismic_P-wave_velocity_model.mp4", "description": "This file is an animation shows slices of the 3D P-wave velocity model.", "format": "mp4", "mediaType": "application/octet-stream", "title": "3D_seismic_P-wave_velocity_model.mp4"}, {"@type": "dcat:Distribution", "accessURL": "https://gdr.openei.org/files/1214/3D_seismic_S-wave_velocity_model.mp4", "description": "This file is an animation shows slices of the 3D S-wave velocity model.", "format": "mp4", "mediaType": "application/octet-stream", "title": "3D_seismic_S-wave_velocity_model.mp4"}, {"@type": "dcat:Distribution", "accessURL": "https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2020/Chai.pdf", "description": "Paper published at the 45th Workshop on Geothermal Reservoir Engineering titled \"Automatic Seismic Phase Picking Using Deep Learning for the EGS Collab project\"", "format": "pdf", "mediaType": "application/pdf", "title": "Associated Stanford Paper - Chai et al"}, {"@type": "dcat:Distribution", "accessURL": "https://doi.org/10.1029/2020GL088651", "description": "Associated paper published in the Geophysical Research Letters titled \"Using a Deep Neural Network and Transfer Learning to Bridge Scales for Seismic Phase Picking\"", "format": "HTML", "mediaType": "text/html", "title": "Associated AGU Paper - Chai et al"}], "identifier": "https://data.openei.org/submissions/8349", "issued": "2020-04-20T06:00:00Z", "keyword": ["geothermal", "energy", "EGS Collab", "3D seismic structure", "transfer learning", "deep learning", "machine learning", "interactive", "SURF", "P-wave", "S-wave", "microseismic catalog", "seismic tomography", "interactive visualization", "geophysics", "modeling", "velocity", "model", "microseismicity", "catalog", "transfer-learning", "double-difference tomography", "3D", "seismic", "MEQ", "processed data", "geospatial data"], "landingPage": "https://gdr.openei.org/submissions/1214", "license": "https://creativecommons.org/licenses/by/4.0/", "modified": "2025-02-17T18:05:49Z", "programCode": ["019:006"], "projectLead": "Lauren Boyd", "projectNumber": "EE0032708", "projectTitle": "EGS Collab", "publisher": {"@type": "org:Organization", "name": "Oak Ridge National Laboratory"}, "spatial": "{\"type\":\"Polygon\",\"coordinates\":[[[-103.7577,44.3488],[-103.7465,44.3488],[-103.7465,44.3544],[-103.7577,44.3544],[-103.7577,44.3488]]]}", "title": "EGS Collab Experiment 1: 3D Seismic Velocity Model and Updated Microseismic Catalog Using Transfer-Learning Aided Double-Difference Tomography"}
+{
+  "@type": "dcat:Dataset",
+  "DOI": "10.15121/1632061",
+  "accessLevel": "public",
+  "bureauCode": ["019:20"],
+  "contactPoint": {
+    "@type": "vcard:Contact",
+    "fn": "Chengping Chai",
+    "hasEmail": "mailto:chaic@ornl.gov"
+  },
+  "dataQuality": true,
+  "description": "This package contains a 3D Seismic velocity model and an updated microseismic catalog associated with a proceedings paper (Chai et al., 2020) published in the 45th Workshop on Geothermal Reservoir Engineering. The 3D_seismic_velocity_model text file contains x (m), y(m), z(m), P-wave velocity (km/s), P-wave velocity quality indicator (1 for well-constrained; 0 for poorly constrained), S-wave velocity (km/s), and S-wave velocity quality indicator (1 for well-constrained; 0 for poorly constrained). The Updated_MEQ_catalog text file contains event origin time, x(m), y(m), z(m), error in x (m), error in y (m), error in z (m), and RMS misfit (millisecond). The 3D_seismic_P-wave_velocity_model animation file shows slices of the 3D P-wave velocity model. The 3D_seismic_S-wave_velocity_model animation file shows slices of the 3D S-wave velocity model. The Interactive_MEQ_locations API file is an interactive visualization of the updated microseismic event locations. The visualization allows users to view the event locations by dragging, rotating, and zooming in. \n\nReferences:\nChai, C., Maceira, M., Santos-Villalobos, H. J., Venkatakrishnan, S. V., Schoenball, M., and EGS Collab Team, 2020, Automatic Seismic Phase Picking Using Deep Learning for the EGS Collab Project, in PROCEEDINGS, 45th Workshop on Geothermal Reservoir Engineering, edited, Stanford University, Stanford, California, 45, 1266-1276.",
+  "distribution": [
+    {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://gdr.openei.org/files/1214/Updated_MEQ_catalog.csv",
+      "description": "This file contains seismic event origin time, x(m), y(m), z(m), error in x (m), error in y (m), error in z (m), and RMS misfit (millisecond).",
+      "format": "csv",
+      "mediaType": "text/csv",
+      "title": "Updated_MEQ_catalog.csv"
+    },
+    {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://gdr.openei.org/files/1214/3D_seismic_velocity_model.csv",
+      "description": "This file contains x (m), y(m), z(m), P-wave velocity (km/s), P-wave velocity quality indicator (1 for well-constrained; 0 for poorly constrained), S-wave velocity (km/s), and S-wave velocity quality indicator (1 for well-constrained; 0 for poorly constrained).",
+      "format": "csv",
+      "mediaType": "text/csv",
+      "title": "3D_seismic_velocity_model.csv"
+    },
+    {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://gdr.openei.org/files/1214/Interactive_MEQ_locations.html",
+      "description": "This file is an interactive visualization of the updated microseismic event locations. The visualization allows users to view the event locations by dragging, rotating, and zooming in. Clicking a legend will switch the clicked symbols between visible and invisible.",
+      "format": "html",
+      "mediaType": "text/html",
+      "title": "Interactive_MEQ_locations.html"
+    },
+    {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://gdr.openei.org/files/1214/3D_seismic_P-wave_velocity_model.mp4",
+      "description": "This file is an animation shows slices of the 3D P-wave velocity model.",
+      "format": "mp4",
+      "mediaType": "application/octet-stream",
+      "title": "3D_seismic_P-wave_velocity_model.mp4"
+    },
+    {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://gdr.openei.org/files/1214/3D_seismic_S-wave_velocity_model.mp4",
+      "description": "This file is an animation shows slices of the 3D S-wave velocity model.",
+      "format": "mp4",
+      "mediaType": "application/octet-stream",
+      "title": "3D_seismic_S-wave_velocity_model.mp4"
+    },
+    {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2020/Chai.pdf",
+      "description": "Paper published at the 45th Workshop on Geothermal Reservoir Engineering titled \"Automatic Seismic Phase Picking Using Deep Learning for the EGS Collab project\"",
+      "format": "pdf",
+      "mediaType": "application/pdf",
+      "title": "Associated Stanford Paper - Chai et al"
+    },
+    {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://doi.org/10.1029/2020GL088651",
+      "description": "Associated paper published in the Geophysical Research Letters titled \"Using a Deep Neural Network and Transfer Learning to Bridge Scales for Seismic Phase Picking\"",
+      "format": "HTML",
+      "mediaType": "text/html",
+      "title": "Associated AGU Paper - Chai et al"
+    }
+  ],
+  "identifier": "https://data.openei.org/submissions/8349",
+  "issued": "2020-04-20T06:00:00Z",
+  "keyword": [
+    "geothermal",
+    "energy",
+    "EGS Collab",
+    "3D seismic structure",
+    "transfer learning",
+    "deep learning",
+    "machine learning",
+    "interactive",
+    "SURF",
+    "P-wave",
+    "S-wave",
+    "microseismic catalog",
+    "seismic tomography",
+    "interactive visualization",
+    "geophysics",
+    "modeling",
+    "velocity",
+    "model",
+    "microseismicity",
+    "catalog",
+    "transfer-learning",
+    "double-difference tomography",
+    "3D",
+    "seismic",
+    "MEQ",
+    "processed data",
+    "geospatial data"
+  ],
+  "landingPage": "https://gdr.openei.org/submissions/1214",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "modified": "2025-02-17T18:05:49Z",
+  "programCode": ["019:006"],
+  "projectLead": "Lauren Boyd",
+  "projectNumber": "EE0032708",
+  "projectTitle": "EGS Collab",
+  "publisher": {
+    "@type": "org:Organization",
+    "name": "Oak Ridge National Laboratory"
+  },
+  "spatial": "{\"type\":\"Polygon\",\"coordinates\":[[[-103.7577,44.3488],[-103.7465,44.3488],[-103.7465,44.3544],[-103.7577,44.3544],[-103.7577,44.3488]]]}",
+  "title": "EGS Collab Experiment 1: 3D Seismic Velocity Model and Updated Microseismic Catalog Using Transfer-Learning Aided Double-Difference Tomography"
+}
