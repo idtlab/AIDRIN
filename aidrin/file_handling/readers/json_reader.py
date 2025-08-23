@@ -38,8 +38,10 @@ class jsonReader(BaseFileReader):
             data = json.load(f)
             # only parse hierarchical data
             if isinstance(data, dict):
-                self.logger.info("Keys found: %s", data.keys())
-                return list(data.keys())
+                # Ensure all keys are strings to avoid "unhashable type" errors
+                keys = [str(k) for k in data.keys()]
+                self.logger.info("Keys found: %s", keys)
+                return keys
 
     def filter(self, kept_keys):
         with open(self.file_path) as f:
@@ -47,6 +49,8 @@ class jsonReader(BaseFileReader):
         # fix str passing
         if isinstance(kept_keys, str):
             kept_keys = kept_keys.split(",")
+        # Ensure all keys are strings to avoid "unhashable type" errors
+        kept_keys = [str(k) for k in kept_keys]
         # Only keep keys the user selected
         filtered_data = {k: data[k] for k in kept_keys if k in data}
 

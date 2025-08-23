@@ -61,6 +61,26 @@ Relevance" %} {% set page_route = "featureRelevance" %} {% block metricContent
         ><br />
       </li>
     </ul>
+
+    <div style="margin-top: 20px; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+      <strong>Note:</strong> Please select at least one categorical or numerical feature for analysis.
+      The target feature should be different from the selected features.
+    </div>
   </div>
 </div>
+
+<script>
+// Add form validation before submission
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.querySelector('form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      if (!window.validateFeatureRelevanceForm()) {
+        e.preventDefault();
+        return false;
+      }
+    });
+  }
+});
+</script>
 {% endblock %}

@@ -465,6 +465,7 @@ $(document).ready(function () {
   function createCheckboxContainer(features, tableId, nameTag) {
     var table = $("#" + tableId);
     table.empty(); // Clear previous content
+
     var columns = 4; // Maximum number of columns
     for (var i = 0; i < features.length && features[0] != "{"; i++) {
       if (i % columns === 0) {
@@ -641,6 +642,8 @@ function updateCrossDisable() {
       !multipleAttributeEnabled || isSelectedAsSensitive
     );
   });
+
+
 }
 $(document).ready(function () {
   // Trigger when main metric checkboxes change
@@ -716,4 +719,20 @@ function updateMetricCheckboxState(metricCheckboxName) {
   if (metricCheckbox) {
     toggleValue(metricCheckbox);
   }
+}
+
+
+
+// Individual checkbox toggle for metric checkboxes
+function toggleValueIndividual(checkbox) {
+  // Toggle the value based on the checked state
+  if (checkbox.checked) {
+    const label = checkbox.closest("label");
+    const text = label.textContent.trim();
+    checkbox.value = text;
+  } else {
+    checkbox.value = "no";
+  }
+
+  console.log("Checkbox value:", checkbox.value); // For debugging
 }

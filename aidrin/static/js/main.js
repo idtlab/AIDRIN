@@ -327,14 +327,42 @@ function submitForm() {
     })
     .then((data) => {
       if (data.trigger === "correlationError") {
-        openErrorPopup(
-          "Invalid Request",
-          "Input Feature and Target Feature cannot be the same"
-        ); // call error popup
+        if (data.error) {
+          openErrorPopup("Feature Relevance Error", data.error);
+        } else {
+          openErrorPopup(
+            "Invalid Request",
+            "Input Feature and Target Feature cannot be the same"
+          );
+        }
       }
-      if (data.error) {
-        openErrorPopup("", data.error); // call error popup
+
+      // Add validation for feature relevance form
+      if (data.trigger === "validationError") {
+        openErrorPopup("Validation Error", data.error || "Please check your input and try again.");
       }
+
+      // Function to validate feature relevance form
+      function validateFeatureRelevanceForm() {
+        const catFeatures = document.querySelectorAll('input[name="categorical features for feature relevancy"]:checked');
+        const numFeatures = document.querySelectorAll('input[name="numerical features for feature relevancy"]:checked');
+        const targetFeature = document.querySelector('select[name="target for feature relevance"]').value;
+
+        if (catFeatures.length === 0 && numFeatures.length === 0) {
+          openErrorPopup("Validation Error", "Please select at least one categorical or numerical feature for analysis.");
+          return false;
+        }
+
+        if (!targetFeature) {
+          openErrorPopup("Validation Error", "Please select a target feature for analysis.");
+          return false;
+        }
+
+        return true;
+      }
+
+      // Make the validation function globally available
+      window.validateFeatureRelevanceForm = validateFeatureRelevanceForm;
       console.log("Server Response:", data);
       var resultContainer = document.getElementById("resultContainer");
       resp_data = data;
@@ -2514,23 +2542,7 @@ function toggleValueIndividual(checkbox) {
   } else {
     checkbox.value = "no";
   }
-  updateSelectAllState();
   console.log("Checkbox value:", checkbox.value); // For debugging
-}
-function updateSelectAllState() {
-  const checkboxes = document.querySelectorAll(".checkbox.individual");
-  const selectAll = document.getElementById("selectAllCheckbox");
-
-  const total = checkboxes.length;
-  const checked = Array.from(checkboxes).filter((cb) => cb.checked).length;
-
-  if (checked === 0) {
-    selectAll.checked = false;
-  } else if (checked === total) {
-    selectAll.checked = true;
-  } else {
-    selectAll.checked = false;
-  }
 }
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function () {
