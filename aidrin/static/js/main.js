@@ -2533,6 +2533,14 @@ function toggleValue(checkbox) {
     checkbox.value = "no";
   }
   console.log("Checkbox value:", checkbox.value); // For debugging
+
+  // If this is the class imbalance checkbox, update cross-disabling
+  if (checkbox.name === "class imbalance") {
+    console.log("Class imbalance checkbox toggled, updating cross-disabling");
+    if (typeof updateCrossDisable === 'function') {
+      updateCrossDisable();
+    }
+  }
 }
 function toggleValueIndividual(checkbox) {
   // Toggle the value based on the checked state

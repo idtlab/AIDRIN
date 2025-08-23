@@ -24,16 +24,23 @@ class hdf5Reader(BaseFileReader):
 
             def convert_numpy_types(obj):
                 """Recursively convert numpy types to Python native types"""
-                if hasattr(obj, 'item'):  # numpy scalar
-                    return obj.item()
-                elif isinstance(obj, (list, tuple)):
-                    return [convert_numpy_types(item) for item in obj]
-                elif isinstance(obj, dict):
-                    return {str(k): convert_numpy_types(v) for k, v in obj.items()}
-                elif hasattr(obj, 'dtype'):  # numpy array
-                    return obj.tolist()
-                else:
-                    return obj
+                try:
+                    if hasattr(obj, 'item'):  # numpy scalar
+                        return obj.item()
+                    elif isinstance(obj, (list, tuple)):
+                        return [convert_numpy_types(item) for item in obj]
+                    elif isinstance(obj, dict):
+                        return {str(k): convert_numpy_types(v) for k, v in obj.items()}
+                    elif hasattr(obj, 'dtype'):  # numpy array
+                        if obj.size == 1:  # Single element array
+                            return obj.item()
+                        else:  # Multi-element array
+                            return obj.tolist()
+                    else:
+                        return obj
+                except Exception as e:
+                    self.logger.warning(f"Error converting numpy type: {e}")
+                    return str(obj)  # Fallback to string representation
 
             def recurse(name, obj, path=[]):
                 try:
@@ -53,7 +60,22 @@ class hdf5Reader(BaseFileReader):
                                     rows.append(row_dict)
                                 except Exception as e:
                                     self.logger.warning(f"Error processing row: {e}")
-                                    continue
+                                    # Try to process the row with basic conversion
+                                    try:
+                                        basic_row = {}
+                                        for col in row.index:
+                                            try:
+                                                value = row[col]
+                                                if hasattr(value, 'item'):
+                                                    basic_row[str(col)] = value.item()
+                                                else:
+                                                    basic_row[str(col)] = str(value)
+                                            except:
+                                                basic_row[str(col)] = str(value)
+                                        rows.append(basic_row)
+                                    except Exception as e2:
+                                        self.logger.warning(f"Failed to process row even with basic conversion: {e2}")
+                                        continue
                         else:
                             # Scalar or flat dataset - ensure data is hashable
                             try:
@@ -63,8 +85,17 @@ class hdf5Reader(BaseFileReader):
                                 rows.append(row_dict)
                             except Exception as e:
                                 self.logger.warning(f"Error processing scalar data: {e}")
-                                # Skip this data point
-                                pass
+                                # Try basic conversion
+                                try:
+                                    if hasattr(data, 'item'):
+                                        row_dict = {"value": data.item()}
+                                    else:
+                                        row_dict = {"value": str(data)}
+                                    rows.append(row_dict)
+                                except Exception as e2:
+                                    self.logger.warning(f"Failed to process scalar data even with basic conversion: {e2}")
+                                    # Skip this data point
+                                    pass
                 except Exception as e:
                     self.logger.warning(f"Error in recurse function: {e}")
                     return
@@ -81,6 +112,11 @@ class hdf5Reader(BaseFileReader):
             # Ensure all column names are strings to avoid numpy array issues
             if hasattr(df, 'columns') and len(df.columns) > 0:
                 df.columns = [str(col) for col in df.columns]
+
+            # Check if DataFrame is empty and log warning
+            if df.empty:
+                self.logger.warning("No data was successfully processed from HDF5 file")
+                return None
 
             return df
         except Exception as e:
@@ -119,13 +155,13 @@ class hdf5Reader(BaseFileReader):
         if isinstance(kept_keys, str):
             kept_keys = kept_keys.split(",")
         # Ensure all keys are strings and hashable to avoid "unhashable type" errors
-        kept_keys = set()
+        filtered_keys = set()
         for g in kept_keys:
             try:
                 # Convert to string and ensure it's hashable
                 key_str = str(g).strip("/")
                 # Test if it's hashable by trying to add to set
-                kept_keys.add(key_str)
+                filtered_keys.add(key_str)
             except (TypeError, ValueError) as e:
                 # If conversion fails, skip this key and log the error
                 self.logger.warning(f"Skipping unhashable key {g}: {e}")
@@ -144,13 +180,13 @@ class hdf5Reader(BaseFileReader):
                 for name, obj in src_group.items():
                     full_path = f"{path}/{name}".strip("/")
                     if isinstance(obj, h5py.Group):
-                        if full_path in kept_keys:
+                        if full_path in filtered_keys:
                             tgt_subgroup = tgt_group.create_group(name)
                             copy_group(full_path, obj, tgt_subgroup)
                         else:
                             copy_group(full_path, obj, tgt_group)
                     elif isinstance(obj, h5py.Dataset):
-                        if path.strip("/") in kept_keys:
+                        if path.strip("/") in filtered_keys:
                             tgt_group.create_dataset(name, data=obj[()])
 
             copy_group("", src, tgt)
