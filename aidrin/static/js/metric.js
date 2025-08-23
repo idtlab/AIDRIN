@@ -481,7 +481,7 @@ $(document).ready(function () {
         id: tableId + "checkbox_" + i, // Generate unique ids so all buttons work
         name: nameTag, // Set the name attribute
         value: features[i],
-        disabled: true,
+        // Remove disabled: true - individual checkboxes should be selectable
       });
 
       var span = $("<span>").addClass("checkmark");
@@ -600,6 +600,7 @@ function updateCrossDisable() {
 
   // Update QI checkboxes - only disable if selected as sensitive in the SAME metric
   // AND ensure they're disabled if the main metric checkbox is not checked
+  // EXCLUDE feature relevance checkboxes from this logic
   $('input[name="quasi identifiers for k-anonymity"]').each(function () {
     const val = $(this).val();
     $(this).prop("disabled", !kAnonymityEnabled);
@@ -643,15 +644,31 @@ function updateCrossDisable() {
     );
   });
 
+  // IMPORTANT: Feature relevance checkboxes should NEVER be disabled
+  // They are independent of metric selection and should always be selectable
+  $('input[name="categorical features for feature relevancy"], input[name="numerical features for feature relevancy"]').each(function () {
+    $(this).prop("disabled", false);
+  });
+}
 
+// Function to ensure feature relevance checkboxes are always enabled
+function ensureFeatureRelevanceCheckboxesEnabled() {
+  $('input[name="categorical features for feature relevancy"], input[name="numerical features for feature relevancy"]').each(function () {
+    $(this).prop("disabled", false);
+  });
 }
 $(document).ready(function () {
+  // Ensure feature relevance checkboxes are always enabled
+  ensureFeatureRelevanceCheckboxesEnabled();
+
   // Trigger when main metric checkboxes change
   $(document).on(
     "change",
     'input[name="k-anonymity"], input[name="l-diversity"], input[name="t-closeness"], input[name="entropy risk"], input[name="single attribute risk score"], input[name="multiple attribute risk score"]',
     function () {
       updateCrossDisable();
+      // Re-ensure feature relevance checkboxes are enabled after any metric changes
+      ensureFeatureRelevanceCheckboxesEnabled();
     }
   );
 

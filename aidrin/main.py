@@ -7,7 +7,6 @@ import io
 import base64
 
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import redis
@@ -315,7 +314,6 @@ def upload_file():
 
     if uploaded_file_path and file_type in ['.h5', '.json', '.npz']:
         try:
-            file_info = (uploaded_file_path, uploaded_file_name, file_type)
             # Get the reader object to access parse method
             from aidrin.file_handling.file_parser import READER_MAP
             if file_type in READER_MAP:
@@ -603,8 +601,6 @@ def correlationAnalysis():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
-    file = read_file(file_info)
 
     if request.method == "POST":
         metric_time_log.info("Correlation Analysis Request Started")
@@ -655,8 +651,6 @@ def featureRelevance():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
-    file = read_file(file_info)
 
     if request.method == 'POST':
         start_time = time.time()
@@ -670,10 +664,6 @@ def featureRelevance():
             # Clean each list by removing empty strings and whitespace-only entries
             cat_cols = [col.strip() for col in raw_cat_cols.split(",") if col.strip()]
             num_cols = [col.strip() for col in raw_num_cols.split(",") if col.strip()]
-
-            print(cat_cols)
-            print(num_cols)
-
             target = request.form.get("target for feature relevance")
 
             try:
@@ -780,7 +770,7 @@ def classImbalance():
 
             # Generate cache key for class imbalance
             cache_key = generate_metric_cache_key(
-                uploaded_file_name,
+                file_name,
                 "classimbalance",
                 classes=classes,
                 dist_metric=dist_metric

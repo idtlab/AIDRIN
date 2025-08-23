@@ -175,7 +175,9 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
 
         # Validate that at least some features are selected
         if not cat_cols and not num_cols:
-            return {"Error": "No features selected for analysis. Please select at least one categorical or numerical feature from the checkboxes above."}
+            return {
+                "Error": "No features selected for analysis. Please select at least one categorical or numerical feature from the checkboxes above."
+            }
 
         df_filtered = df[selected_columns].copy()
         print(f"Filtered DataFrame shape: {df_filtered.shape}")
@@ -406,9 +408,11 @@ def plot_features(self: Task, correlations, target_col):
         if len(clean_features) <= 20:
             for i, (bar, val) in enumerate(zip(bars, clean_corr_values)):
                 height = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{val:.3f}',
-                        ha='center', va='bottom' if height >= 0 else 'top')
+                plt.text(
+                    bar.get_x() + bar.get_width()/2., height,
+                    f'{val:.3f}',
+                    ha='center', va='bottom' if height >= 0 else 'top'
+                )
 
         plt.tight_layout()
 

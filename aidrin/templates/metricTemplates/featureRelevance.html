@@ -81,6 +81,18 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
+  // Ensure feature relevance checkboxes are always enabled
+  if (typeof ensureFeatureRelevanceCheckboxesEnabled === 'function') {
+    ensureFeatureRelevanceCheckboxesEnabled();
+  }
+
+  // Also ensure they're enabled after a short delay to handle dynamic content
+  setTimeout(function() {
+    if (typeof ensureFeatureRelevanceCheckboxesEnabled === 'function') {
+      ensureFeatureRelevanceCheckboxesEnabled();
+    }
+  }, 1000);
 });
 </script>
 {% endblock %}

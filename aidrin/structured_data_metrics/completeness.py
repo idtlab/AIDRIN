@@ -20,7 +20,7 @@ def completeness(self: Task, file_info):
         # Calculate completeness metric for each column
         try:
             completeness_scores = (1 - file.isnull().mean()).to_dict()
-        except Exception as e:
+        except Exception:
             # If to_dict() fails, manually create the dictionary
             completeness_scores = {}
             for col in file.columns:

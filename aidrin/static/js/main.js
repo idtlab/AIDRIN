@@ -2514,17 +2514,18 @@ function toggleValue(checkbox) {
   // Find all select dropdowns within that container
   const dropdowns = container.querySelectorAll("select");
   const inputs = container.querySelectorAll("input.textWrapper");
-  const checkboxes = container.querySelectorAll("input.checkbox.individual");
-  // Enable or disable all dropdowns inside the container based on checkbox state
+
+  // Enable or disable dropdowns and text inputs based on checkbox state
   dropdowns.forEach((dropdown) => {
     dropdown.disabled = !checkbox.checked;
   });
   inputs.forEach((input) => {
     input.disabled = !checkbox.checked;
   });
-  checkboxes.forEach((input) => {
-    input.disabled = !checkbox.checked;
-  });
+
+  // IMPORTANT: Don't disable individual feature checkboxes - they should remain selectable
+  // The individual checkboxes are for selecting features, not for enabling/disabling the metric
+
   // Toggle the value based on the checked state
   if (checkbox.checked) {
     checkbox.value = "yes";
