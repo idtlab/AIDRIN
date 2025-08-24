@@ -292,6 +292,38 @@
             }
             console.log("Checkbox value:", cb.value); // For debugging
         });
+        updateSelectAllState();
+    }
+
+    // Update Select All state based on individual checkbox states
+    function updateSelectAllState() {
+        const checkboxes = document.querySelectorAll('.checkbox.individual');
+        const selectAll = document.getElementById('selectAllCheckbox');
+
+        const total = checkboxes.length;
+        const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+
+        if (checked === 0) {
+            selectAll.checked = false;
+        } else if (checked === total) {
+            selectAll.checked = true;
+        } else {
+            selectAll.checked = false;
+        }
+    }
+
+    // Individual checkbox toggle for upload preview
+    function toggleValueIndividual(checkbox) {
+        // Toggle the value based on the checked state
+        if (checkbox.checked) {
+            const label = checkbox.closest("label");
+            const text = label.textContent.trim();
+            checkbox.value = text;
+        } else {
+            checkbox.value = "no";
+        }
+        updateSelectAllState();
+        console.log("Checkbox value:", checkbox.value); // For debugging
     }
 
     function modifyFile(){

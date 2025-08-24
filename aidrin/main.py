@@ -7,7 +7,6 @@ import io
 import base64
 
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import redis
@@ -26,7 +25,7 @@ from flask import (
 )
 from aidrin.file_handling.file_parser import (
     SUPPORTED_FILE_TYPES,
-    read_file as read_file_parser,
+    read_file,
 )
 from aidrin.logging import setup_logging
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -309,14 +308,44 @@ def upload_file():
 
     file_upload_time_log.info("File Uploaded. Type: %s", file_type)
 
+    # Generate hierarchical data preview for supported file types
+    file_preview = None
+    current_checked_keys = None
+
+    if uploaded_file_path and file_type in ['.h5', '.json', '.npz']:
+        try:
+            # Get the reader object to access parse method
+            from aidrin.file_handling.file_parser import READER_MAP
+            if file_type in READER_MAP:
+                reader = READER_MAP[file_type](uploaded_file_path, file_upload_time_log)
+                try:
+                    file_preview = reader.parse()
+                    # Ensure file_preview is a list of strings
+                    if file_preview and isinstance(file_preview, list):
+                        file_preview = [str(key) for key in file_preview if key is not None]
+                except Exception as parse_error:
+                    print(f"Error parsing file: {parse_error}")
+                    file_preview = []
+
+                # Get previously selected keys from session
+                current_checked_keys = session.get('selected_keys', [])
+                if isinstance(current_checked_keys, str):
+                    current_checked_keys = current_checked_keys.split(',') if current_checked_keys else []
+                elif not isinstance(current_checked_keys, list):
+                    current_checked_keys = []
+        except Exception as e:
+            print(f"Error generating file preview: {e}")
+            file_preview = None
+            current_checked_keys = None
+
     return render_template(
         'upload_file.html',
         uploaded_file_path=uploaded_file_path or '',
         uploaded_file_name=uploaded_file_name or '',
         file_type=file_type or '',
         supported_file_types=SUPPORTED_FILE_TYPES,
-        file_preview=None,
-        current_checked_keys=None
+        file_preview=file_preview,
+        current_checked_keys=current_checked_keys
     )
 
 
@@ -357,6 +386,35 @@ def clear_file():
         file_upload_time_log.info("File Clear Failure: Unable to clear folder")
         return jsonify({"success": False, "error": str(e)}), 500
     return redirect(url_for("upload_file"))
+
+
+@main.route('/filter_file', methods=['POST'])
+def filter_file():
+    """Handle file filtering for hierarchical data (HDF5, JSON, etc.)"""
+    try:
+        data = request.get_json()
+        keys = data.get('keys', '')
+
+        if not keys:
+            return jsonify({"success": False, "error": "No keys provided"}), 400
+
+        # Ensure keys are strings and hashable before storing in session
+        if isinstance(keys, str):
+            # Split by comma and clean up
+            keys_list = [key.strip() for key in keys.split(',') if key.strip()]
+        elif isinstance(keys, list):
+            keys_list = [str(key) for key in keys if key]
+        else:
+            keys_list = [str(keys)]
+
+        # Store the selected keys in session
+        session['selected_keys'] = keys_list
+        session['minimize_preview'] = True
+
+        return jsonify({"success": True, "message": "File filtered successfully"})
+    except Exception as e:
+        print(f"Error in filter_file: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # Metric Page Routes
@@ -438,7 +496,11 @@ def fairness():
 
     final_dict = {}
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = (file_path, file_name, file_type)
+    file = read_file(file_info)
 
     if request.method == 'POST':
         start_time = time.time()
@@ -451,7 +513,7 @@ def fairness():
             rep_dict = {}
             list_of_cols = [item.strip() for item in request.form.get('features for representation rate').split(', ')]
             # Create file_info tuple for the representation rate functions
-            file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+            file_info = (file_path, file_name, file_type)
             rep_dict['Probability ratios'] = calculate_representation_rate(list_of_cols, file_info)
             rep_dict['Representation Rate Visualization'] = create_representation_rate_vis(list_of_cols, file_info)
             rep_dict['Description'] = (
@@ -472,7 +534,7 @@ def fairness():
 
                 print("Inputs:", y_true, sensitive_attribute_column)
                 # Create file_info tuple for the calculate_statistical_rates function
-                file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+                file_info = (file_path, file_name, file_type)
                 sr_dict = calculate_statistical_rates(y_true, sensitive_attribute_column, file_info)
 
                 sr_dict["Description"] = (
@@ -528,7 +590,7 @@ def fairness():
 
         return store_result('fairness', final_dict)
 
-    return get_result_or_default('fairness', uploaded_file_path, uploaded_file_name)
+    return get_result_or_default('fairness', file_path, file_name)
 
 
 @main.route('/correlationAnalysis', methods=['GET', 'POST'])
@@ -536,7 +598,9 @@ def correlationAnalysis():
 
     final_dict = {}
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
 
     if request.method == "POST":
         metric_time_log.info("Correlation Analysis Request Started")
@@ -549,7 +613,7 @@ def correlationAnalysis():
                 start_time_correlations = time.time()
                 columns = request.form.getlist("all features for data transformation")
                 # Create file_info tuple for the calc_correlations function
-                file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+                file_info = (file_path, file_name, file_type)
                 correlations_result = calc_correlations.delay(columns, file_info)
                 corr_dict = correlations_result.get()
                 # catch potential errors
@@ -576,7 +640,7 @@ def correlationAnalysis():
 
         return store_result('correlationAnalysis', final_dict)
 
-    return get_result_or_default('correlationAnalysis', uploaded_file_path, uploaded_file_name)
+    return get_result_or_default('correlationAnalysis', file_path, file_name)
 
 
 @main.route('/featureRelevance', methods=['GET', 'POST'])
@@ -584,11 +648,9 @@ def featureRelevance():
 
     final_dict = {}
 
-    read_result = read_file()
-    # Check if read_file returned a redirect response (error case)
-    if hasattr(read_result, 'status_code'):  # It's a Response object
-        return read_result
-    file, uploaded_file_path, uploaded_file_name = read_result
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
 
     if request.method == 'POST':
         start_time = time.time()
@@ -602,10 +664,6 @@ def featureRelevance():
             # Clean each list by removing empty strings and whitespace-only entries
             cat_cols = [col.strip() for col in raw_cat_cols.split(",") if col.strip()]
             num_cols = [col.strip() for col in raw_num_cols.split(",") if col.strip()]
-
-            print(cat_cols)
-            print(num_cols)
-
             target = request.form.get("target for feature relevance")
 
             try:
@@ -614,24 +672,55 @@ def featureRelevance():
                     print("Error: Target is same as feature")
                     return jsonify({"trigger": "correlationError"}), 200
                 # Create file_info tuple for the data_cleaning function
-                file_info = (uploaded_file_path, uploaded_file_name, session.get('uploaded_file_type'))
+                file_info = (file_path, file_name, file_type)
                 data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
                 df_json = data_cleaning_result.get()  # json serialized
+
+                # Check if data_cleaning returned an error
+                if isinstance(df_json, dict) and "Error" in df_json:
+                    print("Data cleaning failed:", df_json["Error"])
+                    return jsonify({"trigger": "correlationError", "error": df_json["Error"]}), 200
+
+                if df_json is None:
+                    print("Data cleaning returned None")
+                    return jsonify({"trigger": "correlationError", "error": "Data cleaning failed"}), 200
+
                 print("Data cleaning returned df with shape:", (pd.DataFrame.from_dict(df_json).shape if df_json is not None else "None"))
             except Exception as e:
                 print("Error occurred during data cleaning:", e)
-                df_json = None
+                return jsonify({"trigger": "correlationError", "error": str(e)}), 200
 
             # Generate Pearson correlation
-            pearson_corr_result = pearson_correlation.delay(df_json, target)
-            correlations = pearson_corr_result.get()
-            # don't let the user check the same target and feature
-            if correlations is None or len(correlations) == 0:
-                print("Error: Correlations is None or empty")
-                return jsonify({"trigger": "correlationError"}), 200
+            try:
+                pearson_corr_result = pearson_correlation.delay(df_json, target)
+                correlations = pearson_corr_result.get()
 
-            plot_features_result = plot_features.delay(correlations, target)
-            f_plot = plot_features_result.get()
+                # Check if pearson_correlation returned an error
+                if isinstance(correlations, dict) and "Error" in correlations:
+                    print("Pearson correlation failed:", correlations["Error"])
+                    return jsonify({"trigger": "correlationError", "error": correlations["Error"]}), 200
+
+                # don't let the user check the same target and feature
+                if correlations is None or len(correlations) == 0:
+                    print("Error: Correlations is None or empty")
+                    return jsonify({"trigger": "correlationError", "error": "No valid correlations could be calculated"}), 200
+            except Exception as e:
+                print("Error occurred during pearson correlation:", e)
+                return jsonify({"trigger": "correlationError", "error": str(e)}), 200
+
+            # Generate visualization
+            try:
+                plot_features_result = plot_features.delay(correlations, target)
+                f_plot = plot_features_result.get()
+
+                if f_plot is None:
+                    print("Error: Plot generation failed")
+                    return jsonify({"trigger": "correlationError", "error": "Visualization generation failed"}), 200
+
+            except Exception as e:
+                print("Error occurred during plot generation:", e)
+                return jsonify({"trigger": "correlationError", "error": f"Plot generation failed: {str(e)}"}), 200
+
             f_dict = {}
 
             f_dict['Pearson Correlation to Target'] = correlations
@@ -652,7 +741,7 @@ def featureRelevance():
 
         return store_result('featureRelevance', final_dict)
 
-    return get_result_or_default('featureRelevance', uploaded_file_path, uploaded_file_name)
+    return get_result_or_default('featureRelevance', file_path, file_name)
 
 
 @main.route('/classImbalance', methods=['GET', 'POST'])
@@ -660,7 +749,11 @@ def classImbalance():
 
     final_dict = {}
 
-    file, uploaded_file_path, uploaded_file_name = read_file()
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = (file_path, file_name, file_type)
+    file = read_file(file_info)
 
     if request.method == 'POST':
         start_time = time.time()
@@ -677,7 +770,7 @@ def classImbalance():
 
             # Generate cache key for class imbalance
             cache_key = generate_metric_cache_key(
-                uploaded_file_name,
+                file_name,
                 "classimbalance",
                 classes=classes,
                 dist_metric=dist_metric
@@ -790,7 +883,7 @@ def classImbalance():
 
         return store_result('classImbalance', final_dict)
 
-    return get_result_or_default('classImbalance', uploaded_file_path, uploaded_file_name)
+    return get_result_or_default('classImbalance', file_path, file_name)
 
 
 @main.route('/privacyPreservation', methods=['GET', 'POST'])
@@ -801,7 +894,7 @@ def privacyPreservation():
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
     file_info = (file_path, file_name, file_type)
-    file = read_file_parser(file_info)
+    file = read_file(file_info)
 
     if request.method == "POST":
         start_time = time.time()
@@ -2013,7 +2106,11 @@ def handle_summary_statistics():
 @main.route('/summary_statistics', methods=['GET'])
 def get_summary_statistics():
     try:
-        df, uploaded_file_path, uploaded_file_name = read_file()
+        file_path = session.get("uploaded_file_path")
+        file_name = session.get("uploaded_file_name")
+        file_type = session.get("uploaded_file_type")
+        file_info = (file_path, file_name, file_type)
+        df = read_file(file_info)
         # Extract summary statistics
         summary_statistics = df.describe().applymap(
             lambda x: f"{x:.2e}" if abs(x) < 0.001 else round(x, 2)
@@ -2118,13 +2215,11 @@ def check_task_status(task_id, metric_name):
 @main.route('/feature_set', methods=['POST'])
 def extract_features():
     try:
-        df, uploaded_file_path, uploaded_file_name = read_file()
-
         file_path = session.get("uploaded_file_path")
         file_name = session.get("uploaded_file_name")
         file_type = session.get("uploaded_file_type")
         file_info = (file_path, file_name, file_type)
-        df = read_file_parser(file_info)
+        df = read_file(file_info)
 
         # Separate numerical and categorical columns
         numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
@@ -2162,65 +2257,6 @@ def extract_features():
 
 
 # Functions
-
-def read_file():
-
-    uploaded_file_path = session.get('uploaded_file_path')
-    uploaded_file_name = session.get('uploaded_file_name')
-    uploaded_file_type = session.get('uploaded_file_type')
-
-    if not uploaded_file_path and uploaded_file_name:
-        return redirect(request.url)
-
-    # Check if the file actually exists
-    if uploaded_file_path and not os.path.exists(uploaded_file_path):
-        # File doesn't exist, clear the session and redirect
-        print(f"File not found: {uploaded_file_path}")
-        session.pop('uploaded_file_path', None)
-        session.pop('uploaded_file_name', None)
-        session.pop('uploaded_file_type', None)
-        return redirect(url_for('upload_file'))
-
-    # default result
-    readFile = None
-    try:
-        # csv
-        if uploaded_file_type == ('.csv'):
-            readFile = pd.read_csv(uploaded_file_path, index_col=False)
-        # npz
-        elif uploaded_file_type == ('.npz'):
-            npz_data = np.load(uploaded_file_path, allow_pickle=True)
-
-            data_dict = {}
-
-            for key in npz_data.files:
-                array = npz_data[key]
-
-                # Check dimensionality
-                if array.ndim == 1:
-                    data_dict[key] = array
-                else:
-                    # Flatten if it's a 2D array with only 1 column
-                    if array.ndim == 2 and array.shape[1] == 1:
-                        data_dict[key] = array.flatten()
-                    else:
-                        # Otherwise, store the whole array as a column of objects (fallback)
-                        data_dict[key] = [row for row in array]
-
-            # Now create the DataFrame safely
-            readFile = pd.DataFrame(data_dict)
-        # excel
-        elif uploaded_file_type == ('.xls, .xlsb, .xlsx, .xlsm'):
-            readFile = pd.read_excel(uploaded_file_path)
-    except Exception as e:
-        print(f"Error reading file {uploaded_file_path}: {e}")
-        # Clear session on error
-        session.pop('uploaded_file_path', None)
-        session.pop('uploaded_file_name', None)
-        session.pop('uploaded_file_type', None)
-        return redirect(url_for('upload_file'))
-
-    return readFile, uploaded_file_path, uploaded_file_name
 
 
 def manage_cache_size(max_cache_size=100):

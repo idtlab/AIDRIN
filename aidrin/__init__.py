@@ -19,8 +19,8 @@ def create_app():
         "broker_url": "redis://localhost:6379/0",  #
         "result_backend": "redis://localhost:6379/0",
         "task_ignore_result": False,  # Store task results in backend for status checking
-        "task_soft_time_limit": 90,  # Task is soft killed
-        "task_time_limit": 120,  # Task is force killed after this time
+        "task_soft_time_limit": 300,  # Task is soft killed
+        "task_time_limit": 360,  # Task is force killed after this time
         "worker_hijack_root_logger": False,  # prevent default celery logging configuration
         "result_expires": 600,  # Delete results from db after 10 min
     }
