@@ -18,7 +18,8 @@ dependencies = [
     "h5py",
     "celery",
     "redis",
-    "flower"
+    "flower",
+    "openpyxl"
 ]
 
 [tool.setuptools.dynamic]
