@@ -631,14 +631,18 @@ def correlationAnalysis():
                     "Correlations took %.2f seconds",
                     time.time() - start_time_correlations,
                 )
+
+                end_time = time.time()
+                execution_time = end_time - start_time
+                print(f"Execution time: {execution_time} seconds")
+
+                return store_result('correlationAnalysis', final_dict)
+            else:
+                # No metrics selected, return empty response
+                return jsonify({"message": "No correlation analysis selected"}), 200
         except Exception as e:
             metric_time_log.error(f"Error: {e}")
             return jsonify({"error": str(e)}), 200
-        end_time = time.time()
-        execution_time = end_time - start_time
-        print(f"Execution time: {execution_time} seconds")
-
-        return store_result('correlationAnalysis', final_dict)
 
     return get_result_or_default('correlationAnalysis', file_path, file_name)
 
@@ -739,7 +743,10 @@ def featureRelevance():
             execution_time = end_time - start_time
             print(f"Execution time: {execution_time} seconds")
 
-        return store_result('featureRelevance', final_dict)
+            return store_result('featureRelevance', final_dict)
+        else:
+            # No metrics selected, return empty response
+            return jsonify({"message": "No feature relevance analysis selected"}), 200
 
     return get_result_or_default('featureRelevance', file_path, file_name)
 
