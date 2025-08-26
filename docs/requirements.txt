@@ -1,0 +1,4 @@
+sphinx==6.2.1
+sphinx-rtd-theme==1.2.2
+sphinxemoji
+breathe

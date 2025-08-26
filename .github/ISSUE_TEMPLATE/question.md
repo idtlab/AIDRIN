@@ -1,10 +1,9 @@
 ---
 name: Question
 about: Ask a question about AIDRIN usage
-title: ''
-labels: 'type: question'
-assignees: ''
-
+title: ""
+labels: "type: question"
+assignees: ""
 ---
 
 **Usage Case**

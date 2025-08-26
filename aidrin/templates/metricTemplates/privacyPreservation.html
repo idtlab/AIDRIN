@@ -1,278 +1,323 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Privacy
+Preservation" %} {% set page_route = "privacyPreservation" %} {% block
+metricContent %}
+<div id="checkboxContainer_privacy" class="checkboxContainer">
+  <br />
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox" style="position: relative;">
+      <input
+        type="checkbox"
+        name="differential privacy"
+        onchange="toggleValue(this)"
+      />
+      <span class="checkmark"></span>
+      <span style="display: inline-flex; align-items: center; gap: 4px;">
+        <span>Differential privacy by adding laplacian noise:</span>
+        <span class="info-icon"
+          >i
+          <span class="info-text"
+            >Adds controlled noise to numerical features to protect individual
+            privacy while maintaining data utility.
+            <a
+              href="{{ url_for('privacy_metrics_docs') }}#differential-privacy"
+              target="_blank"
+              style="color: #4a90e2; font-style: italic;"
+              >See documentation</a
+            ></span
+          >
+        </span>
+      </span>
+    </label>
+    <ul class="metric-inputs" style="display: none;">
+      <li>
+        <label
+          for="numerical features to add noise"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Numerical features to add noise:</label
+        >
+        <div id="numFeaturesCheckbox2"></div>
+      </li>
 
-    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+      <li>
+        <label
+          for="privacy budget"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Privacy budget (default epsilon=0.1):</label
+        >
+        <input class="textWrapper" type="text" name="privacy budget" />
+      </li>
+    </ul>
+  </div>
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox" style="position: relative;">
+      <input
+        type="checkbox"
+        name="single attribute risk score"
+        onchange="toggleValue(this)"
+      />
+      <span class="checkmark"></span>
+      <span style="display: inline-flex; align-items: center; gap: 4px;">
+        <span>Evaluate single attribute risks:</span>
+        <span class="info-icon"
+          >i
+          <span class="info-text"
+            >Measures the risk of re-identification based on individual
+            attributes, helping identify which features might lead to privacy
+            breaches.
+            <a
+              href="{{ url_for('privacy_metrics_docs') }}#single-attribute-risk"
+              target="_blank"
+              style="color: #4a90e2; font-style: italic;"
+              >See documentation</a
+            ></span
+          >
+        </span>
+      </span>
+    </label>
+    <ul class="metric-inputs" style="display: none;">
+      <li>
+        <label
+          for="id feature to measure single attribute risk score"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >ID feature:
+        </label>
+        <select
+          name="id feature to measure single attribute risk score"
+          id="allFeaturesDropdownMMS"
+          required
+        >
+          <option value="" disabled selected>Select a feature</option> </select
+        ><br />
+      </li>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/metric.js') }}"></script>
-    
-    <script>
-        var retrieveFileUrl = "{{ url_for('retrieve_uploaded_file') }}";
-    </script>
-    
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <title>Privacy Preservation</title>
+      <li>
+        <label
+          for="quasi identifiers to measure single attribute risk score"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Quasi identifiers:
+        </label>
+        <div id="catFeaturesCheckbox2"></div>
+        <br />
+      </li>
+    </ul>
+  </div>
 
-</head>
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox" style="position: relative;">
+      <input
+        type="checkbox"
+        name="multiple attribute risk score"
+        onchange="toggleValue(this)"
+      />
+      <span class="checkmark"></span>
+      <span style="display: inline-flex; align-items: center; gap: 4px;">
+        <span>Evaluate multiple attribute risks:</span>
+        <span class="info-icon"
+          >i
+          <span class="info-text"
+            >Assesses the combined risk of re-identification when multiple
+            attributes are considered together, providing a more comprehensive
+            privacy risk assessment.
+            <a
+              href="{{ url_for('privacy_metrics_docs') }}#multiple-attribute-risk"
+              target="_blank"
+              style="color: #4a90e2; font-style: italic;"
+              >See documentation</a
+            ></span
+          >
+        </span>
+      </span>
+    </label>
 
-<body>
-    <!-- error handling popup -->
-    <div id="error-popup" class="error-popup">
-        <svg style="padding-top:5%" xmlns="http://www.w3.org/2000/svg" height="96px" viewBox="0 -960 960 960" width="96px" fill="currentColor"><path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>
-        <h2 id="error-type" style="margin-top:0">Error: Placeholder Type</h2>
-        <p id="error-message">Placeholder Error Details</p>
-        <br>
-        <button id="close-popup" onclick="closeErrorPopup()" style="width:30%;">Ok</button>
-    </div>
-    
-    <div class="top-left-container">
-       
-        <div id="navbar">
-            <a class="home" href="/">
-                <img style="max-width:48px; max-height:48px;" src="images/logoNoBackground.png" alt="Aidrin Logo">
-            </a>
-            <button id="theme-switch">
-                <svg xmlns="http://www.w3.org/2000/svg" height="48px" viewBox="0 -960 960 960" width="48px" fill="#5f6368">
-                    <path
-                        d="M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Z" />
-                </svg>
-                <svg xmlns="http://www.w3.org/2000/svg" height="3em" viewBox="0 -960 960 960" width="3em" fill="#5f6368">
-                    <path
-                        d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Z" />
-                </svg>
-            </button>
-        </div>
-    </div>
-    <h1>Privacy Preservation</h1>
-    <div id="metric-download-gui" class="metric-download-gui">
-        <div id="metric-download-gui-fileName" class="metric-download-gui-fileName">
-        {% if uploaded_file_path %}
-                    File: {{ uploaded_file_name }}
-                    {% else %}
-                    No File Uploaded
-                    {% endif %}
-        </div>
-        {% if uploaded_file_path %}
-                <!-- clear button: visible when file is uploaded, change form style to match-->
-                <button type="button" class="clear-button" style="border:none" onclick="clearFile()">Clear Submission</button>
-        {%else%}
-                <button type="button" class="redirect-upload-button" style="border:none" onclick="location.href='{{ url_for('upload_file') }}'">Upload a File</button>
-         {% endif %}
-    </div>
-    <div class="metric-page-container">
-    <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('privacyPreservation') }}">
-        <div id="checkboxContainer_privacy" class="checkboxContainer"><br> 
-            <div class="checkboxContainerIndividual">
-                <label class="material-checkbox">
-                    <input  type="checkbox" name="differential privacy" onchange="toggleValue(this)"> 
-                    <span class="checkmark"></span>
-                    Differential privacy by adding laplacian noise:<br>
-                </label>
-                <ul>
-                    <li  >
-                        <label for="numerical features to add noise" style="padding:10px; padding-left:15px; min-width:300px;">Numerical features to add noise:</label>
-                        <div id ="numFeaturesCheckbox2"></div>
-                    </li>
+    <ul class="metric-inputs" style="display: none;">
+      <li>
+        <label
+          for="id feature to measure multiple attribute risk score"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >ID feature</label
+        >
+        <select
+          name="id feature to measure multiple attribute risk score"
+          id="allFeaturesDropdownMMM"
+          required
+        >
+          <option value="" disabled selected>Select a feature</option> </select
+        ><br />
+      </li>
+      <li>
+        <label
+          for="quasi identifiers to measure multiple attribute risk score"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Quasi identifiers:
+        </label>
+        <div id="catFeaturesCheckbox3"></div>
+        <br />
+      </li>
+    </ul>
+  </div>
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox" style="position: relative;">
+      <input type="checkbox" name="entropy risk" onchange="toggleValue(this)" />
+      <span class="checkmark"></span>
+      <span style="display: inline-flex; align-items: center; gap: 4px;">
+        <span>Compute Entropy Risk:</span>
+        <span class="info-icon"
+          >i
+          <span class="info-text"
+            >Estimates privacy risk by calculating the entropy of equivalence
+            classes formed by selected quasi-identifiers. Used to assess the
+            likelihood of re-identifying individuals.
+            <a
+              href="{{ url_for('privacy_metrics_docs') }}#entropy-risk"
+              target="_blank"
+              style="color: #4a90e2; font-style: italic;"
+              >See documentation</a
+            ></span
+          >
+        </span>
+      </span>
+    </label>
+    <ul class="metric-inputs" style="display: none;">
+      <li>
+        <label
+          for="quasi identifiers for entropy risk"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Quasi-Identifiers:</label
+        >
+        <div id="entropyRiskQIsCheckbox"></div>
+      </li>
+    </ul>
+  </div>
 
-                    <li  >
-                        <label for="privacy budget" style="padding:10px; padding-left:15px; min-width:300px;">Privacy budget (default epsilon=0.1):</label>
-                        <input class="textWrapper" type="text" name="privacy budget">
-                    </li>
-                </ul>
-            </div>
-            <div class="checkboxContainerIndividual">
-                <label class="material-checkbox" style="position: relative;">
-                <input  type="checkbox" name="single attribute risk score" onchange="toggleValue(this)">
-                <span class="checkmark"></span>
-                <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <span>Evaluate single attribute risks:</span>
-                    <span class="info-icon">i
-                        <span class="info-text">Measures the risk of re-identification based on individual attributes, helping identify which features might lead to privacy breaches.</span>
-                    </span>
-                    
-                </span>
-                </label>
-                <ul>
-                    <li>
-                        <label for="id feature to measure single attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">ID feature: </label>
-                        <select name="id feature to measure single attribute risk score" id="allFeaturesDropdownMMS" required>
-                            <option value ="" disabled selected>Select a feature</option>
-                </select><br>
-                    </li>
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox" style="position: relative;">
+      <input type="checkbox" name="k-anonymity" onchange="toggleValue(this)" />
+      <span class="checkmark"></span>
 
-                    <li >
-                        <label  for="quasi identifiers to measure single attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
-                        <div id ="catFeaturesCheckbox2"></div><br>
-                    </li>
-                </ul>
-            </div>
-            
-            <div class="checkboxContainerIndividual">
-                <label class="material-checkbox" style="position: relative;">
-                <input type="checkbox" name="multiple attribute risk score" onchange="toggleValue(this)"> 
-                <span class="checkmark"></span>
-                <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <span>Evaluate multiple attribute risks:</span>
-                    <span class="info-icon">i
-                        <span class="info-text">Assesses the combined risk of re-identification when multiple attributes are considered together, providing a more comprehensive privacy risk assessment.</span>
-                    </span>
+      <span style="display: inline-flex; align-items: center; gap: 4px;">
+        <span>k-Anonymity:</span>
+        <span class="info-icon"
+          >i
+          <span class="info-text">
+            Ensures each individual is indistinguishable from at least
+            <i>k</i> others based on quasi-identifiers.
+            <a
+              href="{{ url_for('privacy_metrics_docs') }}#k-anonymity"
+              target="_blank"
+              style="color: #4a90e2; font-style: italic;"
+              >See documentation</a
+            ></span
+          >
+        </span>
+      </span>
+    </label>
 
-                </span>
-                </label>
-                
-                <ul>
-                    <li >
-                        <label for="id feature to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">ID feature</label>
-                        <select name="id feature to measure multiple attribute risk score" id="allFeaturesDropdownMMM" required>
-                            <option value ="" disabled selected>Select a feature</option>
-                        </select><br>
-                    </li>
+    <ul class="metric-inputs" style="display: none;">
+      <li>
+        <label
+          for="quasi identifiers for k-anonymity"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Quasi-Identifiers:</label
+        >
+        <div id="kAnonymityQIsCheckbox"></div>
+      </li>
+    </ul>
+  </div>
 
-                    <li >
-                        <label for="quasi identifiers to measure multiple attribute risk score" style="padding:10px; padding-left:15px; min-width:300px;">Quasi identifiers: </label>
-                        <div  id ="catFeaturesCheckbox3"></div><br>
-                    </li>
-                </ul>
-            </div>
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox" style="position: relative;">
+      <input type="checkbox" name="l-diversity" onchange="toggleValue(this)" />
+      <span class="checkmark"></span>
+      <span style="display: inline-flex; align-items: center; gap: 4px;">
+        <span>l-Diversity:</span>
+        <span class="info-icon"
+          >i
+          <span class="info-text">
+            Strengthens k-anonymity by requiring diverse sensitive values in
+            each equivalence class.
+            <a
+              href="{{ url_for('privacy_metrics_docs') }}#l-diversity"
+              target="_blank"
+              style="color: #4a90e2; font-style: italic;"
+              >See documentation</a
+            ></span
+          >
+        </span>
+      </span>
+    </label>
 
-            <div class="checkboxContainerIndividual">
-                <label class="material-checkbox" style="position: relative;">
-                <input type="checkbox" name="entropy risk" onchange="toggleValue(this)">
-                <span class="checkmark"></span>
-                <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <span>Compute Entropy Risk:</span>
-                    <span class="info-icon">i
-                        <span class="info-text">Estimates privacy risk by calculating the entropy of equivalence classes formed by selected quasi-identifiers. Used to assess the likelihood of re-identifying individuals.</span>
-                    </span>
-                    
-                </span>
-                </label>
-                <ul>
-                    <li>
-                        <label for="quasi identifiers for entropy risk" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
-                        <div id="entropyRiskQIsCheckbox"></div>
-                    </li>
-                </ul>
-            </div>
+    <ul class="metric-inputs" style="display: none;">
+      <li>
+        <label
+          for="quasi identifiers for l-diversity"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Quasi-Identifiers :</label
+        >
+        <div id="lDiversityQIsCheckbox"></div>
+      </li>
+      <li>
+        <label
+          for="sensitive attribute for l-diversity"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Sensitive Attribute:</label
+        >
+        <select
+          name="sensitive attribute for l-diversity"
+          id="lDiversitySensitiveDropdown"
+          required
+        >
+          <option value="" disabled selected>Select a feature</option>
+        </select>
+      </li>
+    </ul>
+  </div>
 
-            <div class="checkboxContainerIndividual">
-                <label class="material-checkbox" style="position: relative;">
-                <input type="checkbox" name="k-anonymity" onchange="toggleValue(this)">
-                <span class="checkmark"></span>
+  <div class="checkboxContainerIndividual">
+    <label class="material-checkbox" style="position: relative;">
+      <input type="checkbox" name="t-closeness" onchange="toggleValue(this)" />
+      <span class="checkmark"></span>
+      <span style="display: inline-flex; align-items: center; gap: 4px;">
+        <span>t-Closeness:</span>
+        <span class="info-icon"
+          >i
+          <span class="info-text"
+            >Requires the sensitive attribute distribution to be close to the
+            overall distribution.
+            <a
+              href="{{ url_for('privacy_metrics_docs') }}#t-closeness"
+              target="_blank"
+              style="color: #4a90e2; font-style: italic;"
+              >See documentation</a
+            ></span
+          >
+        </span>
+      </span>
+    </label>
 
-                <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <span>k-Anonymity:</span>
-                    <span class="info-icon">i
-                        <span class="info-text"> Ensures each individual is indistinguishable from at least <i>k</i> others based on quasi-identifiers.</span>
-                    </span>
-                    
-                </span>
-                </label>
-
-
-                <ul>
-                    <li>
-                        <label for="quasi identifiers for k-anonymity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
-                        <div id="kAnonymityQIsCheckbox"></div> 
-                        </li>
-                </ul>
-            </div>
-
-            <div class="checkboxContainerIndividual">
-                <label class="material-checkbox" style="position: relative;">
-                <input type="checkbox" name="l-diversity" onchange="toggleValue(this)">
-                <span class="checkmark"></span>
-                <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <span>l-Diversity:</span>
-                    <span class="info-icon">i
-                        <span class="info-text"> Strengthens k-anonymity by requiring diverse sensitive values in each equivalence class.</span>
-                    </span>
-                    
-                </span>
-                </label>
-
-
-                <ul>
-                    <li>
-                        <label for="quasi identifiers for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers :</label>
-                        <div id="lDiversityQIsCheckbox"></div>
-                        </li>
-                    <li>
-                        <label for="sensitive attribute for l-diversity" style="padding:10px; padding-left:15px; min-width:300px;">Sensitive Attribute:</label>
-                        <select name="sensitive attribute for l-diversity" id="lDiversitySensitiveDropdown" required>
-                            <option value="" disabled selected>Select a feature</option>
-                        </select>
-                    </li>
-                </ul>
-            </div>
-
-            <div class="checkboxContainerIndividual">
-                
-                <label class="material-checkbox" style="position: relative;">
-                <input type="checkbox" name="t-closeness" onchange="toggleValue(this)">
-                <span class="checkmark"></span>
-                <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <span>t-Closeness:</span>
-                    <span class="info-icon">i
-                        <span class="info-text">Requires the sensitive attribute distribution to be close to the overall distribution.</span>
-                    </span>
-                </span>
-                </label>
-
-
-
-
-
-                <ul>
-                    <li>
-                        <label for="quasi identifiers for t-closeness" style="padding:10px; padding-left:15px; min-width:300px;">Quasi-Identifiers:</label>
-                        <div id="tClosenessQIsCheckbox"></div>
-                        </li>
-                    <li>
-                        <label for="sensitive attribute for t-closeness" style="padding:10px; padding-left:15px; min-width:300px;">Sensitive Attribute:</label>
-                        <select name="sensitive attribute for t-closeness" id="tClosenessSensitiveDropdown" required>
-                            <option value="" disabled selected>Select a feature</option>
-                        </select>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </div>
-    <div id = "formbuttonsContainer">
-        <button class="animated-button" type="submit" onclick="submitForm();">
-            <span>Submit</span>
-            <span></span>
-            </button>
-        <button class="animated-button return" type="button" onclick="location.href='{{url_for('upload_file')}}'">
-            <span>Return</span>
-            <span></span>
-            </button>
-    </div>
-    </form>
-
-    <div id="resultContainer" style="display:none;"></div>
-    
-    <div id="summaryStatistics"></div>
-    <!-- Container for summary plots and statistics -->
-    <div style="display:flex;">
-        <div class="plot-container" id="histogramsContainer"></div>
-        <div class="plot-container" style="text-align:left" id="metrics">
-
-        <h2 style="text-align:center">Privacy Preservation Metrics</h2>
-        <p>No data available yet. Please submit a request.</p>
-        <div id="buttonsContainer" style="display:none;">
-            <button type="button" id="downloadBtn" onclick="downloadJSON()">Download JSON</button>
-        </div>
-            
-    </div> 
-
-
-
-
-</body>
-
-</html>
+    <ul class="metric-inputs" style="display: none;">
+      <li>
+        <label
+          for="quasi identifiers for t-closeness"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Quasi-Identifiers:</label
+        >
+        <div id="tClosenessQIsCheckbox"></div>
+      </li>
+      <li>
+        <label
+          for="sensitive attribute for t-closeness"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Sensitive Attribute:</label
+        >
+        <select
+          name="sensitive attribute for t-closeness"
+          id="tClosenessSensitiveDropdown"
+          required
+        >
+          <option value="" disabled selected>Select a feature</option>
+        </select>
+      </li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
