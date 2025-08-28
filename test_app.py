@@ -1,6 +1,6 @@
 import os
 import pytest
-from aidrin import create_app   # works if __all__ is set in aidrin/__init__.py
+from aidrin import create_app
 from aidrin._version import __version__
 
 
