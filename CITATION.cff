@@ -6,12 +6,12 @@ authors:
   - family-names: Hiniduma
     given-names: Kaveen
     affiliation: The Ohio State University
-    orcid: 'https://orcid.org/0009-0006-8516-0215'
+    orcid: "https://orcid.org/0009-0006-8516-0215"
   - family-names: Byna
     given-names: Suren
-    email: sbyna@lbl.gov    
+    email: sbyna@lbl.gov
     affiliation: The Ohio State University
-    orcid: 'https://orcid.org/0000-0003-3048-3448'
+    orcid: "https://orcid.org/0000-0003-3048-3448"
   - family-names: Ryan
     given-names: Dylan
     affiliation: The Ohio State University
@@ -19,11 +19,11 @@ authors:
     given-names: Jean Luca
     email: jlbez@lbl.gov
     affiliation: Lawrence Berkeley National Laboratory
-    orcid: 'https://orcid.org/0000-0002-3915-1135'
+    orcid: "https://orcid.org/0000-0002-3915-1135"
   - family-names: Madduri
     given-names: Ravi
     affiliation: Argonne National Laboratory
-    orcid: 'https://orcid.org/0000-0003-2130-2887'
+    orcid: "https://orcid.org/0000-0003-2130-2887"
 url: https://aidrin.io
 repository-code: https://github.com/idtlab/AIDRIN
 abstract: AIDRIN is a tool developed to assess the readiness of datasets for artificial intelligence applications. It helps users quickly evaluate the quality, structure, and completeness of their data to ensure it meets the foundational requirements for machine learning and other AI workflows.

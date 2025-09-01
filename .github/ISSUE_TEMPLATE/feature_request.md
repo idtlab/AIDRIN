@@ -1,10 +1,9 @@
 ---
 name: Feature Request
 about: Request a new feature in AIDRIN
-title: ''
-labels: 'type: new feature'
-assignees: ''
-
+title: ""
+labels: "type: new feature"
+assignees: ""
 ---
 
 **Is your feature request related to a problem? If so, please describe.**

@@ -17,6 +17,17 @@ def conditional_demographic_disparity(self: Task, target, sensitive, accepted_va
     pd.DataFrame: A DataFrame containing the demographic disparity results for each sensitive group.
     """
     try:
+        # Validate input data
+        if not target or not sensitive:
+            return {"Error": "Target and sensitive columns cannot be empty"}
+
+        if len(target) != len(sensitive):
+            return {"Error": "Target and sensitive columns must have the same length"}
+
+        # Check if accepted_value exists in target data
+        if accepted_value not in target:
+            return {"Error": f"Accepted value '{accepted_value}' not found in target column"}
+
         accepted_value = type(target[0])(
             accepted_value
         )  # cast accepted_value to the same type as target elements
@@ -34,11 +45,24 @@ def conditional_demographic_disparity(self: Task, target, sensitive, accepted_va
             df.groupby(["sensitive", "target_binary"]).size().unstack(fill_value=0)
         )
 
+        # Ensure both columns exist (0 and 1)
+        if 0 not in group_counts.columns:
+            group_counts[0] = 0
+        if 1 not in group_counts.columns:
+            group_counts[1] = 0
+
         # Calculate the total numbers of rejected and accepted outcomes
         total_rejected = group_counts[0].sum()
-        total_accepted = group_counts[
-            1
-        ].sum()  # if there are no accepted values, this column will not exist and an error will be raised
+        total_accepted = group_counts[1].sum()
+
+        # Check if we have both accepted and rejected values
+        if total_rejected == 0 and total_accepted == 0:
+            return {"Error": "No valid target values found in the data"}
+        if total_rejected == 0:
+            return {"Error": "No rejected values found in the target column"}
+        if total_accepted == 0:
+            return {"Error": "No accepted values found in the target column"}
+
         # Initialize a list to store results
         results = {}
 

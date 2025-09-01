@@ -13,6 +13,11 @@ from aidrin.file_handling.file_parser import read_file
 def outliers(self: Task, file_info):
     try:
         file = read_file(file_info)
+
+        # Ensure DataFrame columns are strings to avoid numpy array issues
+        if hasattr(file, 'columns'):
+            file.columns = [str(col) for col in file.columns]
+
         try:
             out_dict = {}
             # Select numerical columns for outlier detection
@@ -37,6 +42,9 @@ def outliers(self: Task, file_info):
 
             # Convert the proportions Series to a dictionary
             proportions_dict = proportions.to_dict()
+
+            # Ensure all column names are strings to avoid numpy array issues
+            proportions_dict = {str(k): v for k, v in proportions_dict.items()}
 
             # Calculate the average of dictionary values
             average_value = sum(proportions_dict.values()) / len(proportions_dict)
