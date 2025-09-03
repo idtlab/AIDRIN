@@ -335,6 +335,7 @@ function submitForm() {
             "Input Feature and Target Feature cannot be the same"
           );
         }
+
       }
 
       // Add validation for feature relevance form
@@ -360,7 +361,6 @@ function submitForm() {
 
         return true;
       }
-
       // Make the validation function globally available
       window.validateFeatureRelevanceForm = validateFeatureRelevanceForm;
       console.log("Server Response:", data);
@@ -2517,6 +2517,7 @@ function toggleValue(checkbox) {
   const checkboxes = container.querySelectorAll("input.checkbox.individual:not(.target-feature)");
   const selectAllCheckboxs = container.querySelectorAll("input.checkbox.select-all");
   // Enable or disable all dropdowns inside the container based on checkbox state
+
   dropdowns.forEach((dropdown) => {
     dropdown.disabled = !checkbox.checked;
   });
@@ -2531,6 +2532,9 @@ function toggleValue(checkbox) {
   selectAllCheckboxs.forEach((input) => {
     input.disabled = !checkbox.checked;
   });
+  // IMPORTANT: Don't disable individual feature checkboxes - they should remain selectable
+  // The individual checkboxes are for selecting features, not for enabling/disabling the metric
+
   // Toggle the value based on the checked state
   if (checkbox.checked) {
     checkbox.value = "yes";

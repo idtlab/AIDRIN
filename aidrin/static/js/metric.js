@@ -706,6 +706,53 @@ $(document).ready(function () {
       row.append(cell);
     }
   }
+
+  function createDistanceMetricsCheckboxContainer() {
+    var table = $("#classImbalanceDistanceCheckbox");
+    table.empty(); // Clear previous content
+
+    const distanceMetrics = [
+      { value: "EU", label: "Euclidean Distance (EU)" },
+      { value: "CH", label: "Chebyshev Distance (CH)" },
+      { value: "KL", label: "Kullback-Leibler Divergence (KL)" },
+      { value: "HE", label: "Hellinger Distance (HE)" },
+      { value: "TV", label: "Total Variation Distance (TV)" },
+      { value: "CS", label: "Chi-square Divergence (CS)" }
+    ];
+
+    var columns = 2; // Maximum number of columns for distance metrics
+    for (var i = 0; i < distanceMetrics.length; i++) {
+      if (i % columns === 0) {
+        var row = $("<tr>");
+        table.append(row);
+      }
+
+      var checkbox = $("<input>").attr({
+        type: "checkbox",
+        class: "checkbox individual",
+        style: "margin-right:10px",
+        onchange: "toggleValueIndividual(this)",
+        id: "classImbalanceDistanceCheckbox_checkbox_" + i,
+        name: "distance metrics for class imbalance",
+        value: distanceMetrics[i].value, // Store the short code (EU, CH, etc.)
+      });
+
+      var span = $("<span>").addClass("checkmark");
+
+      var label = $("<label>")
+        .attr(
+          "style",
+          "display: flex; flex-direction:row; min-width: 200px; align-items: center;"
+        )
+        .attr("class", "material-checkbox")
+        .attr("id", "classImbalanceDistanceCheckbox_checkbox_" + i);
+
+      label.append(checkbox).append(span).append(distanceMetrics[i].label);
+      var cell = $("<td>").append(label);
+
+      row.append(cell);
+    }
+  }
 });
 
 function updateCrossDisable() {
@@ -970,8 +1017,6 @@ $('input[name="quasi identifiers for t-closeness"]').each(function () {
   .each(function () {
     $(this).prop("disabled", false);
   });
-
-
 }
 
   // Update class imbalance feature checkboxes - disable if main metric checkbox is not checked
