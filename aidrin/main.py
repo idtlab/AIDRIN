@@ -145,6 +145,7 @@ def is_metric_cache_valid(cache_entry, max_age_minutes=30):
     print(f"Cache validation - Current time: {current_time}, Expires at: {expires_at}, Is valid: {is_valid}")
     return is_valid
 
+
 def clear_all_user_cache():
     """Clear ALL cache entries for current user."""
     user_id = get_current_user_id()
@@ -158,6 +159,7 @@ def clear_all_user_cache():
 
     print(f"User {user_id} ALL cache cleared: Removed {len(keys_to_remove)} entries")
     return len(keys_to_remove)
+
 
 def cleanup_old_uploaded_files(max_age_hours=24):
     """
@@ -209,10 +211,12 @@ def serve_docs(filename):
     root_dir = os.path.dirname(os.path.abspath(__file__))
     return send_from_directory(os.path.join(root_dir, '..', 'docs'), filename)
 
+
 @main.route('/docs')
 def docs_index():
     """Redirect to main Sphinx documentation index"""
     return redirect('/docs/build/html/index.html')
+
 
 @main.route('/')
 def homepage():
@@ -261,6 +265,7 @@ def view_logs():
 @main.route('/class-imbalance-docs')
 def class_imbalance_docs():
     return redirect('/docs/build/html/class_imbalance.html')
+
 
 @main.route('/privacy-metrics-docs')
 def privacy_metrics_docs():
@@ -2229,55 +2234,9 @@ def check_task_status(task_id, metric_name):
             'error': str(e)
         }), 500
 
-@main.route('/check_and_update_task/<task_id>/<metric_name>', methods=['GET'])
-def check_task_status(task_id, metric_name):
-    """Check the status of an async task and return results if complete."""
-    try:
-        task_result = AsyncResult(task_id)
+# feature set route
 
-        if task_result.ready():
-            if task_result.successful():
-                result = task_result.get()
 
-                # Store the result in cache for the frontend to retrieve
-                cache_key = f"{task_id}_{metric_name}"
-                current_app.TEMP_RESULTS_CACHE[cache_key] = {
-                    'data': result,
-                    'timestamp': time.time()
-                }
-
-                # Return a clean response with just what the frontend needs
-                return jsonify({
-                    'status': 'completed',
-                    'result': result  # Return the entire result dictionary
-                })
-            else:
-                error = str(task_result.info) if task_result.info else "Task failed"
-                return jsonify({
-                    'status': 'failed',
-                    'error': error
-                }), 500
-        else:
-            # Task is still running, return progress info if available
-            progress_info = task_result.info if isinstance(task_result.info, dict) else {}
-            current = progress_info.get('current', 0)
-            total = progress_info.get('total', 100)
-            status = progress_info.get('status', 'Processing...')
-
-            return jsonify({
-                'status': 'processing',
-                'progress': {
-                    'current': current,
-                    'total': total,
-                    'status': status
-                }
-            })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'error': str(e)
-        }), 500
-#feature set route
 @main.route('/feature_set', methods=['POST'])
 def extract_features():
     try:
