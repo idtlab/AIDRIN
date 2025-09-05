@@ -68,8 +68,44 @@ def create_app():
     os.makedirs(CUSTOM_METRICS_FOLDER, exist_ok=True)
     app.config["CUSTOM_METRICS_FOLDER"] = CUSTOM_METRICS_FOLDER
     app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {'py'}  # Allowed file extensions for custom metrics
-    if files_removed > 0:
-        print(f"Startup cleanup completed: {files_removed} old files removed")
+
+    REMEDY_FOLDER = os.path.join(CUSTOM_METRICS_FOLDER, "remedy_data")
+    os.makedirs(REMEDY_FOLDER, exist_ok=True)
+    app.config["REMEDY_FOLDER"] = REMEDY_FOLDER
+
+    metrics_removed = 0
+    exclude = {"__init__.py", "base_dr.py"}
+    for filename in os.listdir(CUSTOM_METRICS_FOLDER):
+        if filename in exclude:
+            continue
+        file_path = os.path.join(CUSTOM_METRICS_FOLDER, filename)
+        try:
+            if os.path.isfile(file_path):
+                file_age = current_time - os.path.getmtime(file_path)
+                if file_age > max_age_seconds:
+                    os.remove(file_path)
+                    metrics_removed += 1
+                    print(f"[Startup Cleanup] Deleted old custom metric: {filename}")
+        except Exception as e:
+            print(f"[Startup Cleanup] Failed to delete {file_path}: {e}")
+
+    # Clean up old remedy_data files on app start (older than 1 hour)
+    remedy_removed = 0
+    for filename in os.listdir(REMEDY_FOLDER):
+        file_path = os.path.join(REMEDY_FOLDER, filename)
+        try:
+            if os.path.isfile(file_path):
+                file_age = current_time - os.path.getmtime(file_path)
+                if file_age > max_age_seconds:
+                    os.remove(file_path)
+                    remedy_removed += 1
+                    print(f"[Startup Cleanup] Deleted old remedy file: {filename}")
+        except Exception as e:
+            print(f"[Startup Cleanup] Failed to delete {file_path}: {e}")
+
+
+    if files_removed > 0 or metrics_removed > 0 or remedy_removed > 0:
+        print(f"[Startup Cleanup] Completed: {files_removed} upload(s) + {metrics_removed} custom metric(s) + {remedy_removed} remedy file(s) removed")
 
     return app
 
