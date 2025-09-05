@@ -645,7 +645,8 @@ def compute_t_closeness(
     try:
         # TVD computation
         def tvd(p, q):
-            all_keys = set(p.index).union(set(q.index))
+            # Ensure all keys are hashable by converting to strings
+            all_keys = {str(k) for k in p.index}.union({str(k) for k in q.index})
             p_full = p.reindex(all_keys, fill_value=0)
             q_full = q.reindex(all_keys, fill_value=0)
             return 0.5 * np.abs(p_full - q_full).sum()
@@ -673,8 +674,14 @@ def compute_t_closeness(
         # Compute t-closeness per equivalence class
         t_values = {}
         for keys, group in clean_data.groupby(quasi_identifiers):
+            # Convert keys to a hashable format (tuple of strings)
+            if isinstance(keys, tuple):
+                hashable_keys = tuple(str(k) for k in keys)
+            else:
+                hashable_keys = str(keys)
+
             group_dist = group[sensitive_column].value_counts(normalize=True)
-            t_values[keys] = tvd(group_dist, global_dist)
+            t_values[hashable_keys] = tvd(group_dist, global_dist)
 
         t_series = pd.Series(t_values)
         max_t = round(t_series.max(), 4)
@@ -762,10 +769,16 @@ def compute_entropy_risk(quasi_identifiers, file_info):
 
         entropy_values = {}
         for keys, group in grouped:
+            # Convert keys to a hashable format (tuple of strings)
+            if isinstance(keys, tuple):
+                hashable_keys = tuple(str(k) for k in keys)
+            else:
+                hashable_keys = str(keys)
+
             size = len(group)
             p_i = 1 / size
             entropy = -size * p_i * np.log2(p_i)
-            entropy_values[keys] = entropy
+            entropy_values[hashable_keys] = entropy
 
         entropy_series = pd.Series(entropy_values)
         avg_entropy = entropy_series.sum() / total_records if total_records > 0 else 0.0

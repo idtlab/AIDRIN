@@ -61,6 +61,38 @@ Relevance" %} {% set page_route = "featureRelevance" %} {% block metricContent
         ><br />
       </li>
     </ul>
+
+    <div class="feature-relevance-note">
+      <strong>Note:</strong> Please select at least one categorical or numerical feature for analysis.
+      The target feature should be different from the selected features.
+    </div>
   </div>
 </div>
+
+<script>
+// Add form validation before submission
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.querySelector('form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      if (!window.validateFeatureRelevanceForm()) {
+        e.preventDefault();
+        return false;
+      }
+    });
+  }
+
+  // Ensure feature relevance checkboxes are always enabled
+  if (typeof ensureFeatureRelevanceCheckboxesEnabled === 'function') {
+    ensureFeatureRelevanceCheckboxesEnabled();
+  }
+
+  // Also ensure they're enabled after a short delay to handle dynamic content
+  setTimeout(function() {
+    if (typeof ensureFeatureRelevanceCheckboxesEnabled === 'function') {
+      ensureFeatureRelevanceCheckboxesEnabled();
+    }
+  }, 1000);
+});
+</script>
 {% endblock %}

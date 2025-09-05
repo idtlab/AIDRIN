@@ -11,6 +11,11 @@ from aidrin.file_handling.file_parser import read_file
 @shared_task(bind=True, ignore_result=False)
 def summary_histograms(self: Task, file_info):
     df = read_file(file_info)
+
+    # Ensure DataFrame columns are strings to avoid numpy array issues
+    if hasattr(df, 'columns'):
+        df.columns = [str(col) for col in df.columns]
+
     # background colors for plots (light and dark mode)
     plot_colors = {
         "light": {"bg": "#FBFBF2", "text": "#212529", "curve": "blue"},
@@ -19,6 +24,9 @@ def summary_histograms(self: Task, file_info):
 
     line_graphs = {}
     for column in df.select_dtypes(include="number").columns:
+        # Ensure column name is a string to avoid numpy array issues
+        column_str = str(column)
+
         for theme, colors in plot_colors.items():
             plt.figure(figsize=(6, 6), facecolor=colors["bg"])
             ax = plt.gca()
@@ -29,7 +37,7 @@ def summary_histograms(self: Task, file_info):
 
             # Set a larger font size for the title
             plt.title(
-                f"Distribution Estimate for {column}", fontsize=14, color=colors["text"]
+                f"Distribution Estimate for {column_str}", fontsize=14, color=colors["text"]
             )
 
             # Add labels to the axes
@@ -45,7 +53,7 @@ def summary_histograms(self: Task, file_info):
             img_buffer.seek(0)
             encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
 
-            line_graphs[f"{column}_{theme}"] = encoded_img
+            line_graphs[f"{column_str}_{theme}"] = encoded_img
             plt.close()
             img_buffer.close()
 

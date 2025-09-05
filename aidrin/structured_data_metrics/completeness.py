@@ -12,8 +12,26 @@ from aidrin.file_handling.file_parser import read_file
 def completeness(self: Task, file_info):
     try:
         file = read_file(file_info)
+
+        # Ensure DataFrame columns are strings to avoid numpy array issues
+        if hasattr(file, 'columns'):
+            file.columns = [str(col) for col in file.columns]
+
         # Calculate completeness metric for each column
-        completeness_scores = (1 - file.isnull().mean()).to_dict()
+        try:
+            completeness_scores = (1 - file.isnull().mean()).to_dict()
+        except Exception:
+            # If to_dict() fails, manually create the dictionary
+            completeness_scores = {}
+            for col in file.columns:
+                try:
+                    completeness_scores[str(col)] = float(1 - file[col].isnull().mean())
+                except Exception:
+                    completeness_scores[str(col)] = 0.0
+
+        # Ensure all column names are strings to avoid numpy array issues
+        completeness_scores = {str(k): v for k, v in completeness_scores.items()}
+
         # Calculate overall completeness metric for the dataset
         overall_completeness = 1 - file.isnull().any(axis=1).mean()
 

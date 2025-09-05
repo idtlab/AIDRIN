@@ -98,7 +98,7 @@ Terminal 2 – Celery Worker
 .. code-block:: bash
 
    conda activate aidrin-env
-   PYTHONPATH=. celery -A aidrin.make_celery worker --loglevel=info
+   PYTHONPATH=. celery -A aidrin.make_celery worker --beat --loglevel=info
 
 Terminal 3 – Flask Server
 """""""""""""""""""""""""

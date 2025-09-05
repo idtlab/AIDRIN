@@ -213,10 +213,17 @@ $(document).ready(function () {
                 response.all_features,
                 "allFeaturesDropdownFeaRel"
               );
-              createDropdown(
+              // Create checkbox containers for class imbalance
+              console.log("Creating class imbalance checkboxes with features:", response.class_imbalance_features);
+              createCheckboxContainer(
                 response.class_imbalance_features,
-                "allFeaturesDropdownClIm"
+                "classImbalanceFeaturesCheckbox",
+                "target features for class imbalance"
               );
+
+              // Create checkbox container for distance metrics with custom values
+              createDistanceMetricsCheckboxContainer();
+
               createDropdown(response.all_features, "allFeaturesDropdownMMS");
               createDropdown(response.all_features, "allFeaturesDropdownMMM");
               createDropdown(
@@ -243,10 +250,12 @@ $(document).ready(function () {
               updateMetricCheckboxState("single attribute risk score");
               updateMetricCheckboxState("multiple attribute risk score");
               updateMetricCheckboxState("entropy risk");
+              updateMetricCheckboxState("class imbalance");
 
               // Then initialize cross-disabling for each metric separately
               // Use setTimeout to ensure DOM is fully updated
               setTimeout(function () {
+                console.log("Calling updateCrossDisable after timeout");
                 updateCrossDisable();
               }, 100);
             }
@@ -436,37 +445,54 @@ $(document).ready(function () {
 
   //generate dropdown when features of the dataset are required to select
   $(document).ready(function () {
+    var formData = new FormData();
     fetch(retrieveFileUrl)
       .then((response) => {
         if (!response.ok) {
           throw new Error("File not found or server error");
         }
-        return response.blob(); // Convert response to a Blob
+        return response.blob();
       })
-      .then((blob) => {
-        var reader = new FileReader();
-        reader.onload = function (e) {
-          var content = e.target.result;
-          var lines = content.split("\n");
-          if (lines.length > 0) {
-            var columns = lines[0].split(",");
-            console.log(columns);
+      .then((fileBlob) => {
+        formData.append("file", fileBlob, "filename");
+        $.ajax({
+          url: "/feature_set",
+          type: "POST",
+          data: formData,
+          contentType: false,
+          processData: false,
+          success: function (response) {
+            if (response.success) {
+              // Use all_features for correlationCheckboxContainer
+              createCheckboxContainer(
+                response.all_features,
+                "correlationCheckboxContainer",
+                "all features for data transformation"
+              );
+            } else {
+              console.error("Error:", response.message);
+              alert("Error: " + response.message);
+            }
+          },
+          error: function (error) {
+            console.error("Error fetching features:", error);
+            alert("Error fetching features: " + error);
           }
-          createCheckboxContainer(
-            columns,
-            "correlationCheckboxContainer",
-            "all features for data transformation"
-          );
-        };
-        reader.readAsText(blob);
+        });
+      })
+      .catch((error) => {
+        console.error("Error fetching file:", error);
+        alert("Error fetching file: " + error);
       });
   });
-
   function createCheckboxContainer(features, tableId, nameTag) {
-    var table = $("#" + tableId);
-    table.empty(); // Clear previous content
-    var columns = 4; // Maximum number of columns
-    for (var i = 0; i < features.length && features[0] != "{"; i++) {
+  console.log("createCheckboxContainer called with:", { features, tableId, nameTag });
+  var table = $("#" + tableId);
+  table.empty(); // Clear previous content
+
+      var columns = 4; // Maximum number of columns
+  console.log("Features array:", features);
+  for (var i = 0; i < features.length && features[0] != "{"; i++) {
       if (i % columns === 0) {
         var row = $("<tr>");
         table.append(row);
@@ -480,7 +506,7 @@ $(document).ready(function () {
         id: tableId + "checkbox_" + i, // Generate unique ids so all buttons work
         name: nameTag, // Set the name attribute
         value: features[i],
-        disabled: true,
+        // Remove disabled: true - individual checkboxes should be selectable
       });
 
       var span = $("<span>").addClass("checkmark");
@@ -501,8 +527,56 @@ $(document).ready(function () {
       row.append(cell);
     }
   }
+
+  function createDistanceMetricsCheckboxContainer() {
+    var table = $("#classImbalanceDistanceCheckbox");
+    table.empty(); // Clear previous content
+
+    const distanceMetrics = [
+      { value: "EU", label: "Euclidean Distance (EU)" },
+      { value: "CH", label: "Chebyshev Distance (CH)" },
+      { value: "KL", label: "Kullback-Leibler Divergence (KL)" },
+      { value: "HE", label: "Hellinger Distance (HE)" },
+      { value: "TV", label: "Total Variation Distance (TV)" },
+      { value: "CS", label: "Chi-square Divergence (CS)" }
+    ];
+
+    var columns = 2; // Maximum number of columns for distance metrics
+    for (var i = 0; i < distanceMetrics.length; i++) {
+      if (i % columns === 0) {
+        var row = $("<tr>");
+        table.append(row);
+      }
+
+      var checkbox = $("<input>").attr({
+        type: "checkbox",
+        class: "checkbox individual",
+        style: "margin-right:10px",
+        onchange: "toggleValueIndividual(this)",
+        id: "classImbalanceDistanceCheckbox_checkbox_" + i,
+        name: "distance metrics for class imbalance",
+        value: distanceMetrics[i].value, // Store the short code (EU, CH, etc.)
+      });
+
+      var span = $("<span>").addClass("checkmark");
+
+      var label = $("<label>")
+        .attr(
+          "style",
+          "display: flex; flex-direction:row; min-width: 200px; align-items: center;"
+        )
+        .attr("class", "material-checkbox")
+        .attr("id", "classImbalanceDistanceCheckbox_checkbox_" + i);
+
+      label.append(checkbox).append(span).append(distanceMetrics[i].label);
+      var cell = $("<td>").append(label);
+
+      row.append(cell);
+    }
+  }
 });
 function updateCrossDisable() {
+  console.log("updateCrossDisable function called");
   // Get selected quasi-identifiers for each metric separately
   // This allows users to select the same feature for different metrics when appropriate
   const kAnonymityQIs = new Set();
@@ -511,6 +585,7 @@ function updateCrossDisable() {
   const entropyRiskQIs = new Set();
   const singleAttributeQIs = new Set();
   const multipleAttributeQIs = new Set();
+  const classImbalanceFeatures = new Set();
 
   // Collect selected QIs for each metric independently
   $('input[name="quasi identifiers for k-anonymity"]:checked').each(
@@ -549,6 +624,24 @@ function updateCrossDisable() {
     multipleAttributeQIs.add($(this).val());
   });
 
+  // Collect selected features for class imbalance
+  console.log("Looking for class imbalance checkboxes...");
+  const allClassImbalanceCheckboxes = $('input[name="target features for class imbalance"]');
+  console.log("Total class imbalance checkboxes found:", allClassImbalanceCheckboxes.length);
+  const classImbalanceCheckboxes = $('input[name="target features for class imbalance"]:checked');
+  console.log("Checked class imbalance checkboxes:", classImbalanceCheckboxes.length);
+  classImbalanceCheckboxes.each(function () {
+    const value = $(this).val();
+    console.log("Adding class imbalance feature:", value);
+    classImbalanceFeatures.add(value);
+  });
+  console.log("Class imbalance features set:", Array.from(classImbalanceFeatures));
+
+  // Debug: Log all class imbalance checkboxes and their values
+  allClassImbalanceCheckboxes.each(function(index) {
+    console.log(`Checkbox ${index}: name="${$(this).attr('name')}", value="${$(this).val()}", checked=${$(this).is(':checked')}`);
+  });
+
   // Get selected sensitive attributes for each metric
   const selectedSensitives = new Set();
   const sensitiveDropdowns = [
@@ -574,6 +667,7 @@ function updateCrossDisable() {
   const multipleAttributeEnabled = $(
     'input[name="multiple attribute risk score"]'
   ).is(":checked");
+  const classImbalanceEnabled = $('input[name="class imbalance"]').is(":checked");
 
   // Update dropdowns - only disable options that are selected as QIs in the SAME metric
   // This prevents selecting the same feature as both QI and sensitive attribute within the same metric
@@ -597,8 +691,74 @@ function updateCrossDisable() {
     $(this).prop("disabled", multipleAttributeQIs.has(val));
   });
 
+  // Update other metrics' dropdowns to disable features selected for class imbalance
+  console.log("Disabling features in other dropdowns based on class imbalance selection...");
+  $("#allFeaturesDropdownRepRate option").each(function () {
+    const val = $(this).text();
+    const shouldDisable = classImbalanceFeatures.has(val);
+    if (shouldDisable) {
+      console.log("Disabling feature in RepRate dropdown:", val);
+    }
+    $(this).prop("disabled", shouldDisable);
+  });
+
+  $("#allFeaturesDropdownStatRate1 option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", classImbalanceFeatures.has(val));
+  });
+
+  $("#allFeaturesDropdownStatRate2 option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", classImbalanceFeatures.has(val));
+  });
+
+  $("#allFeaturesDropdownRealRep option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", classImbalanceFeatures.has(val));
+  });
+
+  $("#allFeaturesDropdownFeaRel option").each(function () {
+    const val = $(this).text();
+    const shouldDisable = classImbalanceFeatures.has(val);
+    if (shouldDisable) {
+      console.log("Disabling feature in FeaRel dropdown:", val);
+    }
+    $(this).prop("disabled", shouldDisable);
+  });
+
+  $("#allFeaturesDropdownMMS option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", singleAttributeQIs.has(val) || classImbalanceFeatures.has(val));
+  });
+
+  $("#allFeaturesDropdownMMM option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", multipleAttributeQIs.has(val) || classImbalanceFeatures.has(val));
+  });
+
+  $("#allFeaturesDropdownCondDemoDis1 option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", classImbalanceFeatures.has(val));
+  });
+
+  $("#allFeaturesDropdownCondDemoDis2 option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", classImbalanceFeatures.has(val));
+  });
+
+  $("#lDiversitySensitiveDropdown option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", lDiversityQIs.has(val) || classImbalanceFeatures.has(val));
+  });
+
+  $("#tClosenessSensitiveDropdown option").each(function () {
+    const val = $(this).text();
+    $(this).prop("disabled", tClosenessQIs.has(val) || classImbalanceFeatures.has(val));
+  });
+
   // Update QI checkboxes - only disable if selected as sensitive in the SAME metric
   // AND ensure they're disabled if the main metric checkbox is not checked
+  // EXCLUDE feature relevance checkboxes from this logic
   $('input[name="quasi identifiers for k-anonymity"]').each(function () {
     const val = $(this).val();
     $(this).prop("disabled", !kAnonymityEnabled);
@@ -641,14 +801,37 @@ function updateCrossDisable() {
       !multipleAttributeEnabled || isSelectedAsSensitive
     );
   });
+
+  // IMPORTANT: Feature relevance checkboxes should NEVER be disabled
+  // They are independent of metric selection and should always be selectable
+  $('input[name="categorical features for feature relevancy"], input[name="numerical features for feature relevancy"]').each(function () {
+    $(this).prop("disabled", false);
+  });
+}
+
+  // Update class imbalance feature checkboxes - disable if main metric checkbox is not checked
+  $('input[name="target features for class imbalance"]').each(function () {
+    $(this).prop("disabled", !classImbalanceEnabled);
+  });
+
+// Function to ensure feature relevance checkboxes are always enabled
+function ensureFeatureRelevanceCheckboxesEnabled() {
+  $('input[name="categorical features for feature relevancy"], input[name="numerical features for feature relevancy"]').each(function () {
+    $(this).prop("disabled", false);
+  });
 }
 $(document).ready(function () {
+  // Ensure feature relevance checkboxes are always enabled
+  ensureFeatureRelevanceCheckboxesEnabled();
+
   // Trigger when main metric checkboxes change
   $(document).on(
     "change",
-    'input[name="k-anonymity"], input[name="l-diversity"], input[name="t-closeness"], input[name="entropy risk"], input[name="single attribute risk score"], input[name="multiple attribute risk score"]',
+    'input[name="k-anonymity"], input[name="l-diversity"], input[name="t-closeness"], input[name="entropy risk"], input[name="single attribute risk score"], input[name="multiple attribute risk score"], input[name="class imbalance"]',
     function () {
       updateCrossDisable();
+      // Re-ensure feature relevance checkboxes are enabled after any metric changes
+      ensureFeatureRelevanceCheckboxesEnabled();
     }
   );
 
@@ -701,6 +884,16 @@ $(document).ready(function () {
     }
   );
 
+  // Trigger when class imbalance feature checkboxes change
+  $(document).on(
+    "change",
+    'input[name="target features for class imbalance"]',
+    function () {
+      console.log("Class imbalance feature checkbox changed:", $(this).val(), "checked:", $(this).is(":checked"));
+      updateCrossDisable();
+    }
+  );
+
   // Trigger when any sensitive dropdown changes
   $(
     "#lDiversitySensitiveDropdown, #tClosenessSensitiveDropdown, #allFeaturesDropdownMMS, #allFeaturesDropdownMMM"
@@ -716,4 +909,20 @@ function updateMetricCheckboxState(metricCheckboxName) {
   if (metricCheckbox) {
     toggleValue(metricCheckbox);
   }
+}
+
+
+
+// Individual checkbox toggle for metric checkboxes
+function toggleValueIndividual(checkbox) {
+  // Toggle the value based on the checked state
+  if (checkbox.checked) {
+    const label = checkbox.closest("label");
+    const text = label.textContent.trim();
+    checkbox.value = text;
+  } else {
+    checkbox.value = "no";
+  }
+
+  console.log("Checkbox value:", checkbox.value); // For debugging
 }
