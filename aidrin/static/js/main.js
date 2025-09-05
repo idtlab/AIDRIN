@@ -443,7 +443,8 @@ function submitForm() {
                     jsonData: jsonData,
                     isCustomMetric: true,
                     riskScore: "N/A",
-                    value: "N/A"
+                    value: "N/A",
+                    downloadUrl: data[type].apply_remedy || null
                 });
             } else if (data[type]["is_async"]) {
                 // Handle async tasks (from develop)
@@ -620,8 +621,15 @@ function submitForm() {
                       <div id="${visualizationId}" style="display: none;">`;
 
           if (content.isCustomMetric) {
-              // Handle Custom Metric Evaluation (from HEAD)
-              visualizationHtml += `<pre style="text-align: left; padding: 20px; background: #f5f5f5; border: 1px solid #ddd; overflow-x: auto;">${content.jsonData}</pre>`;
+            visualizationHtml += `<pre style="text-align: left; padding: 20px; background: #f5f5f5; border: 1px solid #ddd; overflow-x: auto;">${content.jsonData}</pre>`;
+
+            // Add a download button if apply_remedy exists
+            if (content.downloadUrl) {
+                visualizationHtml += `
+                <a href="${content.downloadUrl}" download class="animated-button" style="margin-top: 10px; display: inline-block;">
+                    Download Remedied Dataset
+                </a>`;
+            }
           } else if (content.isAsync) {
               // Handle async task placeholder (from develop)
               const asyncId = `async-${content.taskId.replace(/[^a-zA-Z0-9]/g, "")}`;

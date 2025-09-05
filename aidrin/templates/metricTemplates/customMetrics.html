@@ -6,17 +6,20 @@
 
   <p><strong>Define your custom <code>metric()</code> and <code>remedy()</code> functions:</strong></p>
   <p>The <code>metric()</code> function should return a dictionary with metric results. The <code>remedy()</code> function should return a modified dataset as a dataframe.</p>
+  <p style="margin-bottom:20px;"> If you do not wish to apply a remedy, you can leave the <code>remedy()</code> function as it is. The metric evaluations will still be displayed below.</p>
   <textarea id="metricCodeEditor" name="metric_code"></textarea>
 
   <p style="margin-top: 20px;"><strong>If you wish to apply the remedy you defined above, please check the box below:</strong></p>
-  <p> If you choose not to apply the remedy, you will see the metric evaluations below.</p>
   <label>
     <input type="checkbox" id="apply_remedy" name="apply_remedy" value="yes" /> Apply Remedy
   </label>
 
+  <p style="margin-top:20px; align-self: center;"> <strong>Click "Save" to save your custom metric and remedy. And then click "Submit" to view the results.</strong></p>
   <div style="margin-top: 20px; display:flex; gap:15px;">
+
     <button onclick="saveFile()" class="animated-button">Save</button>
   </div>
+<p><em>Note: Custom metrics you define and any remedied data will be stored on the server for <strong>1 hour</strong>. After that, they will be automatically removed.</em></p>
 
 </div>
 
