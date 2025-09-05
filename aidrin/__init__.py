@@ -3,7 +3,7 @@ from celery import Celery, Task
 from flask import Flask
 from ._version import __version__
 from .main import main as main_blueprint
-from .tasks import delete_old_custom_metrics
+from .tasks import delete_old_custom_metrics  # noqa: F401
 
 
 # create app config
@@ -103,9 +103,9 @@ def create_app():
         except Exception as e:
             print(f"[Startup Cleanup] Failed to delete {file_path}: {e}")
 
-
     if files_removed > 0 or metrics_removed > 0 or remedy_removed > 0:
-        print(f"[Startup Cleanup] Completed: {files_removed} upload(s) + {metrics_removed} custom metric(s) + {remedy_removed} remedy file(s) removed")
+        print(f"[Startup Cleanup] Completed: {files_removed} upload(s) + "
+              f"{metrics_removed} custom metric(s) + {remedy_removed} remedy file(s) removed")
 
     return app
 

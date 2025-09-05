@@ -3,10 +3,7 @@ import logging
 import os
 import time
 import uuid
-from werkzeug.utils import secure_filename
 import sys
-from .custom_metrics.base_dr import BaseDRAgent
-import inspect
 import importlib
 import io
 import base64
@@ -2125,13 +2122,12 @@ def customMetrics():
                 remedy_filename = f"remedied_{session['session_id']}{data_file_type}"
                 remedy_filepath = os.path.join(remedy_folder, remedy_filename)
 
-                #supports csv only for now, frontend enables only csv for custom metrics
+                # supports csv only for now, frontend enables only csv for custom metrics
                 new_data.to_csv(remedy_filepath, index=False)
 
                 # Return download link
                 final_dict['Custom Metric Evaluation']['apply_remedy'] = \
                     url_for("download_remedy", filename=remedy_filename)
-
 
         except Exception as e:
             metric_time_log.error(f"Error: {str(e)}")
@@ -2155,6 +2151,7 @@ def customMetrics():
 # ------------------------------------
 # Load / Save/ Download custommetrics
 # ------------------------------------
+
 
 @main.route("/download_remedy/<filename>")
 def download_remedy(filename):
