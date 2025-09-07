@@ -1024,12 +1024,6 @@ $('input[name="quasi identifiers for t-closeness"]').each(function () {
     $(this).prop("disabled", !classImbalanceEnabled);
   });
 
-// Function to ensure feature relevance checkboxes are always enabled
-function ensureFeatureRelevanceCheckboxesEnabled() {
-  $('input[name="categorical features for feature relevancy"], input[name="numerical features for feature relevancy"]').each(function () {
-    $(this).prop("disabled", false);
-  });
-}
 $(document).ready(function () {
   // Ensure feature relevance checkboxes are always enabled
   ensureFeatureRelevanceCheckboxesEnabled();

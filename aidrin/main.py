@@ -678,8 +678,8 @@ def featureRelevance():
         # feature relevancy
         if request.form.get("feature relevancy") == "yes":
             # Get raw input from form and sanitize
-            raw_cat_cols = request.form.get("categorical features for feature relevancy", "")
-            raw_num_cols = request.form.get("numerical features for feature relevancy", "")
+            raw_cat_cols = request.form.get("categorical features", "")
+            raw_num_cols = request.form.get("numerical features", "")
 
             # Clean each list by removing empty strings and whitespace-only entries
             cat_cols = [col.strip() for col in raw_cat_cols.split(",") if col.strip()]

@@ -285,7 +285,6 @@ function submitForm() {
   var catFeaCheckboxValues = Array.from(
     formData.getAll("categorical features for feature relevancy")
   ).join(",");
-
   // Add the concatenated checkbox values to the form data
   formData.set("correlation columns", checkboxValues);
   formData.set(
