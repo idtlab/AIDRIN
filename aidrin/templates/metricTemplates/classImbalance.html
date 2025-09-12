@@ -29,21 +29,37 @@ Imbalance" %} {% set page_route = "classImbalance" %} {% block metricContent %}
 
     <ul class="metric-inputs" style="display: none;">
       <li>
-        <label
-          for="target features for class imbalance"
-          style="padding: 10px; padding-left: 15px; min-width: 300px;"
-          >Target features:</label
+        <label class="listLabel" for="target features for class imbalance"
+          >Target feature:</label
         >
-        <table id="classImbalanceFeaturesCheckbox"></table>
+        <select
+          name="target features for class imbalance"
+          id="allFeaturesCheckboxClassImbalance"
+          required
+        >
+          <option value="" disabled selected
+            >No features available for this dataset</option
+          >
+          <!-- Options will be added dynamically using JavaScript -->
+        </select>
       </li>
       <li>
-        <label
-          for="distance metrics for class imbalance"
-          style="padding: 10px; padding-left: 15px; min-width: 300px;"
-          >Distance metrics:</label
-        >
-        <table id="classImbalanceDistanceCheckbox"></table>
+
+        <label for="classImbalanceDistanceDropdown">Select Distance Metrics:</label>
+        <br>
+        <select
+          id="classImbalanceDistanceDropdown"
+          name="distance metric for class imbalance"
+          multiple
+          style="min-width:250px; height:120px;">
+        </select>
+        <br>
       </li>
+        <small style="color: gray; font-style: italic;">
+          Note: By default, <strong>Euclidean Distance (EU)</strong> is used to measure the imbalance degree.
+          You can also select other distance metrics if needed.
+        </small>
+
     </ul>
   </div>
 </div>

@@ -783,7 +783,10 @@ def classImbalance():
         # check for parameters
         if request.form.get("class imbalance") == "yes":
             classes = request.form.get("target features for class imbalance")
-            dist_metric = request.form.get("distance metric for class imbalance", "EU")
+            dist_metric = request.form.get("distance metric for class imbalance")
+
+            if not dist_metric:
+                dist_metric = "EU"
 
             print("Class Imbalance - Form data:", dict(request.form))
             print("Class Imbalance - Form keys:", list(request.form.keys()))
