@@ -766,7 +766,7 @@ def classImbalance():
         start_time = time.time()
         # check for parameters
         if request.form.get("class imbalance") == "yes":
-            classes = request.form.get("features for class imbalance")
+            classes = request.form.get("target features for class imbalance")
             dist_metric = request.form.get("distance metric for class imbalance", "EU")
 
             print("Class Imbalance - Form data:", dict(request.form))
