@@ -478,6 +478,7 @@ function submitForm() {
               value: "N/A",
               description: "",
               interpretation: "",
+              ai: "",
               title: title,
               jsonData: jsonData,
               hasError: false,
@@ -541,6 +542,7 @@ function submitForm() {
             // Handle specific field names for privacy metrics descriptions and class imbalance
             var description = "";
             var interpretation = "";
+            var ai = data[type]["AI"] || "";
 
             if (
               type === "k-Anonymity" ||
@@ -593,6 +595,7 @@ function submitForm() {
                   value: "N/A",
                   description: "",
                   interpretation: "",
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -620,6 +623,7 @@ function submitForm() {
                   value: "N/A",
                   description: "",
                   interpretation: "",
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -647,6 +651,7 @@ function submitForm() {
                   value: "N/A",
                   description: "",
                   interpretation: "",
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -672,6 +677,7 @@ function submitForm() {
                   value: "N/A",
                   description: "",
                   interpretation: "",
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -697,6 +703,7 @@ function submitForm() {
                   value: "N/A",
                   description: "",
                   interpretation: "",
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -722,6 +729,7 @@ function submitForm() {
                   value: "N/A",
                   description: "",
                   interpretation: "",
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -747,6 +755,7 @@ function submitForm() {
                   value: "N/A",
                   description: "",
                   interpretation: "",
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -774,6 +783,7 @@ function submitForm() {
                   value: "N/A",
                   description: "",
                   interpretation: "",
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -793,6 +803,7 @@ function submitForm() {
                   value: value,
                   description: description,
                   interpretation: interpretation,
+                  ai: ai,
                   title: title,
                   jsonData: jsonData,
                   hasError: true,
@@ -808,6 +819,7 @@ function submitForm() {
                 value: value,
                 description: description,
                 interpretation: interpretation,
+                ai: ai,
                 title: title,
                 jsonData: jsonData,
                 hasError: false,
@@ -1097,6 +1109,11 @@ function submitForm() {
                    ${
                      !content.hasError && content.interpretation
                        ? `<div><strong>Graph interpretation:</strong> ${content.interpretation}</div>`
+                       : ""
+                   }
+                   ${
+                     !content.hasError && content.ai
+                       ? `<div><strong>AIDRIN AI:</strong> ${content.ai}</div>`
                        : ""
                    }
 
@@ -1825,6 +1842,10 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
       // Add description if present (only for successful results, not errors)
       if (results.Description && !results.Description.includes("Error")) {
         completedHtml += `<div style="color: inherit;"><strong>Description:</strong> ${results.Description}</div>`;
+      }
+
+      if (results.AI) {
+        completedHtml += `<div style="color: inherit;"><strong>AIDRIN-AI:</strong> ${results.AI}</div>`;
       }
 
       // Add graph interpretation if present (only for successful results, not errors)

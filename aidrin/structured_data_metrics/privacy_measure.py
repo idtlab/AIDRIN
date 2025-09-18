@@ -9,6 +9,7 @@ import pandas as pd
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from aidrin.file_handling.file_parser import read_file
+from aidrin.aix.aix import comment
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,10 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
             "The box plot displays the distribution of risk scores for each feature. Features with "
             "higher medians or more outliers indicate greater privacy risk. A compact, lower box is desirable."
         )
-
+        result_dict['AI'] = comment(
+            result_dict['Description'],
+            result_dict["Single attribute risk scoring Visualization"]
+        )
     except SoftTimeLimitExceeded:
         raise Exception("Single Attribute Risk task timed out. The dataset may be too large or complex.")
     except ValueError as ve:
@@ -417,7 +421,10 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         result_dict["Descriptive statistics of the risk scores"] = stats_dict
         result_dict["Multiple attribute risk scoring Visualization"] = base64_image
         result_dict['Dataset Risk Score'] = normalized_distance
-
+        result_dict['AI'] = comment(
+            result_dict['Description'],
+            result_dict["Multiple attribute risk scoring Visualization"]
+        )
     except SoftTimeLimitExceeded:
         raise Exception("Multiple Attribute Risk task timed out. The dataset may be too large or complex.")
     except ValueError as ve:
@@ -508,6 +515,10 @@ def compute_k_anonymity(quasi_identifiers: List[str], file_info):
                 "class sizes (higher k) is desirable for privacy."
             ),
         }
+        result_dict['AI'] = comment(
+            result_dict['Description'],
+            result_dict["k-Anonymity Visualization"]
+        )
     except SoftTimeLimitExceeded:
         raise Exception("K anonymity task timed out.")
     except ValueError as ve:
@@ -613,6 +624,10 @@ def compute_l_diversity(
                 "The histogram displays the spread of l-diversity values. A distribution concentrated at higher l values is optimal."
             ),
         }
+        result_dict['AI'] = comment(
+            result_dict['Description'],
+            result_dict["l-Diversity Visualization"]
+        )
     except SoftTimeLimitExceeded:
         raise Exception("L Diversity task timed out.")
     except ValueError as ve:
@@ -724,6 +739,10 @@ def compute_t_closeness(
                 "The histogram shows the distribution of t values. Lower t values across groups indicate stronger privacy."
             ),
         }
+        result_dict['AI'] = comment(
+            result_dict['Description'],
+            result_dict["t-Closeness Visualization"]
+        )
     except SoftTimeLimitExceeded:
         raise Exception("T Closeness task timed out.")
     except ValueError as ve:
@@ -822,6 +841,10 @@ def compute_entropy_risk(quasi_identifiers, file_info):
                 "indicate better privacy; left-skewed distributions suggest higher risk."
             ),
         }
+        result_dict['AI'] = comment(
+            result_dict['Description'],
+            result_dict["Entropy Risk Visualization"]
+        )
     except SoftTimeLimitExceeded:
         raise Exception("Entropy Risk task timed out.")
     except ValueError as ve:

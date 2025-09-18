@@ -63,6 +63,7 @@ from aidrin.structured_data_metrics.representation_rate import (
     create_representation_rate_vis,
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
+from aidrin.aix.aix import comment
 
 # Setup #####
 main = Blueprint("main", __name__)  # register main blueprint
@@ -444,6 +445,10 @@ def dataQuality():
                     "0 indicating low completeness. If the visualization is empty, it means "
                     "that all features are complete."
                 )
+                compl_dict['AI'] = comment(
+                    compl_dict['Description'],
+                    compl_dict["Completeness Visualization"]
+                )
                 final_dict["Completeness"] = compl_dict
                 metric_time_log.info(
                     "Completeness took %.2f seconds",
@@ -458,6 +463,10 @@ def dataQuality():
                     "Outlier scores are calculated for numerical columns using the Interquartile"
                     " Range (IQR) method, where a score of 1 indicates that all data points in a "
                     "column are identified as outliers, a score of 0 signifies no outliers are detected"
+                )
+                out_dict['AI'] = comment(
+                    out_dict['Description'],
+                    out_dict['Outliers Visualization']
                 )
                 final_dict["Outliers"] = out_dict
                 metric_time_log.info(
@@ -522,6 +531,10 @@ def fairness():
                 "differences in representation rates between various groups. Higher "
                 "values imply overrepresentation relative to another"
             )
+            rep_dict['AI'] = comment(
+                rep_dict['Description'],
+                rep_dict['Representation Rate Visualization']
+            )
             final_dict['Representation Rate'] = rep_dict
         # statistical rate
         if (request.form.get('statistical rate') == "yes" and
@@ -541,6 +554,10 @@ def fairness():
                     "The graph illustrates the statistical rates of various classes across different sensitive attributes. "
                     "Each group in the graph represents a specific sensitive attribute, and within each group, each bar corresponds "
                     "to a class, with the height indicating the proportion of that sensitive attribute within that particular class"
+                )
+                sr_dict['AI'] = comment(
+                    sr_dict['Description'],
+                    sr_dict['Statistical Rate Visualization']
                 )
                 final_dict["Statistical Rate"] = sr_dict
                 metric_time_log.info(
@@ -737,6 +754,10 @@ def featureRelevance():
                 "correlation, while a value of -1 indicates a perfect negative "
                 "correlation."
             )
+            f_dict['AI'] = comment(
+                f_dict['Description'],
+                f_dict['Feature Relevance Visualization']
+            )
             final_dict['Feature Relevance'] = f_dict
 
             end_time = time.time()
@@ -766,7 +787,7 @@ def classImbalance():
         start_time = time.time()
         # check for parameters
         if request.form.get("class imbalance") == "yes":
-            classes = request.form.get("features for class imbalance")
+            classes = request.form.get("target features for class imbalance")
             dist_metric = request.form.get("distance metric for class imbalance", "EU")
 
             print("Class Imbalance - Form data:", dict(request.form))
@@ -814,6 +835,10 @@ def classImbalance():
                             "specified feature, providing a visual representation of the "
                             "relative proportions of each class."
                         )
+                        ci_dict['AI'] = comment(
+                            ci_dict['Description'],
+                            ci_dict['Class Imbalance Visualization']
+                        )
 
                         # Calculate imbalance degree
                         imbalance_result = calc_imbalance_degree(file, classes, dist_metric=dist_metric)
@@ -854,6 +879,10 @@ def classImbalance():
                         "The chart displays the distribution of classes within the "
                         "specified feature, providing a visual representation of the "
                         "relative proportions of each class."
+                    )
+                    ci_dict['AI'] = comment(
+                        ci_dict['Description'],
+                        ci_dict['Class Imbalance Visualization']
                     )
                     # Calculate imbalance degree
                     imbalance_result = calc_imbalance_degree(file, classes, dist_metric=dist_metric)
@@ -2541,6 +2570,10 @@ def process_differential_privacy(file_name, feature_to_add_noise, epsilon, file,
         print(f"Privacy - DP Cache MISS for key: {cache_key}")
         try:
             noisy_stat = return_noisy_stats(feature_to_add_noise, float(epsilon), file)
+            noisy_stat['AI'] = comment(
+                noisy_stat['Description'],
+                noisy_stat["DP Statistics Visualization"]
+            )
             final_dict['DP Statistics'] = noisy_stat
             current_app.TEMP_RESULTS_CACHE[cache_key] = {
                 'data': noisy_stat,
