@@ -28,7 +28,12 @@ def comment(description, base64_image):
                 "content": [
                     {
                         "type": "text",
-                        "text": "You are a statistician and data analyst expert. You a given a plot. {description} Provide a short summary of they key observations for this image in one sentence. Include a second sentence giving an insight if this data were to be used by AI or ML.",
+                        "text": (
+                            "You are a statistician and data analyst expert. You a given a plot. "
+                            "{description} Provide a short summary of they key observations for this "
+                            "image in one sentence. Include a second sentence giving an insight if "
+                            "this data were to be used by AI or ML."
+                        )
                     },
                     {
                         "type": "image_url",
