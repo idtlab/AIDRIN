@@ -2200,7 +2200,7 @@ class CustomDR(BaseDRAgent):
         # Example implementation
         # Replace this with your actual remediation logic
         # For example, filling null values with a default value
-        # self.dataset.fillna(0, inplace=True)
+        # return self.dataset.fillna(0, inplace=False)
         return self.dataset
     """
 
