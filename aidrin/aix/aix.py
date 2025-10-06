@@ -22,6 +22,7 @@ def comment(description, base64_image):
         return None
 
     response = client.chat.completions.create(
+        model=aidrin_model,
         messages=[
             {
                 "role": "user",
