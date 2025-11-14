@@ -41,6 +41,7 @@ Key Features
 
    installation
    usage
+   custom_metrics
    appfl_integration
    contributing
    limitations

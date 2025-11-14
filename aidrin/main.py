@@ -9,6 +9,7 @@ import io
 import base64
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import redis
@@ -2039,6 +2040,29 @@ def privacyPreservation():
 
     return get_result_or_default("privacyPreservation", file_path, file_name)
 
+def ensure_json_serializable(obj):
+    """
+    Recursively converts non-native types (like NumPy/Pandas objects)
+    to native Python types for JSON serialization.
+    """
+    if isinstance(obj, dict):
+        return {k: ensure_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [ensure_json_serializable(item) for item in obj]
+    elif isinstance(obj, (np.integer, np.int64)):
+        # Convert NumPy integers (like int64) to native Python int
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64)):
+        # Convert NumPy floats (like float64) to native Python float
+        return float(obj)
+    elif isinstance(obj, pd.Timestamp):
+        # Convert Pandas Timestamps to ISO 8601 string
+        return obj.isoformat()
+    elif isinstance(obj, set):
+        # Sets are not JSON serializable, convert to list
+        return list(obj)
+
+    return obj
 
 @main.route("/customMetrics", methods=["GET", "POST"])
 def customMetrics():
@@ -2129,6 +2153,9 @@ def customMetrics():
                 final_dict['Custom Metric Evaluation']['apply_remedy'] = \
                     url_for("download_remedy", filename=remedy_filename)
 
+            # Ensure JSON serializability
+            final_dict = ensure_json_serializable(final_dict)
+
         except Exception as e:
             metric_time_log.error(f"Error: {str(e)}")
             return jsonify({"error": str(e)}), 500
@@ -2173,34 +2200,39 @@ def load_custom_metric():
     # Starter template content
     starter_template = """from aidrin.custom_metrics.base_dr import BaseDRAgent
 from typing import Any
+from typing import Dict, Union, Any
 
 class CustomDR(BaseDRAgent):
     def __init__(self, dataset: Any, **kwargs):
         super().__init__(dataset, **kwargs)
-        self.dataset = dataset
 
     def metric(self, **kwargs):
         \"\"\"
         Implement your custom metric logic here.
-        Return a dictionary of results.
         \"\"\"
-        # Example implementation
-        # Replace this with your actual metric logic
-        # For example, calculating null values in the dataset
+
+        # IMPLEMENT YOUR METRIC LOGIC BELOW
+        # Example: Calculating the total number of missing cells in the entire DataFrame
+
+        # df: pd.DataFrame = self.dataset
         # return {
-        #      "null_values": self.dataset.isnull().sum().to_dict()
-        #  }
-        return {"message": "This is a placeholder metric. Please implement your logic."}
+        #     "total_missing_cells": df.isna().sum().to_dict()
+        # }
+
+        return {"message": "Placeholder metric. Implement your logic here."}
 
     def remedy(self, metric_results: dict):
         \"\"\"
-        Implement your custom remediation logic here.
-        This method can be used to apply any necessary changes to the dataset.
+        Applies custom remediation logic based on the calculated metrics.
         \"\"\"
-        # Example implementation
-        # Replace this with your actual remediation logic
+
+        # IMPLEMENT YOUR REMEDIATION LOGIC BELOW
         # For example, filling null values with a default value
-        # return self.dataset.fillna(0, inplace=False)
+
+        # df_remedied: pd.DataFrame = self.dataset.copy()
+        # df_remedied.fillna(0, inplace=True)
+        # return df_remedied
+
         return self.dataset
     """
 
