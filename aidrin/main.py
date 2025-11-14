@@ -9,7 +9,6 @@ import io
 import base64
 
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import redis
@@ -2040,6 +2039,7 @@ def privacyPreservation():
 
     return get_result_or_default("privacyPreservation", file_path, file_name)
 
+
 def ensure_json_serializable(obj):
     """
     Recursively converts non-native types (like NumPy/Pandas objects)
@@ -2049,12 +2049,6 @@ def ensure_json_serializable(obj):
         return {k: ensure_json_serializable(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [ensure_json_serializable(item) for item in obj]
-    elif isinstance(obj, (np.integer, np.int64)):
-        # Convert NumPy integers (like int64) to native Python int
-        return int(obj)
-    elif isinstance(obj, (np.floating, np.float64)):
-        # Convert NumPy floats (like float64) to native Python float
-        return float(obj)
     elif isinstance(obj, pd.Timestamp):
         # Convert Pandas Timestamps to ISO 8601 string
         return obj.isoformat()
@@ -2063,6 +2057,7 @@ def ensure_json_serializable(obj):
         return list(obj)
 
     return obj
+
 
 @main.route("/customMetrics", methods=["GET", "POST"])
 def customMetrics():
