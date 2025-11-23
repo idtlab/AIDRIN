@@ -1,8 +1,9 @@
 import os
 import uuid
-
+import random
 import h5py
 import pandas as pd
+import numpy as np
 from flask import current_app, session
 
 from aidrin.file_handling.readers.base_reader import BaseFileReader
@@ -11,138 +12,177 @@ from aidrin.file_handling.readers.base_reader import BaseFileReader
 class hdf5Reader(BaseFileReader):
     def read(self):
         try:
+            # Limit number of rows using random sampling
+            MAX_ROWS = 2000
             rows = []
-            # Clean up byte strings in all object columns
+            count = 0
+            
 
+            # Clean up byte strings in all object columns
             def decode_bytes(df):
                 for col in df.columns:
                     if df[col].dtype == object:
                         df[col] = df[col].apply(
-                            lambda x: x.decode("utf-8") if isinstance(x, bytes) else x
+                            lambda x: x.decode("utf-8") if isinstance(x, (bytes, bytearray, np.bytes_)) else x
                         )
                 return df
 
-            def convert_numpy_types(obj):
-                """Recursively convert numpy types to Python native types"""
+            # Expand structured numpy dtypes into list of dicts
+            def structured_to_records(data):
                 try:
-                    if hasattr(obj, 'item'):  # numpy scalar
+                    if isinstance(data, np.ndarray):
+                        if getattr(data, "dtype", None) is not None and data.dtype.names:
+                            return [dict(zip(data.dtype.names, row)) for row in data]
+                except Exception:
+                    pass
+                return data
+
+            # Convert numpy types to Python native types
+            def convert_numpy_types(obj):
+                try:
+                    if hasattr(obj, "item"):
                         return obj.item()
                     elif isinstance(obj, (list, tuple)):
-                        return [convert_numpy_types(item) for item in obj]
+                        return [convert_numpy_types(x) for x in obj]
                     elif isinstance(obj, dict):
                         return {str(k): convert_numpy_types(v) for k, v in obj.items()}
-                    elif hasattr(obj, 'dtype'):  # numpy array
-                        if obj.size == 1:  # Single element array
+                    elif isinstance(obj, np.ndarray):
+                        if obj.size == 1:
                             return obj.item()
-                        else:  # Multi-element array
-                            return obj.tolist()
-                    else:
-                        return obj
-                except Exception as e:
-                    self.logger.warning(f"Error converting numpy type: {e}")
-                    return str(obj)  # Fallback to string representation
+                        return [convert_numpy_types(x) for x in obj.tolist()]
+                    return obj
+                except Exception:
+                    return str(obj)
 
-            def recurse(name, obj, path=[]):
-                try:
-                    if isinstance(obj, h5py.Dataset):
-                        data = obj[()]
-                        # If it's a 1D or structured dataset, load it into dicts
-                        if isinstance(data, (list, tuple)) or hasattr(data, "dtype"):
-                            try:
-                                df = pd.DataFrame(data)
-                            except Exception:
-                                df = pd.DataFrame(data.tolist())  # base
-                            for _, row in df.iterrows():
-                                try:
-                                    row_dict = row.to_dict()
-                                    # Convert any numpy types to Python native types
-                                    row_dict = convert_numpy_types(row_dict)
-                                    rows.append(row_dict)
-                                except Exception as e:
-                                    self.logger.warning(f"Error processing row: {e}")
-                                    # Try to process the row with basic conversion
-                                    try:
-                                        basic_row = {}
-                                        for col in row.index:
-                                            try:
-                                                value = row[col]
-                                                if hasattr(value, 'item'):
-                                                    basic_row[str(col)] = value.item()
-                                                else:
-                                                    basic_row[str(col)] = str(value)
-                                            except Exception:
-                                                basic_row[str(col)] = str(value)
-                                        rows.append(basic_row)
-                                    except Exception as e2:
-                                        self.logger.warning(f"Failed to process row even with basic conversion: {e2}")
-                                        continue
-                        else:
-                            # Scalar or flat dataset - ensure data is hashable
-                            try:
-                                # Convert any numpy types to Python native types
-                                data = convert_numpy_types(data)
-                                row_dict = {"value": data}
-                                rows.append(row_dict)
-                            except Exception as e:
-                                self.logger.warning(f"Error processing scalar data: {e}")
-                                # Try basic conversion
-                                try:
-                                    if hasattr(data, 'item'):
-                                        row_dict = {"value": data.item()}
-                                    else:
-                                        row_dict = {"value": str(data)}
-                                    rows.append(row_dict)
-                                except Exception as e2:
-                                    self.logger.warning(f"Failed to process scalar data even with basic conversion: {e2}")
-                                    # Skip this data point
-                                    pass
-                except Exception as e:
-                    self.logger.warning(f"Error in recurse function: {e}")
+            # Random sampling helper
+            def add_row(row_dict):
+                nonlocal count
+                count += 1
+                if len(rows) < MAX_ROWS:
+                    rows.append(row_dict)
+                else:
+                    j = random.randint(1, count)
+                    if j <= MAX_ROWS:
+                        rows[j - 1] = row_dict
+
+            # Process a chunk of data (structured dtype, ND flattening, sampling)
+            def process_data_chunk(data):
+                data = structured_to_records(data)
+
+                # ND flattening for multidimensional arrays
+                if isinstance(data, np.ndarray) and hasattr(data, "ndim") and data.ndim > 2:
+                    try:
+                        data = np.ascontiguousarray(data).reshape(data.shape[0], -1)
+                    except Exception:
+                        return
+
+                # Fast-path for simple 1D arrays
+                if isinstance(data, np.ndarray) and data.ndim == 1:
+                    for val in data:
+                        try:
+                            row_val = convert_numpy_types(val)
+                            add_row({"value": row_val})
+                        except Exception:
+                            continue
                     return
 
-            with h5py.File(self.file_path, "r") as f:
+                # Handle table-like datasets
+                if isinstance(data, (list, tuple)) or hasattr(data, "dtype"):
+                    try:
+                        df = pd.DataFrame(data)
+                    except Exception:
+                        try:
+                            df = pd.DataFrame(data.tolist())
+                        except Exception:
+                            return
 
+                    for _, row in df.iterrows():
+                        try:
+                            row_dict = convert_numpy_types(row.to_dict())
+                            add_row(row_dict)
+                        except Exception:
+                            try:
+                                basic_row = {}
+                                for col in row.index:
+                                    val = row[col]
+                                    if hasattr(val, "item"):
+                                        basic_row[str(col)] = val.item()
+                                    else:
+                                        basic_row[str(col)] = str(val)
+                                add_row(basic_row)
+                            except Exception:
+                                continue
+                else:
+                    try:
+                        val = convert_numpy_types(data)
+                        add_row({"value": val})
+                    except Exception:
+                        try:
+                            if hasattr(data, "item"):
+                                add_row({"value": data.item()})
+                            else:
+                                add_row({"value": str(data)})
+                        except Exception:
+                            return
+
+            # Chunked dataset reading + sampling
+            def recurse(name, obj, path=[]):
+                if isinstance(obj, h5py.Dataset):
+                    shape = getattr(obj, "shape", None)
+
+                    # Chunk mode for any large dataset (Option 2)
+                    if shape is not None and len(shape) > 0 and shape[0] > 10000:
+                        step = 10000
+                        for i in range(0, shape[0], step):
+                            try:
+                                chunk = obj[i:i+step]
+                                process_data_chunk(chunk)
+                            except Exception:
+                                break
+                    else:
+                        try:
+                            data = obj[()]
+                            process_data_chunk(data)
+                        except Exception:
+                            return
+
+            # Traverse all datasets
+            with h5py.File(self.file_path, "r") as f:
                 def visit(name, obj):
                     recurse(name, obj, name.strip("/").split("/"))
-
                 f.visititems(visit)
+
+            # Create final DataFrame
             df = pd.DataFrame(rows)
             df = decode_bytes(df)
 
-            # Ensure all column names are strings to avoid numpy array issues
-            if hasattr(df, 'columns') and len(df.columns) > 0:
+            if hasattr(df, "columns") and len(df.columns) > 0:
                 df.columns = [str(col) for col in df.columns]
 
-            # Check if DataFrame is empty and log warning
             if df.empty:
                 self.logger.warning("No data was successfully processed from HDF5 file")
                 return None
 
             return df
+
         except Exception as e:
             self.logger.error(f"Error while reading: {e}")
             return None
 
     def parse(self):
-        # Recursively find all group names in the HDF5 file
         def recurse(data):
             try:
-                # Convert items() to a list first to avoid iteration issues
                 items = list(data.items())
                 for name, obj in items:
                     try:
-                        # Ensure name is a string and hashable to avoid "unhashable type" errors
                         full_path = str(name)
-
                         if isinstance(obj, h5py.Group):
                             group_names.append(full_path)
                             recurse(obj)
-                    except (TypeError, ValueError) as e:
-                        # If conversion fails, skip this key and log the error
-                        self.logger.warning(f"Skipping unhashable key {name}: {e}")
+                    except (TypeError, ValueError):
                         continue
-            except Exception as e:
-                self.logger.error(f"Error during recursion: {e}")
+            except Exception:
+                pass
             return group_names
 
         with h5py.File(self.file_path, "r") as f:
@@ -154,16 +194,13 @@ class hdf5Reader(BaseFileReader):
     def filter(self, kept_keys):
         if isinstance(kept_keys, str):
             kept_keys = kept_keys.split(",")
-        # Ensure all keys are strings and hashable to avoid "unhashable type" errors
+
         filtered_keys = set()
         for g in kept_keys:
             try:
-                # Convert to string and ensure it's hashable
                 key_str = str(g).strip("/")
-                # Test if it's hashable by trying to add to set
                 filtered_keys.add(key_str)
             except (TypeError, ValueError) as e:
-                # If conversion fails, skip this key and log the error
                 self.logger.warning(f"Skipping unhashable key {g}: {e}")
                 continue
 
@@ -171,6 +208,7 @@ class hdf5Reader(BaseFileReader):
             f"filtered_{uuid.uuid4().hex}_{session.get('uploaded_file_name')}"
         )
         new_file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], new_file_name)
+
         with (
             h5py.File(self.file_path, "r") as src,
             h5py.File(new_file_path, "w") as tgt,
@@ -192,3 +230,4 @@ class hdf5Reader(BaseFileReader):
             copy_group("", src, tgt)
 
         return new_file_path
+
