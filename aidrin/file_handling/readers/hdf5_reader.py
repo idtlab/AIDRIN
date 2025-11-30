@@ -12,18 +12,16 @@ from aidrin.file_handling.readers.base_reader import BaseFileReader
 class hdf5Reader(BaseFileReader):
     def read(self):
         try:
-            # Limit number of rows using random sampling
-            MAX_ROWS = 2000
-            rows = []
-            count = 0
-            
+            rows = [] 
 
             # Clean up byte strings in all object columns
             def decode_bytes(df):
                 for col in df.columns:
                     if df[col].dtype == object:
                         df[col] = df[col].apply(
-                            lambda x: x.decode("utf-8") if isinstance(x, (bytes, bytearray, np.bytes_)) else x
+                            lambda x: x.decode("utf-8")
+                            if isinstance(x, (bytes, bytearray, np.bytes_))
+                            else x
                         )
                 return df
 
@@ -54,18 +52,7 @@ class hdf5Reader(BaseFileReader):
                 except Exception:
                     return str(obj)
 
-            # Random sampling helper
-            def add_row(row_dict):
-                nonlocal count
-                count += 1
-                if len(rows) < MAX_ROWS:
-                    rows.append(row_dict)
-                else:
-                    j = random.randint(1, count)
-                    if j <= MAX_ROWS:
-                        rows[j - 1] = row_dict
-
-            # Process a chunk of data (structured dtype, ND flattening, sampling)
+            # Process a chunk of data (structured dtype, ND flattening)
             def process_data_chunk(data):
                 data = structured_to_records(data)
 
@@ -77,11 +64,11 @@ class hdf5Reader(BaseFileReader):
                         return
 
                 # Fast-path for simple 1D arrays
-                if isinstance(data, np.ndarray) and data.ndim == 1:
+                if isinstance(data, np.ndarray) and getattr(data, "ndim", 1) == 1:
                     for val in data:
                         try:
                             row_val = convert_numpy_types(val)
-                            add_row({"value": row_val})
+                            rows.append({"value": row_val})  
                         except Exception:
                             continue
                     return
@@ -99,7 +86,7 @@ class hdf5Reader(BaseFileReader):
                     for _, row in df.iterrows():
                         try:
                             row_dict = convert_numpy_types(row.to_dict())
-                            add_row(row_dict)
+                            rows.append(row_dict)  
                         except Exception:
                             try:
                                 basic_row = {}
@@ -109,28 +96,28 @@ class hdf5Reader(BaseFileReader):
                                         basic_row[str(col)] = val.item()
                                     else:
                                         basic_row[str(col)] = str(val)
-                                add_row(basic_row)
+                                rows.append(basic_row)
                             except Exception:
                                 continue
                 else:
                     try:
                         val = convert_numpy_types(data)
-                        add_row({"value": val})
+                        rows.append({"value": val})  
                     except Exception:
                         try:
                             if hasattr(data, "item"):
-                                add_row({"value": data.item()})
+                                rows.append({"value": data.item()})
                             else:
-                                add_row({"value": str(data)})
+                                rows.append({"value": str(data)})
                         except Exception:
                             return
 
-            # Chunked dataset reading + sampling
+            # Chunked dataset reading 
             def recurse(name, obj, path=[]):
                 if isinstance(obj, h5py.Dataset):
                     shape = getattr(obj, "shape", None)
 
-                    # Chunk mode for any large dataset (Option 2)
+                    # Still chunk large datasets to avoid memory explosions
                     if shape is not None and len(shape) > 0 and shape[0] > 10000:
                         step = 10000
                         for i in range(0, shape[0], step):
