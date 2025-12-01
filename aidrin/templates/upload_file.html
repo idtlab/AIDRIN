@@ -111,6 +111,21 @@
             <h3 onclick="togglePillarDropdown('DataStructureDropdown')">Data Structure and Organization<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
                 <div id="DataStructureDropdown">
                     <strong class="toggle-button">No metrics available for this pillar yet</strong>
+            {% if file_type == '.csv' %}
+                <h3 onclick="location.href='{{ url_for('customMetrics') }}'" style="cursor:pointer; color:inherit;">
+                    Define Custom Metrics
+                    <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
+                        <path d="M400-280v-400l200 200-200 200Z"/>
+                    </svg>
+                </h3>
+            {% else %}
+                <h3 style="cursor:not-allowed; color:grey;" title="Custom metrics can only be defined for CSV files">
+                    Define Custom Metrics
+                    <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
+                        <path d="M400-280v-400l200 200-200 200Z"/>
+                    </svg>
+                </h3>
+            {% endif %}
                 </div>
 
         {% else %}
@@ -137,6 +152,7 @@
                     <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("FAIR")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
             <h3 class="noUpload metric-info">Data Structure and Organization<span class="metric-info-text">Please upload a file</span></h3>
+            <h3 class="noUpload metric-info">Define Custom Metrics<span class="metric-info-text">Please upload a file</span></h3>
         {% endif %}
         </div>
     </form>

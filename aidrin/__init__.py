@@ -1,9 +1,9 @@
 import os
-
 from celery import Celery, Task
 from flask import Flask
 from ._version import __version__
 from .main import main as main_blueprint
+from .tasks import delete_old_custom_metrics  # noqa: F401
 
 
 # create app config
@@ -16,8 +16,14 @@ def create_app():
     app.secret_key = "aidrin"
     # Celery Config
     app.config["CELERY"] = {
-        "broker_url": "redis://localhost:6379/0",  #
+        "broker_url": "redis://localhost:6379/0",
         "result_backend": "redis://localhost:6379/0",
+        "beat_schedule": {
+            "delete-old-custom-metrics": {
+                "task": "delete_old_custom_metrics",
+                "schedule": 120.0,
+            }
+        },
         "task_ignore_result": False,  # Store task results in backend for status checking
         "task_soft_time_limit": 300,  # Task is soft killed
         "task_time_limit": 360,  # Task is force killed after this time
@@ -57,8 +63,49 @@ def create_app():
         except Exception as e:
             print(f"Failed to delete {file_path}: {e}")
 
-    if files_removed > 0:
-        print(f"Startup cleanup completed: {files_removed} old files removed")
+    # Create custom_metrics folder
+    CUSTOM_METRICS_FOLDER = os.path.join(app.root_path, "custom_metrics")
+    os.makedirs(CUSTOM_METRICS_FOLDER, exist_ok=True)
+    app.config["CUSTOM_METRICS_FOLDER"] = CUSTOM_METRICS_FOLDER
+    app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {'py'}  # Allowed file extensions for custom metrics
+
+    REMEDY_FOLDER = os.path.join(CUSTOM_METRICS_FOLDER, "remedy_data")
+    os.makedirs(REMEDY_FOLDER, exist_ok=True)
+    app.config["REMEDY_FOLDER"] = REMEDY_FOLDER
+
+    metrics_removed = 0
+    exclude = {"__init__.py", "base_dr.py"}
+    for filename in os.listdir(CUSTOM_METRICS_FOLDER):
+        if filename in exclude:
+            continue
+        file_path = os.path.join(CUSTOM_METRICS_FOLDER, filename)
+        try:
+            if os.path.isfile(file_path):
+                file_age = current_time - os.path.getmtime(file_path)
+                if file_age > max_age_seconds:
+                    os.remove(file_path)
+                    metrics_removed += 1
+                    print(f"[Startup Cleanup] Deleted old custom metric: {filename}")
+        except Exception as e:
+            print(f"[Startup Cleanup] Failed to delete {file_path}: {e}")
+
+    # Clean up old remedy_data files on app start (older than 1 hour)
+    remedy_removed = 0
+    for filename in os.listdir(REMEDY_FOLDER):
+        file_path = os.path.join(REMEDY_FOLDER, filename)
+        try:
+            if os.path.isfile(file_path):
+                file_age = current_time - os.path.getmtime(file_path)
+                if file_age > max_age_seconds:
+                    os.remove(file_path)
+                    remedy_removed += 1
+                    print(f"[Startup Cleanup] Deleted old remedy file: {filename}")
+        except Exception as e:
+            print(f"[Startup Cleanup] Failed to delete {file_path}: {e}")
+
+    if files_removed > 0 or metrics_removed > 0 or remedy_removed > 0:
+        print(f"[Startup Cleanup] Completed: {files_removed} upload(s) + "
+              f"{metrics_removed} custom metric(s) + {remedy_removed} remedy file(s) removed")
 
     return app
 
@@ -74,6 +121,7 @@ def celery_init_app(app: Flask) -> Celery:
     celery_app.config_from_object(app.config["CELERY"])
     celery_app.set_default()
     app.extensions["celery"] = celery_app
+
     return celery_app
 
 

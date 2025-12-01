@@ -4,7 +4,9 @@ Publications
 2025
 ----
 
-- K. Hiniduma, Z. Li, A. Sinha, R. Madduri, S. Byna (2025). *CADRE: Customizable Assurance of Data Readiness in Privacy-Preserving Federated Learning*. In Proceedings of the 21st IEEE International Conference on e-Science **(e-Science '25)**. https://arxiv.org/abs/2505.23849
+- K. Hiniduma, J. L. Bez, R. Madduri, S. Byna (2025). *AIDRIN: A Comprehensive Toolset for Automating Data Preparation for AI*. Poster presented at the International Conference for High Performance Computing, Networking, Storage, and Analysis **(SC25)**. https://sc25.conference-program.com/presentation/?id=int_post104&sess=sess537
+
+- K. Hiniduma, Z. Li, A. Sinha, R. Madduri, S. Byna (2025). *CADRE: Customizable Assurance of Data Readiness in Privacy-Preserving Federated Learning*. In Proceedings of the 21st IEEE International Conference on e-Science **(e-Science '25)**. https://doi.org/10.1109/eScience65000.2025.00023
 
 - K. Hiniduma, D. Ryan, S. Byna, J. L. Bez, R. Madduri (2025). *AIDRIN 2.0: A Framework to Assess Data Readiness for AI*. Poster presented at the International Conference on Scalable Scientific Data Management **(SSDBM 2025)**. https://arxiv.org/abs/2505.18213
 

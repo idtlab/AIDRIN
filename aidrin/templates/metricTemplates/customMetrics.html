@@ -1,0 +1,72 @@
+{% extends 'metricTemplates/metricBase.html' %}
+{% set page_title = "Define Custom Metric" %}
+{% set page_route = "customMetrics" %}
+{% block metricContent %}
+<div style="margin: 2%; display: flex; flex-direction: column; align-items: center;">
+
+  <p><strong>Define your custom <code>metric()</code> and <code>remedy()</code> functions:</strong></p>
+  <p>The <code>metric()</code> function should return a dictionary with metric results. The <code>remedy()</code> function should return a modified dataset as a dataframe.</p>
+  <p style="margin-bottom:20px;"> If you do not wish to apply a remedy, you can leave the <code>remedy()</code> function as it is. The metric evaluations will still be displayed below.</p>
+  <textarea id="metricCodeEditor" name="metric_code"></textarea>
+
+  <p style="margin-top: 20px;"><strong>If you wish to apply the remedy you defined above, please check the box below:</strong></p>
+  <label>
+    <input type="checkbox" id="apply_remedy" name="apply_remedy" value="yes" /> Apply Remedy
+  </label>
+
+  <p style="margin-top:20px; align-self: center;"> <strong>Click "Save" to save your custom metric and remedy. And then click "Submit" to view the results.</strong></p>
+  <div style="margin-top: 20px; display:flex; gap:15px;">
+
+    <button onclick="saveFile()" class="animated-button">Save</button>
+  </div>
+<p><em>Note: Custom metrics you define and any remedied data will be stored on the server for <strong>1 hour</strong>. After that, they will be automatically removed.</em></p>
+
+</div>
+
+<!-- CodeMirror -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/codemirror.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/theme/eclipse.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/mode/python/python.min.js"></script>
+
+
+<script>
+let editor;
+
+document.addEventListener("DOMContentLoaded", () => {
+  editor = CodeMirror.fromTextArea(document.getElementById("metricCodeEditor"), {
+    mode: "python",
+    lineNumbers: true,
+    theme: "eclipse",  // Light theme with white background
+    indentUnit: 4,
+    tabSize: 4,
+    lineWrapping: true,
+    matchBrackets: true,
+    autoCloseBrackets: true
+  });
+
+  // Load existing code
+  fetch("/load_custom_metric")
+    .then(r => r.text())
+    .then(code => editor.setValue(code))
+    .catch(err => alert("Error loading file: " + err));
+});
+
+function saveFile() {
+  const code = editor.getValue();
+  const applyRemedy = document.getElementById("apply_remedy").checked ? "yes" : "no";
+
+  const formData = new FormData();
+  formData.append("metric_code", code);
+  formData.append("apply_remedy", applyRemedy);
+
+  fetch("/save_custom_metric_text", { method: "POST", body: formData })
+    .then(r => r.json())
+    .then(data => alert(data.message || data.error))
+    .catch(err => alert("Error saving file: " + err));
+}
+
+
+</script>
+
+{% endblock %}
