@@ -214,15 +214,15 @@ $(document).ready(function () {
                 "allFeaturesDropdownFeaRel"
               );
               // Create checkbox containers for class imbalance
-              console.log("Creating class imbalance checkboxes with features:", response.class_imbalance_features);
-              createCheckboxContainer(
-                response.class_imbalance_features,
-                "classImbalanceFeaturesCheckbox",
+              console.log("Creating class imbalance checkboxes with features:", response.all_features);
+              createDropdown(
+                response.all_features,
+                "allFeaturesCheckboxClassImbalance",
                 "target features for class imbalance"
               );
 
               // Create checkbox container for distance metrics with custom values
-              createDistanceMetricsCheckboxContainer();
+              createDistanceMetricsDropdown();
 
               createDropdown(response.all_features, "allFeaturesDropdownMMS");
               createDropdown(response.all_features, "allFeaturesDropdownMMM");
@@ -242,6 +242,42 @@ $(document).ready(function () {
                 response.all_features,
                 "tClosenessSensitiveDropdown"
               );
+              // Disable Target feature checkboxes
+              document.querySelectorAll(".checkboxContainerIndividual").forEach(container => {
+                const dropdown = container.querySelector("select");
+
+                const updateTargetCheckbox = () => {
+                    const selectedTarget = dropdown.value;
+                    // Find the target checkbox
+                    const targetCheckbox = container.querySelector(`input.checkbox.individual[value="${selectedTarget}"]`);
+                    if (!targetCheckbox) return;
+                    // Remove previous target-feature class and enable all checkboxes
+                    container.querySelectorAll("input.checkbox.individual").forEach(cb => {
+                      if(cb.classList.contains("target-feature")){
+                        cb.classList.remove("target-feature");
+                        cb.disabled = false;
+                      }
+                    });
+
+                    // Uncheck, mark, and disable the target checkbox
+                    targetCheckbox.checked = false;
+                    targetCheckbox.classList.add("target-feature");
+                    targetCheckbox.disabled = true;
+                    console.log("disabling target feature");
+
+                    // Uncheck the select-all checkbox for the group containing this target
+                    const parentDiv = targetCheckbox.closest("div");
+                    if (parentDiv) {
+                        const selectAll = parentDiv.querySelector("input.checkbox.select-all");
+                        if (selectAll) selectAll.checked = false;
+                    }
+                };
+                // Call once on page load
+                updateTargetCheckbox();
+                // Call on dropdown change
+                dropdown.addEventListener("change", updateTargetCheckbox);
+              });
+
 
               // Initialize main metric checkbox states first
               updateMetricCheckboxState("k-anonymity");
@@ -486,29 +522,70 @@ $(document).ready(function () {
       });
   });
   function createCheckboxContainer(features, tableId, nameTag) {
-  console.log("createCheckboxContainer called with:", { features, tableId, nameTag });
-  var table = $("#" + tableId);
-  table.empty(); // Clear previous content
+    var $table = $("#" + tableId);
+    $table.empty(); // Clear previous content
+    var columns = 4; // Maximum number of columns
 
-      var columns = 4; // Maximum number of columns
-  console.log("Features array:", features);
-  for (var i = 0; i < features.length && features[0] != "{"; i++) {
+    // Return early if no features with message
+    if (!features || features.length === 0 || features[0] === "{") {
+      $table.append($("<tr>").append($("<td colspan='4'>").text("No features available for selection")));
+      return;
+    }
+    function updateSelectAllState(tableId) {
+      const checkboxes = $table.find(".checkbox.individual").not(".target-feature");
+      const selectAll = document.getElementById(tableId + "-select-all");
+      const total = checkboxes.length;
+      const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+
+      selectAll.checked = checked === total;
+    }
+    // Create select all for all tables except single attribute risk and laplacian noise (only one feature selected)
+    if(nameTag!="quasi identifiers to measure single attribute risk score"&&nameTag!="numerical features to add noise"){
+      //create selectAll checkbox
+      var $selectAllRow = $("<tr>")
+      var selectAllId = tableId + "-select-all";
+      var $selectAllCell = $("<td>").attr({
+        colspan: columns,
+      });
+      var $selectAllCheckbox = $("<input>")
+        .attr({
+          type: "checkbox",
+          class: "checkbox select-all",
+          id: selectAllId,
+          disabled: false,
+        });
+      var selectAllLabel = $("<label>")
+        .attr("for", selectAllId)
+        .attr("class", "material-checkbox selectAll")
+        .attr("style", "display:flex;flex-direction:row;min-width:125px;align-items:center;")
+        .attr("data-tooltip", "Warning: Selecting all features may significantly increase processing time.")
+        .append($selectAllCheckbox)
+        .append($("<span>").addClass("checkmark"))
+        .append("Select All");
+
+      $selectAllCell.append(selectAllLabel)
+      $selectAllRow.append($selectAllCell);
+      $table.append($selectAllRow);
+    }
+    for (var i = 0; i < features.length && features[0] != "{"; i++) {
       if (i % columns === 0) {
         var row = $("<tr>");
-        table.append(row);
+        $table.append(row);
       }
 
       var checkbox = $("<input>").attr({
         type: "checkbox",
         class: "checkbox individual",
         style: "margin-right:10px",
-        onchange: "toggleValueIndividual(this)",
         id: tableId + "checkbox_" + i, // Generate unique ids so all buttons work
         name: nameTag, // Set the name attribute
         value: features[i],
         // Remove disabled: true - individual checkboxes should be selectable
       });
-
+      checkbox.on("change", function () {
+        toggleValueIndividual(this);
+        updateSelectAllState(tableId);
+      });
       var span = $("<span>").addClass("checkmark");
 
       var label = $("<label>")
@@ -526,11 +603,15 @@ $(document).ready(function () {
 
       row.append(cell);
     }
+    $("#" + selectAllId).on("change", function () {
+      const checked = this.checked;
+      $table.find(".checkbox.individual").not(".target-feature").prop("checked", checked).trigger("change");
+    });
   }
 
-  function createDistanceMetricsCheckboxContainer() {
-    var table = $("#classImbalanceDistanceCheckbox");
-    table.empty(); // Clear previous content
+  function createDistanceMetricsDropdown() {
+    var dropdown = $("#classImbalanceDistanceDropdown");
+    dropdown.empty(); // Clear previous options
 
     const distanceMetrics = [
       { value: "EU", label: "Euclidean Distance (EU)" },
@@ -541,40 +622,16 @@ $(document).ready(function () {
       { value: "CS", label: "Chi-square Divergence (CS)" }
     ];
 
-    var columns = 2; // Maximum number of columns for distance metrics
-    for (var i = 0; i < distanceMetrics.length; i++) {
-      if (i % columns === 0) {
-        var row = $("<tr>");
-        table.append(row);
-      }
-
-      var checkbox = $("<input>").attr({
-        type: "checkbox",
-        class: "checkbox individual",
-        style: "margin-right:10px",
-        onchange: "toggleValueIndividual(this)",
-        id: "classImbalanceDistanceCheckbox_checkbox_" + i,
-        name: "distance metrics for class imbalance",
-        value: distanceMetrics[i].value, // Store the short code (EU, CH, etc.)
-      });
-
-      var span = $("<span>").addClass("checkmark");
-
-      var label = $("<label>")
-        .attr(
-          "style",
-          "display: flex; flex-direction:row; min-width: 200px; align-items: center;"
-        )
-        .attr("class", "material-checkbox")
-        .attr("id", "classImbalanceDistanceCheckbox_checkbox_" + i);
-
-      label.append(checkbox).append(span).append(distanceMetrics[i].label);
-      var cell = $("<td>").append(label);
-
-      row.append(cell);
-    }
+    distanceMetrics.forEach(metric => {
+      var option = $("<option>")
+        .attr("value", metric.value)
+        .text(metric.label);
+      dropdown.append(option);
+    });
   }
+
 });
+
 function updateCrossDisable() {
   console.log("updateCrossDisable function called");
   // Get selected quasi-identifiers for each metric separately
@@ -761,22 +818,52 @@ function updateCrossDisable() {
   // EXCLUDE feature relevance checkboxes from this logic
   $('input[name="quasi identifiers for k-anonymity"]').each(function () {
     const val = $(this).val();
-    $(this).prop("disabled", !kAnonymityEnabled);
+    const isSelectedAsSensitive =
+      $("#lDiversitySensitiveDropdown").val() === val;
+
+    const shouldDisable = !kAnonymityEnabled || isSelectedAsSensitive;
+
+    $(this).prop("disabled", shouldDisable);
+
+    if (shouldDisable) {
+      $(this).addClass("target-feature");
+    } else {
+      $(this).removeClass("target-feature");
+    }
   });
 
   $('input[name="quasi identifiers for l-diversity"]').each(function () {
-    const val = $(this).val();
-    const isSelectedAsSensitive =
-      $("#lDiversitySensitiveDropdown").val() === val;
-    $(this).prop("disabled", !lDiversityEnabled || isSelectedAsSensitive);
-  });
+  const val = $(this).val();
+  const isSelectedAsSensitive =
+    $("#lDiversitySensitiveDropdown").val() === val;
 
-  $('input[name="quasi identifiers for t-closeness"]').each(function () {
-    const val = $(this).val();
-    const isSelectedAsSensitive =
-      $("#tClosenessSensitiveDropdown").val() === val;
-    $(this).prop("disabled", !tClosenessEnabled || isSelectedAsSensitive);
-  });
+  const shouldDisable = !lDiversityEnabled || isSelectedAsSensitive;
+
+  $(this).prop("disabled", shouldDisable);
+
+  if (shouldDisable) {
+    $(this).addClass("target-feature");
+  } else {
+    $(this).removeClass("target-feature");
+  }
+});
+
+$('input[name="quasi identifiers for t-closeness"]').each(function () {
+  const val = $(this).val();
+  const isSelectedAsSensitive =
+    $("#tClosenessSensitiveDropdown").val() === val;
+
+  const shouldDisable = !tClosenessEnabled || isSelectedAsSensitive;
+
+  $(this).prop("disabled", shouldDisable);
+
+  if (shouldDisable) {
+    $(this).addClass("target-feature");
+  } else {
+    $(this).removeClass("target-feature");
+  }
+});
+
 
   $('input[name="quasi identifiers for entropy risk"]').each(function () {
     const val = $(this).val();
@@ -803,8 +890,8 @@ function updateCrossDisable() {
   });
 
   // IMPORTANT: Feature relevance checkboxes should NEVER be disabled
-  // They are independent of metric selection and should always be selectable
-  $('input[name="categorical features for feature relevancy"], input[name="numerical features for feature relevancy"]').each(function () {
+  $('input[name="categorical features for feature relevancy"]:not(.target-feature), input[name="numerical features for feature relevancy"]:not(.target-feature)')
+  .each(function () {
     $(this).prop("disabled", false);
   });
 }
@@ -814,12 +901,6 @@ function updateCrossDisable() {
     $(this).prop("disabled", !classImbalanceEnabled);
   });
 
-// Function to ensure feature relevance checkboxes are always enabled
-function ensureFeatureRelevanceCheckboxesEnabled() {
-  $('input[name="categorical features for feature relevancy"], input[name="numerical features for feature relevancy"]').each(function () {
-    $(this).prop("disabled", false);
-  });
-}
 $(document).ready(function () {
   // Ensure feature relevance checkboxes are always enabled
   ensureFeatureRelevanceCheckboxesEnabled();
@@ -915,14 +996,8 @@ function updateMetricCheckboxState(metricCheckboxName) {
 
 // Individual checkbox toggle for metric checkboxes
 function toggleValueIndividual(checkbox) {
-  // Toggle the value based on the checked state
-  if (checkbox.checked) {
-    const label = checkbox.closest("label");
-    const text = label.textContent.trim();
-    checkbox.value = text;
-  } else {
-    checkbox.value = "no";
-  }
-
+  const label = checkbox.closest("label");
+  const text = label.textContent.trim();
+  checkbox.value = text;
   console.log("Checkbox value:", checkbox.value); // For debugging
 }

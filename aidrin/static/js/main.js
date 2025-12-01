@@ -285,15 +285,14 @@ function submitForm() {
   var catFeaCheckboxValues = Array.from(
     formData.getAll("categorical features for feature relevancy")
   ).join(",");
-
   // Add the concatenated checkbox values to the form data
   formData.set("correlation columns", checkboxValues);
   formData.set(
-    "numerical features for feature relevancy",
+    "numerical features",
     numFeaCheckboxValues
   );
   formData.set(
-    "categorical features for feature relevancy",
+    "categorical features",
     catFeaCheckboxValues
   );
 
@@ -335,6 +334,7 @@ function submitForm() {
             "Input Feature and Target Feature cannot be the same"
           );
         }
+
       }
 
       // Add validation for feature relevance form
@@ -360,7 +360,6 @@ function submitForm() {
 
         return true;
       }
-
       // Make the validation function globally available
       window.validateFeatureRelevanceForm = validateFeatureRelevanceForm;
       console.log("Server Response:", data);
@@ -2139,15 +2138,24 @@ function toggleValue(checkbox) {
   // Find all select dropdowns within that container
   const dropdowns = container.querySelectorAll("select");
   const inputs = container.querySelectorAll("input.textWrapper");
+  const checkboxes = container.querySelectorAll("input.checkbox.individual:not(.target-feature)");
+  const selectAllCheckboxs = container.querySelectorAll("input.checkbox.select-all");
+  // Enable or disable all dropdowns inside the container based on checkbox state
 
-  // Enable or disable dropdowns and text inputs based on checkbox state
   dropdowns.forEach((dropdown) => {
     dropdown.disabled = !checkbox.checked;
   });
   inputs.forEach((input) => {
     input.disabled = !checkbox.checked;
   });
+  checkboxes.forEach((input) => {
 
+    input.disabled = !checkbox.checked;
+  });
+  //toggle select all checkboxes state
+  selectAllCheckboxs.forEach((input) => {
+    input.disabled = !checkbox.checked;
+  });
   // IMPORTANT: Don't disable individual feature checkboxes - they should remain selectable
   // The individual checkboxes are for selecting features, not for enabling/disabling the metric
 

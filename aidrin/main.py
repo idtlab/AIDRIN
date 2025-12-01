@@ -614,9 +614,25 @@ def correlationAnalysis():
 
             if request.form.get("correlations") == "yes":
                 start_time_correlations = time.time()
-                columns = request.form.getlist("all features for data transformation")
-                # Create file_info tuple for the calc_correlations function
+                # Get raw input from form and sanitize
+                raw_cat_cols = request.form.get(
+                    "categorical features", ""
+                )
+                raw_num_cols = request.form.get(
+                    "numerical features", ""
+                )
+                # Clean each list by removing empty strings and whitespace-only entries
+                cat_cols = [
+                    col.strip() for col in raw_cat_cols.split(",") if col.strip()
+                ]
+                num_cols = [
+                    col.strip() for col in raw_num_cols.split(",") if col.strip()
+                ]
+                metric_time_log.debug(cat_cols)
+                metric_time_log.debug(num_cols)
+                columns = cat_cols + num_cols
                 file_info = (file_path, file_name, file_type)
+
                 correlations_result = calc_correlations.delay(columns, file_info)
                 corr_dict = correlations_result.get()
                 # catch potential errors
@@ -665,8 +681,8 @@ def featureRelevance():
         # feature relevancy
         if request.form.get("feature relevancy") == "yes":
             # Get raw input from form and sanitize
-            raw_cat_cols = request.form.get("categorical features for feature relevancy", "")
-            raw_num_cols = request.form.get("numerical features for feature relevancy", "")
+            raw_cat_cols = request.form.get("categorical features", "")
+            raw_num_cols = request.form.get("numerical features", "")
 
             # Clean each list by removing empty strings and whitespace-only entries
             cat_cols = [col.strip() for col in raw_cat_cols.split(",") if col.strip()]
@@ -770,7 +786,10 @@ def classImbalance():
         # check for parameters
         if request.form.get("class imbalance") == "yes":
             classes = request.form.get("target features for class imbalance")
-            dist_metric = request.form.get("distance metric for class imbalance", "EU")
+            dist_metric = request.form.get("distance metric for class imbalance")
+
+            if not dist_metric:
+                dist_metric = "EU"
 
             print("Class Imbalance - Form data:", dict(request.form))
             print("Class Imbalance - Form keys:", list(request.form.keys()))
@@ -1688,6 +1707,7 @@ def privacyPreservation():
                         try:
                             result = compute_l_diversity(l_qis, l_sensitive, file)
                             final_dict["l-Diversity"] = result
+
                             current_app.TEMP_RESULTS_CACHE[cache_key] = {
                                 'data': result,
                                 'timestamp': time.time(),
@@ -1826,6 +1846,7 @@ def privacyPreservation():
                                 'timestamp': time.time(),
                                 'expires_at': time.time() + (30 * 60)
                             }
+                            print(f"Cached l-Diversity for key: {cache_key}")
                             print(f"Cached t-Closeness for key: {cache_key}")
                         except Exception as e:
                             error_message = str(e)
@@ -1923,7 +1944,6 @@ def privacyPreservation():
                     "entropy",
                     qis=entropy_qis
                 )
-
                 print(f"Privacy - Entropy Risk Generated cache key: {cache_key}")
 
                 # Check if this calculation has been cached
@@ -2393,8 +2413,7 @@ def get_summary_statistics():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# Feature Set Route
-
+# Progress Tracking routes
 @main.route('/check_and_update_task/<task_id>/<metric_name>', methods=['GET'])
 def check_task_status(task_id, metric_name):
     """Check the status of an async task and return results if complete."""
@@ -2444,6 +2463,8 @@ def check_task_status(task_id, metric_name):
             'error': str(e)
         }), 500
 
+# feature set route
+
 
 @main.route('/feature_set', methods=['POST'])
 def extract_features():
@@ -2490,8 +2511,6 @@ def extract_features():
 
 
 # Functions
-
-
 def manage_cache_size(max_cache_size=100):
     """
     Manage the cache size by removing oldest entries if cache exceeds max size.
