@@ -1,130 +1,216 @@
 import base64
 import io
+from typing import Optional
 
+import matplotlib
+
+matplotlib.use("Agg")  
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
 
 
-def iterate_chunks(df, chunksize=50000):
-    """Yield DataFrame chunks for any file type."""
-    for start in range(0, len(df), chunksize):
-        yield df.iloc[start:start + chunksize]
+MAX_B64_LEN = 250_000
+MAX_BARS = 40
+
+
+def _fig_to_b64(fig: plt.Figure, dpi: int = 85) -> str:
+    """Convert a specific Matplotlib Figure to base64 PNG."""
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    buf.seek(0)
+    s = base64.b64encode(buf.read()).decode("utf-8")
+    plt.close(fig)
+    return s
+
+
+def _info_image(message: str) -> str:
+    fig = plt.figure(figsize=(7.5, 2.3))
+    ax = fig.add_subplot(111)
+    ax.axis("off")
+    ax.text(0.01, 0.5, message, fontsize=11, va="center")
+    fig.tight_layout()
+    return _fig_to_b64(fig, dpi=95)
+
+
+def _barplot_small(
+    keys,
+    vals,
+    title: str,
+    max_bars: int = MAX_BARS,
+    top: bool = True,
+) -> Optional[str]:
+    keys = list(keys)
+    vals = np.asarray(list(vals), dtype=float)
+
+    mask = np.isfinite(vals)
+    keys = [k for k, m in zip(keys, mask) if m]
+    vals = vals[mask]
+    if vals.size == 0:
+        return None
+
+    if len(keys) > max_bars:
+        order = np.argsort(vals)
+        order = order[-max_bars:] if top else order[:max_bars]
+        keys = [keys[i] for i in order]
+        vals = vals[order]
+
+    x = np.arange(len(keys))
+    fig = plt.figure(figsize=(7.5, 3.2))
+    ax = fig.add_subplot(111)
+    ax.bar(x, vals)
+    ax.set_title(title, fontsize=12)
+    ax.set_ylim(0, 1)
+
+    step = max(1, len(keys) // 10)
+    tick_idx = np.arange(0, len(keys), step)
+    ax.set_xticks(tick_idx)
+    ax.set_xticklabels(
+        [str(keys[i]) for i in tick_idx],
+        rotation=45,
+        ha="right",
+        fontsize=8,
+    )
+
+    fig.tight_layout()
+    return _fig_to_b64(fig, dpi=85)
 
 
 @shared_task(bind=True, ignore_result=False)
 def outliers(self: Task, file_info):
+    """
+    Exact IQR outlier proportions per numeric column (matches OG semantics):
+      - For each numeric col: compute q1/q3 on non-null values
+      - Outlier mask on those same non-null values using 1.5*IQR fences
+      - Proportion = (# outliers) / (# non-null)
+      - Overall outlier score = mean of per-feature proportions (finite only)
+    Backward-compatible output keys:
+      - "Outlier scores" dict includes "Overall outlier score"
+      - "Outliers Visualization" is base64 PNG when possible
+    """
     try:
-        # Reads the file
         df = read_file(file_info)
 
         if df is None:
-            return {"Error": "File could not be read."}
+            return {
+                "Error": "File could not be read.",
+                "Outliers Visualization": _info_image(
+                    "Outliers unavailable: file could not be read."
+                ),
+            }
 
-        # Ensures column names are strings
-        df.columns = [str(col) for col in df.columns]
+        if not hasattr(df, "columns") or df.empty:
+            return {
+                "Error": "Dataset is empty.",
+                "Outliers Visualization": _info_image(
+                    "Outliers unavailable: dataset is empty."
+                ),
+            }
 
-        # Selects only numeric columns
-        numeric_df = df.select_dtypes(include=[np.number])
+        df.columns = [str(c) for c in df.columns]
 
-        if numeric_df.empty:
-            return {"Error": "No numerical features found in the dataset."}
 
-        numeric_cols = list(numeric_df.columns)
+        for c in df.columns:
+            if df[c].dtype == object:
+                coerced = pd.to_numeric(df[c], errors="coerce")
+       
+                if np.isfinite(coerced.to_numpy(dtype=float, copy=False)).sum() > 0:
+                    df[c] = coerced
 
-        # Collects values for global quantile computation
-        collected = {col: [] for col in numeric_cols}
+        numerical_df = df.select_dtypes(include=[np.number])
+        if numerical_df.empty:
+ 
+            return {
+                "Error": "No numerical features found in the dataset.",
+                "Outlier scores": {"Overall outlier score": 0.0},
+                "Outliers Visualization": _info_image(
+                    "No numerical features found in the dataset."
+                ),
+            }
 
-        for chunk in iterate_chunks(numeric_df):
-            for col in numeric_cols:
-                collected[col].extend(chunk[col].dropna().tolist())
+        proportions = {}
 
-        # Handles fully empty columns
-        for col in numeric_cols:
-            if len(collected[col]) == 0:
-                collected[col] = [np.nan]
+        for col in numerical_df.columns:
+            series = numerical_df[col].dropna()
 
-        # Computes Q1, Q3, and IQR for each column
-        stats = {}
-        for col in numeric_cols:
-            series = np.array(collected[col])
-            if np.all(np.isnan(series)):
-                stats[col] = (np.nan, np.nan, np.nan)
+            if series.empty:
+                proportions[str(col)] = np.nan
                 continue
 
-            q1 = np.nanpercentile(series, 25)
-            q3 = np.nanpercentile(series, 75)
-            IQR = q3 - q1
-            stats[col] = (q1, q3, IQR)
+            q1 = float(series.quantile(0.25))
+            q3 = float(series.quantile(0.75))
+            iqr = float(q3 - q1)
 
-        # Counts outliers across all chunks
-        total_counts = {col: 0 for col in numeric_cols}
-        outlier_counts = {col: 0 for col in numeric_cols}
+            if not np.isfinite(iqr) or iqr == 0.0:
+                proportions[str(col)] = 0.0
+                continue
 
-        for chunk in iterate_chunks(numeric_df):
-            for col in numeric_cols:
-                col_data = chunk[col].dropna()
-                total_counts[col] += len(col_data)
+            lower = q1 - 1.5 * iqr
+            upper = q3 + 1.5 * iqr
+            mask = (series < lower) | (series > upper)
+            proportions[str(col)] = float(mask.mean())
 
-                q1, q3, IQR = stats[col]
-
-                if np.isnan(IQR) or IQR == 0:
-                    continue
-
-                lower = q1 - 1.5 * IQR
-                upper = q3 + 1.5 * IQR
-                mask = (col_data < lower) | (col_data > upper)
-                outlier_counts[col] += mask.sum()
-
-        # Computes final outlier proportions
-        proportions = {}
-        for col in numeric_cols:
-            if total_counts[col] == 0:
-                proportions[col] = 0.0
-            else:
-                proportions[col] = outlier_counts[col] / total_counts[col]
-
-        # Computes overall outlier score
-        valid_scores = [v for v in proportions.values() if not np.isnan(v)]
-        overall_score = float(np.mean(valid_scores)) if valid_scores else 0.0
-
+        valid_values = [v for v in proportions.values() if np.isfinite(v)]
+        overall_score = float(np.mean(valid_values)) if valid_values else 0.0
         proportions["Overall outlier score"] = overall_score
 
-        # Builds response dictionary
-        out_dict = {"Outlier scores": proportions}
+        out = {"Outlier scores": proportions}
 
-        # Creates visualization for feature-level outlier proportions
+        # Visualization (feature-level only)
         feature_scores = {
-            k: v for k, v in proportions.items()
-            if k != "Overall outlier score"
+            k: v for k, v in proportions.items() if k != "Overall outlier score"
         }
 
-        if feature_scores:
-            plt.figure(figsize=(8, 8))
-            plt.bar(feature_scores.keys(), feature_scores.values(), color="red")
-            plt.title("Proportion of Outliers for Numerical Columns", fontsize=14)
-            plt.xlabel("Columns", fontsize=14)
-            plt.ylabel("Proportion of Outliers", fontsize=14)
-            plt.ylim(0, 1)
-            plt.xticks(rotation=45, ha="right", fontsize=12)
-            plt.tight_layout()
+        if not feature_scores:
+            out["Outliers Visualization"] = _info_image(
+                "Outliers computed, but no feature scores to plot."
+            )
+            return out
 
-            # Converts chart to base64
-            img_buf = io.BytesIO()
-            plt.savefig(img_buf, format="png")
-            img_buf.seek(0)
-            img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
-            plt.close()
+        vals = np.asarray(list(feature_scores.values()), dtype=float)
+        finite_vals = vals[np.isfinite(vals)]
 
-            out_dict["Outliers Visualization"] = img_base64
+        if finite_vals.size == 0:
+            out["Outliers Visualization"] = _info_image(
+                "Outliers computed, but no finite scores to plot."
+            )
+            return out
 
-        return out_dict
+        if float(np.nanmax(finite_vals)) == 0.0:
+            out["Outliers Visualization"] = _info_image(
+                "No outliers detected (all proportions are 0).\n"
+                "Common causes: very few rows, constant columns (IQR=0)."
+            )
+            return out
+
+        img = _barplot_small(
+            keys=list(feature_scores.keys()),
+            vals=list(feature_scores.values()),
+            title="Proportion of Outliers (top features)",
+            max_bars=MAX_BARS,
+            top=True,
+        )
+
+        if (not img) or (len(img) > MAX_B64_LEN):
+            out["Outliers Visualization"] = _info_image(
+                "Outliers chart omitted to prevent oversized payload.\n"
+                "Scores are computed successfully."
+            )
+        else:
+            out["Outliers Visualization"] = img
+
+        return out
 
     except SoftTimeLimitExceeded:
         raise Exception("Outliers task timed out.")
     except Exception as e:
-        return {"Error": f"Outlier detection failed: {str(e)}"}
+        msg = f"Outlier detection failed: {str(e)}"
+        return {
+            "Error": msg,
+            "Outliers Visualization": _info_image(msg),
+        }
 
