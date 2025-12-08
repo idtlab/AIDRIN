@@ -82,16 +82,7 @@ def _barplot_small(
 
 @shared_task(bind=True, ignore_result=False)
 def outliers(self: Task, file_info):
-    """
-    Exact IQR outlier proportions per numeric column (matches OG semantics):
-      - For each numeric col: compute q1/q3 on non-null values
-      - Outlier mask on those same non-null values using 1.5*IQR fences
-      - Proportion = (# outliers) / (# non-null)
-      - Overall outlier score = mean of per-feature proportions (finite only)
-    Backward-compatible output keys:
-      - "Outlier scores" dict includes "Overall outlier score"
-      - "Outliers Visualization" is base64 PNG when possible
-    """
+
     try:
         df = read_file(file_info)
 
