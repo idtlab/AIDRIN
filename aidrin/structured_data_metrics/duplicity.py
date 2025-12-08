@@ -1,78 +1,68 @@
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 import numpy as np
+import pandas as pd
 
 from aidrin.file_handling.file_parser import read_file
-
-
-def iterate_chunks(df, chunksize=50000):
-    """Yield DataFrame chunks for any file type."""
-    for start in range(0, len(df), chunksize):
-        yield df.iloc[start:start + chunksize]
-
-
-def row_to_key(row):
-    """
-    Convert a pandas Series row into a hashable, NaN-normalized tuple.
-
-    - NaNs are mapped to a sentinel so that rows with NaNs in the same positions
-      compare equal (matching pandas.duplicated behavior).
-    """
-    sentinel = "__NAN__"
-    values = []
-    for v in row:
-        # Treats all NaN-like values as the same
-        if isinstance(v, float) and np.isnan(v):
-            values.append(sentinel)
-        else:
-            values.append(v)
-    return tuple(values)
 
 
 @shared_task(bind=True, ignore_result=False)
 def duplicity(self: Task, file_info):
     try:
-        df = read_file(file_info)
+        file = read_file(file_info)
 
-        if df is None:
-            return {"Error": "File could not be read."}
+        if file is None or not hasattr(file, "empty") or file.empty:
+            return {
+                "Duplicity scores": {
+                    "Overall duplicity of the dataset": 0.0
+                }
+            }
 
-        # Ensure column names are strings
-        if hasattr(df, "columns"):
-            df.columns = [str(col) for col in df.columns]
+        n_rows = len(file)
+        n_cols = len(file.columns)
 
-        total_duplicates = 0
-        total_rows = 0
+        if n_rows >= 2:
+            dup = float(file.duplicated().sum() / n_rows)
+            return {
+                "Duplicity scores": {
+                    "Overall duplicity of the dataset": dup
+                }
+            }
 
-        # Global set to track unique row signatures across all chunks
-        global_seen = set()
+        numeric = file.select_dtypes(include=[np.number])
 
-        for chunk in iterate_chunks(df):
-            chunk_size = len(chunk)
-            if chunk_size == 0:
-                continue
+        if numeric.empty:
+            vals = file.to_numpy().ravel()
+            vals = vals[~pd.isna(vals)]
+            total = int(vals.size)
+            if total <= 1:
+                dup = 0.0
+            else:
+                uniq = int(pd.unique(vals).size)
+                dup = float(1.0 - (uniq / total))
+            return {
+                "Duplicity scores": {
+                    "Overall duplicity of the dataset": dup
+                }
+            }
 
-            total_rows += chunk_size
+        vals = numeric.to_numpy().ravel()
+        vals = vals[np.isfinite(vals)]
+        total = int(vals.size)
 
-            # Compute a normalized, hashable key for each row
-            # This mirrors pandas.duplicated's "NA values are equal" behavior.
-            for _, row in chunk.iterrows():
-                key = row_to_key(row)
-                if key in global_seen:
-                    total_duplicates += 1
-                else:
-                    global_seen.add(key)
-
-        # Avoid division by zero
-        dup_score = total_duplicates / total_rows if total_rows > 0 else 0.0
+        if total <= 1:
+            dup = 0.0
+        else:
+            vals = np.round(vals, 6)
+            uniq = int(pd.unique(vals).size)
+            dup = float(1.0 - (uniq / total))
 
         return {
             "Duplicity scores": {
-                "Overall duplicity of the dataset": dup_score
+                "Overall duplicity of the dataset": dup
             }
         }
 
     except SoftTimeLimitExceeded:
         raise Exception("Duplicity task timed out.")
-    except Exception as e:
-        return {"Error": f"Duplicity detection failed: {str(e)}"}
+
