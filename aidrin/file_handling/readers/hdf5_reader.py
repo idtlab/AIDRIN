@@ -1,6 +1,6 @@
 import os
 import uuid
-import random
+import json
 import h5py
 import pandas as pd
 import numpy as np
@@ -12,148 +12,136 @@ from aidrin.file_handling.readers.base_reader import BaseFileReader
 class hdf5Reader(BaseFileReader):
     def read(self):
         try:
-            rows = [] 
+            CHUNK = 10_000
+            MAX_TOTAL_ROWS = None
+            MAX_ROWS_PER_DATASET = None
 
-            # Clean up byte strings in all object columns
-            def decode_bytes(df):
-                for col in df.columns:
-                    if df[col].dtype == object:
-                        df[col] = df[col].apply(
-                            lambda x: x.decode("utf-8")
-                            if isinstance(x, (bytes, bytearray, np.bytes_))
-                            else x
-                        )
+            dfs = []
+            total_rows = 0
+
+            def decode_bytes_inplace(df):
+                if df is None or df.empty:
+                    return df
+                obj_cols = df.select_dtypes(include=["object"]).columns
+                for col in obj_cols:
+                    df[col] = df[col].map(
+                        lambda x: x.decode("utf-8")
+                        if isinstance(x, (bytes, bytearray, np.bytes_))
+                        else x
+                    )
                 return df
 
-            # Expand structured numpy dtypes into list of dicts
-            def structured_to_records(data):
-                try:
-                    if isinstance(data, np.ndarray):
-                        if getattr(data, "dtype", None) is not None and data.dtype.names:
-                            return [dict(zip(data.dtype.names, row)) for row in data]
-                except Exception:
-                    pass
-                return data
+            def make_cells_hashable_inplace(df):
+                if df is None or df.empty:
+                    return df
 
-            # Convert numpy types to Python native types
-            def convert_numpy_types(obj):
-                try:
-                    if hasattr(obj, "item"):
-                        return obj.item()
-                    elif isinstance(obj, (list, tuple)):
-                        return [convert_numpy_types(x) for x in obj]
-                    elif isinstance(obj, dict):
-                        return {str(k): convert_numpy_types(v) for k, v in obj.items()}
-                    elif isinstance(obj, np.ndarray):
-                        if obj.size == 1:
-                            return obj.item()
-                        return [convert_numpy_types(x) for x in obj.tolist()]
-                    return obj
-                except Exception:
-                    return str(obj)
-
-            # Process a chunk of data (structured dtype, ND flattening)
-            def process_data_chunk(data):
-                data = structured_to_records(data)
-
-                # ND flattening for multidimensional arrays
-                if isinstance(data, np.ndarray) and hasattr(data, "ndim") and data.ndim > 2:
-                    try:
-                        data = np.ascontiguousarray(data).reshape(data.shape[0], -1)
-                    except Exception:
-                        return
-
-                # Fast-path for simple 1D arrays
-                if isinstance(data, np.ndarray) and getattr(data, "ndim", 1) == 1:
-                    for val in data:
+                def to_hashable(x):
+                    if isinstance(x, (list, dict, set, tuple, np.ndarray)):
                         try:
-                            row_val = convert_numpy_types(val)
-                            rows.append({"value": row_val})  
+                            return json.dumps(x, default=str, ensure_ascii=False)
                         except Exception:
-                            continue
+                            return str(x)
+                    return x
+
+                obj_cols = df.select_dtypes(include=["object"]).columns
+                for col in obj_cols:
+                    df[col] = df[col].map(to_hashable)
+                return df
+
+            def df_from_any(data):
+                if isinstance(data, np.ndarray):
+                    if getattr(data.dtype, "names", None):
+                        return pd.DataFrame.from_records(data)
+
+                    if data.ndim == 0:
+                        return pd.DataFrame(
+                            [{"value": data.item() if isinstance(data, np.generic) else data}]
+                        )
+
+                    if data.ndim == 1:
+                        return pd.DataFrame({"value": data})
+
+                    if data.ndim > 2:
+                        data = np.ascontiguousarray(data).reshape(data.shape[0], -1)
+
+                    if data.ndim == 2:
+                        return pd.DataFrame(data)
+
+                    return pd.DataFrame({"value": [str(data)]})
+
+                if isinstance(data, (list, tuple)):
+                    try:
+                        return pd.DataFrame(data)
+                    except Exception:
+                        return pd.DataFrame({"value": list(data)})
+
+                return pd.DataFrame([{"value": data}])
+
+            def add_df(df):
+                nonlocal total_rows
+                if df is None or df.empty:
                     return
 
-                # Handle table-like datasets
-                if isinstance(data, (list, tuple)) or hasattr(data, "dtype"):
-                    try:
-                        df = pd.DataFrame(data)
-                    except Exception:
-                        try:
-                            df = pd.DataFrame(data.tolist())
-                        except Exception:
-                            return
+                df.columns = [str(c) for c in df.columns]
 
-                    for _, row in df.iterrows():
-                        try:
-                            row_dict = convert_numpy_types(row.to_dict())
-                            rows.append(row_dict)  
-                        except Exception:
-                            try:
-                                basic_row = {}
-                                for col in row.index:
-                                    val = row[col]
-                                    if hasattr(val, "item"):
-                                        basic_row[str(col)] = val.item()
-                                    else:
-                                        basic_row[str(col)] = str(val)
-                                rows.append(basic_row)
-                            except Exception:
-                                continue
-                else:
-                    try:
-                        val = convert_numpy_types(data)
-                        rows.append({"value": val})  
-                    except Exception:
-                        try:
-                            if hasattr(data, "item"):
-                                rows.append({"value": data.item()})
-                            else:
-                                rows.append({"value": str(data)})
-                        except Exception:
-                            return
+                df = decode_bytes_inplace(df)
+                df = make_cells_hashable_inplace(df)
 
-            # Chunked dataset reading 
-            def recurse(name, obj, path=[]):
-                if isinstance(obj, h5py.Dataset):
-                    shape = getattr(obj, "shape", None)
+                dfs.append(df)
+                total_rows += len(df)
 
-                    # Still chunk large datasets to avoid memory explosions
-                    if shape is not None and len(shape) > 0 and shape[0] > 10000:
-                        step = 10000
-                        for i in range(0, shape[0], step):
-                            try:
-                                chunk = obj[i:i+step]
-                                process_data_chunk(chunk)
-                            except Exception:
-                                break
-                    else:
-                        try:
-                            data = obj[()]
-                            process_data_chunk(data)
-                        except Exception:
-                            return
-
-            # Traverse all datasets
             with h5py.File(self.file_path, "r") as f:
-                def visit(name, obj):
-                    recurse(name, obj, name.strip("/").split("/"))
-                f.visititems(visit)
 
-            # Create final DataFrame
-            df = pd.DataFrame(rows)
-            df = decode_bytes(df)
+                def handle_dataset(name, dset):
+                    nonlocal total_rows
+                    try:
+                        shape = getattr(dset, "shape", None)
+                        dtype = getattr(dset, "dtype", None)
+                        self.logger.info(f"HDF5 dataset: {name} shape={shape} dtype={dtype}")
 
-            if hasattr(df, "columns") and len(df.columns) > 0:
-                df.columns = [str(col) for col in df.columns]
+                        if shape is None or len(shape) == 0:
+                            df = df_from_any(dset[()])
+                            add_df(df)
+                            return
 
-            if df.empty:
+                        n = int(shape[0]) if shape[0] is not None else 0
+                        if n == 0:
+                            df = df_from_any(dset[()])
+                            add_df(df)
+                            return
+
+                        limit = n
+                        if isinstance(MAX_ROWS_PER_DATASET, int):
+                            limit = min(limit, MAX_ROWS_PER_DATASET)
+
+                        for start in range(0, limit, CHUNK):
+                            if isinstance(MAX_TOTAL_ROWS, int) and total_rows >= MAX_TOTAL_ROWS:
+                                self.logger.warning("Stopping early due to MAX_TOTAL_ROWS cap")
+                                return
+
+                            chunk = dset[start: start + CHUNK]
+                            df = df_from_any(chunk)
+                            add_df(df)
+
+                    except Exception:
+                        self.logger.exception(f"Failed reading dataset: {name}")
+
+                def visitor(name, obj):
+                    if isinstance(obj, h5py.Dataset):
+                        handle_dataset(name, obj)
+
+                f.visititems(visitor)
+
+            if not dfs:
                 self.logger.warning("No data was successfully processed from HDF5 file")
                 return None
 
-            return df
+            out = pd.concat(dfs, ignore_index=True, sort=False)
+            return None if out.empty else out
 
         except Exception as e:
             self.logger.error(f"Error while reading: {e}")
+            self.logger.exception("HDF5 read() failed with exception")
             return None
 
     def parse(self):
@@ -166,10 +154,11 @@ class hdf5Reader(BaseFileReader):
                         if isinstance(obj, h5py.Group):
                             group_names.append(full_path)
                             recurse(obj)
-                    except (TypeError, ValueError):
+                    except (TypeError, ValueError) as e:
+                        self.logger.warning(f"Skipping unhashable key {name}: {e}")
                         continue
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.error(f"Error during recursion: {e}")
             return group_names
 
         with h5py.File(self.file_path, "r") as f:
@@ -191,9 +180,7 @@ class hdf5Reader(BaseFileReader):
                 self.logger.warning(f"Skipping unhashable key {g}: {e}")
                 continue
 
-        new_file_name = (
-            f"filtered_{uuid.uuid4().hex}_{session.get('uploaded_file_name')}"
-        )
+        new_file_name = f"filtered_{uuid.uuid4().hex}_{session.get('uploaded_file_name')}"
         new_file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], new_file_name)
 
         with (
@@ -204,12 +191,14 @@ class hdf5Reader(BaseFileReader):
             def copy_group(path, src_group, tgt_group):
                 for name, obj in src_group.items():
                     full_path = f"{path}/{name}".strip("/")
+
                     if isinstance(obj, h5py.Group):
                         if full_path in filtered_keys:
                             tgt_subgroup = tgt_group.create_group(name)
                             copy_group(full_path, obj, tgt_subgroup)
                         else:
                             copy_group(full_path, obj, tgt_group)
+
                     elif isinstance(obj, h5py.Dataset):
                         if path.strip("/") in filtered_keys:
                             tgt_group.create_dataset(name, data=obj[()])
@@ -217,4 +206,5 @@ class hdf5Reader(BaseFileReader):
             copy_group("", src, tgt)
 
         return new_file_path
+
 
