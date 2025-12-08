@@ -14,6 +14,8 @@ class hdf5Reader(BaseFileReader):
         try:
             CHUNK = 10_000
 
+            MAX_TOTAL_ROWS = None
+            MAX_ROWS_PER_DATASET = None
 
             dfs = []
             total_rows = 0
