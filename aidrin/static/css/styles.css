@@ -165,7 +165,9 @@ select {
 #tClosenessQIsCheckbox,
 #classImbalanceFeaturesCheckbox,
 #classImbalanceDistanceCheckbox {
-  max-height: 200px;
+  /* Use a generous max-height so most feature lists fit without scrolling,
+     while still allowing the container to scroll on very large datasets. */
+  max-height: 60vh;
   max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
