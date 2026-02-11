@@ -24,23 +24,17 @@ jobs:
         channels: conda-forge
         activate-environment: aidrin
 
-    - name: Conda info
-      run: conda info
-
-    - name: Conda list
-      run: conda list
-
-    - name: Install
+    - name: Install Dependencies
+      # This shell ensures the conda environment is actually active for all commands
+      shell: bash -el {0}
       run: |
-        conda run -n aidrin python --version
+        conda install setuptools wheel
         
-        conda install -n aidrin setuptools wheel
-
-        conda run -n aidrin pip install --upgrade pip
-        conda run -n aidrin pip install pytest pytest-flask
-
-        conda run -n aidrin pip install -e .
+        python -m pip install --upgrade pip
+        pip install pytest pytest-flask
+        
+        pip install -e .
 
     - name: Run pytest
-      run: 
-        conda run -n aidrin pytest -v
+      shell: bash -el {0}
+      run: pytest -v
