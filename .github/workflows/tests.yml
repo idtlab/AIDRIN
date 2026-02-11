@@ -33,9 +33,13 @@ jobs:
     - name: Install
       run: |
         conda run -n aidrin python --version
-        conda run -n aidrin pip install -e .
-        conda run -n aidrin pip install --upgrade pip setuptools wheel
+        
+        conda install -n aidrin setuptools wheel
+
+        conda run -n aidrin pip install --upgrade pip
         conda run -n aidrin pip install pytest pytest-flask
+
+        conda run -n aidrin pip install -e .
 
     - name: Run pytest
       run: 
