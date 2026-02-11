@@ -31,9 +31,9 @@ jobs:
         conda install -y setuptools wheel
         
         python -m pip install --upgrade pip
-        pip install pytest pytest-flask
-        
+
         pip install -e .
+        pip install pytest pytest-flask dython
 
     - name: Run pytest
       shell: bash -el {0}
