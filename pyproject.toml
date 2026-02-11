@@ -10,6 +10,7 @@ readme = "README.md"
 description="A tool to evaluate the readiness of data for AI"
 maintainers = [{name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"},{name = "Suren Byna", email = "byna.1@osu.edu"}]
 dependencies = [
+    "setuptools",
     "flask==3.0.2",
     "matplotlib==3.10.5",
     "dython==0.7.5",
