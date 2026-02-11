@@ -30,17 +30,17 @@ jobs:
     - name: Conda list
       run: conda list
 
-    - name: Install
+    - name: Install Dependencies
+      shell: bash -l {0}  # Using a login shell automatically handles environment activation
       run: |
-        conda install -n aidrin setuptools -y
-
-        conda run -n aidrin python --version
-
-        conda run -n aidrin pip install --upgrade pip
-        conda run -n aidrin pip install -e .
-
-        conda run -n aidrin pip install pytest pytest-flask
+        # Install setuptools via conda to provide pkg_resources robustly
+        conda install setuptools -y
+        
+        # Install your package and testing tools
+        pip install -e .
+        pip install pytest pytest-flask
 
     - name: Run pytest
+      shell: bash -l {0}
       run: |
-        conda run -n aidrin pytest -v
+        pytest -v
