@@ -33,14 +33,16 @@ jobs:
     - name: Install Dependencies
       shell: bash -l {0}  # Using a login shell automatically handles environment activation
       run: |
-        # Install setuptools via conda to provide pkg_resources robustly
-        conda install setuptools -y
+        python -m pip install --upgrade pip
         
-        # Install your package and testing tools
+        pip install setuptools==70.0.0 
+
         pip install -e .
         pip install pytest pytest-flask
 
     - name: Run pytest
       shell: bash -l {0}
       run: |
+        python -c "import pkg_resources; print('pkg_resources found')"
+
         pytest -v
