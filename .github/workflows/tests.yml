@@ -6,29 +6,43 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
       with:
         python-version: ${{ matrix.python-version }}
+        auto-update-conda: true
+        channels: conda-forge
+        activate-environment: aidrin
 
-    - name: Upgrade pip, setuptools, wheel
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
+    - name: Conda info
+      run: conda info
 
-    - name: Install dependencies
+    - name: Conda list
+      run: conda list
+
+    - name: Install Dependencies
+      shell: bash -l {0}  # Using a login shell automatically handles environment activation
       run: |
-        pip install -e .                     # install your package (aidrin)
-        pip install pytest pytest-flask celery redis dython
+        python -m pip install --upgrade pip
+        
+        pip install setuptools==70.0.0 
+
+        pip install -e .
+        pip install pytest pytest-flask
 
     - name: Run pytest
-      run: pytest -v
+      shell: bash -l {0}
+      run: |
+        python -c "import pkg_resources; print('pkg_resources found')"
+
+        pytest -v
