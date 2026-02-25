@@ -2,6 +2,7 @@ import os
 import uuid
 
 import h5py
+import numpy as np
 import pandas as pd
 from flask import current_app, session
 
@@ -46,6 +47,20 @@ class hdf5Reader(BaseFileReader):
                 try:
                     if isinstance(obj, h5py.Dataset):
                         data = obj[()]
+                        # Replace the dataset's fill value with NaN so that
+                        # pd.isnull()-based metrics (completeness, outliers, etc.)
+                        # correctly detect missing data.  CSV ingestion performs this
+                        # translation automatically via pd.read_csv's na_values list;
+                        # without it, fill-value-encoded missingness (e.g. -9999.0)
+                        # is invisible to every downstream metric and completeness is
+                        # silently reported as 100% for incomplete scientific datasets.
+                        if hasattr(data, "dtype") and data.dtype.kind in ("f", "i", "u"):
+                            fill_val = obj.fillvalue
+                            if fill_val is not None:
+                                mask = data == fill_val
+                                if mask.any():
+                                    data = data.astype(np.float64)
+                                    data[mask] = np.nan
                         # If it's a 1D or structured dataset, load it into dicts
                         if isinstance(data, (list, tuple)) or hasattr(data, "dtype"):
                             try:
