@@ -17,40 +17,55 @@ class hdf5Reader(BaseFileReader):
         self.fill_values = set(fill_values) if fill_values is not None else set()
 
     def _collect_fill_values(self, dataset):
-        """Return a set of numeric sentinels that represent missing data for
-        this dataset, drawn from four sources in priority order:
+        """Return (explicit, uncertain) sets of numeric missing-data sentinels.
 
-        1. User-supplied values passed at construction time.
-        2. ``_FillValue`` attribute — NetCDF/CF convention, present in
-           virtually all climate, oceanography, and atmospheric HDF5 files.
-        3. ``missing_value`` attribute — older NetCDF convention; may be a
-           scalar or a 1-D array listing multiple sentinels.
-        4. ``dataset.fillvalue`` — the HDF5-native fill value written into
-           the file at dataset-creation time (always present; defaults to
-           0 / 0.0 when the producer did not set one explicitly).
+        explicit — safe to replace silently:
+            • User-supplied values passed at construction time.
+            • ``_FillValue`` attribute (NetCDF/CF convention).
+            • ``missing_value`` attribute (older NetCDF convention; may be a
+              scalar or a 1-D array of multiple sentinels).
+            • The HDF5 native ``dataset.fillvalue`` when it is non-zero *or*
+              when fill-value attributes are present (the producer clearly
+              cared about missingness, so the native value is intentional).
 
-        Only numeric values are collected; non-numeric sentinels (e.g. byte
-        strings in variable-length string datasets) are silently skipped
-        because the dtype guard in read() filters those datasets out before
-        this method is called.
+        uncertain — producer intent is ambiguous, warn before replacing:
+            • The HDF5 native ``dataset.fillvalue`` when it equals the dtype
+              default (0 / 0.0) *and* no fill-value attributes are present.
+              HDF5 always stores a fill value; without an explicit assignment
+              it defaults to zero, which is a valid measurement in counts,
+              indices, and many physical quantities.
+
+        Only numeric values are collected; non-numeric sentinels are skipped
+        because the dtype guard in read() excludes string/compound datasets
+        before this method is called.
         """
-        collected = set(self.fill_values)
+        explicit = set(self.fill_values)
+        has_fill_attrs = False
 
         for attr_name in ("_FillValue", "missing_value"):
             if attr_name in dataset.attrs:
+                has_fill_attrs = True
                 raw = dataset.attrs[attr_name]
                 for v in np.atleast_1d(raw).ravel():
                     try:
-                        collected.add(float(v))
+                        explicit.add(float(v))
                     except (TypeError, ValueError):
                         pass
 
+        uncertain = set()
         try:
-            collected.add(float(dataset.fillvalue))
+            native = float(dataset.fillvalue)
+            if native not in explicit:
+                dtype_default = float(np.zeros(1, dtype=dataset.dtype)[0])
+                if not has_fill_attrs and native == dtype_default:
+                    # Zero is the HDF5 default, not a deliberate sentinel.
+                    uncertain.add(native)
+                else:
+                    explicit.add(native)
         except (TypeError, ValueError):
             pass
 
-        return collected
+        return explicit, uncertain
 
     def read(self):
         try:
@@ -89,19 +104,47 @@ class hdf5Reader(BaseFileReader):
                 try:
                     if isinstance(obj, h5py.Dataset):
                         data = obj[()]
-                        # Translate all fill-value sentinels to NaN so that
+                        # Translate fill-value sentinels to NaN so that
                         # pd.isnull()-based metrics (completeness, outliers, …)
-                        # correctly detect missing data.  Sentinels are collected
-                        # from the HDF5 native fillvalue, the _FillValue and
-                        # missing_value dataset attributes (NetCDF/CF convention),
-                        # and any values supplied by the caller at construction time.
+                        # correctly detect missing data.
                         if hasattr(data, "dtype") and data.dtype.kind in ("f", "i", "u"):
-                            fill_vals = self._collect_fill_values(obj)
-                            if fill_vals:
-                                mask = np.zeros(data.shape, dtype=bool)
-                                for fv in fill_vals:
-                                    mask |= data == fv
-                                if mask.any():
+                            explicit_fills, uncertain_fills = self._collect_fill_values(obj)
+                            all_fills = explicit_fills | uncertain_fills
+                            if all_fills:
+                                # Only iterate sentinels that actually appear in
+                                # the data, so we can report accurately and avoid
+                                # unnecessary dtype promotion.
+                                matched = {fv for fv in all_fills if (data == fv).any()}
+                                if matched:
+                                    mask = np.zeros(data.shape, dtype=bool)
+                                    for fv in matched:
+                                        mask |= data == fv
+                                    n_replaced = int(mask.sum())
+
+                                    uncertain_matched = matched & uncertain_fills
+                                    if uncertain_matched:
+                                        # The only sentinel that matched is the
+                                        # HDF5 default zero — it may be valid data.
+                                        self.logger.warning(
+                                            f"Dataset '{name}': {n_replaced}/"
+                                            f"{data.size} value(s) match the HDF5 "
+                                            f"default fill value {uncertain_matched} "
+                                            f"and will be replaced with NaN. "
+                                            f"If zero is a valid measurement here "
+                                            f"(e.g. counts, indices), set a "
+                                            f"'_FillValue' attribute in the file to "
+                                            f"an unambiguous sentinel, or pass "
+                                            f"fill_values=[] at construction time to "
+                                            f"suppress native fill value replacement."
+                                        )
+                                    else:
+                                        self.logger.info(
+                                            f"Dataset '{name}': replaced "
+                                            f"{n_replaced}/{data.size} value(s) "
+                                            f"matching explicit fill sentinel(s) "
+                                            f"{matched} with NaN."
+                                        )
+
                                     data = data.astype(np.float64)
                                     data[mask] = np.nan
                         # If it's a 1D or structured dataset, load it into dicts
