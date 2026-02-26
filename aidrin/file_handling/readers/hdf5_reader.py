@@ -10,6 +10,48 @@ from aidrin.file_handling.readers.base_reader import BaseFileReader
 
 
 class hdf5Reader(BaseFileReader):
+    def __init__(self, file_path: str, logger, fill_values=None):
+        super().__init__(file_path, logger)
+        # Optional user-supplied fill values merged with auto-detected ones.
+        # Accepts any iterable of scalars, e.g. fill_values=[-9999, -1].
+        self.fill_values = set(fill_values) if fill_values is not None else set()
+
+    def _collect_fill_values(self, dataset):
+        """Return a set of numeric sentinels that represent missing data for
+        this dataset, drawn from four sources in priority order:
+
+        1. User-supplied values passed at construction time.
+        2. ``_FillValue`` attribute — NetCDF/CF convention, present in
+           virtually all climate, oceanography, and atmospheric HDF5 files.
+        3. ``missing_value`` attribute — older NetCDF convention; may be a
+           scalar or a 1-D array listing multiple sentinels.
+        4. ``dataset.fillvalue`` — the HDF5-native fill value written into
+           the file at dataset-creation time (always present; defaults to
+           0 / 0.0 when the producer did not set one explicitly).
+
+        Only numeric values are collected; non-numeric sentinels (e.g. byte
+        strings in variable-length string datasets) are silently skipped
+        because the dtype guard in read() filters those datasets out before
+        this method is called.
+        """
+        collected = set(self.fill_values)
+
+        for attr_name in ("_FillValue", "missing_value"):
+            if attr_name in dataset.attrs:
+                raw = dataset.attrs[attr_name]
+                for v in np.atleast_1d(raw).ravel():
+                    try:
+                        collected.add(float(v))
+                    except (TypeError, ValueError):
+                        pass
+
+        try:
+            collected.add(float(dataset.fillvalue))
+        except (TypeError, ValueError):
+            pass
+
+        return collected
+
     def read(self):
         try:
             rows = []
@@ -47,17 +89,18 @@ class hdf5Reader(BaseFileReader):
                 try:
                     if isinstance(obj, h5py.Dataset):
                         data = obj[()]
-                        # Replace the dataset's fill value with NaN so that
-                        # pd.isnull()-based metrics (completeness, outliers, etc.)
-                        # correctly detect missing data.  CSV ingestion performs this
-                        # translation automatically via pd.read_csv's na_values list;
-                        # without it, fill-value-encoded missingness (e.g. -9999.0)
-                        # is invisible to every downstream metric and completeness is
-                        # silently reported as 100% for incomplete scientific datasets.
+                        # Translate all fill-value sentinels to NaN so that
+                        # pd.isnull()-based metrics (completeness, outliers, …)
+                        # correctly detect missing data.  Sentinels are collected
+                        # from the HDF5 native fillvalue, the _FillValue and
+                        # missing_value dataset attributes (NetCDF/CF convention),
+                        # and any values supplied by the caller at construction time.
                         if hasattr(data, "dtype") and data.dtype.kind in ("f", "i", "u"):
-                            fill_val = obj.fillvalue
-                            if fill_val is not None:
-                                mask = data == fill_val
+                            fill_vals = self._collect_fill_values(obj)
+                            if fill_vals:
+                                mask = np.zeros(data.shape, dtype=bool)
+                                for fv in fill_vals:
+                                    mask |= data == fv
                                 if mask.any():
                                     data = data.astype(np.float64)
                                     data[mask] = np.nan
