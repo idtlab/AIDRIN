@@ -57,10 +57,17 @@ class hdf5Reader(BaseFileReader):
             native = float(dataset.fillvalue)
             if native not in explicit:
                 dtype_default = float(np.zeros(1, dtype=dataset.dtype)[0])
-                if not has_fill_attrs and native == dtype_default:
-                    # Zero is the HDF5 default, not a deliberate sentinel.
+                if native == dtype_default:
+                    # Native fill equals the dtype default (0 / 0.0).  HDF5
+                    # always stores a fill value; without an explicit producer
+                    # assignment it lands here.  Even when fill-value attributes
+                    # are present (e.g. _FillValue=-9999), the producer's chosen
+                    # sentinel is already in `explicit` — the default zero is
+                    # still ambiguous and must not be silently replaced.
                     uncertain.add(native)
                 else:
+                    # Non-default native fill: the producer explicitly chose
+                    # this value, so it is intentional.
                     explicit.add(native)
         except (TypeError, ValueError):
             pass
