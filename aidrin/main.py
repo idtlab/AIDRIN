@@ -66,6 +66,7 @@ from aidrin.structured_data_metrics.representation_rate import (
     create_representation_rate_vis,
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
+from aidrin.structured_data_metrics.hipaa_compliance import detect_hipaa_identifiers
 
 # Setup #####
 main = Blueprint("main", __name__)  # register main blueprint
@@ -2078,6 +2079,49 @@ def ensure_json_serializable(obj):
 
     return obj
 
+@main.route("/hipaaCompliance", methods=["GET", "POST"])
+def hipaaCompliance():
+    final_dict = {}
+    data_file_path = session.get("uploaded_file_path")
+    data_file_name = session.get("uploaded_file_name")
+    data_file_type = session.get("uploaded_file_type")
+    file_info = (data_file_path, data_file_name, data_file_type)
+
+    if request.method == "POST":
+        metric_time_log.info("HIPAA Compliance Evaluation Request Started")
+        start_time = time.time()
+
+        try:
+            df = read_file(file_info)
+
+            selected_columns = request.form.getlist(
+                "HIPAA identifiers for HIPAA compliance"
+            )
+
+            detected_hipaa = detect_hipaa_identifiers(df, selected_columns)
+
+            final_dict["HIPAA Compliance Evaluation"] = {
+                "Detected HIPAA Identifiers": detected_hipaa,
+                "Description": "This metric performs a high-precision audit of the dataset to identify Protected Health Information (PHI). "
+                    "It uses a hybrid approach: using pre-compiled regular expressions for fixed-format identifiers (SSNs, emails, "
+                    "medical IDs, URLs, phone/fax numbers, VIN numbers and IP addresses) and the pgeocode GeoNames database to validate global postal codes."
+            }
+
+            final_dict = ensure_json_serializable(final_dict)
+
+        except Exception as e:
+            metric_time_log.error(f"Error: {str(e)}")
+            return jsonify({"error": str(e)}), 500
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+        metric_time_log.info(
+            f"HIPAA Compliance Evaluation Execution time: {execution_time:.2f} seconds"
+        )
+
+        return store_result("hipaaCompliance", final_dict)
+
+    return get_result_or_default("hipaaCompliance", data_file_path, data_file_name)
 
 @main.route("/customMetrics", methods=["GET", "POST"])
 def customMetrics():

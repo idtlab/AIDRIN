@@ -31,3 +31,4 @@ six==1.16.0
 threadpoolctl==3.3.0
 tzdata==2024.1
 Werkzeug==3.1.6
+pgeocode==0.5.0

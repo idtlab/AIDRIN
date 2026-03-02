@@ -191,6 +191,11 @@ $(document).ready(function () {
                 "catFeaturesCheckbox3",
                 "quasi identifiers to measure multiple attribute risk score"
               );
+              createCheckboxContainer(
+                response.all_features,
+                "hipaaIdentifiersCheckbox",
+                "HIPAA identifiers for HIPAA compliance"
+              );
 
               // Create dropdowns for all features
               createDropdown(

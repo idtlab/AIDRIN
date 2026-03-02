@@ -1,0 +1,35 @@
+{% extends 'metricTemplates/metricBase.html' %} {% set page_title = "HIPAA
+Compliance" %} {% set page_route = "hipaaCompliance" %} {% block
+metricContent %}
+<div id="checkboxContainer_privacy" class="checkboxContainer">
+  <br />
+  <div class="checkboxContainerIndividual">
+  <label class="material-checkbox">
+    <input type="checkbox" name="hipaa identifier scan" onchange="toggleValue(this)" />
+    <span class="checkmark"></span>
+    <span>Scan for HIPAA Identifiers</span>
+
+    <span class="info-icon">
+          i
+          <span class="info-text">
+            This option scans the selected columns for HIPAA identifiers, highlighting any personally identifiable information (PHI) found.
+            For more details on the 18 HIPAA identifiers and examples, see
+            <a href="https://www.accountablehq.com/post/what-are-the-18-hipaa-identifiers-a-clear-guide-with-examples" target="_blank">this guide</a>.
+        </span>
+        </span>
+
+  </label>
+
+  <ul class="metric-inputs" style="display: none;">
+    <li>
+      <label
+          for="HIPAA identifiers for HIPAA compliance"
+          style="padding: 10px; padding-left: 15px; min-width: 300px;"
+          >Columns to scan for HIPAA Identifiers:</label
+        >
+      <div id="hipaaIdentifiersCheckbox"></div>
+    </li>
+  </ul>
+</div>
+</div>
+{% endblock %}

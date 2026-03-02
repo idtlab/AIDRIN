@@ -390,6 +390,7 @@ function submitForm() {
         "l-Diversity",
         "t-Closeness",
         "Entropy Risk",
+        "HIPAA Compliance Evaluation",
         "Custom Metric Evaluation",
       ];
 
@@ -472,6 +473,19 @@ function submitForm() {
                     riskScore: "N/A",
                     value: "N/A",
                     downloadUrl: data[type].apply_remedy || null
+                })};
+            if (type === "HIPAA Compliance Evaluation") {
+                // Handle Custom Metric Evaluation (from HEAD)
+                console.log("HIPAA Compliance Evaluation:", type);
+                var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
+                var description = data[type]["Description"] || "No description provided.";
+                visualizationContent.push({
+                    title: type,
+                    jsonData: jsonData,
+                    isCustomMetric: true,
+                    description: description,
+                    riskScore: "N/A",
+                    value: "N/A",
                 });
             } else if (data[type]["is_async"]) {
                 // Handle async tasks (from develop)
