@@ -15,26 +15,37 @@ from aidrin.file_handling.file_parser import read_file
 matplotlib.use("Agg")
 
 NOMINAL_NOMINAL_ASSOC = "theil"
+_NORMALITY_MIN_SAMPLES = 8
+_NORMALITY_MAX_SAMPLE_SIZE = 5000
+_NORMALITY_ALPHA = 0.05
 
 
 def _is_column_normal(series: pd.Series) -> bool:
-    """Return True when the series appears normally distributed."""
+    """
+    Return True when the series appears approximately normally distributed.
+
+    The primary check uses the Shapiro–Wilk test (scipy.stats.shapiro)
+    with significance level alpha = _NORMALITY_ALPHA, run on a sample
+    capped at _NORMALITY_MAX_SAMPLE_SIZE observations to keep runtime
+    reasonable on very large datasets. If SciPy is unavailable, a
+    simple skewness/kurtosis heuristic is used as a fallback.
+    """
     cleaned = pd.to_numeric(series, errors="coerce").dropna()
-    if cleaned.shape[0] < 8:
-        # For very small samples normality tests are unstable; default to non-parametric.
+    if cleaned.shape[0] < _NORMALITY_MIN_SAMPLES:
         return False
 
-    # Prefer a statistical normality test when scipy is available.
     try:
         from scipy.stats import shapiro
 
         sample = cleaned
-        if cleaned.shape[0] > 5000:
-            sample = cleaned.sample(n=5000, random_state=42)
+        if cleaned.shape[0] > _NORMALITY_MAX_SAMPLE_SIZE:
+            sample = cleaned.sample(
+                n=_NORMALITY_MAX_SAMPLE_SIZE,
+                random_state=42,
+            )
         _, p_value = shapiro(sample)
-        return bool(p_value > 0.05)
+        return bool(p_value > _NORMALITY_ALPHA)
     except Exception:
-        # Fallback heuristic when scipy is unavailable.
         skewness = cleaned.skew()
         kurtosis = cleaned.kurtosis()
         return abs(skewness) < 1 and abs(kurtosis) < 1
