@@ -77,7 +77,11 @@ Calculates correlations between specified columns (numerical or categorical). Yo
    from aidrin import calculate_correlations
    result = calculate_correlations(columns=['age', 'education.num'], file_info=file_info)
 
-**Returns**: A dictionary with numerical correlation scores (using Pearson’s coefficient) and categorical correlation analysis using Theil's U statistic. It will also return a visualization (heatmap) of the correlations.
+**Returns**: A dictionary with numerical correlation scores (using Pearson’s coefficient) and categorical correlation analysis using Theil’s U statistic. It will also return a visualization (heatmap) of the correlations.
+
+.. note::
+
+   Column classification (categorical vs. numerical) correctly handles pandas 2.x ``StringDtype`` and ``category`` dtype columns, as well as narrow numeric types such as ``float32`` and ``int32`` produced by HDF5 or scientific data loaders.
 
 calculate_class_distribution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -92,6 +96,10 @@ Analyzes class distribution in a specified column to quantify imbalance. The `co
    result = calculate_class_distribution(column='income', file_info=file_info)
 
 **Returns**: A dictionary with an imbalance degree score and a pie chart visualization of the class distribution.
+
+.. note::
+
+   Columns with narrow numeric dtypes such as ``float32`` or ``int32`` (common in HDF5 and scientific datasets) are correctly identified as numerical and rejected if they have too many unique values. Only genuinely categorical columns should be passed as the ``column`` parameter.
 
 calculate_duplicates
 ^^^^^^^^^^^^^^^^^^^^
@@ -120,6 +128,10 @@ Assesses feature relevance relative to a given target column. Categorical featur
    result = calculate_feature_relevance(file_info=file_info, target_col='income')
 
 **Returns**: A dictionary with feature importance scores for the target column. A bar chart visualization of feature importances is also provided.
+
+.. note::
+
+   The ``target_col`` can be an ``object``-dtype column or a pandas 2.x ``StringDtype`` column — both are detected as categorical and label-encoded automatically before correlation is computed.
 
 calculate_outliers
 ^^^^^^^^^^^^^^^^^^
