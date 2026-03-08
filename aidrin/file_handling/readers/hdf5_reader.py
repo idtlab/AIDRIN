@@ -11,7 +11,7 @@ from aidrin.file_handling.readers.base_reader import BaseFileReader
 class hdf5Reader(BaseFileReader):
     def read(self):
         try:
-            rows = []
+            rows_by_dataset = {}  # dataset path → list of row-dicts
             # Clean up byte strings in all object columns
 
             def decode_bytes(df):
@@ -45,6 +45,7 @@ class hdf5Reader(BaseFileReader):
             def recurse(name, obj, path=[]):
                 try:
                     if isinstance(obj, h5py.Dataset):
+                        dataset_rows = []
                         data = obj[()]
                         # If it's a 1D or structured dataset, load it into dicts
                         if isinstance(data, (list, tuple)) or hasattr(data, "dtype"):
@@ -57,7 +58,7 @@ class hdf5Reader(BaseFileReader):
                                     row_dict = row.to_dict()
                                     # Convert any numpy types to Python native types
                                     row_dict = convert_numpy_types(row_dict)
-                                    rows.append(row_dict)
+                                    dataset_rows.append(row_dict)
                                 except Exception as e:
                                     self.logger.warning(f"Error processing row: {e}")
                                     # Try to process the row with basic conversion
@@ -72,7 +73,7 @@ class hdf5Reader(BaseFileReader):
                                                     basic_row[str(col)] = str(value)
                                             except Exception:
                                                 basic_row[str(col)] = str(value)
-                                        rows.append(basic_row)
+                                        dataset_rows.append(basic_row)
                                     except Exception as e2:
                                         self.logger.warning(f"Failed to process row even with basic conversion: {e2}")
                                         continue
@@ -82,7 +83,7 @@ class hdf5Reader(BaseFileReader):
                                 # Convert any numpy types to Python native types
                                 data = convert_numpy_types(data)
                                 row_dict = {"value": data}
-                                rows.append(row_dict)
+                                dataset_rows.append(row_dict)
                             except Exception as e:
                                 self.logger.warning(f"Error processing scalar data: {e}")
                                 # Try basic conversion
@@ -91,11 +92,13 @@ class hdf5Reader(BaseFileReader):
                                         row_dict = {"value": data.item()}
                                     else:
                                         row_dict = {"value": str(data)}
-                                    rows.append(row_dict)
+                                    dataset_rows.append(row_dict)
                                 except Exception as e2:
                                     self.logger.warning(f"Failed to process scalar data even with basic conversion: {e2}")
                                     # Skip this data point
                                     pass
+                        if dataset_rows:
+                            rows_by_dataset[name] = dataset_rows
                 except Exception as e:
                     self.logger.warning(f"Error in recurse function: {e}")
                     return
@@ -106,6 +109,34 @@ class hdf5Reader(BaseFileReader):
                     recurse(name, obj, name.strip("/").split("/"))
 
                 f.visititems(visit)
+
+            # Guard against heterogeneous dataset schemas being silently merged.
+            # When datasets have different column sets, pd.DataFrame() outer-joins
+            # them and fills missing columns with NaN, causing completeness and
+            # other metrics to report artificially low scores on fully-complete data.
+            if len(rows_by_dataset) > 1:
+                schemas = {
+                    ds_name: frozenset(rows[0].keys())
+                    for ds_name, rows in rows_by_dataset.items()
+                    if rows
+                }
+                unique_schemas = set(schemas.values())
+                if len(unique_schemas) > 1:
+                    schema_detail = "\n".join(
+                        f"  /{ds}: {sorted(cols)}"
+                        for ds, cols in schemas.items()
+                    )
+                    raise ValueError(
+                        "HDF5 file contains datasets with incompatible schemas. "
+                        "Merging them would introduce artificial NaN values and "
+                        "corrupt metric results (e.g., completeness would report "
+                        "falsely low scores on fully-complete data).\n"
+                        f"Detected schemas:\n{schema_detail}\n"
+                        "Use the 'Select Groups' step to filter the file to a "
+                        "single dataset or group before running metrics."
+                    )
+
+            rows = [row for dataset_rows in rows_by_dataset.values() for row in dataset_rows]
             df = pd.DataFrame(rows)
             df = decode_bytes(df)
 
@@ -119,6 +150,8 @@ class hdf5Reader(BaseFileReader):
                 return None
 
             return df
+        except ValueError:
+            raise
         except Exception as e:
             self.logger.error(f"Error while reading: {e}")
             return None
