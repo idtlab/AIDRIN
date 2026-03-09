@@ -77,7 +77,7 @@ Calculates correlations between specified columns (numerical or categorical). Yo
    from aidrin import calculate_correlations
    result = calculate_correlations(columns=['age', 'education.num'], file_info=file_info)
 
-**Returns**: A dictionary with numerical correlation scores (using Pearson’s coefficient) and categorical correlation analysis using Theil's U statistic. It will also return a visualization (heatmap) of the correlations.
+**Returns**: A dictionary with numerical correlation scores (automatically choosing Pearson’s or Spearman’s coefficient based on a normality check) and categorical correlation analysis using Theil's U statistic. It will also return a visualization (heatmap) of the correlations, and the selected numerical method is exposed under ``Correlations Analysis Numerical -> Method``.
 
 calculate_class_distribution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -270,7 +270,7 @@ Assesses how dataset features influence AI through correlation and feature relev
 
 - **Correlation Analysis**:
 
-  - **Method**: For numerical columns, computes Pearson’s correlation coefficient (ranging from -1 to 1). For categorical columns, uses Theil's U statistic to measure association.
+  - **Method**: For numerical columns, runs a normality check and computes Pearson’s correlation coefficient when the data appears approximately normal; otherwise it uses Spearman’s rank correlation (both ranging from -1 to 1). For categorical columns, it uses Theil's U statistic to measure association.
   - **Parameters**: Select columns for analysis (numerical and/or categorical).
   - **Result**: Heatmap visualization of correlation coefficients.
 
