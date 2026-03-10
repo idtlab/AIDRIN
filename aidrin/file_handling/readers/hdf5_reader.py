@@ -40,11 +40,9 @@ class hdf5Reader(BaseFileReader):
         before this method is called.
         """
         explicit = set(self.fill_values)
-        has_fill_attrs = False
 
         for attr_name in ("_FillValue", "missing_value"):
             if attr_name in dataset.attrs:
-                has_fill_attrs = True
                 raw = dataset.attrs[attr_name]
                 for v in np.atleast_1d(raw).ravel():
                     try:
