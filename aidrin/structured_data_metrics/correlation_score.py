@@ -21,8 +21,8 @@ def calc_correlations(self: Task, columns: List[str], file_info):
     df = read_file(file_info)
     try:
         # Separate categorical and numerical columns
-        categorical_columns = df[columns].select_dtypes(include="object").columns
-        numerical_columns = df[columns].select_dtypes(exclude="object").columns
+        categorical_columns = df[columns].select_dtypes(include=["object", "string", "category"]).columns
+        numerical_columns = df[columns].select_dtypes(exclude=["object", "string", "category"]).columns
 
         result_dict = {
             "Correlations Analysis Categorical": {},

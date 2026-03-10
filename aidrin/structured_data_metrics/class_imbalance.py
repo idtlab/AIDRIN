@@ -4,6 +4,7 @@ import warnings
 from math import sqrt
 from celery.exceptions import SoftTimeLimitExceeded
 import numpy as np
+import pandas as pd
 # Configure matplotlib before importing pyplot
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
@@ -359,7 +360,7 @@ def calc_imbalance_degree(df, column, dist_metric='EU'):
             raise ValueError(f"Target feature '{column}' not found in the dataset")
 
         # Check if the column has categorical data
-        if df[column].dtype in ['int64', 'float64'] and df[column].nunique() > 100:
+        if pd.api.types.is_numeric_dtype(df[column]) and df[column].nunique() > 100:
             raise ValueError(
                 f"Column '{column}' appears to be numerical with too many unique values ({df[column].nunique()})."
                 "Class imbalance analysis requires categorical data with fewer unique values."
