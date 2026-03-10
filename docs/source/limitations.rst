@@ -22,10 +22,7 @@ What We Can Do
 - Analyze **DCAT and DataCite JSON metadata** for FAIR compliance.
 - Identify **missing or incomplete metadata elements**.
 - Work with **structured tabular datasets** (CSV, Excel, JSON, NumPy ``.npz``, and
-  HDF5 ``.h5``) for data readiness checks.  For HDF5 files, format-native missing
-  data sentinels (``_FillValue``, ``missing_value``, and the dataset's HDF5 fill
-  value) are automatically normalised to ``NaN`` before any metric is computed,
-  ensuring accurate completeness, outlier, and privacy scores.
+  HDF5 ``.h5``) for data readiness checks.
 
 What We Cannot Do
 ~~~~~~~~~~~~~~~~~
