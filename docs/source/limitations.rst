@@ -22,7 +22,6 @@ What We Can Do
 - Analyze **DCAT and DataCite JSON metadata** for FAIR compliance.
 - Identify **missing or incomplete metadata elements**.
 - Work with **structured tabular datasets** (e.g., CSV, Excel) for basic data readiness checks.
-- Handle all **numpy numeric dtypes** (e.g., ``float32``, ``int32``, ``uint16``) and pandas 2.x ``StringDtype`` columns correctly across all metric computations — not just the default ``float64``/``int64`` types produced by CSV parsing.
 
 What We Cannot Do
 ~~~~~~~~~~~~~~~~~
