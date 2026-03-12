@@ -228,7 +228,7 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
             print("No categorical columns to encode")
 
         # Encode target variable if categorical
-        if df_filtered[target_col].dtype == "object":
+        if pd.api.types.is_object_dtype(df_filtered[target_col]) or isinstance(df_filtered[target_col].dtype, pd.StringDtype):
             try:
                 print(f"Encoding target column {target_col}...")
                 le_target = LabelEncoder()
