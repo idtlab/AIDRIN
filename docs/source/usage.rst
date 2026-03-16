@@ -65,6 +65,29 @@ Evaluates dataset completeness by checking for missing values.
 
 **Returns**: A dictionary with an overall completeness score (1 for no missing values, 0 for all missing) and a histogram of missing value proportions per column.
 
+.. note::
+
+   **HDF5 fill value handling**: HDF5 datasets encode missing data as a numeric
+   sentinel (the *fill value*) rather than as a blank cell.  When reading an
+   ``.h5`` file AIDRIN automatically translates these sentinels to ``NaN``
+   before computing completeness, so the score reflects true data availability
+   rather than always reporting 100%.
+
+   Sentinels are collected from the following sources, in priority order:
+
+   1. **User-supplied** – pass ``fill_values=[v1, v2, …]`` to ``hdf5Reader``
+      at construction time to declare domain-specific sentinels explicitly.
+   2. **_FillValue attribute** – the NetCDF/CF convention used by virtually
+      all climate, oceanography, and atmospheric HDF5 files.
+   3. **missing_value attribute** – the older NetCDF convention; may be a
+      scalar or an array of multiple sentinels.
+   4. **HDF5 native fill value** – the value stored in the dataset's own
+      metadata (``dataset.fillvalue``).  When this equals the dtype default
+      (``0`` / ``0.0``) and no fill-value attributes are present, a warning
+      is logged before replacement because zero is a legitimate measurement in
+      many scientific datasets (e.g. counts, indices).  Set a ``_FillValue``
+      attribute in the file to an unambiguous sentinel to suppress this warning.
+
 calculate_correlations
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -421,6 +444,12 @@ Notes
   - The local installation requires setting up Redis, Celery, and Flask (see `Installation <./installation.html>`_). The web application at `aidrin.io <https://aidrin.io>`_ handles these server-side, offering a no-setup alternative.
   - Both use the same codebase, ensuring identical functionality. The web application is ideal for users who prefer a browser-based interface.
 
-- **File Formats**: The web application supports CSV files for data uploads and DCAT/DataCite JSON for metadata in the Understandability and Usability dimension.
+- **File Formats**: The web application supports CSV, Excel, JSON, NumPy (``.npz``),
+  and HDF5 (``.h5``) files for data uploads, and DCAT/DataCite JSON for metadata
+  in the Understandability and Usability dimension.  For HDF5 files, fill-value
+  sentinels (``_FillValue``, ``missing_value``, and the HDF5 native fill value) are
+  automatically converted to ``NaN`` so that all metrics — completeness, outliers,
+  feature relevance, and privacy — operate on accurately marked missing data.  See
+  the ``calculate_completeness`` note above for the full sentinel-resolution order.
 - **Visualizations**: Generated downloadable plots (e.g., histograms, bar charts, heatmaps) are displayed in the web interface.
 - **JSON Reports**: Each dimension’s analysis generates a downloadable JSON report containing all metrics, statistics, and visualization data (where applicable).

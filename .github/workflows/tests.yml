@@ -34,8 +34,8 @@ jobs:
       shell: bash -l {0}  # Using a login shell automatically handles environment activation
       run: |
         python -m pip install --upgrade pip
-        
-        pip install setuptools==70.0.0 
+
+        pip install setuptools==70.0.0
 
         pip install -e .
         pip install pytest pytest-flask
