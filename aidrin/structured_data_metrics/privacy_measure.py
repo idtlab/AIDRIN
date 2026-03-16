@@ -453,7 +453,8 @@ def compute_k_anonymity(quasi_identifiers: List[str], file_info):
             if qi not in data.columns:
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
 
-        data.replace("?", pd.NA, inplace=True)
+        # Replacing placeholder missing values with proper NA without using inplace=True
+        data = data.replace("?", pd.NA)
         clean_data = data.dropna(subset=quasi_identifiers)
         if clean_data.empty:
             raise ValueError(
