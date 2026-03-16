@@ -6,7 +6,7 @@ from aidrin.file_handling.readers.excel_reader import excelReader
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
-
+from aidrin.file_handling.readers.zarr_reader import zarrReader
 # Notes:
 # To add support for new file types:
 # - Add a new subclass of BaseFileReader with a .read() method
@@ -21,7 +21,9 @@ READER_MAP = {
     ".xls, .xlsb, .xlsx, .xlsm": excelReader,
     ".json": jsonReader,
     ".h5": hdf5Reader,
+    ".zarr": zarrReader,
     # Add additional file types here
+
 }
 
 # Supported file types. Read on front end to create select features.
@@ -31,6 +33,7 @@ SUPPORTED_FILE_TYPES = [
     (".json", "JSON"),
     (".npz", "NumPy"),
     (".h5", "HDF5"),
+    (".zarr", "Zarr"),
     # Add additional file types here using the format:
     # (file_type,file_type_name)
 ]
