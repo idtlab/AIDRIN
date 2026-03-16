@@ -270,7 +270,7 @@ Assesses how dataset features influence AI through correlation and feature relev
 
 - **Correlation Analysis**:
 
-  - **Method**: For numerical columns, runs a normality check and computes Pearson’s correlation coefficient when the data appears approximately normal; otherwise it uses Spearman’s rank correlation (both ranging from -1 to 1). For categorical columns, it uses Theil's U statistic to measure association.
+  - **Method**: For numerical columns, runs a normality check using the Shapiro–Wilk test (α = 0.05) on up to 5000 sampled rows; if the test does not reject normality it computes Pearson’s correlation coefficient; otherwise it uses Spearman’s rank correlation (both ranging from -1 to 1). When SciPy is unavailable, a skewness/kurtosis heuristic is used as a fallback. For categorical columns, it uses Theil's U statistic to measure association.
   - **Parameters**: Select columns for analysis (numerical and/or categorical).
   - **Result**: Heatmap visualization of correlation coefficients.
 
