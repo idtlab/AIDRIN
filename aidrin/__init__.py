@@ -13,7 +13,7 @@ def create_app():
     @app.context_processor
     def inject_version():
         return dict(app_version=__version__)  # global variable to access version in templates
-    app.secret_key = "aidrin"
+    app.secret_key = os.environ.get("AIDRIN_SECRET_KEY", "change-me-in-production") #Updated this env variable from static hardcoded to dynamic 
     # Celery Config
     app.config["CELERY"] = {
         "broker_url": "redis://localhost:6379/0",
@@ -50,6 +50,7 @@ def create_app():
     current_time = time.time()
     max_age_seconds = 3600  # 1 hour
     files_removed = 0
+
 
     for filename in os.listdir(UPLOAD_FOLDER):
         file_path = os.path.join(UPLOAD_FOLDER, filename)
