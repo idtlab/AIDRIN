@@ -74,7 +74,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         # Drop rows with missing values
         selected_df = selected_df.dropna()
         rows_after_dropna = len(selected_df)
-        print(rows_after_dropna)
+        logger.debug(rows_after_dropna)
         if rows_after_dropna == 0:
             raise ValueError("After removing missing values, no data remains. Please check your data quality or select different columns.")
 
@@ -250,7 +250,7 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         rows_after_dropna = len(selected_df)
 
         if rows_after_dropna == 0:
-            print("DEBUG: About to raise ValueError - no data remains after dropna")
+            logger.debug("DEBUG: About to raise ValueError - no data remains after dropna")
             raise ValueError("After removing missing values, no data remains. Please check your data quality or select different columns.")
 
         # Check data quality for quasi-identifiers
