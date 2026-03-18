@@ -1,5 +1,3 @@
-import logging
-logger = logging.getLogger(__name__)
 import base64
 import io
 
@@ -11,6 +9,9 @@ from celery.exceptions import SoftTimeLimitExceeded
 from sklearn.preprocessing import LabelEncoder
 
 from aidrin.file_handling.file_parser import read_file
+import logging
+
+logger = logging.getLogger(__name__)
 
 # def calc_shapley(df, cat_cols, num_cols, target_col):
 #     """

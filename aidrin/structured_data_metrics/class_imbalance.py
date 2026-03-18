@@ -1,5 +1,3 @@
-import logging
-logger = logging.getLogger(__name__)
 import base64
 import io
 import warnings
@@ -12,6 +10,9 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 
 import matplotlib.pyplot as plt  # noqa: E402
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 plt.ioff()  # Turn off interactive mode

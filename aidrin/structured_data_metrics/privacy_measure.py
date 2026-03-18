@@ -12,6 +12,8 @@ from aidrin.file_handling.file_parser import read_file
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 
 def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
     result_dict = {}

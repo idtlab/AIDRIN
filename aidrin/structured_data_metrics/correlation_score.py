@@ -1,5 +1,3 @@
-import logging
-logger = logging.getLogger(__name__)
 import base64
 from io import BytesIO
 from typing import List
@@ -12,6 +10,9 @@ from celery.exceptions import SoftTimeLimitExceeded
 from dython.nominal import associations
 
 from aidrin.file_handling.file_parser import read_file
+import logging
+
+logger = logging.getLogger(__name__)
 
 matplotlib.use("Agg")
 
