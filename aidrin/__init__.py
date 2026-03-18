@@ -13,7 +13,7 @@ def create_app():
     @app.context_processor
     def inject_version():
         return dict(app_version=__version__)  # global variable to access version in templates
-    app.secret_key = "aidrin"
+    app.secret_key = os.environ.get("AIDRIN_SECRET_KEY", "aidrin")
     # Celery Config
     app.config["CELERY"] = {
         "broker_url": "redis://localhost:6379/0",
