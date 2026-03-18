@@ -11,6 +11,23 @@ from aidrin.file_handling.file_parser import read_file
 
 @shared_task(bind=True, ignore_result=False)
 def outliers(self: Task, file_info):
+    """
+    Detect and calculate outliers in the dataset using IQR method.
+
+    Outliers are values that fall outside 1.5 times the interquartile range
+    above the upper quartile or below the lower quartile.
+
+    Parameters
+    ----------
+    file_info : tuple
+        (file_path, file_name, file_type) identifying the dataset file.
+
+    Returns
+    -------
+    dict
+        Dictionary containing outlier scores per column and visualization.
+    """
+
     try:
         file = read_file(file_info)
 

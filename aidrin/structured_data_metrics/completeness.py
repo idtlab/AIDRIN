@@ -11,6 +11,24 @@ from aidrin.file_handling.file_parser import read_file
 @shared_task(bind=True, ignore_result=False)
 def completeness(self: Task, file_info):
     try:
+    """
+    Calculate completeness metric for each column in the dataset.
+
+    Completeness measures the proportion of non-missing values in each column.
+    A score of 1.0 means no missing values, 0.0 means all values are missing.
+
+    Parameters
+    ----------
+    file_info : tuple
+        (file_path, file_name, file_type) identifying the dataset file.
+
+    Returns
+    -------
+    dict
+        Dictionary with completeness scores per column, overall completeness,
+        and a base64 encoded bar chart visualization.
+    """
+
         file = read_file(file_info)
 
         # Ensure DataFrame columns are strings to avoid numpy array issues
