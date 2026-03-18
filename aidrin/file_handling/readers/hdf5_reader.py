@@ -235,6 +235,8 @@ class hdf5Reader(BaseFileReader):
                 return None
 
             return df
+        except ValueError:
+            raise
         except Exception as e:
             self.logger.error(f"Error while reading: {e}")
             return None

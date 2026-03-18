@@ -258,3 +258,80 @@ class TestCompletenessAccuracy:
 
         completeness = 1 - col.isnull().mean()
         assert abs(completeness - 0.6) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Multi-group guard: read() must reject files with multiple top-level groups
+# ---------------------------------------------------------------------------
+
+def _make_multigroup_hdf5(path, groups):
+    """Write an HDF5 file with multiple top-level groups, each holding one dataset."""
+    with h5py.File(path, "w") as f:
+        for group_name, data in groups.items():
+            g = f.create_group(group_name)
+            g.create_dataset("data", data=data)
+
+
+class TestMultiGroupGuard:
+
+    def test_read_raises_on_multiple_top_level_groups(self, tmp_path, logger):
+        """
+        hdf5Reader.read() must raise ValueError when the file has more than one
+        top-level group. Previously it would silently concatenate all groups into
+        a single misaligned DataFrame, causing wrong completeness scores.
+        """
+        fpath = str(tmp_path / "multi.h5")
+        _make_multigroup_hdf5(fpath, {
+            "sensors": np.arange(100, dtype=np.float64),
+            "waveforms": np.random.rand(50, 16),
+        })
+
+        with pytest.raises(ValueError, match="multiple top-level groups"):
+            hdf5Reader(fpath, logger).read()
+
+    def test_error_message_lists_group_names(self, tmp_path, logger):
+        """The ValueError message should name the offending groups so the user knows what to pick."""
+        fpath = str(tmp_path / "multi.h5")
+        _make_multigroup_hdf5(fpath, {
+            "injection": np.array([1.0, 2.0, 3.0]),
+            "seismicity": np.array([4.0, 5.0, 6.0]),
+        })
+
+        with pytest.raises(ValueError) as exc_info:
+            hdf5Reader(fpath, logger).read()
+
+        msg = str(exc_info.value)
+        assert "injection" in msg
+        assert "seismicity" in msg
+
+    def test_single_group_file_reads_without_error(self, tmp_path, logger):
+        """A file with exactly one top-level group should still read fine."""
+        fpath = str(tmp_path / "single.h5")
+        with h5py.File(fpath, "w") as f:
+            g = f.create_group("sensors")
+            g.create_dataset("temperature", data=np.array([20.0, 21.0, 22.0]))
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert not df.empty
+
+    def test_completeness_not_inflated_by_group_misalignment(self, tmp_path, logger):
+        """
+        Regression: before the guard, uploading a file with groups of different
+        shapes produced a NaN-padded DataFrame. completeness() would report low
+        scores on a fully-populated dataset. Verify the guard prevents this by
+        ensuring a single-group file reports 100% completeness.
+        """
+        fpath = str(tmp_path / "single_full.h5")
+        with h5py.File(fpath, "w") as f:
+            g = f.create_group("measurements")
+            g.create_dataset("pressure", data=np.ones(200, dtype=np.float64))
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+
+        overall_completeness = 1 - df.isnull().any(axis=1).mean()
+        assert overall_completeness == 1.0, (
+            f"Expected 100% completeness for a fully-populated single-group file, "
+            f"got {overall_completeness:.2%}."
+        )
