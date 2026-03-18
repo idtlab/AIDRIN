@@ -4,6 +4,7 @@ from typing import List
 
 import matplotlib
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
@@ -14,6 +15,40 @@ from aidrin.file_handling.file_parser import read_file
 matplotlib.use("Agg")
 
 NOMINAL_NOMINAL_ASSOC = "theil"
+_NORMALITY_MIN_SAMPLES = 8
+_NORMALITY_MAX_SAMPLE_SIZE = 5000
+_NORMALITY_ALPHA = 0.05
+
+
+def _is_column_normal(series: pd.Series) -> bool:
+    """
+    Return True when the series appears approximately normally distributed.
+
+    The primary check uses the Shapiro–Wilk test (scipy.stats.shapiro)
+    with significance level alpha = _NORMALITY_ALPHA, run on a sample
+    capped at _NORMALITY_MAX_SAMPLE_SIZE observations to keep runtime
+    reasonable on very large datasets. If SciPy is unavailable, a
+    simple skewness/kurtosis heuristic is used as a fallback.
+    """
+    cleaned = pd.to_numeric(series, errors="coerce").dropna()
+    if cleaned.shape[0] < _NORMALITY_MIN_SAMPLES:
+        return False
+
+    try:
+        from scipy.stats import shapiro
+
+        sample = cleaned
+        if cleaned.shape[0] > _NORMALITY_MAX_SAMPLE_SIZE:
+            sample = cleaned.sample(
+                n=_NORMALITY_MAX_SAMPLE_SIZE,
+                random_state=42,
+            )
+        _, p_value = shapiro(sample)
+        return bool(p_value > _NORMALITY_ALPHA)
+    except Exception:
+        skewness = cleaned.skew()
+        kurtosis = cleaned.kurtosis()
+        return abs(skewness) < 1 and abs(kurtosis) < 1
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -89,8 +124,15 @@ def calc_correlations(self: Task, columns: List[str], file_info):
 
         # Check if there are numerical features
         if not numerical_columns.empty:
-            # Numerical-numerical correlations are computed using pearson
-            numerical_correlation = df[numerical_columns].corr()
+            numerical_df = df[numerical_columns].apply(pd.to_numeric, errors="coerce")
+            normal_columns = [
+                col for col in numerical_df.columns if _is_column_normal(numerical_df[col])
+            ]
+            all_normal = len(normal_columns) == len(numerical_df.columns)
+            corr_method = "pearson" if all_normal else "spearman"
+
+            # Numerical-numerical correlations are computed dynamically based on normality.
+            numerical_correlation = numerical_df.corr(method=corr_method)
 
             # Create a subplot with 1 row and 1 column
             _, axes = plt.subplots(1, 1, figsize=(8, 8))
@@ -120,9 +162,12 @@ def calc_correlations(self: Task, columns: List[str], file_info):
                 "Correlations Analysis Numerical Visualization"
             ] = base64_image_num
             result_dict["Correlations Analysis Numerical"]["Description"] = (
-                "Numerical correlations are calculated using Pearson's correlation coefficient, with values "
+                f"Numerical correlations are calculated using {corr_method.title()}'s correlation coefficient, with values "
                 "ranging from -1 to 1. A value of 1 indicates a perfect positive correlation, -1 indicates a perfect "
                 "negative correlation, and 0 indicates no correlation"
+            )
+            result_dict["Correlations Analysis Numerical"]["Method"] = (
+                corr_method.title()
             )
 
         # Create and return a dictionary with correlation scores and plots
