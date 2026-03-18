@@ -8,7 +8,7 @@ import seaborn as sns
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from dython.nominal import associations
-
+import logging
 from aidrin.file_handling.file_parser import read_file
 
 matplotlib.use("Agg")
@@ -36,7 +36,9 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             categorical_correlation = associations(
                 df[categorical_columns], nom_nom_assoc=NOMINAL_NOMINAL_ASSOC, plot=False
             )
-            print(categorical_correlation["corr"])
+            #print(categorical_correlation["corr"])
+            logger=logging.getLogger(__name__)
+            logger.info(f"Categorical correlation matrix: {categorical_correlation['corr']}")# added logging for categorical correlation matrix
 
             # Create a subplot with 1 row and 1 column
             _, axes = plt.subplots(1, 1, figsize=(8, 8))
