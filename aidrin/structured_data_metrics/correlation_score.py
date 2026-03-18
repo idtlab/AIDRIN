@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 import base64
 from io import BytesIO
 from typing import List

@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 import pandas as pd
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
