@@ -51,7 +51,6 @@ def create_app():
     max_age_seconds = 3600  # 1 hour
     files_removed = 0
 
-
     for filename in os.listdir(UPLOAD_FOLDER):
         file_path = os.path.join(UPLOAD_FOLDER, filename)
         try:
