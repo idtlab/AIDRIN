@@ -302,6 +302,7 @@ def upload_file():
             session['uploaded_file_name'] = display_name
             session['uploaded_file_path'] = file_path
             session['uploaded_file_type'] = request.form.get('fileTypeSelector')
+            session['owned_files'] = [file_path]
 
             return redirect(url_for('upload_file'))
 
@@ -373,20 +374,14 @@ def retrieve_uploaded_file():
 @main.route('/clear', methods=['GET', 'POST'])
 def clear_file():
     file_upload_time_log.info("Clearing File")
-    # remove file path/name
-    session.pop("uploaded_file_path", None)
-    session.pop("uploaded_file_name", None)
-    session.pop("uploaded_file_type", None)
-    session.pop("minimize_preview", None)
+    owned_files = session.get('owned_files', [])
     session.clear()
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
     try:
-        for filename in os.listdir(upload_folder):
-            file_path = os.path.join(upload_folder, filename)
-            if os.path.isfile(file_path):
+        for file_path in owned_files:
+            if file_path and os.path.isfile(file_path):
                 os.remove(file_path)
     except Exception as e:
-        file_upload_time_log.info("File Clear Failure: Unable to clear folder")
+        file_upload_time_log.info("File Clear Failure: Unable to clear files")
         return jsonify({"success": False, "error": str(e)}), 500
     return redirect(url_for("upload_file"))
 
