@@ -3,7 +3,7 @@ from aidrin.file_handling.readers.base_reader import BaseFileReader
 
 try:
     import uproot
-        UPROOT_AVAILABLE = True
+    UPROOT_AVAILABLE = True
 except ImportError:
     UPROOT_AVAILABLE = False
 
