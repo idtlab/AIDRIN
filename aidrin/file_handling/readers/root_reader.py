@@ -1,11 +1,9 @@
 import pandas as pd
-import numpy as np
 from aidrin.file_handling.readers.base_reader import BaseFileReader
 
 try:
     import uproot
-    import awkward as ak
-    UPROOT_AVAILABLE = True
+        UPROOT_AVAILABLE = True
 except ImportError:
     UPROOT_AVAILABLE = False
 
@@ -53,7 +51,7 @@ class rootReader(BaseFileReader):
                                 if df_tree[col].dtype == object:
                                     try:
                                         df_tree[col] = df_tree[col].apply(
-                                            lambda x: x[0] if hasattr(x, '__len__') 
+                                            lambda x: x[0] if hasattr(x, '__len__')
                                             and len(x) == 1 else str(x)
                                         )
                                     except Exception:
