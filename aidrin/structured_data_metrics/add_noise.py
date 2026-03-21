@@ -29,7 +29,7 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info):
     else:
         df = file_info
     df_drop_na = df.dropna()
-    df_drop_na = df_drop_na.reset_index(inplace=False)
+    df_drop_na = df_drop_na.reset_index(drop=True)
     if df_drop_na.empty:
         raise Exception("Dataset is empty")
 
