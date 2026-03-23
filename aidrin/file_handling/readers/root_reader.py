@@ -156,3 +156,4 @@ class rootReader(BaseFileReader):
         except Exception as e:
             self.logger.error(f"error filtering ROOT file: {e}")
             return None
+
