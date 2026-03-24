@@ -333,3 +333,32 @@ class TestCompoundDatasets:
         df = hdf5Reader(fpath, logger).read()
         assert df is not None
         assert df["temp"].isna().sum() == 0
+
+    def test_compound_uncertain_zero_emits_warning(self, tmp_path, logger, caplog):
+        """Uncertain zero fill in a compound field emits a WARNING, consistent with flat datasets."""
+        dt = np.dtype([("depth", "<f4"), ("temp", "<f4")])
+        data = np.array(
+            [(100.0, 0.0), (200.0, 25.1), (300.0, 18.7)],
+            dtype=dt,
+        )
+        fpath = str(tmp_path / "compound_uncertain.h5")
+        self._make_compound_hdf5(fpath, data, fill_attr=None)
+
+        with caplog.at_level(logging.WARNING):
+            hdf5Reader(fpath, logger).read()
+
+        assert any("default fill value" in r.message for r in caplog.records)
+
+    def test_compound_uncertain_zero_still_replaced(self, tmp_path, logger):
+        """Uncertain zero in a compound field is replaced with NaN even though it emits a WARNING."""
+        dt = np.dtype([("depth", "<f4"), ("temp", "<f4")])
+        data = np.array(
+            [(100.0, 0.0), (200.0, 25.1), (300.0, 18.7)],
+            dtype=dt,
+        )
+        fpath = str(tmp_path / "compound_uncertain2.h5")
+        self._make_compound_hdf5(fpath, data, fill_attr=None)
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert df["temp"].isna().sum() == 1
