@@ -20,7 +20,8 @@ dependencies = [
     "celery==5.5.3",
     "redis==6.4.0",
     "flower",
-    "openpyxl==3.1.5"
+    "openpyxl==3.1.5",
+    "zarr>=2.16,<3.0"
 ]
 
 [tool.setuptools.dynamic]
