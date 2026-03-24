@@ -156,6 +156,10 @@ class hdf5Reader(BaseFileReader):
                         if isinstance(data, (list, tuple)) or hasattr(data, "dtype"):
                             try:
                                 df = pd.DataFrame(data)
+                                if hasattr(data, "dtype") and data.dtype.kind == "V":
+                                    explicit, _ = self._collect_fill_values(obj)
+                                    for col in df.select_dtypes(include="number").columns:
+                                        df[col] = df[col].where(~df[col].isin(explicit))
                             except Exception:
                                 df = pd.DataFrame(data.tolist())  # base
                             for _, row in df.iterrows():
