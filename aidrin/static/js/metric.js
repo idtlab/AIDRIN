@@ -524,26 +524,47 @@ $(document).ready(function () {
   function createCheckboxContainer(features, tableId, nameTag) {
     var $table = $("#" + tableId);
     $table.empty(); // Clear previous content
-    var columns = 4; // Maximum number of columns
+
+    // Determine a responsive number of columns (1–4) based on available width.
+    // This keeps multiple columns on wide screens while collapsing to fewer
+    // columns on smaller viewports, avoiding horizontal scrollbars.
+    var containerWidth =
+      $table.closest(".checkboxContainer").width() ||
+      $table.parent().width() ||
+      $(window).width() ||
+      800;
+    var minColumnWidth = 220; // approximate width needed per column
+    var columns = Math.max(
+      1,
+      Math.min(4, Math.floor(containerWidth / minColumnWidth))
+    );
 
     // Return early if no features with message
     if (!features || features.length === 0 || features[0] === "{") {
-      $table.append($("<tr>").append($("<td colspan='4'>").text("No features available for selection")));
+      $table.append(
+        $("<tr>").append(
+          $("<td colspan='" + columns + "'>").text(
+            "No features available for selection"
+          )
+        )
+      );
       return;
     }
     function updateSelectAllState(tableId) {
       const checkboxes = $table.find(".checkbox.individual").not(".target-feature");
       const selectAll = document.getElementById(tableId + "-select-all");
-      const total = checkboxes.length;
-      const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
-
-      selectAll.checked = checked === total;
+      if (selectAll) {
+        const total = checkboxes.length;
+        const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+        selectAll.checked = checked === total;
+      }
     }
     // Create select all for all tables except single attribute risk and laplacian noise (only one feature selected)
+    var selectAllId = null;
     if(nameTag!="quasi identifiers to measure single attribute risk score"&&nameTag!="numerical features to add noise"){
       //create selectAll checkbox
       var $selectAllRow = $("<tr>")
-      var selectAllId = tableId + "-select-all";
+      selectAllId = tableId + "-select-all";
       var $selectAllCell = $("<td>").attr({
         colspan: columns,
       });
@@ -603,10 +624,12 @@ $(document).ready(function () {
 
       row.append(cell);
     }
-    $("#" + selectAllId).on("change", function () {
-      const checked = this.checked;
-      $table.find(".checkbox.individual").not(".target-feature").prop("checked", checked).trigger("change");
-    });
+    if (selectAllId) {
+      $("#" + selectAllId).on("change", function () {
+        const checked = this.checked;
+        $table.find(".checkbox.individual").not(".target-feature").prop("checked", checked).trigger("change");
+      });
+    }
   }
 
   function createDistanceMetricsDropdown() {

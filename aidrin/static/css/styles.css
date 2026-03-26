@@ -154,7 +154,9 @@ select {
 }
 
 /* Individual scrollbars for specific checkbox containers */
+#numFeaturesCheckbox1,
 #numFeaturesCheckbox2,
+#catFeaturesCheckbox1,
 #catFeaturesCheckbox2,
 #catFeaturesCheckbox3,
 #entropyRiskQIsCheckbox,
@@ -163,10 +165,12 @@ select {
 #tClosenessQIsCheckbox,
 #classImbalanceFeaturesCheckbox,
 #classImbalanceDistanceCheckbox {
-  max-height: 200px;
+  /* Use a generous max-height so most feature lists fit without scrolling,
+     while still allowing the container to scroll on very large datasets. */
+  max-height: 60vh;
   max-width: 100%;
   overflow-y: auto;
-  overflow-x: auto;
+  overflow-x: hidden;
   border: 1px solid var(--tertiaryColor);
   border-radius: 6px;
   padding: 8px;
@@ -174,8 +178,43 @@ select {
   margin-top: 5px;
 }
 
+/* Ensure tables inside checkbox containers don't overflow horizontally */
+#numFeaturesCheckbox1 table,
+#numFeaturesCheckbox2 table,
+#catFeaturesCheckbox1 table,
+#catFeaturesCheckbox2 table,
+#catFeaturesCheckbox3 table,
+#entropyRiskQIsCheckbox table,
+#kAnonymityQIsCheckbox table,
+#lDiversityQIsCheckbox table,
+#tClosenessQIsCheckbox table,
+#classImbalanceFeaturesCheckbox table,
+#classImbalanceDistanceCheckbox table {
+  width: 100%;
+  table-layout: auto;
+}
+
+/* Ensure table cells don't cause horizontal overflow */
+#numFeaturesCheckbox1 td,
+#numFeaturesCheckbox2 td,
+#catFeaturesCheckbox1 td,
+#catFeaturesCheckbox2 td,
+#catFeaturesCheckbox3 td,
+#entropyRiskQIsCheckbox td,
+#kAnonymityQIsCheckbox td,
+#lDiversityQIsCheckbox td,
+#tClosenessQIsCheckbox td,
+#classImbalanceFeaturesCheckbox td,
+#classImbalanceDistanceCheckbox td {
+  width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
 /* Style the scrollbars for privacy metrics */
+#numFeaturesCheckbox1::-webkit-scrollbar,
 #numFeaturesCheckbox2::-webkit-scrollbar,
+#catFeaturesCheckbox1::-webkit-scrollbar,
 #catFeaturesCheckbox2::-webkit-scrollbar,
 #catFeaturesCheckbox3::-webkit-scrollbar,
 #entropyRiskQIsCheckbox::-webkit-scrollbar,
@@ -188,7 +227,9 @@ select {
   height: 8px;
 }
 
+#numFeaturesCheckbox1::-webkit-scrollbar-track,
 #numFeaturesCheckbox2::-webkit-scrollbar-track,
+#catFeaturesCheckbox1::-webkit-scrollbar-track,
 #catFeaturesCheckbox2::-webkit-scrollbar-track,
 #catFeaturesCheckbox3::-webkit-scrollbar-track,
 #entropyRiskQIsCheckbox::-webkit-scrollbar-track,
@@ -201,7 +242,9 @@ select {
   border-radius: 4px;
 }
 
+#numFeaturesCheckbox1::-webkit-scrollbar-thumb,
 #numFeaturesCheckbox2::-webkit-scrollbar-thumb,
+#catFeaturesCheckbox1::-webkit-scrollbar-thumb,
 #catFeaturesCheckbox2::-webkit-scrollbar-thumb,
 #catFeaturesCheckbox3::-webkit-scrollbar-thumb,
 #entropyRiskQIsCheckbox::-webkit-scrollbar-thumb,
@@ -214,7 +257,9 @@ select {
   border-radius: 4px;
 }
 
+#numFeaturesCheckbox1::-webkit-scrollbar-thumb:hover,
 #numFeaturesCheckbox2::-webkit-scrollbar-thumb:hover,
+#catFeaturesCheckbox1::-webkit-scrollbar-thumb:hover,
 #catFeaturesCheckbox2::-webkit-scrollbar-thumb:hover,
 #catFeaturesCheckbox3::-webkit-scrollbar-thumb:hover,
 #entropyRiskQIsCheckbox::-webkit-scrollbar-thumb:hover,
