@@ -1,7 +1,7 @@
 import base64
 import os
 from io import BytesIO
-
+import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -19,8 +19,6 @@ def add_laplace_noise(data, epsilon):
 
 def return_noisy_stats(add_noise_columns, epsilon, file_info):
     # Convert JSON back to DataFrame if needed, otherwise use DataFrame directly
-    import pandas as pd
-
     if epsilon <= 0:
         raise Exception("Epsilon must be greater than 0")
 
