@@ -62,7 +62,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
         # Check data types - ensure quasi-identifiers are categorical or string
         non_categorical_cols = []
         for col in eval_cols:
-            if df[col].dtype in ['int64', 'float64'] and df[col].nunique() > 100:
+            if pd.api.types.is_numeric_dtype(df[col]) and df[col].nunique() > 100:
                 non_categorical_cols.append(col)
 
         if non_categorical_cols:
@@ -453,7 +453,8 @@ def compute_k_anonymity(quasi_identifiers: List[str], file_info):
             if qi not in data.columns:
                 raise ValueError(f"Quasi-identifier '{qi}' not found in the dataset.")
 
-        data.replace("?", pd.NA, inplace=True)
+        # Replacing placeholder missing values with proper NA without using inplace=True
+        data = data.replace("?", pd.NA)
         clean_data = data.dropna(subset=quasi_identifiers)
         if clean_data.empty:
             raise ValueError(
