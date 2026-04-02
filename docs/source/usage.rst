@@ -338,6 +338,13 @@ Focuses on privacy preservation through metrics that assess anonymity and disclo
   - **Parameters**: Quasi-identifier columns (e.g., `['sex']`).
   - **Result**: Bar chart of entropy values.
 
+- **HIPAA Compliance**:
+
+  - **Method**: Scans datasets for the presence of 8 out of 18 key HIPAA-regulated identifiers as defined under the `Safe Harbor method <https://www.accountablehq.com/post/what-are-the-18-hipaa-identifiers-a-clear-guide-with-examples>`_. This includes detection of direct and indirect identifiers that could enable re-identification of individuals.
+  - **Identifiers Detected**: Social Security Numbers (SSNs), email addresses, phone and fax numbers, IP addresses, URLs, Vehicle Identification Numbers (VINs), and medical or account identifiers. Additionally, US postal codes are identified using geographic validation powered by `pgeocode <https://pgeocode.readthedocs.io/en/latest/>`_.
+  - **Parameters**: Configuration of columns to scan or exclude.
+  - **Result**: Flagged records with detected identifiers, including counts and classification by identifier type.
+
 Understandability and Usability
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

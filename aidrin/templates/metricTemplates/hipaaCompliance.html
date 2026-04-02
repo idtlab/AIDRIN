@@ -8,16 +8,6 @@ metricContent %}
     <input type="checkbox" name="hipaa identifier scan" onchange="toggleValue(this)" />
     <span class="checkmark"></span>
     <span>Scan for HIPAA Identifiers</span>
-
-    <span class="info-icon">
-          i
-          <span class="info-text">
-            This option scans the selected columns for HIPAA identifiers, highlighting any personally identifiable information (PHI) found.
-            For more details on the 18 HIPAA identifiers and examples, see
-            <a href="https://www.accountablehq.com/post/what-are-the-18-hipaa-identifiers-a-clear-guide-with-examples" target="_blank">this guide</a>.
-        </span>
-        </span>
-
   </label>
 
   <ul class="metric-inputs" style="display: none;">
@@ -30,6 +20,16 @@ metricContent %}
       <div id="hipaaIdentifiersCheckbox"></div>
     </li>
   </ul>
+  <p>
+  <em>
+    Note: This scan detects <strong>8 key HIPAA-regulated identifiers</strong>,
+    including potential Social Security Numbers (SSNs), email addresses,
+    phone and fax numbers, IP addresses, URLs, VINs, and medical or account identifiers.
+    It also incorporates <strong>geographic database validation</strong> to identify
+    and flag potential US postal codes.
+  </em>
+</p>
+
 </div>
 </div>
 {% endblock %}
