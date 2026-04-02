@@ -2079,6 +2079,7 @@ def ensure_json_serializable(obj):
 
     return obj
 
+
 @main.route("/hipaaCompliance", methods=["GET", "POST"])
 def hipaaCompliance():
     final_dict = {}
@@ -2103,8 +2104,9 @@ def hipaaCompliance():
             final_dict["HIPAA Compliance Evaluation"] = {
                 "Detected HIPAA Identifiers": detected_hipaa,
                 "Description": "This metric performs a high-precision audit of the dataset to identify Protected Health Information (PHI). "
-                    "It uses a hybrid approach: using pre-compiled regular expressions for fixed-format identifiers (SSNs, emails, "
-                    "medical IDs, URLs, phone/fax numbers, VIN numbers and IP addresses) and the pgeocode GeoNames database to validate global postal codes."
+                "It uses a hybrid approach: using pre-compiled regular expressions for fixed-format identifiers (SSNs, emails, "
+                "medical IDs, URLs, phone/fax numbers, VIN numbers and IP addresses) and the pgeocode GeoNames database to validate "
+                "global postal codes."
             }
 
             final_dict = ensure_json_serializable(final_dict)
@@ -2122,6 +2124,7 @@ def hipaaCompliance():
         return store_result("hipaaCompliance", final_dict)
 
     return get_result_or_default("hipaaCompliance", data_file_path, data_file_name)
+
 
 @main.route("/customMetrics", methods=["GET", "POST"])
 def customMetrics():

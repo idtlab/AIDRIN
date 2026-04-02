@@ -2,6 +2,7 @@ import re
 import pandas as pd
 import pgeocode
 
+
 def detect_hipaa_identifiers(df, columns_to_scan, country='US'):
     """
     Scans a DataFrame for HIPAA identifiers using Regex and
