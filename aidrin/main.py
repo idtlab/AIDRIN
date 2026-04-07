@@ -2417,6 +2417,7 @@ def get_summary_statistics():
         # Normalize column names to strings to avoid numpy scalar keys in JSON
         df.columns = df.columns.astype(str)
         # Extract summary statistics, ensuring JSON-safe values (no NaN/Inf)
+
         def clean_value(x):
             """Convert a single value to a JSON-friendly representation."""
             if isinstance(x, numbers.Number):
