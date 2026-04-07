@@ -1,11 +1,14 @@
 import base64
 import io
+import logging
 
 import numpy as np
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
+
+logger = logging.getLogger(__name__)
 
 # Configure matplotlib before importing pyplot to ensure non-interactive Agg backend
 import matplotlib  # noqa: E402
@@ -20,6 +23,7 @@ def calculate_statistical_rates(
     self: Task, y_true_column, sensitive_attribute_column, file_info
 ):
     try:
+        logger.info("Statistical Rate task started: target=%r, sensitive=%r", y_true_column, sensitive_attribute_column)
         dataframe = read_file(file_info)
         # Drop rows with NaN values in the specified columns
         dataframe_cleaned = dataframe.dropna(
@@ -142,7 +146,7 @@ def calculate_statistical_rates(
                 "Statistical Rate Visualization": base64_plot,
             }
         )
-        return {
+        result = {
             "Statistical Rates": cleaned_payload["Statistical Rates"],
             "TSD scores": cleaned_payload["TSD scores"],
             "Description": cleaned_payload["Description"],
@@ -150,7 +154,11 @@ def calculate_statistical_rates(
                 "Statistical Rate Visualization"
             ],
         }
+        logger.info("Statistical Rate task completed: %d sensitive groups, %d classes", len(unique_sensitive_values), len(unique_class_labels))
+        return result
     except SoftTimeLimitExceeded:
+        logger.error("Statistical Rate task timed out")
         raise Exception("Statistical Rate task timed out.")
     except Exception as e:
+        logger.error("Statistical Rate task failed: %s", e)
         return {"Error": str(e)}

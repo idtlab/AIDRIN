@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,6 +10,8 @@ from celery.exceptions import SoftTimeLimitExceeded
 from sklearn.preprocessing import LabelEncoder
 
 from aidrin.file_handling.file_parser import read_file
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -40,22 +43,20 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
         or ``{"Error": str}`` on failure.
     """
     try:
-        print(f"Starting data_cleaning with cat_cols: {cat_cols}, num_cols: {num_cols}, target_col: {target_col}")
+        logger.info("Data cleaning task started: %d cat cols, %d num cols, target=%r", len(cat_cols), len(num_cols), target_col)
 
         try:
             df = read_file(file_info)
-            print(f"File read successfully. DataFrame shape: {df.shape}")
-            print(f"DataFrame columns: {list(df.columns)}")
-            print(f"DataFrame dtypes: {df.dtypes.to_dict()}")
+            logger.info("File read successfully: shape=%s", df.shape)
         except Exception as e:
-            print(f"Error reading file: {e}")
+            logger.error("Error reading file: %s", e)
             return {
                 "Error": "Failed to read the file. Please check the file path and type."
             }
 
         # Filter DataFrame to include only the specified columns
         selected_columns = [target_col] + cat_cols + num_cols
-        print(f"Selected columns: {selected_columns}")
+        logger.debug("Selected columns: %s", selected_columns)
 
         # Check if all columns exist
         missing_columns = [col for col in selected_columns if col not in df.columns]
@@ -69,79 +70,73 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
             }
 
         df_filtered = df[selected_columns].copy()
-        print(f"Filtered DataFrame shape: {df_filtered.shape}")
+        logger.debug("Filtered DataFrame shape: %s", df_filtered.shape)
 
         # Fill missing values more robustly
         if cat_cols:  # Only process if there are categorical columns
             for col in cat_cols:
+                logger.debug("Imputing missing values in categorical column %r", col)
                 try:
-                    print(f"Processing categorical column: {col}")
-                    print(f"Column {col} unique values before fillna: {df_filtered[col].nunique()}")
                     df_filtered[col] = df_filtered[col].fillna("Missing")
-                    print(f"Column {col} unique values after fillna: {df_filtered[col].nunique()}")
                 except Exception as e:
-                    print(f"Warning: Error filling missing values in categorical column {col}: {e}")
+                    logger.warning("Error filling missing values in categorical column %r: %s", col, e)
                     # Fallback: replace NaN with a default value
                     df_filtered[col] = df_filtered[col].astype(str).replace('nan', 'Missing')
         else:
-            print("No categorical columns to process")
+            logger.debug("No categorical columns to impute")
 
         if num_cols:  # Only process if there are numerical columns
             for col in num_cols:
+                col_mean = df_filtered[col].mean()
+                if pd.isna(col_mean):
+                    col_mean = 0.0
+                logger.debug("Imputing missing values in numerical column %r with mean=%.4f", col, col_mean)
                 try:
-                    print(f"Processing numerical column: {col}")
-                    print(f"Column {col} data type: {df_filtered[col].dtype}")
-                    # Calculate mean safely
-                    col_mean = df_filtered[col].mean()
-                    if pd.isna(col_mean):
-                        col_mean = 0.0
-                    print(f"Column {col} mean: {col_mean}")
                     df_filtered[col] = df_filtered[col].fillna(col_mean)
                 except Exception as e:
-                    print(f"Warning: Error filling missing values in numerical column {col}: {e}")
+                    logger.warning("Error filling missing values in numerical column %r: %s", col, e)
                     # Fallback: replace NaN with 0
                     df_filtered[col] = df_filtered[col].fillna(0.0)
         else:
-            print("No numerical columns to process")
+            logger.debug("No numerical columns to impute")
 
         # One-hot encode categorical columns only if they exist
         if cat_cols:
+            logger.debug("Starting one-hot encoding for %d categorical columns", len(cat_cols))
             try:
-                print(f"Starting one-hot encoding for {len(cat_cols)} categorical columns...")
                 df_filtered = pd.get_dummies(df_filtered, columns=cat_cols)
-                print(f"One-hot encoding completed. DataFrame now has {df_filtered.shape[1]} columns.")
+                logger.debug("One-hot encoding completed: DataFrame now has %d columns", df_filtered.shape[1])
             except Exception as e:
-                print(f"Error during one-hot encoding: {e}")
+                logger.error("Error during one-hot encoding: %s", e)
                 return {"Error": f"One-hot encoding failed: {str(e)}"}
         else:
-            print("No categorical columns to encode")
+            logger.debug("No categorical columns to one-hot encode")
 
         # Encode target variable if categorical
         if pd.api.types.is_object_dtype(df_filtered[target_col]) or isinstance(df_filtered[target_col].dtype, pd.StringDtype):
+            logger.debug("Encoding categorical target column %r", target_col)
             try:
-                print(f"Encoding target column {target_col}...")
                 le_target = LabelEncoder()
                 df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
-                print(f"Target column {target_col} encoded successfully.")
+                logger.debug("Target column %r encoded successfully", target_col)
             except Exception as e:
-                print(f"Error encoding target column: {e}")
+                logger.error("Error encoding target column: %s", e)
                 return {"Error": f"Target column encoding failed: {str(e)}"}
 
         # Convert to JSON more safely
         try:
-            print("Converting DataFrame to JSON format...")
             result = df_filtered.to_dict(orient="list")
-            print(f"Data cleaning completed successfully. Final data shape: {df_filtered.shape}")
+            logger.info("Data cleaning task completed: final shape=%s", df_filtered.shape)
             return result
         except Exception as e:
-            print(f"Error converting to JSON: {e}")
+            logger.error("Error converting to dict: %s", e)
             return {"Error": f"JSON conversion failed: {str(e)}"}
 
     except SoftTimeLimitExceeded:
-        print("Data Cleaning task timed out.")
+        logger.error("Data cleaning task timed out")
         raise Exception("Data Cleaning task timed out.")
     except Exception as e:
-        print(f"Error occurred during data cleaning: {e}")
+        logger.error("Error occurred during data cleaning: %s", e)
         return {"Error": f"Data cleaning failed: {str(e)}"}
 
 
@@ -168,54 +163,45 @@ def pearson_correlation(self: Task, df_json, target_col) -> dict:
         correlation with the target, or ``{"Error": str}`` on failure.
     """
     try:
-        print(f"Starting pearson_correlation with target_col: {target_col}")
-        print(f"Input df_json type: {type(df_json)}")
-        if isinstance(df_json, dict):
-            print(f"Input df_json keys: {list(df_json.keys())}")
+        logger.info("Pearson correlation task started: target=%r", target_col)
 
         # Convert JSON back to DataFrame with proper error handling
         try:
             df = pd.DataFrame.from_dict(df_json)
-            print(f"DataFrame created successfully. Shape: {df.shape}")
-            print(f"DataFrame columns: {list(df.columns)}")
-            print(f"DataFrame dtypes: {df.dtypes.to_dict()}")
+            logger.info("DataFrame reconstructed: shape=%s", df.shape)
         except Exception as e:
-            print(f"Error converting JSON to DataFrame: {e}")
+            logger.error("Error converting dict to DataFrame: %s", e)
             return {"Error": f"Failed to convert data: {str(e)}"}
 
         # Ensure target column exists
         if target_col not in df.columns:
-            print(f"Target column '{target_col}' not found. Available columns: {list(df.columns)}")
+            logger.error("Target column %r not found. Available: %s", target_col, list(df.columns))
             return {"Error": f"Target column '{target_col}' not found in the data"}
 
         # Get columns excluding target column
         cols = df.columns.difference([target_col])
         if len(cols) == 0:
-            print("No feature columns found for correlation analysis")
             return {"Error": "No feature columns found for correlation analysis"}
 
-        print(f"Processing {len(cols)} feature columns: {list(cols)}")
+        logger.info("Computing Pearson correlation for %d feature columns", len(cols))
 
         correlations = {}
+        skipped = 0
         for col in cols:
             if col != target_col:
                 try:
-                    print(f"Processing column: {col}")
-                    print(f"Column {col} dtype: {df[col].dtype}")
-                    print(f"Target column {target_col} dtype: {df[target_col].dtype}")
-
                     # Ensure both columns are numeric
                     if not pd.api.types.is_numeric_dtype(df[col]) or not pd.api.types.is_numeric_dtype(df[target_col]):
-                        print(f"Warning: Skipping column '{col}' - non-numeric data types")
+                        logger.debug("Skipping column %r — non-numeric dtype", col)
+                        skipped += 1
                         continue
 
                     # Remove any NaN values for this specific column pair
                     valid_data = df[[col, target_col]].dropna()
                     if len(valid_data) < 2:
-                        print(f"Warning: Skipping column '{col}' - insufficient valid data after removing NaN values")
+                        logger.debug("Skipping column %r — insufficient valid data (%d rows)", col, len(valid_data))
+                        skipped += 1
                         continue
-
-                    print(f"Column {col} valid data points: {len(valid_data)}")
 
                     # Calculate covariance
                     cov = np.cov(valid_data[col], valid_data[target_col], ddof=0)[0, 1]
@@ -225,7 +211,8 @@ def pearson_correlation(self: Task, df_json, target_col) -> dict:
 
                     # Check for division by zero
                     if std_dev_col == 0 or std_dev_target == 0:
-                        print(f"Warning: Skipping column '{col}' - zero standard deviation")
+                        logger.debug("Skipping column %r — zero standard deviation", col)
+                        skipped += 1
                         continue
 
                     # Calculate Pearson correlation coefficient
@@ -233,26 +220,28 @@ def pearson_correlation(self: Task, df_json, target_col) -> dict:
 
                     # Ensure correlation is a valid number
                     if np.isfinite(corr):
-                        correlations[col] = float(corr)  # Convert to Python float for JSON serialization
-                        print(f"Column {col} correlation: {corr}")
+                        correlations[col] = float(corr)
                     else:
-                        print(f"Warning: Skipping column '{col}' - invalid correlation value: {corr}")
+                        logger.debug("Skipping column %r — invalid correlation value: %s", col, corr)
+                        skipped += 1
 
                 except Exception as e:
-                    print(f"Warning: Error calculating correlation for column '{col}': {e}")
+                    logger.warning("Error calculating correlation for column %r: %s", col, e)
+                    skipped += 1
                     continue
 
         if not correlations:
-            print("No valid correlations could be calculated")
+            logger.error("No valid correlations could be calculated for target=%r (%d features skipped)", target_col, skipped)
             return {"Error": "No valid correlations could be calculated"}
 
-        print(f"Successfully calculated correlations for {len(correlations)} features")
+        logger.info("Pearson correlation task completed: %d features computed, %d skipped", len(correlations), skipped)
         return correlations
 
     except SoftTimeLimitExceeded:
+        logger.error("Pearson correlation task timed out")
         raise Exception("Pearson Correlation task timed out.")
     except Exception as e:
-        print(f"Unexpected error in pearson_correlation: {e}")
+        logger.error("Unexpected error in pearson_correlation: %s", e)
         return {"Error": f"Correlation calculation failed: {str(e)}"}
 
 
@@ -277,6 +266,8 @@ def plot_features(self: Task, correlations, target_col):
         Base64-encoded PNG image, or ``None`` on error.
     """
     try:
+        logger.info("Plot features task started: %d features, target=%r", len(correlations), target_col)
+
         # Validate input data
         if not correlations or not isinstance(correlations, dict):
             raise ValueError("Invalid correlations data provided")
@@ -350,12 +341,12 @@ def plot_features(self: Task, correlations, target_col):
         buf.seek(0)
         image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-        print(f"Successfully created visualization with {len(clean_features)} features")
+        logger.info("Plot features task completed: %d features visualized", len(clean_features))
         return image_base64
 
     except SoftTimeLimitExceeded:
-        print("Plot Features task timed out.")
+        logger.error("Plot features task timed out")
         raise Exception("Plot Features task timed out.")
     except Exception as e:
-        print(f"Error occurred during plotting: {e}")
+        logger.error("Error occurred during plotting: %s", e)
         return None

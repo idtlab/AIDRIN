@@ -145,7 +145,7 @@ def custom_metrics():
             final_dict = ensure_json_serializable(final_dict)
 
         except Exception as e:
-            metric_time_log.error(f"Error: {str(e)}")
+            metric_time_log.error("Custom Metric error: %s", e)
             return jsonify({"error": str(e)}), 500
 
         finally:
@@ -155,7 +155,7 @@ def custom_metrics():
                 sys.path.remove(folder)
 
         metric_time_log.info(
-            f"Custom Metric Evaluation Execution time: {time.time() - start_time:.2f} seconds"
+            "Custom Metric Evaluation completed in %.2f seconds", time.time() - start_time
         )
         return store_result("custom.custom_metrics", final_dict)
 

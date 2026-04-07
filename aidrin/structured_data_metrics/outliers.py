@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,6 +8,8 @@ from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -33,6 +36,7 @@ def outliers(self: Task, file_info):
         Returns ``{"Error": str}`` if no numerical columns are found.
     """
     try:
+        logger.info("Outliers task started")
         file = read_file(file_info)
 
         # Ensure DataFrame columns are strings to avoid numpy array issues
@@ -109,10 +113,13 @@ def outliers(self: Task, file_info):
                 out_dict["Outliers Visualization"] = img_base64
                 plt.close()
 
+            logger.info("Outliers task completed: %d numerical columns processed", len(numerical_columns.columns))
             return out_dict
 
         except Exception as e:
+            logger.error("Outlier detection failed: %s", e)
             return {"Error": f"Outlier detection failed: {str(e)}"}
 
     except SoftTimeLimitExceeded:
+        logger.error("Outliers task timed out")
         raise Exception("Outliers task timed out.")

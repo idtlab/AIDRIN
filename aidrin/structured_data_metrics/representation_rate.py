@@ -1,11 +1,14 @@
 import base64
 import io
+import logging
 
 import matplotlib.pyplot as plt
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -31,6 +34,7 @@ def calculate_representation_rate(self: Task, columns, file_info):
         ``"Column: '<col>', Probability ratio for '<a>' to '<b>'"``
         mapped to their float ratio values, or ``{"Error": str}`` on failure.
     """
+    logger.info("Representation Rate task started: %d columns", len(columns))
     dataframe = read_file(file_info)
     representation_rate_info = {}
     processed_keys = set()  # Using a set to track processed pairs
@@ -60,10 +64,13 @@ def calculate_representation_rate(self: Task, columns, file_info):
                         processed_keys.add(pair)  # Mark the pair as processed
                         representation_rate_info[key] = probability_ratio
 
+        logger.info("Representation Rate task completed: %d ratios computed", len(representation_rate_info))
         return representation_rate_info
     except SoftTimeLimitExceeded:
+        logger.error("Representation Rate task timed out")
         raise Exception("Representation Rate task timed out.")
     except Exception as e:
+        logger.error("Representation Rate task failed: %s", e)
         return {"Error": f"Error calculating representation rate: {str(e)}"}
 
 
@@ -87,6 +94,7 @@ def create_representation_rate_vis(self: Task, columns, file_info):
     str
         Base64-encoded PNG image, or ``{"Error": str}`` on failure.
     """
+    logger.info("Representation Rate visualization task started")
     dataframe = read_file(file_info)
     try:
         for column in columns:
@@ -132,8 +140,11 @@ def create_representation_rate_vis(self: Task, columns, file_info):
 
             plt.close()  # Close the plot to free up resources
 
+            logger.info("Representation Rate visualization task completed")
             return img_base64
     except SoftTimeLimitExceeded:
+        logger.error("Representation Rate visualization task timed out")
         raise Exception("Representation Rate Vis task timed out.")
     except Exception as e:
+        logger.error("Representation Rate visualization task failed: %s", e)
         return {"Error": f"Error calculating representation rate: {str(e)}"}

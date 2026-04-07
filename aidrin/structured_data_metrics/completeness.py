@@ -1,11 +1,14 @@
 import base64
 import io
+import logging
 
 import matplotlib.pyplot as plt
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -30,6 +33,7 @@ def completeness(self: Task, file_info):
         where each score is in ``[0, 1]`` (1 = fully complete).
     """
     try:
+        logger.info("Completeness task started")
         file = read_file(file_info)
 
         # Ensure DataFrame columns are strings to avoid numpy array issues
@@ -83,7 +87,9 @@ def completeness(self: Task, file_info):
         result_dict["Completeness Visualization"] = img_base64
         plt.close()
 
+        logger.info("Completeness task completed: %d columns, overall=%.4f", len(completeness_scores), overall_completeness)
         return result_dict
 
     except SoftTimeLimitExceeded:
+        logger.error("Completeness task timed out")
         raise Exception("Completeness task timed out.")

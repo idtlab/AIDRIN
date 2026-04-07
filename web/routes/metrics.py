@@ -76,9 +76,10 @@ def data_quality():
 
     if request.method == "POST":
         start_time = time.time()
-        metric_time_log.info("Data quality Request Started")
+        selected = [m for m in ("completeness", "outliers", "duplicity") if request.form.get(m) == "yes"]
+        metric_time_log.info("Data Quality request started: %s", selected)
         try:
-            if request.form.get("completeness") == "yes":
+            if "completeness" in selected:
                 t0 = time.time()
                 compl_dict = completeness(file_info)
                 compl_dict["Description"] = (
@@ -90,7 +91,7 @@ def data_quality():
                 final_dict["Completeness"] = compl_dict
                 metric_time_log.info("Completeness took %.2f seconds", time.time() - t0)
 
-            if request.form.get("outliers") == "yes":
+            if "outliers" in selected:
                 t0 = time.time()
                 out_dict = outliers(file_info)
                 out_dict["Description"] = (
@@ -101,7 +102,7 @@ def data_quality():
                 final_dict["Outliers"] = out_dict
                 metric_time_log.info("Outliers took %.2f seconds", time.time() - t0)
 
-            if request.form.get("duplicity") == "yes":
+            if "duplicity" in selected:
                 t0 = time.time()
                 dup_dict = duplicity(file_info)
                 dup_dict["Description"] = (
@@ -112,12 +113,10 @@ def data_quality():
                 metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
 
         except Exception as e:
-            metric_time_log.error(f"Error: {e}")
+            metric_time_log.error("Data Quality error: %s", e)
             return jsonify({"error": str(e)}), 200
 
-        metric_time_log.info(
-            f"Data Quality Execution time: {time.time() - start_time:.2f} seconds"
-        )
+        metric_time_log.info("Data Quality completed in %.2f seconds", time.time() - start_time)
         return store_result("metrics.data_quality", final_dict)
 
     return get_result_or_default("metrics.data_quality", file_path, file_name)
@@ -138,11 +137,20 @@ def fairness():
 
     if request.method == "POST":
         start_time = time.time()
+        selected = []
+        if request.form.get("representation rate") == "yes":
+            selected.append("Representation Rate")
+        if request.form.get("statistical rate") == "yes":
+            selected.append("Statistical Rate")
+        if request.form.get("conditional demographic disparity") == "yes":
+            selected.append("Conditional Demographic Disparity")
+        metric_time_log.info("Fairness request started: %s", selected)
 
         if (
             request.form.get("representation rate") == "yes"
             and request.form.get("features for representation rate") is not None
         ):
+            t0 = time.time()
             rep_dict = {}
             list_of_cols = [
                 item.strip()
@@ -159,6 +167,7 @@ def fairness():
                 "values imply overrepresentation relative to another"
             )
             final_dict["Representation Rate"] = rep_dict
+            metric_time_log.info("Representation Rate took %.2f seconds", time.time() - t0)
 
         if (
             request.form.get("statistical rate") == "yes"
@@ -215,7 +224,7 @@ def fairness():
                     "Conditional Demographic Disparity took %.2f seconds", time.time() - t0
                 )
 
-        print(f"Execution time: {time.time() - start_time} seconds")
+        metric_time_log.info("Fairness completed in %.2f seconds", time.time() - start_time)
         return store_result("metrics.fairness", final_dict)
 
     return get_result_or_default("metrics.fairness", file_path, file_name)
@@ -233,7 +242,7 @@ def correlation_analysis():
     file_type = session.get("uploaded_file_type")
 
     if request.method == "POST":
-        metric_time_log.info("Correlation Analysis Request Started")
+        metric_time_log.info("Correlation Analysis request started")
         start_time = time.time()
         try:
             if request.form.get("correlations") == "yes":
@@ -250,11 +259,12 @@ def correlation_analysis():
                 ]
                 columns = cat_cols + num_cols
                 file_info = (file_path, file_name, file_type)
+                metric_time_log.info("Correlation Analysis: %d categorical, %d numerical columns", len(cat_cols), len(num_cols))
 
                 correlations_result = calc_correlations.delay(columns, file_info)
                 corr_dict = correlations_result.get()
                 if "Message" in corr_dict:
-                    print("Correlation analysis failed:", corr_dict["Message"])
+                    metric_time_log.warning("Correlation analysis failed: %s", corr_dict["Message"])
                     final_dict["Error"] = corr_dict["Message"]
                 else:
                     final_dict["Correlations Analysis Categorical"] = corr_dict[
@@ -264,12 +274,12 @@ def correlation_analysis():
                         "Correlations Analysis Numerical"
                     ]
                 metric_time_log.info("Correlations took %.2f seconds", time.time() - t0)
-                print(f"Execution time: {time.time() - start_time} seconds")
+                metric_time_log.info("Correlation Analysis completed in %.2f seconds", time.time() - start_time)
                 return store_result("metrics.correlation_analysis", final_dict)
             else:
                 return jsonify({"message": "No correlation analysis selected"}), 200
         except Exception as e:
-            metric_time_log.error(f"Error: {e}")
+            metric_time_log.error("Correlation Analysis error: %s", e)
             return jsonify({"error": str(e)}), 200
 
     return get_result_or_default("metrics.correlation_analysis", file_path, file_name)
@@ -300,24 +310,33 @@ def feature_relevance():
                 if col.strip()
             ]
             target = request.form.get("target for feature relevance")
+            metric_time_log.info(
+                "Feature Relevance request started: %d categorical, %d numerical columns, target=%r",
+                len(cat_cols), len(num_cols), target,
+            )
 
             try:
                 if target in cat_cols or target in num_cols:
                     return jsonify({"trigger": "correlationError"}), 200
                 file_info = (file_path, file_name, file_type)
+                t0 = time.time()
                 data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
                 df_json = data_cleaning_result.get()
+                metric_time_log.info("Feature Relevance — data cleaning took %.2f seconds", time.time() - t0)
 
                 if isinstance(df_json, dict) and "Error" in df_json:
                     return jsonify({"trigger": "correlationError", "error": df_json["Error"]}), 200
                 if df_json is None:
                     return jsonify({"trigger": "correlationError", "error": "Data cleaning failed"}), 200
             except Exception as e:
+                metric_time_log.error("Feature Relevance — data cleaning error: %s", e)
                 return jsonify({"trigger": "correlationError", "error": str(e)}), 200
 
             try:
+                t0 = time.time()
                 pearson_corr_result = pearson_correlation.delay(df_json, target)
                 correlations = pearson_corr_result.get()
+                metric_time_log.info("Feature Relevance — Pearson correlation took %.2f seconds", time.time() - t0)
 
                 if isinstance(correlations, dict) and "Error" in correlations:
                     return jsonify({"trigger": "correlationError", "error": correlations["Error"]}), 200
@@ -326,14 +345,18 @@ def feature_relevance():
                         {"trigger": "correlationError", "error": "No valid correlations could be calculated"}
                     ), 200
             except Exception as e:
+                metric_time_log.error("Feature Relevance — Pearson correlation error: %s", e)
                 return jsonify({"trigger": "correlationError", "error": str(e)}), 200
 
             try:
+                t0 = time.time()
                 plot_features_result = plot_features.delay(correlations, target)
                 f_plot = plot_features_result.get()
+                metric_time_log.info("Feature Relevance — plot generation took %.2f seconds", time.time() - t0)
                 if f_plot is None:
                     return jsonify({"trigger": "correlationError", "error": "Visualization generation failed"}), 200
             except Exception as e:
+                metric_time_log.error("Feature Relevance — plot generation error: %s", e)
                 return jsonify(
                     {"trigger": "correlationError", "error": f"Plot generation failed: {str(e)}"}
                 ), 200
@@ -351,7 +374,7 @@ def feature_relevance():
                 ),
             }
             final_dict["Feature Relevance"] = f_dict
-            print(f"Execution time: {time.time() - start_time} seconds")
+            metric_time_log.info("Feature Relevance completed in %.2f seconds", time.time() - start_time)
             return store_result("metrics.feature_relevance", final_dict)
         else:
             return jsonify({"message": "No feature relevance analysis selected"}), 200
@@ -377,6 +400,11 @@ def class_imbalance():
         if request.form.get("class imbalance") == "yes":
             classes = request.form.get("target features for class imbalance")
             dist_metric = request.form.get("distance metric for class imbalance") or "EU"
+            metric_time_log.info(
+                "Class Imbalance request started: target=%r, dist_metric=%r",
+                classes,
+                dist_metric,
+            )
 
             cache_key = generate_metric_cache_key(
                 file_name, "classimbalance", classes=classes, dist_metric=dist_metric
@@ -393,7 +421,11 @@ def class_imbalance():
             else:
                 if cached_entry:
                     current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                t0 = time.time()
                 ci_dict = _compute_class_imbalance(file, classes, dist_metric)
+                metric_time_log.info(
+                    "Class Imbalance — computation took %.2f seconds", time.time() - t0
+                )
                 final_dict["Class Imbalance"] = ci_dict
                 current_app.TEMP_RESULTS_CACHE[cache_key] = {
                     "data": ci_dict,
@@ -401,7 +433,7 @@ def class_imbalance():
                     "expires_at": time.time() + (30 * 60),
                 }
 
-        print(f"Execution time: {time.time() - start_time} seconds")
+        metric_time_log.info("Class Imbalance completed in %.2f seconds", time.time() - start_time)
         return store_result("metrics.class_imbalance", final_dict)
 
     return get_result_or_default("metrics.class_imbalance", file_path, file_name)
@@ -447,7 +479,20 @@ def privacy_preservation():
 
     if request.method == "POST":
         start_time = time.time()
-        metric_time_log.info("Privacy Preservation Request Started")
+        selected_privacy_metrics = [
+            m for m in [
+                "differential privacy" if request.form.get("differential privacy") == "yes" else None,
+                "single attribute risk score" if request.form.get("single attribute risk score") == "yes" else None,
+                "multiple attribute risk score" if request.form.get("multiple attribute risk score") == "yes" else None,
+                "k-anonymity" if request.form.get("k-anonymity") == "yes" else None,
+                "l-diversity" if request.form.get("l-diversity") == "yes" else None,
+                "t-closeness" if request.form.get("t-closeness") == "yes" else None,
+                "entropy risk" if request.form.get("entropy risk") == "yes" else None,
+            ] if m is not None
+        ]
+        metric_time_log.info(
+            "Privacy Preservation request started: selected=%s", selected_privacy_metrics
+        )
 
         if request.form.get("differential privacy") == "yes":
             numerical_features_raw = request.form.get("numerical features to add noise")
@@ -617,7 +662,7 @@ def privacy_preservation():
                 )
 
         metric_time_log.info(
-            f"Privacy Preservation Execution time: {time.time() - start_time:.2f} seconds"
+            "Privacy Preservation completed in %.2f seconds", time.time() - start_time
         )
         return store_result("metrics.privacy_preservation", final_dict)
 
@@ -657,11 +702,11 @@ def hipaa_compliance():
             final_dict = ensure_json_serializable(final_dict)
 
         except Exception as e:
-            metric_time_log.error(f"Error: {str(e)}")
+            metric_time_log.error("HIPAA Compliance error: %s", e)
             return jsonify({"error": str(e)}), 500
 
         metric_time_log.info(
-            f"HIPAA Compliance Evaluation Execution time: {time.time() - start_time:.2f} seconds"
+            "HIPAA Compliance Evaluation completed in %.2f seconds", time.time() - start_time
         )
         return store_result("metrics.hipaa_compliance", final_dict)
 
@@ -674,9 +719,10 @@ def hipaa_compliance():
 
 @metrics_bp.route("/fair-assessment", methods=["GET", "POST"])
 def fair_assessment():
-    start_time = time.time()
     try:
         if request.method == "POST":
+            start_time = time.time()
+            metric_time_log.info("FAIR Assessment request started")
             if "metadata" not in request.files:
                 return jsonify({"error": "No 'metadata' field found in form data"}), 400
 
@@ -704,6 +750,7 @@ def fair_assessment():
             else:
                 return jsonify({"Error:": "Unknown metadata type"}), 400
 
+            metric_time_log.info("FAIR Assessment completed in %.2f seconds", time.time() - start_time)
             return store_result("metrics.fair_assessment", result)
 
         else:
@@ -712,7 +759,6 @@ def fair_assessment():
                 entry = current_app.TEMP_RESULTS_CACHE.pop(results_id)
                 return jsonify(entry["data"])
 
-            print(f"Execution time: {time.time() - start_time} seconds")
             return render_template("metricTemplates/upload_meta.html")
 
     except Exception as e:

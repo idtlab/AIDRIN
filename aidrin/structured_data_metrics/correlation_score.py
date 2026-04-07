@@ -1,9 +1,8 @@
 import base64
+import logging
 from io import BytesIO
 from typing import List
 
-import matplotlib
-import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 from celery import Task, shared_task
@@ -12,7 +11,12 @@ from dython.nominal import associations
 
 from aidrin.file_handling.file_parser import read_file
 
+logger = logging.getLogger(__name__)
+
+# Configure matplotlib before importing pyplot to ensure non-interactive Agg backend
+import matplotlib  # noqa: E402
 matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
 
 NOMINAL_NOMINAL_ASSOC = "theil"
 _NORMALITY_MIN_SAMPLES = 8
@@ -71,7 +75,7 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             categorical_correlation = associations(
                 df[categorical_columns], nom_nom_assoc=NOMINAL_NOMINAL_ASSOC, plot=False
             )
-            print(categorical_correlation["corr"])
+            logger.debug("Categorical correlation matrix computed:\n%s", categorical_correlation["corr"])
 
             # Create a subplot with 1 row and 1 column
             _, axes = plt.subplots(1, 1, figsize=(8, 8))
