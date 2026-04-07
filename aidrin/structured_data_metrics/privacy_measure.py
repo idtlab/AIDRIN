@@ -14,6 +14,34 @@ logger = logging.getLogger(__name__)
 
 
 def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
+    """Compute Marketer/Prosecutor model re-identification risk for each quasi-identifier.
+
+    For every column in *eval_cols*, calculates the proportion of individuals
+    who could be uniquely re-identified based solely on that attribute
+    (Prosecutor risk) and the expected proportion an attacker sampling at
+    random would correctly re-identify (Marketer risk).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataset.  Must contain *id_col* and all columns in *eval_cols*.
+    id_col : str
+        Column whose values uniquely identify each row (e.g. a record ID).
+        Must have no duplicate values.
+    eval_cols : list of str or str
+        Quasi-identifier column names (categorical).  A comma-separated string
+        is also accepted.
+    task : celery.Task, optional
+        Active Celery task instance used for progress updates.  Pass ``None``
+        when calling outside a Celery worker.
+
+    Returns
+    -------
+    dict
+        ``{"Descriptive statistics of the risk scores": {col: {metric: float}},
+        "Single attribute risk scoring Visualization": base64_str}``
+        or ``{"Error": str}`` on validation failure.
+    """
     result_dict = {}
 
     try:
@@ -206,6 +234,33 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
 
 
 def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
+    """Compute combined Marketer/Prosecutor re-identification risk across all quasi-identifiers.
+
+    Unlike :func:`generate_single_attribute_MM_risk_scores`, this function
+    groups records by the *combination* of all columns in *eval_cols* to
+    measure how uniquely identifiable individuals are when multiple attributes
+    are considered together.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataset.  Must contain *id_col* and all columns in *eval_cols*.
+    id_col : str
+        Column whose values uniquely identify each row.  Must have no
+        duplicate values.
+    eval_cols : list of str or str
+        Quasi-identifier column names (categorical).  A comma-separated string
+        is also accepted.
+    task : celery.Task, optional
+        Active Celery task instance used for progress updates.
+
+    Returns
+    -------
+    dict
+        ``{"Descriptive statistics of the risk scores": {metric: float},
+        "Multiple attribute risk scoring Visualization": base64_str}``
+        or ``{"Error": str}`` on validation failure.
+    """
     result_dict = {}
 
     try:
@@ -439,6 +494,29 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
 
 
 def compute_k_anonymity(quasi_identifiers: List[str], file_info):
+    """Measure k-anonymity for the given quasi-identifier columns.
+
+    Groups records by the combination of *quasi_identifiers* and returns the
+    minimum group size *k* — the smallest number of individuals who share the
+    same quasi-identifier values.  A higher *k* means better privacy
+    protection.  Placeholder ``"?"`` values are treated as missing and dropped
+    before grouping.
+
+    Parameters
+    ----------
+    quasi_identifiers : list of str
+        Column names that together form the quasi-identifier.
+    file_info : tuple or pd.DataFrame
+        ``(file_path, file_name, file_type)`` tuple **or** a DataFrame
+        directly (accepted for programmatic use without a file on disk).
+
+    Returns
+    -------
+    dict
+        ``{"k-Value": int, "descriptive_statistics": dict,
+        "k-Anonymity Visualization": base64_str}``
+        or ``{"Error": str}`` on validation failure.
+    """
     # Handle both DataFrame and tuple inputs
     if isinstance(file_info, tuple):
         data = read_file(file_info)
@@ -532,6 +610,30 @@ def compute_l_diversity(
     sensitive_column: str,
     file_info,
 ):
+    """Quantify l-diversity within groups defined by quasi-identifiers.
+
+    Groups records by *quasi_identifiers* and, within each group, counts the
+    number of distinct values of *sensitive_column*.  The l-diversity value is
+    the minimum distinct-value count across all groups — a higher *l* means
+    each equivalence class contains more diverse sensitive values, making
+    targeted inference harder.
+
+    Parameters
+    ----------
+    quasi_identifiers : list of str
+        Column names that form the quasi-identifier.
+    sensitive_column : str
+        Column containing the sensitive attribute (e.g. diagnosis, salary).
+    file_info : tuple or pd.DataFrame
+        ``(file_path, file_name, file_type)`` tuple **or** a DataFrame.
+
+    Returns
+    -------
+    dict
+        ``{"l-Value": int, "descriptive_statistics": dict,
+        "l-Diversity Visualization": base64_str}``
+        or ``{"Error": str}`` on validation failure.
+    """
     # Handle both DataFrame and tuple inputs
     if isinstance(file_info, tuple):
         data = read_file(file_info)
@@ -637,6 +739,32 @@ def compute_t_closeness(
     sensitive_column: str,
     file_info,
 ):
+    """Measure t-closeness between each group's and the global sensitive attribute distribution.
+
+    Groups records by *quasi_identifiers* and computes the Total Variation
+    Distance (TVD) between the sensitive attribute distribution within each
+    group and the global distribution.  The t-closeness value is the maximum
+    TVD across all groups — smaller values indicate better privacy because no
+    group reveals significantly different information about the sensitive
+    attribute than the whole population.
+
+    Parameters
+    ----------
+    quasi_identifiers : list of str
+        Column names that form the quasi-identifier.
+    sensitive_column : str
+        Column containing the sensitive attribute.
+    file_info : tuple or pd.DataFrame
+        ``(file_path, file_name, file_type)`` tuple **or** a DataFrame.
+
+    Returns
+    -------
+    dict
+        ``{"t-Value": float, "descriptive_statistics": dict,
+        "t-Closeness Visualization": base64_str}``
+        where ``t-Value`` is in ``[0, 1]``,
+        or ``{"Error": str}`` on validation failure.
+    """
     # Handle both DataFrame and tuple inputs
     if isinstance(file_info, tuple):
         data = read_file(file_info)
@@ -744,6 +872,29 @@ def compute_t_closeness(
 
 
 def compute_entropy_risk(quasi_identifiers, file_info):
+    """Calculate entropy-based re-identification risk for quasi-identifier columns.
+
+    Groups records by the combination of *quasi_identifiers* and computes the
+    Shannon entropy of the resulting group-size distribution.  Lower entropy
+    means the groups are more unequal in size — a sign of higher
+    re-identification risk because some records are in very small (potentially
+    unique) groups.
+
+    Parameters
+    ----------
+    quasi_identifiers : list of str
+        Column names that together form the quasi-identifier.
+    file_info : tuple or pd.DataFrame
+        ``(file_path, file_name, file_type)`` tuple **or** a DataFrame.
+
+    Returns
+    -------
+    dict
+        ``{"Entropy-Value": float, "descriptive_statistics": dict,
+        "Entropy Risk Visualization": base64_str}``
+        where ``Entropy-Value >= 0``,
+        or ``{"Error": str}`` on validation failure.
+    """
     # Handle both DataFrame and tuple inputs
     if isinstance(file_info, tuple):
         data = read_file(file_info)

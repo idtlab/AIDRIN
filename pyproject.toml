@@ -7,26 +7,85 @@ build-backend = "setuptools.build_meta"
 name = "aidrin"
 dynamic = ["version"]
 readme = "README.md"
-description="A tool to evaluate the readiness of data for AI"
-maintainers = [{name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"},{name = "Suren Byna", email = "byna.1@osu.edu"}]
+description = "A tool to evaluate the readiness of data for AI"
+requires-python = ">=3.10"
+maintainers = [
+    {name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"},
+    {name = "Suren Byna", email = "byna.1@osu.edu"},
+]
 dependencies = [
-    "setuptools",
     "flask==3.1.3",
-    "matplotlib==3.10.5",
-    "dython==0.7.5",
-    "pandas==2.2.1",
-    "shap==0.48.0",
-    "h5py==3.14.0",
     "celery==5.5.3",
     "redis==6.4.0",
     "flower",
+    "pandas==2.2.1",
+    "numpy==1.26.4",
+    "scipy==1.15.3",
+    "scikit-learn==1.5.0",
+    "matplotlib==3.10.5",
+    "seaborn==0.13.2",
+    "dython==0.7.5",
+    "shap==0.48.0",
+    "h5py==3.14.0",
     "openpyxl==3.1.5",
-    "pgeocode==0.5.0"
+    "pgeocode==0.5.0",
 ]
+
+[project.optional-dependencies]
+# Legacy extras kept for backward compatibility with pip users.
+# Prefer dependency groups below when using uv.
+dev = [
+    "pytest>=7.0",
+    "pytest-flask",
+    "flake8>=6.0",
+    "pytest-cov>=4.0",
+]
+docs = [
+    "sphinx==6.2.1",
+    "sphinx-rtd-theme==1.2.2",
+    "sphinxemoji",
+    "breathe",
+]
+
+# ---------------------------------------------------------------------------
+# uv run shortcuts
+# ---------------------------------------------------------------------------
+# Start the development web server:
+#   uv run flask --app 'web:create_app()' run --debug
+#
+# Start the Celery worker:
+#   uv run celery -A worker.make_celery worker --loglevel=info
+#
+# Start Celery beat (scheduled tasks):
+#   uv run celery -A worker.make_celery beat --loglevel=info
 
 [tool.setuptools.dynamic]
 version = {attr = "aidrin._version.__version__"}
 
+
+# ---------------------------------------------------------------------------
+# uv
+# ---------------------------------------------------------------------------
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "pytest-flask",
+    "flake8>=6.0",
+    "pytest-cov>=4.0",
+]
+docs = [
+    "sphinx==6.2.1",
+    "sphinx-rtd-theme==1.2.2",
+    "sphinxemoji",
+    "breathe",
+]
+
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+
 [tool.coverage.run]
 branch = true
-source = ["aidrin"]
+source = ["aidrin", "web", "worker"]

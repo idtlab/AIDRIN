@@ -11,6 +11,27 @@ from aidrin.file_handling.file_parser import read_file
 
 @shared_task(bind=True, ignore_result=False)
 def outliers(self: Task, file_info):
+    """Detect outliers in numerical columns using the IQR method.
+
+    For each numerical column, computes the inter-quartile range (IQR) and
+    flags values below ``Q1 - 1.5*IQR`` or above ``Q3 + 1.5*IQR`` as
+    outliers.  Columns with zero IQR (no variability) receive a score of 0.
+    An overall outlier score is the mean across all column scores.  A bar-chart
+    visualisation of per-column scores is included.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)`` describing the dataset to read.
+
+    Returns
+    -------
+    dict
+        ``{"Outlier scores": {col: float, "Overall outlier score": float},
+        "Outliers Visualization": base64_str}``
+        where each per-column score is the proportion of outliers in ``[0, 1]``.
+        Returns ``{"Error": str}`` if no numerical columns are found.
+    """
     try:
         file = read_file(file_info)
 

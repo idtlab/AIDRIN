@@ -1,5 +1,5 @@
 {% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Privacy
-Preservation" %} {% set page_route = "privacyPreservation" %} {% block
+Preservation" %} {% set page_route = "metrics.privacyPreservation" %} {% block
 metricContent %}
 <div id="checkboxContainer_privacy" class="checkboxContainer">
   <br />
@@ -19,7 +19,7 @@ metricContent %}
             >Adds controlled noise to numerical features to protect individual
             privacy while maintaining data utility.
             <a
-              href="{{ url_for('privacy_metrics_docs') }}#differential-privacy"
+              href="{{ url_for('admin.privacy_metrics_docs') }}#differential-privacy"
               target="_blank"
               style="color: #4a90e2; font-style: italic;"
               >See documentation</a
@@ -65,7 +65,7 @@ metricContent %}
             attributes, helping identify which features might lead to privacy
             breaches.
             <a
-              href="{{ url_for('privacy_metrics_docs') }}#single-attribute-risk"
+              href="{{ url_for('admin.privacy_metrics_docs') }}#single-attribute-risk"
               target="_blank"
               style="color: #4a90e2; font-style: italic;"
               >See documentation</a
@@ -119,7 +119,7 @@ metricContent %}
             attributes are considered together, providing a more comprehensive
             privacy risk assessment.
             <a
-              href="{{ url_for('privacy_metrics_docs') }}#multiple-attribute-risk"
+              href="{{ url_for('admin.privacy_metrics_docs') }}#multiple-attribute-risk"
               target="_blank"
               style="color: #4a90e2; font-style: italic;"
               >See documentation</a
@@ -168,7 +168,7 @@ metricContent %}
             classes formed by selected quasi-identifiers. Used to assess the
             likelihood of re-identifying individuals.
             <a
-              href="{{ url_for('privacy_metrics_docs') }}#entropy-risk"
+              href="{{ url_for('admin.privacy_metrics_docs') }}#entropy-risk"
               target="_blank"
               style="color: #4a90e2; font-style: italic;"
               >See documentation</a
@@ -202,7 +202,7 @@ metricContent %}
             Ensures each individual is indistinguishable from at least
             <i>k</i> others based on quasi-identifiers.
             <a
-              href="{{ url_for('privacy_metrics_docs') }}#k-anonymity"
+              href="{{ url_for('admin.privacy_metrics_docs') }}#k-anonymity"
               target="_blank"
               style="color: #4a90e2; font-style: italic;"
               >See documentation</a
@@ -236,7 +236,7 @@ metricContent %}
             Strengthens k-anonymity by requiring diverse sensitive values in
             each equivalence class.
             <a
-              href="{{ url_for('privacy_metrics_docs') }}#l-diversity"
+              href="{{ url_for('admin.privacy_metrics_docs') }}#l-diversity"
               target="_blank"
               style="color: #4a90e2; font-style: italic;"
               >See documentation</a
@@ -284,7 +284,7 @@ metricContent %}
             >Requires the sensitive attribute distribution to be close to the
             overall distribution.
             <a
-              href="{{ url_for('privacy_metrics_docs') }}#t-closeness"
+              href="{{ url_for('admin.privacy_metrics_docs') }}#t-closeness"
               target="_blank"
               style="color: #4a90e2; font-style: italic;"
               >See documentation</a

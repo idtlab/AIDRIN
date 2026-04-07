@@ -337,7 +337,7 @@ $(document).ready(function () {
       });
 
     var formData = new FormData();
-    var file = "{{ url_for('retrieve_uploaded_file') }}";
+    var file = "{{ url_for('core.retrieve_uploaded_file') }}";
     formData.append("file", file);
 
     $.ajax({
@@ -930,17 +930,12 @@ $('input[name="quasi identifiers for t-closeness"]').each(function () {
   });
 
 $(document).ready(function () {
-  // Ensure feature relevance checkboxes are always enabled
-  ensureFeatureRelevanceCheckboxesEnabled();
-
   // Trigger when main metric checkboxes change
   $(document).on(
     "change",
     'input[name="k-anonymity"], input[name="l-diversity"], input[name="t-closeness"], input[name="entropy risk"], input[name="single attribute risk score"], input[name="multiple attribute risk score"], input[name="class imbalance"]',
     function () {
       updateCrossDisable();
-      // Re-ensure feature relevance checkboxes are enabled after any metric changes
-      ensureFeatureRelevanceCheckboxesEnabled();
     }
   );
 

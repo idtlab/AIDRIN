@@ -43,6 +43,7 @@ Key Features
    usage
    custom_metrics
    appfl_integration
+   testing
    contributing
    limitations
    publications

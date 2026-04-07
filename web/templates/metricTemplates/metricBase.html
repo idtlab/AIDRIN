@@ -16,7 +16,7 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/metric.js') }}"></script>
     <script>
-      var retrieveFileUrl = "{{ url_for('retrieve_uploaded_file') }}";
+      var retrieveFileUrl = "{{ url_for('core.retrieve_uploaded_file') }}";
     </script>
     <link
       rel="stylesheet"
@@ -55,7 +55,7 @@
         type="button"
         class="redirect-upload-button"
         style="border: none;"
-        onclick="location.href='{{ url_for('upload_file') }}'"
+        onclick="location.href='{{ url_for('core.upload_file') }}'"
       >
         Upload a File
       </button>
@@ -80,7 +80,7 @@
           <button
             class="animated-button return"
             type="button"
-            onclick="location.href='{{url_for('upload_file')}}'"
+            onclick="location.href='{{url_for('core.upload_file')}}'"
           >
             <span>Return</span>
             <span></span>

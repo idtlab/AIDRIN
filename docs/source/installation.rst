@@ -98,7 +98,7 @@ Terminal 2 – Celery Worker
 .. code-block:: bash
 
    conda activate aidrin-env
-   PYTHONPATH=. celery -A aidrin.make_celery worker --beat --loglevel=info
+   PYTHONPATH=. celery -A worker.make_celery worker --beat --loglevel=info
 
 Terminal 3 – Flask Server
 """""""""""""""""""""""""
@@ -106,7 +106,7 @@ Terminal 3 – Flask Server
 .. code-block:: bash
 
    conda activate aidrin-env
-   flask --app aidrin run --debug
+   flask --app 'web:create_app()' run --debug
 
 Once running, visit:
 `http://127.0.0.1:5000 <http://127.0.0.1:5000>`_

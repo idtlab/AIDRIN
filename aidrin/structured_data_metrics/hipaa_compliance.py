@@ -12,7 +12,7 @@ def detect_hipaa_identifiers(df, columns_to_scan, country='US'):
 
     patterns = {
         "US_SSN": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
-        "EMAIL_ADDRESS": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+        "EMAIL_ADDRESS": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
         "PHONE_OR_FAX": re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
         "IP_ADDRESS": re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"),
         "URL": re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+"),
@@ -32,6 +32,16 @@ def detect_hipaa_identifiers(df, columns_to_scan, country='US'):
         col_findings = []
         found_entities = set()
 
+        # Pre-validate unique postal candidates to avoid repeated DB lookups
+        all_zip_candidates = set()
+        for value in series:
+            for cand in postal_candidate_re.findall(value):
+                all_zip_candidates.add(cand.split('-')[0])
+        valid_zips = {
+            z for z in all_zip_candidates
+            if pd.notna(nomi.query_postal_code(z).place_name)
+        }
+
         for value in series:
             for entity_type, regex in patterns.items():
                 matches = regex.findall(value)
@@ -39,12 +49,9 @@ def detect_hipaa_identifiers(df, columns_to_scan, country='US'):
                     col_findings.extend(matches)
                     found_entities.add(entity_type)
 
-            candidates = postal_candidate_re.findall(value)
-            for cand in candidates:
+            for cand in postal_candidate_re.findall(value):
                 clean_zip = cand.split('-')[0]
-
-                res = nomi.query_postal_code(clean_zip)
-                if pd.notna(res.place_name):
+                if clean_zip in valid_zips:
                     col_findings.append(clean_zip)
                     found_entities.add("VALID_POSTAL_CODE")
 

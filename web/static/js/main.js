@@ -315,13 +315,15 @@ function submitForm() {
     body: formData,
   })
     .then((response) => {
-      if (
-        response.ok &&
-        response.headers.get("content-type")?.includes("application/json")
-      ) {
-        return response.json();
+      if (response.headers.get("content-type")?.includes("application/json")) {
+        return response.json().then((body) => {
+          if (!response.ok) {
+            throw new Error(body.error || `Server error (${response.status})`);
+          }
+          return body;
+        });
       } else {
-        throw new Error("Server did not return valid JSON.");
+        throw new Error(`Unexpected response from server (${response.status})`);
       }
     })
     .then((data) => {
@@ -473,10 +475,8 @@ function submitForm() {
                     riskScore: "N/A",
                     value: "N/A",
                     downloadUrl: data[type].apply_remedy || null
-                })};
-            if (type === "HIPAA Compliance Evaluation") {
-                // Handle Custom Metric Evaluation (from HEAD)
-                console.log("HIPAA Compliance Evaluation:", type);
+                });
+            } else if (type === "HIPAA Compliance Evaluation") {
                 var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
                 var description = data[type]["Description"] || "No description provided.";
                 visualizationContent.push({
@@ -954,7 +954,11 @@ function submitForm() {
     })
     .catch((error) => {
       console.error("Error:", error);
-      openErrorPopup("Visualization Error", error); // call error popup
+      var metrics = document.getElementById("metrics");
+      if (metrics) {
+        metrics.innerHTML = "<p style='color:red;text-align:center;'>An error occurred while loading results. Please try again.</p>";
+      }
+      openErrorPopup("Visualization Error", error.message || String(error));
     });
 }
 

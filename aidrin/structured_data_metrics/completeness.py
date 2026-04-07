@@ -10,6 +10,25 @@ from aidrin.file_handling.file_parser import read_file
 
 @shared_task(bind=True, ignore_result=False)
 def completeness(self: Task, file_info):
+    """Compute per-column and overall completeness (non-missing rate) for a dataset.
+
+    Reads the file, calculates the proportion of non-null values for every
+    column, and also computes an overall completeness score — the fraction of
+    rows that have *no* missing values in *any* column.  A bar-chart
+    visualisation is included in the result.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)`` describing the dataset to read.
+
+    Returns
+    -------
+    dict
+        ``{"Completeness scores": {col: float}, "Overall Completeness": float,
+        "Completeness Visualization": base64_str}``
+        where each score is in ``[0, 1]`` (1 = fully complete).
+    """
     try:
         file = read_file(file_info)
 

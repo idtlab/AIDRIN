@@ -1,5 +1,5 @@
 {% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Class
-Imbalance" %} {% set page_route = "classImbalance" %} {% block metricContent %}
+Imbalance" %} {% set page_route = "metrics.classImbalance" %} {% block metricContent %}
 <div id="checkboxContainer_classImbalance" class="checkboxContainer">
   <br />
   <div class="checkboxContainerIndividual">
@@ -18,7 +18,7 @@ Imbalance" %} {% set page_route = "classImbalance" %} {% block metricContent %}
           >This option checks the distribution of the target feature and
           displays a pie chart highlighting the class imbalance in the dataset.
           <a
-            href="{{ url_for('class_imbalance_docs') }}"
+            href="{{ url_for('admin.class_imbalance_docs') }}"
             target="_blank"
             style="color: #4a90e2; font-style: italic;"
             >See documentation</a

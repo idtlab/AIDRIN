@@ -31,18 +31,20 @@ jobs:
       run: conda list
 
     - name: Install Dependencies
-      shell: bash -l {0}  # Using a login shell automatically handles environment activation
+      shell: bash -l {0}
       run: |
         python -m pip install --upgrade pip
-
         pip install setuptools==70.0.0
-
         pip install -e .
-        pip install pytest pytest-flask
+        pip install pytest pytest-flask pytest-cov
 
-    - name: Run pytest
+    - name: Run unit tests
       shell: bash -l {0}
       run: |
         python -c "import pkg_resources; print('pkg_resources found')"
+        PYTHONPATH=. pytest tests/unit/ -v --cov=aidrin --cov-report=term-missing
 
-        pytest -v
+    - name: Run integration tests
+      shell: bash -l {0}
+      run: |
+        PYTHONPATH=. pytest tests/integration/ -v

@@ -1,3 +1,13 @@
+# This file is kept for backward compatibility with plain pip workflows.
+# When using uv, install the project and its dependency groups instead:
+#
+#   uv sync                       # runtime deps only
+#   uv sync --group dev           # + dev/test tools
+#   uv sync --group dev --group docs  # + documentation tools
+#
+# To regenerate this file from the lock file:
+#   uv pip compile pyproject.toml -o requirements.txt
+
 celery==5.5.3
 redis==6.4.0
 shap==0.48.0

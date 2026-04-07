@@ -1,4 +1,4 @@
-from aidrin import create_app
+from web import create_app
 from aidrin.logging import setup_logging
 
 setup_logging()  # Initialize logging before creating the app

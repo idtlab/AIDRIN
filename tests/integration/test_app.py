@@ -1,6 +1,6 @@
 import os
 import pytest
-from aidrin import create_app
+from web import create_app
 from aidrin._version import __version__
 
 

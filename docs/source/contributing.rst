@@ -26,7 +26,7 @@ Coding Standards
 
 - Follow **PEP8** style; our CI enforces it.
 - Run `pre-commit` to auto-format and lint your code before committing.
-- **Include tests** for new features (unit, integration, examples).
+- **Include tests** for new features (unit, integration, examples). See :ref:`testing` for how to run the test suite.
 - **Document your code** using proper docstrings:
 
   - **L1 (mandatory)**: summary, params, returns, exceptions, TODOs

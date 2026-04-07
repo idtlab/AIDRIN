@@ -10,6 +10,27 @@ from aidrin.file_handling.file_parser import read_file
 
 @shared_task(bind=True, ignore_result=False)
 def calculate_representation_rate(self: Task, columns, file_info):
+    """Calculate pairwise representation (probability) ratios for sensitive attribute columns.
+
+    For each column in *columns*, computes the normalised value counts and then
+    emits the ratio ``P(value_a) / P(value_b)`` for every unordered pair of
+    distinct values.  A ratio greater than 1 indicates that ``value_a`` is
+    over-represented relative to ``value_b``.
+
+    Parameters
+    ----------
+    columns : list of str
+        Names of the sensitive attribute columns to analyse.
+    file_info : tuple
+        ``(file_path, file_name, file_type)`` describing the dataset to read.
+
+    Returns
+    -------
+    dict
+        Keys of the form
+        ``"Column: '<col>', Probability ratio for '<a>' to '<b>'"``
+        mapped to their float ratio values, or ``{"Error": str}`` on failure.
+    """
     dataframe = read_file(file_info)
     representation_rate_info = {}
     processed_keys = set()  # Using a set to track processed pairs
@@ -48,6 +69,24 @@ def calculate_representation_rate(self: Task, columns, file_info):
 
 @shared_task(bind=True, ignore_result=False)
 def create_representation_rate_vis(self: Task, columns, file_info):
+    """Render a pie chart visualising the value distribution of a sensitive column.
+
+    For the first column in *columns*, computes cumulative normalised value
+    counts and renders a pie chart showing what percentage of the dataset each
+    distinct value occupies.
+
+    Parameters
+    ----------
+    columns : list of str
+        Sensitive attribute column names; only the first column is visualised.
+    file_info : tuple
+        ``(file_path, file_name, file_type)`` describing the dataset to read.
+
+    Returns
+    -------
+    str
+        Base64-encoded PNG image, or ``{"Error": str}`` on failure.
+    """
     dataframe = read_file(file_info)
     try:
         for column in columns:
