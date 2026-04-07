@@ -1,6 +1,6 @@
 {% extends 'metricTemplates/metricBase.html' %}
 {% set page_title = "Define Custom Metric" %}
-{% set page_route = "custom.customMetrics" %}
+{% set page_route = "custom.custom_metrics" %}
 {% block metricContent %}
 <div style="margin: 2%; display: flex; flex-direction: column; align-items: center;">
 
@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Load existing code
-  fetch("/load_custom_metric")
+  fetch("/load-custom-metric")
     .then(r => r.text())
     .then(code => editor.setValue(code))
     .catch(err => alert("Error loading file: " + err));
@@ -60,7 +60,7 @@ function saveFile() {
   formData.append("metric_code", code);
   formData.append("apply_remedy", applyRemedy);
 
-  fetch("/save_custom_metric_text", { method: "POST", body: formData })
+  fetch("/save-custom-metric-text", { method: "POST", body: formData })
     .then(r => r.json())
     .then(data => alert(data.message || data.error))
     .catch(err => alert("Error saving file: " + err));

@@ -239,7 +239,7 @@ Web Application Workflow
 To use the AIDRIN web application:
 
 1. **Upload a Data File**:
-   - Navigate to the file upload page at `aidrin.io <https://aidrin.io/upload_file>`_. or `https://127.0.0.1:5000/upload_file` if running locally.
+   - Navigate to the file upload page at `aidrin.io <https://aidrin.io/upload-file>`_. or `https://127.0.0.1:5000/upload-file` if running locally.
    - Upload a dataset (e.g., CSV file like ``adult.csv``) via the web interface. You can download the sample dataset from the `UCI Machine Learning Repository <https://archive.ics.uci.edu/ml/datasets/adult>`_.
    - The file is processed server-side.
 
@@ -383,7 +383,7 @@ and provides a detailed assessment against the FAIR criteria.
 How it Works
 ''''''''''''''
 
-1. Navigate to the `FAIR Compliance Report upload page <https://aidrin.io/FAIR>`_.
+1. Navigate to the `FAIR Compliance Report upload page <https://aidrin.io/fair_assessment>`_.
 2. Upload your metadata file (**DCAT** or **DataCite JSON**).
 3. The system evaluates the file against the FAIR principles and generates a structured report.
 

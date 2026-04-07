@@ -116,7 +116,7 @@ $(document).ready(function () {
       formData.append("file", fileBlob, "filename");
 
       $.ajax({
-        url: "/feature_set",
+        url: "/feature-set",
         type: "POST",
         data: formData,
         contentType: false,
@@ -193,7 +193,7 @@ $(document).ready(function () {
               );
               createCheckboxContainer(
                 response.all_features,
-                "hipaaIdentifiersCheckbox",
+                "hipaa-identifiers-checkbox",
                 "HIPAA identifiers for HIPAA compliance"
               );
 
@@ -216,13 +216,13 @@ $(document).ready(function () {
               );
               createDropdown(
                 response.all_features,
-                "allFeaturesDropdownFeaRel"
+                "all-features-dropdown-feature-relevance"
               );
               // Create checkbox containers for class imbalance
               console.log("Creating class imbalance checkboxes with features:", response.all_features);
               createDropdown(
                 response.all_features,
-                "allFeaturesCheckboxClassImbalance",
+                "all-features-dropdown-class-imbalance",
                 "target features for class imbalance"
               );
 
@@ -341,7 +341,7 @@ $(document).ready(function () {
     formData.append("file", file);
 
     $.ajax({
-      url: "/summary_statistics",
+      url: "/summary-statistics",
       type: "POST",
       data: formData,
       contentType: false,
@@ -497,7 +497,7 @@ $(document).ready(function () {
       .then((fileBlob) => {
         formData.append("file", fileBlob, "filename");
         $.ajax({
-          url: "/feature_set",
+          url: "/feature-set",
           type: "POST",
           data: formData,
           contentType: false,
@@ -638,7 +638,7 @@ $(document).ready(function () {
   }
 
   function createDistanceMetricsDropdown() {
-    var dropdown = $("#classImbalanceDistanceDropdown");
+    var dropdown = $("#class-imbalance-distance-dropdown");
     dropdown.empty(); // Clear previous options
 
     const distanceMetrics = [
@@ -802,7 +802,7 @@ function updateCrossDisable() {
     $(this).prop("disabled", classImbalanceFeatures.has(val));
   });
 
-  $("#allFeaturesDropdownFeaRel option").each(function () {
+  $("#all-features-dropdown-feature-relevance option").each(function () {
     const val = $(this).text();
     const shouldDisable = classImbalanceFeatures.has(val);
     if (shouldDisable) {

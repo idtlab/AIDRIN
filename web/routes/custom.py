@@ -63,8 +63,8 @@ class CustomDR(BaseDRAgent):
 '''
 
 
-@custom_bp.route("/customMetrics", methods=["GET", "POST"])
-def customMetrics():
+@custom_bp.route("/custom-metrics", methods=["GET", "POST"])
+def custom_metrics():
     final_dict = {}
     data_file_path = session.get("uploaded_file_path")
     data_file_name = session.get("uploaded_file_name")
@@ -157,18 +157,18 @@ def customMetrics():
         metric_time_log.info(
             f"Custom Metric Evaluation Execution time: {time.time() - start_time:.2f} seconds"
         )
-        return store_result("custom.customMetrics", final_dict)
+        return store_result("custom.custom_metrics", final_dict)
 
-    return get_result_or_default("custom.customMetrics", data_file_path, data_file_name)
+    return get_result_or_default("custom.custom_metrics", data_file_path, data_file_name)
 
 
-@custom_bp.route("/download_remedy/<filename>")
+@custom_bp.route("/download-remedy/<filename>")
 def download_remedy(filename):
     remedy_folder = current_app.config["REMEDY_FOLDER"]
     return send_from_directory(remedy_folder, filename, as_attachment=True)
 
 
-@custom_bp.route("/load_custom_metric", methods=["GET"])
+@custom_bp.route("/load-custom-metric", methods=["GET"])
 def load_custom_metric():
     folder = current_app.config.get("CUSTOM_METRICS_FOLDER", "custom_metrics")
     os.makedirs(folder, exist_ok=True)
@@ -190,7 +190,7 @@ def load_custom_metric():
     return response
 
 
-@custom_bp.route("/save_custom_metric_text", methods=["POST"])
+@custom_bp.route("/save-custom-metric-text", methods=["POST"])
 def save_custom_metric_text():
     code = request.form.get("metric_code")
     if not code:

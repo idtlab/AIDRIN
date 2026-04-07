@@ -1,7 +1,11 @@
 import base64
 import io
 
-import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.pyplot as plt  # noqa: E402
+
+plt.ioff()  # Turn off interactive mode
+
 import numpy as np
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
@@ -111,7 +115,8 @@ def calculate_statistical_rates(
         plt.savefig(buffer, format="png")
         buffer.seek(0)
         base64_plot = base64.b64encode(buffer.read()).decode("utf-8")
-        # Close the BytesIO stream
+        # Close the figure and BytesIO stream to free memory
+        plt.close(fig)
         buffer.close()
 
         # Full disclosure: This workaround is from stackoverflow.

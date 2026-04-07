@@ -28,7 +28,7 @@ def publications():
     return render_template("publications.html")
 
 
-@admin_bp.route("/view_logs")
+@admin_bp.route("/view-logs")
 def view_logs():
     # data/logs/ lives at the project root (two levels above web/routes/)
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

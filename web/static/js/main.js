@@ -308,7 +308,7 @@ function submitForm() {
     print("No Element ID");
   }
   const url = new URL(window.location.href);
-  url.searchParams.set("returnType", "json");
+  url.searchParams.set("return_type", "json");
   const currentURL = url.toString();
   fetch(currentURL, {
     method: "POST",
@@ -850,9 +850,9 @@ function submitForm() {
               }
           } else if (content.image && content.image.trim() !== "") {
               // Handle valid visualization image
-              const imageBlobUrl = `data:image/jpeg;base64,${content.image}`;
+              const imageBlobUrl = `data:image/png;base64,${content.image}`;
               visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
-                      <a href="${imageBlobUrl}" download="${content.title}.jpg" class="toggle metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
+                      <a href="${imageBlobUrl}" download="${content.title}.png" class="toggle metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
           } else if (!content.isAsync) {
               // Display message for empty visualization (only for non-async tasks)
               visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
@@ -1025,7 +1025,7 @@ function pollAsyncTask(
   function checkTask() {
     attempts++;
 
-    fetch(`/check_and_update_task/${taskId}/${encodeURIComponent(metricName)}`)
+    fetch(`/check-and-update-task/${taskId}/${encodeURIComponent(metricName)}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -2335,7 +2335,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
     //open popup
     datalogPopup.classList.add("open-popup");
 
-    fetch("/view_logs")
+    fetch("/view-logs")
       .then((response) => response.json())
       .then((data) => {
         const tbodyMaster = document.querySelector("#masterLogTable tbody");

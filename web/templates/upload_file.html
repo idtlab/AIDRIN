@@ -86,34 +86,34 @@
         </div>
         <div style="display: flex; flex-direction: column; margin-top: 10px; align-self: center; width: max-content;">
         {% if uploaded_file_path %}
-            <h3 onclick="togglePillarDropdown('dataQualityDropdown')">Data Quality<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
-                <div id="dataQualityDropdown">
-                    <strong id="toggleButton_quality" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.dataQuality")}}'"> Data Quality Metrics<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+            <h3 onclick="togglePillarDropdown('data-quality-dropdown')">Data Quality<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="data-quality-dropdown">
+                    <strong id="toggleButton_quality" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.data_quality")}}'"> Data Quality Metrics<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
-            <h3 onclick="togglePillarDropdown('AIImpactDropdown')">Impact of Data on AI<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
-                <div id="AIImpactDropdown">
-                    <strong id="toggleButton_featureRelevance" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.featureRelevance")}}'"> Feature Relevance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
-                    <strong id="toggleButton_correlation" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.correlationAnalysis")}}'"> Correlation Analysis<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+            <h3 onclick="togglePillarDropdown('ai-impact-dropdown')">Impact of Data on AI<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="ai-impact-dropdown">
+                    <strong id="toggle-button-feature-relevance" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.feature_relevance")}}'"> Feature Relevance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                    <strong id="toggleButton_correlation" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.correlation_analysis")}}'"> Correlation Analysis<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
-            <h3 onclick="togglePillarDropdown('FairnessDropdown')">Fairness and Bias<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
-                <div id="FairnessDropdown">
+            <h3 onclick="togglePillarDropdown('fairness-dropdown')">Fairness and Bias<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="fairness-dropdown">
                     <strong id="toggleButton_fairness" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.fairness")}}'"> Fairness Metrics<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
-                    <strong id="toggleButton_classImbalance" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.classImbalance")}}'"> Class Imbalance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                    <strong id="toggle-button-class-imbalance" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.class_imbalance")}}'"> Class Imbalance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
-            <h3 onclick="togglePillarDropdown('DataGovernanceDropdown')">Data Governance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
-                <div id="DataGovernanceDropdown">
-                    <strong id="toggleButton_privacy" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.privacyPreservation")}}'"> Privacy Preservation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
-                    <strong id="toggleButton_hipaa" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.hipaaCompliance")}}'"> HIPAA Compliance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+            <h3 onclick="togglePillarDropdown('data-governance-dropdown')">Data Governance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="data-governance-dropdown">
+                    <strong id="toggleButton_privacy" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.privacy_preservation")}}'"> Privacy Preservation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+                    <strong id="toggleButton_hipaa" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.hipaa_compliance")}}'"> HIPAA Compliance<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
-            <h3 onclick="togglePillarDropdown('UnderstandabilityDropdown')">Understandability and Usability<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
-                <div id="UnderstandabilityDropdown">
-                    <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.FAIR")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+            <h3 onclick="togglePillarDropdown('understandability-dropdown')">Understandability and Usability<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="understandability-dropdown">
+                    <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.fair_assessment")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
-            <h3 onclick="togglePillarDropdown('DataStructureDropdown')">Data Structure and Organization<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
-                <div id="DataStructureDropdown">
+            <h3 onclick="togglePillarDropdown('data-structure-dropdown')">Data Structure and Organization<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="data-structure-dropdown">
                     <strong class="toggle-button">No metrics available for this pillar yet</strong>
             {% if file_type == '.csv' %}
-                <h3 onclick="location.href='{{ url_for('custom.customMetrics') }}'" style="cursor:pointer; color:inherit;">
+                <h3 onclick="location.href='{{ url_for('custom.custom_metrics') }}'" style="cursor:pointer; color:inherit;">
                     Define Custom Metrics
                     <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
                         <path d="M400-280v-400l200 200-200 200Z"/>
@@ -131,27 +131,27 @@
 
         {% else %}
             <h3 class="noUpload metric-info">Data Quality<span class="metric-info-text">Please upload a file</span></h3>
-                <div id="dataQualityDropdown">
+                <div id="data-quality-dropdown">
                     <strong id="toggleButton_quality" class="toggle-button metric-info"> Data Quality Metrics<span class="metric-info-text">Please upload a file</span></strong>
                 </div>
             <h3 class="noUpload metric-info">Impact of Data on AI<span class="metric-info-text">Please upload a file</span></h3>
-                <div id="AIImpactDropdown">
-                    <strong id="toggleButton_featureRelevance" class="toggle-button metric-info"> Feature Relevance<span class="metric-info-text">Please upload a file</span></strong>
+                <div id="ai-impact-dropdown">
+                    <strong id="toggle-button-feature-relevance" class="toggle-button metric-info"> Feature Relevance<span class="metric-info-text">Please upload a file</span></strong>
                     <strong id="toggleButton_correlation" class="toggle-button metric-info"> Correlation Analysis<span class="metric-info-text">Please upload a file</span></strong>
                 </div>
             <h3 class="noUpload metric-info">Fairness and Bias<span class="metric-info-text">Please upload a file</span></h3>
-                <div id="FairnessDropdown">
+                <div id="fairness-dropdown">
                     <strong id="toggleButton_fairness" class="toggle-button metric-info"> Fairness Metrics<span class="metric-info-text">Please upload a file</span></strong>
-                    <strong id="toggleButton_classImbalance" class="toggle-button metric-info"> Class Imbalance<span class="metric-info-text">Please upload a file</span></strong>
+                    <strong id="toggle-button-class-imbalance" class="toggle-button metric-info"> Class Imbalance<span class="metric-info-text">Please upload a file</span></strong>
                 </div>
             <h3 class="noUpload metric-info">Data Governance<span class="metric-info-text">Please upload a file</span></h3>
-                <div id="DataGovernanceDropdown">
+                <div id="data-governance-dropdown">
                     <strong id="toggleButton_privacy" class="toggle-button metric-info"> Privacy Preservation<span class="metric-info-text">Please upload a file</span></strong>
                     <strong id="toggleButton_hipaa" class="toggle-button metric-info"> HIPAA Compliance<span class="metric-info-text">Please upload a file</span></strong>
                 </div>
-            <h3 onclick="togglePillarDropdown('UnderstandabilityDropdown')">Understandability and Usability<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
-                <div id="UnderstandabilityDropdown">
-                    <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.FAIR")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
+            <h3 onclick="togglePillarDropdown('understandability-dropdown')">Understandability and Usability<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></h3>
+                <div id="understandability-dropdown">
+                    <strong id="toggleButton_FAIR" class="toggle-button clickable" onclick="location.href='{{url_for("metrics.fair_assessment")}}'"> FAIR Compliance Evaluation<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M400-280v-400l200 200-200 200Z"/></svg></strong>
                 </div>
             <h3 class="noUpload metric-info">Data Structure and Organization<span class="metric-info-text">Please upload a file</span></h3>
             <h3 class="noUpload metric-info">Define Custom Metrics<span class="metric-info-text">Please upload a file</span></h3>
@@ -351,7 +351,7 @@
         console.log("Checkbox Values:",checkboxValues);
 
 
-        fetch('/filter_file', {
+        fetch('/filter-file', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -362,7 +362,7 @@
         .then(data => {
             if (data.success) {
 
-                window.location.href = '/upload_file?minimize_preview=true';  // Now reload to get preview data
+                window.location.href = '/upload-file?minimize_preview=true';  // Now reload to get preview data
             } else {
                 openErrorPopup('Filtering Error', data.error || 'Unknown error');
             }

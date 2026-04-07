@@ -1,6 +1,6 @@
 {% extends 'metricTemplates/metricBase.html' %} {% set page_title = "Class
-Imbalance" %} {% set page_route = "metrics.classImbalance" %} {% block metricContent %}
-<div id="checkboxContainer_classImbalance" class="checkboxContainer">
+Imbalance" %} {% set page_route = "metrics.class_imbalance" %} {% block metricContent %}
+<div id="checkbox-container-class-imbalance" class="checkboxContainer">
   <br />
   <div class="checkboxContainerIndividual">
     <label class="material-checkbox">
@@ -34,7 +34,7 @@ Imbalance" %} {% set page_route = "metrics.classImbalance" %} {% block metricCon
         >
         <select
           name="target features for class imbalance"
-          id="allFeaturesCheckboxClassImbalance"
+          id="all-features-dropdown-class-imbalance"
           required
         >
           <option value="" disabled selected
@@ -45,10 +45,10 @@ Imbalance" %} {% set page_route = "metrics.classImbalance" %} {% block metricCon
       </li>
       <li>
 
-        <label for="classImbalanceDistanceDropdown">Select Distance Metrics:</label>
+        <label for="class-imbalance-distance-dropdown">Select Distance Metrics:</label>
         <br>
         <select
-          id="classImbalanceDistanceDropdown"
+          id="class-imbalance-distance-dropdown"
           name="distance metric for class imbalance"
           multiple
           style="min-width:250px; height:120px;">

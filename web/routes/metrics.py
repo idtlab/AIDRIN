@@ -66,8 +66,8 @@ metric_time_log = logging.getLogger("metric")
 # Data Quality
 # ---------------------------------------------------------------------------
 
-@metrics_bp.route("/dataQuality", methods=["GET", "POST"])
-def dataQuality():
+@metrics_bp.route("/data-quality", methods=["GET", "POST"])
+def data_quality():
     final_dict = {}
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
@@ -118,9 +118,9 @@ def dataQuality():
         metric_time_log.info(
             f"Data Quality Execution time: {time.time() - start_time:.2f} seconds"
         )
-        return store_result("metrics.dataQuality", final_dict)
+        return store_result("metrics.data_quality", final_dict)
 
-    return get_result_or_default("metrics.dataQuality", file_path, file_name)
+    return get_result_or_default("metrics.data_quality", file_path, file_name)
 
 
 # ---------------------------------------------------------------------------
@@ -181,32 +181,39 @@ def fairness():
                     "Statistical Rate analysis took %.2f seconds", time.time() - t0
                 )
             except Exception as e:
-                print("Error during Statistical Rate analysis:", e)
+                metric_time_log.error("Error during Statistical Rate analysis: %s", e)
+                final_dict["Statistical Rate"] = {"Error": str(e)}
 
         if request.form.get("conditional demographic disparity") == "yes":
             t0 = time.time()
             target = request.form.get("target for conditional demographic disparity")
             sensitive = request.form.get("sensitive for conditional demographic disparity")
             accepted_value = request.form.get("target value for conditional demographic disparity")
-            cdd_result = conditional_demographic_disparity.delay(
-                file[target].to_list(), file[sensitive].to_list(), accepted_value
-            )
-            cdd_dict = cdd_result.get()
-            cdd_dict["Description"] = (
-                "The conditional demographic disparity metric evaluates the distribution "
-                "of outcomes categorized as positive and negative across various sensitive groups. "
-                "The user specifies which outcome category is considered \"positive\" for the analysis, "
-                "with all other outcome categories classified as \"negative\". The metric calculates the "
-                "proportion of outcomes classified as \"positive\" and \"negative\" within each sensitive group."
-                " A resulting disparity value of True indicates that within a specific sensitive group, "
-                "the proportion of outcomes classified as \"negative\" exceeds the proportion classified as"
-                " \"positive\". This metric provides insights into potential disparities in outcome distribution "
-                "across sensitive groups based on the user-defined positive outcome criterion."
-            )
-            final_dict["Conditional Demographic Disparity"] = cdd_dict
-            metric_time_log.info(
-                "Conditional Demographic Disparity took %.2f seconds", time.time() - t0
-            )
+            try:
+                cdd_result = conditional_demographic_disparity.delay(
+                    file[target].to_list(), file[sensitive].to_list(), accepted_value
+                )
+                cdd_dict = cdd_result.get(timeout=60)
+            except Exception as e:
+                metric_time_log.error("Error during Conditional Demographic Disparity analysis: %s", e)
+                final_dict["Conditional Demographic Disparity"] = {"Error": str(e)}
+                cdd_dict = None
+            if cdd_dict is not None:
+                cdd_dict["Description"] = (
+                    "The conditional demographic disparity metric evaluates the distribution "
+                    "of outcomes categorized as positive and negative across various sensitive groups. "
+                    "The user specifies which outcome category is considered \"positive\" for the analysis, "
+                    "with all other outcome categories classified as \"negative\". The metric calculates the "
+                    "proportion of outcomes classified as \"positive\" and \"negative\" within each sensitive group."
+                    " A resulting disparity value of True indicates that within a specific sensitive group, "
+                    "the proportion of outcomes classified as \"negative\" exceeds the proportion classified as"
+                    " \"positive\". This metric provides insights into potential disparities in outcome distribution "
+                    "across sensitive groups based on the user-defined positive outcome criterion."
+                )
+                final_dict["Conditional Demographic Disparity"] = cdd_dict
+                metric_time_log.info(
+                    "Conditional Demographic Disparity took %.2f seconds", time.time() - t0
+                )
 
         print(f"Execution time: {time.time() - start_time} seconds")
         return store_result("metrics.fairness", final_dict)
@@ -214,12 +221,13 @@ def fairness():
     return get_result_or_default("metrics.fairness", file_path, file_name)
 
 
+
 # ---------------------------------------------------------------------------
 # Correlation Analysis
 # ---------------------------------------------------------------------------
 
-@metrics_bp.route("/correlationAnalysis", methods=["GET", "POST"])
-def correlationAnalysis():
+@metrics_bp.route("/correlation-analysis", methods=["GET", "POST"])
+def correlation_analysis():
     final_dict = {}
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
@@ -258,22 +266,22 @@ def correlationAnalysis():
                     ]
                 metric_time_log.info("Correlations took %.2f seconds", time.time() - t0)
                 print(f"Execution time: {time.time() - start_time} seconds")
-                return store_result("metrics.correlationAnalysis", final_dict)
+                return store_result("metrics.correlation_analysis", final_dict)
             else:
                 return jsonify({"message": "No correlation analysis selected"}), 200
         except Exception as e:
             metric_time_log.error(f"Error: {e}")
             return jsonify({"error": str(e)}), 200
 
-    return get_result_or_default("metrics.correlationAnalysis", file_path, file_name)
+    return get_result_or_default("metrics.correlation_analysis", file_path, file_name)
 
 
 # ---------------------------------------------------------------------------
 # Feature Relevance
 # ---------------------------------------------------------------------------
 
-@metrics_bp.route("/featureRelevance", methods=["GET", "POST"])
-def featureRelevance():
+@metrics_bp.route("/feature-relevance", methods=["GET", "POST"])
+def feature_relevance():
     final_dict = {}
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
@@ -345,19 +353,19 @@ def featureRelevance():
             }
             final_dict["Feature Relevance"] = f_dict
             print(f"Execution time: {time.time() - start_time} seconds")
-            return store_result("metrics.featureRelevance", final_dict)
+            return store_result("metrics.feature_relevance", final_dict)
         else:
             return jsonify({"message": "No feature relevance analysis selected"}), 200
 
-    return get_result_or_default("metrics.featureRelevance", file_path, file_name)
+    return get_result_or_default("metrics.feature_relevance", file_path, file_name)
 
 
 # ---------------------------------------------------------------------------
 # Class Imbalance
 # ---------------------------------------------------------------------------
 
-@metrics_bp.route("/classImbalance", methods=["GET", "POST"])
-def classImbalance():
+@metrics_bp.route("/class-imbalance", methods=["GET", "POST"])
+def class_imbalance():
     final_dict = {}
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
@@ -395,9 +403,9 @@ def classImbalance():
                 }
 
         print(f"Execution time: {time.time() - start_time} seconds")
-        return store_result("metrics.classImbalance", final_dict)
+        return store_result("metrics.class_imbalance", final_dict)
 
-    return get_result_or_default("metrics.classImbalance", file_path, file_name)
+    return get_result_or_default("metrics.class_imbalance", file_path, file_name)
 
 
 def _compute_class_imbalance(file, classes, dist_metric):
@@ -429,8 +437,8 @@ def _compute_class_imbalance(file, classes, dist_metric):
 # Privacy Preservation
 # ---------------------------------------------------------------------------
 
-@metrics_bp.route("/privacyPreservation", methods=["GET", "POST"])
-def privacyPreservation():
+@metrics_bp.route("/privacy-preservation", methods=["GET", "POST"])
+def privacy_preservation():
     final_dict = {}
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
@@ -612,17 +620,17 @@ def privacyPreservation():
         metric_time_log.info(
             f"Privacy Preservation Execution time: {time.time() - start_time:.2f} seconds"
         )
-        return store_result("metrics.privacyPreservation", final_dict)
+        return store_result("metrics.privacy_preservation", final_dict)
 
-    return get_result_or_default("metrics.privacyPreservation", file_path, file_name)
+    return get_result_or_default("metrics.privacy_preservation", file_path, file_name)
 
 
 # ---------------------------------------------------------------------------
 # HIPAA Compliance
 # ---------------------------------------------------------------------------
 
-@metrics_bp.route("/hipaaCompliance", methods=["GET", "POST"])
-def hipaaCompliance():
+@metrics_bp.route("/hipaa-compliance", methods=["GET", "POST"])
+def hipaa_compliance():
     final_dict = {}
     data_file_path = session.get("uploaded_file_path")
     data_file_name = session.get("uploaded_file_name")
@@ -656,17 +664,17 @@ def hipaaCompliance():
         metric_time_log.info(
             f"HIPAA Compliance Evaluation Execution time: {time.time() - start_time:.2f} seconds"
         )
-        return store_result("metrics.hipaaCompliance", final_dict)
+        return store_result("metrics.hipaa_compliance", final_dict)
 
-    return get_result_or_default("metrics.hipaaCompliance", data_file_path, data_file_name)
+    return get_result_or_default("metrics.hipaa_compliance", data_file_path, data_file_name)
 
 
 # ---------------------------------------------------------------------------
 # FAIR Assessment
 # ---------------------------------------------------------------------------
 
-@metrics_bp.route("/FAIR", methods=["GET", "POST"])
-def FAIR():
+@metrics_bp.route("/fair-assessment", methods=["GET", "POST"])
+def fair_assessment():
     start_time = time.time()
     try:
         if request.method == "POST":
@@ -697,7 +705,7 @@ def FAIR():
             else:
                 return jsonify({"Error:": "Unknown metadata type"}), 400
 
-            return store_result("metrics.FAIR", result)
+            return store_result("metrics.fair_assessment", result)
 
         else:
             results_id = request.args.get("results_id")
@@ -716,7 +724,7 @@ def FAIR():
 # Async task status polling
 # ---------------------------------------------------------------------------
 
-@metrics_bp.route("/check_and_update_task/<task_id>/<metric_name>", methods=["GET"])
+@metrics_bp.route("/check-and-update-task/<task_id>/<metric_name>", methods=["GET"])
 def check_task_status(task_id, metric_name):
     try:
         task_result = AsyncResult(task_id)

@@ -163,8 +163,8 @@ select {
 #kAnonymityQIsCheckbox,
 #lDiversityQIsCheckbox,
 #tClosenessQIsCheckbox,
-#classImbalanceFeaturesCheckbox,
-#classImbalanceDistanceCheckbox {
+#all-features-dropdown-class-imbalance,
+#class-imbalance-distance-dropdown {
   /* Use a generous max-height so most feature lists fit without scrolling,
      while still allowing the container to scroll on very large datasets. */
   max-height: 60vh;
@@ -188,8 +188,8 @@ select {
 #kAnonymityQIsCheckbox table,
 #lDiversityQIsCheckbox table,
 #tClosenessQIsCheckbox table,
-#classImbalanceFeaturesCheckbox table,
-#classImbalanceDistanceCheckbox table {
+#all-features-dropdown-class-imbalance table,
+#class-imbalance-distance-dropdown table {
   width: 100%;
   table-layout: auto;
 }
@@ -204,8 +204,8 @@ select {
 #kAnonymityQIsCheckbox td,
 #lDiversityQIsCheckbox td,
 #tClosenessQIsCheckbox td,
-#classImbalanceFeaturesCheckbox td,
-#classImbalanceDistanceCheckbox td {
+#all-features-dropdown-class-imbalance td,
+#class-imbalance-distance-dropdown td {
   width: 100%;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -221,8 +221,8 @@ select {
 #kAnonymityQIsCheckbox::-webkit-scrollbar,
 #lDiversityQIsCheckbox::-webkit-scrollbar,
 #tClosenessQIsCheckbox::-webkit-scrollbar,
-#classImbalanceFeaturesCheckbox::-webkit-scrollbar,
-#classImbalanceDistanceCheckbox::-webkit-scrollbar {
+#all-features-dropdown-class-imbalance::-webkit-scrollbar,
+#class-imbalance-distance-dropdown::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
@@ -236,8 +236,8 @@ select {
 #kAnonymityQIsCheckbox::-webkit-scrollbar-track,
 #lDiversityQIsCheckbox::-webkit-scrollbar-track,
 #tClosenessQIsCheckbox::-webkit-scrollbar-track,
-#classImbalanceFeaturesCheckbox::-webkit-scrollbar-track,
-#classImbalanceDistanceCheckbox::-webkit-scrollbar-track {
+#all-features-dropdown-class-imbalance::-webkit-scrollbar-track,
+#class-imbalance-distance-dropdown::-webkit-scrollbar-track {
   background: var(--backgroundColor);
   border-radius: 4px;
 }
@@ -251,8 +251,8 @@ select {
 #kAnonymityQIsCheckbox::-webkit-scrollbar-thumb,
 #lDiversityQIsCheckbox::-webkit-scrollbar-thumb,
 #tClosenessQIsCheckbox::-webkit-scrollbar-thumb,
-#classImbalanceFeaturesCheckbox::-webkit-scrollbar-thumb,
-#classImbalanceDistanceCheckbox::-webkit-scrollbar-thumb {
+#all-features-dropdown-class-imbalance::-webkit-scrollbar-thumb,
+#class-imbalance-distance-dropdown::-webkit-scrollbar-thumb {
   background: var(--tertiaryColor);
   border-radius: 4px;
 }
@@ -266,8 +266,8 @@ select {
 #kAnonymityQIsCheckbox::-webkit-scrollbar-thumb:hover,
 #lDiversityQIsCheckbox::-webkit-scrollbar-thumb:hover,
 #tClosenessQIsCheckbox::-webkit-scrollbar-thumb:hover,
-#classImbalanceFeaturesCheckbox::-webkit-scrollbar-thumb:hover,
-#classImbalanceDistanceCheckbox::-webkit-scrollbar-thumb:hover {
+#all-features-dropdown-class-imbalance::-webkit-scrollbar-thumb:hover,
+#class-imbalance-distance-dropdown::-webkit-scrollbar-thumb:hover {
   background: var(--darkAccent);
 }
 

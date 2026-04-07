@@ -35,7 +35,7 @@ def test_home(client):
 
 
 def test_upload_file_route(client):
-    response = client.get("/upload_file")
+    response = client.get("/upload-file")
     assert response.status_code == 200
 
 
@@ -45,7 +45,7 @@ def test_publications(client):
 
 
 def test_fair(client):
-    response = client.get("/FAIR")
+    response = client.get("/fair-assessment")
     assert response.status_code == 200
 
 

@@ -110,14 +110,14 @@ def store_result(metric, final_dict):
     results_id = uuid.uuid4().hex
     current_app.TEMP_RESULTS_CACHE[results_id] = {"data": formatted_final_dict}
     return redirect(
-        url_for(metric, results_id=results_id, return_type=request.args.get("returnType"))
+        url_for(metric, results_id=results_id, return_type=request.args.get("return_type"))
     )
 
 
 def get_result_or_default(metric, uploaded_file_path, uploaded_file_name):
     """Load results from cache (if present) and render the metric template.
 
-    ``metric`` is a Flask endpoint name (e.g. ``"metrics.dataQuality"``).  The
+    ``metric`` is a Flask endpoint name (e.g. ``"metrics.data_quality"``).  The
     template is resolved from the final segment after the last ``"."``.
     """
     results_id = request.args.get("results_id")
@@ -128,10 +128,10 @@ def get_result_or_default(metric, uploaded_file_path, uploaded_file_name):
         entry = current_app.TEMP_RESULTS_CACHE.pop(results_id)
         formatted_final_dict = entry["data"]
 
-    if return_type == "json" and formatted_final_dict:
+    if return_type == "json" and formatted_final_dict is not None:
         return jsonify(formatted_final_dict)
 
-    # Strip the blueprint prefix (e.g. "metrics.dataQuality" → "dataQuality")
+    # Strip the blueprint prefix (e.g. "metrics.data_quality" → "data_quality")
     template_name = metric.rsplit(".", 1)[-1]
     return render_template(
         "metricTemplates/" + template_name + ".html",

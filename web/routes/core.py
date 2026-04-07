@@ -31,7 +31,7 @@ def homepage():
     return render_template("homepage.html")
 
 
-@core_bp.route("/upload_file", methods=["GET", "POST"])
+@core_bp.route("/upload-file", methods=["GET", "POST"])
 def upload_file():
     if request.method == "POST":
         file_upload_time_log.info("File upload initiated")
@@ -97,7 +97,7 @@ def upload_file():
     )
 
 
-@core_bp.route("/retrieve_uploaded_file", methods=["GET"])
+@core_bp.route("/retrieve-uploaded-file", methods=["GET"])
 def retrieve_uploaded_file():
     file_upload_time_log.info("Retrieving File")
     uploaded_file_path = session.get("uploaded_file_path")
@@ -133,7 +133,7 @@ def clear_file():
     return redirect(url_for("core.upload_file"))
 
 
-@core_bp.route("/filter_file", methods=["POST"])
+@core_bp.route("/filter-file", methods=["POST"])
 def filter_file():
     try:
         data = request.get_json()
@@ -158,7 +158,7 @@ def filter_file():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@core_bp.route("/my_cache", methods=["GET"])
+@core_bp.route("/my-cache", methods=["GET"])
 def my_cache():
     try:
         user_id = get_current_user_id()
@@ -181,7 +181,7 @@ def my_cache():
         return render_template("my_cache.html", cache_info=None, error=str(e))
 
 
-@core_bp.route("/clear_cache", methods=["POST"])
+@core_bp.route("/clear-cache", methods=["POST"])
 def clear_cache():
     try:
         removed_count = clear_all_user_cache()
@@ -196,7 +196,7 @@ def clear_cache():
         return jsonify({"success": False, "message": f"Error clearing cache: {str(e)}"}), 500
 
 
-@core_bp.route("/summary_statistics", methods=["GET", "POST"])
+@core_bp.route("/summary-statistics", methods=["GET", "POST"])
 def summary_statistics():
     if request.method == "POST":
         try:
@@ -250,7 +250,7 @@ def summary_statistics():
         return jsonify({"success": False, "message": str(e)})
 
 
-@core_bp.route("/feature_set", methods=["POST"])
+@core_bp.route("/feature-set", methods=["POST"])
 def extract_features():
     try:
         file_path = session.get("uploaded_file_path")
