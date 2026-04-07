@@ -1,16 +1,18 @@
 import base64
 import io
 
-import matplotlib
-import matplotlib.pyplot as plt  # noqa: E402
-
-plt.ioff()  # Turn off interactive mode
-
 import numpy as np
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
+
+# Configure matplotlib before importing pyplot to ensure non-interactive Agg backend
+import matplotlib  # noqa: E402
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt  # noqa: E402
+
+plt.ioff()  # Turn off interactive mode
 
 
 @shared_task(bind=True, ignore_result=False)

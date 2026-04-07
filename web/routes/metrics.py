@@ -221,7 +221,6 @@ def fairness():
     return get_result_or_default("metrics.fairness", file_path, file_name)
 
 
-
 # ---------------------------------------------------------------------------
 # Correlation Analysis
 # ---------------------------------------------------------------------------

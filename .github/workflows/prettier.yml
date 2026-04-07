@@ -23,4 +23,4 @@ jobs:
         run: npm install prettier
 
       - name: Run prettier
-        run: npx prettier --check aidrin/static/css
+        run: npx prettier --check web/static/css
