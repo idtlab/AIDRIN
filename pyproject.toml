@@ -59,6 +59,9 @@ docs = [
 # Start Celery beat (scheduled tasks):
 #   uv run celery -A worker.make_celery beat --loglevel=info
 
+[tool.setuptools.packages.find]
+include = ["aidrin*", "web*", "worker*"]
+
 [tool.setuptools.dynamic]
 version = {attr = "aidrin._version.__version__"}
 
