@@ -69,15 +69,88 @@ function toggleVisualization(id) {
 
 /** Error Handling: Creates a popup with error types and server response (details) */
 let errorPopup;
+function formatAjaxErrorMessage(error) {
+  if (!error) {
+    return "Unknown error";
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error.responseJSON) {
+    if (error.responseJSON.message) {
+      return error.responseJSON.message;
+    }
+    if (error.responseJSON.error) {
+      return error.responseJSON.error;
+    }
+  }
+
+  if (error.responseText) {
+    var text = error.responseText.trim();
+    if (text.startsWith("<")) {
+      return error.statusText || "An unknown server error occurred";
+    }
+    try {
+      var parsed = JSON.parse(text);
+      if (parsed && typeof parsed === "object") {
+        if (parsed.message) {
+          return parsed.message;
+        }
+        if (parsed.error) {
+          return parsed.error;
+        }
+        if (parsed.detail) {
+          return parsed.detail;
+        }
+        if (parsed.success === false && parsed.message) {
+          return parsed.message;
+        }
+        if (parsed.success === false && parsed.error) {
+          return parsed.error;
+        }
+        console.error("AJAX error response JSON:", parsed);
+        var keys = Object.keys(parsed);
+        return `Server returned unexpected error JSON with keys: ${keys.slice(0, 10).join(", ")}${keys.length > 10 ? ", ..." : ""}`;
+      }
+    } catch (e) {
+      // not JSON, fallback to raw text
+    }
+    return text;
+  }
+
+  if (error.statusText) {
+    return error.statusText;
+  }
+  if (error.message) {
+    return error.message;
+  }
+
+  try {
+    var stringified = JSON.stringify(error);
+    if (stringified.length > 500) {
+      return `Unexpected error object with keys: ${Object.keys(error).slice(0, 10).join(", ")}${Object.keys(error).length > 10 ? ", ..." : ""}`;
+    }
+    return stringified;
+  } catch (e) {
+    return String(error);
+  }
+}
+
 function openErrorPopup(type, message) {
   errorPopup = document.getElementById("error-popup");
   errorPopup.classList.add("open-popup");
 
   errorType = document.getElementById("error-type");
-  errorType.innerHTML = "Error: " + type;
+  errorType.textContent = "Error: " + type;
 
   errorMessage = document.getElementById("error-message");
-  errorMessage.innerHTML = message;
+  if (message && typeof message === "object") {
+    errorMessage.textContent = formatAjaxErrorMessage(message);
+  } else {
+    errorMessage.textContent = message;
+  }
 }
 function closeErrorPopup() {
   //error popup has to be present in the DOM for the function to call already
@@ -306,11 +379,11 @@ $(document).ready(function () {
         },
         error: function (error) {
           console.log(error);
-          openErrorPopup("", error);
+          openErrorPopup("File Retrieval", formatAjaxErrorMessage(error));
         },
       }).catch((error) => {
         console.error("Error fetching file:", error);
-        openErrorPopup("File Retrieval", error);
+        openErrorPopup("File Retrieval", formatAjaxErrorMessage(error));
       });
     });
 
@@ -479,7 +552,8 @@ $(document).ready(function () {
       },
       error: function (error) {
         console.log(error);
-        openErrorPopup("", error);
+        var errorMessage = formatAjaxErrorMessage(error);
+        openErrorPopup("Summary Statistics Error", errorMessage);
       },
     });
   });

@@ -7,6 +7,9 @@ import sys
 import importlib
 import io
 import base64
+import numbers
+import datetime
+import math
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -2411,10 +2414,32 @@ def get_summary_statistics():
         file_type = session.get("uploaded_file_type")
         file_info = (file_path, file_name, file_type)
         df = read_file(file_info)
-        # Extract summary statistics
-        summary_statistics = df.describe().applymap(
-            lambda x: f"{x:.2e}" if abs(x) < 0.001 else round(x, 2)
-        ).to_dict()
+        # Normalize column names to strings to avoid numpy scalar keys in JSON
+        df.columns = df.columns.astype(str)
+        # Extract summary statistics, ensuring JSON-safe values (no NaN/Inf)
+        def clean_value(x):
+            """Convert a single value to a JSON-friendly representation."""
+            if isinstance(x, numbers.Number):
+                # NaN/Inf are not valid JSON; convert to None
+                if pd.isna(x) or math.isnan(float(x)) or math.isinf(float(x)):
+                    return None
+                x = float(x)
+                return f"{x:.2e}" if x != 0 and abs(x) < 0.001 else round(x, 2)
+            if isinstance(x, (pd.Timestamp, datetime.datetime, datetime.date)):
+                return x.isoformat()
+            if pd.isna(x):
+                return None
+            return str(x)
+
+        def sanitize(obj):
+            if isinstance(obj, dict):
+                return {str(k): sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [sanitize(v) for v in obj]
+            return clean_value(obj)
+
+        raw_summary = df.describe(include='all').to_dict()
+        summary_statistics = sanitize(raw_summary)
 
         # Calculate probability distributions
         histograms = summary_histograms(df)
@@ -2433,10 +2458,18 @@ def get_summary_statistics():
         all_features = numerical_columns + categorical_columns
 
         for v in summary_statistics.values():
-            for old_key in v:
+            for old_key in list(v.keys()):
                 if old_key in ["25%", "50%", "75%"]:
                     new_key = old_key.replace("%", "th percentile")
                     v[new_key] = v.pop(old_key)
+                    key_for_check = new_key
+                else:
+                    key_for_check = old_key
+                # ensure any lingering NaN/Inf are set to None after renaming
+                if isinstance(v.get(key_for_check), numbers.Number):
+                    val = v[key_for_check]
+                    if pd.isna(val) or math.isnan(float(val)) or math.isinf(float(val)):
+                        v[key_for_check] = None
 
         # Count the number of records
         records_count = len(df)

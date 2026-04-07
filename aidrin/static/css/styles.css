@@ -1261,6 +1261,9 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   padding: 0 30px;
   position: fixed;
   z-index: 100;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
   transform: translate(-50%, -50%) scale(0.1);
   visibility: hidden;
 }
