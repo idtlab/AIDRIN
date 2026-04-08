@@ -127,12 +127,14 @@ def upload_file():
 
         if file:
             cleared_count = clear_all_user_cache()
-            print(f"Cache cleared for new file upload: {cleared_count} entries removed")
+            file_upload_time_log.info(
+                "Cache cleared for new file upload: %d entries removed", cleared_count
+            )
 
             display_name = file.filename
             filename = f"{uuid.uuid4().hex}_{file.filename}"
             file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            print(f"Saving file to {file_path}")
+            file_upload_time_log.info("Saving file to %s", file_path)
             file.save(file_path)
 
             session["uploaded_file_name"] = display_name
@@ -159,7 +161,7 @@ def upload_file():
                     if file_preview and isinstance(file_preview, list):
                         file_preview = [str(key) for key in file_preview if key is not None]
                 except Exception as parse_error:
-                    print(f"Error parsing file: {parse_error}")
+                    file_upload_time_log.error("Error parsing file: %s", parse_error)
                     file_preview = []
 
                 current_checked_keys = session.get("selected_keys", [])
@@ -170,7 +172,7 @@ def upload_file():
                 elif not isinstance(current_checked_keys, list):
                     current_checked_keys = []
         except Exception as e:
-            print(f"Error generating file preview: {e}")
+            file_upload_time_log.error("Error generating file preview: %s", e)
             file_preview = None
             current_checked_keys = None
 
@@ -246,7 +248,7 @@ def filter_file():
 
         return jsonify({"success": True, "message": "File filtered successfully"})
     except Exception as e:
-        print(f"Error in filter_file: {e}")
+        file_upload_time_log.error("Error in filter_file: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
 

@@ -1,8 +1,8 @@
 /**
- * workspace.js — Single-page workspace logic for AIDRIN
+ * inspector.js — Single-page inspector logic for AIDRIN
  *
  * Handles: panel switching, sidebar toggling, parameterized form submission,
- * FAIR assessment submission, CodeMirror lazy init, and workspace initialization.
+ * FAIR assessment submission, CodeMirror lazy init, and inspector initialization.
  */
 
 // ==================== Panel Switching ====================
@@ -174,12 +174,6 @@ function workspaceSubmit(targetUrl) {
       </div>`;
   }
 
-  // Debug: log what we're sending
-  console.log('[inspector] POST to', targetUrl);
-  for (const [k, v] of processedFormData.entries()) {
-    console.log('[inspector] form:', k, '=', typeof v === 'string' ? v : v.name);
-  }
-
   // POST to the metric endpoint
   fetch(targetUrl + '?return_type=json', {
     method: 'POST',
@@ -193,7 +187,6 @@ function workspaceSubmit(targetUrl) {
       }
     })
     .then(data => {
-      console.log('[inspector] Response:', JSON.stringify(data).substring(0, 500));
       // Store for download
       lastMetricResult = data;
 
