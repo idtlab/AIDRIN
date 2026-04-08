@@ -7,9 +7,11 @@ from flask import (
     Blueprint,
     current_app,
     jsonify,
+    redirect,
     render_template,
     request,
     session,
+    url_for,
 )
 from aidrin.file_handling.file_parser import read_file
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -759,7 +761,7 @@ def fair_assessment():
                 entry = current_app.TEMP_RESULTS_CACHE.pop(results_id)
                 return jsonify(entry["data"])
 
-            return render_template("metricTemplates/upload_meta.html")
+            return redirect(url_for("core.inspector"))
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400

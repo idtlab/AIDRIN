@@ -1,9 +1,12 @@
+import logging
 import os
 import time
 from celery import Celery, Task
 from flask import Flask
 from aidrin._version import __version__
 from aidrin.logging import setup_logging
+
+startup_log = logging.getLogger("startup")
 
 
 def _configure_matplotlib():
@@ -86,9 +89,9 @@ def create_app():
                 if current_time - os.path.getmtime(file_path) > max_age_seconds:
                     os.remove(file_path)
                     files_removed += 1
-                    print(f"Cleaned up old file on startup: {filename}")
+                    startup_log.info("Cleaned up old file on startup: %s", filename)
         except Exception as e:
-            print(f"Failed to delete {file_path}: {e}")
+            startup_log.warning("Failed to delete %s: %s", file_path, e)
 
     # Custom metrics folder stays inside the aidrin package (dynamic import target)
     import aidrin as _aidrin_pkg
@@ -113,9 +116,9 @@ def create_app():
                 if current_time - os.path.getmtime(file_path) > max_age_seconds:
                     os.remove(file_path)
                     metrics_removed += 1
-                    print(f"[Startup Cleanup] Deleted old custom metric: {filename}")
+                    startup_log.info("Deleted old custom metric: %s", filename)
         except Exception as e:
-            print(f"[Startup Cleanup] Failed to delete {file_path}: {e}")
+            startup_log.warning("Failed to delete %s: %s", file_path, e)
 
     remedy_removed = 0
     for filename in os.listdir(remedy_folder):
@@ -125,14 +128,14 @@ def create_app():
                 if current_time - os.path.getmtime(file_path) > max_age_seconds:
                     os.remove(file_path)
                     remedy_removed += 1
-                    print(f"[Startup Cleanup] Deleted old remedy file: {filename}")
+                    startup_log.info("Deleted old remedy file: %s", filename)
         except Exception as e:
-            print(f"[Startup Cleanup] Failed to delete {file_path}: {e}")
+            startup_log.warning("Failed to delete %s: %s", file_path, e)
 
     if files_removed > 0 or metrics_removed > 0 or remedy_removed > 0:
-        print(
-            f"[Startup Cleanup] Completed: {files_removed} upload(s) + "
-            f"{metrics_removed} custom metric(s) + {remedy_removed} remedy file(s) removed"
+        startup_log.info(
+            "Startup cleanup completed: %d upload(s) + %d custom metric(s) + %d remedy file(s) removed",
+            files_removed, metrics_removed, remedy_removed,
         )
 
     return app

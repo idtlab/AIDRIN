@@ -2,6 +2,7 @@
 
 import io
 import base64
+import logging
 import time
 import uuid
 
@@ -9,6 +10,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from flask import current_app, jsonify, redirect, render_template, request, session, url_for
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +76,7 @@ def is_metric_cache_valid(cache_entry):
     current_time = time.time()
     expires_at = cache_entry.get("expires_at", 0)
     is_valid = current_time < expires_at
-    print(f"Cache validation - Current time: {current_time}, Expires at: {expires_at}, Is valid: {is_valid}")
+    logger.debug("Cache validation - Current time: %s, Expires at: %s, Is valid: %s", current_time, expires_at, is_valid)
     return is_valid
 
 
@@ -86,7 +89,7 @@ def clear_all_user_cache():
     ]
     for key in keys_to_remove:
         current_app.TEMP_RESULTS_CACHE.pop(key, None)
-    print(f"User {user_id} ALL cache cleared: Removed {len(keys_to_remove)} entries")
+    logger.info("User %s ALL cache cleared: Removed %d entries", user_id, len(keys_to_remove))
     return len(keys_to_remove)
 
 
@@ -97,7 +100,7 @@ def manage_cache_size(max_cache_size=100):
         keys_to_remove = list(current_app.TEMP_RESULTS_CACHE.keys())[:items_to_remove]
         for key in keys_to_remove:
             current_app.TEMP_RESULTS_CACHE.pop(key, None)
-        print(f"Cache cleanup: Removed {len(keys_to_remove)} old entries")
+        logger.info("Cache cleanup: Removed %d old entries", len(keys_to_remove))
 
 
 # ---------------------------------------------------------------------------
@@ -133,14 +136,8 @@ def get_result_or_default(metric, uploaded_file_path, uploaded_file_name):
             return jsonify(formatted_final_dict)
         return jsonify({"message": "No results available"}), 200
 
-    # Strip the blueprint prefix (e.g. "metrics.data_quality" → "data_quality")
-    template_name = metric.rsplit(".", 1)[-1]
-    return render_template(
-        "metricTemplates/" + template_name + ".html",
-        uploaded_file_path=uploaded_file_path,
-        uploaded_file_name=uploaded_file_name,
-        formatted_final_dict=formatted_final_dict,
-    )
+    # All metric pages are now served by the inspector — redirect there
+    return redirect(url_for("core.inspector"))
 
 
 # ---------------------------------------------------------------------------

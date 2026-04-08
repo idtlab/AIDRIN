@@ -58,4 +58,26 @@ Before you begin:
 - Use the correct **issue template** (bug, feature, install, usage).
 - Every change starts with an issue.
 
+Debugging the Web Interface
+============================
+
+AIDRIN's inspector UI includes debug logging that is disabled by default to keep the browser console clean. To enable verbose logging during development:
+
+1. Open the browser's developer console (F12 → Console).
+2. Run:
+
+   .. code-block:: javascript
+
+      localStorage.setItem("aidrin_debug", "true");
+
+3. Reload the page. All internal log messages will now appear prefixed with ``[aidrin]``.
+
+To disable debug logging again:
+
+   .. code-block:: javascript
+
+      localStorage.removeItem("aidrin_debug");
+
+This affects ``main.js`` debug output. Errors (``console.error``) are always shown regardless of this setting.
+
 Thank you for contributing to AIDRIN!

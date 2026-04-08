@@ -121,70 +121,8 @@ def inspector():
 
 @core_bp.route("/upload-file", methods=["GET", "POST"])
 def upload_file():
-    if request.method == "POST":
-        file_upload_time_log.info("File upload initiated")
-        file = request.files["file"]
-
-        if file:
-            cleared_count = clear_all_user_cache()
-            file_upload_time_log.info(
-                "Cache cleared for new file upload: %d entries removed", cleared_count
-            )
-
-            display_name = file.filename
-            filename = f"{uuid.uuid4().hex}_{file.filename}"
-            file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            file_upload_time_log.info("Saving file to %s", file_path)
-            file.save(file_path)
-
-            session["uploaded_file_name"] = display_name
-            session["uploaded_file_path"] = file_path
-            session["uploaded_file_type"] = request.form.get("fileTypeSelector")
-
-            return redirect(url_for("core.upload_file"))
-
-    uploaded_file_name = session.get("uploaded_file_name", "")
-    uploaded_file_path = session.get("uploaded_file_path", "")
-    file_type = session.get("uploaded_file_type", "")
-
-    file_upload_time_log.info("File Uploaded. Type: %s", file_type)
-
-    file_preview = None
-    current_checked_keys = None
-
-    if uploaded_file_path and file_type in [".h5", ".json", ".npz"]:
-        try:
-            if file_type in READER_MAP:
-                reader = READER_MAP[file_type](uploaded_file_path, file_upload_time_log)
-                try:
-                    file_preview = reader.parse()
-                    if file_preview and isinstance(file_preview, list):
-                        file_preview = [str(key) for key in file_preview if key is not None]
-                except Exception as parse_error:
-                    file_upload_time_log.error("Error parsing file: %s", parse_error)
-                    file_preview = []
-
-                current_checked_keys = session.get("selected_keys", [])
-                if isinstance(current_checked_keys, str):
-                    current_checked_keys = (
-                        current_checked_keys.split(",") if current_checked_keys else []
-                    )
-                elif not isinstance(current_checked_keys, list):
-                    current_checked_keys = []
-        except Exception as e:
-            file_upload_time_log.error("Error generating file preview: %s", e)
-            file_preview = None
-            current_checked_keys = None
-
-    return render_template(
-        "upload_file.html",
-        uploaded_file_path=uploaded_file_path or "",
-        uploaded_file_name=uploaded_file_name or "",
-        file_type=file_type or "",
-        supported_file_types=SUPPORTED_FILE_TYPES,
-        file_preview=file_preview,
-        current_checked_keys=current_checked_keys,
-    )
+    """Legacy route — redirects to the inspector."""
+    return redirect(url_for("core.inspector"))
 
 
 @core_bp.route("/retrieve-uploaded-file", methods=["GET"])
@@ -220,11 +158,7 @@ def clear_file():
         file_upload_time_log.info("File Clear Failure: Unable to clear folder")
         return jsonify({"success": False, "error": str(e)}), 500
 
-    # Redirect to workspace if the referrer is from workspace, else upload_file
-    referrer = request.referrer or ""
-    if "/inspector" in referrer:
-        return redirect(url_for("core.inspector"))
-    return redirect(url_for("core.upload_file"))
+    return redirect(url_for("core.inspector"))
 
 
 @core_bp.route("/filter-file", methods=["POST"])
@@ -305,7 +239,7 @@ def summary_statistics():
             uploaded_file_path = session.get("uploaded_file_path")
             if uploaded_file_path and os.path.exists(uploaded_file_path):
                 return redirect(url_for("core.summary_statistics"))
-            return render_template("upload_file.html")
+            return redirect(url_for("core.inspector"))
         except Exception as e:
             return jsonify({"success": False, "message": str(e)})
 

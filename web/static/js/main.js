@@ -1,3 +1,7 @@
+// Debug logging — set to true to enable console output
+const AIDRIN_DEBUG = localStorage.getItem("aidrin_debug") === "true";
+function debugLog(...args) { if (AIDRIN_DEBUG) debugLog("[aidrin]", ...args); }
+
 function togglePillarDropdown(id) {
   const container = document.getElementById(id); //
   const subElements = container.querySelectorAll(".toggle-button");
@@ -23,13 +27,13 @@ function uploadForm() {
 
   // Check if file type is selected
   if (!fileTypeSelector.value) {
-    alert("Please select a file type first");
+    if (typeof showToast === 'function') showToast("Please select a file type first", "error");
     return;
   }
 
   // Check if file is selected
   if (!fileInput.files || fileInput.files.length === 0) {
-    alert("Please select a file to upload");
+    if (typeof showToast === 'function') showToast("Please select a file to upload", "error");
     return;
   }
 
@@ -65,7 +69,7 @@ function updateFileInputBasedOnType(
   if (fileType) {
     fileInput.disabled = false;
     fileInput.setAttribute("accept", fileType);
-    console.log("USER SELECTED FILETYPE: " + fileType);
+    debugLog("USER SELECTED FILETYPE: " + fileType);
     fileUploadMessage.style.opacity = "1";
     fileUploadMessage.textContent = "Click to upload or drag and drop";
   } else {
@@ -73,7 +77,7 @@ function updateFileInputBasedOnType(
     fileInput.removeAttribute("accept");
     fileUploadMessage.style.opacity = "0.6";
     fileUploadMessage.textContent = "Select a file type first";
-    console.log("FILE UPLOAD DISABLED");
+    debugLog("FILE UPLOAD DISABLED");
   }
 }
 
@@ -302,8 +306,6 @@ function submitForm() {
     metrics.innerHTML = "<p>Loading visualizations, please wait...</p>";
   } else {
     console.error("No Element ID");
-    console.log("No Element ID");
-    print("No Element ID");
   }
   const url = new URL(window.location.href);
   url.searchParams.set("return_type", "json");
@@ -362,7 +364,7 @@ function submitForm() {
       }
       // Make the validation function globally available
       window.validateFeatureRelevanceForm = validateFeatureRelevanceForm;
-      console.log("Server Response:", data);
+      debugLog("Server Response:", data);
       var resultContainer = document.getElementById("resultContainer");
       resp_data = data;
 
@@ -397,7 +399,7 @@ function submitForm() {
       // First, check for validation errors and show popups immediately
       visualizationTypes.forEach(function (type) {
         if (isKeyPresentAndDefined(data, type) && data[type]["Error"]) {
-          console.log(
+          debugLog(
             "Validation/Processing error in",
             type,
             ":",
@@ -438,33 +440,33 @@ function submitForm() {
       });
 
       // Debug: Log the entire data structure to see what we're receiving
-      console.log("DEBUG: Full data structure received:", data);
-      console.log(
+      debugLog("DEBUG: Full data structure received:", data);
+      debugLog(
         "DEBUG: Checking for Single attribute risk scoring errors..."
       );
       if (data["Single attribute risk scoring"]) {
-        console.log(
+        debugLog(
           "DEBUG: Single attribute risk scoring data:",
           data["Single attribute risk scoring"]
         );
         if (data["Single attribute risk scoring"]["Error"]) {
-          console.log(
+          debugLog(
             "DEBUG: Found error in Single attribute risk scoring:",
             data["Single attribute risk scoring"]["Error"]
           );
         } else {
-          console.log("DEBUG: No error found in Single attribute risk scoring");
+          debugLog("DEBUG: No error found in Single attribute risk scoring");
         }
       } else {
-        console.log("DEBUG: Single attribute risk scoring not found in data");
+        debugLog("DEBUG: Single attribute risk scoring not found in data");
       }
 
       visualizationTypes.forEach(function (type) {
-        console.log("Checking type:", type);
+        debugLog("Checking type:", type);
         if (isKeyPresentAndDefined(data, type)) {
             if (type === "Custom Metric Evaluation") {
                 // Handle Custom Metric Evaluation (from HEAD)
-                console.log("Adding Custom Metric Evaluation:", type);
+                debugLog("Adding Custom Metric Evaluation:", type);
                 var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
                 visualizationContent.push({
                     title: type,
@@ -487,7 +489,7 @@ function submitForm() {
                 });
             } else if (data[type]["is_async"]) {
                 // Handle async tasks (from develop)
-                console.log("Adding async task placeholder:", type);
+                debugLog("Adding async task placeholder:", type);
                 var title = type;
                 var jsonData = JSON.stringify(data);
                 visualizationContent.push({
@@ -505,10 +507,10 @@ function submitForm() {
                     taskId: data[type]["task_id"],
                     cacheKey: data[type]["cache_key"],
                 });
-                console.log("Starting polling for task:", data[type]["task_id"], "for metric:", type);
+                debugLog("Starting polling for task:", data[type]["task_id"], "for metric:", type);
                 pollAsyncTask(data[type]["task_id"], data[type]["cache_key"], type);
             } else if (isKeyPresentAndDefined(data[type], type + " Visualization")) {
-                console.log("Adding visualization:", type);
+                debugLog("Adding visualization:", type);
                 var image = data[type][type + " Visualization"];
                 // Ensure image is a string
                 if (typeof image !== "string") {
@@ -554,7 +556,7 @@ function submitForm() {
 
                 // Check if there's an error or if the image is empty
                 if (data[type]["Error"]) {
-                    console.log("Error in", type, ":", data[type]["Error"]);
+                    debugLog("Error in", type, ":", data[type]["Error"]);
                     // Enhanced error handling for specific metrics (from develop)
                     let errorType = "Error";
                     let isSpecificError = false;
@@ -628,13 +630,13 @@ function submitForm() {
                         hasError: false,
                     });
                 } else {
-                    console.log("Empty visualization for:", type);
+                    debugLog("Empty visualization for:", type);
                 }
             } else {
-                console.log("Missing visualization key for:", type, "Expected:", type + " Visualization");
+                debugLog("Missing visualization key for:", type, "Expected:", type + " Visualization");
             }
         } else {
-            console.log("Type not found in data:", type);
+            debugLog("Type not found in data:", type);
         }
     });
       // Boolean flag to track if heading has been added
@@ -646,7 +648,7 @@ function submitForm() {
           metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
           headingAdded = true;
         }
-        console.log("Visualization content:", visualizationContent);
+        debugLog("Visualization content:", visualizationContent);
         // Add each visualization to the metric visualization section
         visualizationContent.forEach(function (content, index) {
           const visualizationId = `visualization_${index}`;
@@ -1018,7 +1020,7 @@ function pollAsyncTask(
 ) {
   let attempts = 0;
 
-  console.log(`Starting polling for ${metricName} task: ${taskId}`);
+  debugLog(`Starting polling for ${metricName} task: ${taskId}`);
 
   function checkTask() {
     attempts++;
@@ -1031,7 +1033,7 @@ function pollAsyncTask(
         return response.json();
       })
       .then((data) => {
-        console.log(`DEBUG: Received response for ${metricName}:`, data);
+        debugLog(`DEBUG: Received response for ${metricName}:`, data);
 
         // Get DOM elements for progress bar and status
         const asyncTaskElement = document.querySelector(
@@ -1051,7 +1053,7 @@ function pollAsyncTask(
           data.error ||
           data.result?.error
         ) {
-          console.log(
+          debugLog(
             "DEBUG: Task failed with status:",
             data.status,
             "error:",
@@ -1078,7 +1080,7 @@ function pollAsyncTask(
             errorMessage = data.meta.error;
           }
 
-          console.log("DEBUG: Extracted error message:", errorMessage);
+          debugLog("DEBUG: Extracted error message:", errorMessage);
 
           // Create error result and update with error display
           const errorResult = { error: errorMessage };
@@ -1089,7 +1091,7 @@ function pollAsyncTask(
         }
 
         if (data.status === "completed" || data.status === "SUCCESS") {
-          console.log("DEBUG: Task completed successfully");
+          debugLog("DEBUG: Task completed successfully");
 
           // Task completed successfully, complete the progress bar
           if (progressBar) {
@@ -1117,7 +1119,7 @@ function pollAsyncTask(
             (data.result.Description &&
               data.result.Description.includes("Error")))
         ) {
-          console.log("DEBUG: Detected error in result data:", data.result);
+          debugLog("DEBUG: Detected error in result data:", data.result);
 
           // Update progress bar to show failure
           if (progressBar) {
@@ -1199,7 +1201,7 @@ function pollAsyncTask(
           setTimeout(checkTask, interval);
         } else {
           // Max retries reached
-          console.log(
+          debugLog(
             "DEBUG: Max retries reached for",
             metricName,
             "creating error result"
@@ -1225,7 +1227,7 @@ function pollAsyncTask(
 
           // Create error result for connection/polling failures
           const errorResult = { error: `Connection error: ${error.message}` };
-          console.log(
+          debugLog(
             "DEBUG: Calling updateAsyncTaskWithResults with connection error for",
             metricName
           );
@@ -1241,7 +1243,7 @@ function pollAsyncTask(
 }
 
 function updateAsyncTaskWithResults(taskId, metricName, results) {
-  console.log(
+  debugLog(
     `DEBUG: updateAsyncTaskWithResults called for ${metricName} with:`,
     { taskId, results }
   );
@@ -1250,7 +1252,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
   const asyncElement = document.querySelector(`[data-task-id="${taskId}"]`);
   updateTaskStatus(taskId, metricName, "completed", "Calculation completed!");
   if (!asyncElement || !results) {
-    console.log("No async element or results found:", {
+    debugLog("No async element or results found:", {
       taskId,
       metricName,
       results,
@@ -1263,7 +1265,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
 
   // Check if there's an error - use the same template as other metrics
   if (results.error) {
-    console.log("DEBUG: Async task failed with error:", results.error);
+    debugLog("DEBUG: Async task failed with error:", results.error);
 
     // Trigger error popup for failed async tasks
     let errorType = "Error";
@@ -1273,7 +1275,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
       errorType = getMultipleAttributeRiskErrorType(results.error);
     }
 
-    console.log("DEBUG: Error type determined:", errorType);
+    debugLog("DEBUG: Error type determined:", errorType);
 
     // Show error popup
     openErrorPopup(errorType, results.error);
@@ -1339,7 +1341,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
                 </div>`;
     }
 
-    console.log("DEBUG: Generated error HTML for", metricName);
+    debugLog("DEBUG: Generated error HTML for", metricName);
   } else {
     // Check if this is actually an error result disguised as a "successful" result
     // Validation errors often come with Description and Graph interpretation fields
@@ -1351,7 +1353,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
       (results.Description &&
         results.Description.includes("not found in the dataset"))
     ) {
-      console.log(
+      debugLog(
         "DEBUG: Detected validation error in results:",
         results.Description
       );
@@ -1634,7 +1636,7 @@ function updateTaskStatus(taskId, metricName, status, message) {
     });
   } else {
     // Final fallback: add status to page
-    console.log(`Task Status Update - ${metricName}: ${status} - ${message}`);
+    debugLog(`Task Status Update - ${metricName}: ${status} - ${message}`);
   }
 }
 
@@ -2122,23 +2124,23 @@ function showResults() {
 // }
 
 function toggleValue(checkbox) {
-  console.log("Checkbox clicked:", checkbox);
+  debugLog("Checkbox clicked:", checkbox);
   // Find the closest parent container of the checkbox (checkboxContainer)
   const container = checkbox.closest(".checkboxContainerIndividual");
-  console.log(container);
+  debugLog(container);
 
   if (!container) {
     return;
   }
-  console.log("Container found:", container);
+  debugLog("Container found:", container);
 
   // Toggle the metric-selected class to show/hide QI sections
   if (checkbox.checked) {
     container.classList.add("metric-selected");
-    console.log("Added metric-selected class - QI sections should be visible");
+    debugLog("Added metric-selected class - QI sections should be visible");
   } else {
     container.classList.remove("metric-selected");
-    console.log("Removed metric-selected class - QI sections should be hidden");
+    debugLog("Removed metric-selected class - QI sections should be hidden");
   }
 
   // Find and show/hide the metric inputs (QI and sensitive attribute sections)
@@ -2181,11 +2183,11 @@ function toggleValue(checkbox) {
   } else {
     checkbox.value = "no";
   }
-  console.log("Checkbox value:", checkbox.value); // For debugging
+  debugLog("Checkbox value:", checkbox.value); // For debugging
 
   // If this is the class imbalance checkbox, update cross-disabling
   if (checkbox.name === "class imbalance") {
-    console.log("Class imbalance checkbox toggled, updating cross-disabling");
+    debugLog("Class imbalance checkbox toggled, updating cross-disabling");
     if (typeof updateCrossDisable === 'function') {
       updateCrossDisable();
     }
@@ -2200,7 +2202,7 @@ function toggleValueIndividual(checkbox) {
   } else {
     checkbox.value = "no";
   }
-  console.log("Checkbox value:", checkbox.value); // For debugging
+  debugLog("Checkbox value:", checkbox.value); // For debugging
 }
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function () {
@@ -2208,7 +2210,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll(".checkboxContainer").forEach((container) => {
     const checkboxes = container.querySelectorAll("input[type='checkbox']");
     checkboxes.forEach((checkbox) => {
-      console.log(checkbox);
+      debugLog(checkbox);
       // Set initial state of selects based on checkbox
       toggleValue(checkbox);
     });
@@ -2220,7 +2222,7 @@ document.addEventListener("DOMContentLoaded", function () {
     .forEach((container) => {
       const checkboxes = container.querySelectorAll("input[type='checkbox']");
       checkboxes.forEach((checkbox) => {
-        console.log(checkbox);
+        debugLog(checkbox);
         // Set initial state of selects based on checkbox
         toggleValue(checkbox);
 
@@ -2238,18 +2240,18 @@ document.addEventListener("DOMContentLoaded", function () {
   setupTooltipPositioning();
 
   // Auto-start polling for async tasks when page loads
-  console.log("DOMContentLoaded: Checking for async tasks...");
+  debugLog("DOMContentLoaded: Checking for async tasks...");
 
   // Check if there are any async tasks that need polling
   const scripts = document.querySelectorAll("script[data-task-id]");
-  console.log("Found", scripts.length, "scripts with task IDs");
+  debugLog("Found", scripts.length, "scripts with task IDs");
 
   scripts.forEach((script) => {
     const taskId = script.getAttribute("data-task-id");
     const cacheKey = script.getAttribute("data-cache-key");
     const metricName = script.getAttribute("data-metric-name");
 
-    console.log("Script attributes:", { taskId, cacheKey, metricName });
+    debugLog("Script attributes:", { taskId, cacheKey, metricName });
 
     if (taskId && cacheKey && metricName) {
       pollAsyncTask(taskId, cacheKey, metricName);
@@ -2258,7 +2260,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Also check for any elements that contain async task information in the results
   const resultElements = document.querySelectorAll("[data-task-id]");
-  console.log("Found", resultElements.length, "result elements with task IDs");
+  debugLog("Found", resultElements.length, "result elements with task IDs");
 
   resultElements.forEach((element) => {
     const taskId = element.getAttribute("data-task-id");
@@ -2267,7 +2269,7 @@ document.addEventListener("DOMContentLoaded", function () {
       element.getAttribute("data-metric-name") || "MMrisk Score";
 
     if (taskId && cacheKey) {
-      console.log(
+      debugLog(
         `Starting polling for ${metricName} from result element: ${taskId}`
       );
       pollAsyncTask(taskId, cacheKey, metricName);
@@ -2278,7 +2280,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const asyncStatusElements = document.querySelectorAll(
     ".async-task-status[data-task-id]"
   );
-  console.log("Found", asyncStatusElements.length, "async status elements");
+  debugLog("Found", asyncStatusElements.length, "async status elements");
 
   asyncStatusElements.forEach((element) => {
     const taskId = element.getAttribute("data-task-id");
@@ -2287,7 +2289,7 @@ document.addEventListener("DOMContentLoaded", function () {
       element.getAttribute("data-metric-name") || "MMrisk Score";
 
     if (taskId && cacheKey) {
-      console.log(
+      debugLog(
         `Starting polling for ${metricName} from async status element: ${taskId}`
       );
       pollAsyncTask(taskId, cacheKey, metricName);
