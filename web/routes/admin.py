@@ -1,6 +1,6 @@
 import os
 
-from flask import Blueprint, jsonify, redirect, send_from_directory
+from flask import Blueprint, jsonify, redirect, render_template, send_from_directory
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -26,6 +26,11 @@ def docs_index():
 def publications():
     from flask import render_template
     return render_template("publications.html")
+
+
+@admin_bp.route("/logs")
+def logs_page():
+    return render_template("logs.html")
 
 
 @admin_bp.route("/view-logs")

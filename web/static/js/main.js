@@ -67,14 +67,12 @@ function updateFileInputBasedOnType(
     fileInput.setAttribute("accept", fileType);
     console.log("USER SELECTED FILETYPE: " + fileType);
     fileUploadMessage.style.opacity = "1";
-    fileUploadMessage.style.fontSize = "1.5em";
-    fileTypeSelector.style.fontSize = "1.25em";
+    fileUploadMessage.textContent = "Click to upload or drag and drop";
   } else {
     fileInput.disabled = true;
     fileInput.removeAttribute("accept");
-    fileUploadMessage.style.opacity = "0";
-    fileUploadMessage.style.fontSize = "0px";
-    fileTypeSelector.style.fontSize = "1.75em";
+    fileUploadMessage.style.opacity = "0.6";
+    fileUploadMessage.textContent = "Select a file type first";
     console.log("FILE UPLOAD DISABLED");
   }
 }
@@ -2301,12 +2299,12 @@ document.addEventListener("DOMContentLoaded", function () {
 let darkmode = localStorage.getItem("darkmode");
 //add a darkmode class to the body
 const enableDarkmode = () => {
-  document.body.classList.add("darkmode");
+  document.documentElement.classList.add("dark");
   localStorage.setItem("darkmode", "active");
 };
-//remove the darkmode class from the body
+//remove the darkmode class from the html element
 const disableDarkmode = () => {
-  document.body.classList.remove("darkmode");
+  document.documentElement.classList.remove("dark");
   localStorage.setItem("darkmode", null);
 };
 let datalogPopup;
@@ -2319,7 +2317,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
     darkmode = localStorage.getItem("darkmode");
 
     darkmode !== "active" ? enableDarkmode() : disableDarkmode();
-    toggleSlidesColor();
+    if (typeof toggleSlidesColor === "function") toggleSlidesColor();
   });
 
   //data log handlers
@@ -2327,8 +2325,8 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
   const radioButtons = document.querySelectorAll('input[name="tableSwitch"]');
   const tableContainers = document.querySelectorAll(".scrollable-container");
-  // popping up current log
-  dataLogButton.addEventListener("click", () => {
+  // popping up current log (only if the button element exists — new inspector uses a link instead)
+  if (dataLogButton) dataLogButton.addEventListener("click", () => {
     datalogPopup = document.getElementById("datalog-popup");
     const datalogContent = document.getElementById("datalog-content");
 

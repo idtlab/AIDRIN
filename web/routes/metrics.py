@@ -317,7 +317,7 @@ def feature_relevance():
 
             try:
                 if target in cat_cols or target in num_cols:
-                    return jsonify({"trigger": "correlationError"}), 200
+                    return jsonify({"trigger": "correlationError", "error": "The target feature cannot also be selected as an input feature. Please deselect it from the categorical/numerical features list."}), 200
                 file_info = (file_path, file_name, file_type)
                 t0 = time.time()
                 data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)

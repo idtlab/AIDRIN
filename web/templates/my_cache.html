@@ -1,126 +1,112 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>My Cache Info</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 40px;
-      }
-      .container {
-        max-width: 700px;
-        margin: auto;
-      }
-      .message {
-        background: #e0ffe0;
-        color: #1a4d1a;
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-      }
-      .error {
-        background: #ffe0e0;
-        color: #a11a1a;
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-      }
-      .cache-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-      }
-      .cache-table th,
-      .cache-table td {
-        border: 1px solid #ccc;
-        padding: 8px;
-      }
-      .cache-table th {
-        background: #f0f0f0;
-      }
-      .clear-btn {
-        background: #d86470;
-        color: white;
-        border: none;
-        padding: 12px 24px;
-        border-radius: 5px;
-        font-size: 1.1em;
-        cursor: pointer;
-        margin-top: 20px;
-      }
-      .clear-btn:hover {
-        background: #a11a1a;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>My Cache Info</h1>
-      {% if message %}
-      <div class="{{ 'message' if 'cleared' in message else 'error' }}">
-        {{ message }}
-      </div>
-      {% endif %} {% if cache_info %}
-      <p><strong>User ID:</strong> {{ cache_info.user_id }}</p>
-      <p>
-        <strong>Total User Entries:</strong> {{ cache_info.total_user_entries }}
-      </p>
-      <p>
-        <strong>Global Cache Size:</strong> {{ cache_info.global_cache_size }}
-      </p>
-      <p>
-        <strong>User Cache Percentage:</strong> {{
-        cache_info.user_cache_percentage }}%
-      </p>
-      <h3>User Cache Keys</h3>
-      <table class="cache-table">
-        <tr>
-          <th>#</th>
-          <th>Cache Key</th>
-        </tr>
-        {% for key in cache_info.user_cache_keys %}
-        <tr>
-          <td>{{ loop.index }}</td>
-          <td>{{ key }}</td>
-        </tr>
-        {% endfor %}
-      </table>
-      {% else %}
-      <p>No cache info available.</p>
-      {% endif %}
-      <button class="clear-btn" onclick="clearCache()">Clear My Cache</button>
-      <script>
-        function clearCache() {
-          if (
-            confirm(
-              "Are you sure you want to clear all cached results? This will remove all stored calculations."
-            )
-          ) {
-            fetch("/clear-cache", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-            })
-              .then((response) => response.json())
-              .then((data) => {
-                if (data.success) {
-                  alert(data.message);
-                  // Reload the page to show updated cache info
-                  window.location.reload();
-                } else {
-                  alert("Error: " + data.message);
-                }
-              })
-              .catch((error) => {
-                console.error("Error:", error);
-                alert("An error occurred while clearing the cache.");
-              });
-          }
-        }
-      </script>
-      <p><a href="/">&larr; Back to Homepage</a></p>
+{% extends '_base.html' %}
+
+{% block title %}AIDRIN - My Cache{% endblock %}
+
+{% block head_extra %}
+  <script src="{{ url_for('static', filename='js/inspector.js') }}"></script>
+{% endblock %}
+
+{% block body %}
+  <div class="max-w-2xl mx-auto py-10 px-6">
+
+    <a href="/" class="inline-flex items-center gap-1 text-sm mb-6 text-blue-600 dark:text-blue-400 hover:underline">
+      <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z"/></svg>
+      Back to Inspector
+    </a>
+
+    <h1 class="text-3xl font-semibold text-gray-900 dark:text-white mb-6">Cache Information</h1>
+
+    {% if message %}
+    <div class="flex items-start gap-2 p-4 mb-5 text-sm rounded-lg {{ 'text-green-800 bg-green-50 dark:bg-green-900/20 dark:text-green-400' if 'cleared' in message else 'text-red-800 bg-red-50 dark:bg-red-900/20 dark:text-red-400' }}" role="alert">
+      <svg class="w-4 h-4 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>
+      <span>{{ message }}</span>
     </div>
-  </body>
-</html>
+    {% endif %}
+
+    {% if cache_info %}
+    <!-- Stats card -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-6">
+      <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Cache Summary</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+        <div class="p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+          <div class="text-lg font-bold text-gray-900 dark:text-white">{{ cache_info.total_user_entries }}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Cached Results</div>
+        </div>
+        <div class="p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+          <div class="text-lg font-bold text-gray-900 dark:text-white">{{ cache_info.transient_entries }}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Pending</div>
+        </div>
+        <div class="p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+          <div class="text-lg font-bold text-gray-900 dark:text-white">{{ cache_info.global_cache_size }}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Global Total</div>
+        </div>
+        <div class="p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+          <div class="text-lg font-bold text-gray-900 dark:text-white">{{ cache_info.user_cache_percentage }}%</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Your Share</div>
+        </div>
+      </div>
+      <div class="px-3 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center gap-2 text-sm">
+        <span class="text-gray-500 dark:text-gray-400">User ID:</span>
+        <span class="font-mono text-xs text-gray-900 dark:text-white">{{ cache_info.user_id }}</span>
+      </div>
+    </div>
+
+    <!-- Cache keys table -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-6">
+      <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Cache Keys</h2>
+      <div class="relative overflow-x-auto rounded-lg">
+        <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+          <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+            <tr>
+              <th scope="col" class="px-4 py-3 w-12">#</th>
+              <th scope="col" class="px-4 py-3">Cache Key</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key in cache_info.user_cache_keys %}
+            <tr class="{{ 'bg-white dark:bg-gray-800' if loop.index is odd else 'bg-gray-50 dark:bg-gray-700/50' }} border-b dark:border-gray-700">
+              <td class="px-4 py-2 font-medium text-gray-900 dark:text-white">{{ loop.index }}</td>
+              <td class="px-4 py-2 font-mono text-xs break-all">{{ key }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-6">
+      <p class="text-sm text-gray-500 dark:text-gray-400">No cache info available.</p>
+    </div>
+    {% endif %}
+
+    <button onclick="clearCache()"
+            class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-red-600 hover:bg-red-700 focus:ring-4 focus:ring-red-300 dark:bg-red-500 dark:hover:bg-red-600 dark:focus:ring-red-900 transition-colors inline-flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      Clear My Cache
+    </button>
+
+    <script>
+      function clearCache() {
+        if (confirm("Are you sure you want to clear all cached results?")) {
+          fetch("/clear-cache", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              showToast(data.message, 'success');
+              setTimeout(() => window.location.reload(), 1500);
+            } else {
+              showToast("Error: " + data.message, 'error');
+            }
+          })
+          .catch(error => {
+            console.error("Error:", error);
+            showToast("An error occurred while clearing the cache.", 'error');
+          });
+        }
+      }
+    </script>
+  </div>
+{% endblock %}

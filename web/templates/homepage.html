@@ -5,244 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Homenaje&display=swap"
-      rel="stylesheet"
-    />
-    <title>Homepage</title>
+    <link href="https://fonts.googleapis.com/css2?family=Homenaje&display=swap" rel="stylesheet" />
+    <!-- Apply dark class before render to prevent flash -->
+    <script>if (localStorage.getItem("darkmode") === "active") document.documentElement.classList.add("dark");</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        corePlugins: { preflight: false },
+      }
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/flowbite@2/dist/flowbite.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}" />
+    <title>AIDRIN</title>
     <style>
-      body {
-        font-family: "Homenaje", sans-serif;
-        font-weight: 400;
-        font-style: normal;
-        font-size: 30px;
-        margin: 0;
-        padding: 20px;
-        padding-top: 50px;
-
-        display: flex;
-        flex-direction: row;
-        /*background-color: rgba(255,245,220,255);*/
-      }
-
-      h1 {
-        color: #212121;
-
-        font-size: 6em;
-        font-style: normal;
-        font-weight: 400;
-        line-height: normal;
-      }
-      .h1-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-shrink: 1;
-
-        border-radius: 20px;
-        margin: 10px;
-      }
-
-      h2 {
-        text-align: left;
-
-        font-style: normal;
-        font-weight: 400;
-        line-height: normal;
-        text-wrap: wrap;
-        padding: 10px;
-      }
-      .h2-container {
-        max-width: 800px;
-        justify-content: center;
-        align-items: center;
-        gap: 10px;
-      }
-
-      button {
-        padding: 15px 30px;
-        font-size: 1.5em;
-        cursor: pointer;
-
-        border: none;
-        border-radius: 5px;
-        transition: background-color 0.3s ease;
-      }
-
-      .button-container {
-        display: flex;
-        flex-direction: row;
-        justify-content: center;
-        flex-wrap: wrap;
-
-        margin-top: 30px;
-      }
-
-      .button-container a {
-        margin: 30px;
-        text-decoration: none;
-        display: inline-block;
-      }
-      button {
-        cursor: pointer;
-        border-radius: 20px;
-        padding: 50px;
-        font-family: "Homenaje", sans-serif;
-        position: relative;
-        overflow: hidden;
-        color: black;
-
-        transition: background 0.3s ease-in-out, color 0.3s ease-in-out;
-      }
-
-      button::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: transparent; /* Start with no background */
-        opacity: 0; /* Initially hidden */
-        transition: opacity 0.3s ease-in-out, background 0.3s ease-in-out;
-        z-index: -1;
-      }
-
-      button:hover {
-        color: white;
-        background: transparent; /* Fade out the initial background */
-      }
-
-      button:hover::before {
-        opacity: 1; /* Fade in the gradient */
-        background: linear-gradient(
-          135deg,
-          rgba(216, 100, 112, 1),
-          rgba(68, 133, 244, 1)
-        );
-      }
-
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-        }
-        to {
-          opacity: 1;
-        }
-      }
-      /* I liked the animation */
-      .animated {
-        animation: fadeIn 2s ease-out;
-      }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      .animated { animation: fadeIn 1.2s ease-out; }
+      html, body { font-family: 'Homenaje', sans-serif; margin: 0; padding: 0; }
     </style>
   </head>
-  <body class="animated">
-    <div class="h1-container">
-      <!-- patterns -->
-      <img
-        src="images/pattern1.png"
-        style="
-          position: absolute;
-          bottom: 13vh;
-          right: -4vw;
-          opacity: 0.5;
-          z-index: -1;
-        "
-      />
-      <img
-        src="images/pattern2.jpg"
-        style="
-          position: absolute;
-          bottom: 80vh;
-          right: -5vw;
-          opacity: 0.3;
-          z-index: -1;
-        "
-      />
-      <img
-        src="images/pattern3.png"
-        style="
-          position: absolute;
-          top: 0vh;
-          left: 0vw;
-          opacity: 0.3;
-          z-index: -1;
-        "
-      />
-      <img
-        src="images/pattern3.png"
-        style="
-          position: absolute;
-          top: 40vh;
-          left: 0vw;
-          opacity: 0.3;
-          z-index: -1;
-        "
-      />
-      <img
-        src="images/pattern3.png"
-        style="
-          position: absolute;
-          top: 80vh;
-          left: 0vw;
-          opacity: 0.3;
-          z-index: -1;
-        "
-      />
-      <img
-        src="images/pattern3.png"
-        style="
-          position: absolute;
-          top: 0vh;
-          left: 25vw;
-          opacity: 0.3;
-          z-index: -1;
-        "
-      />
+  <body class="animated min-h-screen overflow-hidden bg-[var(--backgroundColor)]">
 
-      <img
-        src="images/logo.png"
-        alt="AIDRIn Logo"
-        style="
-          max-width: 600px;
-          max-height: 600px;
-          padding-left: 7vw;
-          padding-top: 7vh;
-        "
-      />
+    <!-- Subtle gradient background overlay -->
+    <div class="absolute inset-0 -z-10 pointer-events-none"
+         style="background: radial-gradient(ellipse at 20% 50%, rgba(216,100,112,0.06) 0%, transparent 60%),
+                            radial-gradient(ellipse at 80% 30%, rgba(68,133,244,0.06) 0%, transparent 60%),
+                            radial-gradient(ellipse at 50% 80%, rgba(155,107,176,0.05) 0%, transparent 50%);">
     </div>
-    <div
-      style="display: flex; flex-direction: column; justify-content: center;"
-    >
-      <div class="h2-container">
-        <h2>
-          A framework that covers a broad range of readiness dimensions that
-          aids in quantitatively and qualitatively evaluating the readiness of
-          data.
-        </h2>
+
+    <!-- Background patterns -->
+    <img src="images/pattern1.png" class="absolute bottom-[13vh] right-[-4vw] opacity-30 -z-10 pointer-events-none" alt="" />
+    <img src="images/pattern2.jpg" class="absolute bottom-[80vh] right-[-5vw] opacity-15 -z-10 pointer-events-none" alt="" />
+    <img src="images/pattern3.png" class="absolute top-0 left-0 opacity-15 -z-10 pointer-events-none" alt="" />
+    <img src="images/pattern3.png" class="absolute top-[40vh] left-0 opacity-15 -z-10 pointer-events-none" alt="" />
+    <img src="images/pattern3.png" class="absolute top-[80vh] left-0 opacity-15 -z-10 pointer-events-none" alt="" />
+    <img src="images/pattern3.png" class="absolute top-0 left-[25vw] opacity-15 -z-10 pointer-events-none" alt="" />
+
+    <div class="flex flex-row items-center min-h-screen px-8 pt-12 gap-8">
+
+      <!-- Logo -->
+      <div class="flex justify-center items-center flex-shrink-0 rounded-2xl p-4">
+        <img
+          src="images/logo.png"
+          alt="AIDRIn Logo"
+          class="max-w-[480px] max-h-[480px] pl-[7vw] pt-[7vh]"
+        />
       </div>
 
-      <div class="button-container">
-        <a href="{{ url_for('core.upload_file') }}">
-          <button>Assess Data Readiness</button>
-        </a>
+      <!-- Content -->
+      <div class="flex flex-col justify-center max-w-2xl">
+        <h1 class="text-[5rem] leading-none font-normal mb-4"
+            style="font-family: 'Homenaje', sans-serif; background: linear-gradient(135deg, #D86470, #9B6BB0, #4485F4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+          AIDRIN
+        </h1>
+
+        <div class="backdrop-blur-md rounded-2xl p-6 mb-8 shadow-md border"
+             style="background: var(--secondaryColor); border-color: rgba(155,107,176,0.15);">
+          <p class="text-2xl font-normal leading-relaxed m-0" style="color: var(--textColor);">
+            A framework that covers a broad range of readiness dimensions that
+            aids in quantitatively and qualitatively evaluating the readiness of data.
+          </p>
+        </div>
+
+        <div class="flex flex-row flex-wrap gap-6 mt-2">
+          <a href="{{ url_for('core.workspace') }}" class="no-underline">
+            <button class="relative overflow-hidden rounded-2xl px-12 py-8 text-2xl font-normal cursor-pointer border-none shadow-md hover:shadow-xl hover:text-white dark:hover:text-white transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9B6BB0] group"
+                    style="font-family: 'Homenaje', sans-serif; background: var(--secondaryColor); color: var(--textColor); border: 1px solid rgba(155,107,176,0.2);">
+              <span class="relative z-10">Assess Data Readiness</span>
+              <span class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-[#D86470] via-[#9B6BB0] to-[#4485F4]"></span>
+            </button>
+          </a>
+        </div>
       </div>
     </div>
-    <!-- Package Version -->
-    <div
-      class="version-container"
-      style="position: fixed; bottom: 10px; right: 10px;"
-    >
-      <p class="version-text" style="margin: 0px; font-size: 0.7em;">
-        v{{ app_version }} |
-        <a
-          href="https://aidrin.readthedocs.io/en/latest/"
-          target="_blank"
-          style="text-decoration: none; color: #007bff;"
-        >
-          Docs
-        </a>
-      </p>
+
+    <!-- Version badge -->
+    <div class="fixed bottom-2 right-3 text-xs opacity-60" style="color: var(--textColorSecondary);">
+      v{{ app_version }} |
+      <a href="https://aidrin.readthedocs.io/en/latest/" target="_blank" style="color: var(--linkColor); text-decoration: none;">Docs</a>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@2/dist/flowbite.min.js"></script>
   </body>
 </html>

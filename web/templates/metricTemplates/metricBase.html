@@ -1,16 +1,18 @@
 <!-- Base HTML template for all metric pages to extend -->
 
 <!DOCTYPE html>
-<html lang="en" max-width: 100%>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Apply dark class before render to prevent flash -->
+    <script>if (localStorage.getItem("darkmode") === "active") document.documentElement.classList.add("dark");</script>
 
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
     />
-
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
@@ -18,30 +20,45 @@
     <script>
       var retrieveFileUrl = "{{ url_for('core.retrieve_uploaded_file') }}";
     </script>
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/styles.css') }}"
-    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        corePlugins: { preflight: false },
+      }
+    </script>
+    <!-- Flowbite CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/flowbite@2/dist/flowbite.min.css" rel="stylesheet" />
+
     <title>{{ page_title or "title" }}</title>
   </head>
 
   <body>
     <!-- Include universal elements -->
-    {% include 'universalComponents.html'%}
+    {% include 'universalComponents.html' %}
 
-    <h1>{{ page_title or "title" }}</h1>
+    <h1 class="text-center mt-16">{{ page_title or "title" }}</h1>
 
-    <!-- file info GUI -->
+    <!-- file info bar: filename + clear/upload button -->
     <div id="metric-download-gui" class="metric-download-gui">
       <div
         id="metric-download-gui-fileName"
-        class="metric-download-gui-fileName"
+        class="metric-download-gui-fileName rounded-t-xl px-4 py-2 text-sm font-medium text-center"
+        style="background: var(--secondaryColor); color: var(--textColor);"
       >
-        {% if uploaded_file_path %} File: {{ uploaded_file_name }} {% else %} No
-        File Uploaded {% endif %}
+        {% if uploaded_file_path %}
+          <span class="flex items-center justify-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
+            File: {{ uploaded_file_name }}
+          </span>
+        {% else %}
+          No File Uploaded
+        {% endif %}
       </div>
       {% if uploaded_file_path %}
-      <!-- clear button: visible when file is uploaded, change form style to match-->
       <button
         type="button"
         class="clear-button"
@@ -50,7 +67,7 @@
       >
         Clear Submission
       </button>
-      {%else%}
+      {% else %}
       <button
         type="button"
         class="redirect-upload-button"
@@ -61,18 +78,21 @@
       </button>
       {% endif %}
     </div>
+
     <div class="metric-page-container">
       <form
         id="uploadForm"
         method="post"
         enctype="multipart/form-data"
         action="{{ url_for(page_route) }}"
+        class="rounded-xl shadow-md"
+        style="background: var(--secondaryColor);"
       >
         <!-- Placeholder for metric specific content -->
-        {% block metricContent %}{% endblock%}
+        {% block metricContent %}{% endblock %}
 
-        <!-- Submit and return button -->
-        <div id="formbuttonsContainer">
+        <!-- Submit and return buttons -->
+        <div id="formbuttonsContainer" class="flex items-center justify-center gap-3 py-4">
           <button class="animated-button" type="submit" onclick="submitForm();">
             <span>Submit</span>
             <span></span>
@@ -80,7 +100,7 @@
           <button
             class="animated-button return"
             type="button"
-            onclick="location.href='{{url_for('core.upload_file')}}'"
+            onclick="location.href='{{ url_for('core.upload_file') }}'"
           >
             <span>Return</span>
             <span></span>
@@ -94,13 +114,13 @@
     <!-- Data summary table -->
     <div id="summaryStatistics"></div>
     <!-- Container for summary plots and statistics -->
-    <div style="display: flex;">
+    <div class="flex flex-wrap">
       <!-- Histograms -->
       <div class="plot-container" id="histogramsContainer"></div>
       <!-- Visualizations Container -->
       <div class="plot-container" style="text-align: left;" id="metrics">
-        <h2 style="text-align: center;">Metric Results</h2>
-        <p>No data available yet. Please submit a request.</p>
+        <h2 class="text-center font-semibold text-lg mb-2">Metric Results</h2>
+        <p class="text-center text-sm" style="color: var(--textColorSecondary);">No data available yet. Please submit a request.</p>
         <div id="buttonsContainer" style="display: none;">
           <button type="button" id="downloadBtn" onclick="downloadJSON()">
             Download JSON
@@ -108,5 +128,8 @@
         </div>
       </div>
     </div>
+
+    <!-- Flowbite JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@2/dist/flowbite.min.js"></script>
   </body>
 </html>

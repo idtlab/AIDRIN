@@ -1,53 +1,56 @@
 <!-- Includes universal elements -->
 
 <!-- error handling popup -->
-<div id="error-popup" class="error-popup">
+<div id="error-popup" class="error-popup flex-col items-center text-center rounded-2xl shadow-2xl max-w-sm w-80 bg-[#1A1A2E] dark:bg-[#F0EEF6] text-[#F0EEF6] dark:text-[#1A1A2E]" style="padding: 0 30px;">
   <svg
     style="padding-top: 5%;"
     xmlns="http://www.w3.org/2000/svg"
-    height="96px"
+    height="80px"
     viewBox="0 -960 960 960"
-    width="96px"
+    width="80px"
     fill="currentColor"
   >
     <path
       d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"
     />
   </svg>
-  <h2 id="error-type" style="margin-top: 0;">Error: Placeholder Type</h2>
-  <p id="error-message">Placeholder Error Details</p>
+  <h2 id="error-type" class="font-semibold text-lg" style="margin-top: 0;">Error: Placeholder Type</h2>
+  <p id="error-message" class="text-sm">Placeholder Error Details</p>
   <br />
-  <button id="close-popup" onclick="closeErrorPopup()" style="width: 30%;">
+  <button
+    onclick="closeErrorPopup()"
+    class="w-[40%] py-2 px-4 mb-4 text-white rounded-full border-none cursor-pointer bg-gradient-to-r from-[#D86470] via-[#9B6BB0] to-[#4485F4] hover:opacity-90 transition-opacity text-base"
+  >
     Ok
   </button>
 </div>
 
 <!-- data log popup -->
-<div id="datalog-popup" class="datalog-popup">
-  <h2>Datalog</h2>
+<div id="datalog-popup" class="datalog-popup flex-col items-center text-center rounded-2xl shadow-2xl bg-[#1A1A2E] dark:bg-[#F0EEF6] text-[#F0EEF6] dark:text-[#1A1A2E]" style="min-width: 50vh; max-height: 50%; padding: 0 30px; border: 2px solid var(--backgroundColor);">
+  <h2 class="font-semibold text-lg mt-4">Datalog</h2>
   <!-- Table switcher radio buttons -->
-  <div class="radio-group">
-    <label
-      ><input type="radio" name="tableSwitch" value="masterLog" checked />
-      Master</label
-    >
-    <label
-      ><input type="radio" name="tableSwitch" value="fileUploadLog" /> File
-      Upload</label
-    >
-    <label
-      ><input type="radio" name="tableSwitch" value="metricLog" /> Metric
-      Specific</label
-    >
+  <div class="radio-group flex gap-4 text-base my-3 justify-center">
+    <label class="flex items-center gap-1 cursor-pointer">
+      <input type="radio" name="tableSwitch" value="masterLog" checked class="accent-[#4485f4]" />
+      Master
+    </label>
+    <label class="flex items-center gap-1 cursor-pointer">
+      <input type="radio" name="tableSwitch" value="fileUploadLog" class="accent-[#4485f4]" />
+      File Upload
+    </label>
+    <label class="flex items-center gap-1 cursor-pointer">
+      <input type="radio" name="tableSwitch" value="metricLog" class="accent-[#4485f4]" />
+      Metric Specific
+    </label>
   </div>
   <!-- Overall log -->
   <div class="scrollable-container active" id="masterLog">
-    <table id="masterLogTable">
+    <table id="masterLogTable" class="w-full text-sm">
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Logger</th>
-          <th>Message</th>
+          <th class="px-2 py-1 text-left">Time</th>
+          <th class="px-2 py-1 text-left">Logger</th>
+          <th class="px-2 py-1 text-left">Message</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -55,11 +58,11 @@
   </div>
   <!-- File Upload log -->
   <div class="scrollable-container" id="fileUploadLog">
-    <table id="fileUploadLogTable">
+    <table id="fileUploadLogTable" class="w-full text-sm">
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Message</th>
+          <th class="px-2 py-1 text-left">Time</th>
+          <th class="px-2 py-1 text-left">Message</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -67,84 +70,97 @@
   </div>
   <!-- Metric upload log -->
   <div class="scrollable-container" id="metricLog">
-    <table id="metricLogTable">
+    <table id="metricLogTable" class="w-full text-sm">
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Message</th>
+          <th class="px-2 py-1 text-left">Time</th>
+          <th class="px-2 py-1 text-left">Message</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
   </div>
-  <button id="close-popup" onclick="closeDatalogPopup()" style="width: 30%;">
+  <button
+    onclick="closeDatalogPopup()"
+    class="w-[40%] my-4 py-2 px-4 text-white rounded-full border-none cursor-pointer bg-gradient-to-r from-[#D86470] via-[#9B6BB0] to-[#4485F4] hover:opacity-90 transition-opacity text-base"
+  >
     Close Log
   </button>
 </div>
 
 <!-- navbar (home button, datalog, themeswitch) -->
-<div class="top-left-container">
-  <div id="navbar">
-    <a class="home" href="/">
+<nav class="top-left-container" role="navigation" aria-label="Main navigation">
+  <div id="navbar" class="flex items-center rounded-xl px-3 gap-1 shadow-md" style="height: 64px; background: var(--secondaryColor);">
+    <!-- Home -->
+    <a class="home flex items-center justify-center w-11 h-11 rounded-lg transition-colors hover:bg-black/10 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4485f4]" href="/" aria-label="Go to homepage">
       <img
-        style="max-width: 48px; max-height: 48px;"
+        style="max-width: 40px; max-height: 40px;"
         src="images/logoNoBackground.png"
         alt="Aidrin Logo"
       />
     </a>
-    <button class="navbar-buttons" id="datalog-button">
+    <!-- Datalog button -->
+    <button
+      class="navbar-buttons flex items-center justify-center w-11 h-11 rounded-lg transition-colors hover:bg-black/10 dark:hover:bg-white/10 border-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4485f4]"
+      id="datalog-button"
+      aria-label="Open data log"
+      style="background: transparent; margin: 0; padding: 0;"
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        height="48px"
+        height="28px"
         viewBox="0 -960 960 960"
-        width="48px"
-        fill="#5f6368"
+        width="28px"
+        fill="currentColor"
+        style="fill: var(--textColor);"
       >
         <path
           d="M120-160v-160h720v160H120Zm80-40h80v-80h-80v80Zm-80-440v-160h720v160H120Zm80-40h80v-80h-80v80Zm-80 280v-160h720v160H120Zm80-40h80v-80h-80v80Z"
         />
       </svg>
+    </button>
+    <!-- Theme switch button -->
+    <button
+      class="navbar-buttons flex items-center justify-center w-11 h-11 rounded-lg transition-colors hover:bg-black/10 dark:hover:bg-white/10 border-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4485f4]"
+      id="theme-switch"
+      aria-label="Toggle dark mode"
+      style="background: transparent; margin: 0; padding: 0;"
+    >
+      <!-- Sun icon: visible in light mode -->
       <svg
+        class="block dark:hidden"
         xmlns="http://www.w3.org/2000/svg"
-        height="48px"
+        height="28px"
         viewBox="0 -960 960 960"
-        width="48px"
-        fill="#5f6368"
+        width="28px"
+        fill="currentColor"
+        style="fill: var(--textColor);"
       >
         <path
-          d="M120-160v-160h720v160H120Zm80-40h80v-80h-80v80Zm-80-440v-160h720v160H120Zm80-40h80v-80h-80v80Zm-80 280v-160h720v160H120Zm80-40h80v-80h-80v80Z"
+          d="M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Z"
         />
       </svg>
-      <button class="navbar-buttons" id="theme-switch">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          height="48px"
-          viewBox="0 -960 960 960"
-          width="48px"
-          fill="#5f6368"
-        >
-          <path
-            d="M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Z"
-          />
-        </svg>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          height="48px"
-          viewBox="0 -960 960 960"
-          width="3em"
-          fill="#5f6368"
-        >
-          <path
-            d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Z"
-          />
-        </svg>
-      </button>
+      <!-- Moon icon: visible in dark mode -->
+      <svg
+        class="hidden dark:block"
+        xmlns="http://www.w3.org/2000/svg"
+        height="28px"
+        viewBox="0 -960 960 960"
+        width="28px"
+        fill="currentColor"
+        style="fill: var(--textColor);"
+      >
+        <path
+          d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Z"
+        />
+      </svg>
     </button>
   </div>
-</div>
+</nav>
+
 <!-- Package Version -->
 <div class="version-container">
-  <p class="version-text">
+  <p class="version-text" style="margin: 0px; font-size: 0.7em;">
     v{{ app_version }} |
     <a
       href="https://aidrin.readthedocs.io/en/latest/"

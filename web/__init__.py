@@ -6,7 +6,27 @@ from aidrin._version import __version__
 from aidrin.logging import setup_logging
 
 
+def _configure_matplotlib():
+    """Set matplotlib defaults for clean white-background plots."""
+    import matplotlib
+    matplotlib.use("Agg")  # non-interactive backend
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({
+        "figure.facecolor": "#FFFFFF",
+        "axes.facecolor": "#FFFFFF",
+        "axes.edgecolor": "#1A1A2E",
+        "axes.labelcolor": "#1A1A2E",
+        "text.color": "#1A1A2E",
+        "xtick.color": "#1A1A2E",
+        "ytick.color": "#1A1A2E",
+        "figure.figsize": (8, 6),
+        "savefig.facecolor": "#FFFFFF",
+        "savefig.edgecolor": "none",
+    })
+
+
 def create_app():
+    _configure_matplotlib()
     setup_logging()
     app = Flask(__name__)
 

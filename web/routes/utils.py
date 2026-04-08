@@ -106,7 +106,7 @@ def manage_cache_size(max_cache_size=100):
 
 def store_result(metric, final_dict):
     """Store computed metric results in the cache and redirect to the metric page."""
-    formatted_final_dict = format_dict_values(final_dict)
+    formatted_final_dict = ensure_json_serializable(format_dict_values(final_dict))
     results_id = uuid.uuid4().hex
     current_app.TEMP_RESULTS_CACHE[results_id] = {"data": formatted_final_dict}
     return redirect(
@@ -128,8 +128,10 @@ def get_result_or_default(metric, uploaded_file_path, uploaded_file_name):
         entry = current_app.TEMP_RESULTS_CACHE.pop(results_id)
         formatted_final_dict = entry["data"]
 
-    if return_type == "json" and formatted_final_dict is not None:
-        return jsonify(formatted_final_dict)
+    if return_type == "json":
+        if formatted_final_dict is not None:
+            return jsonify(formatted_final_dict)
+        return jsonify({"message": "No results available"}), 200
 
     # Strip the blueprint prefix (e.g. "metrics.data_quality" → "data_quality")
     template_name = metric.rsplit(".", 1)[-1]
@@ -160,47 +162,58 @@ def format_dict_values(d):
 
 def ensure_json_serializable(obj):
     """Recursively convert non-native types (NumPy/Pandas) to JSON-safe Python types."""
+    import numpy as np
+
     if isinstance(obj, dict):
-        return {k: ensure_json_serializable(v) for k, v in obj.items()}
+        return {str(k): ensure_json_serializable(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [ensure_json_serializable(item) for item in obj]
     elif isinstance(obj, pd.Timestamp):
         return obj.isoformat()
     elif isinstance(obj, set):
         return list(obj)
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    elif pd.isna(obj):
+        return None
     return obj
 
 
 def summary_histograms(df):
     """Generate base64-encoded KDE distribution plots for all numeric columns."""
     plot_colors = {
-        "light": {"bg": "#FBFBF2", "text": "#212529", "curve": "blue"},
-        "dark":  {"bg": "#495057", "text": "#F8F9FA", "curve": "red"},
+        "light": {"bg": "#FFFFFF", "text": "#1A1A2E", "curve": "#4485F4"},
+        "dark":  {"bg": "#1A1A2E", "text": "#F0EEF6", "curve": "#6EA8FE"},
     }
 
     line_graphs = {}
     for column in df.select_dtypes(include="number").columns:
         for theme, colors in plot_colors.items():
-            plt.figure(figsize=(6, 6), facecolor=colors["bg"])
-            ax = plt.gca()
+            fig, ax = plt.subplots(figsize=(4, 3), facecolor=colors["bg"])
             ax.set_facecolor(colors["bg"])
 
             sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=colors["curve"])
 
-            plt.title(f"Distribution Estimate for {column}", fontsize=14, color=colors["text"])
-            plt.xlabel("Values", fontsize=12, color=colors["text"])
-            plt.ylabel("Density", fontsize=12, color=colors["text"])
-            ax.tick_params(colors=colors["text"])
+            ax.set_xlabel("Values", fontsize=10, color=colors["text"])
+            ax.set_ylabel("Density", fontsize=10, color=colors["text"])
+            ax.tick_params(colors=colors["text"], labelsize=8)
             for spine in ax.spines.values():
                 spine.set_color(colors["text"])
+            fig.tight_layout(pad=0.5)
 
             img_buffer = io.BytesIO()
-            plt.savefig(img_buffer, format="png", bbox_inches="tight", pad_inches=0.1)
+            fig.savefig(img_buffer, format="png", dpi=150)
             img_buffer.seek(0)
             encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
 
             line_graphs[f"{column}_{theme}"] = encoded_img
-            plt.close()
+            plt.close(fig)
             img_buffer.close()
 
     return line_graphs

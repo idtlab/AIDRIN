@@ -1,0 +1,884 @@
+/*
+ * theme.css — Shared design tokens + essential component styles for the workspace.
+ * This replaces styles.css for pages that use the new Tailwind-based layout.
+ * The old styles.css is still loaded by legacy metric pages (metricBase.html, etc.)
+ */
+
+/* ==============================
+   1. CSS Custom Properties
+   ============================== */
+
+:root {
+  /* Brand colors (from logo gradient) */
+  --brandCoral: #D86470;
+  --brandPurple: #9B6BB0;
+  --brandBlue: #4485F4;
+
+  /* Light mode palette */
+  --textColor: #1A1A2E;
+  --oppositeTextColor: #F0EEF6;
+  --textColorSecondary: #6B6B80;
+  --backgroundColor: #F4F3F9;
+  --secondaryColor: #FFFFFF;
+  --secondaryColorHalfOpacity: #ffffff80;
+  --tertiaryColor: #9B99B0;
+  --darkAccent: #4452A8;
+  --nav-bar: #1A1A2E;
+  --dotColor: #4485F4;
+  --spanColor: #ffffff;
+  --selectColor: #ffffff;
+  --shadowColor: rgba(26, 26, 46, 0.12);
+  --disabledOverlay: rgba(26, 26, 46, 0.35);
+  --disabledOverlayText: rgba(26, 26, 46, 0.2);
+  --visitedColor: #9B6BB0;
+  --linkColor: #4485F4;
+
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+
+html.dark {
+  --textColor: #F0EEF6;
+  --oppositeTextColor: #1A1A2E;
+  --textColorSecondary: #9B99B0;
+  --backgroundColor: #121220;
+  --secondaryColor: #1E1E32;
+  --secondaryColorHalfOpacity: #1E1E3280;
+  --tertiaryColor: #6B6B80;
+  --darkAccent: #6EA8FE;
+  --nav-bar: #121220;
+  --spanColor: #1A1A2E;
+  --dotColor: #F0EEF6;
+  --visitedColor: #C9A0DC;
+  --linkColor: #6EA8FE;
+}
+
+
+/* ==============================
+   1b. Base Resets (replaces Tailwind preflight for key elements)
+   ============================== */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: 'Roboto', sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  width: 100%;
+  border-color: inherit;
+  text-indent: 0;
+}
+
+th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0;
+  border: none;
+}
+
+td {
+  padding: 0;
+  border: none;
+}
+
+thead th {
+  border-bottom: none;
+}
+
+button, input, select, textarea {
+  font-family: 'Roboto', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-size: inherit;
+  font-weight: inherit;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+ul, ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  margin: 0;
+}
+
+
+/* Flowbite-style native checkboxes (used in chip/pill feature selectors) */
+input[type="checkbox"].w-3\.5 {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  background-color: #f3f4f6;
+  cursor: pointer;
+  position: relative;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+html.dark input[type="checkbox"].w-3\.5 {
+  background-color: #374151;
+  border-color: #4b5563;
+}
+
+input[type="checkbox"].w-3\.5:checked {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+input[type="checkbox"].w-3\.5:checked::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"].w-3\.5:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+
+
+/* ==============================
+   2. Popup / Modal Mechanism
+   ============================== */
+
+.error-popup {
+  top: 50%;
+  left: 50%;
+  border-radius: 20px;
+  text-align: center;
+  width: fit-content;
+  word-wrap: break-word;
+  position: fixed;
+  z-index: 100;
+  transform: translate(-50%, -50%) scale(0.1);
+  visibility: hidden;
+}
+
+.datalog-popup {
+  top: 50%;
+  left: 50%;
+  border-radius: 20px;
+  text-align: center;
+  word-wrap: break-word;
+  box-sizing: border-box;
+  width: fit-content;
+  position: fixed;
+  z-index: 100;
+  transform: translate(-50%, -50%) scale(0.1);
+  visibility: hidden;
+}
+
+.datalog-popup .scrollable-container {
+  display: none;
+  overflow-y: auto;
+  max-height: 25vh;
+  margin-bottom: 10px;
+}
+
+.datalog-popup .scrollable-container.active {
+  display: flex;
+}
+
+.open-popup {
+  visibility: visible;
+  transform: translate(-50%, -50%) scale(1);
+  transition: transform 0.15s ease-in-out, visibility 0.15s ease-in-out;
+}
+
+
+/* ==============================
+   3. Material Checkbox
+   ============================== */
+
+.material-checkbox {
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.material-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.checkmark {
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  border: 2px solid var(--textColor);
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.material-checkbox input[type="checkbox"]:checked ~ .checkmark {
+  background-color: var(--brandPurple);
+  border-color: var(--brandPurple);
+}
+
+.material-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 5px;
+  width: 4px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.material-checkbox input[type="checkbox"]:focus ~ .checkmark {
+  box-shadow: 0 0 0 2px rgba(155, 107, 176, 0.3);
+}
+
+.material-checkbox:hover input[type="checkbox"] ~ .checkmark {
+  border-color: var(--brandPurple);
+}
+
+.material-checkbox input:disabled ~ .checkmark {
+  opacity: 0.25;
+  background-color: var(--textColor);
+  cursor: not-allowed;
+}
+
+
+/* ==============================
+   4. Info Tooltips
+   ============================== */
+
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  background-color: var(--textColor);
+  color: var(--backgroundColor);
+  text-align: center;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  margin-left: 6px;
+  position: relative;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.info-text {
+  display: none;
+  position: absolute;
+  background-color: var(--secondaryColor);
+  color: var(--textColor);
+  padding: 12px 16px;
+  border-radius: 6px;
+  white-space: normal;
+  width: 320px;
+  max-width: 80vw;
+  z-index: 9999;
+  pointer-events: auto;
+  cursor: default;
+  box-shadow: 0 4px 12px var(--shadowColor);
+  border: 1px solid var(--tertiaryColor);
+  font-size: 13px;
+  line-height: 1.5;
+  left: 100%;
+  top: 0;
+  margin-left: 8px;
+}
+
+html.dark .info-text {
+  background-color: var(--tertiaryColor);
+  color: var(--secondaryColor);
+}
+
+.info-icon:hover .info-text,
+.info-text:hover {
+  display: block !important;
+}
+
+.info-text a {
+  color: var(--brandBlue) !important;
+  text-decoration: underline !important;
+  font-weight: 600 !important;
+}
+
+.info-text a:hover {
+  opacity: 0.8;
+}
+
+
+/* ==============================
+   5. Animated Submit Button
+   ============================== */
+
+.animated-button {
+  position: relative;
+  display: inline-block;
+  padding: 12px 24px;
+  border: none;
+  font-size: 14px;
+  background-color: var(--tertiaryColor);
+  border-radius: 100px;
+  font-weight: 600;
+  width: 110px;
+  height: 42px;
+  color: var(--backgroundColor);
+  box-shadow: 0 0 0 2px var(--shadowColor);
+  cursor: pointer;
+  overflow: hidden;
+  margin: 8px;
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.animated-button span {
+  color: var(--spanColor);
+}
+
+.animated-button span:first-child {
+  position: relative;
+  z-index: 1;
+}
+
+.animated-button span:last-child {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background-color: var(--brandPurple);
+  border-radius: 50%;
+  opacity: 0;
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.return span:last-child {
+  background-color: var(--brandBlue);
+}
+
+.animated-button:hover {
+  box-shadow: 0 0 0 5px rgba(155, 107, 176, 0.35);
+  color: #ffffff;
+}
+
+.return:hover {
+  box-shadow: 0 0 0 5px rgba(68, 133, 244, 0.35);
+  color: #ffffff;
+}
+
+.animated-button:active {
+  scale: 0.95;
+}
+
+.animated-button:hover span:last-child {
+  width: 150px;
+  height: 150px;
+  opacity: 1;
+}
+
+
+/* ==============================
+   6. File Upload Dropzone
+   ============================== */
+
+.custum-file-upload {
+  height: 200px;
+  max-width: 100%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  border: 2px rgba(155, 107, 176, 0.3) dashed;
+  border-top: none;
+  background-color: #1A1A2E;
+  padding: 1.5em;
+  border-radius: 0px 0px 10px 10px;
+  transition: all 0.3s;
+}
+
+.custum-file-upload .icon svg {
+  height: 80px;
+  fill: #e8e8e8;
+}
+
+.custum-file-upload .text span {
+  font-weight: 400;
+  color: #e8e8e8;
+}
+
+.custum-file-upload input {
+  display: none;
+}
+
+
+/* ==============================
+   7. Metric Form Components
+   ============================== */
+
+.checkboxContainer {
+  display: block;
+}
+
+.checkboxContainerIndividual {
+  margin-bottom: 4px;
+  padding: 4px 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+/* Add visual separator + extra space only when the metric inputs are visible */
+.checkboxContainerIndividual:has(.metric-inputs[style*="block"]) {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--secondaryColorHalfOpacity);
+}
+
+.checkboxContainerIndividual label {
+  margin-bottom: 4px;
+  display: block;
+}
+
+.checkboxContainerIndividual .material-checkbox {
+  margin-bottom: 4px;
+  display: flex;
+}
+
+.metric-inputs {
+  transition: all 0.3s ease;
+  overflow: visible !important;
+}
+
+.metric-inputs li {
+  margin: 8px 0;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.listLabel {
+  display: flex;
+  width: 150px;
+  min-width: 150px;
+  align-items: center;
+  font-size: 14px;
+}
+
+/* Feature list scrollable containers */
+.checkboxContainerIndividual .metric-inputs {
+  border: 1px solid var(--tertiaryColor);
+  border-radius: 8px;
+  padding: 10px;
+  background-color: var(--secondaryColor);
+}
+
+#numFeaturesCheckbox1,
+#numFeaturesCheckbox2,
+#catFeaturesCheckbox1,
+#catFeaturesCheckbox2,
+#catFeaturesCheckbox3,
+#entropyRiskQIsCheckbox,
+#kAnonymityQIsCheckbox,
+#lDiversityQIsCheckbox,
+#tClosenessQIsCheckbox,
+#hipaa-identifiers-checkbox {
+  max-height: 300px;
+  max-width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid var(--tertiaryColor);
+  border-radius: 6px;
+  padding: 8px;
+  background-color: var(--secondaryColor);
+  margin-top: 5px;
+}
+
+/* Styled selects — Flowbite-matching */
+select:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  outline: none;
+  display: block;
+  padding: 10px 40px 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #f9fafb;
+  color: #111827;
+  cursor: pointer;
+  max-width: 400px;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+}
+
+html.dark select:not([multiple]) {
+  border-color: #4b5563;
+  background-color: #374151;
+  color: #f9fafb;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+}
+
+select:not([multiple]):focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Multiple selects keep native appearance */
+select[multiple] {
+  box-sizing: border-box;
+  outline: none;
+  padding: 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #f9fafb;
+  color: #111827;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+html.dark select[multiple] {
+  border-color: #4b5563;
+  background-color: #374151;
+  color: #f9fafb;
+}
+
+select[multiple] option {
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin: 1px 0;
+}
+
+select[multiple]:focus, select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Text inputs */
+.textWrapper {
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--tertiaryColor);
+  border-radius: 8px;
+  background-color: var(--secondaryColor);
+  color: var(--textColor);
+  max-width: 400px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.textWrapper:focus {
+  border-color: var(--brandBlue);
+  box-shadow: 0 0 0 2px rgba(68, 133, 244, 0.15);
+}
+
+/* Metric form lists (feature selectors) */
+.checkboxContainerIndividual ul {
+  list-style: none;
+  padding-left: 8px;
+  margin: 0;
+}
+
+.checkboxContainerIndividual li {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.checkboxContainerIndividual li label {
+  font-size: 14px;
+  min-width: 150px;
+  padding: 6px 10px;
+}
+
+.feature-relevance-note {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background-color: var(--secondaryColor);
+  border-radius: 6px;
+  border: 1px solid var(--tertiaryColor);
+  color: var(--textColor);
+  font-size: 13px;
+}
+
+
+/* ==============================
+   8. Sample Data Section
+   ============================== */
+
+.sampleDataContainer {
+  overflow: hidden;
+  height: 0;
+  color: var(--textColor);
+  transition: height 0.5s ease;
+}
+
+.sampleDataContainer.visible {
+  height: auto;
+}
+
+.sampleDataContainer .filter-section {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--secondaryColor);
+  border-radius: 8px;
+}
+
+.sampleDataContainer .filter-section label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.sampleDataContainer .filter-section select {
+  width: 100%;
+  max-width: 250px;
+}
+
+.sampleDataContainer .file-list {
+  display: grid;
+  gap: 6px;
+}
+
+.sampleDataContainer .file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--secondaryColor);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.sampleDataContainer .file-item:hover {
+  border-color: var(--brandBlue);
+  box-shadow: 0 2px 8px rgba(68, 133, 244, 0.12);
+}
+
+.sampleDataContainer .file-item.highlighted {
+  border-color: var(--brandBlue);
+  background: rgba(68, 133, 244, 0.06);
+}
+
+.sampleDataContainer .file-item.notHighlighted {
+  opacity: 0.4;
+}
+
+.sampleDataContainer .file-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.sampleDataContainer .file-name {
+  flex: 1;
+  margin-right: 12px;
+}
+
+.sampleDataContainer .file-type {
+  padding: 2px 8px;
+  background: var(--tertiaryColor);
+  color: white;
+  border-radius: 12px;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 12px;
+}
+
+.file-size {
+  color: var(--textColorSecondary);
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+.download-header {
+  background: rgba(68, 133, 244, 0.08);
+  border: 1px solid rgba(68, 133, 244, 0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.download-header-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--brandBlue);
+}
+
+.download-header-text {
+  color: var(--brandBlue);
+}
+
+
+/* ==============================
+   9. Slideshow / Histograms
+   ============================== */
+
+.slideshow-container {
+  max-width: 1000px;
+  position: relative;
+  margin: auto;
+}
+
+.mySlides {
+  display: none;
+}
+
+.dot {
+  cursor: pointer;
+  height: 0px;
+  width: 0px;
+  margin: 10px 2px;
+  padding: 8px;
+  background-color: var(--tertiaryColor);
+  border-radius: 50%;
+  display: inline-block;
+  transition: background-color 0.6s ease;
+}
+
+.activeDot,
+.dot:hover {
+  background-color: var(--dotColor);
+}
+
+.active {
+  display: block;
+}
+
+
+/* ==============================
+   10. Plot Container
+   ============================== */
+
+.plot-container {
+  margin: 1%;
+  margin-top: 24px;
+  border-radius: 12px;
+  text-align: center;
+  width: 48%;
+  padding: 16px;
+  background-color: var(--secondaryColor);
+  box-shadow: 0 1px 4px var(--shadowColor);
+}
+
+.plot-container img {
+  object-fit: cover;
+  width: fit-content;
+  max-width: 95%;
+}
+
+
+/* ==============================
+   11. Clear / Action Buttons
+   ============================== */
+
+.clear-button {
+  display: flex;
+  width: 100%;
+  font-size: 14px;
+  padding: 8px 16px;
+  align-self: center;
+  justify-content: center;
+  background-color: var(--brandCoral);
+  color: white;
+  border: none;
+  border-radius: 0px 0px 10px 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.clear-button:hover {
+  background-color: #E88A93;
+}
+
+
+/* ==============================
+   12. Radio Group (datalog tabs)
+   ============================== */
+
+.radio-group {
+  font-size: large;
+  margin: 15px;
+}

@@ -17,6 +17,7 @@ from flask import (
 from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP, read_file
 from web.routes.utils import (
     clear_all_user_cache,
+    ensure_json_serializable,
     get_current_user_id,
     summary_histograms,
 )
@@ -28,7 +29,94 @@ file_upload_time_log = logging.getLogger("file_upload")
 
 @core_bp.route("/")
 def homepage():
-    return render_template("homepage.html")
+    return redirect(url_for("core.inspector"))
+
+
+@core_bp.route("/inspector", methods=["GET", "POST"])
+def inspector():
+    if request.method == "POST":
+        file_upload_time_log.info("File upload initiated (workspace)")
+        file = request.files["file"]
+
+        if file:
+            cleared_count = clear_all_user_cache()
+            file_upload_time_log.info(
+                "Cache cleared for new file upload: %d entries removed", cleared_count
+            )
+
+            display_name = file.filename
+            filename = f"{uuid.uuid4().hex}_{file.filename}"
+            file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
+            file.save(file_path)
+
+            session["uploaded_file_name"] = display_name
+            session["uploaded_file_path"] = file_path
+            session["uploaded_file_type"] = request.form.get("fileTypeSelector")
+
+            return redirect(url_for("core.inspector"))
+
+    uploaded_file_name = session.get("uploaded_file_name", "")
+    uploaded_file_path = session.get("uploaded_file_path", "")
+    file_type = session.get("uploaded_file_type", "")
+
+    # Validate session: clear stale data if file no longer exists or type is missing
+    if uploaded_file_path and (
+        not os.path.exists(uploaded_file_path) or not file_type
+    ):
+        file_upload_time_log.warning(
+            "Stale session detected (file=%s, type=%s). Clearing.",
+            uploaded_file_path,
+            file_type,
+        )
+        session.pop("uploaded_file_path", None)
+        session.pop("uploaded_file_name", None)
+        session.pop("uploaded_file_type", None)
+        uploaded_file_path = ""
+        uploaded_file_name = ""
+        file_type = ""
+
+    file_preview = None
+    current_checked_keys = None
+
+    if uploaded_file_path and file_type in [".h5", ".json", ".npz"]:
+        try:
+            if file_type in READER_MAP:
+                reader = READER_MAP[file_type](uploaded_file_path, file_upload_time_log)
+                try:
+                    file_preview = reader.parse()
+                    if file_preview and isinstance(file_preview, list):
+                        file_preview = [str(key) for key in file_preview if key is not None]
+                except Exception as parse_error:
+                    file_upload_time_log.error("Error parsing file: %s", parse_error)
+                    file_preview = []
+
+                current_checked_keys = session.get("selected_keys", [])
+                if isinstance(current_checked_keys, str):
+                    current_checked_keys = (
+                        current_checked_keys.split(",") if current_checked_keys else []
+                    )
+                elif not isinstance(current_checked_keys, list):
+                    current_checked_keys = []
+        except Exception as e:
+            file_upload_time_log.error("Error generating file preview: %s", e)
+            file_preview = None
+            current_checked_keys = None
+
+    try:
+        return render_template(
+            "inspector.html",
+            uploaded_file_path=uploaded_file_path or "",
+            uploaded_file_name=uploaded_file_name or "",
+            file_type=file_type or "",
+            supported_file_types=SUPPORTED_FILE_TYPES,
+            file_preview=file_preview if file_preview is not None else [],
+            current_checked_keys=current_checked_keys
+            if current_checked_keys is not None
+            else [],
+        )
+    except Exception as e:
+        file_upload_time_log.error("Error rendering workspace: %s", e, exc_info=True)
+        return f"<h1>Workspace render error</h1><pre>{e}</pre>", 500
 
 
 @core_bp.route("/upload-file", methods=["GET", "POST"])
@@ -130,6 +218,10 @@ def clear_file():
         file_upload_time_log.info("File Clear Failure: Unable to clear folder")
         return jsonify({"success": False, "error": str(e)}), 500
 
+    # Redirect to workspace if the referrer is from workspace, else upload_file
+    referrer = request.referrer or ""
+    if "/inspector" in referrer:
+        return redirect(url_for("core.inspector"))
     return redirect(url_for("core.upload_file"))
 
 
@@ -163,7 +255,14 @@ def my_cache():
     try:
         user_id = get_current_user_id()
         cache = current_app.TEMP_RESULTS_CACHE
-        user_cache_keys = [key for key in cache if key.startswith(f"user:{user_id}")]
+        user_prefix = f"user:{user_id}"
+
+        # Collect user-specific cached metric results (keyed with user: prefix)
+        user_cache_keys = [key for key in cache if key.startswith(user_prefix)]
+
+        # Also count transient result entries (UUID keys from store_result)
+        transient_keys = [key for key in cache if not key.startswith("user:")]
+
         total_user_entries = len(user_cache_keys)
         global_cache_size = len(cache)
         user_cache_percentage = round(
@@ -175,6 +274,7 @@ def my_cache():
             "global_cache_size": global_cache_size,
             "user_cache_percentage": user_cache_percentage,
             "user_cache_keys": user_cache_keys,
+            "transient_entries": len(transient_keys),
         }
         return render_template("my_cache.html", cache_info=cache_info)
     except Exception as e:
@@ -211,11 +311,17 @@ def summary_statistics():
         file_path = session.get("uploaded_file_path")
         file_name = session.get("uploaded_file_name")
         file_type = session.get("uploaded_file_type")
+
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({"success": False, "message": "No file uploaded or file not found"}), 200
+        if not file_type:
+            return jsonify({"success": False, "message": "File type not set in session"}), 200
+
         file_info = (file_path, file_name, file_type)
         df = read_file(file_info)
 
         summary_statistics = df.describe().applymap(
-            lambda x: f"{x:.2e}" if abs(x) < 0.001 else round(x, 2)
+            lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
         ).to_dict()
 
         histograms = summary_histograms(df)
@@ -234,7 +340,7 @@ def summary_statistics():
                     new_key = old_key.replace("%", "th percentile")
                     v[new_key] = v.pop(old_key)
 
-        response_data = {
+        response_data = ensure_json_serializable({
             "success": True,
             "message": "File uploaded successfully",
             "records_count": len(df),
@@ -244,7 +350,7 @@ def summary_statistics():
             "all_features": all_features,
             "summary_statistics": summary_statistics,
             "histograms": histograms,
-        }
+        })
         return jsonify(response_data)
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
@@ -256,6 +362,12 @@ def extract_features():
         file_path = session.get("uploaded_file_path")
         file_name = session.get("uploaded_file_name")
         file_type = session.get("uploaded_file_type")
+
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({"success": False, "message": "No file uploaded or file not found"}), 200
+        if not file_type:
+            return jsonify({"success": False, "message": "File type not set in session"}), 200
+
         file_info = (file_path, file_name, file_type)
         df = read_file(file_info)
 

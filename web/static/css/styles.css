@@ -1,42 +1,52 @@
 :root {
   font-family: "Roboto", sans-serif;
-  --textColor: #212121;
-  --oppositeTextColor: #fbfbf2;
-  --textColorSecondary: #696868;
-  --backgroundColor: #d9dad7;
-  --secondaryColor: #fbfbf2;
-  --secondaryColorHalfOpacity: #fbfbf281;
 
-  --tertiaryColor: #8f8f8f;
+  /* Brand colors (from logo gradient) */
+  --brandCoral: #D86470;
+  --brandPurple: #9B6BB0;
+  --brandBlue: #4485F4;
 
-  --darkAccent: rgb(71, 71, 71);
-  --nav-bar: #212121;
+  /* Light mode palette — purple-tinted neutrals */
+  --textColor: #1A1A2E;
+  --oppositeTextColor: #F0EEF6;
+  --textColorSecondary: #6B6B80;
+  --backgroundColor: #F4F3F9;
+  --secondaryColor: #FFFFFF;
+  --secondaryColorHalfOpacity: #ffffff80;
 
-  --dotColor: #505050;
+  --tertiaryColor: #9B99B0;
+
+  --darkAccent: #4452A8;
+  --nav-bar: #1A1A2E;
+
+  --dotColor: #4485F4;
   --spanColor: #ffffff;
   --selectColor: #ffffff;
-  --shadowColor: rgba(0, 0, 0, 0.2);
-  --disabledOverlay: rgba(0, 0, 0, 0.5);
-  --disabledOverlayText: rgba(0, 0, 0, 0.3);
-  --visitedColor: purple;
+  --shadowColor: rgba(26, 26, 46, 0.12);
+  --disabledOverlay: rgba(26, 26, 46, 0.35);
+  --disabledOverlayText: rgba(26, 26, 46, 0.2);
+  --visitedColor: #9B6BB0;
+  --linkColor: #4485F4;
 
   transition: all 0.3s ease;
 }
 
-.darkmode {
-  --textColor: #fbfbf2;
-  --oppositeTextColor: #212121;
-  --textColorSecondary: #c8c8c5;
-  --backgroundColor: #212529;
-  --secondaryColor: #495057;
-  --secondaryColorHalfOpacity: #49505786;
+html.dark {
+  /* Dark mode — deep navy with purple undertones */
+  --textColor: #F0EEF6;
+  --oppositeTextColor: #1A1A2E;
+  --textColorSecondary: #9B99B0;
+  --backgroundColor: #121220;
+  --secondaryColor: #1E1E32;
+  --secondaryColorHalfOpacity: #1E1E3280;
 
-  --tertiaryColor: #c2c4c7;
-  --darkAccent: rgb(198, 198, 198);
-  --nav-bar: #212121;
-  --spanColor: #212121;
-  --dotColor: #ffffff;
-  --visitedColor: rgb(198, 115, 219);
+  --tertiaryColor: #6B6B80;
+  --darkAccent: #6EA8FE;
+  --nav-bar: #121220;
+  --spanColor: #1A1A2E;
+  --dotColor: #F0EEF6;
+  --visitedColor: #C9A0DC;
+  --linkColor: #6EA8FE;
 }
 
 body {
@@ -522,7 +532,7 @@ input[type="checkbox"] {
 /* change Dropdown color while hovering */
 .clickable:hover {
   cursor: pointer;
-  color: #4691ee;
+  color: var(--brandBlue);
 }
 
 /* Make this one special :) (to set it apart as it switches pages) */
@@ -658,7 +668,7 @@ input[type="reset"] {
 }
 
 /* Dark mode override for info-text */
-.darkmode .info-text {
+html.dark .info-text {
   background-color: var(
     --tertiaryColor
   ); /* Use original dark mode background */
@@ -823,7 +833,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   transform: translate(-50%, -50%);
   width: 20px;
   height: 20px;
-  background-color: #4caf50;
+  background-color: #9B6BB0;
   border-radius: 50%;
   opacity: 0;
   transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
@@ -836,7 +846,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   transform: translate(-50%, -50%);
   width: 20px;
   height: 20px;
-  background-color: #4691ee;
+  background-color: #4485F4;
   border-radius: 50%;
   opacity: 0;
   transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
@@ -848,12 +858,12 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
 }
 
 .animated-button:hover {
-  box-shadow: 0 0 0 5px #4caf4f5e;
+  box-shadow: 0 0 0 5px rgba(155, 107, 176, 0.35);
   color: #ffffff;
 }
 
 .return:hover {
-  box-shadow: 0 0 0 5px #3958925e;
+  box-shadow: 0 0 0 5px rgba(68, 133, 244, 0.35);
   color: #ffffff;
 }
 
@@ -878,7 +888,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   flex-direction: column;
   border: 2px #e8e8e8 dashed;
   border-top: none;
-  background-color: #212121;
+  background-color: #1A1A2E;
   padding: 1.5em;
   border-radius: 0px 0px 10px 10px;
   transition: all 0.3s;
@@ -937,7 +947,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
   padding-bottom: 0.5em;
   align-self: center;
   justify-content: center;
-  background-color: rgb(172, 13, 13);
+  background-color: #D86470;
   color: white;
   margin-bottom: 0px;
   border-radius: 0px 0px 10px 10px;
@@ -947,7 +957,7 @@ s .material-checkbox input[type="checkbox"]:disabled ~ .checkmark {
 }
 
 .clear-button:hover {
-  background-color: rgb(234, 102, 102);
+  background-color: #E88A93;
 }
 
 .redirect-upload-button {
@@ -1334,15 +1344,10 @@ thead th {
 }
 
 .navbar-buttons {
-  height: 64px;
-  width: 64px;
   margin: 0px;
   padding: 0px;
   border: none;
-  background: var(--secondaryColor);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  background: transparent;
 }
 
 .navbar-buttons svg {
@@ -1350,27 +1355,7 @@ thead th {
 }
 
 .navbar-buttons:hover {
-  color: linear-gradient(
-    135deg,
-    rgba(216, 100, 112, 0.7),
-    rgba(68, 133, 244, 0.7)
-  );
-}
-
-.navbar-buttons svg:last-child {
-  display: none;
-}
-
-.navbar-buttons svg:first-child {
-  display: block;
-}
-
-.darkmode .navbar-buttons svg:first-child {
-  display: none;
-}
-
-.darkmode .navbar-buttons svg:last-child {
-  display: block;
+  opacity: 0.75;
 }
 
 .sampleDataContainer {
