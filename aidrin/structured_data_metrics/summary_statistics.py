@@ -16,36 +16,33 @@ def summary_histograms(self: Task, file_info):
     if hasattr(df, 'columns'):
         df.columns = [str(col) for col in df.columns]
 
-    # background colors for plots (light and dark mode)
-    plot_colors = {
-        "light": {"bg": "#FFFFFF", "text": "#1A1A2E", "curve": "#4485F4"},
-        "dark": {"bg": "#1A1A2E", "text": "#F0EEF6", "curve": "#6EA8FE"},
-    }
+    text_color = "#6b7280"
+    curve_color = "#4485F4"
 
     line_graphs = {}
     for column in df.select_dtypes(include="number").columns:
         column_str = str(column)
 
-        for theme, colors in plot_colors.items():
-            fig, ax = plt.subplots(figsize=(4, 3), facecolor=colors["bg"])
-            ax.set_facecolor(colors["bg"])
+        fig, ax = plt.subplots(figsize=(4, 3))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
 
-            sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=colors["curve"])
+        sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=curve_color)
 
-            ax.set_xlabel("Values", fontsize=10, color=colors["text"])
-            ax.set_ylabel("Density", fontsize=10, color=colors["text"])
-            ax.tick_params(colors=colors["text"], labelsize=8)
-            for spine in ax.spines.values():
-                spine.set_color(colors["text"])
-            fig.tight_layout(pad=0.5)
+        ax.set_xlabel("Values", fontsize=10, color=text_color)
+        ax.set_ylabel("Density", fontsize=10, color=text_color)
+        ax.tick_params(colors=text_color, labelsize=8)
+        for spine in ax.spines.values():
+            spine.set_color(text_color)
+        fig.tight_layout(pad=0.5)
 
-            img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format="png", dpi=150)
-            img_buffer.seek(0)
-            encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
+        img_buffer = io.BytesIO()
+        fig.savefig(img_buffer, format="png", dpi=150, transparent=True)
+        img_buffer.seek(0)
+        encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
 
-            line_graphs[f"{column_str}_{theme}"] = encoded_img
-            plt.close(fig)
-            img_buffer.close()
+        line_graphs[f"{column_str}_light"] = encoded_img
+        plt.close(fig)
+        img_buffer.close()
 
     return line_graphs

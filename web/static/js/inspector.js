@@ -752,15 +752,11 @@ function renderWorkspaceHistograms(histograms) {
   const container = document.getElementById('workspace-histograms');
   if (!container) return;
 
-  // Determine current theme
-  const isDark = document.documentElement.classList.contains('dark');
-  const themeSuffix = isDark ? '_dark' : '_light';
-
-  // Group histograms by column, pick the right theme variant
+  // Always use the light variant — CSS filter handles dark mode
   const columns = {};
   for (const [key, base64] of Object.entries(histograms)) {
-    if (key.endsWith(themeSuffix)) {
-      const colName = key.slice(0, -themeSuffix.length);
+    if (key.endsWith('_light')) {
+      const colName = key.slice(0, -'_light'.length);
       columns[colName] = base64;
     }
   }

@@ -15,16 +15,17 @@ def _configure_matplotlib():
     matplotlib.use("Agg")  # non-interactive backend
     import matplotlib.pyplot as plt
     plt.rcParams.update({
-        "figure.facecolor": "#FFFFFF",
-        "axes.facecolor": "#FFFFFF",
-        "axes.edgecolor": "#1A1A2E",
-        "axes.labelcolor": "#1A1A2E",
-        "text.color": "#1A1A2E",
-        "xtick.color": "#1A1A2E",
-        "ytick.color": "#1A1A2E",
+        "figure.facecolor": "none",
+        "axes.facecolor": "none",
+        "axes.edgecolor": "#6b7280",
+        "axes.labelcolor": "#6b7280",
+        "text.color": "#6b7280",
+        "xtick.color": "#6b7280",
+        "ytick.color": "#6b7280",
         "figure.figsize": (8, 6),
-        "savefig.facecolor": "#FFFFFF",
+        "savefig.facecolor": "none",
         "savefig.edgecolor": "none",
+        "savefig.transparent": True,
     })
 
 

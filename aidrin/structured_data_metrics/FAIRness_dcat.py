@@ -116,7 +116,7 @@ def categorize_metadata(self: Task, flat_metadata, original_metadata):
         pie_sizes = [total_passed, max(0, total_expected - total_passed)]
 
         fig, (ax1, ax2) = plt.subplots(
-            1, 2, figsize=(6, 2.5), facecolor="#FFFFFF",
+            1, 2, figsize=(6, 2.5),
             gridspec_kw={"width_ratios": [1, 2], "wspace": 0.6}
         )
 
@@ -126,7 +126,7 @@ def categorize_metadata(self: Task, flat_metadata, original_metadata):
             colors=["#4485F4", "#e5e7eb"],
             autopct="%1.1f%%",
             startangle=90,
-            textprops={"fontsize": 10, "color": "#1A1A2E"},
+            textprops={"fontsize": 10, "color": "#6b7280"},
         )
         ax1.axis("equal")
 
@@ -149,14 +149,16 @@ def categorize_metadata(self: Task, flat_metadata, original_metadata):
 
         ax2.set_xlim(0, 110)
         ax2.set_xticks([])
-        ax2.tick_params(axis="y", labelsize=9, colors="#1A1A2E")
+        ax2.tick_params(axis="y", labelsize=9, colors="#6b7280")
         for spine in ax2.spines.values():
             spine.set_visible(False)
-        ax2.set_facecolor("#FFFFFF")
+        fig.patch.set_alpha(0)
+        ax1.set_facecolor("none")
+        ax2.set_facecolor("none")
 
         fig.tight_layout(pad=0.5)
         buffer = io.BytesIO()
-        fig.savefig(buffer, format="png", dpi=200)
+        fig.savefig(buffer, format="png", dpi=200, transparent=True)
         plt.close(fig)
         encoded_image_combined = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
