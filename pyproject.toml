@@ -86,6 +86,16 @@ docs = [
 
 
 # ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    # dateutil uses deprecated utcfromtimestamp — upstream issue
+    "ignore:datetime.datetime.utcfromtimestamp:DeprecationWarning",
+]
+
+# ---------------------------------------------------------------------------
 # Coverage
 # ---------------------------------------------------------------------------
 

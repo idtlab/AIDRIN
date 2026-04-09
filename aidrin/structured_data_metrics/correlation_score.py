@@ -103,8 +103,6 @@ def calc_correlations(self: Task, columns: List[str], file_info):
                 if len(label.get_text()) > 9:
                     label.set_text(label.get_text()[:9] + "...")
 
-            plt.show()
-
             # Save the plot to a BytesIO object
             image_stream_cat = BytesIO()
             plt.savefig(image_stream_cat, format="png")
