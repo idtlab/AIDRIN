@@ -771,7 +771,7 @@ function renderWorkspaceHistograms(histograms) {
 
   for (const [colName, base64] of Object.entries(columns)) {
     html += `
-      <div class="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+      <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
         <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="w-full" />
         <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${colName}</div>
       </div>
