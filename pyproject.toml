@@ -34,6 +34,12 @@ dependencies = [
 [project.optional-dependencies]
 # Legacy extras kept for backward compatibility with pip users.
 # Prefer dependency groups below when using uv.
+telemetry = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-instrumentation-flask>=0.41b0",
+    "opentelemetry-exporter-otlp>=1.20",
+]
 dev = [
     "pytest>=7.0",
     "pytest-flask",

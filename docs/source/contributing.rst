@@ -58,6 +58,71 @@ Before you begin:
 - Use the correct **issue template** (bug, feature, install, usage).
 - Every change starts with an issue.
 
+OpenTelemetry (Optional)
+=========================
+
+AIDRIN supports optional OpenTelemetry tracing for monitoring metric evaluation performance.
+
+**Installation (from local source):**
+
+.. code-block:: bash
+
+   # From the project root:
+   pip install -e ".[telemetry]"
+
+   # Or with dev tools as well:
+   pip install -e ".[telemetry,dev]"
+
+When the telemetry packages are not installed (plain ``pip install -e .``), all tracing
+is a no-op with zero overhead.
+
+**Configuration** via environment variables:
+
+- ``OTEL_EXPORTER_OTLP_ENDPOINT`` — collector endpoint (e.g., ``http://localhost:4317``). If not set, traces go to console.
+- ``OTEL_SERVICE_NAME`` — service name (defaults to ``aidrin``).
+
+**What gets traced:**
+
+- Every HTTP request (automatic via Flask instrumentation)
+- Each metric evaluation with attributes: ``metric.name``, ``metric.pillar``, ``metric.duration_ms``
+- File metadata: ``file.name``, ``file.type``
+
+**Quick test (console output):**
+
+.. code-block:: bash
+
+   pip install -e ".[telemetry]"
+   flask --app 'web:create_app()' run --debug
+
+Run a metric and observe trace spans printed to the terminal.
+
+**Test with Jaeger:**
+
+.. code-block:: bash
+
+   # Start Jaeger (Docker)
+   docker run -d --name jaeger \
+     -p 16686:16686 -p 4317:4317 \
+     jaegertracing/all-in-one:latest
+
+   # Start AIDRIN with OTLP exporter
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+   flask --app 'web:create_app()' run --debug
+
+   # Open Jaeger UI at http://localhost:16686, select service "aidrin"
+
+**Verify installation:**
+
+.. code-block:: python
+
+   # With OTel installed:
+   python -c "from web.telemetry import get_tracer; print(type(get_tracer()).__name__)"
+   # → "Tracer"
+
+   # Without OTel:
+   # → "_NoOpTracer"
+
+
 Debugging the Web Interface
 ============================
 

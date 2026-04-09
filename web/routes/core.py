@@ -21,6 +21,7 @@ from web.routes.utils import (
     get_current_user_id,
     summary_histograms,
 )
+from web.telemetry import trace_metric
 
 core_bp = Blueprint("core", __name__)
 

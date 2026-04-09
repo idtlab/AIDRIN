@@ -34,6 +34,10 @@ def create_app():
     setup_logging()
     app = Flask(__name__)
 
+    # Optional OpenTelemetry instrumentation
+    from web.telemetry import init_telemetry
+    init_telemetry(app)
+
     @app.context_processor
     def inject_version():
         return dict(app_version=__version__)
