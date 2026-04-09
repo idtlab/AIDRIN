@@ -264,9 +264,10 @@ function renderWorkspaceResults(data) {
 
         // Left: visualizations
         if (hasViz) {
-          html += `<div>`;
+          html += `<div class="flex flex-col items-center gap-4">`;
           for (const viz of visualizations) {
-            html += `<img src="${viz.src}" alt="${viz.key}" class="w-full rounded-lg" />`;
+            const sizeStyle = 'max-width: 100%; max-height: 500px; object-fit: contain;';
+            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg" style="${sizeStyle}" />`;
           }
           html += `</div>`;
         }

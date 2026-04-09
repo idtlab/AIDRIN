@@ -103,42 +103,59 @@ def create_representation_rate_vis(self: Task, columns, file_info):
             len(column_series)
             value_counts = column_series.value_counts(normalize=True)
 
-            # Calculate cumulative proportions
-            cum_proportions = value_counts.sort_index().cumsum()
+            # Proportions as percentages
+            proportions = value_counts.sort_values(ascending=True)
+            labels = [str(v) for v in proportions.index]
+            values = [p * 100 for p in proportions.values]
 
-            # Create a pie chart for cumulative proportions
-            plt.figure(figsize=(8, 8))
-            values = [
-                cum_proportions[attribute_value] * 100
-                for attribute_value in cum_proportions.index
-            ]
+            # Horizontal bar chart
+            n = len(labels)
+            fig_height = max(2, n * 0.3)
+            fig, ax = plt.subplots(figsize=(8, fig_height))
+            fig.patch.set_alpha(0)
+            ax.set_facecolor("none")
 
-            # Plot the pie chart
+            text_color = "#6b7280"
+            bars = ax.barh(range(n), values, color="#4485F4", height=0.8)
 
-            plt.title(
-                "Percentage Distribution of Sensitive Attribute Values", fontsize=16
-            )
-            plt.pie(
-                values,
-                labels=cum_proportions.index,
-                autopct="%1.1f%%",
-                startangle=140,
-                textprops={"fontsize": 14},
-            )
+            ax.set_xlabel("Proportion (%)", fontsize=10, color=text_color)
+            ax.set_yticks(range(n))
+            ax.set_yticklabels(labels, fontsize=9, color=text_color)
+            ax.tick_params(axis="x", colors=text_color, labelsize=8)
+            ax.set_xlim(0, max(values) * 1.12)
+            ax.set_ylim(-0.5, n - 0.5)
 
-            # plt.subplots_adjust(left=0.2)
-            plt.tight_layout()
+            for spine in ax.spines.values():
+                spine.set_color(text_color)
+
+            # Value labels inside bars
+            for bar, val in zip(bars, values):
+                # Place label inside bar if wide enough, otherwise just outside
+                if val > max(values) * 0.15:
+                    ax.text(
+                        val - 0.5, bar.get_y() + bar.get_height() / 2,
+                        f'{val:.1f}%',
+                        ha='right', va='center', fontsize=8, color='white', fontweight='bold',
+                    )
+                else:
+                    ax.text(
+                        val + 0.5, bar.get_y() + bar.get_height() / 2,
+                        f'{val:.1f}%',
+                        ha='left', va='center', fontsize=8, color=text_color,
+                    )
+
+            fig.tight_layout(pad=0.5)
 
             # Save the chart to a BytesIO object
             img_buf = io.BytesIO()
-            plt.savefig(img_buf, format="png")
+            fig.savefig(img_buf, format="png", dpi=150, transparent=True)
             img_buf.seek(0)
 
             # Encode the image as base64
             img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
             img_buf.close()
 
-            plt.close()  # Close the plot to free up resources
+            plt.close(fig)
 
             logger.info("Representation Rate visualization task completed")
             return img_base64
