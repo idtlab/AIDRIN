@@ -282,7 +282,7 @@ function renderWorkspaceResults(data) {
 
         // Right: scores (height synced to plot via JS)
         if (hasScores) {
-          html += `<div id="${pairId}-scores" class="overflow-auto" style="min-height: 200px; max-height: 500px;">`;
+          html += `<div id="${pairId}-scores" class="overflow-auto" style="min-height: 400px; max-height: 500px;">`;
           html += renderScoresSection(scores);
           html += `</div>`;
         }
@@ -435,7 +435,7 @@ function syncScoresHeight(pairId) {
   const scores = document.getElementById(`${pairId}-scores`);
   if (img && scores) {
     const imgHeight = img.offsetHeight;
-    const minHeight = 200;
+    const minHeight = 400;
     scores.style.maxHeight = Math.max(imgHeight, minHeight) + 'px';
   }
 }
@@ -591,7 +591,7 @@ function buildResultCard(type, results) {
         html += `</div>`;
       }
       if (hasScores) {
-        html += `<div id="${asyncPairId}-scores" class="overflow-auto" style="min-height: 200px; max-height: 500px;">${renderScoresSection(scores)}</div>`;
+        html += `<div id="${asyncPairId}-scores" class="overflow-auto" style="min-height: 400px; max-height: 500px;">${renderScoresSection(scores)}</div>`;
       }
       html += `</div>`;
     }

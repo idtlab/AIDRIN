@@ -57,23 +57,26 @@
 
     <!-- Sample data container (hidden by default) -->
     <div id="sampleDataContainer" class="sampleDataContainer mt-4">
-      <div class="flex items-center gap-2 p-3 text-sm text-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 mb-3">
-        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/></svg>
-        <span>Click any file below to download</span>
+      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+        <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Sample Datasets</h3>
+        <div class="flex items-center gap-2 p-3 text-sm text-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 mb-3">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/></svg>
+          <span>Click any file below to download</span>
+        </div>
+        <div class="mb-3">
+          <label for="fileTypeSelect" class="block text-sm font-medium mb-1 text-gray-900 dark:text-white">Filter by type:</label>
+          <select id="fileTypeSelect" class="w-full" style="max-width: none;">
+            <option value="">All Files</option>
+            <option value="csv">CSV</option>
+            <option value="dcat">DCAT</option>
+            <option value="json">JSON</option>
+            <option value="npz">NPZ</option>
+            <option value="xlsx">Excel</option>
+            <option value="h5">HDF5</option>
+          </select>
+        </div>
+        <div class="file-list" id="fileList"></div>
       </div>
-      <div class="mb-3">
-        <label for="fileTypeSelect" class="block text-sm font-medium mb-1 text-gray-900 dark:text-white">Filter by type:</label>
-        <select id="fileTypeSelect" style="max-width: none;">
-          <option value="">All Files</option>
-          <option value="csv">CSV</option>
-          <option value="dcat">DCAT</option>
-          <option value="json">JSON</option>
-          <option value="npz">NPZ</option>
-          <option value="xlsx">Excel</option>
-          <option value="h5">HDF5</option>
-        </select>
-      </div>
-      <div class="file-list" id="fileList"></div>
     </div>
   </div>
 </div>
