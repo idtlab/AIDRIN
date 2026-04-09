@@ -188,54 +188,6 @@ input[type="checkbox"].w-3\.5:focus {
 }
 
 
-/* ==============================
-   2. Popup / Modal Mechanism
-   ============================== */
-
-.error-popup {
-  top: 50%;
-  left: 50%;
-  border-radius: 20px;
-  text-align: center;
-  width: fit-content;
-  word-wrap: break-word;
-  position: fixed;
-  z-index: 100;
-  transform: translate(-50%, -50%) scale(0.1);
-  visibility: hidden;
-}
-
-.datalog-popup {
-  top: 50%;
-  left: 50%;
-  border-radius: 20px;
-  text-align: center;
-  word-wrap: break-word;
-  box-sizing: border-box;
-  width: fit-content;
-  position: fixed;
-  z-index: 100;
-  transform: translate(-50%, -50%) scale(0.1);
-  visibility: hidden;
-}
-
-.datalog-popup .scrollable-container {
-  display: none;
-  overflow-y: auto;
-  max-height: 25vh;
-  margin-bottom: 10px;
-}
-
-.datalog-popup .scrollable-container.active {
-  display: flex;
-}
-
-.open-popup {
-  visibility: visible;
-  transform: translate(-50%, -50%) scale(1);
-  transition: transform 0.15s ease-in-out, visibility 0.15s ease-in-out;
-}
-
 
 /* ==============================
    3. Material Checkbox
@@ -438,40 +390,6 @@ html.dark .info-text {
 }
 
 
-/* ==============================
-   6. File Upload Dropzone
-   ============================== */
-
-.custum-file-upload {
-  height: 200px;
-  max-width: 100%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  border: 2px rgba(155, 107, 176, 0.3) dashed;
-  border-top: none;
-  background-color: #1A1A2E;
-  padding: 1.5em;
-  border-radius: 0px 0px 10px 10px;
-  transition: all 0.3s;
-}
-
-.custum-file-upload .icon svg {
-  height: 80px;
-  fill: #e8e8e8;
-}
-
-.custum-file-upload .text span {
-  font-weight: 400;
-  color: #e8e8e8;
-}
-
-.custum-file-upload input {
-  display: none;
-}
-
 
 /* ==============================
    7. Metric Form Components
@@ -516,14 +434,6 @@ html.dark .info-text {
   display: flex;
   flex-direction: row;
   align-items: center;
-}
-
-.listLabel {
-  display: flex;
-  width: 150px;
-  min-width: 150px;
-  align-items: center;
-  font-size: 14px;
 }
 
 /* Feature list scrollable containers */
@@ -663,17 +573,6 @@ select[multiple]:focus, select:focus {
   padding: 6px 10px;
 }
 
-.feature-relevance-note {
-  margin-top: 16px;
-  padding: 10px 14px;
-  background-color: var(--secondaryColor);
-  border-radius: 6px;
-  border: 1px solid var(--tertiaryColor);
-  color: var(--textColor);
-  font-size: 13px;
-}
-
-
 /* ==============================
    8. Sample Data Section
    ============================== */
@@ -687,25 +586,6 @@ select[multiple]:focus, select:focus {
 
 .sampleDataContainer.visible {
   height: auto;
-}
-
-.sampleDataContainer .filter-section {
-  margin-bottom: 12px;
-  padding: 12px;
-  background: var(--secondaryColor);
-  border-radius: 8px;
-}
-
-.sampleDataContainer .filter-section label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.sampleDataContainer .filter-section select {
-  width: 100%;
-  max-width: 250px;
 }
 
 .sampleDataContainer .file-list {
@@ -768,117 +648,3 @@ select[multiple]:focus, select:focus {
   font-size: 12px;
 }
 
-.download-header {
-  background: rgba(68, 133, 244, 0.08);
-  border: 1px solid rgba(68, 133, 244, 0.2);
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.download-header-icon {
-  width: 20px;
-  height: 20px;
-  color: var(--brandBlue);
-}
-
-.download-header-text {
-  color: var(--brandBlue);
-}
-
-
-/* ==============================
-   9. Slideshow / Histograms
-   ============================== */
-
-.slideshow-container {
-  max-width: 1000px;
-  position: relative;
-  margin: auto;
-}
-
-.mySlides {
-  display: none;
-}
-
-.dot {
-  cursor: pointer;
-  height: 0px;
-  width: 0px;
-  margin: 10px 2px;
-  padding: 8px;
-  background-color: var(--tertiaryColor);
-  border-radius: 50%;
-  display: inline-block;
-  transition: background-color 0.6s ease;
-}
-
-.activeDot,
-.dot:hover {
-  background-color: var(--dotColor);
-}
-
-.active {
-  display: block;
-}
-
-
-/* ==============================
-   10. Plot Container
-   ============================== */
-
-.plot-container {
-  margin: 1%;
-  margin-top: 24px;
-  border-radius: 12px;
-  text-align: center;
-  width: 48%;
-  padding: 16px;
-  background-color: var(--secondaryColor);
-  box-shadow: 0 1px 4px var(--shadowColor);
-}
-
-.plot-container img {
-  object-fit: cover;
-  width: fit-content;
-  max-width: 95%;
-}
-
-
-/* ==============================
-   11. Clear / Action Buttons
-   ============================== */
-
-.clear-button {
-  display: flex;
-  width: 100%;
-  font-size: 14px;
-  padding: 8px 16px;
-  align-self: center;
-  justify-content: center;
-  background-color: var(--brandCoral);
-  color: white;
-  border: none;
-  border-radius: 0px 0px 10px 10px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.clear-button:hover {
-  background-color: #E88A93;
-}
-
-
-/* ==============================
-   12. Radio Group (datalog tabs)
-   ============================== */
-
-.radio-group {
-  font-size: large;
-  margin: 15px;
-}

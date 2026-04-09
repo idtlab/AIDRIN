@@ -8,7 +8,6 @@ from flask import (
     current_app,
     jsonify,
     redirect,
-    render_template,
     request,
     session,
     url_for,
