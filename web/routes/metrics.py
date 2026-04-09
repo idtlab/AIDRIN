@@ -764,27 +764,31 @@ def fair_assessment():
             json_data = file.read()
             data_dict = json.loads(json_data.decode("utf-8"))
 
-            if request.form.get("metadata type") == "DCAT":
+            metadata_type = request.form.get("metadata type", "")
+
+            if metadata_type == "DCAT":
                 try:
                     extracted_json = extract_keys_and_values(data_dict)
                     fair_dict = categorize_metadata(extracted_json, data_dict)
                     result = format_dict_values(fair_dict)
                 except json.JSONDecodeError as e:
                     return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
-            elif request.form.get("metadata type") == "Datacite":
+            elif metadata_type == "Datacite":
                 try:
                     result = categorize_keys_fair(data_dict)
                 except json.JSONDecodeError as e:
                     return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
             else:
-                return jsonify({"Error:": "Unknown metadata type"}), 400
+                return jsonify({"error": "Unknown metadata type"}), 400
 
             duration = time.time() - start_time
             metric_time_log.info("FAIR Assessment completed in %.2f seconds", duration)
             with trace_metric("fair_assessment", "understandability") as span:
                 span.set_attribute("metric.duration_ms", duration * 1000)
-                span.set_attribute("metadata.type", metadata_type or "")
-            return store_result("metrics.fair_assessment", result)
+                span.set_attribute("metadata.type", metadata_type)
+
+            result = ensure_json_serializable(result)
+            return jsonify(result)
 
         else:
             results_id = request.args.get("results_id")

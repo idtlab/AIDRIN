@@ -93,25 +93,45 @@ def outliers(self: Task, file_info):
             }
 
             if feature_scores:  # only plot if there are valid features
-                plt.figure(figsize=(8, 8))
-                plt.bar(feature_scores.keys(), feature_scores.values(), color="red")
-                plt.title("Proportion of Outliers for Numerical Columns", fontsize=14)
-                plt.xlabel("Columns", fontsize=14)
-                plt.ylabel("Proportion of Outliers", fontsize=14)
-                plt.ylim(0, 1)
+                labels = list(feature_scores.keys())
+                values = list(feature_scores.values())
+                n = len(labels)
+                text_color = "#6b7280"
 
-                plt.xticks(rotation=45, ha="right", fontsize=12)
-                plt.subplots_adjust(bottom=0.5)
-                plt.tight_layout()
+                fig_height = max(3, n * 0.3)
+                fig, ax = plt.subplots(figsize=(8, fig_height))
+                fig.patch.set_alpha(0)
+                ax.set_facecolor("none")
 
-                # Save the chart to BytesIO and encode as base64
+                bars = ax.barh(range(n), values, color="#D86470", height=0.7)
+                ax.set_xlabel("Proportion of Outliers", fontsize=10, color=text_color)
+                ax.set_yticks(range(n))
+                ax.set_yticklabels(labels, fontsize=9, color=text_color)
+                ax.tick_params(axis="x", colors=text_color, labelsize=8)
+                ax.set_xlim(0, max(max(values) * 1.15, 0.1))
+                ax.invert_yaxis()
+                ax.set_ylim(n - 0.5, -0.5)
+
+                for spine in ax.spines.values():
+                    spine.set_color(text_color)
+
+                for bar, val in zip(bars, values):
+                    if val > max(values) * 0.15:
+                        ax.text(val - 0.005, bar.get_y() + bar.get_height() / 2,
+                                f'{val:.3f}', ha='right', va='center', fontsize=8, color='white', fontweight='bold')
+                    else:
+                        ax.text(val + 0.005, bar.get_y() + bar.get_height() / 2,
+                                f'{val:.3f}', ha='left', va='center', fontsize=8, color=text_color)
+
+                fig.tight_layout(pad=0.5)
+
                 img_buf = io.BytesIO()
-                plt.savefig(img_buf, format="png")
+                fig.savefig(img_buf, format="png", dpi=150, transparent=True)
                 img_buf.seek(0)
                 img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
 
                 out_dict["Outliers Visualization"] = img_base64
-                plt.close()
+                plt.close(fig)
 
             logger.info("Outliers task completed: %d numerical columns processed", len(numerical_columns.columns))
             return out_dict

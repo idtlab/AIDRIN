@@ -199,12 +199,14 @@ function workspaceSubmit(targetUrl) {
         return;
       }
       if (data.message && !data.trigger && Object.keys(data).length <= 2) {
-        // Simple message response (e.g., "No feature relevance analysis selected")
         const m = document.getElementById('metrics');
         if (m) m.innerHTML = `<div class="p-4 text-sm text-yellow-800 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 dark:text-yellow-300" role="alert">${data.message}</div>`;
         return;
       }
+
+      // Render sync results first (sets innerHTML), then start async polling (appends)
       renderWorkspaceResults(data);
+      handleAsyncResults(data);
     })
     .catch(error => {
       console.error('Error:', error);
@@ -226,6 +228,9 @@ function renderWorkspaceResults(data) {
 
   for (const [type, results] of Object.entries(data)) {
     if (typeof results !== 'object' || results === null) continue;
+
+    // Skip async tasks — they're handled by handleAsyncResults/pollAsyncMetric
+    if (results.is_async && results.task_id) continue;
 
     // Extract parts
     const description = results.Description || '';
@@ -261,6 +266,7 @@ function renderWorkspaceResults(data) {
       // Two-column layout: visualization | scores
       const hasViz = visualizations.length > 0;
       const hasScores = Object.keys(scores).length > 0;
+      const pairId = 'result-pair-' + Math.random().toString(36).substr(2, 6);
 
       if (hasViz || hasScores) {
         html += `<div class="grid gap-4" style="grid-template-columns: ${hasViz && hasScores ? '1fr 1fr' : '1fr'};">`;
@@ -269,15 +275,14 @@ function renderWorkspaceResults(data) {
         if (hasViz) {
           html += `<div class="flex flex-col items-center gap-4">`;
           for (const viz of visualizations) {
-            const sizeStyle = 'max-width: 100%; max-height: 500px; object-fit: contain;';
-            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg" style="${sizeStyle}" />`;
+            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg w-full" data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
           }
           html += `</div>`;
         }
 
-        // Right: scores
+        // Right: scores (height synced to plot via JS)
         if (hasScores) {
-          html += `<div class="overflow-auto" style="max-height: 500px;">`;
+          html += `<div id="${pairId}-scores" class="overflow-auto" style="min-height: 200px; max-height: 500px;">`;
           html += renderScoresSection(scores);
           html += `</div>`;
         }
@@ -312,7 +317,9 @@ function renderWorkspaceResults(data) {
     html += `</div>`; // close card
   }
 
-  if (!html) {
+  // Don't show "no results" if there are async tasks being polled
+  const hasAsync = Object.values(data).some(r => typeof r === 'object' && r !== null && r.is_async);
+  if (!html && !hasAsync) {
     html = '<p class="text-center text-sm py-4" style="color: var(--textColorSecondary);">No results returned.</p>';
   }
 
@@ -416,6 +423,194 @@ function renderScoresSection(scores, depth) {
 
   return html;
 }
+
+// ==================== Layout Helpers ====================
+
+/**
+ * Sync the scores panel max-height to match the rendered plot image height.
+ * Called via onload on result plot images.
+ */
+function syncScoresHeight(pairId) {
+  const img = document.querySelector(`img[data-pair="${pairId}"]`);
+  const scores = document.getElementById(`${pairId}-scores`);
+  if (img && scores) {
+    const imgHeight = img.offsetHeight;
+    const minHeight = 200;
+    scores.style.maxHeight = Math.max(imgHeight, minHeight) + 'px';
+  }
+}
+
+
+// ==================== Async Task Polling ====================
+
+/**
+ * Check if any metric results contain async tasks and start polling them.
+ */
+function handleAsyncResults(data) {
+  for (const [type, results] of Object.entries(data)) {
+    if (typeof results === 'object' && results !== null && results.is_async && results.task_id) {
+      pollAsyncMetric(results.task_id, type, results.cache_key);
+    }
+  }
+}
+
+/**
+ * Poll an async metric task until complete, showing progress inline.
+ */
+function pollAsyncMetric(taskId, metricName, cacheKey) {
+  // Find or create a placeholder in the results area
+  const resultsSection = document.getElementById('results-section');
+  if (resultsSection) resultsSection.style.display = 'block';
+
+  const metricsDiv = document.getElementById('metrics');
+  if (!metricsDiv) return;
+
+  // Create a placeholder card for this async metric
+  const placeholderId = `async-${taskId}`;
+  let existing = document.getElementById(placeholderId);
+  if (!existing) {
+    const card = document.createElement('div');
+    card.id = placeholderId;
+    card.className = 'p-5 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700';
+    card.innerHTML = `
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${metricName}</h3>
+      <div class="flex items-center gap-3">
+        <svg class="w-5 h-5 text-gray-300 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+        <div>
+          <p class="text-sm text-gray-700 dark:text-gray-300">Processing...</p>
+          <div class="w-48 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
+            <div id="${placeholderId}-bar" class="bg-blue-600 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    metricsDiv.appendChild(card);
+  }
+
+  // Start polling
+  let attempts = 0;
+  const maxAttempts = 150; // 5 minutes at 2s intervals
+
+  const poll = () => {
+    attempts++;
+    fetch(`/check-and-update-task/${taskId}/${encodeURIComponent(metricName)}`)
+      .then(r => r.json())
+      .then(response => {
+        const card = document.getElementById(placeholderId);
+        if (!card) return;
+
+        if (response.status === 'completed') {
+          // Render the completed result in place of the placeholder
+          const resultData = {};
+          resultData[metricName] = response.result;
+
+          // Update stored result for download
+          if (lastMetricResult) {
+            lastMetricResult[metricName] = response.result;
+          }
+
+          // Build result HTML and replace placeholder
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = buildResultCard(metricName, response.result);
+          card.replaceWith(tempDiv.firstElementChild || tempDiv);
+
+        } else if (response.status === 'failed') {
+          card.innerHTML = `
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${metricName}</h3>
+            <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">
+              ${response.error || 'Task failed'}
+            </div>`;
+
+        } else if (response.status === 'processing') {
+          // Update progress bar
+          const progress = response.progress || {};
+          const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+          const bar = document.getElementById(`${placeholderId}-bar`);
+          if (bar) bar.style.width = `${pct}%`;
+
+          const statusText = card.querySelector('p');
+          if (statusText) statusText.textContent = progress.status || 'Processing...';
+
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 2000);
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Polling error:', err);
+        if (attempts < maxAttempts) setTimeout(poll, 3000);
+      });
+  };
+
+  setTimeout(poll, 1000); // First poll after 1s
+}
+
+/**
+ * Build a single result card HTML string for a completed metric.
+ * Reuses the same rendering logic as renderWorkspaceResults but for one entry.
+ */
+function buildResultCard(type, results) {
+  if (typeof results !== 'object' || results === null) return '';
+
+  const description = results.Description || '';
+  const error = results.Error || '';
+  const interpretation = results['Graph interpretation'];
+  const visualizations = [];
+  const scores = {};
+
+  for (const [key, value] of Object.entries(results)) {
+    if (key === 'Description' || key === 'Error' || key === 'Graph interpretation') continue;
+    if (key.toLowerCase().includes('visualization') && typeof value === 'string' && value.length > 100) {
+      visualizations.push({ key, src: value.startsWith('data:') ? value : `data:image/png;base64,${value}` });
+    } else {
+      scores[key] = value;
+    }
+  }
+
+  let html = `<div class="p-5 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">`;
+  html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${type}</h3>`;
+
+  if (error) {
+    html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error}</div>`;
+  } else {
+    if (description) {
+      html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${description}</p>`;
+    }
+
+    const hasViz = visualizations.length > 0;
+    const hasScores = Object.keys(scores).length > 0;
+
+    const asyncPairId = 'result-pair-' + Math.random().toString(36).substr(2, 6);
+    if (hasViz || hasScores) {
+      html += `<div class="grid gap-4" style="grid-template-columns: ${hasViz && hasScores ? '1fr 1fr' : '1fr'};">`;
+      if (hasViz) {
+        html += `<div class="flex flex-col items-center gap-4">`;
+        for (const viz of visualizations) {
+          html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg w-full" data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
+        }
+        html += `</div>`;
+      }
+      if (hasScores) {
+        html += `<div id="${asyncPairId}-scores" class="overflow-auto" style="min-height: 200px; max-height: 500px;">${renderScoresSection(scores)}</div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (interpretation && typeof interpretation === 'string' && !interpretation.includes('No visualization available')) {
+      html += `<div class="flex items-start gap-2.5 p-4 mt-4 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+        <svg class="w-5 h-5 shrink-0 mt-0.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
+        <div>
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Interpretation</div>
+          <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${interpretation}</p>
+        </div>
+      </div>`;
+    }
+  }
+
+  html += `</div>`;
+  return html;
+}
+
 
 // ==================== Toast Notifications ====================
 
@@ -552,6 +747,13 @@ function submitFairAssessment() {
     .then(response => response.json())
     .then(data => {
       if (!resultContainer) return;
+
+      // Check for error response
+      if (data.error) {
+        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${data.error}</div>`;
+        return;
+      }
+
       let html = '';
 
       // Compliance summary bar — extract from FAIR Compliance Checks

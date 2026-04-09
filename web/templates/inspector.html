@@ -4,7 +4,7 @@
 
 {% block head_extra %}
   <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   <script>
     var retrieveFileUrl = "{{ url_for('core.retrieve_uploaded_file') }}";
@@ -147,6 +147,35 @@
           updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
         });
         updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
+      }
+
+      // Drag and drop support for the upload dropzone
+      const dropzone = document.getElementById('fileUploadContainer');
+      const fileInput2 = document.getElementById('file');
+      if (dropzone && fileInput2) {
+        ['dragenter', 'dragover'].forEach(evt => {
+          dropzone.addEventListener(evt, function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+          });
+        });
+
+        ['dragleave', 'drop'].forEach(evt => {
+          dropzone.addEventListener(evt, function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+          });
+        });
+
+        dropzone.addEventListener('drop', function(e) {
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            fileInput2.files = files;
+            uploadForm();
+          }
+        });
       }
     });
   </script>
