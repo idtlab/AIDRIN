@@ -256,7 +256,7 @@ def summary_statistics():
         file_info = (file_path, file_name, file_type)
         df = read_file(file_info)
 
-        summary_statistics = df.describe().applymap(
+        summary_statistics = df.describe().map(
             lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
         ).to_dict()
 
