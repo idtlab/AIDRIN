@@ -100,7 +100,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)
         ]
         categorical_columns = [
-            col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)
+            col for col, dtype in df.dtypes.items() if pd.api.types.is_string_dtype(dtype)
         ]
         all_features = numerical_columns + categorical_columns
 

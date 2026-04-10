@@ -304,7 +304,7 @@ def summary_statistics():
             col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)
         ]
         categorical_columns = [
-            col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)
+            col for col, dtype in df.dtypes.items() if pd.api.types.is_string_dtype(dtype)
         ]
         all_features = numerical_columns + categorical_columns
 
@@ -349,7 +349,7 @@ def extract_features():
             col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)
         ]
         categorical_columns = [
-            col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)
+            col for col, dtype in df.dtypes.items() if pd.api.types.is_string_dtype(dtype)
         ]
         all_features = numerical_columns + categorical_columns
 
