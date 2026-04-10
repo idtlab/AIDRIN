@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _globus_available = False
 
 try:
-    from globus_compute_sdk import Client as ComputeClient, Executor
+    from globus_compute_sdk import Client as ComputeClient
     from globus_sdk import (
         ConfidentialAppAuthClient,
         NativeAppAuthClient,

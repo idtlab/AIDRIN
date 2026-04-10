@@ -9,7 +9,7 @@ import uuid
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from flask import current_app, jsonify, redirect, render_template, request, session, url_for
+from flask import current_app, jsonify, redirect, request, session, url_for
 
 logger = logging.getLogger(__name__)
 

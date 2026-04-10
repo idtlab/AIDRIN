@@ -10,54 +10,57 @@
 
 :root {
   /* Brand colors (from logo gradient) */
-  --brandCoral: #D86470;
-  --brandPurple: #9B6BB0;
-  --brandBlue: #4485F4;
+  --brandCoral: #d86470;
+  --brandPurple: #9b6bb0;
+  --brandBlue: #4485f4;
 
   /* Light mode palette */
-  --textColor: #1A1A2E;
-  --oppositeTextColor: #F0EEF6;
-  --textColorSecondary: #6B6B80;
-  --backgroundColor: #F4F3F9;
-  --secondaryColor: #FFFFFF;
+  --textColor: #1a1a2e;
+  --oppositeTextColor: #f0eef6;
+  --textColorSecondary: #6b6b80;
+  --backgroundColor: #f4f3f9;
+  --secondaryColor: #ffffff;
   --secondaryColorHalfOpacity: #ffffff80;
-  --tertiaryColor: #9B99B0;
-  --darkAccent: #4452A8;
-  --nav-bar: #1A1A2E;
-  --dotColor: #4485F4;
+  --tertiaryColor: #9b99b0;
+  --darkAccent: #4452a8;
+  --nav-bar: #1a1a2e;
+  --dotColor: #4485f4;
   --spanColor: #ffffff;
   --selectColor: #ffffff;
   --shadowColor: rgba(26, 26, 46, 0.12);
   --disabledOverlay: rgba(26, 26, 46, 0.35);
   --disabledOverlayText: rgba(26, 26, 46, 0.2);
-  --visitedColor: #9B6BB0;
-  --linkColor: #4485F4;
+  --visitedColor: #9b6bb0;
+  --linkColor: #4485f4;
 
-  transition: color 0.3s ease, background-color 0.3s ease;
+  transition:
+    color 0.3s ease,
+    background-color 0.3s ease;
 }
 
 html.dark {
-  --textColor: #F0EEF6;
-  --oppositeTextColor: #1A1A2E;
-  --textColorSecondary: #9B99B0;
+  --textColor: #f0eef6;
+  --oppositeTextColor: #1a1a2e;
+  --textColorSecondary: #9b99b0;
   --backgroundColor: #121220;
-  --secondaryColor: #1E1E32;
-  --secondaryColorHalfOpacity: #1E1E3280;
-  --tertiaryColor: #6B6B80;
-  --darkAccent: #6EA8FE;
+  --secondaryColor: #1e1e32;
+  --secondaryColorHalfOpacity: #1e1e3280;
+  --tertiaryColor: #6b6b80;
+  --darkAccent: #6ea8fe;
   --nav-bar: #121220;
-  --spanColor: #1A1A2E;
-  --dotColor: #F0EEF6;
-  --visitedColor: #C9A0DC;
-  --linkColor: #6EA8FE;
+  --spanColor: #1a1a2e;
+  --dotColor: #f0eef6;
+  --visitedColor: #c9a0dc;
+  --linkColor: #6ea8fe;
 }
-
 
 /* ==============================
    1b. Base Resets (replaces Tailwind preflight for key elements)
    ============================== */
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -68,7 +71,7 @@ html {
 }
 
 body {
-  font-family: 'Roboto', sans-serif;
+  font-family: "Roboto", sans-serif;
   font-size: 1rem;
   line-height: 1.5;
   margin: 0;
@@ -98,8 +101,11 @@ thead th {
   border-bottom: none;
 }
 
-button, input, select, textarea {
-  font-family: 'Roboto', sans-serif;
+button,
+input,
+select,
+textarea {
+  font-family: "Roboto", sans-serif;
   font-size: 0.875rem;
   line-height: 1.5;
   margin: 0;
@@ -117,7 +123,12 @@ img {
   max-width: 100%;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-size: inherit;
   font-weight: inherit;
   margin: 0;
@@ -127,7 +138,8 @@ p {
   margin: 0;
 }
 
-ul, ol {
+ul,
+ol {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -142,7 +154,6 @@ pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   margin: 0;
 }
-
 
 /* Flowbite-style native checkboxes (used in chip/pill feature selectors) */
 input[type="checkbox"].w-3\.5 {
@@ -171,7 +182,7 @@ input[type="checkbox"].w-3\.5:checked {
 }
 
 input[type="checkbox"].w-3\.5:checked::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 1px;
   left: 4px;
@@ -186,8 +197,6 @@ input[type="checkbox"].w-3\.5:focus {
   outline: none;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
 }
-
-
 
 /* ==============================
    3. Material Checkbox
@@ -251,7 +260,6 @@ input[type="checkbox"].w-3\.5:focus {
   background-color: var(--textColor);
   cursor: not-allowed;
 }
-
 
 /* ==============================
    4. Info Tooltips
@@ -318,7 +326,6 @@ html.dark .info-text {
 .info-text a:hover {
   opacity: 0.8;
 }
-
 
 /* ==============================
    5. Animated Submit Button
@@ -388,8 +395,6 @@ html.dark .info-text {
   height: 150px;
   opacity: 1;
 }
-
-
 
 /* ==============================
    7. Metric Form Components
@@ -481,7 +486,9 @@ select:not([multiple]) {
   max-width: 400px;
   font-size: 14px;
   line-height: 1.5;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -530,7 +537,8 @@ select[multiple] option {
   margin: 1px 0;
 }
 
-select[multiple]:focus, select:focus {
+select[multiple]:focus,
+select:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
@@ -647,4 +655,3 @@ select[multiple]:focus, select:focus {
   margin-left: 8px;
   font-size: 12px;
 }
-
