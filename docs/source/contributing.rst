@@ -123,6 +123,77 @@ Run a metric and observe trace spans printed to the terminal.
    # → "_NoOpTracer"
 
 
+Globus Compute (Optional)
+==========================
+
+AIDRIN supports remote metric execution via Globus Compute, allowing you to
+evaluate large datasets without transferring files to the AIDRIN server.
+
+**Installation:**
+
+.. code-block:: bash
+
+   pip install -e ".[globus]"
+
+**Setup:**
+
+1. Register an application at https://developers.globus.org/
+2. Set the environment variable:
+
+   .. code-block:: bash
+
+      export GLOBUS_CLIENT_ID=<your-client-id>
+
+3. The remote Globus Compute endpoint must have ``aidrin`` installed:
+
+   .. code-block:: bash
+
+      pip install aidrin
+
+**Setting up a Globus Compute Endpoint:**
+
+On the remote machine where your data is located:
+
+.. code-block:: bash
+
+   # Install the endpoint software and aidrin
+   pip install globus-compute-endpoint aidrin
+
+   # Configure a new endpoint
+   globus-compute-endpoint configure aidrin-endpoint
+
+   # Start the endpoint
+   globus-compute-endpoint start aidrin-endpoint
+
+   # Get the endpoint UUID (copy this for the inspector)
+   globus-compute-endpoint list
+
+For local testing, you can run an endpoint on the same machine:
+
+.. code-block:: bash
+
+   pip install globus-compute-endpoint
+   globus-compute-endpoint configure test-local
+   globus-compute-endpoint start test-local
+
+Stop an endpoint with ``globus-compute-endpoint stop <name>``.
+
+**Requirements for the remote endpoint:**
+
+- ``aidrin`` must be installed (``pip install aidrin``)
+- Network access to authenticate with Globus
+- The file path entered in the inspector must be accessible from the endpoint machine
+
+**Usage:**
+
+1. In the inspector, select the "Remote (Globus)" tab
+2. Click "Sign in with Globus" (redirects to Globus Auth)
+3. Paste the Globus Compute endpoint UUID
+4. Enter the file path as it exists on the remote machine (e.g., ``/home/user/data/adult.csv``)
+5. Select the file type and click "Load Remote Dataset"
+6. Run metrics as usual — computation happens on the remote endpoint, only results travel back
+
+
 Debugging the Web Interface
 ============================
 

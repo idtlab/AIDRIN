@@ -115,7 +115,143 @@ document.addEventListener('DOMContentLoaded', function () {
  * @param {string} targetUrl - The metric endpoint URL (e.g., '/data-quality')
  */
 function workspaceSubmit(targetUrl) {
-  // Find the active form in the current panel
+  // Clear previous results before submitting new ones
+  const resultsSection = document.getElementById('results-section');
+  if (resultsSection) resultsSection.style.display = 'none';
+  const metricsDiv = document.getElementById('metrics');
+  if (metricsDiv) metricsDiv.innerHTML = '';
+  const buttonsContainer = document.getElementById('buttonsContainer');
+  if (buttonsContainer) buttonsContainer.style.display = 'none';
+
+  // In Globus mode, route through Globus Compute instead of local endpoint
+  if (window.AIDRIN_GLOBUS_MODE) {
+    const gPanel = document.getElementById('panel-' + activePanel);
+    const gForm = gPanel ? gPanel.querySelector('form') : null;
+    const gFormData = gForm ? new FormData(gForm) : new FormData();
+
+    // Map route URLs to remote_metric_runner metric names
+    const urlToMetrics = {
+      '/data-quality': ['completeness', 'outliers', 'duplicates'],
+      '/fairness': ['representation_rate', 'statistical_rates'],
+      '/feature-relevance': ['feature_relevance'],
+      '/correlation-analysis': ['correlations'],
+      '/class-imbalance': ['class_distribution'],
+      '/privacy-preservation': ['k_anonymity', 'l_diversity', 't_closeness', 'entropy_risk'],
+      '/hipaa-compliance': ['hipaa'],
+    };
+
+    let remoteName = urlToMetrics[targetUrl] ? urlToMetrics[targetUrl][0] : targetUrl.replace('/', '');
+    let remoteParams = {};
+    let remoteDisplayName = '';
+
+    // Map metric names to display names
+    const metricDisplayMap = {
+      'completeness': 'Completeness', 'outliers': 'Outliers', 'duplicates': 'Duplicity',
+      'representation_rate': 'Representation Rate', 'statistical_rates': 'Statistical Rate',
+      'feature_relevance': 'Feature Relevance', 'correlations': 'Correlation Analysis',
+      'class_distribution': 'Class Imbalance',
+      'k_anonymity': 'k-Anonymity', 'l_diversity': 'l-Diversity',
+      't_closeness': 't-Closeness', 'entropy_risk': 'Entropy Risk',
+      'hipaa': 'HIPAA Compliance',
+    };
+
+    if (targetUrl === '/data-quality') {
+      remoteName = 'data_quality';
+      const selected = [];
+      const selectedNames = [];
+      if (gFormData.get('completeness') === 'yes') { selected.push('completeness'); selectedNames.push('Completeness'); }
+      if (gFormData.get('outliers') === 'yes') { selected.push('outliers'); selectedNames.push('Outliers'); }
+      if (gFormData.get('duplicity') === 'yes') { selected.push('duplicates'); selectedNames.push('Duplicity'); }
+      if (selected.length === 0) {
+        if (typeof showToast === 'function') showToast('Please select at least one metric', 'error');
+        return;
+      }
+      remoteParams = { selected: selected };
+      remoteDisplayName = selectedNames.join(', ');
+    } else if (targetUrl === '/feature-relevance') {
+      remoteName = 'feature_relevance';
+      remoteDisplayName = 'Feature Relevance';
+      // Collect selected features and target from the form
+      const catCols = Array.from(gFormData.getAll('categorical features for feature relevancy')).join(',');
+      const numCols = Array.from(gFormData.getAll('numerical features for feature relevancy')).join(',');
+      const target = gFormData.get('target for feature relevance');
+      if (!target) {
+        if (typeof showToast === 'function') showToast('Please select a target feature', 'error');
+        return;
+      }
+      remoteParams = {
+        target_col: target,
+        cat_cols: catCols ? catCols.split(',') : [],
+        num_cols: numCols ? numCols.split(',') : [],
+      };
+    } else if (targetUrl === '/correlation-analysis') {
+      remoteName = 'correlations';
+      remoteDisplayName = 'Correlation Analysis';
+      const catCols = Array.from(gFormData.getAll('categorical features for correlation analysis')).join(',');
+      const numCols = Array.from(gFormData.getAll('numerical features for correlation analysis')).join(',');
+      const columns = (catCols ? catCols.split(',') : []).concat(numCols ? numCols.split(',') : []);
+      remoteParams = { columns: columns };
+    } else if (targetUrl === '/fairness') {
+      remoteName = 'fairness';
+      const selectedFairness = [];
+      const selectedNames = [];
+      remoteParams = { selected: [] };
+
+      if (gFormData.get('representation rate') === 'yes') {
+        remoteParams.selected.push('representation_rate');
+        remoteParams.rep_columns = [gFormData.get('features for representation rate')];
+        selectedNames.push('Representation Rate');
+      }
+      if (gFormData.get('statistical rate') === 'yes') {
+        remoteParams.selected.push('statistical_rates');
+        remoteParams.sensitive_attr = gFormData.get('features for statistical rate');
+        remoteParams.y_true = gFormData.get('target for statistical rate');
+        selectedNames.push('Statistical Rate');
+      }
+      if (remoteParams.selected.length === 0) {
+        if (typeof showToast === 'function') showToast('Please select at least one metric', 'error');
+        return;
+      }
+      remoteDisplayName = selectedNames.join(', ');
+    } else if (targetUrl === '/class-imbalance') {
+      remoteName = 'class_distribution';
+      remoteDisplayName = 'Class Imbalance';
+      remoteParams = { column: gFormData.get('target features for class imbalance') };
+    } else if (targetUrl === '/privacy-preservation') {
+      // Privacy has multiple sub-metrics — check which are selected
+      // For now, run k-anonymity if selected (most common)
+      if (gFormData.get('k-anonymity') === 'yes') {
+        remoteName = 'k_anonymity';
+        remoteDisplayName = 'k-Anonymity';
+        remoteParams = { quasi_ids: Array.from(gFormData.getAll('quasi identifiers for k-anonymity')) };
+      } else if (gFormData.get('l-diversity') === 'yes') {
+        remoteName = 'l_diversity';
+        remoteDisplayName = 'l-Diversity';
+        remoteParams = {
+          quasi_ids: Array.from(gFormData.getAll('quasi identifiers for l-diversity')),
+          sensitive_col: gFormData.get('sensitive attribute for l-diversity'),
+        };
+      } else if (gFormData.get('t-closeness') === 'yes') {
+        remoteName = 't_closeness';
+        remoteDisplayName = 't-Closeness';
+        remoteParams = {
+          quasi_ids: Array.from(gFormData.getAll('quasi identifiers for t-closeness')),
+          sensitive_col: gFormData.get('sensitive attribute for t-closeness'),
+        };
+      } else if (gFormData.get('entropy risk') === 'yes') {
+        remoteName = 'entropy_risk';
+        remoteDisplayName = 'Entropy Risk';
+        remoteParams = { quasi_ids: Array.from(gFormData.getAll('quasi identifiers for entropy risk')) };
+      }
+    } else {
+      remoteDisplayName = metricDisplayMap[remoteName] || remoteName;
+    }
+
+    submitGlobusMetric(remoteName, remoteParams, remoteDisplayName);
+    return;
+  }
+
+  // Local mode: find the active form
   const panel = document.getElementById('panel-' + activePanel);
   if (!panel) return;
 
@@ -160,7 +296,6 @@ function workspaceSubmit(targetUrl) {
   }
 
   // Show the results section and set loading state
-  const resultsSection = document.getElementById('results-section');
   if (resultsSection) resultsSection.style.display = 'block';
 
   const resultsContainer = document.getElementById('metrics');
@@ -275,7 +410,9 @@ function renderWorkspaceResults(data) {
         if (hasViz) {
           html += `<div class="flex flex-col items-center gap-4">`;
           for (const viz of visualizations) {
-            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg w-full" data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
+            const isHeatmap = /correlation|heatmap/i.test(viz.key);
+            const imgStyle = isHeatmap ? ' style="max-width:500px; max-height:500px; object-fit:contain;"' : '';
+            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? '' : 'w-full'}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
           }
           html += `</div>`;
         }
@@ -424,6 +561,348 @@ function renderScoresSection(scores, depth) {
   return html;
 }
 
+// ==================== Globus Compute ====================
+
+/** Switch between Upload and Globus tabs on the landing page. */
+function switchUploadTab(tab) {
+  const localPanel = document.getElementById('local-upload');
+  const globusPanel = document.getElementById('globus-panel');
+  const tabLocal = document.getElementById('tab-local');
+  const tabGlobus = document.getElementById('tab-globus');
+
+  if (!localPanel || !globusPanel) {
+    console.error('switchUploadTab: missing elements', { localPanel: !!localPanel, globusPanel: !!globusPanel });
+    return;
+  }
+
+  const activeClass = 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500';
+  const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400';
+
+  if (tab === 'globus') {
+    localPanel.classList.add('hidden');
+    globusPanel.classList.remove('hidden');
+    tabLocal.className = `upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 ${inactiveClass}`;
+    tabGlobus.className = `upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 ${activeClass}`;
+  } else {
+    localPanel.classList.remove('hidden');
+    globusPanel.classList.add('hidden');
+    tabLocal.className = `upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 ${activeClass}`;
+    tabGlobus.className = `upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 ${inactiveClass}`;
+  }
+}
+
+/** Fetch summary statistics via Globus Compute and render in data overview. */
+function fetchGlobusSummary() {
+  const endpointId = window.AIDRIN_GLOBUS_ENDPOINT;
+  const filePath = window.AIDRIN_GLOBUS_FILE_PATH;
+  const fileName = window.AIDRIN_GLOBUS_FILE_NAME;
+  const fileType = window.AIDRIN_GLOBUS_FILE_TYPE;
+
+  if (!endpointId || !filePath) return;
+
+  fetch('/globus/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      endpoint_id: endpointId,
+      file_path: filePath,
+      file_name: fileName,
+      file_type: fileType,
+      metric_name: 'summary_statistics',
+      params: {},
+    }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        const loading = document.getElementById('globus-summary-loading');
+        if (loading) loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+        return;
+      }
+      // Cached result — render immediately without polling
+      if (data.status === 'completed' && data.result) {
+        renderGlobusSummary(data.result);
+        return;
+      }
+      if (data.task_id) {
+        pollGlobusSummary(data.task_id);
+      }
+    })
+    .catch(err => {
+      const loading = document.getElementById('globus-summary-loading');
+      if (loading) loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${err.message}</div>`;
+    });
+}
+
+/** Render Globus summary data (used by both cached and polled paths). */
+function renderGlobusSummary(data) {
+  const loading = document.getElementById('globus-summary-loading');
+  const content = document.getElementById('globus-summary-content');
+  if (loading) loading.style.display = 'none';
+
+  if (data.error) {
+    if (content) content.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+    _unlockGlobusSidebar();
+    return;
+  }
+
+  if (content) {
+    let html = `
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+          <div class="text-3xl font-bold text-gray-900 dark:text-white">${(data.records_count || 0).toLocaleString()}</div>
+          <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Records</div>
+        </div>
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+          <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.features_count || 0}</div>
+          <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Features</div>
+        </div>
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+          <div class="text-3xl font-bold text-gray-900 dark:text-white">${(data.numerical_features || []).length}</div>
+          <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Numerical</div>
+        </div>
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+          <div class="text-3xl font-bold text-gray-900 dark:text-white">${(data.categorical_features || []).length}</div>
+          <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Categorical</div>
+        </div>
+      </div>
+    `;
+
+    if (data.summary_statistics) {
+      const features = Object.keys(data.summary_statistics);
+      const allStats = features.length > 0 ? Object.keys(data.summary_statistics[features[0]]) : [];
+      const preferredOrder = ['count', 'min', '25th percentile', '50th percentile', 'mean', '75th percentile', 'max', 'std'];
+      const statKeys = preferredOrder.filter(s => allStats.includes(s)).concat(allStats.filter(s => !preferredOrder.includes(s)));
+
+      html += '<div class="relative overflow-x-auto rounded-lg shadow-sm">';
+      html += '<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
+      html += '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>';
+      html += '<th scope="col" class="px-4 py-3">Feature</th>';
+      statKeys.forEach(s => { html += `<th scope="col" class="px-4 py-3 text-right">${s}</th>`; });
+      html += '</tr></thead><tbody>';
+      features.forEach((feat, i) => {
+        const stripe = i % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700/50';
+        html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${feat}</td>`;
+        statKeys.forEach(s => { html += `<td class="px-4 py-2 font-mono text-xs text-right">${data.summary_statistics[feat][s] ?? '—'}</td>`; });
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    content.innerHTML = html;
+  }
+
+  // Render histograms if available
+  if (data.histograms && typeof renderWorkspaceHistograms === 'function') {
+    var wh = document.getElementById('workspace-histograms');
+    if (wh) {
+      wh.style.display = 'block';
+      renderWorkspaceHistograms(data.histograms);
+    }
+  }
+
+  // Populate feature dropdowns for metric panels
+  if (data.all_features && typeof populateWorkspaceDropdowns === 'function') {
+    populateWorkspaceDropdowns(data);
+  }
+
+  _unlockGlobusSidebar();
+}
+
+function _unlockGlobusSidebar() {
+  var sidebarMetrics = document.getElementById('sidebar-metrics');
+  if (sidebarMetrics) sidebarMetrics.classList.remove('opacity-50', 'pointer-events-none');
+  var loadingMsg = document.getElementById('sidebar-loading-msg');
+  if (loadingMsg) loadingMsg.remove();
+}
+
+/** Poll for Globus summary statistics and render when complete. */
+function pollGlobusSummary(taskId) {
+  let attempts = 0;
+  const maxAttempts = 120;
+
+  const poll = () => {
+    attempts++;
+    fetch(`/globus/check-task/${taskId}`)
+      .then(r => r.json())
+      .then(response => {
+        if (response.status === 'completed' && response.result) {
+          renderGlobusSummary(response.result);
+          // Cache the result so page reloads don't re-fetch
+          fetch('/globus/cache-summary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(response.result),
+          }).catch(() => {}); // Best-effort cache
+
+        } else if (response.status === 'failed') {
+          const loading = document.getElementById('globus-summary-loading');
+          if (loading) loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${response.error || 'Failed to load summary'}</div>`;
+          _unlockGlobusSidebar();
+        } else if (attempts < maxAttempts) {
+          setTimeout(poll, 2000);
+        }
+      })
+      .catch(err => {
+        if (attempts < maxAttempts) setTimeout(poll, 3000);
+      });
+  };
+
+  setTimeout(poll, 1000);
+}
+
+/** Disconnect from Globus — clear tokens. */
+function disconnectGlobus() {
+  fetch('/globus/disconnect', { method: 'POST' })
+    .then(() => window.location.reload())
+    .catch(err => console.error('Globus disconnect error:', err));
+}
+
+/** Load a remote dataset via Globus Compute. */
+function loadGlobusDataset() {
+  const endpointId = document.getElementById('globus-endpoint-id')?.value?.trim();
+  const filePath = document.getElementById('globus-file-path')?.value?.trim();
+  const fileType = document.getElementById('globus-file-type')?.value;
+
+  if (!endpointId || !filePath) {
+    if (typeof showToast === 'function') showToast('Please fill in endpoint UUID and file path', 'error');
+    return;
+  }
+
+  // Disable the form to prevent double-clicking
+  const loadBtn = document.querySelector('#globusForm button[onclick*="loadGlobusDataset"]');
+  const inputs = document.querySelectorAll('#globusForm input, #globusForm select');
+  if (loadBtn) {
+    loadBtn.disabled = true;
+    loadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    loadBtn.textContent = 'Connecting...';
+  }
+  inputs.forEach(el => { el.disabled = true; el.classList.add('opacity-50'); });
+
+  const fileName = filePath.split('/').pop();
+
+  if (typeof showToast === 'function') showToast('Connecting to remote endpoint...', 'info');
+
+  fetch('/globus/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      endpoint_id: endpointId,
+      file_path: filePath,
+      file_name: fileName,
+      file_type: fileType,
+      metric_name: 'completeness',
+      params: {},
+    }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        _reEnableGlobusForm();
+        if (typeof showToast === 'function') showToast(data.error, 'error');
+        return;
+      }
+      // Reload the page — session now has globus file info,
+      // inspector will show sidebar + panels
+      window.location.href = '/inspector';
+    })
+    .catch(err => {
+      _reEnableGlobusForm();
+      if (typeof showToast === 'function') showToast('Failed to connect: ' + err.message, 'error');
+    });
+}
+
+function _reEnableGlobusForm() {
+  const loadBtn = document.querySelector('#globusForm button[onclick*="loadGlobusDataset"]');
+  const inputs = document.querySelectorAll('#globusForm input, #globusForm select');
+  if (loadBtn) {
+    loadBtn.disabled = false;
+    loadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    loadBtn.textContent = 'Load Remote Dataset';
+  }
+  inputs.forEach(el => { el.disabled = false; el.classList.remove('opacity-50'); });
+}
+
+let _globusSubmitInProgress = false;
+
+/** Disable or enable all submit buttons in metric panels. */
+function _setSubmitButtonsDisabled(disabled) {
+  document.querySelectorAll('.metric-panel button[onclick*="workspaceSubmit"]').forEach(btn => {
+    btn.disabled = disabled;
+    if (disabled) {
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  });
+}
+
+/** Called when a Globus task finishes (success or failure). */
+function _globusTaskDone() {
+  _globusSubmitInProgress = false;
+  _setSubmitButtonsDisabled(false);
+}
+
+/** Submit a metric to run on a remote Globus Compute endpoint. */
+function submitGlobusMetric(metricName, params, displayName) {
+  if (_globusSubmitInProgress) {
+    if (typeof showToast === 'function') showToast('A task is already running on the remote endpoint. Please wait.', 'info');
+    return;
+  }
+
+  const endpointId = window.AIDRIN_GLOBUS_ENDPOINT || '';
+  const filePath = window.AIDRIN_GLOBUS_FILE_PATH || '';
+  const fileName = window.AIDRIN_GLOBUS_FILE_NAME || '';
+  const fileType = window.AIDRIN_GLOBUS_FILE_TYPE || '';
+
+  if (!endpointId || !filePath) {
+    if (typeof showToast === 'function') showToast('No remote file configured', 'error');
+    return;
+  }
+
+  // Block further submissions and disable submit buttons
+  _globusSubmitInProgress = true;
+  _setSubmitButtonsDisabled(true);
+
+  // Show results section with spinner
+  const resultsSection = document.getElementById('results-section');
+  if (resultsSection) resultsSection.style.display = 'block';
+
+  fetch('/globus/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      endpoint_id: endpointId,
+      file_path: filePath,
+      file_name: fileName,
+      file_type: fileType,
+      metric_name: metricName,
+      params: params || {},
+    }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        _globusTaskDone();
+        const m = document.getElementById('metrics');
+        if (m) m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${data.error}</div>`;
+        return;
+      }
+      if (data.task_id && data.is_async) {
+        // Reuse existing async polling — but use Globus check endpoint
+        pollAsyncMetric(data.task_id, displayName || metricName, null, '/globus/check-task/');
+      } else {
+        _globusTaskDone();
+      }
+    })
+    .catch(err => {
+      _globusTaskDone();
+      if (typeof showToast === 'function') showToast('Globus submit error: ' + err.message, 'error');
+    });
+}
+
+
 // ==================== Layout Helpers ====================
 
 /**
@@ -457,13 +936,36 @@ function handleAsyncResults(data) {
 /**
  * Poll an async metric task until complete, showing progress inline.
  */
-function pollAsyncMetric(taskId, metricName, cacheKey) {
+function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
+  checkUrlBase = checkUrlBase || '/check-and-update-task/';
   // Find or create a placeholder in the results area
   const resultsSection = document.getElementById('results-section');
   if (resultsSection) resultsSection.style.display = 'block';
 
   const metricsDiv = document.getElementById('metrics');
   if (!metricsDiv) return;
+
+  // Human-readable metric names for the spinner card
+  const metricDisplayNames = {
+    'data_quality': 'Data Quality',
+    'completeness': 'Completeness',
+    'outliers': 'Outliers',
+    'duplicates': 'Duplicity',
+    'correlations': 'Correlation Analysis',
+    'feature_relevance': 'Feature Relevance',
+    'representation_rate': 'Representation Rate',
+    'statistical_rates': 'Statistical Rates',
+    'class_distribution': 'Class Imbalance',
+    'k_anonymity': 'k-Anonymity',
+    'l_diversity': 'l-Diversity',
+    't_closeness': 't-Closeness',
+    'entropy_risk': 'Entropy Risk',
+    'hipaa': 'HIPAA Compliance',
+    'privacy_preservation': 'Privacy Preservation',
+    'fairness': 'Fairness',
+    'Completeness': 'Completeness',
+  };
+  const displayName = metricDisplayNames[metricName] || metricName;
 
   // Create a placeholder card for this async metric
   const placeholderId = `async-${taskId}`;
@@ -473,11 +975,11 @@ function pollAsyncMetric(taskId, metricName, cacheKey) {
     card.id = placeholderId;
     card.className = 'p-5 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700';
     card.innerHTML = `
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${metricName}</h3>
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${displayName}</h3>
       <div class="flex items-center gap-3">
         <svg class="w-5 h-5 text-gray-300 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
         <div>
-          <p class="text-sm text-gray-700 dark:text-gray-300">Processing...</p>
+          <p class="text-sm text-gray-700 dark:text-gray-300">${checkUrlBase.includes('globus') ? 'Running on Globus Compute Endpoint...' : 'Processing...'}</p>
           <div class="w-48 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
             <div id="${placeholderId}-bar" class="bg-blue-600 h-1.5 rounded-full transition-all" style="width: 0%"></div>
           </div>
@@ -493,28 +995,51 @@ function pollAsyncMetric(taskId, metricName, cacheKey) {
 
   const poll = () => {
     attempts++;
-    fetch(`/check-and-update-task/${taskId}/${encodeURIComponent(metricName)}`)
+    const checkUrl = checkUrlBase.includes('globus')
+      ? `${checkUrlBase}${taskId}`
+      : `${checkUrlBase}${taskId}/${encodeURIComponent(metricName)}`;
+    fetch(checkUrl)
       .then(r => r.json())
       .then(response => {
         const card = document.getElementById(placeholderId);
         if (!card) return;
 
         if (response.status === 'completed') {
-          // Render the completed result in place of the placeholder
-          const resultData = {};
-          resultData[metricName] = response.result;
-
           // Update stored result for download
           if (lastMetricResult) {
             lastMetricResult[metricName] = response.result;
           }
 
-          // Build result HTML and replace placeholder
+          // Check if result is a multi-metric bundle (e.g., data_quality returns
+          // {Completeness: {...}, Outliers: {...}, Duplicity: {...}})
+          // vs a single metric result (has Description/Visualization at top level)
+          const result = response.result;
+          const isBundle = typeof result === 'object' && result !== null
+            && !result.Description && !result.Error
+            && Object.values(result).some(v => typeof v === 'object' && v !== null && (v.Description || v.Error));
+
           const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = buildResultCard(metricName, response.result);
-          card.replaceWith(tempDiv.firstElementChild || tempDiv);
+          if (isBundle) {
+            // Render each sub-metric as its own card (matches local renderWorkspaceResults)
+            let html = '';
+            for (const [subType, subResult] of Object.entries(result)) {
+              if (typeof subResult === 'object' && subResult !== null) {
+                html += buildResultCard(subType, subResult);
+              }
+            }
+            tempDiv.innerHTML = html;
+          } else {
+            tempDiv.innerHTML = buildResultCard(metricName, result);
+          }
+
+          // Replace placeholder with all rendered cards
+          const fragment = document.createDocumentFragment();
+          while (tempDiv.firstChild) fragment.appendChild(tempDiv.firstChild);
+          card.replaceWith(fragment);
+          _globusTaskDone();
 
         } else if (response.status === 'failed') {
+          _globusTaskDone();
           card.innerHTML = `
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${metricName}</h3>
             <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">
@@ -538,7 +1063,11 @@ function pollAsyncMetric(taskId, metricName, cacheKey) {
       })
       .catch(err => {
         console.error('Polling error:', err);
-        if (attempts < maxAttempts) setTimeout(poll, 3000);
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 3000);
+        } else {
+          _globusTaskDone();
+        }
       });
   };
 
@@ -586,7 +1115,9 @@ function buildResultCard(type, results) {
       if (hasViz) {
         html += `<div class="flex flex-col items-center gap-4">`;
         for (const viz of visualizations) {
-          html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg w-full" data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
+          const isHeatmap = /correlation|heatmap/i.test(viz.key);
+          const imgStyle = isHeatmap ? ' style="max-width:500px; max-height:500px; object-fit:contain;"' : '';
+          html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? '' : 'w-full'}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
         }
         html += `</div>`;
       }

@@ -20,6 +20,15 @@
 
     <hr class="my-2 border-gray-300 dark:border-gray-600" />
 
+    <!-- Metric pillars (disabled until data is loaded in Globus mode) -->
+    <div id="sidebar-metrics" class="{% if globus_mode %}opacity-50 pointer-events-none{% endif %}">
+    {% if globus_mode %}
+    <div id="sidebar-loading-msg" class="flex items-center gap-2 px-2 py-2 mb-2 text-xs text-gray-500 dark:text-gray-400">
+      <svg class="w-3.5 h-3.5 animate-spin text-gray-400" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="#3b82f6"/></svg>
+      Loading dataset info...
+    </div>
+    {% endif %}
+
     <!-- Pillar: Data Quality -->
     <div class="mb-1">
       <button type="button" onclick="toggleSidebarGroup('pillar-quality')"
@@ -110,6 +119,8 @@
         {% endif %}
       </ul>
     </div>
+
+    </div><!-- end sidebar-metrics -->
 
     <!-- Version -->
     <div class="absolute bottom-3 left-3 right-3 text-xs opacity-50 text-center">

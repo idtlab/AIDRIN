@@ -9,3 +9,9 @@ def register_blueprints(app):
     app.register_blueprint(core_bp)
     app.register_blueprint(custom_bp)
     app.register_blueprint(metrics_bp)
+
+    # Globus Compute — optional, only if SDK is installed
+    from web.globus import is_globus_available
+    if is_globus_available():
+        from web.routes.globus import globus_bp
+        app.register_blueprint(globus_bp)

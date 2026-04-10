@@ -103,17 +103,38 @@ def inspector():
             file_preview = None
             current_checked_keys = None
 
+    # Check if Globus Compute is available
+    from web.globus import is_globus_available
+    globus_available = is_globus_available()
+    globus_authenticated = session.get("globus_authenticated", False)
+
+    # Globus remote file — treat as "uploaded" for sidebar/panels visibility
+    globus_file_path = session.get("globus_file_path", "")
+    globus_file_name = session.get("globus_file_name", "")
+    globus_file_type = session.get("globus_file_type", "")
+    globus_endpoint_id = session.get("globus_endpoint_id", "")
+    globus_mode = bool(globus_file_path and globus_authenticated)
+
+    # If Globus mode, use globus file info for template (shows sidebar + panels)
+    effective_file_path = uploaded_file_path or globus_file_path
+    effective_file_name = uploaded_file_name or globus_file_name
+    effective_file_type = file_type or globus_file_type
+
     try:
         return render_template(
             "inspector.html",
-            uploaded_file_path=uploaded_file_path or "",
-            uploaded_file_name=uploaded_file_name or "",
-            file_type=file_type or "",
+            uploaded_file_path=effective_file_path or "",
+            uploaded_file_name=effective_file_name or "",
+            file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],
             current_checked_keys=current_checked_keys
             if current_checked_keys is not None
             else [],
+            globus_available=globus_available,
+            globus_authenticated=globus_authenticated,
+            globus_mode=globus_mode,
+            globus_endpoint_id=globus_endpoint_id,
         )
     except Exception as e:
         file_upload_time_log.error("Error rendering workspace: %s", e, exc_info=True)
@@ -143,6 +164,22 @@ def retrieve_uploaded_file():
 @core_bp.route("/clear", methods=["GET", "POST"])
 def clear_file():
     file_upload_time_log.info("Clearing File")
+
+    # Cancel any active Globus Compute tasks and clear cached summary
+    from web.globus import is_globus_available
+    if is_globus_available():
+        endpoint_id = session.get("globus_endpoint_id", "")
+        file_path = session.get("globus_file_path", "")
+        if endpoint_id and file_path:
+            cache_key = f"globus_summary:{endpoint_id}:{file_path}"
+            current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+        if session.get("globus_active_tasks"):
+            try:
+                from web.routes.globus import _cancel_active_globus_tasks
+                _cancel_active_globus_tasks()
+            except Exception as e:
+                file_upload_time_log.warning("Failed to cancel Globus tasks on clear: %s", e)
+
     session.pop("uploaded_file_path", None)
     session.pop("uploaded_file_name", None)
     session.pop("uploaded_file_type", None)

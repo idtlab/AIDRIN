@@ -70,11 +70,33 @@
   <script src="{{ url_for('static', filename='js/inspector.js') }}"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      {% if uploaded_file_path %}
-        console.log('[workspace] File loaded: {{ uploaded_file_name }}');
+      {% if uploaded_file_path and not globus_mode %}
         initWorkspace();
-      {% else %}
-        console.log('[workspace] No file uploaded, showing upload panel');
+      {% elif globus_mode %}
+        // Globus mode — flag for workspaceSubmit to route through Globus
+        window.AIDRIN_GLOBUS_MODE = true;
+        window.AIDRIN_GLOBUS_ENDPOINT = '{{ globus_endpoint_id }}';
+        window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
+        window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
+        window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
+        showPanel('data-overview');
+        // Show Globus info banner + loading spinner for summary stats
+        var ws = document.getElementById('workspace-summary');
+        if (ws) ws.innerHTML = `
+          <div id="globus-summary-loading" class="text-center py-6">
+            <div role="status" class="inline-block">
+              <svg class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+            </div>
+            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading summary statistics from remote endpoint...</p>
+          </div>
+          <div id="globus-summary-content"></div>
+        `;
+        // Hide histograms placeholder (will be populated if/when available)
+        var wh = document.getElementById('workspace-histograms');
+        if (wh) wh.style.display = 'none';
+
+        // Fetch summary stats via Globus Compute
+        fetchGlobusSummary();
       {% endif %}
     });
   </script>

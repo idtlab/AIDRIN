@@ -25,6 +25,7 @@ dependencies = [
     "matplotlib==3.10.5",
     "seaborn==0.13.2",
     "dython==0.7.5",
+    "setuptools<81",  # dython requires pkg_resources, removed in setuptools>=82
     "shap==0.48.0",
     "h5py==3.14.0",
     "openpyxl==3.1.5",
@@ -34,6 +35,10 @@ dependencies = [
 [project.optional-dependencies]
 # Legacy extras kept for backward compatibility with pip users.
 # Prefer dependency groups below when using uv.
+globus = [
+    "globus-compute-sdk>=2.3.0",
+    "globus-sdk>=3.20.0",
+]
 telemetry = [
     "opentelemetry-api>=1.20",
     "opentelemetry-sdk>=1.20",
