@@ -106,6 +106,11 @@ def inspector():
     # Check if Globus Compute is available
     from web.globus import is_globus_available
     globus_available = is_globus_available()
+
+    # Check if LLM explanations are available
+    from web.llm import is_llm_available
+    llm_available = is_llm_available()
+    llm_configured = bool(session.get("llm_config", {}).get("api_key"))
     globus_authenticated = session.get("globus_authenticated", False)
 
     # Globus remote file — treat as "uploaded" for sidebar/panels visibility
@@ -135,6 +140,8 @@ def inspector():
             globus_authenticated=globus_authenticated,
             globus_mode=globus_mode,
             globus_endpoint_id=globus_endpoint_id,
+            llm_available=llm_available,
+            llm_configured=llm_configured,
         )
     except Exception as e:
         file_upload_time_log.error("Error rendering workspace: %s", e, exc_info=True)
@@ -268,6 +275,28 @@ def clear_cache():
         )
     except Exception as e:
         return jsonify({"success": False, "message": f"Error clearing cache: {str(e)}"}), 500
+
+
+@core_bp.route("/cached-result/<metric_name>")
+def cached_result(metric_name):
+    """Return cached metric results for the current user and file, if available."""
+    user_id = get_current_user_id()
+    file_name = (
+        session.get("uploaded_file_name")
+        or session.get("globus_file_name")
+        or ""
+    )
+    if not file_name:
+        return jsonify({"cached": False})
+
+    cache_key = f"user:{user_id}:file:{file_name}:{metric_name}"
+    entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
+    if entry and entry.get("data"):
+        resp = {"cached": True, "data": entry["data"]}
+        if entry.get("_llm_explanations"):
+            resp["llm_explanations"] = entry["_llm_explanations"]
+        return jsonify(resp)
+    return jsonify({"cached": False})
 
 
 @core_bp.route("/summary-statistics", methods=["GET", "POST"])

@@ -112,6 +112,17 @@ def store_result(metric, final_dict):
     formatted_final_dict = ensure_json_serializable(format_dict_values(final_dict))
     results_id = uuid.uuid4().hex
     current_app.TEMP_RESULTS_CACHE[results_id] = {"data": formatted_final_dict}
+
+    # Also store a persistent user-scoped copy for the cache info page
+    user_id = get_current_user_id()
+    metric_short = metric.rsplit(".", 1)[-1] if "." in metric else metric
+    file_name = session.get("uploaded_file_name") or session.get("globus_file_name") or "unknown"
+    user_key = f"user:{user_id}:file:{file_name}:{metric_short}"
+    current_app.TEMP_RESULTS_CACHE[user_key] = {
+        "data": formatted_final_dict,
+        "timestamp": time.time(),
+    }
+
     return redirect(
         url_for(metric, results_id=results_id, return_type=request.args.get("return_type"))
     )

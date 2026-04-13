@@ -46,6 +46,22 @@ Step 2: Set Up the Conda Environment
 
 This installs AIDRIN and its dependencies in editable mode.
 
+**Optional extras:**
+
+.. code-block:: bash
+
+   # AI-generated explanations of metric results (OpenAI-compatible APIs)
+   pip install -e ".[llm]"
+
+   # Remote metric execution via Globus Compute
+   pip install -e ".[globus]"
+
+   # OpenTelemetry tracing
+   pip install -e ".[telemetry]"
+
+   # All optional features
+   pip install -e ".[llm,globus,telemetry]"
+
 Step 3: Install Required Services
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
