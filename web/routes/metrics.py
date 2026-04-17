@@ -331,6 +331,11 @@ def feature_relevance():
                 if col.strip()
             ]
             target = request.form.get("target for feature relevance")
+            if not target:
+                return jsonify({
+                    "trigger": "correlationError",
+                    "error": "Please select a target feature before submitting.",
+                }), 200
             metric_time_log.info(
                 "Feature Relevance request started: %d categorical, %d numerical columns, target=%r",
                 len(cat_cols), len(num_cols), target,

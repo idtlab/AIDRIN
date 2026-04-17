@@ -19,6 +19,11 @@
   <!-- Top bar -->
   {% include '_components/topbar.html' %}
 
+  <!-- LLM settings modal (only when openai is installed) -->
+  {% if llm_available %}
+    {% include '_components/llm_settings.html' %}
+  {% endif %}
+
   <!-- Sidebar (only visible when file is uploaded) -->
   {% if uploaded_file_path %}
     {% include '_components/sidebar.html' %}
@@ -70,6 +75,10 @@
   <script src="{{ url_for('static', filename='js/inspector.js') }}"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      {% if llm_available and llm_configured %}
+        window.AIDRIN_LLM_ENABLED = true;
+      {% endif %}
+
       {% if uploaded_file_path and not globus_mode %}
         initWorkspace();
       {% elif globus_mode %}

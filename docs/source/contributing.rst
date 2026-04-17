@@ -194,6 +194,72 @@ Stop an endpoint with ``globus-compute-endpoint stop <name>``.
 6. Run metrics as usual — computation happens on the remote endpoint, only results travel back
 
 
+LLM Explanations (Optional)
+============================
+
+AIDRIN supports optional AI-generated explanations of metric results using any
+OpenAI-compatible API (OpenAI, Azure OpenAI, Ollama, vLLM, etc.).
+
+**Installation:**
+
+.. code-block:: bash
+
+   pip install -e ".[llm]"
+
+When the ``openai`` package is not installed, the feature is hidden in the UI
+with zero overhead.
+
+**How it works:**
+
+1. Click the sparkle icon in the top-right toolbar to open the AI settings.
+2. Enter the API base URL, API key, and model name.
+3. Click **Test** to verify the connection. If successful, click **Save**.
+4. From that point on, every metric result will show an "AI Explanation"
+   callout below the results with a short LLM-generated interpretation.
+
+**Configuration details:**
+
+- **API Base URL** — the base URL of the OpenAI-compatible API
+  (default: ``https://api.openai.com/v1``). For Ollama, use
+  ``http://localhost:11434/v1``.
+- **API Key** — your API key. Stored in the server-side Flask session only;
+  never exposed in client-side JavaScript or logs.
+- **Model** — the model identifier (e.g., ``gpt-4o-mini``, ``llama3``,
+  ``claude-3-haiku-20240307``).
+
+**What gets sent to the LLM:**
+
+- The metric name and description (context)
+- The metric scores/values (JSON)
+- The plot image (base64 PNG), if the model supports vision
+
+If the model does not support vision (returns empty with an image), AIDRIN
+automatically retries with text-only input. The model name is displayed in
+the explanation callout for transparency.
+
+**Architecture:**
+
+- ``web/llm.py`` — optional dependency detection and ``explain_metric()``
+- ``web/routes/llm.py`` — Flask routes: ``/llm/configure``, ``/llm/test``,
+  ``/llm/explain``, ``/llm/status``, ``/llm/disconnect``
+- ``web/templates/_components/llm_settings.html`` — settings modal
+- LLM calls happen server-side, after the metric result is rendered;
+  the explanation loads asynchronously without blocking results
+
+**Testing with Ollama (local, no API key needed):**
+
+.. code-block:: bash
+
+   # Install and start Ollama
+   ollama serve
+   ollama pull llama3
+
+   # In AIDRIN settings:
+   # API Base URL: http://localhost:11434/v1
+   # API Key: ollama  (any non-empty string)
+   # Model: llama3
+
+
 Debugging the Web Interface
 ============================
 

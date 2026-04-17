@@ -15,3 +15,9 @@ def register_blueprints(app):
     if is_globus_available():
         from web.routes.globus import globus_bp
         app.register_blueprint(globus_bp)
+
+    # LLM explanations — optional, only if openai is installed
+    from web.llm import is_llm_available
+    if is_llm_available():
+        from web.routes.llm import llm_bp
+        app.register_blueprint(llm_bp)

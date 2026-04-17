@@ -1,0 +1,75 @@
+<!-- LLM Settings Modal (triggered from topbar) -->
+<div id="llm-settings-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onclick="if(event.target===this)closeLLMSettings()">
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">AI Explanation Settings</h3>
+      <button onclick="closeLLMSettings()" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Close">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      Connect to any OpenAI-compatible API to generate AI explanations for metric results.
+      Your API key is stored in the server session only.
+    </p>
+
+    <form id="llm-settings-form" onsubmit="event.preventDefault()">
+      <!-- API Base URL -->
+      <div class="mb-3">
+        <label for="llm-api-base" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">API Base URL</label>
+        <input type="url" id="llm-api-base" placeholder="https://api.openai.com/v1"
+               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+               value="{{ session.get('llm_config', {}).get('api_base', 'https://api.openai.com/v1') }}">
+      </div>
+
+      <!-- API Key -->
+      <div class="mb-3">
+        <label for="llm-api-key" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+        <input type="password" id="llm-api-key" placeholder="sk-..."
+               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+               value="{{ '••••••••' if session.get('llm_config', {}).get('api_key') else '' }}">
+      </div>
+
+      <!-- Model -->
+      <div class="mb-3">
+        <label for="llm-model" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Model</label>
+        <input type="text" id="llm-model" placeholder="gpt-4o-mini"
+               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+               value="{{ session.get('llm_config', {}).get('model', 'gpt-4o-mini') }}">
+      </div>
+
+      <!-- Temperature -->
+      <div class="mb-4">
+        <label for="llm-temperature" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Temperature</label>
+        <input type="number" id="llm-temperature" min="0" max="2" step="0.1" placeholder="0.5"
+               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+               value="{{ session.get('llm_config', {}).get('temperature', 0.5) }}">
+        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">0 = deterministic, 2 = creative (default 0.5)</p>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-end gap-2">
+        <button type="button" onclick="testLLMConnection()"
+                id="llm-test-btn"
+                class="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+          Test
+        </button>
+        <button type="button" onclick="saveLLMSettings()"
+                id="llm-save-btn"
+                disabled
+                class="px-4 py-2 text-sm font-medium text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 disabled:opacity-50 disabled:cursor-not-allowed">
+          Save
+        </button>
+        {% if session.get('llm_config', {}).get('api_key') %}
+        <button type="button" onclick="disconnectLLM()"
+                class="px-4 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 dark:text-red-400 dark:border-red-600 dark:hover:bg-red-900/20">
+          Disconnect
+        </button>
+        {% endif %}
+      </div>
+
+      <!-- Status message -->
+      <div id="llm-settings-status" class="mt-3 text-sm hidden"></div>
+    </form>
+  </div>
+</div>
