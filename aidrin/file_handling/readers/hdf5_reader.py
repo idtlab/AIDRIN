@@ -156,6 +156,44 @@ class hdf5Reader(BaseFileReader):
                         if isinstance(data, (list, tuple)) or hasattr(data, "dtype"):
                             try:
                                 df = pd.DataFrame(data)
+                                if hasattr(data, "dtype") and data.dtype.kind == "V":
+                                    explicit, _ = self._collect_fill_values(obj)
+                                    for col in df.select_dtypes(include="number").columns:
+                                        # _collect_fill_values cannot unpack per-field fill
+                                        # values from a compound dataset.fillvalue (it is a
+                                        # void tuple and float() on it raises TypeError).
+                                        # Derive uncertain fills per field instead.
+                                        col_explicit = set(explicit)
+                                        col_uncertain = set()
+                                        try:
+                                            field_dtype = data.dtype.fields[col][0]
+                                            native = float(obj.fillvalue[col])
+                                            default = float(np.zeros(1, dtype=field_dtype)[0])
+                                            if native not in col_explicit:
+                                                if native == default:
+                                                    col_uncertain.add(native)
+                                                else:
+                                                    col_explicit.add(native)
+                                        except (TypeError, ValueError, KeyError):
+                                            pass
+                                        matched = (col_explicit | col_uncertain) & set(df[col].dropna().unique())
+                                        if matched:
+                                            uncertain_matched = matched & col_uncertain
+                                            if uncertain_matched:
+                                                self.logger.warning(
+                                                    f"Dataset '{name}', field '{col}': "
+                                                    f"{df[col].isin(uncertain_matched).sum()}/"
+                                                    f"{len(df[col])} value(s) match the HDF5 "
+                                                    f"default fill value {uncertain_matched} "
+                                                    f"and will be replaced with NaN. "
+                                                    f"If zero is a valid measurement here "
+                                                    f"(e.g. counts, indices), set a "
+                                                    f"'_FillValue' attribute in the file to "
+                                                    f"an unambiguous sentinel, or pass "
+                                                    f"fill_values=[] at construction time to "
+                                                    f"suppress native fill value replacement."
+                                                )
+                                            df[col] = df[col].where(~df[col].isin(matched))
                             except Exception:
                                 df = pd.DataFrame(data.tolist())  # base
                             for _, row in df.iterrows():

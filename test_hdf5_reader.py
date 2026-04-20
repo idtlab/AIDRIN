@@ -258,3 +258,107 @@ class TestCompletenessAccuracy:
 
         completeness = 1 - col.isnull().mean()
         assert abs(completeness - 0.6) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Compound/structured datasets: fill-value replacement across named fields
+# ---------------------------------------------------------------------------
+
+class TestCompoundDatasets:
+
+    def _make_compound_hdf5(self, path, data, fill_attr=None):
+        """Write a compound dataset HDF5 file for testing."""
+        with h5py.File(path, "w") as f:
+            ds = f.create_dataset("observations", data=data)
+            if fill_attr is not None:
+                ds.attrs["_FillValue"] = fill_attr
+
+    def test_compound_sentinel_replaced_with_nan(self, tmp_path, logger):
+        """Sentinel in a numeric field of a compound dataset is replaced with NaN."""
+        dt = np.dtype([("depth", "<f4"), ("temp", "<f4")])
+        data = np.array(
+            [(100.0, 20.5), (200.0, 25.1), (300.0, -9999.0), (400.0, 18.7)],
+            dtype=dt,
+        )
+        fpath = str(tmp_path / "compound.h5")
+        self._make_compound_hdf5(fpath, data, fill_attr=np.float32(-9999.0))
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert df["temp"].isna().sum() == 1
+
+    def test_compound_non_sentinel_values_unchanged(self, tmp_path, logger):
+        """Real measurements in a compound dataset are not touched."""
+        dt = np.dtype([("depth", "<f4"), ("temp", "<f4")])
+        data = np.array(
+            [(100.0, 20.5), (200.0, 25.1), (300.0, -9999.0), (400.0, 18.7)],
+            dtype=dt,
+        )
+        fpath = str(tmp_path / "compound.h5")
+        self._make_compound_hdf5(fpath, data, fill_attr=np.float32(-9999.0))
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        valid = df["temp"].dropna().tolist()
+        assert sorted(valid) == pytest.approx(sorted([20.5, 25.1, 18.7]), rel=1e-4)
+
+    def test_compound_completeness_reflects_true_missingness(self, tmp_path, logger):
+        """Completeness score for a compound dataset reflects actual missing entries."""
+        dt = np.dtype([("depth", "<f4"), ("temp", "<f4")])
+        data = np.array(
+            [(100.0, 20.5), (200.0, 25.1), (300.0, -9999.0), (400.0, 18.7)],
+            dtype=dt,
+        )
+        fpath = str(tmp_path / "compound.h5")
+        self._make_compound_hdf5(fpath, data, fill_attr=np.float32(-9999.0))
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        completeness = 1 - df["temp"].isnull().mean()
+        assert abs(completeness - 0.75) < 1e-6, (
+            f"Expected completeness 0.75, got {completeness}. "
+            "Sentinel was not replaced with NaN in compound dataset."
+        )
+
+    def test_compound_no_fill_attr_no_nan(self, tmp_path, logger):
+        """Compound dataset with no fill attribute comes through unchanged."""
+        dt = np.dtype([("depth", "<f4"), ("temp", "<f4")])
+        data = np.array(
+            [(100.0, 20.5), (200.0, 25.1), (300.0, 18.7)],
+            dtype=dt,
+        )
+        fpath = str(tmp_path / "compound_nofill.h5")
+        self._make_compound_hdf5(fpath, data, fill_attr=None)
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert df["temp"].isna().sum() == 0
+
+    def test_compound_uncertain_zero_emits_warning(self, tmp_path, logger, caplog):
+        """Uncertain zero fill in a compound field emits a WARNING, consistent with flat datasets."""
+        dt = np.dtype([("depth", "<f4"), ("temp", "<f4")])
+        data = np.array(
+            [(100.0, 0.0), (200.0, 25.1), (300.0, 18.7)],
+            dtype=dt,
+        )
+        fpath = str(tmp_path / "compound_uncertain.h5")
+        self._make_compound_hdf5(fpath, data, fill_attr=None)
+
+        with caplog.at_level(logging.WARNING):
+            hdf5Reader(fpath, logger).read()
+
+        assert any("default fill value" in r.message for r in caplog.records)
+
+    def test_compound_uncertain_zero_still_replaced(self, tmp_path, logger):
+        """Uncertain zero in a compound field is replaced with NaN even though it emits a WARNING."""
+        dt = np.dtype([("depth", "<f4"), ("temp", "<f4")])
+        data = np.array(
+            [(100.0, 0.0), (200.0, 25.1), (300.0, 18.7)],
+            dtype=dt,
+        )
+        fpath = str(tmp_path / "compound_uncertain2.h5")
+        self._make_compound_hdf5(fpath, data, fill_attr=None)
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert df["temp"].isna().sum() == 1
