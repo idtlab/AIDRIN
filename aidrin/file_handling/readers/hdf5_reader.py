@@ -207,6 +207,16 @@ class hdf5Reader(BaseFileReader):
                     return
 
             with h5py.File(self.file_path, "r") as f:
+                top_level_groups = [
+                    name for name, obj in f.items() if isinstance(obj, h5py.Group)
+                ]
+                if len(top_level_groups) > 1:
+                    raise ValueError(
+                        f"HDF5 file contains multiple top-level groups: "
+                        f"{top_level_groups}. "
+                        f"Use the group selector on the upload page to choose "
+                        f"one group before running metrics."
+                    )
 
                 def visit(name, obj):
                     recurse(name, obj, name.strip("/").split("/"))
@@ -225,6 +235,8 @@ class hdf5Reader(BaseFileReader):
                 return None
 
             return df
+        except ValueError:
+            raise
         except Exception as e:
             self.logger.error(f"Error while reading: {e}")
             return None

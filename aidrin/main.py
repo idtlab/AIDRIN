@@ -28,6 +28,7 @@ from flask import (
 )
 from aidrin.file_handling.file_parser import (
     SUPPORTED_FILE_TYPES,
+    filter_file as fp_filter_file,
     read_file,
 )
 from aidrin.logging import setup_logging
@@ -301,6 +302,7 @@ def upload_file():
             # store the file path in the session
             session['uploaded_file_name'] = display_name
             session['uploaded_file_path'] = file_path
+            session['original_file_path'] = file_path
             session['uploaded_file_type'] = request.form.get('fileTypeSelector')
 
             return redirect(url_for('upload_file'))
@@ -410,9 +412,23 @@ def filter_file():
         else:
             keys_list = [str(keys)]
 
-        # Store the selected keys in session
+        # Store the selected keys in session for UI re-display
         session['selected_keys'] = keys_list
         session['minimize_preview'] = True
+
+        # Actually filter the file and update the active file path so that
+        # metric routes read the filtered dataset, not the full multi-group file.
+        original_path = session.get('original_file_path') or session.get('uploaded_file_path')
+        file_name = session.get('uploaded_file_name')
+        file_type = session.get('uploaded_file_type')
+
+        if original_path and file_type:
+            file_info = (original_path, file_name, file_type)
+            filtered_path = fp_filter_file(file_info, keys_list)
+            if filtered_path:
+                session['uploaded_file_path'] = filtered_path
+            else:
+                return jsonify({"success": False, "error": "Failed to create filtered file"}), 500
 
         return jsonify({"success": True, "message": "File filtered successfully"})
     except Exception as e:
