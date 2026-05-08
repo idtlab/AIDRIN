@@ -2381,7 +2381,7 @@ def get_summary_statistics():
         categorical_columns = [
             col
             for col, dtype in df.dtypes.items()
-            if pd.api.types.is_object_dtype(dtype)
+            if pd.api.types.is_object_dtype(dtype) or isinstance(dtype, pd.StringDtype)
         ]
         all_features = numerical_columns + categorical_columns
 
@@ -2477,7 +2477,7 @@ def extract_features():
 
         # Separate numerical and categorical columns
         numerical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)]
-        categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype)]
+        categorical_columns = [col for col, dtype in df.dtypes.items() if pd.api.types.is_object_dtype(dtype) or isinstance(dtype, pd.StringDtype)]
         all_features = numerical_columns + categorical_columns
 
         # Filter features for Class Imbalance (30 or fewer unique values)
