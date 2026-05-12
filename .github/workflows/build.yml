@@ -24,6 +24,11 @@ jobs:
         channels: conda-forge
         activate-environment: aidrin
 
+    - name: Ensure pip in conda env
+      shell: bash -l {0}
+      run: |
+        conda install -n aidrin -c conda-forge pip -y
+
     - name: Install package (editable)
       shell: bash -l {0}
       run: |
