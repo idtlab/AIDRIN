@@ -277,7 +277,7 @@ GLOBUS_AUTH_SCOPE = "openid profile email"
 
 
 def _get_client_id():
-    client_id = os.environ.get("GLOBUS_CLIENT_ID")
+    client_id = os.environ.get("GLOBUS_CLIENT_ID", "de3c8676-500c-43fe-af4e-262b3332dfd7")
     if not client_id:
         raise ValueError(
             "GLOBUS_CLIENT_ID environment variable is required. "
