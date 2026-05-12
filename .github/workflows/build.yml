@@ -28,17 +28,18 @@ jobs:
       shell: bash -l {0}
       run: |
         python --version
-        pip install -e .
+        which python
+        python -m pip install -e .
 
     - name: Build sdist and wheel
       shell: bash -l {0}
       run: |
-        pip install build
+        python -m pip install build
         python -m build
 
     - name: Verify wheel installs
       shell: bash -l {0}
       run: |
-        pip install dist/*.whl
+        python -m pip install dist/*.whl
         python -c "import aidrin; print('aidrin', aidrin.__version__)"
         python -c "import web; print('web package OK')"
