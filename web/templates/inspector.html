@@ -1,0 +1,213 @@
+{% extends '_base.html' %}
+
+{% block title %}AIDRIN - Inspector{% endblock %}
+
+{% block head_extra %}
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script>
+    var retrieveFileUrl = "{{ url_for('core.retrieve_uploaded_file') }}";
+  </script>
+  <!-- metric.js is NOT loaded in the inspector — its auto-running $(document).ready()
+       handlers expect old metricBase.html elements that don't exist here.
+       All needed functionality (dropdown population, toggleValue, etc.) is in
+       inspector.js and main.js instead. -->
+{% endblock %}
+
+{% block body %}
+  <!-- Top bar -->
+  {% include '_components/topbar.html' %}
+
+  <!-- LLM settings modal (only when openai is installed) -->
+  {% if llm_available %}
+    {% include '_components/llm_settings.html' %}
+  {% endif %}
+
+  <!-- Sidebar (only visible when file is uploaded) -->
+  {% if uploaded_file_path %}
+    {% include '_components/sidebar.html' %}
+  {% endif %}
+
+  <!-- Main content area -->
+  <div id="main-content" class="{% if uploaded_file_path %}sm:ml-64{% endif %} pt-14 min-h-screen transition-all">
+    <div class="p-4 max-w-6xl mx-auto">
+
+      {% if not uploaded_file_path %}
+        <!-- No file uploaded: show upload panel -->
+        {% include '_components/upload_panel.html' %}
+      {% else %}
+        <!-- File uploaded: show metric workspace -->
+
+        <!-- Mobile file info (visible on small screens) -->
+        <div class="sm:hidden flex items-center gap-2 p-3 mb-4 rounded-lg text-sm" style="background: var(--secondaryColor);">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" viewBox="0 -960 960 960" fill="currentColor"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
+          <span class="font-medium truncate">{{ uploaded_file_name }}</span>
+          <button onclick="clearFile()" class="ml-auto p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30" aria-label="Clear file">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Metric configuration panels (only one visible at a time) -->
+        <div id="panels-container">
+          {% include '_panels/_data_overview.html' %}
+          {% include '_panels/_data_quality.html' %}
+          {% include '_panels/_feature_relevance.html' %}
+          {% include '_panels/_correlation_analysis.html' %}
+          {% include '_panels/_fairness.html' %}
+          {% include '_panels/_class_imbalance.html' %}
+          {% include '_panels/_privacy_preservation.html' %}
+          {% include '_panels/_hipaa_compliance.html' %}
+          {% include '_panels/_fair_assessment.html' %}
+          {% include '_panels/_custom_metrics.html' %}
+        </div>
+
+        <!-- Results -->
+        {% include '_components/results_container.html' %}
+      {% endif %}
+
+    </div>
+  </div>
+
+{% endblock %}
+
+{% block scripts_extra %}
+  <script src="{{ url_for('static', filename='js/inspector.js') }}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      {% if llm_available and llm_configured %}
+        window.AIDRIN_LLM_ENABLED = true;
+      {% endif %}
+
+      {% if uploaded_file_path and not globus_mode %}
+        initWorkspace();
+      {% elif globus_mode %}
+        // Globus mode — flag for workspaceSubmit to route through Globus
+        window.AIDRIN_GLOBUS_MODE = true;
+        window.AIDRIN_GLOBUS_ENDPOINT = '{{ globus_endpoint_id }}';
+        window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
+        window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
+        window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
+        showPanel('data-overview');
+        // Show Globus info banner + loading spinner for summary stats
+        var ws = document.getElementById('workspace-summary');
+        if (ws) ws.innerHTML = `
+          <div id="globus-summary-loading" class="text-center py-6">
+            <div role="status" class="inline-block">
+              <svg class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+            </div>
+            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading summary statistics from remote endpoint...</p>
+          </div>
+          <div id="globus-summary-content"></div>
+        `;
+        // Hide histograms placeholder (will be populated if/when available)
+        var wh = document.getElementById('workspace-histograms');
+        if (wh) wh.style.display = 'none';
+
+        // Fetch summary stats via Globus Compute
+        fetchGlobusSummary();
+      {% endif %}
+    });
+  </script>
+
+  <!-- Sample data JS (for upload panel) -->
+  <script>
+    const sampleFiles = [
+      { name: 'adult.csv', type: 'csv', size: '3.7 MB' },
+      { name: 'adult.h5', type: 'h5', size: '3.7 MB' },
+      { name: 'adult.json', type: 'json', size: '13.4 MB' },
+      { name: 'adult.npz', type: 'npz', size: '484 KB' },
+      { name: 'adult.xlsx', type: 'xlsx', size: '2.1 MB' },
+      { name: 'BUTTER-E.json', type: 'dcat', size: '5 KB' },
+      { name: 'EGS_Collab_Experiment.json', type: 'dcat', size: '6 KB' },
+      { name: 'employees.h5', type: 'h5', size: '1.1 MB' },
+      { name: 'employees.json', type: 'json', size: '2 KB' },
+      { name: 'employees.xlsx', type: 'xlsx', size: '5 KB' },
+      { name: 'smallSample.csv', type: 'csv', size: '29 bytes' },
+    ];
+
+    function toggleSampleData() {
+      const c = document.getElementById('sampleDataContainer');
+      if (c) c.classList.toggle('visible');
+    }
+
+    function renderFiles(files) {
+      files = files || sampleFiles;
+      const fileList = document.getElementById('fileList');
+      if (!fileList) return;
+      fileList.innerHTML = '';
+      files.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.dataset.type = file.type;
+        item.innerHTML = `<div class="file-content"><div class="file-name">${file.name} <span class="file-size">${file.size}</span></div><div class="file-type">${file.type}</div></div>`;
+        item.addEventListener('click', () => {
+          const link = document.createElement('a');
+          link.href = `/static/datasets/test_data/${file.type}/${file.name}`;
+          link.download = file.name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        });
+        fileList.appendChild(item);
+      });
+    }
+
+    function filterFiles() {
+      const selectedType = document.getElementById('fileTypeSelect')?.value;
+      const allFiles = document.querySelectorAll('.file-item');
+      allFiles.forEach(item => {
+        item.classList.remove('notHighlighted', 'highlighted');
+        if (selectedType) {
+          item.classList.add(item.dataset.type === selectedType ? 'highlighted' : 'notHighlighted');
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      renderFiles();
+      const sel = document.getElementById('fileTypeSelect');
+      if (sel) sel.addEventListener('change', filterFiles);
+
+      // File type selector enables file input
+      const fileTypeEl = document.getElementById('fileTypeSelector');
+      const fileInput = document.getElementById('file');
+      const fileMsg = document.getElementById('FileUploadMessage');
+      if (fileTypeEl && fileInput && fileMsg) {
+        fileTypeEl.addEventListener('change', function() {
+          updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
+        });
+        updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
+      }
+
+      // Drag and drop support for the upload dropzone
+      const dropzone = document.getElementById('fileUploadContainer');
+      const fileInput2 = document.getElementById('file');
+      if (dropzone && fileInput2) {
+        ['dragenter', 'dragover'].forEach(evt => {
+          dropzone.addEventListener(evt, function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+          });
+        });
+
+        ['dragleave', 'drop'].forEach(evt => {
+          dropzone.addEventListener(evt, function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+          });
+        });
+
+        dropzone.addEventListener('drop', function(e) {
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            fileInput2.files = files;
+            uploadForm();
+          }
+        });
+      }
+    });
+  </script>
+{% endblock %}

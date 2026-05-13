@@ -64,28 +64,46 @@ def completeness(self: Task, file_info):
         result_dict["Completeness scores"] = completeness_scores
         result_dict["Overall Completeness"] = overall_completeness
 
-        # Create a bar chart for all features
-        plt.figure(figsize=(8, 6))
-        plt.bar(completeness_scores.keys(), completeness_scores.values(), color="blue")
-        plt.title("Feature-wise Completeness Scores", fontsize=16)
-        plt.xlabel("Features", fontsize=14)
-        plt.ylabel("Completeness Score", fontsize=14)
-        plt.ylim(0, 1)
+        # Horizontal bar chart — grows vertically with feature count
+        labels = list(completeness_scores.keys())
+        values = list(completeness_scores.values())
+        n = len(labels)
+        text_color = "#6b7280"
 
-        # Rotate x-axis tick labels for readability
-        plt.xticks(rotation=45, ha="right", fontsize=12)
-        plt.tight_layout()
+        fig_height = max(3, n * 0.3)
+        fig, ax = plt.subplots(figsize=(8, fig_height))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
 
-        # Save the chart to a BytesIO object
+        bars = ax.barh(range(n), values, color="#4485F4", height=0.7)
+        ax.set_xlabel("Completeness Score", fontsize=10, color=text_color)
+        ax.set_yticks(range(n))
+        ax.set_yticklabels(labels, fontsize=9, color=text_color)
+        ax.tick_params(axis="x", colors=text_color, labelsize=8)
+        ax.set_xlim(0, 1.12)
+        ax.invert_yaxis()
+        ax.set_ylim(n - 0.5, -0.5)
+
+        for spine in ax.spines.values():
+            spine.set_color(text_color)
+
+        for bar, val in zip(bars, values):
+            if val > 0.15:
+                ax.text(val - 0.01, bar.get_y() + bar.get_height() / 2,
+                        f'{val:.2f}', ha='right', va='center', fontsize=8, color='white', fontweight='bold')
+            else:
+                ax.text(val + 0.01, bar.get_y() + bar.get_height() / 2,
+                        f'{val:.2f}', ha='left', va='center', fontsize=8, color=text_color)
+
+        fig.tight_layout(pad=0.5)
+
         img_buf = io.BytesIO()
-        plt.savefig(img_buf, format="png")
+        fig.savefig(img_buf, format="png", dpi=150, transparent=True)
         img_buf.seek(0)
 
-        # Encode the image as base64
         img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
-
         result_dict["Completeness Visualization"] = img_base64
-        plt.close()
+        plt.close(fig)
 
         logger.info("Completeness task completed: %d columns, overall=%.4f", len(completeness_scores), overall_completeness)
         return result_dict

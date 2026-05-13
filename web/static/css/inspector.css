@@ -1,0 +1,63 @@
+/* inspector.css — Custom styles for the inspector layout */
+
+/* Smooth panel transitions */
+.metric-panel {
+  animation: fadeInPanel 0.2s ease-out;
+}
+
+@keyframes fadeInPanel {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Sidebar active state */
+.sidebar-metric-item.active {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+html.dark .sidebar-metric-item.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Full-width selects inside metric panel cards (override theme.css max-width) */
+.metric-panel select.w-full {
+  max-width: none;
+}
+
+/* Tables: outer border + header separator */
+.relative.overflow-x-auto {
+  border: 1px solid #e5e7eb;
+}
+
+html.dark .relative.overflow-x-auto {
+  border-color: #374151;
+}
+
+.relative.overflow-x-auto thead {
+  border-bottom: 2px solid #d1d5db;
+}
+
+html.dark .relative.overflow-x-auto thead {
+  border-bottom-color: #4b5563;
+}
+
+/* CodeMirror editor sizing */
+.CodeMirror {
+  font-size: 13px !important;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  line-height: 1.5 !important;
+  min-height: 300px;
+  height: auto;
+}
+
+.CodeMirror-scroll {
+  min-height: 300px;
+}

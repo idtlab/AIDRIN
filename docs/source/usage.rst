@@ -257,6 +257,12 @@ To use the AIDRIN web application:
    - A JSON report summarizing the results is available for download.
    - Return to the homepage to select another dimension or upload a new dataset.
 
+5. **AI Explanations (Optional)**:
+   - If the ``openai`` package is installed (``pip install aidrin[llm]``), a sparkle icon appears in the top-right toolbar.
+   - Click it to configure an OpenAI-compatible API endpoint (OpenAI, Ollama, vLLM, etc.).
+   - Once configured, each metric result will include an AI-generated explanation summarizing the key observations and implications for AI/ML.
+   - The model name is shown in each explanation for transparency.
+
 Data Readiness Dimensions and Metrics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

@@ -2,13 +2,16 @@
 
 import io
 import base64
+import logging
 import time
 import uuid
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from flask import current_app, jsonify, redirect, render_template, request, session, url_for
+from flask import current_app, jsonify, redirect, request, session, url_for
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +76,7 @@ def is_metric_cache_valid(cache_entry):
     current_time = time.time()
     expires_at = cache_entry.get("expires_at", 0)
     is_valid = current_time < expires_at
-    print(f"Cache validation - Current time: {current_time}, Expires at: {expires_at}, Is valid: {is_valid}")
+    logger.debug("Cache validation - Current time: %s, Expires at: %s, Is valid: %s", current_time, expires_at, is_valid)
     return is_valid
 
 
@@ -86,7 +89,7 @@ def clear_all_user_cache():
     ]
     for key in keys_to_remove:
         current_app.TEMP_RESULTS_CACHE.pop(key, None)
-    print(f"User {user_id} ALL cache cleared: Removed {len(keys_to_remove)} entries")
+    logger.info("User %s ALL cache cleared: Removed %d entries", user_id, len(keys_to_remove))
     return len(keys_to_remove)
 
 
@@ -97,7 +100,7 @@ def manage_cache_size(max_cache_size=100):
         keys_to_remove = list(current_app.TEMP_RESULTS_CACHE.keys())[:items_to_remove]
         for key in keys_to_remove:
             current_app.TEMP_RESULTS_CACHE.pop(key, None)
-        print(f"Cache cleanup: Removed {len(keys_to_remove)} old entries")
+        logger.info("Cache cleanup: Removed %d old entries", len(keys_to_remove))
 
 
 # ---------------------------------------------------------------------------
@@ -106,9 +109,20 @@ def manage_cache_size(max_cache_size=100):
 
 def store_result(metric, final_dict):
     """Store computed metric results in the cache and redirect to the metric page."""
-    formatted_final_dict = format_dict_values(final_dict)
+    formatted_final_dict = ensure_json_serializable(format_dict_values(final_dict))
     results_id = uuid.uuid4().hex
     current_app.TEMP_RESULTS_CACHE[results_id] = {"data": formatted_final_dict}
+
+    # Also store a persistent user-scoped copy for the cache info page
+    user_id = get_current_user_id()
+    metric_short = metric.rsplit(".", 1)[-1] if "." in metric else metric
+    file_name = session.get("uploaded_file_name") or session.get("globus_file_name") or "unknown"
+    user_key = f"user:{user_id}:file:{file_name}:{metric_short}"
+    current_app.TEMP_RESULTS_CACHE[user_key] = {
+        "data": formatted_final_dict,
+        "timestamp": time.time(),
+    }
+
     return redirect(
         url_for(metric, results_id=results_id, return_type=request.args.get("return_type"))
     )
@@ -128,17 +142,13 @@ def get_result_or_default(metric, uploaded_file_path, uploaded_file_name):
         entry = current_app.TEMP_RESULTS_CACHE.pop(results_id)
         formatted_final_dict = entry["data"]
 
-    if return_type == "json" and formatted_final_dict is not None:
-        return jsonify(formatted_final_dict)
+    if return_type == "json":
+        if formatted_final_dict is not None:
+            return jsonify(formatted_final_dict)
+        return jsonify({"message": "No results available"}), 200
 
-    # Strip the blueprint prefix (e.g. "metrics.data_quality" → "data_quality")
-    template_name = metric.rsplit(".", 1)[-1]
-    return render_template(
-        "metricTemplates/" + template_name + ".html",
-        uploaded_file_path=uploaded_file_path,
-        uploaded_file_name=uploaded_file_name,
-        formatted_final_dict=formatted_final_dict,
-    )
+    # All metric pages are now served by the inspector — redirect there
+    return redirect(url_for("core.inspector"))
 
 
 # ---------------------------------------------------------------------------
@@ -160,47 +170,57 @@ def format_dict_values(d):
 
 def ensure_json_serializable(obj):
     """Recursively convert non-native types (NumPy/Pandas) to JSON-safe Python types."""
+    import numpy as np
+
     if isinstance(obj, dict):
-        return {k: ensure_json_serializable(v) for k, v in obj.items()}
+        return {str(k): ensure_json_serializable(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [ensure_json_serializable(item) for item in obj]
     elif isinstance(obj, pd.Timestamp):
         return obj.isoformat()
     elif isinstance(obj, set):
         return list(obj)
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    elif pd.isna(obj):
+        return None
     return obj
 
 
 def summary_histograms(df):
     """Generate base64-encoded KDE distribution plots for all numeric columns."""
-    plot_colors = {
-        "light": {"bg": "#FBFBF2", "text": "#212529", "curve": "blue"},
-        "dark":  {"bg": "#495057", "text": "#F8F9FA", "curve": "red"},
-    }
+    text_color = "#6b7280"
+    curve_color = "#4485F4"
 
     line_graphs = {}
     for column in df.select_dtypes(include="number").columns:
-        for theme, colors in plot_colors.items():
-            plt.figure(figsize=(6, 6), facecolor=colors["bg"])
-            ax = plt.gca()
-            ax.set_facecolor(colors["bg"])
+        fig, ax = plt.subplots(figsize=(4, 3))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
 
-            sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=colors["curve"])
+        sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=curve_color)
 
-            plt.title(f"Distribution Estimate for {column}", fontsize=14, color=colors["text"])
-            plt.xlabel("Values", fontsize=12, color=colors["text"])
-            plt.ylabel("Density", fontsize=12, color=colors["text"])
-            ax.tick_params(colors=colors["text"])
-            for spine in ax.spines.values():
-                spine.set_color(colors["text"])
+        ax.set_xlabel("Values", fontsize=10, color=text_color)
+        ax.set_ylabel("Density", fontsize=10, color=text_color)
+        ax.tick_params(colors=text_color, labelsize=8)
+        for spine in ax.spines.values():
+            spine.set_color(text_color)
+        fig.tight_layout(pad=0.5)
 
-            img_buffer = io.BytesIO()
-            plt.savefig(img_buffer, format="png", bbox_inches="tight", pad_inches=0.1)
-            img_buffer.seek(0)
-            encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
+        img_buffer = io.BytesIO()
+        fig.savefig(img_buffer, format="png", dpi=150, transparent=True)
+        img_buffer.seek(0)
+        encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
 
-            line_graphs[f"{column}_{theme}"] = encoded_img
-            plt.close()
-            img_buffer.close()
+        # Store as _light for backward compat with JS picker
+        line_graphs[f"{column}_light"] = encoded_img
+        plt.close(fig)
+        img_buffer.close()
 
     return line_graphs

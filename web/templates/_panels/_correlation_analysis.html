@@ -1,0 +1,35 @@
+<!-- Correlation Analysis metric panel -->
+<div id="panel-correlation-analysis" class="metric-panel hidden">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Correlation Analysis</h2>
+    <form id="form-correlation-analysis" method="post" enctype="multipart/form-data">
+      <input type="file" id="file" name="file" style="display: none;" />
+      <div id="checkboxContainer_correlation" class="checkboxContainer">
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="correlations" value="yes" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Perform Correlation Analysis
+            <span class="info-icon">i<span class="info-text">This option calculates feature correlations using Pearson correlation for numerical features and Theil's U for categorical features. It returns a visualization of the correlation matrix.</span></span>
+          </label>
+          <div class="mt-3 space-y-3">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Categorical features:</label>
+              <div id="corrCatFeaturesCheckbox" class="w-full"></div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Numerical features:</label>
+              <div id="corrNumFeaturesCheckbox" class="w-full"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <button type="button" onclick="workspaceSubmit('/correlation-analysis');"
+                class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+          Submit
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

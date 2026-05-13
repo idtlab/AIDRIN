@@ -1,0 +1,37 @@
+<!-- Data Quality metric panel -->
+<div id="panel-data-quality" class="metric-panel hidden">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Data Quality</h2>
+    <form id="form-data-quality" method="post" enctype="multipart/form-data">
+      <input type="file" id="file" name="file" style="display: none;" />
+      <div id="checkboxContainer_quality" class="checkboxContainer">
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="completeness" id="toggleButton_completeness" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check completeness
+            <span class="info-icon">i<span class="info-text">This option checks the proportion of NaN values in each feature and displays a bar chart highlighting features with only missing values.</span></span>
+          </label>
+          <label class="material-checkbox">
+            <input type="checkbox" name="outliers" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check outliers
+            <span class="info-icon">i<span class="info-text">This option checks for outliers in numerical features using the Inter Quartile Range (IQR) method and displays a bar chart highlighting features with outliers.</span></span>
+          </label>
+          <label class="material-checkbox">
+            <input type="checkbox" name="duplicity" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check duplicity
+            <span class="info-icon">i<span class="info-text">This option checks for duplicate rows in the dataset and display the proportion of overall duplicates in the dataset.</span></span>
+          </label>
+        </div>
+      </div>
+      <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <button type="button" onclick="workspaceSubmit('/data-quality');"
+                class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+          Submit
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

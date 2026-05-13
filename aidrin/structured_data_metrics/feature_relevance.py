@@ -309,35 +309,52 @@ def plot_features(self: Task, correlations, target_col):
         if len(clean_features) != len(clean_corr_values):
             raise ValueError("Mismatch between cleaned features and correlation values")
 
-        # Create the plot
-        plt.figure(figsize=(max(8, len(clean_features) * 0.8), 8))
-        bars = plt.bar(range(len(clean_features)), clean_corr_values, color="skyblue")
+        # Create horizontal bar plot — grows vertically with feature count
+        n = len(clean_features)
+        fig_height = max(4, n * 0.35)
+        fig, ax = plt.subplots(figsize=(8, fig_height))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
 
-        # Add a horizontal line at y=0
-        plt.axhline(y=0, color="black", linewidth=0.5)
-        plt.title(f"Correlation of Features with {target_col}")
-        plt.xlabel("Features")
-        plt.ylabel("Correlation")
+        text_color = "#6b7280"
+        y_pos = range(n)
+        colors = ["#4485F4" if v >= 0 else "#D86470" for v in clean_corr_values]
+        bars = ax.barh(y_pos, clean_corr_values, color=colors, height=0.6)
 
-        # Set x-axis labels
-        plt.xticks(range(len(clean_features)), clean_features, rotation=45, ha="right")
+        # Add a vertical line at x=0
+        ax.axvline(x=0, color=text_color, linewidth=0.5)
+        ax.set_xlabel("Correlation", fontsize=10, color=text_color)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(clean_features, fontsize=9, color=text_color)
+        ax.tick_params(axis="x", colors=text_color, labelsize=8)
+        ax.invert_yaxis()  # Top feature first
+        ax.set_ylim(n - 0.5, -0.5)  # Tight vertical margins
 
-        # Add value labels on bars if there are few features
-        if len(clean_features) <= 20:
-            for i, (bar, val) in enumerate(zip(bars, clean_corr_values)):
-                height = bar.get_height()
-                plt.text(
-                    bar.get_x() + bar.get_width()/2., height,
-                    f'{val:.3f}',
-                    ha='center', va='bottom' if height >= 0 else 'top'
-                )
+        # Extend x-axis to fit value labels
+        x_min = min(clean_corr_values) if clean_corr_values else -1
+        x_max = max(clean_corr_values) if clean_corr_values else 1
+        margin = 0.12
+        ax.set_xlim(min(x_min - margin, -margin), max(x_max + margin, margin))
 
-        plt.tight_layout()
+        for spine in ax.spines.values():
+            spine.set_color(text_color)
+
+        # Add value labels on bars
+        for bar, val in zip(bars, clean_corr_values):
+            ax.text(
+                val + (0.01 if val >= 0 else -0.01),
+                bar.get_y() + bar.get_height() / 2,
+                f'{val:.3f}',
+                ha='left' if val >= 0 else 'right',
+                va='center', fontsize=8, color=text_color,
+            )
+
+        fig.tight_layout(pad=0.5)
 
         # Save the plot to a BytesIO object and encode it as base64
         buf = io.BytesIO()
-        plt.savefig(buf, format="png", dpi=100, bbox_inches='tight')
-        plt.close()
+        fig.savefig(buf, format="png", dpi=150, transparent=True)
+        plt.close(fig)
         buf.seek(0)
         image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 

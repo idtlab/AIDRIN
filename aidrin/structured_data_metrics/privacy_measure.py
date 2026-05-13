@@ -184,7 +184,7 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None):
 
         # Create a box plot
         plt.figure(figsize=(8, 8))
-        plt.boxplot(list(sing_res.values()), labels=sing_res.keys())
+        plt.boxplot(list(sing_res.values()), tick_labels=list(sing_res.keys()))
         plt.title("Box plot of single feature risk scores")
         plt.xlabel("Feature")
         plt.ylabel("Risk Score")
@@ -443,7 +443,7 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None)
         x_label = ",".join(eval_cols)
         # Create a box plot
         plt.figure(figsize=(8, 8))
-        plt.boxplot(risk_scores, vert=True)  # vert=False for horizontal box plot
+        plt.boxplot(risk_scores, orientation="vertical")
         plt.title('Box Plot of Multiple Attribute Risk Scores')
         plt.ylabel('Risk Score')
         plt.xlabel('Feature Combination')

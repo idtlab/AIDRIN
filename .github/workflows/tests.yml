@@ -11,7 +11,16 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        extras: [""]
+        include:
+          # Test optional dependencies on a single fast combination
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: "[telemetry]"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: "[globus]"
 
     steps:
     - uses: actions/checkout@v4
@@ -30,21 +39,28 @@ jobs:
     - name: Conda list
       run: conda list
 
+    - name: Ensure pip in conda env
+      shell: bash -l {0}
+      run: |
+        conda install -n aidrin -c conda-forge pip -y
+
     - name: Install Dependencies
       shell: bash -l {0}
       run: |
+        python --version
+        which python
         python -m pip install --upgrade pip
-        pip install setuptools==70.0.0
-        pip install -e .
-        pip install pytest pytest-flask pytest-cov
+        python -m pip install setuptools==70.0.0
+        python -m pip install -e ".${{ matrix.extras }}"
+        python -m pip install -e ".[dev]"
 
     - name: Run unit tests
       shell: bash -l {0}
       run: |
         python -c "import pkg_resources; print('pkg_resources found')"
-        PYTHONPATH=. pytest tests/unit/ -v --cov=aidrin --cov-report=term-missing
+        PYTHONPATH=. pytest tests/unit/ -v --cov=aidrin --cov=web --cov=worker --cov-report=term-missing
 
     - name: Run integration tests
       shell: bash -l {0}
       run: |
-        PYTHONPATH=. pytest tests/integration/ -v
+        PYTHONPATH=. pytest tests/integration/ -v --cov=aidrin --cov=web --cov=worker --cov-append --cov-report=term-missing

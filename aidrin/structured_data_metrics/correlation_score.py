@@ -77,38 +77,35 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             )
             logger.debug("Categorical correlation matrix computed:\n%s", categorical_correlation["corr"])
 
-            # Create a subplot with 1 row and 1 column
-            _, axes = plt.subplots(1, 1, figsize=(8, 8))
+            corr_matrix = categorical_correlation["corr"]
+            n = len(corr_matrix.columns)
+            fig_size = max(6, n * 0.7)
+            text_color = "#6b7280"
 
-            # Plot for categorical-categorical correlations
+            fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+            fig.patch.set_alpha(0)
+            ax.set_facecolor("none")
+
+            annot_size = max(7, min(10, 80 // max(n, 1)))
             _ = sns.heatmap(
-                categorical_correlation["corr"],
-                annot=True,
-                cmap="coolwarm",
-                fmt=".2f",
-                ax=axes,
+                corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", ax=ax,
+                annot_kws={"size": annot_size},
+                linewidths=0.5, linecolor="#e5e7eb",
+                cbar=False,
             )
-            axes.set_title("Categorical-Categorical Correlation Matrix")
-            axes.tick_params(axis="x", rotation=0, labelsize=12)
-            axes.tick_params(axis="y", rotation=90, labelsize=12)
 
-            # Add trailing 3 dots if the label is longer than 9 characters
-            tick_labels = axes.get_xticklabels()
-            for label in tick_labels:
-                if len(label.get_text()) > 9:
-                    label.set_text(label.get_text()[:9] + "...")
+            # Truncate long labels
+            x_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_xticklabels()]
+            y_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_yticklabels()]
+            ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9, color=text_color)
+            ax.set_yticklabels(y_labels, rotation=0, fontsize=9, color=text_color)
 
-            tick_labels = axes.get_yticklabels()
-            for label in tick_labels:
-                if len(label.get_text()) > 9:
-                    label.set_text(label.get_text()[:9] + "...")
-
-            plt.show()
+            fig.tight_layout(pad=0.5)
 
             # Save the plot to a BytesIO object
             image_stream_cat = BytesIO()
-            plt.savefig(image_stream_cat, format="png")
-            plt.close()
+            fig.savefig(image_stream_cat, format="png", dpi=150, transparent=True)
+            plt.close(fig)
 
             # Convert the plot to base64
             base64_image_cat = base64.b64encode(image_stream_cat.getvalue()).decode(
@@ -138,21 +135,33 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             # Numerical-numerical correlations are computed dynamically based on normality.
             numerical_correlation = numerical_df.corr(method=corr_method)
 
-            # Create a subplot with 1 row and 1 column
-            _, axes = plt.subplots(1, 1, figsize=(8, 8))
+            n = len(numerical_correlation.columns)
+            fig_size = max(6, n * 0.7)
+            text_color = "#6b7280"
 
-            # Plot for numerical-numerical correlations
+            fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+            fig.patch.set_alpha(0)
+            ax.set_facecolor("none")
+
+            annot_size = max(7, min(10, 80 // max(n, 1)))
             _ = sns.heatmap(
-                numerical_correlation, annot=True, cmap="coolwarm", fmt=".2f", ax=axes
+                numerical_correlation, annot=True, cmap="coolwarm", fmt=".2f", ax=ax,
+                annot_kws={"size": annot_size},
+                linewidths=0.5, linecolor="#e5e7eb",
+                cbar=False,
             )
-            axes.set_title("Numerical-Numerical Correlation Matrix")
-            axes.tick_params(axis="x", rotation=0, labelsize=12)
-            axes.tick_params(axis="y", rotation=90, labelsize=12)
+
+            x_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_xticklabels()]
+            y_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_yticklabels()]
+            ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9, color=text_color)
+            ax.set_yticklabels(y_labels, rotation=0, fontsize=9, color=text_color)
+
+            fig.tight_layout(pad=0.5)
 
             # Save the plot to a BytesIO object
             image_stream_num = BytesIO()
-            plt.savefig(image_stream_num, format="png")
-            plt.close()
+            fig.savefig(image_stream_num, format="png", dpi=150, transparent=True)
+            plt.close(fig)
 
             # Convert the plot to base64
             base64_image_num = base64.b64encode(image_stream_num.getvalue()).decode(

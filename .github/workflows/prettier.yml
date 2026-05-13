@@ -22,5 +22,11 @@ jobs:
       - name: Install prettier
         run: npm install prettier
 
-      - name: Run prettier
+      - name: Check CSS formatting
         run: npx prettier --check web/static/css
+
+      - name: Check JavaScript formatting and syntax
+        run: |
+          npx prettier --check web/static/js
+          node --check web/static/js/inspector.js
+          node --check web/static/js/main.js

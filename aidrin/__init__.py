@@ -223,7 +223,7 @@ def calculate_feature_relevance(file_info, target_col, cat_cols=None, num_cols=N
         if cat_cols is None:
             cat_cols = [
                 c for c, d in df.dtypes.items()
-                if pd.api.types.is_object_dtype(d) and c != target_col
+                if pd.api.types.is_string_dtype(d) and c != target_col
             ]
         if num_cols is None:
             num_cols = [

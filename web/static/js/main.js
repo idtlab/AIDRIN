@@ -1,3 +1,9 @@
+// Debug logging — set to true to enable console output
+const AIDRIN_DEBUG = localStorage.getItem("aidrin_debug") === "true";
+function debugLog(...args) {
+  if (AIDRIN_DEBUG) debugLog("[aidrin]", ...args);
+}
+
 function togglePillarDropdown(id) {
   const container = document.getElementById(id); //
   const subElements = container.querySelectorAll(".toggle-button");
@@ -23,13 +29,15 @@ function uploadForm() {
 
   // Check if file type is selected
   if (!fileTypeSelector.value) {
-    alert("Please select a file type first");
+    if (typeof showToast === "function")
+      showToast("Please select a file type first", "error");
     return;
   }
 
   // Check if file is selected
   if (!fileInput.files || fileInput.files.length === 0) {
-    alert("Please select a file to upload");
+    if (typeof showToast === "function")
+      showToast("Please select a file to upload", "error");
     return;
   }
 
@@ -39,6 +47,14 @@ function uploadForm() {
 
 //to clear
 function clearFile() {
+  // Clear saved form states
+  try {
+    Object.keys(sessionStorage)
+      .filter((k) => k.startsWith("aidrin_form_"))
+      .forEach((k) => sessionStorage.removeItem(k));
+  } catch (e) {
+    /* ignore */
+  }
   fetch("/clear", {
     method: "POST",
   })
@@ -58,24 +74,22 @@ function clearFile() {
 function updateFileInputBasedOnType(
   fileTypeElement,
   fileInput,
-  fileUploadMessage
+  fileUploadMessage,
 ) {
   const fileType = fileTypeElement.value;
   //if a filetype is present, set to that filetype only, otherwise disable
   if (fileType) {
     fileInput.disabled = false;
     fileInput.setAttribute("accept", fileType);
-    console.log("USER SELECTED FILETYPE: " + fileType);
+    debugLog("USER SELECTED FILETYPE: " + fileType);
     fileUploadMessage.style.opacity = "1";
-    fileUploadMessage.style.fontSize = "1.5em";
-    fileTypeSelector.style.fontSize = "1.25em";
+    fileUploadMessage.textContent = "Click to upload or drag and drop";
   } else {
     fileInput.disabled = true;
     fileInput.removeAttribute("accept");
-    fileUploadMessage.style.opacity = "0";
-    fileUploadMessage.style.fontSize = "0px";
-    fileTypeSelector.style.fontSize = "1.75em";
-    console.log("FILE UPLOAD DISABLED");
+    fileUploadMessage.style.opacity = "0.6";
+    fileUploadMessage.textContent = "Select a file type first";
+    debugLog("FILE UPLOAD DISABLED");
   }
 }
 
@@ -280,21 +294,15 @@ function submitForm() {
   // Get the values of the checkboxes and concatenate them with a comma
   var checkboxValues = Array.from(formData.getAll("checkboxValues")).join(",");
   var numFeaCheckboxValues = Array.from(
-    formData.getAll("numerical features for feature relevancy")
+    formData.getAll("numerical features for feature relevancy"),
   ).join(",");
   var catFeaCheckboxValues = Array.from(
-    formData.getAll("categorical features for feature relevancy")
+    formData.getAll("categorical features for feature relevancy"),
   ).join(",");
   // Add the concatenated checkbox values to the form data
   formData.set("correlation columns", checkboxValues);
-  formData.set(
-    "numerical features",
-    numFeaCheckboxValues
-  );
-  formData.set(
-    "categorical features",
-    catFeaCheckboxValues
-  );
+  formData.set("numerical features", numFeaCheckboxValues);
+  formData.set("categorical features", catFeaCheckboxValues);
 
   // Note: We don't need to modify the quasi-identifier fields as they should remain as lists
   // The backend will handle both string and list formats
@@ -304,8 +312,6 @@ function submitForm() {
     metrics.innerHTML = "<p>Loading visualizations, please wait...</p>";
   } else {
     console.error("No Element ID");
-    console.log("No Element ID");
-    print("No Element ID");
   }
   const url = new URL(window.location.href);
   url.searchParams.set("return_type", "json");
@@ -333,30 +339,44 @@ function submitForm() {
         } else {
           openErrorPopup(
             "Invalid Request",
-            "Input Feature and Target Feature cannot be the same"
+            "Input Feature and Target Feature cannot be the same",
           );
         }
-
       }
 
       // Add validation for feature relevance form
       if (data.trigger === "validationError") {
-        openErrorPopup("Validation Error", data.error || "Please check your input and try again.");
+        openErrorPopup(
+          "Validation Error",
+          data.error || "Please check your input and try again.",
+        );
       }
 
       // Function to validate feature relevance form
       function validateFeatureRelevanceForm() {
-        const catFeatures = document.querySelectorAll('input[name="categorical features for feature relevancy"]:checked');
-        const numFeatures = document.querySelectorAll('input[name="numerical features for feature relevancy"]:checked');
-        const targetFeature = document.querySelector('select[name="target for feature relevance"]').value;
+        const catFeatures = document.querySelectorAll(
+          'input[name="categorical features for feature relevancy"]:checked',
+        );
+        const numFeatures = document.querySelectorAll(
+          'input[name="numerical features for feature relevancy"]:checked',
+        );
+        const targetFeature = document.querySelector(
+          'select[name="target for feature relevance"]',
+        ).value;
 
         if (catFeatures.length === 0 && numFeatures.length === 0) {
-          openErrorPopup("Validation Error", "Please select at least one categorical or numerical feature for analysis.");
+          openErrorPopup(
+            "Validation Error",
+            "Please select at least one categorical or numerical feature for analysis.",
+          );
           return false;
         }
 
         if (!targetFeature) {
-          openErrorPopup("Validation Error", "Please select a target feature for analysis.");
+          openErrorPopup(
+            "Validation Error",
+            "Please select a target feature for analysis.",
+          );
           return false;
         }
 
@@ -364,7 +384,7 @@ function submitForm() {
       }
       // Make the validation function globally available
       window.validateFeatureRelevanceForm = validateFeatureRelevanceForm;
-      console.log("Server Response:", data);
+      debugLog("Server Response:", data);
       var resultContainer = document.getElementById("resultContainer");
       resp_data = data;
 
@@ -399,11 +419,11 @@ function submitForm() {
       // First, check for validation errors and show popups immediately
       visualizationTypes.forEach(function (type) {
         if (isKeyPresentAndDefined(data, type) && data[type]["Error"]) {
-          console.log(
+          debugLog(
             "Validation/Processing error in",
             type,
             ":",
-            data[type]["Error"]
+            data[type]["Error"],
           );
 
           // Show error popup immediately for all error types
@@ -412,12 +432,12 @@ function submitForm() {
             openErrorPopup(errorType, data[type]["Error"]);
           } else if (type === "Single attribute risk scoring") {
             const errorType = getSingleAttributeRiskErrorType(
-              data[type]["Error"]
+              data[type]["Error"],
             );
             openErrorPopup(errorType, data[type]["Error"]);
           } else if (type === "Multiple attribute risk scoring") {
             const errorType = getMultipleAttributeRiskErrorType(
-              data[type]["Error"]
+              data[type]["Error"],
             );
             openErrorPopup(errorType, data[type]["Error"]);
           } else if (type === "Entropy Risk") {
@@ -440,205 +460,239 @@ function submitForm() {
       });
 
       // Debug: Log the entire data structure to see what we're receiving
-      console.log("DEBUG: Full data structure received:", data);
-      console.log(
-        "DEBUG: Checking for Single attribute risk scoring errors..."
-      );
+      debugLog("DEBUG: Full data structure received:", data);
+      debugLog("DEBUG: Checking for Single attribute risk scoring errors...");
       if (data["Single attribute risk scoring"]) {
-        console.log(
+        debugLog(
           "DEBUG: Single attribute risk scoring data:",
-          data["Single attribute risk scoring"]
+          data["Single attribute risk scoring"],
         );
         if (data["Single attribute risk scoring"]["Error"]) {
-          console.log(
+          debugLog(
             "DEBUG: Found error in Single attribute risk scoring:",
-            data["Single attribute risk scoring"]["Error"]
+            data["Single attribute risk scoring"]["Error"],
           );
         } else {
-          console.log("DEBUG: No error found in Single attribute risk scoring");
+          debugLog("DEBUG: No error found in Single attribute risk scoring");
         }
       } else {
-        console.log("DEBUG: Single attribute risk scoring not found in data");
+        debugLog("DEBUG: Single attribute risk scoring not found in data");
       }
 
       visualizationTypes.forEach(function (type) {
-        console.log("Checking type:", type);
+        debugLog("Checking type:", type);
         if (isKeyPresentAndDefined(data, type)) {
-            if (type === "Custom Metric Evaluation") {
-                // Handle Custom Metric Evaluation (from HEAD)
-                console.log("Adding Custom Metric Evaluation:", type);
-                var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
-                visualizationContent.push({
-                    title: type,
-                    jsonData: jsonData,
-                    isCustomMetric: true,
-                    riskScore: "N/A",
-                    value: "N/A",
-                    downloadUrl: data[type].apply_remedy || null
-                });
-            } else if (type === "HIPAA Compliance Evaluation") {
-                var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
-                var description = data[type]["Description"] || "No description provided.";
-                visualizationContent.push({
-                    title: type,
-                    jsonData: jsonData,
-                    isCustomMetric: true,
-                    description: description,
-                    riskScore: "N/A",
-                    value: "N/A",
-                });
-            } else if (data[type]["is_async"]) {
-                // Handle async tasks (from develop)
-                console.log("Adding async task placeholder:", type);
-                var title = type;
-                var jsonData = JSON.stringify(data);
-                visualizationContent.push({
-                    image: "",
-                    riskScore: "N/A",
-                    riskLevel: null,
-                    riskColor: null,
-                    value: "N/A",
-                    description: "",
-                    interpretation: "",
-                    title: title,
-                    jsonData: jsonData,
-                    hasError: false,
-                    isAsync: true,
-                    taskId: data[type]["task_id"],
-                    cacheKey: data[type]["cache_key"],
-                });
-                console.log("Starting polling for task:", data[type]["task_id"], "for metric:", type);
-                pollAsyncTask(data[type]["task_id"], data[type]["cache_key"], type);
-            } else if (isKeyPresentAndDefined(data[type], type + " Visualization")) {
-                console.log("Adding visualization:", type);
-                var image = data[type][type + " Visualization"];
-                // Ensure image is a string
-                if (typeof image !== "string") {
-                    image = image ? String(image) : "";
-                }
-                // Handle specific field names for privacy metrics and class imbalance
-                var value = "N/A";
-                if (type === "k-Anonymity" && data[type]["k-Value"] !== undefined) {
-                    value = data[type]["k-Value"];
-                } else if (type === "l-Diversity" && data[type]["l-Value"] !== undefined) {
-                    value = data[type]["l-Value"];
-                } else if (type === "t-Closeness" && data[type]["t-Value"] !== undefined) {
-                    value = data[type]["t-Value"];
-                } else if (type === "Entropy Risk" && data[type]["Entropy-Value"] !== undefined) {
-                    value = data[type]["Entropy-Value"];
-                } else if (
-                    type === "Class Imbalance" &&
-                    data[type]["Imbalance degree"] &&
-                    data[type]["Imbalance degree"]["Imbalance Degree score"] !== undefined
-                ) {
-                    value = data[type]["Imbalance degree"]["Imbalance Degree score"];
-                } else if (data[type]["Value"] !== undefined) {
-                    value = data[type]["Value"];
-                }
-                // Handle specific field names for privacy metrics descriptions and class imbalance
-                var description = "";
-                var interpretation = "";
-                if (type === "k-Anonymity" || type === "l-Diversity" || type === "t-Closeness" || type === "Entropy Risk") {
-                    description = data[type]["Description"] || "";
-                    interpretation = data[type]["Graph interpretation"] || "";
-                } else if (type === "Class Imbalance") {
-                    description = data[type]["Description"] || "";
-                    interpretation = data[type]["Imbalance degree"] && data[type]["Imbalance degree"]["Description"] ? data[type]["Imbalance degree"]["Description"] : "";
-                } else {
-                    description = data[type]["Description"] || "";
-                    interpretation = data[type]["Graph interpretation"] || "";
-                }
-                var riskScore = data[type]["Risk Score"] || "N/A";
-                var riskLevel = data[type]["Risk Level"] || null;
-                var riskColor = data[type]["Risk Color"] || null;
-                var title = type;
-                var jsonData = JSON.stringify(data);
-
-                // Check if there's an error or if the image is empty
-                if (data[type]["Error"]) {
-                    console.log("Error in", type, ":", data[type]["Error"]);
-                    // Enhanced error handling for specific metrics (from develop)
-                    let errorType = "Error";
-                    let isSpecificError = false;
-                    let errorMetricFlag = {};
-
-                    if (type === "DP Statistics") {
-                        errorType = getDPStatisticsErrorType(data[type]["Error"]);
-                        isSpecificError = true;
-                        errorMetricFlag.isDPStatistics = true;
-                    } else if (type === "Single attribute risk scoring") {
-                        errorType = getSingleAttributeRiskErrorType(data[type]["Error"]);
-                        isSpecificError = true;
-                        errorMetricFlag.isSingleAttributeRisk = true;
-                    } else if (type === "Multiple attribute risk scoring") {
-                        errorType = getMultipleAttributeRiskErrorType(data[type]["Error"]);
-                        isSpecificError = true;
-                        errorMetricFlag.isMultipleAttributeRisk = true;
-                    } else if (type === "Entropy Risk") {
-                        errorType = getEntropyRiskErrorType(data[type]["Error"]);
-                        isSpecificError = true;
-                        errorMetricFlag.isEntropyRisk = true;
-                    } else if (type === "k-Anonymity") {
-                        errorType = getKAnonymityErrorType(data[type]["Error"]);
-                        isSpecificError = true;
-                        errorMetricFlag.isKAnonymity = true;
-                    } else if (type === "l-Diversity") {
-                        errorType = getLDiversityErrorType(data[type]["Error"]);
-                        isSpecificError = true;
-                        errorMetricFlag.isLDiversity = true;
-                    } else if (type === "t-Closeness") {
-                        errorType = getTClosenessErrorType(data[type]["Error"]);
-                        isSpecificError = true;
-                        errorMetricFlag.isTCloseness = true;
-                    } else if (type === "Class Imbalance") {
-                        errorType = getClassImbalanceErrorType(data[type]["Error"]);
-                        isSpecificError = true;
-                        errorMetricFlag.isClassImbalance = true;
-                    }
-
-                    // Show error popup immediately
-                    openErrorPopup(errorType, data[type]["Error"]);
-
-                    visualizationContent.push({
-                        image: "",
-                        riskScore: "N/A",
-                        riskLevel: null,
-                        riskColor: null,
-                        value: "N/A",
-                        description: "",
-                        interpretation: "",
-                        title: title,
-                        jsonData: jsonData,
-                        hasError: true,
-                        ...errorMetricFlag,
-                        errorDetails: {
-                            errorMessage: data[type]["Error"],
-                            errorType: errorType,
-                        },
-                    });
-                } else if (image && image.trim() !== "") {
-                    visualizationContent.push({
-                        image: image,
-                        riskScore: riskScore,
-                        riskLevel: riskLevel,
-                        riskColor: riskColor,
-                        value: value,
-                        description: description,
-                        interpretation: interpretation,
-                        title: title,
-                        jsonData: jsonData,
-                        hasError: false,
-                    });
-                } else {
-                    console.log("Empty visualization for:", type);
-                }
-            } else {
-                console.log("Missing visualization key for:", type, "Expected:", type + " Visualization");
+          if (type === "Custom Metric Evaluation") {
+            // Handle Custom Metric Evaluation (from HEAD)
+            debugLog("Adding Custom Metric Evaluation:", type);
+            var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
+            visualizationContent.push({
+              title: type,
+              jsonData: jsonData,
+              isCustomMetric: true,
+              riskScore: "N/A",
+              value: "N/A",
+              downloadUrl: data[type].apply_remedy || null,
+            });
+          } else if (type === "HIPAA Compliance Evaluation") {
+            var jsonData = JSON.stringify(data[type], null, 2); // Pretty-print JSON
+            var description =
+              data[type]["Description"] || "No description provided.";
+            visualizationContent.push({
+              title: type,
+              jsonData: jsonData,
+              isCustomMetric: true,
+              description: description,
+              riskScore: "N/A",
+              value: "N/A",
+            });
+          } else if (data[type]["is_async"]) {
+            // Handle async tasks (from develop)
+            debugLog("Adding async task placeholder:", type);
+            var title = type;
+            var jsonData = JSON.stringify(data);
+            visualizationContent.push({
+              image: "",
+              riskScore: "N/A",
+              riskLevel: null,
+              riskColor: null,
+              value: "N/A",
+              description: "",
+              interpretation: "",
+              title: title,
+              jsonData: jsonData,
+              hasError: false,
+              isAsync: true,
+              taskId: data[type]["task_id"],
+              cacheKey: data[type]["cache_key"],
+            });
+            debugLog(
+              "Starting polling for task:",
+              data[type]["task_id"],
+              "for metric:",
+              type,
+            );
+            pollAsyncTask(data[type]["task_id"], data[type]["cache_key"], type);
+          } else if (
+            isKeyPresentAndDefined(data[type], type + " Visualization")
+          ) {
+            debugLog("Adding visualization:", type);
+            var image = data[type][type + " Visualization"];
+            // Ensure image is a string
+            if (typeof image !== "string") {
+              image = image ? String(image) : "";
             }
+            // Handle specific field names for privacy metrics and class imbalance
+            var value = "N/A";
+            if (type === "k-Anonymity" && data[type]["k-Value"] !== undefined) {
+              value = data[type]["k-Value"];
+            } else if (
+              type === "l-Diversity" &&
+              data[type]["l-Value"] !== undefined
+            ) {
+              value = data[type]["l-Value"];
+            } else if (
+              type === "t-Closeness" &&
+              data[type]["t-Value"] !== undefined
+            ) {
+              value = data[type]["t-Value"];
+            } else if (
+              type === "Entropy Risk" &&
+              data[type]["Entropy-Value"] !== undefined
+            ) {
+              value = data[type]["Entropy-Value"];
+            } else if (
+              type === "Class Imbalance" &&
+              data[type]["Imbalance degree"] &&
+              data[type]["Imbalance degree"]["Imbalance Degree score"] !==
+                undefined
+            ) {
+              value = data[type]["Imbalance degree"]["Imbalance Degree score"];
+            } else if (data[type]["Value"] !== undefined) {
+              value = data[type]["Value"];
+            }
+            // Handle specific field names for privacy metrics descriptions and class imbalance
+            var description = "";
+            var interpretation = "";
+            if (
+              type === "k-Anonymity" ||
+              type === "l-Diversity" ||
+              type === "t-Closeness" ||
+              type === "Entropy Risk"
+            ) {
+              description = data[type]["Description"] || "";
+              interpretation = data[type]["Graph interpretation"] || "";
+            } else if (type === "Class Imbalance") {
+              description = data[type]["Description"] || "";
+              interpretation =
+                data[type]["Imbalance degree"] &&
+                data[type]["Imbalance degree"]["Description"]
+                  ? data[type]["Imbalance degree"]["Description"]
+                  : "";
+            } else {
+              description = data[type]["Description"] || "";
+              interpretation = data[type]["Graph interpretation"] || "";
+            }
+            var riskScore = data[type]["Risk Score"] || "N/A";
+            var riskLevel = data[type]["Risk Level"] || null;
+            var riskColor = data[type]["Risk Color"] || null;
+            var title = type;
+            var jsonData = JSON.stringify(data);
+
+            // Check if there's an error or if the image is empty
+            if (data[type]["Error"]) {
+              debugLog("Error in", type, ":", data[type]["Error"]);
+              // Enhanced error handling for specific metrics (from develop)
+              let errorType = "Error";
+              let isSpecificError = false;
+              let errorMetricFlag = {};
+
+              if (type === "DP Statistics") {
+                errorType = getDPStatisticsErrorType(data[type]["Error"]);
+                isSpecificError = true;
+                errorMetricFlag.isDPStatistics = true;
+              } else if (type === "Single attribute risk scoring") {
+                errorType = getSingleAttributeRiskErrorType(
+                  data[type]["Error"],
+                );
+                isSpecificError = true;
+                errorMetricFlag.isSingleAttributeRisk = true;
+              } else if (type === "Multiple attribute risk scoring") {
+                errorType = getMultipleAttributeRiskErrorType(
+                  data[type]["Error"],
+                );
+                isSpecificError = true;
+                errorMetricFlag.isMultipleAttributeRisk = true;
+              } else if (type === "Entropy Risk") {
+                errorType = getEntropyRiskErrorType(data[type]["Error"]);
+                isSpecificError = true;
+                errorMetricFlag.isEntropyRisk = true;
+              } else if (type === "k-Anonymity") {
+                errorType = getKAnonymityErrorType(data[type]["Error"]);
+                isSpecificError = true;
+                errorMetricFlag.isKAnonymity = true;
+              } else if (type === "l-Diversity") {
+                errorType = getLDiversityErrorType(data[type]["Error"]);
+                isSpecificError = true;
+                errorMetricFlag.isLDiversity = true;
+              } else if (type === "t-Closeness") {
+                errorType = getTClosenessErrorType(data[type]["Error"]);
+                isSpecificError = true;
+                errorMetricFlag.isTCloseness = true;
+              } else if (type === "Class Imbalance") {
+                errorType = getClassImbalanceErrorType(data[type]["Error"]);
+                isSpecificError = true;
+                errorMetricFlag.isClassImbalance = true;
+              }
+
+              // Show error popup immediately
+              openErrorPopup(errorType, data[type]["Error"]);
+
+              visualizationContent.push({
+                image: "",
+                riskScore: "N/A",
+                riskLevel: null,
+                riskColor: null,
+                value: "N/A",
+                description: "",
+                interpretation: "",
+                title: title,
+                jsonData: jsonData,
+                hasError: true,
+                ...errorMetricFlag,
+                errorDetails: {
+                  errorMessage: data[type]["Error"],
+                  errorType: errorType,
+                },
+              });
+            } else if (image && image.trim() !== "") {
+              visualizationContent.push({
+                image: image,
+                riskScore: riskScore,
+                riskLevel: riskLevel,
+                riskColor: riskColor,
+                value: value,
+                description: description,
+                interpretation: interpretation,
+                title: title,
+                jsonData: jsonData,
+                hasError: false,
+              });
+            } else {
+              debugLog("Empty visualization for:", type);
+            }
+          } else {
+            debugLog(
+              "Missing visualization key for:",
+              type,
+              "Expected:",
+              type + " Visualization",
+            );
+          }
         } else {
-            console.log("Type not found in data:", type);
+          debugLog("Type not found in data:", type);
         }
-    });
+      });
       // Boolean flag to track if heading has been added
       var headingAdded = false;
 
@@ -648,7 +702,7 @@ function submitForm() {
           metrics.innerHTML = `<div class="heading">Readiness Report</div>`;
           headingAdded = true;
         }
-        console.log("Visualization content:", visualizationContent);
+        debugLog("Visualization content:", visualizationContent);
         // Add each visualization to the metric visualization section
         visualizationContent.forEach(function (content, index) {
           const visualizationId = `visualization_${index}`;
@@ -666,15 +720,15 @@ function submitForm() {
 
             // Add a download button if apply_remedy exists
             if (content.downloadUrl) {
-                visualizationHtml += `
+              visualizationHtml += `
                 <a href="${content.downloadUrl}" download class="animated-button" style="margin-top: 10px; display: inline-block;">
                     Download Remedied Dataset
                 </a>`;
             }
           } else if (content.isAsync) {
-              // Handle async task placeholder (from develop)
-              const asyncId = `async-${content.taskId.replace(/[^a-zA-Z0-9]/g, "")}`;
-              visualizationHtml += `<div class="async-task-status"
+            // Handle async task placeholder (from develop)
+            const asyncId = `async-${content.taskId.replace(/[^a-zA-Z0-9]/g, "")}`;
+            visualizationHtml += `<div class="async-task-status"
                           data-task-id="${content.taskId}"
                           data-cache-key="${content.cacheKey}"
                           data-metric-name="${content.title}"
@@ -698,9 +752,9 @@ function submitForm() {
                           </style>
                       </div>`;
           } else if (content.hasError) {
-              // Enhanced error handling (from develop)
-              if (content.isDPStatistics) {
-                  visualizationHtml += `
+            // Enhanced error handling (from develop)
+            if (content.isDPStatistics) {
+              visualizationHtml += `
                       <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
                           <div style="color: #d32f2f; margin-bottom: 15px;">
                               <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
@@ -717,8 +771,8 @@ function submitForm() {
                               </p>
                           </div>
                       </div>`;
-              } else if (content.isSingleAttributeRisk) {
-                  visualizationHtml += `
+            } else if (content.isSingleAttributeRisk) {
+              visualizationHtml += `
                       <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
                           <div style="color: #d32f2f; margin-bottom: 15px;">
                               <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
@@ -735,8 +789,8 @@ function submitForm() {
                               </p>
                           </div>
                       </div>`;
-              } else if (content.isMultipleAttributeRisk) {
-                  visualizationHtml += `
+            } else if (content.isMultipleAttributeRisk) {
+              visualizationHtml += `
                       <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
                           <div style="color: #d32f2f; margin-bottom: 15px;">
                               <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
@@ -753,8 +807,8 @@ function submitForm() {
                               </p>
                           </div>
                       </div>`;
-              } else if (content.isEntropyRisk) {
-                  visualizationHtml += `
+            } else if (content.isEntropyRisk) {
+              visualizationHtml += `
                       <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
                           <div style="color: #d32f2f; margin-bottom: 15px;">
                               <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
@@ -771,8 +825,8 @@ function submitForm() {
                               </p>
                           </div>
                       </div>`;
-              } else if (content.isKAnonymity) {
-                  visualizationHtml += `
+            } else if (content.isKAnonymity) {
+              visualizationHtml += `
                       <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
                           <div style="color: #d32f2f; margin-bottom: 15px;">
                               <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
@@ -789,8 +843,8 @@ function submitForm() {
                               </p>
                           </div>
                       </div>`;
-              } else if (content.isLDiversity) {
-                  visualizationHtml += `
+            } else if (content.isLDiversity) {
+              visualizationHtml += `
                       <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
                           <div style="color: #d32f2f; margin-bottom: 15px;">
                               <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
@@ -807,8 +861,8 @@ function submitForm() {
                               </p>
                           </div>
                       </div>`;
-              } else if (content.isTCloseness) {
-                  visualizationHtml += `
+            } else if (content.isTCloseness) {
+              visualizationHtml += `
                       <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
                           <div style="color: #d32f2f; margin-bottom: 15px;">
                               <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
@@ -825,8 +879,8 @@ function submitForm() {
                               </p>
                           </div>
                       </div>`;
-              } else if (content.isClassImbalance) {
-                  visualizationHtml += `
+            } else if (content.isClassImbalance) {
+              visualizationHtml += `
                       <div class="error-container" style="text-align: center; padding: 20px; border: 2px solid #d32f2f; border-radius: 8px; background-color: #ffebee; margin-bottom: 20px;">
                           <div style="color: #d32f2f; margin-bottom: 15px;">
                               <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="#d32f2f" style="margin-bottom: 10px;">
@@ -843,19 +897,19 @@ function submitForm() {
                               </p>
                           </div>
                       </div>`;
-              } else {
-                  visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
+            } else {
+              visualizationHtml += `<div style="text-align: center; padding: 20px; color: #d32f2f;">
                       <strong>Error:</strong> ${content.description}
                   </div>`;
-              }
+            }
           } else if (content.image && content.image.trim() !== "") {
-              // Handle valid visualization image
-              const imageBlobUrl = `data:image/png;base64,${content.image}`;
-              visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
+            // Handle valid visualization image
+            const imageBlobUrl = `data:image/png;base64,${content.image}`;
+            visualizationHtml += `<img src="${imageBlobUrl}" alt="Visualization ${index + 1} Chart">
                       <a href="${imageBlobUrl}" download="${content.title}.png" class="toggle metric-download" style="padding:0px;"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg></a>`;
           } else if (!content.isAsync) {
-              // Display message for empty visualization (only for non-async tasks)
-              visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
+            // Display message for empty visualization (only for non-async tasks)
+            visualizationHtml += `<div style="text-align: center; padding: 20px; color: #666;">
                       No visualization available for this metric.
                   </div>`;
           }
@@ -870,7 +924,7 @@ function submitForm() {
           </div>`;
 
           metrics.innerHTML += visualizationHtml;
-      });
+        });
 
         // Check if duplicity is present and 0 (no duplicity)
         if (
@@ -911,7 +965,7 @@ function submitForm() {
         // Assuming 'data' is your dictionary
         const modifiedData = removeVisualizationKey(data);
         const jsonBlobUrl = `data:application/json,${encodeURIComponent(
-          JSON.stringify(modifiedData)
+          JSON.stringify(modifiedData),
         )}`;
         // Add the "Download JSON" link for the last jsonData outside the loop
         metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
@@ -946,7 +1000,7 @@ function submitForm() {
         // Assuming 'data' is your dictionary
         const modifiedData = removeVisualizationKey(data);
         const jsonBlobUrl = `data:application/json,${encodeURIComponent(
-          JSON.stringify(modifiedData)
+          JSON.stringify(modifiedData),
         )}`;
         // Add the "Download JSON" link for the last jsonData outside the loop
         metrics.innerHTML += `<a href="${jsonBlobUrl}" download="report.json" class="toggle">Download JSON Report</a>`;
@@ -956,7 +1010,8 @@ function submitForm() {
       console.error("Error:", error);
       var metrics = document.getElementById("metrics");
       if (metrics) {
-        metrics.innerHTML = "<p style='color:red;text-align:center;'>An error occurred while loading results. Please try again.</p>";
+        metrics.innerHTML =
+          "<p style='color:red;text-align:center;'>An error occurred while loading results. Please try again.</p>";
       }
       openErrorPopup("Visualization Error", error.message || String(error));
     });
@@ -1016,11 +1071,11 @@ function pollAsyncTask(
   cacheKey,
   metricName,
   maxAttempts = 800,
-  interval = 1500
+  interval = 1500,
 ) {
   let attempts = 0;
 
-  console.log(`Starting polling for ${metricName} task: ${taskId}`);
+  debugLog(`Starting polling for ${metricName} task: ${taskId}`);
 
   function checkTask() {
     attempts++;
@@ -1033,11 +1088,11 @@ function pollAsyncTask(
         return response.json();
       })
       .then((data) => {
-        console.log(`DEBUG: Received response for ${metricName}:`, data);
+        debugLog(`DEBUG: Received response for ${metricName}:`, data);
 
         // Get DOM elements for progress bar and status
         const asyncTaskElement = document.querySelector(
-          `[data-task-id="${taskId}"]`
+          `[data-task-id="${taskId}"]`,
         );
         const statusSpan = asyncTaskElement
           ? asyncTaskElement.querySelector(`#task-status-${taskId}`)
@@ -1053,11 +1108,11 @@ function pollAsyncTask(
           data.error ||
           data.result?.error
         ) {
-          console.log(
+          debugLog(
             "DEBUG: Task failed with status:",
             data.status,
             "error:",
-            data.error || data.result?.error
+            data.error || data.result?.error,
           );
 
           // Update progress bar to show failure
@@ -1080,7 +1135,7 @@ function pollAsyncTask(
             errorMessage = data.meta.error;
           }
 
-          console.log("DEBUG: Extracted error message:", errorMessage);
+          debugLog("DEBUG: Extracted error message:", errorMessage);
 
           // Create error result and update with error display
           const errorResult = { error: errorMessage };
@@ -1091,7 +1146,7 @@ function pollAsyncTask(
         }
 
         if (data.status === "completed" || data.status === "SUCCESS") {
-          console.log("DEBUG: Task completed successfully");
+          debugLog("DEBUG: Task completed successfully");
 
           // Task completed successfully, complete the progress bar
           if (progressBar) {
@@ -1119,7 +1174,7 @@ function pollAsyncTask(
             (data.result.Description &&
               data.result.Description.includes("Error")))
         ) {
-          console.log("DEBUG: Detected error in result data:", data.result);
+          debugLog("DEBUG: Detected error in result data:", data.result);
 
           // Update progress bar to show failure
           if (progressBar) {
@@ -1191,7 +1246,7 @@ function pollAsyncTask(
             statusSpan.textContent = "Taking longer than expected...";
           }
           console.warn(
-            `${metricName} polling timeout reached. Task may still be running.`
+            `${metricName} polling timeout reached. Task may still be running.`,
           );
         }
       })
@@ -1201,14 +1256,14 @@ function pollAsyncTask(
           setTimeout(checkTask, interval);
         } else {
           // Max retries reached
-          console.log(
+          debugLog(
             "DEBUG: Max retries reached for",
             metricName,
-            "creating error result"
+            "creating error result",
           );
 
           const asyncTaskElement = document.querySelector(
-            `[data-task-id="${taskId}"]`
+            `[data-task-id="${taskId}"]`,
           );
           const progressBar = asyncTaskElement
             ? asyncTaskElement.querySelector(".progress-bar")
@@ -1227,9 +1282,9 @@ function pollAsyncTask(
 
           // Create error result for connection/polling failures
           const errorResult = { error: `Connection error: ${error.message}` };
-          console.log(
+          debugLog(
             "DEBUG: Calling updateAsyncTaskWithResults with connection error for",
-            metricName
+            metricName,
           );
           setTimeout(() => {
             updateAsyncTaskWithResults(taskId, metricName, errorResult);
@@ -1243,16 +1298,16 @@ function pollAsyncTask(
 }
 
 function updateAsyncTaskWithResults(taskId, metricName, results) {
-  console.log(
-    `DEBUG: updateAsyncTaskWithResults called for ${metricName} with:`,
-    { taskId, results }
-  );
+  debugLog(`DEBUG: updateAsyncTaskWithResults called for ${metricName} with:`, {
+    taskId,
+    results,
+  });
 
   // Find the async task placeholder
   const asyncElement = document.querySelector(`[data-task-id="${taskId}"]`);
   updateTaskStatus(taskId, metricName, "completed", "Calculation completed!");
   if (!asyncElement || !results) {
-    console.log("No async element or results found:", {
+    debugLog("No async element or results found:", {
       taskId,
       metricName,
       results,
@@ -1265,7 +1320,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
 
   // Check if there's an error - use the same template as other metrics
   if (results.error) {
-    console.log("DEBUG: Async task failed with error:", results.error);
+    debugLog("DEBUG: Async task failed with error:", results.error);
 
     // Trigger error popup for failed async tasks
     let errorType = "Error";
@@ -1275,7 +1330,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
       errorType = getMultipleAttributeRiskErrorType(results.error);
     }
 
-    console.log("DEBUG: Error type determined:", errorType);
+    debugLog("DEBUG: Error type determined:", errorType);
 
     // Show error popup
     openErrorPopup(errorType, results.error);
@@ -1341,7 +1396,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
                 </div>`;
     }
 
-    console.log("DEBUG: Generated error HTML for", metricName);
+    debugLog("DEBUG: Generated error HTML for", metricName);
   } else {
     // Check if this is actually an error result disguised as a "successful" result
     // Validation errors often come with Description and Graph interpretation fields
@@ -1353,9 +1408,9 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
       (results.Description &&
         results.Description.includes("not found in the dataset"))
     ) {
-      console.log(
+      debugLog(
         "DEBUG: Detected validation error in results:",
-        results.Description
+        results.Description,
       );
 
       // Extract the actual error message
@@ -1473,7 +1528,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
       if (
         results["Graph interpretation"] &&
         !results["Graph interpretation"].includes(
-          "No visualization available due to error"
+          "No visualization available due to error",
         )
       ) {
         completedHtml += `<div style="color: inherit;"><strong>Graph interpretation:</strong> ${results["Graph interpretation"]}</div>`;
@@ -1511,13 +1566,13 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
                             <tr>
                                 <td style="color: inherit; background-color: transparent; border-color: inherit;"><strong>${featureName}</strong></td>
                                 <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.mean.toFixed(
-                                  3
+                                  3,
                                 )}</td>
                                 <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.std.toFixed(
-                                  3
+                                  3,
                                 )}</td>
                                 <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.min.toFixed(
-                                  3
+                                  3,
                                 )}</td>
                                 <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats[
                                   "25%"
@@ -1529,7 +1584,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
                                   "75%"
                                 ].toFixed(3)}</td>
                                 <td style="color: inherit; background-color: transparent; border-color: inherit;">${featureStats.max.toFixed(
-                                  3
+                                  3,
                                 )}</td>
                             </tr>`;
           }
@@ -1552,13 +1607,13 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
                                 </tr>
                                 <tr>
                                     <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.mean.toFixed(
-                                      3
+                                      3,
                                     )}</td>
                                     <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.std.toFixed(
-                                      3
+                                      3,
                                     )}</td>
                                     <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.min.toFixed(
-                                      3
+                                      3,
                                     )}</td>
                                     <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats[
                                       "25%"
@@ -1570,7 +1625,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
                                       "75%"
                                     ].toFixed(3)}</td>
                                     <td style="color: inherit; background-color: transparent; border-color: inherit;">${stats.max.toFixed(
-                                      3
+                                      3,
                                     )}</td>
                                 </tr>
                             </table>
@@ -1610,7 +1665,7 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
 function updateTaskStatus(taskId, metricName, status, message) {
   // Find the async task status element for this metric
   const asyncElements = document.querySelectorAll(
-    `[data-metric-name="${metricName}"]`
+    `[data-metric-name="${metricName}"]`,
   );
 
   if (asyncElements.length > 0) {
@@ -1636,7 +1691,7 @@ function updateTaskStatus(taskId, metricName, status, message) {
     });
   } else {
     // Final fallback: add status to page
-    console.log(`Task Status Update - ${metricName}: ${status} - ${message}`);
+    debugLog(`Task Status Update - ${metricName}: ${status} - ${message}`);
   }
 }
 
@@ -2124,23 +2179,23 @@ function showResults() {
 // }
 
 function toggleValue(checkbox) {
-  console.log("Checkbox clicked:", checkbox);
+  debugLog("Checkbox clicked:", checkbox);
   // Find the closest parent container of the checkbox (checkboxContainer)
   const container = checkbox.closest(".checkboxContainerIndividual");
-  console.log(container);
+  debugLog(container);
 
   if (!container) {
     return;
   }
-  console.log("Container found:", container);
+  debugLog("Container found:", container);
 
   // Toggle the metric-selected class to show/hide QI sections
   if (checkbox.checked) {
     container.classList.add("metric-selected");
-    console.log("Added metric-selected class - QI sections should be visible");
+    debugLog("Added metric-selected class - QI sections should be visible");
   } else {
     container.classList.remove("metric-selected");
-    console.log("Removed metric-selected class - QI sections should be hidden");
+    debugLog("Removed metric-selected class - QI sections should be hidden");
   }
 
   // Find and show/hide the metric inputs (QI and sensitive attribute sections)
@@ -2156,8 +2211,12 @@ function toggleValue(checkbox) {
   // Find all select dropdowns within that container
   const dropdowns = container.querySelectorAll("select");
   const inputs = container.querySelectorAll("input.textWrapper");
-  const checkboxes = container.querySelectorAll("input.checkbox.individual:not(.target-feature)");
-  const selectAllCheckboxs = container.querySelectorAll("input.checkbox.select-all");
+  const checkboxes = container.querySelectorAll(
+    "input.checkbox.individual:not(.target-feature)",
+  );
+  const selectAllCheckboxs = container.querySelectorAll(
+    "input.checkbox.select-all",
+  );
   // Enable or disable all dropdowns inside the container based on checkbox state
 
   dropdowns.forEach((dropdown) => {
@@ -2167,7 +2226,6 @@ function toggleValue(checkbox) {
     input.disabled = !checkbox.checked;
   });
   checkboxes.forEach((input) => {
-
     input.disabled = !checkbox.checked;
   });
   //toggle select all checkboxes state
@@ -2183,12 +2241,12 @@ function toggleValue(checkbox) {
   } else {
     checkbox.value = "no";
   }
-  console.log("Checkbox value:", checkbox.value); // For debugging
+  debugLog("Checkbox value:", checkbox.value); // For debugging
 
   // If this is the class imbalance checkbox, update cross-disabling
   if (checkbox.name === "class imbalance") {
-    console.log("Class imbalance checkbox toggled, updating cross-disabling");
-    if (typeof updateCrossDisable === 'function') {
+    debugLog("Class imbalance checkbox toggled, updating cross-disabling");
+    if (typeof updateCrossDisable === "function") {
       updateCrossDisable();
     }
   }
@@ -2202,7 +2260,7 @@ function toggleValueIndividual(checkbox) {
   } else {
     checkbox.value = "no";
   }
-  console.log("Checkbox value:", checkbox.value); // For debugging
+  debugLog("Checkbox value:", checkbox.value); // For debugging
 }
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function () {
@@ -2210,7 +2268,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll(".checkboxContainer").forEach((container) => {
     const checkboxes = container.querySelectorAll("input[type='checkbox']");
     checkboxes.forEach((checkbox) => {
-      console.log(checkbox);
+      debugLog(checkbox);
       // Set initial state of selects based on checkbox
       toggleValue(checkbox);
     });
@@ -2222,7 +2280,7 @@ document.addEventListener("DOMContentLoaded", function () {
     .forEach((container) => {
       const checkboxes = container.querySelectorAll("input[type='checkbox']");
       checkboxes.forEach((checkbox) => {
-        console.log(checkbox);
+        debugLog(checkbox);
         // Set initial state of selects based on checkbox
         toggleValue(checkbox);
 
@@ -2240,18 +2298,18 @@ document.addEventListener("DOMContentLoaded", function () {
   setupTooltipPositioning();
 
   // Auto-start polling for async tasks when page loads
-  console.log("DOMContentLoaded: Checking for async tasks...");
+  debugLog("DOMContentLoaded: Checking for async tasks...");
 
   // Check if there are any async tasks that need polling
   const scripts = document.querySelectorAll("script[data-task-id]");
-  console.log("Found", scripts.length, "scripts with task IDs");
+  debugLog("Found", scripts.length, "scripts with task IDs");
 
   scripts.forEach((script) => {
     const taskId = script.getAttribute("data-task-id");
     const cacheKey = script.getAttribute("data-cache-key");
     const metricName = script.getAttribute("data-metric-name");
 
-    console.log("Script attributes:", { taskId, cacheKey, metricName });
+    debugLog("Script attributes:", { taskId, cacheKey, metricName });
 
     if (taskId && cacheKey && metricName) {
       pollAsyncTask(taskId, cacheKey, metricName);
@@ -2260,7 +2318,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Also check for any elements that contain async task information in the results
   const resultElements = document.querySelectorAll("[data-task-id]");
-  console.log("Found", resultElements.length, "result elements with task IDs");
+  debugLog("Found", resultElements.length, "result elements with task IDs");
 
   resultElements.forEach((element) => {
     const taskId = element.getAttribute("data-task-id");
@@ -2269,8 +2327,8 @@ document.addEventListener("DOMContentLoaded", function () {
       element.getAttribute("data-metric-name") || "MMrisk Score";
 
     if (taskId && cacheKey) {
-      console.log(
-        `Starting polling for ${metricName} from result element: ${taskId}`
+      debugLog(
+        `Starting polling for ${metricName} from result element: ${taskId}`,
       );
       pollAsyncTask(taskId, cacheKey, metricName);
     }
@@ -2278,9 +2336,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Also check for async task status elements specifically
   const asyncStatusElements = document.querySelectorAll(
-    ".async-task-status[data-task-id]"
+    ".async-task-status[data-task-id]",
   );
-  console.log("Found", asyncStatusElements.length, "async status elements");
+  debugLog("Found", asyncStatusElements.length, "async status elements");
 
   asyncStatusElements.forEach((element) => {
     const taskId = element.getAttribute("data-task-id");
@@ -2289,8 +2347,8 @@ document.addEventListener("DOMContentLoaded", function () {
       element.getAttribute("data-metric-name") || "MMrisk Score";
 
     if (taskId && cacheKey) {
-      console.log(
-        `Starting polling for ${metricName} from async status element: ${taskId}`
+      debugLog(
+        `Starting polling for ${metricName} from async status element: ${taskId}`,
       );
       pollAsyncTask(taskId, cacheKey, metricName);
     }
@@ -2301,12 +2359,12 @@ document.addEventListener("DOMContentLoaded", function () {
 let darkmode = localStorage.getItem("darkmode");
 //add a darkmode class to the body
 const enableDarkmode = () => {
-  document.body.classList.add("darkmode");
+  document.documentElement.classList.add("dark");
   localStorage.setItem("darkmode", "active");
 };
-//remove the darkmode class from the body
+//remove the darkmode class from the html element
 const disableDarkmode = () => {
-  document.body.classList.remove("darkmode");
+  document.documentElement.classList.remove("dark");
   localStorage.setItem("darkmode", null);
 };
 let datalogPopup;
@@ -2319,7 +2377,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
     darkmode = localStorage.getItem("darkmode");
 
     darkmode !== "active" ? enableDarkmode() : disableDarkmode();
-    toggleSlidesColor();
+    if (typeof toggleSlidesColor === "function") toggleSlidesColor();
   });
 
   //data log handlers
@@ -2327,57 +2385,58 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
   const radioButtons = document.querySelectorAll('input[name="tableSwitch"]');
   const tableContainers = document.querySelectorAll(".scrollable-container");
-  // popping up current log
-  dataLogButton.addEventListener("click", () => {
-    datalogPopup = document.getElementById("datalog-popup");
-    const datalogContent = document.getElementById("datalog-content");
+  // popping up current log (only if the button element exists — new inspector uses a link instead)
+  if (dataLogButton)
+    dataLogButton.addEventListener("click", () => {
+      datalogPopup = document.getElementById("datalog-popup");
+      const datalogContent = document.getElementById("datalog-content");
 
-    //open popup
-    datalogPopup.classList.add("open-popup");
+      //open popup
+      datalogPopup.classList.add("open-popup");
 
-    fetch("/view-logs")
-      .then((response) => response.json())
-      .then((data) => {
-        const tbodyMaster = document.querySelector("#masterLogTable tbody");
-        const tbodyFile = document.querySelector("#fileUploadLogTable");
-        const tbodyMetric = document.querySelector("#metricLogTable");
-        tbodyMaster.innerHTML = "";
+      fetch("/view-logs")
+        .then((response) => response.json())
+        .then((data) => {
+          const tbodyMaster = document.querySelector("#masterLogTable tbody");
+          const tbodyFile = document.querySelector("#fileUploadLogTable");
+          const tbodyMetric = document.querySelector("#metricLogTable");
+          tbodyMaster.innerHTML = "";
 
-        data.forEach((row) => {
-          const tr = document.createElement("tr");
+          data.forEach((row) => {
+            const tr = document.createElement("tr");
 
-          ["timestamp", "logger", "message"].forEach((key) => {
-            const td = document.createElement("td");
-            td.textContent = row[key];
-            tr.appendChild(td);
+            ["timestamp", "logger", "message"].forEach((key) => {
+              const td = document.createElement("td");
+              td.textContent = row[key];
+              tr.appendChild(td);
+            });
+            tbodyMaster.appendChild(tr);
+
+            // row without logger
+            const trNoLogger = document.createElement("tr");
+            ["timestamp", "message"].forEach((key) => {
+              const td = document.createElement("td");
+              td.textContent = row[key];
+              trNoLogger.appendChild(td);
+            });
+
+            if (row.logger === "file_upload") {
+              tbodyFile.appendChild(trNoLogger);
+            } else if (row.logger === "metric") {
+              tbodyMetric.appendChild(trNoLogger);
+            }
           });
-          tbodyMaster.appendChild(tr);
-
-          // row without logger
-          const trNoLogger = document.createElement("tr");
-          ["timestamp", "message"].forEach((key) => {
-            const td = document.createElement("td");
-            td.textContent = row[key];
-            trNoLogger.appendChild(td);
-          });
-
-          if (row.logger === "file_upload") {
-            tbodyFile.appendChild(trNoLogger);
-          } else if (row.logger === "metric") {
-            tbodyMetric.appendChild(trNoLogger);
-          }
+        })
+        .catch((error) => {
+          console.error("Error loading log:", error);
+          openErrorPopup("Error loading log:", error);
         });
-      })
-      .catch((error) => {
-        console.error("Error loading log:", error);
-        openErrorPopup("Error loading log:", error);
-      });
-  });
+    });
   // switching between logs
   radioButtons.forEach((radio) => {
     radio.addEventListener("change", () => {
       tableContainers.forEach((container) =>
-        container.classList.remove("active")
+        container.classList.remove("active"),
       );
       document.getElementById(radio.value).classList.add("active");
     });
@@ -2396,7 +2455,7 @@ function closeErrorPopup() {
 function setupTooltipPositioning() {
   // Find all info icons in privacy metrics
   const infoIcons = document.querySelectorAll(
-    ".checkboxContainerIndividual .info-icon"
+    ".checkboxContainerIndividual .info-icon",
   );
 
   infoIcons.forEach((icon) => {

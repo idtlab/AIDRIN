@@ -3,13 +3,15 @@ import logging
 import time
 
 from celery.result import AsyncResult
+from web.telemetry import get_tracer, trace_metric
 from flask import (
     Blueprint,
     current_app,
     jsonify,
-    render_template,
+    redirect,
     request,
     session,
+    url_for,
 )
 from aidrin.file_handling.file_parser import read_file
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -78,46 +80,59 @@ def data_quality():
         start_time = time.time()
         selected = [m for m in ("completeness", "outliers", "duplicity") if request.form.get(m) == "yes"]
         metric_time_log.info("Data Quality request started: %s", selected)
-        try:
-            if "completeness" in selected:
-                t0 = time.time()
-                compl_dict = completeness(file_info)
-                compl_dict["Description"] = (
-                    "Indicate the proportion of available data for each feature, "
-                    "with values closer to 1 indicating high completeness, and values near "
-                    "0 indicating low completeness. If the visualization is empty, it means "
-                    "that all features are complete."
-                )
-                final_dict["Completeness"] = compl_dict
-                metric_time_log.info("Completeness took %.2f seconds", time.time() - t0)
 
-            if "outliers" in selected:
-                t0 = time.time()
-                out_dict = outliers(file_info)
-                out_dict["Description"] = (
-                    "Outlier scores are calculated for numerical columns using the Interquartile"
-                    " Range (IQR) method, where a score of 1 indicates that all data points in a "
-                    "column are identified as outliers, a score of 0 signifies no outliers are detected"
-                )
-                final_dict["Outliers"] = out_dict
-                metric_time_log.info("Outliers took %.2f seconds", time.time() - t0)
+        tracer = get_tracer()
+        with tracer.start_as_current_span("metric.data_quality") as span:
+            span.set_attribute("metric.pillar", "data_quality")
+            span.set_attribute("metric.selected", ",".join(selected))
+            span.set_attribute("file.name", file_name or "")
+            span.set_attribute("file.type", file_type or "")
 
-            if "duplicity" in selected:
-                t0 = time.time()
-                dup_dict = duplicity(file_info)
-                dup_dict["Description"] = (
-                    "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher "
-                    "proportion of duplicated data points in the dataset"
-                )
-                final_dict["Duplicity"] = dup_dict
-                metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
+            try:
+                if "completeness" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.completeness"):
+                        compl_dict = completeness(file_info)
+                    compl_dict["Description"] = (
+                        "Indicate the proportion of available data for each feature, "
+                        "with values closer to 1 indicating high completeness, and values near "
+                        "0 indicating low completeness. If the visualization is empty, it means "
+                        "that all features are complete."
+                    )
+                    final_dict["Completeness"] = compl_dict
+                    metric_time_log.info("Completeness took %.2f seconds", time.time() - t0)
 
-        except Exception as e:
-            metric_time_log.error("Data Quality error: %s", e)
-            return jsonify({"error": str(e)}), 200
+                if "outliers" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.outliers"):
+                        out_dict = outliers(file_info)
+                    out_dict["Description"] = (
+                        "Outlier scores are calculated for numerical columns using the Interquartile"
+                        " Range (IQR) method, where a score of 1 indicates that all data points in a "
+                        "column are identified as outliers, a score of 0 signifies no outliers are detected"
+                    )
+                    final_dict["Outliers"] = out_dict
+                    metric_time_log.info("Outliers took %.2f seconds", time.time() - t0)
 
-        metric_time_log.info("Data Quality completed in %.2f seconds", time.time() - start_time)
-        return store_result("metrics.data_quality", final_dict)
+                if "duplicity" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.duplicity"):
+                        dup_dict = duplicity(file_info)
+                    dup_dict["Description"] = (
+                        "A value of 0 indicates no duplicates, and a value closer to 1 signifies a higher "
+                        "proportion of duplicated data points in the dataset"
+                    )
+                    final_dict["Duplicity"] = dup_dict
+                    metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
+
+            except Exception as e:
+                metric_time_log.error("Data Quality error: %s", e)
+                return jsonify({"error": str(e)}), 200
+
+            duration_ms = (time.time() - start_time) * 1000
+            span.set_attribute("metric.duration_ms", duration_ms)
+            metric_time_log.info("Data Quality completed in %.2f seconds", time.time() - start_time)
+            return store_result("metrics.data_quality", final_dict)
 
     return get_result_or_default("metrics.data_quality", file_path, file_name)
 
@@ -224,7 +239,10 @@ def fairness():
                     "Conditional Demographic Disparity took %.2f seconds", time.time() - t0
                 )
 
-        metric_time_log.info("Fairness completed in %.2f seconds", time.time() - start_time)
+        duration = time.time() - start_time
+        metric_time_log.info("Fairness completed in %.2f seconds", duration)
+        with trace_metric("fairness", "fairness_bias", file_name=file_name, file_type=file_type) as span:
+            span.set_attribute("metric.duration_ms", duration * 1000)
         return store_result("metrics.fairness", final_dict)
 
     return get_result_or_default("metrics.fairness", file_path, file_name)
@@ -274,7 +292,10 @@ def correlation_analysis():
                         "Correlations Analysis Numerical"
                     ]
                 metric_time_log.info("Correlations took %.2f seconds", time.time() - t0)
-                metric_time_log.info("Correlation Analysis completed in %.2f seconds", time.time() - start_time)
+                duration = time.time() - start_time
+                metric_time_log.info("Correlation Analysis completed in %.2f seconds", duration)
+                with trace_metric("correlation_analysis", "impact_on_ai", file_name=file_name, file_type=file_type) as span:
+                    span.set_attribute("metric.duration_ms", duration * 1000)
                 return store_result("metrics.correlation_analysis", final_dict)
             else:
                 return jsonify({"message": "No correlation analysis selected"}), 200
@@ -310,6 +331,11 @@ def feature_relevance():
                 if col.strip()
             ]
             target = request.form.get("target for feature relevance")
+            if not target:
+                return jsonify({
+                    "trigger": "correlationError",
+                    "error": "Please select a target feature before submitting.",
+                }), 200
             metric_time_log.info(
                 "Feature Relevance request started: %d categorical, %d numerical columns, target=%r",
                 len(cat_cols), len(num_cols), target,
@@ -317,7 +343,11 @@ def feature_relevance():
 
             try:
                 if target in cat_cols or target in num_cols:
-                    return jsonify({"trigger": "correlationError"}), 200
+                    return jsonify({
+                        "trigger": "correlationError",
+                        "error": "The target feature cannot also be selected as an input feature. "
+                                 "Please deselect it from the categorical/numerical features list.",
+                    }), 200
                 file_info = (file_path, file_name, file_type)
                 t0 = time.time()
                 data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
@@ -374,7 +404,10 @@ def feature_relevance():
                 ),
             }
             final_dict["Feature Relevance"] = f_dict
-            metric_time_log.info("Feature Relevance completed in %.2f seconds", time.time() - start_time)
+            duration = time.time() - start_time
+            metric_time_log.info("Feature Relevance completed in %.2f seconds", duration)
+            with trace_metric("feature_relevance", "impact_on_ai", file_name=file_name, file_type=file_type) as span:
+                span.set_attribute("metric.duration_ms", duration * 1000)
             return store_result("metrics.feature_relevance", final_dict)
         else:
             return jsonify({"message": "No feature relevance analysis selected"}), 200
@@ -433,7 +466,10 @@ def class_imbalance():
                     "expires_at": time.time() + (30 * 60),
                 }
 
-        metric_time_log.info("Class Imbalance completed in %.2f seconds", time.time() - start_time)
+        duration = time.time() - start_time
+        metric_time_log.info("Class Imbalance completed in %.2f seconds", duration)
+        with trace_metric("class_imbalance", "fairness_bias", file_name=file_name, file_type=file_type) as span:
+            span.set_attribute("metric.duration_ms", duration * 1000)
         return store_result("metrics.class_imbalance", final_dict)
 
     return get_result_or_default("metrics.class_imbalance", file_path, file_name)
@@ -661,9 +697,10 @@ def privacy_preservation():
                     entropy_qis, file
                 )
 
-        metric_time_log.info(
-            "Privacy Preservation completed in %.2f seconds", time.time() - start_time
-        )
+        duration = time.time() - start_time
+        metric_time_log.info("Privacy Preservation completed in %.2f seconds", duration)
+        with trace_metric("privacy_preservation", "data_governance", file_name=file_name, file_type=file_type) as span:
+            span.set_attribute("metric.duration_ms", duration * 1000)
         return store_result("metrics.privacy_preservation", final_dict)
 
     return get_result_or_default("metrics.privacy_preservation", file_path, file_name)
@@ -705,9 +742,10 @@ def hipaa_compliance():
             metric_time_log.error("HIPAA Compliance error: %s", e)
             return jsonify({"error": str(e)}), 500
 
-        metric_time_log.info(
-            "HIPAA Compliance Evaluation completed in %.2f seconds", time.time() - start_time
-        )
+        duration = time.time() - start_time
+        metric_time_log.info("HIPAA Compliance Evaluation completed in %.2f seconds", duration)
+        with trace_metric("hipaa_compliance", "data_governance", file_name=data_file_name, file_type=data_file_type) as span:
+            span.set_attribute("metric.duration_ms", duration * 1000)
         return store_result("metrics.hipaa_compliance", final_dict)
 
     return get_result_or_default("metrics.hipaa_compliance", data_file_path, data_file_name)
@@ -735,23 +773,31 @@ def fair_assessment():
             json_data = file.read()
             data_dict = json.loads(json_data.decode("utf-8"))
 
-            if request.form.get("metadata type") == "DCAT":
+            metadata_type = request.form.get("metadata type", "")
+
+            if metadata_type == "DCAT":
                 try:
                     extracted_json = extract_keys_and_values(data_dict)
                     fair_dict = categorize_metadata(extracted_json, data_dict)
                     result = format_dict_values(fair_dict)
                 except json.JSONDecodeError as e:
                     return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
-            elif request.form.get("metadata type") == "Datacite":
+            elif metadata_type == "Datacite":
                 try:
                     result = categorize_keys_fair(data_dict)
                 except json.JSONDecodeError as e:
                     return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
             else:
-                return jsonify({"Error:": "Unknown metadata type"}), 400
+                return jsonify({"error": "Unknown metadata type"}), 400
 
-            metric_time_log.info("FAIR Assessment completed in %.2f seconds", time.time() - start_time)
-            return store_result("metrics.fair_assessment", result)
+            duration = time.time() - start_time
+            metric_time_log.info("FAIR Assessment completed in %.2f seconds", duration)
+            with trace_metric("fair_assessment", "understandability") as span:
+                span.set_attribute("metric.duration_ms", duration * 1000)
+                span.set_attribute("metadata.type", metadata_type)
+
+            result = ensure_json_serializable(result)
+            return jsonify(result)
 
         else:
             results_id = request.args.get("results_id")
@@ -759,7 +805,7 @@ def fair_assessment():
                 entry = current_app.TEMP_RESULTS_CACHE.pop(results_id)
                 return jsonify(entry["data"])
 
-            return render_template("metricTemplates/upload_meta.html")
+            return redirect(url_for("core.inspector"))
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
