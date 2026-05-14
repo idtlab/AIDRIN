@@ -239,7 +239,7 @@ Web Application Workflow
 To use the AIDRIN web application:
 
 1. **Upload a Data File**:
-   - Navigate to the file upload page at `aidrin.io <https://aidrin.io/upload_file>`_. or `https://127.0.0.1:5000/upload_file` if running locally.
+   - Navigate to the file upload page at `aidrin.io <https://aidrin.io/upload-file>`_. or `https://127.0.0.1:5000/upload-file` if running locally.
    - Upload a dataset (e.g., CSV file like ``adult.csv``) via the web interface. You can download the sample dataset from the `UCI Machine Learning Repository <https://archive.ics.uci.edu/ml/datasets/adult>`_.
    - The file is processed server-side.
 
@@ -256,6 +256,12 @@ To use the AIDRIN web application:
    - Results include downloadable data summary statistics and visualizations (e.g., histograms, bar charts, heatmaps).
    - A JSON report summarizing the results is available for download.
    - Return to the homepage to select another dimension or upload a new dataset.
+
+5. **AI Explanations (Optional)**:
+   - If the ``openai`` package is installed (``pip install aidrin[llm]``), a sparkle icon appears in the top-right toolbar.
+   - Click it to configure an OpenAI-compatible API endpoint (OpenAI, Ollama, vLLM, etc.).
+   - Once configured, each metric result will include an AI-generated explanation summarizing the key observations and implications for AI/ML.
+   - The model name is shown in each explanation for transparency.
 
 Data Readiness Dimensions and Metrics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -361,6 +367,13 @@ Focuses on privacy preservation through metrics that assess anonymity and disclo
   - **Parameters**: Quasi-identifier columns (e.g., `['sex']`).
   - **Result**: Bar chart of entropy values.
 
+- **HIPAA Compliance**:
+
+  - **Method**: Scans datasets for the presence of 8 out of 18 key HIPAA-regulated identifiers as defined under the `Safe Harbor method <https://www.accountablehq.com/post/what-are-the-18-hipaa-identifiers-a-clear-guide-with-examples>`_. This includes detection of direct and indirect identifiers that could enable re-identification of individuals.
+  - **Identifiers Detected**: Social Security Numbers (SSNs), email addresses, phone and fax numbers, IP addresses, URLs, Vehicle Identification Numbers (VINs), and medical or account identifiers. Additionally, US postal codes are identified using geographic validation powered by `pgeocode <https://pgeocode.readthedocs.io/en/latest/>`_.
+  - **Parameters**: Configuration of columns to scan or exclude.
+  - **Result**: Flagged records with detected identifiers, including counts and classification by identifier type.
+
 Understandability and Usability
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -376,7 +389,7 @@ and provides a detailed assessment against the FAIR criteria.
 How it Works
 ''''''''''''''
 
-1. Navigate to the `FAIR Compliance Report upload page <https://aidrin.io/FAIR>`_.
+1. Navigate to the `FAIR Compliance Report upload page <https://aidrin.io/fair_assessment>`_.
 2. Upload your metadata file (**DCAT** or **DataCite JSON**).
 3. The system evaluates the file against the FAIR principles and generates a structured report.
 

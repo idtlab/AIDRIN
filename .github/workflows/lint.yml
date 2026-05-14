@@ -23,4 +23,4 @@ jobs:
         run: pip install flake8
 
       - name: Run flake8
-        run: flake8 --config=tox.ini aidrin/
+        run: flake8 --config=tox.ini aidrin/ web/ worker/

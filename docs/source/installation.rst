@@ -46,6 +46,22 @@ Step 2: Set Up the Conda Environment
 
 This installs AIDRIN and its dependencies in editable mode.
 
+**Optional extras:**
+
+.. code-block:: bash
+
+   # AI-generated explanations of metric results (OpenAI-compatible APIs)
+   pip install -e ".[llm]"
+
+   # Remote metric execution via Globus Compute
+   pip install -e ".[globus]"
+
+   # OpenTelemetry tracing
+   pip install -e ".[telemetry]"
+
+   # All optional features
+   pip install -e ".[llm,globus,telemetry]"
+
 Step 3: Install Required Services
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -98,7 +114,7 @@ Terminal 2 – Celery Worker
 .. code-block:: bash
 
    conda activate aidrin-env
-   PYTHONPATH=. celery -A aidrin.make_celery worker --beat --loglevel=info
+   PYTHONPATH=. celery -A worker.make_celery worker --beat --loglevel=info
 
 Terminal 3 – Flask Server
 """""""""""""""""""""""""
@@ -106,7 +122,7 @@ Terminal 3 – Flask Server
 .. code-block:: bash
 
    conda activate aidrin-env
-   flask --app aidrin run --debug
+   flask --app 'web:create_app()' run --debug
 
 Once running, visit:
 `http://127.0.0.1:5000 <http://127.0.0.1:5000>`_

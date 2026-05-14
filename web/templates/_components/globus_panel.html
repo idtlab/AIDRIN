@@ -1,0 +1,90 @@
+<!-- Globus Compute: remote file configuration -->
+<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+
+    {% if not globus_authenticated %}
+    <!-- Not authenticated — show connect button -->
+    <div class="text-center py-6">
+      <svg class="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"/></svg>
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-2">Connect to Globus</h3>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Authenticate with Globus to run metrics on remote datasets without transferring files.</p>
+      <a href="{{ url_for('globus.auth') }}"
+         class="px-5 py-2.5 text-sm font-medium text-white rounded-lg bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/></svg>
+        Sign in with Globus
+      </a>
+    </div>
+
+    {% else %}
+    <!-- Authenticated — show remote file config -->
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full dark:bg-green-900/30 dark:text-green-400">
+          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+          Globus Connected
+        </span>
+      </div>
+      <button onclick="disconnectGlobus()" class="text-xs text-gray-500 dark:text-gray-400 hover:underline">Disconnect</button>
+    </div>
+
+    <form id="globusForm" onsubmit="return false;">
+      <!-- Endpoint UUID -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Globus Compute Endpoint UUID</label>
+        <input type="text" id="globus-endpoint-id" placeholder="e.g., a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+               style="max-width: none;" />
+      </div>
+
+      <!-- Remote file path -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">File path on remote endpoint</label>
+        <input type="text" id="globus-file-path" placeholder="e.g., /data/datasets/adult.csv"
+               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+               style="max-width: none;" />
+      </div>
+
+      <!-- File type selector -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">File type</label>
+        <select id="globus-file-type" class="w-full" style="max-width: none;">
+          {% for ext, label in supported_file_types %}
+            <option value="{{ ext }}">{{ label }} ({{ ext }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Load dataset button -->
+      <button type="button" onclick="loadGlobusDataset()"
+              class="w-full px-5 py-2.5 text-sm font-medium text-white rounded-lg bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+        Load Remote Dataset
+      </button>
+    </form>
+
+    <details class="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+        Endpoint Setup Guide
+        <svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>
+      </summary>
+      <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400 space-y-3">
+        <p>On the remote machine where your data is located:</p>
+        <div class="bg-gray-900 text-gray-100 rounded-lg p-3 text-xs font-mono space-y-1 overflow-x-auto">
+          <div><span class="text-gray-500"># Install</span></div>
+          <div>pip install globus-compute-endpoint aidrin</div>
+          <div class="pt-2"><span class="text-gray-500"># Configure &amp; start</span></div>
+          <div>globus-compute-endpoint configure aidrin-ep</div>
+          <div>globus-compute-endpoint start aidrin-ep</div>
+          <div class="pt-2"><span class="text-gray-500"># Get endpoint UUID</span></div>
+          <div>globus-compute-endpoint list</div>
+          <div class="pt-2"><span class="text-gray-500"># Stop when done</span></div>
+          <div>globus-compute-endpoint stop aidrin-ep</div>
+        </div>
+        <p>Copy the Endpoint ID from the list output and paste it above.</p>
+        <a href="https://aidrin.readthedocs.io/en/latest/contributing.html"
+           target="_blank" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline text-xs">
+          Full documentation
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+        </a>
+      </div>
+    </details>
+    {% endif %}
+</div>

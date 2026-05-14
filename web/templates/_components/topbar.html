@@ -1,0 +1,73 @@
+<!-- Top navigation bar -->
+<nav class="fixed top-0 z-50 w-full border-b border-gray-200 dark:border-gray-700 bg-[var(--secondaryColor)]">
+  <div class="px-3 py-2 lg:px-5 lg:pl-3">
+    <div class="flex items-center justify-between">
+
+      <!-- Left: hamburger + logo -->
+      <div class="flex items-center gap-2">
+        <!-- Mobile sidebar toggle -->
+        <button id="sidebar-toggle" type="button"
+                class="inline-flex items-center p-2 text-sm rounded-lg sm:hidden hover:bg-black/10 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4485f4]"
+                aria-label="Toggle sidebar" aria-controls="sidebar">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path clip-rule="evenodd" fill-rule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"></path></svg>
+        </button>
+        <!-- Title -->
+        <a href="/" class="flex items-baseline gap-2">
+          <span class="text-lg font-semibold whitespace-nowrap" style="color: var(--textColor); font-family: 'Roboto Slab', Georgia, serif;">AIDRIN</span>
+          <span class="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">AI Data Readiness Inspector</span>
+        </a>
+      </div>
+
+      <!-- Center: file info (visible only when a file is loaded) -->
+      {% if uploaded_file_path %}
+      <div class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-lg text-sm" style="background: var(--backgroundColor);">
+        {% if globus_mode %}
+        <!-- Globus remote file indicator -->
+        <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.893 13.393l-1.135-1.135a2.252 2.252 0 01-.421-.585l-1.08-2.16a.414.414 0 00-.663-.107.827.827 0 01-.812.21l-1.273-.363a.89.89 0 00-.738 1.595l.587.39c.59.395.674 1.23.172 1.732l-.2.2c-.212.212-.33.498-.33.796v.41c0 .409-.11.809-.32 1.158l-1.315 2.191a2.11 2.11 0 01-1.81 1.025 1.055 1.055 0 01-1.055-1.055v-1.172c0-.92-.56-1.747-1.414-2.089l-.655-.261a2.25 2.25 0 01-1.383-2.46l.007-.042a2.25 2.25 0 01.29-.787l.09-.15a2.25 2.25 0 012.37-1.048l1.178.236a1.125 1.125 0 001.302-.795l.208-.73a1.125 1.125 0 00-.578-1.315l-.665-.332-.091.091a2.25 2.25 0 01-1.591.659h-.18c-.249 0-.487.1-.662.274a.931.931 0 01-1.458-1.137l1.411-2.353a2.25 2.25 0 00.286-.76m11.928 9.869A9 9 0 008.965 3.525m11.928 9.868A9 9 0 118.965 3.525"/></svg>
+        <span class="font-medium">{{ uploaded_file_name }}</span>
+        <span class="text-xs text-gray-400 dark:text-gray-500">via Globus</span>
+        {% else %}
+        <!-- Local file indicator -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 -960 960 960" fill="currentColor"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
+        <span class="font-medium">{{ uploaded_file_name }}</span>
+        {% endif %}
+        <button onclick="clearFile()" class="ml-1 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" title="Clear file" aria-label="Clear uploaded file">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      {% endif %}
+
+      <!-- Right: action buttons -->
+      <div class="flex items-center gap-1">
+        {% if uploaded_file_path %}
+        <!-- New Session -->
+        <button onclick="clearFile()" class="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" title="Clear session and start over" aria-label="New session">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M20.995 4.005v4.993"/></svg>
+        </button>
+        <!-- Cache -->
+        <a href="{{ url_for('core.my_cache') }}" class="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors" title="Cache Information" aria-label="View cache">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
+        </a>
+        {% endif %}
+        {% if llm_available %}
+        <!-- AI Explanations -->
+        <button onclick="openLLMSettings()" class="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors {% if llm_configured %}text-purple-500{% endif %}" title="AI Explanation Settings" aria-label="AI Explanation Settings">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/></svg>
+        </button>
+        {% endif %}
+        <!-- Logs -->
+        <a href="{{ url_for('admin.logs_page') }}" class="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors" title="Application Logs" aria-label="View logs">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+        </a>
+        <!-- Theme toggle -->
+        <button id="theme-switch" class="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors" aria-label="Toggle dark mode">
+          <!-- Sun (shown in light mode → click for dark) -->
+          <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
+          <!-- Moon (shown in dark mode → click for light) -->
+          <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</nav>

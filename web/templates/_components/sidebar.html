@@ -1,0 +1,131 @@
+<!-- Sidebar navigation: 6 metric pillars -->
+<aside id="sidebar"
+       class="fixed top-0 left-0 z-40 w-64 h-screen pt-14 transition-transform -translate-x-full sm:translate-x-0 border-r border-gray-200 dark:border-gray-700"
+       style="background: var(--secondaryColor);"
+       aria-label="Sidebar">
+  <div class="h-full px-3 pb-4 pt-4 overflow-y-auto">
+
+    <!-- Logo -->
+    <a href="/" class="flex items-center justify-center py-4 mb-3 border-b border-gray-200 dark:border-gray-700">
+      <img src="/images/logoNoBackground.png" class="w-1/2" alt="AIDRIN Logo" />
+    </a>
+
+    <!-- Data Overview -->
+    <button onclick="showPanel('data-overview')"
+            class="sidebar-item flex items-center w-full p-2 mb-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+            style="color: var(--textColor);">
+      <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 0v1.5c0 .621-.504 1.125-1.125 1.125"/></svg>
+      Data Overview
+    </button>
+
+    <hr class="my-2 border-gray-300 dark:border-gray-600" />
+
+    <!-- Metric pillars (disabled until data is loaded in Globus mode) -->
+    <div id="sidebar-metrics" class="{% if globus_mode %}opacity-50 pointer-events-none{% endif %}">
+    {% if globus_mode %}
+    <div id="sidebar-loading-msg" class="flex items-center gap-2 px-2 py-2 mb-2 text-xs text-gray-500 dark:text-gray-400">
+      <svg class="w-3.5 h-3.5 animate-spin text-gray-400" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="#3b82f6"/></svg>
+      Loading dataset info...
+    </div>
+    {% endif %}
+
+    <!-- Pillar: Data Quality -->
+    <div class="mb-1">
+      <button type="button" onclick="toggleSidebarGroup('pillar-quality')"
+              class="flex items-center w-full p-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+              style="color: var(--textColor);">
+        <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="flex-1 text-left">Data Quality</span>
+        <svg class="w-4 h-4 transition-transform text-gray-400" id="pillar-quality-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+      </button>
+      <ul id="pillar-quality" class="hidden pl-9 space-y-1 pt-1">
+        <li><button onclick="showPanel('data-quality')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Data Quality Metrics</button></li>
+      </ul>
+    </div>
+
+    <!-- Pillar: Impact on AI -->
+    <div class="mb-1">
+      <button type="button" onclick="toggleSidebarGroup('pillar-impact')"
+              class="flex items-center w-full p-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+              style="color: var(--textColor);">
+        <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>
+        <span class="flex-1 text-left">Impact on AI</span>
+        <svg class="w-4 h-4 transition-transform text-gray-400" id="pillar-impact-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+      </button>
+      <ul id="pillar-impact" class="hidden pl-9 space-y-1 pt-1">
+        <li><button onclick="showPanel('feature-relevance')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Feature Relevance</button></li>
+        <li><button onclick="showPanel('correlation-analysis')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Correlation Analysis</button></li>
+      </ul>
+    </div>
+
+    <!-- Pillar: Fairness & Bias -->
+    <div class="mb-1">
+      <button type="button" onclick="toggleSidebarGroup('pillar-fairness')"
+              class="flex items-center w-full p-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+              style="color: var(--textColor);">
+        <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z"/></svg>
+        <span class="flex-1 text-left">Fairness &amp; Bias</span>
+        <svg class="w-4 h-4 transition-transform text-gray-400" id="pillar-fairness-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+      </button>
+      <ul id="pillar-fairness" class="hidden pl-9 space-y-1 pt-1">
+        <li><button onclick="showPanel('fairness')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Fairness Metrics</button></li>
+        <li><button onclick="showPanel('class-imbalance')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Class Imbalance</button></li>
+      </ul>
+    </div>
+
+    <!-- Pillar: Data Governance -->
+    <div class="mb-1">
+      <button type="button" onclick="toggleSidebarGroup('pillar-governance')"
+              class="flex items-center w-full p-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+              style="color: var(--textColor);">
+        <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+        <span class="flex-1 text-left">Data Governance</span>
+        <svg class="w-4 h-4 transition-transform text-gray-400" id="pillar-governance-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+      </button>
+      <ul id="pillar-governance" class="hidden pl-9 space-y-1 pt-1">
+        <li><button onclick="showPanel('privacy-preservation')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Privacy Preservation</button></li>
+        <li><button onclick="showPanel('hipaa-compliance')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">HIPAA Compliance</button></li>
+      </ul>
+    </div>
+
+    <!-- Pillar: Understandability & Usability -->
+    <div class="mb-1">
+      <button type="button" onclick="toggleSidebarGroup('pillar-understand')"
+              class="flex items-center w-full p-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+              style="color: var(--textColor);">
+        <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+        <span class="flex-1 text-left">Understandability</span>
+        <svg class="w-4 h-4 transition-transform text-gray-400" id="pillar-understand-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+      </button>
+      <ul id="pillar-understand" class="hidden pl-9 space-y-1 pt-1">
+        <li><button onclick="showPanel('fair-assessment')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">FAIR Assessment</button></li>
+      </ul>
+    </div>
+
+    <!-- Pillar: Data Structure & Organization -->
+    <div class="mb-1">
+      <button type="button" onclick="toggleSidebarGroup('pillar-structure')"
+              class="flex items-center w-full p-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+              style="color: var(--textColor);">
+        <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z"/></svg>
+        <span class="flex-1 text-left">Data Structure</span>
+        <svg class="w-4 h-4 transition-transform text-gray-400" id="pillar-structure-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+      </button>
+      <ul id="pillar-structure" class="hidden pl-9 space-y-1 pt-1">
+        {% if file_type == '.csv' %}
+        <li><button onclick="showPanel('custom-metrics')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Custom Metrics</button></li>
+        {% else %}
+        <li><span class="p-1.5 text-sm opacity-50" title="Custom metrics require CSV files">Custom Metrics (CSV only)</span></li>
+        {% endif %}
+      </ul>
+    </div>
+
+    </div><!-- end sidebar-metrics -->
+
+    <!-- Version -->
+    <div class="absolute bottom-3 left-3 right-3 text-xs opacity-50 text-center">
+      v{{ app_version }} |
+      <a href="https://aidrin.readthedocs.io/en/latest/" target="_blank" style="color: var(--linkColor);">Docs</a>
+    </div>
+  </div>
+</aside>

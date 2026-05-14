@@ -1,6 +1,10 @@
+import logging
+
 import pandas as pd
 from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -32,14 +36,13 @@ def conditional_demographic_disparity(self: Task, target, sensitive, accepted_va
             accepted_value
         )  # cast accepted_value to the same type as target elements
 
+        logger.info("Computing conditional demographic disparity: %d rows, accepted_value=%r", len(target), accepted_value)
         # Create a DataFrame from the input lists
         df = pd.DataFrame({"target": target, "sensitive": sensitive})
-        print(df)
         # Convert target to binary (1 for accepted, 0 for rejected)
         df["target_binary"] = df["target"].apply(
             lambda x: 1 if x == accepted_value else 0
         )
-        print(df["target_binary"])
         # Calculate counts for each group and target combination
         group_counts = (
             df.groupby(["sensitive", "target_binary"]).size().unstack(fill_value=0)
@@ -85,9 +88,7 @@ def conditional_demographic_disparity(self: Task, target, sensitive, accepted_va
                 "disparity": str(disparity),
             }
 
-        # Convert results to a DataFrame
-        # results_df = pd.DataFrame(results)
-
+        logger.info("Conditional demographic disparity computed for %d sensitive groups", len(results))
         return {"Disparities": results}
     except SoftTimeLimitExceeded:
-        raise Exception("Duplicity task timed out.")
+        raise Exception("Conditional demographic disparity task timed out.")
