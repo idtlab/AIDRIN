@@ -48,6 +48,19 @@ telemetry = [
 llm = [
     "openai>=1.0",
 ]
+adroit = [
+    "openai>=1.6.0",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-text-splitters>=0.3.0",
+    "faiss-cpu>=1.7.0",
+    "numpy>=1.26.4",
+    "pandas>=2.0.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "pymupdf>=1.24.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-flask",
@@ -76,6 +89,13 @@ docs = [
 [tool.setuptools.packages.find]
 include = ["aidrin*", "web*", "worker*"]
 
+[tool.setuptools.package-data]
+"aidrin.adroit" = [
+    "configs/*.yaml",
+    "use_cases/power_consumption/data/metadata.txt",
+    "use_cases/power_consumption/sources/*.pdf",
+]
+
 [tool.setuptools.dynamic]
 version = {attr = "aidrin._version.__version__"}
 
@@ -96,6 +116,19 @@ docs = [
     "sphinx-rtd-theme==1.2.2",
     "sphinxemoji",
     "breathe",
+]
+adroit = [
+    "openai>=1.6.0",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-text-splitters>=0.3.0",
+    "faiss-cpu>=1.7.0",
+    "numpy>=1.26.4",
+    "pandas>=2.0.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "pymupdf>=1.24.0",
 ]
 
 

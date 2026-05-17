@@ -1,0 +1,6 @@
+file-path: headless_demos/messy_sensor_data.csv
+file-type: .csv
+metrics:
+  - completeness
+  - duplicity
+  - outliers

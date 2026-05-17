@@ -1,0 +1,50 @@
+# ADROIT config — UCI Individual Household Electric Power Consumption
+#
+# Dataset: https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption
+# Place files under AIDRIN/use_cases/power_consumption/ before running.
+#
+# Usage:
+#   python -m aidrin.adroit.vector_db_builder -c <path/to/this/file>
+#   python -m aidrin.adroit.run -c <path/to/this/file> -o results/power_consumption.json
+
+paths:
+  data_loader: "aidrin.adroit.dataloaders.power_consumption:load_dataset"
+  metadata_csv: "./use_cases/power_consumption/data/metadata.txt"
+
+profiling:
+  full_summary: false
+
+vector_store:
+  sources:
+    - ./use_cases/power_consumption/sources
+  embedding_model: text-embedding-3-large
+  chunk_size: 1000
+  chunk_overlap: 200
+  vector_store_name: power_consumption_openai_vector_store
+
+retrieval:
+  enabled: true
+  max_workers: 8
+  answer_model: gpt-5.2
+  top_k: 3
+  question:
+    - "Which European Union regulation is cited as requiring that the consequences of profiling be informed to the data subject? Return the name of the regulation as a string."
+    - "When creating an asynchronous version of the dataset, a deterministic sampling scheme [1,2,3,7,2,2,4,1,2,1] is used. What is the modular period of this scheme and does the dataset follow this sampling pattern without significant deviations? Return the modular period as an integer and a boolean indicating whether the dataset follows the pattern (True/False)."
+
+executor:
+  enabled: true
+  max_attempts: 3
+  model: gpt-5.2
+  temperature: 0.0
+
+complexity_scorer:
+  enabled: true
+  model: gpt-5.2
+
+remediation:
+  enabled: true
+  model: gpt-5.2
+  context_chars: 3000
+
+output:
+  save_log: true

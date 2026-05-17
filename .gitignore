@@ -166,6 +166,12 @@ cython_debug/
 metadata/
 noisy/
 
+# ADROIT power consumption dataset (too large for git; download separately)
+aidrin/adroit/use_cases/power_consumption/data/household_power_consumption.txt
+aidrin/adroit/results/
+aidrin/adroit/use_cases/power_consumption/sources/1908.09257v4.pdf
+"aidrin/adroit/use_cases/power_consumption/sources/Deep learning for time series forecasting_ The electric load case.pdf"
+
 # Ignore Mac DS_Store files
 .DS_Store
 **/.DS_Store
