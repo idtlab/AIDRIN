@@ -822,14 +822,14 @@ function renderScoresSection(scores, depth) {
 
 // ==================== Globus Compute ====================
 
-/** Switch between Upload, Globus, and ADROIT tabs on the landing page. */
+/** Switch between Upload, Globus, and CLI tabs on the landing page. */
 function switchUploadTab(tab) {
   const localPanel = document.getElementById("local-upload");
   const globusPanel = document.getElementById("globus-panel");
-  const adroitPanel = document.getElementById("adroit-panel");
+  const cliPanel = document.getElementById("cli-panel");
   const tabLocal = document.getElementById("tab-local");
   const tabGlobus = document.getElementById("tab-globus");
-  const tabAdroit = document.getElementById("tab-adroit");
+  const tabCli = document.getElementById("tab-cli");
 
   if (!localPanel) {
     console.error("switchUploadTab: localPanel not found");
@@ -843,18 +843,18 @@ function switchUploadTab(tab) {
   // Hide all panels and deactivate all tabs
   localPanel.classList.add("hidden");
   if (globusPanel) globusPanel.classList.add("hidden");
-  if (adroitPanel) adroitPanel.classList.add("hidden");
+  if (cliPanel) cliPanel.classList.add("hidden");
   if (tabLocal) tabLocal.className = `${base} ${inactiveClass}`;
   if (tabGlobus) tabGlobus.className = `${base} ${inactiveClass}`;
-  if (tabAdroit) tabAdroit.className = `${base} ${inactiveClass}`;
+  if (tabCli) tabCli.className = `${base} ${inactiveClass}`;
 
   // Activate the selected tab and panel
   if (tab === "globus" && globusPanel) {
     globusPanel.classList.remove("hidden");
     if (tabGlobus) tabGlobus.className = `${base} ${activeClass}`;
-  } else if (tab === "adroit" && adroitPanel) {
-    adroitPanel.classList.remove("hidden");
-    if (tabAdroit) tabAdroit.className = `${base} ${activeClass}`;
+  } else if (tab === "cli" && cliPanel) {
+    cliPanel.classList.remove("hidden");
+    if (tabCli) tabCli.className = `${base} ${activeClass}`;
   } else {
     localPanel.classList.remove("hidden");
     if (tabLocal) tabLocal.className = `${base} ${activeClass}`;

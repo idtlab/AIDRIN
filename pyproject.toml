@@ -86,6 +86,9 @@ docs = [
 # Start Celery beat (scheduled tasks):
 #   uv run celery -A worker.make_celery beat --loglevel=info
 
+[project.scripts]
+aidrin = "aidrin.headless.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["aidrin*", "web*", "worker*"]
 
