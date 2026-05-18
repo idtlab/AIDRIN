@@ -126,8 +126,8 @@ def data_quality():
                     metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
 
             except Exception as e:
-                metric_time_log.error("Data Quality error: %s", e)
-                return jsonify({"error": str(e)}), 200
+                metric_time_log.error("Data Quality error: %s", e, exc_info=True)
+                return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
 
             duration_ms = (time.time() - start_time) * 1000
             span.set_attribute("metric.duration_ms", duration_ms)
@@ -300,8 +300,8 @@ def correlation_analysis():
             else:
                 return jsonify({"message": "No correlation analysis selected"}), 200
         except Exception as e:
-            metric_time_log.error("Correlation Analysis error: %s", e)
-            return jsonify({"error": str(e)}), 200
+            metric_time_log.error("Correlation Analysis error: %s", e, exc_info=True)
+            return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
 
     return get_result_or_default("metrics.correlation_analysis", file_path, file_name)
 
@@ -359,8 +359,8 @@ def feature_relevance():
                 if df_json is None:
                     return jsonify({"trigger": "correlationError", "error": "Data cleaning failed"}), 200
             except Exception as e:
-                metric_time_log.error("Feature Relevance — data cleaning error: %s", e)
-                return jsonify({"trigger": "correlationError", "error": str(e)}), 200
+                metric_time_log.error("Feature Relevance — data cleaning error: %s", e, exc_info=True)
+                return jsonify({"trigger": "correlationError", "error": f"{type(e).__name__}: {e}"}), 200
 
             try:
                 t0 = time.time()
@@ -375,8 +375,8 @@ def feature_relevance():
                         {"trigger": "correlationError", "error": "No valid correlations could be calculated"}
                     ), 200
             except Exception as e:
-                metric_time_log.error("Feature Relevance — Pearson correlation error: %s", e)
-                return jsonify({"trigger": "correlationError", "error": str(e)}), 200
+                metric_time_log.error("Feature Relevance — Pearson correlation error: %s", e, exc_info=True)
+                return jsonify({"trigger": "correlationError", "error": f"{type(e).__name__}: {e}"}), 200
 
             try:
                 t0 = time.time()
@@ -739,8 +739,8 @@ def hipaa_compliance():
             final_dict = ensure_json_serializable(final_dict)
 
         except Exception as e:
-            metric_time_log.error("HIPAA Compliance error: %s", e)
-            return jsonify({"error": str(e)}), 500
+            metric_time_log.error("HIPAA Compliance error: %s", e, exc_info=True)
+            return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
         duration = time.time() - start_time
         metric_time_log.info("HIPAA Compliance Evaluation completed in %.2f seconds", duration)
@@ -808,7 +808,8 @@ def fair_assessment():
             return redirect(url_for("core.inspector"))
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        metric_time_log.error("FAIR Assessment error: %s", e, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 400
 
 
 # ---------------------------------------------------------------------------
@@ -847,7 +848,8 @@ def check_task_status(task_id, metric_name):
                 }
             )
     except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
+        metric_time_log.error("Task status check error: %s", e, exc_info=True)
+        return jsonify({"status": "error", "error": "An internal error occurred"}), 500
 
 
 # ---------------------------------------------------------------------------

@@ -64,7 +64,7 @@ def test_inspector_get_no_file(client):
     html = response.data.decode()
     assert "AI Data Readiness Inspector" in html
     assert "Select a File Type" in html
-    assert "aidrin.readthedocs.io" in html
+    assert "https://aidrin.readthedocs.io/en/latest/" in html
 
 
 def test_inspector_contains_version(uploaded_client):

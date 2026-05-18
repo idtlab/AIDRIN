@@ -58,16 +58,17 @@ def configure():
     except (TypeError, ValueError):
         temperature = 0.5
 
+    api_base = (data.get("api_base") or "https://api.openai.com/v1").strip()
+    model = (data.get("model") or "gpt-4o-mini").strip()
+
     session["llm_config"] = {
-        "api_base": (data.get("api_base") or "https://api.openai.com/v1").strip(),
+        "api_base": api_base,
         "api_key": api_key,
-        "model": (data.get("model") or "gpt-4o-mini").strip(),
+        "model": model,
         "temperature": max(0.0, min(2.0, temperature)),
     }
 
-    logger.info("LLM configured: model=%s, base=%s",
-                session["llm_config"]["model"],
-                session["llm_config"]["api_base"])
+    logger.info("LLM configured: model=%s, base=%s", model, api_base)
     return jsonify({"success": True})
 
 
@@ -118,7 +119,7 @@ def test_connection():
         return jsonify({"success": True, "reply": reply})
     except Exception as e:
         logger.warning("LLM test connection failed: %s", e)
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": f"{type(e).__name__}: {e}"}), 400
 
 
 # ---------------------------------------------------------------------------
@@ -171,8 +172,8 @@ def explain():
     try:
         explanation = explain_metric(full_description, visualization, config)
     except Exception as e:
-        logger.error("LLM explain error: %s", e)
-        return jsonify({"error": str(e)}), 500
+        logger.error("LLM explain error: %s", e, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     if not explanation:
         return jsonify({"error": "LLM returned an empty response"}), 500
