@@ -257,6 +257,14 @@ function withSubmitGuard(button, taskFn) {
     return;
   }
   button.dataset.submitting = "true";
+  // Capture the live text color so the spinner inherits the theme (works for
+  // dark/light mode, blue-on-white buttons, etc.) — the label is hidden via
+  // `color: transparent` in `.is-submitting`, so currentColor alone wouldn't
+  // do (it would be transparent too).
+  button.style.setProperty(
+    "--aidrin-spinner-color",
+    getComputedStyle(button).color,
+  );
   button.disabled = true;
   button.classList.add("is-submitting");
 
@@ -266,6 +274,7 @@ function withSubmitGuard(button, taskFn) {
       button.dataset.submitting = "false";
       button.disabled = false;
       button.classList.remove("is-submitting");
+      button.style.removeProperty("--aidrin-spinner-color");
     });
 }
 
