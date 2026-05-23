@@ -1,18 +1,15 @@
 import logging
 import os
 
+from aidrin.file_handling.readers.base_reader import BaseFileReader
 from aidrin.file_handling.readers.csv_reader import csvReader
 from aidrin.file_handling.readers.excel_reader import excelReader
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
 
-# Notes:
-# To add support for new file types:
-# - Add a new subclass of BaseFileReader with a .read() method
-#       (and optionally .parse(), .filter()) to 'file_readers'.
-# - Register the class in READER_MAP.
-# - Add a display name and extension to SUPPORTED_FILE_TYPES for the front end.
+# To add support for new file types without touching this file,
+# use register_reader() defined below.
 
 # Reader Map. Used to create file type specific parsing
 READER_MAP = {
@@ -21,7 +18,6 @@ READER_MAP = {
     ".xls, .xlsb, .xlsx, .xlsm": excelReader,
     ".json": jsonReader,
     ".h5": hdf5Reader,
-    # Add additional file types here
 }
 
 # Supported file types. Read on front end to create select features.
@@ -31,12 +27,44 @@ SUPPORTED_FILE_TYPES = [
     (".json", "JSON"),
     (".npz", "NumPy"),
     (".h5", "HDF5"),
-    # Add additional file types here using the format:
-    # (file_type,file_type_name)
 ]
 
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
+
+
+def register_reader(extension: str, reader_cls, force: bool = False):
+    """Register a custom reader for a file extension.
+
+    Example:
+        from aidrin.file_handling.readers.base_reader import BaseFileReader
+        from aidrin.file_handling.file_parser import register_reader
+        import pandas as pd
+
+        class MyFormatReader(BaseFileReader):
+            def read(self):
+                return pd.DataFrame(...)
+
+        register_reader(".myf", MyFormatReader)
+    """
+    if not isinstance(extension, str) or not extension.startswith("."):
+        raise ValueError(f"extension must be a dot-prefixed string like '.csv', got: {extension!r}")
+
+    if not (isinstance(reader_cls, type) and issubclass(reader_cls, BaseFileReader)):
+        raise TypeError(f"{reader_cls} must be a subclass of BaseFileReader")
+
+    if extension in READER_MAP and not force:
+        raise ValueError(
+            f"A reader for '{extension}' is already registered ({READER_MAP[extension].__name__}). "
+            f"Pass force=True to override."
+        )
+
+    READER_MAP[extension] = reader_cls
+
+    # keep SUPPORTED_FILE_TYPES in sync; skip if already listed
+    already_listed = any(ext == extension for ext, _ in SUPPORTED_FILE_TYPES)
+    if not already_listed:
+        SUPPORTED_FILE_TYPES.append((extension, extension.lstrip(".").upper()))
 
 
 def parse_file(file_info):
