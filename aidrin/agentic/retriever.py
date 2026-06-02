@@ -40,7 +40,7 @@ try:
     from langchain_openai import OpenAIEmbeddings
 except ImportError as exc:
     raise ImportError(
-        "langchain-openai is required. Install with: pip install 'aidrin[adroit]'"
+        "langchain-openai is required. Install with: pip install 'aidrin[agentic]'"
     ) from exc
 
 try:
@@ -48,10 +48,15 @@ try:
 except ImportError:
     GoogleGenerativeAIEmbeddings = None  # type: ignore
 
-from aidrin.adroit.llm_factory import create_chat_model
+from aidrin.agentic.llm_factory import create_chat_model
 
 
-def _make_embeddings(model_name: str, openai_api_key: str | None = None, google_api_key: str | None = None):
+def _make_embeddings(
+    model_name: str,
+    openai_api_key: str | None = None,
+    google_api_key: str | None = None,
+    base_url: str | None = None,
+):
     if "gemini" in model_name or "embedding-001" in model_name:
         if GoogleGenerativeAIEmbeddings is None:
             raise ImportError(
@@ -62,7 +67,40 @@ def _make_embeddings(model_name: str, openai_api_key: str | None = None, google_
         if google_api_key:
             kwargs["google_api_key"] = google_api_key
         return GoogleGenerativeAIEmbeddings(**kwargs)
-    return OpenAIEmbeddings(model=model_name, api_key=openai_api_key)
+
+    kwargs: dict[str, Any] = {"model": model_name}
+    if openai_api_key:
+        kwargs["api_key"] = openai_api_key
+    if base_url:
+        kwargs["base_url"] = base_url
+    model = OpenAIEmbeddings(**kwargs)
+    if not base_url:
+        return model
+
+    # Wrap with fallback to standard OpenAI when a custom endpoint is configured.
+    fallback_kwargs: dict[str, Any] = {"model": model_name}
+    if openai_api_key:
+        fallback_kwargs["api_key"] = openai_api_key
+    fallback = OpenAIEmbeddings(**fallback_kwargs)
+
+    import sys as _sys
+
+    class _FallbackEmbeddings:
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            try:
+                return model.embed_documents(texts)
+            except Exception as exc:
+                _sys.stderr.write(f"[aidrin] Embedding via custom endpoint failed ({exc}); falling back to OpenAI API.\n")
+                return fallback.embed_documents(texts)
+
+        def embed_query(self, text: str) -> list[float]:
+            try:
+                return model.embed_query(text)
+            except Exception as exc:
+                _sys.stderr.write(f"[aidrin] Embedding via custom endpoint failed ({exc}); falling back to OpenAI API.\n")
+                return fallback.embed_query(text)
+
+    return _FallbackEmbeddings()
 
 
 class VectorRetriever:
@@ -76,6 +114,7 @@ class VectorRetriever:
         self.embedding_model = cfg["embedding_model"]
         self.api_key = cfg["openai_api_key"]
         self.google_api_key = cfg["google_api_key"]
+        self.base_url = cfg["base_url"]
         self.answer_model = cfg["answer_model"]
         self.preview_chars = cfg["preview_chars"]
         self.context_compression = cfg["context_compression"]
@@ -110,8 +149,14 @@ class VectorRetriever:
             retrieval_cfg.get("embedding_model")
             or vector_store_cfg.get("embedding_model", "text-embedding-3-small")
         )
-        openai_api_key = retrieval_cfg.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+        llm_cfg = cfg.get("llm", {}) or {}
+        openai_api_key = (
+            retrieval_cfg.get("openai_api_key")
+            or llm_cfg.get("api_key")
+            or os.environ.get("OPENAI_API_KEY")
+        )
         google_api_key = retrieval_cfg.get("google_api_key") or os.environ.get("GOOGLE_API_KEY")
+        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
         answer_model = retrieval_cfg.get("answer_model", "gpt-4o")
         preview_chars = int(retrieval_cfg.get("preview_chars", 500))
         context_compression = bool(retrieval_cfg.get("context_compression", False))
@@ -124,6 +169,7 @@ class VectorRetriever:
             "embedding_model": embedding_model,
             "openai_api_key": openai_api_key,
             "google_api_key": google_api_key,
+            "base_url": base_url,
             "answer_model": answer_model,
             "preview_chars": preview_chars,
             "context_compression": context_compression,
@@ -143,10 +189,10 @@ class VectorRetriever:
                 raise ValueError("Google API key missing. Set GOOGLE_API_KEY or retrieval.google_api_key in config.")
         elif not (self.api_key or "OPENAI_API_KEY" in os.environ):
             raise ValueError("OpenAI API key missing. Set OPENAI_API_KEY or retrieval.openai_api_key in config.")
-        model = _make_embeddings(self.embedding_model, self.api_key, self.google_api_key)
+        model = _make_embeddings(self.embedding_model, self.api_key, self.google_api_key, self.base_url)
         vec = model.embed_query(text)
         try:
-            from aidrin.adroit.token_tracker import get_tracker
+            from aidrin.agentic.token_tracker import get_tracker
             get_tracker().record_embedding(self.embedding_model, tokens=0, chars=len(text), tokens_unreported=True)
         except Exception:
             pass
@@ -164,7 +210,7 @@ class VectorRetriever:
 
     def retrieve(self, profile_summary: dict[str, Any] | None = None, question: str | None = None) -> dict[str, Any]:
         api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
-        llm = create_chat_model(self.answer_model, api_key=api_key, temperature=0)
+        llm = create_chat_model(self.answer_model, api_key=api_key, temperature=0, base_url=self.base_url)
 
         question = question or self.question
 

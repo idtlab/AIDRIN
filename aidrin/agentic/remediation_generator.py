@@ -22,7 +22,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from aidrin.adroit.llm_factory import create_chat_model
+from aidrin.agentic.llm_factory import create_chat_model
 
 
 _CONTEXT_CHARS = 3000
@@ -64,6 +64,7 @@ class RemediationGenerator:
         self.enabled: bool = cfg["enabled"]
         self.model: str = cfg["model"]
         self.api_key: str | None = cfg["api_key"]
+        self.base_url: str | None = cfg["base_url"]
         self.context_chars: int = cfg["context_chars"]
         self._llm: Any = None
 
@@ -129,25 +130,29 @@ class RemediationGenerator:
     def _get_llm(self) -> Any:
         if self._llm is None:
             api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
-            self._llm = create_chat_model(self.model, api_key=api_key, temperature=0)
+            self._llm = create_chat_model(self.model, api_key=api_key, temperature=0, base_url=self.base_url)
         return self._llm
 
     def _load_config(self, config_path: Path) -> dict[str, Any]:
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
         rem_cfg = raw.get("remediation", {}) or {}
         retrieval_cfg = raw.get("retrieval", {}) or {}
+        llm_cfg = raw.get("llm", {}) or {}
         enabled = bool(rem_cfg.get("enabled", True))
         model = rem_cfg.get("model") or retrieval_cfg.get("answer_model", "gpt-4o")
         api_key = (
             rem_cfg.get("openai_api_key")
             or retrieval_cfg.get("openai_api_key")
+            or llm_cfg.get("api_key")
             or os.environ.get("OPENAI_API_KEY")
         )
+        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
         context_chars = int(rem_cfg.get("context_chars", _CONTEXT_CHARS))
         return {
             "enabled": enabled,
             "model": model,
             "api_key": api_key,
+            "base_url": base_url,
             "context_chars": context_chars,
         }
 

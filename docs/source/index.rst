@@ -36,9 +36,9 @@ Two Ways to Use AIDRIN
 
 **Command Line Interface (CLI)**
    Run data readiness metrics directly from your terminal or Python scripts. Suitable for
-   automated pipelines, CI workflows, and headless environments. Also includes **ADROIT**, an
-   LLM-powered agent for domain-specific question answering and remediation grounded in scientific
-   literature.
+   automated pipelines, CI workflows, and headless environments. Also includes an **agentic
+   evaluation** component for domain-aware data readiness question answering and remediation
+   grounded in scientific literature.
    See :ref:`cli_installation` and :ref:`cli_usage`.
 
 ----

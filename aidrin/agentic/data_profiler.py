@@ -6,7 +6,7 @@ Given a YAML config, the profiler:
 2. Computes summary statistics split into numeric and categorical views.
 3. Returns a JSON-friendly dictionary and can optionally write it to disk.
 
-Dependencies: pandas, pyyaml (both installed with ``pip install "aidrin[adroit]"``).
+Dependencies: pandas, pyyaml (both installed with ``pip install "aidrin[agentic]"``).
 """
 
 from __future__ import annotations
@@ -333,12 +333,31 @@ class DataProfiler:
 
     def _load_via_loader(self, path: str) -> pd.DataFrame:
         if ":" not in path:
-            raise ValueError("paths.data_loader must be in form module:function")
+            raise ValueError("paths.data_loader must be in form 'module_or_file.py:function'")
         module_name, func_name = path.split(":", 1)
+        p = Path(module_name)
+        if p.suffix == ".py":
+            # Resolve relative to the config file's directory
+            candidates = [p, self.config_path.parent / p]
+            for candidate in candidates:
+                candidate = candidate.resolve()
+                if candidate.exists():
+                    spec = importlib.util.spec_from_file_location(candidate.stem, str(candidate))
+                    if spec and spec.loader:
+                        mod = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(mod)  # type: ignore[arg-type]
+                        func = getattr(mod, func_name, None)
+                        if not callable(func):
+                            raise ValueError(f"Loader function '{func_name}' not found in {candidate}")
+                        df = func()
+                        if not isinstance(df, pd.DataFrame):
+                            raise TypeError("Data loader must return a pandas DataFrame")
+                        return df
+            raise FileNotFoundError(f"Loader file not found: {module_name} (looked relative to config and cwd)")
         module = importlib.import_module(module_name)
         func = getattr(module, func_name, None)
         if not callable(func):
-            raise ValueError(f"Loader function {func_name} not found in {module_name}")
+            raise ValueError(f"Loader function '{func_name}' not found in {module_name}")
         df = func()
         if not isinstance(df, pd.DataFrame):
             raise TypeError("Data loader must return a pandas DataFrame")

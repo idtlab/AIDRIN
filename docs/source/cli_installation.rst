@@ -31,15 +31,16 @@ Once installed, the ``aidrin`` command is available system-wide:
 
 ----
 
-ADROIT (Optional)
------------------
+Agentic Evaluation (Optional)
+-----------------------------
 
-**ADROIT** is an LLM-powered extension that requires additional dependencies. Install it as a
-separate optional extra:
+The **agentic evaluation** component is AIDRIN's domain-aware data readiness evaluation extension.
+It uses LLMs and retrieval-augmented generation over domain literature to answer dataset-specific
+readiness questions. It requires additional dependencies — install it as a separate optional extra:
 
 .. code-block:: bash
 
-   pip install -e ".[adroit]"
+   pip install -e ".[agentic]"
 
 .. note::
 

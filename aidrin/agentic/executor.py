@@ -17,6 +17,7 @@ Config (YAML) expected keys:
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import os
 import traceback
 from pathlib import Path
@@ -30,7 +31,7 @@ try:
 except Exception:
     np = None
 
-from aidrin.adroit.llm_factory import create_chat_model
+from aidrin.agentic.llm_factory import create_chat_model
 
 
 class CodeExecutor:
@@ -42,13 +43,14 @@ class CodeExecutor:
         self.model: str = cfg["model"]
         self.temperature: float = cfg["temperature"]
         self.api_key: str | None = cfg["openai_api_key"]
+        self.base_url: str | None = cfg["base_url"]
         self.data_path: Path | None = cfg.get("data_path")
         self.data_loader_path: str | None = cfg.get("data_loader")
 
         api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
         self.llm = None
         if self.enabled:
-            self.llm = create_chat_model(self.model, temperature=self.temperature, api_key=api_key)
+            self.llm = create_chat_model(self.model, temperature=self.temperature, api_key=api_key, base_url=self.base_url)
 
     def run(self, retrieval_result: dict[str, Any] | None, profile_result: dict[str, Any] | None = None) -> dict[str, Any]:
         """Execute generated code with optional self-healing repairs."""
@@ -270,7 +272,13 @@ class CodeExecutor:
         max_attempts = max(1, int(exec_cfg.get("max_attempts", 1)))
         model = exec_cfg.get("model", "gpt-4o")
         temperature = float(exec_cfg.get("temperature", 0.0))
-        openai_api_key = exec_cfg.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+        llm_cfg = cfg.get("llm", {}) or {}
+        openai_api_key = (
+            exec_cfg.get("openai_api_key")
+            or llm_cfg.get("api_key")
+            or os.environ.get("OPENAI_API_KEY")
+        )
+        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
 
         paths_cfg = cfg.get("paths", {}) or {}
         data_loader = paths_cfg.get("data_loader")
@@ -288,6 +296,7 @@ class CodeExecutor:
             "model": model,
             "temperature": temperature,
             "openai_api_key": openai_api_key,
+            "base_url": base_url,
             "data_path": data_csv,
             "data_loader": data_loader,
         }
@@ -308,12 +317,30 @@ class CodeExecutor:
 
     def _load_via_loader(self, path: str) -> pd.DataFrame:
         if ":" not in path:
-            raise ValueError("paths.data_loader must be in form module:function")
+            raise ValueError("paths.data_loader must be in form 'module_or_file.py:function'")
         module_name, func_name = path.split(":", 1)
+        p = Path(module_name)
+        if p.suffix == ".py":
+            candidates = [p, self.config_path.parent / p]
+            for candidate in candidates:
+                candidate = candidate.resolve()
+                if candidate.exists():
+                    spec = importlib.util.spec_from_file_location(candidate.stem, str(candidate))
+                    if spec and spec.loader:
+                        mod = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(mod)  # type: ignore[arg-type]
+                        func = getattr(mod, func_name, None)
+                        if not callable(func):
+                            raise ValueError(f"Loader function '{func_name}' not found in {candidate}")
+                        df = func()
+                        if not isinstance(df, pd.DataFrame):
+                            raise TypeError("Data loader must return a pandas DataFrame")
+                        return df
+            raise FileNotFoundError(f"Loader file not found: {module_name} (looked relative to config and cwd)")
         module = importlib.import_module(module_name)
         func = getattr(module, func_name, None)
         if not callable(func):
-            raise ValueError(f"Loader function {func_name} not found in {module_name}")
+            raise ValueError(f"Loader function '{func_name}' not found in {module_name}")
         df = func()
         if not isinstance(df, pd.DataFrame):
             raise TypeError("Data loader must return a pandas DataFrame")

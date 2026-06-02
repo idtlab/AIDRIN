@@ -1,11 +1,11 @@
 """
-ADROIT pipeline entry point.
+Agentic evaluation pipeline entry point.
 
 Run the full five-stage pipeline (profile → vector build → retrieve → execute → score → remediate)
 for all questions defined in a YAML config.
 
 Example:
-    python -m aidrin.adroit.run -c configs/my_dataset.yaml -o results/output.json
+    python -m aidrin.agentic.run -c configs/my_dataset.yaml -o results/output.json
 """
 
 from __future__ import annotations
@@ -19,12 +19,12 @@ from pathlib import Path
 
 import yaml
 
-from aidrin.adroit.data_profiler import DataProfiler
-from aidrin.adroit.retriever import VectorRetriever
-from aidrin.adroit.executor import CodeExecutor
-from aidrin.adroit.complexity_scorer import QueryComplexityScorer
-from aidrin.adroit.remediation_generator import RemediationGenerator
-from aidrin.adroit.token_tracker import get_tracker
+from aidrin.agentic.data_profiler import DataProfiler
+from aidrin.agentic.retriever import VectorRetriever
+from aidrin.agentic.executor import CodeExecutor
+from aidrin.agentic.complexity_scorer import QueryComplexityScorer
+from aidrin.agentic.remediation_generator import RemediationGenerator
+from aidrin.agentic.token_tracker import get_tracker
 
 try:
     import pandas as pd  # type: ignore
@@ -125,7 +125,7 @@ def _run_query(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the ADROIT data readiness pipeline.")
+    parser = argparse.ArgumentParser(description="Run the domain-aware agentic data readiness evaluation pipeline.")
     parser.add_argument("-c", "--config", type=Path, required=True,
                         help="Path to YAML config file.")
     parser.add_argument("-o", "--output", type=Path,
@@ -161,7 +161,7 @@ def main() -> None:
     vector_result = None
     if not args.skip_vector and cfg.get("vector_store"):
         try:
-            from aidrin.adroit.vector_db_builder import VectorDBBuilder
+            from aidrin.agentic.vector_db_builder import VectorDBBuilder
             builder = VectorDBBuilder(args.config)
             vector_result = builder.build()
         except Exception as exc:
@@ -202,7 +202,7 @@ def main() -> None:
     }
 
     safe = _json_safe(combined)
-    adroit_root = Path(__file__).resolve().parent
+    agentic_root = Path(__file__).resolve().parent
 
     log_path = None
     if args.output:
@@ -210,7 +210,7 @@ def main() -> None:
         profiler.save(safe, args.output)
         log_path = args.output
     elif save_log:
-        out_dir = adroit_root / "outputs"
+        out_dir = agentic_root / "outputs"
         log_path = _write_run_log(safe, out_dir)
 
     print(json.dumps(safe, indent=2, ensure_ascii=False))

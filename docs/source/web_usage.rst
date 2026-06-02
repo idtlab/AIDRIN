@@ -33,7 +33,7 @@ Using AIDRIN Functions
 ~~~~~~~~~~~~~~~~~~~~~~
 
 AIDRIN provides functions for data readiness and privacy analysis on datasets (e.g., CSV files). Below, we outline the key functions, their purpose, and what they return, using a sample dataset (``adult.csv``) as an example. You can download this dataset from the `UCI Machine Learning Repository <https://archive.ics.uci.edu/ml/datasets/adult>`_.
-You can find sample datasets in the `aidrin/datasets/test_data` directory.
+You can find sample datasets in the `examples/sample_data` directory of the repository, or download them directly from the web interface's **Sample Data** panel on the inspector page.
 
 Setting Up File Information
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

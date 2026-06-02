@@ -30,6 +30,7 @@ dependencies = [
     "h5py>=3.14.0",
     "openpyxl>=3.1.5",
     "pgeocode>=0.5.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +49,7 @@ telemetry = [
 llm = [
     "openai>=1.0",
 ]
-adroit = [
+agentic = [
     "openai>=1.6.0",
     "langchain>=0.3.0",
     "langchain-openai>=0.3.0",
@@ -93,11 +94,7 @@ aidrin = "aidrin.headless.cli:main"
 include = ["aidrin*", "web*", "worker*"]
 
 [tool.setuptools.package-data]
-"aidrin.adroit" = [
-    "configs/*.yaml",
-    "use_cases/power_consumption/data/metadata.txt",
-    "use_cases/power_consumption/sources/*.pdf",
-]
+"aidrin.agentic" = []
 
 [tool.setuptools.dynamic]
 version = {attr = "aidrin._version.__version__"}
@@ -120,7 +117,7 @@ docs = [
     "sphinxemoji",
     "breathe",
 ]
-adroit = [
+agentic = [
     "openai>=1.6.0",
     "langchain>=0.3.0",
     "langchain-openai>=0.3.0",

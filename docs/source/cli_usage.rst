@@ -9,16 +9,53 @@ Quick Start
 .. code-block:: bash
 
    # Fast data quality assessment (completeness, duplicates, outliers)
-   aidrin data-quality path/to/dataset.csv
+   aidrin data-quality /path/to/sample_dataset.csv
 
    # List all available metrics
    aidrin list
 
    # Run a single metric
-   aidrin run completeness path/to/dataset.csv
+   aidrin run completeness /path/to/sample_dataset.csv
 
    # Run a batch of metrics from a YAML config
-   aidrin batch path/to/config.yaml
+   aidrin batch /path/to/my_project/batch_config.yaml
+
+----
+
+Sample Dataset
+--------------
+
+All examples on this page use a single CSV file. You can also find ready-to-use sample
+datasets in ``examples/sample_data/`` in the repository.
+
+For the following example, run the following Python snippet
+once to generate a synthetic datasets yourself — then substitute ``/path/to/sample_dataset.csv`` with the
+actual path where you saved it:
+
+.. code-block:: python
+
+   import pandas as pd
+
+   data = {
+       "age":          [34, 28, 42, 31, 25, 34, 38, 45, 29, 33],
+       "income":       [75000, 45000, 95000, 55000, 35000, 75000, 85000, 950000, 42000, None],
+       "credit_score": [720, 650, 780, 690, 600, 720, 750, 800, 620, 700],
+       "education":    ["bachelor","high_school","master","bachelor","high_school",
+                        "bachelor","bachelor","master","bachelor","bachelor"],
+       "gender":       ["male","female","male","female","male","male","female","male","female","male"],
+       "ethnicity":    ["white","hispanic","asian","black","white","white","asian","white","hispanic","black"],
+       "zipcode":      [43201, 43201, 43202, 43202, 43203, 43201, 43203, 43204, 43204, 43205],
+       "diagnosis":    ["diabetes","hypertension","diabetes","hypertension","asthma",
+                        "diabetes","hypertension","asthma","diabetes","hypertension"],
+       "approved":     [1, 0, 1, 1, 0, 1, 1, 1, 0, 0],
+   }
+   pd.DataFrame(data).to_csv("/path/to/sample_dataset.csv", index=False)
+
+The dataset intentionally includes one duplicate row (rows 1 and 6), one missing
+``income`` value (row 10), and one income outlier (row 8) so that completeness,
+duplicity, and outlier metrics return non-trivial results.
+
+
 
 ----
 
@@ -45,13 +82,10 @@ prints a compact summary.
 
 .. code-block:: bash
 
-   aidrin data-quality path/to/dataset.csv
+   aidrin data-quality /path/to/sample_dataset.csv
 
    # Output full per-feature JSON instead of summary
-   aidrin data-quality path/to/dataset.csv --detail
-
-   # Specify file type explicitly
-   aidrin data-quality path/to/dataset.csv --file-type .csv
+   aidrin data-quality /path/to/sample_dataset.csv --detail
 
 ``aidrin run``
 ~~~~~~~~~~~~~~
@@ -61,34 +95,34 @@ Runs a single metric. Use ``aidrin run <metric> -h`` to see required arguments f
 .. code-block:: bash
 
    # General form
-   aidrin run <metric-name> path/to/dataset.csv [metric-specific args]
+   aidrin run <metric-name> /path/to/sample_dataset.csv [metric-specific args]
 
    # Shortcut: omit the "run" subcommand
-   aidrin <metric-name> path/to/dataset.csv [metric-specific args]
+   aidrin <metric-name> /path/to/sample_dataset.csv [metric-specific args]
 
 Examples:
 
 .. code-block:: bash
 
    # Data quality (no extra args needed)
-   aidrin run completeness data.csv
-   aidrin run duplicity data.csv
-   aidrin run outliers data.csv
+   aidrin run completeness /path/to/sample_dataset.csv
+   aidrin run duplicity /path/to/sample_dataset.csv
+   aidrin run outliers /path/to/sample_dataset.csv
 
    # Impact on AI
-   aidrin run correlations data.csv "age,income,education"
-   aidrin run feature-relevance data.csv "gender,education" "age,income,credit_score" approved
+   aidrin run correlations /path/to/sample_dataset.csv "age,income,credit_score"
+   aidrin run feature-relevance /path/to/sample_dataset.csv "gender,education" "age,income,credit_score" approved
 
    # Fairness & bias
-   aidrin run class-imbalance data.csv income
-   aidrin run statistical-rates data.csv income gender
-   aidrin run representation-rate data.csv "gender,ethnicity"
+   aidrin run class-imbalance /path/to/sample_dataset.csv approved
+   aidrin run statistical-rates /path/to/sample_dataset.csv approved gender
+   aidrin run representation-rate /path/to/sample_dataset.csv "gender,ethnicity"
 
    # Data governance / privacy
-   aidrin run k-anonymity data.csv "age,zipcode,gender"
-   aidrin run l-diversity data.csv "age,zipcode" diagnosis
-   aidrin run t-closeness data.csv "age,zipcode" diagnosis
-   aidrin run entropy-risk data.csv "age,zipcode,gender"
+   aidrin run k-anonymity /path/to/sample_dataset.csv "age,zipcode,gender"
+   aidrin run l-diversity /path/to/sample_dataset.csv "age,zipcode" diagnosis
+   aidrin run t-closeness /path/to/sample_dataset.csv "age,zipcode" diagnosis
+   aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
 
 Options available on all ``run`` subcommands:
 
@@ -100,8 +134,6 @@ Options available on all ``run`` subcommands:
      - Description
    * - ``-v``, ``--verbose``
      - Show progress output while the metric runs
-   * - ``--file-type``
-     - Override file type detection (e.g. ``--file-type .csv``)
 
 ``aidrin batch``
 ~~~~~~~~~~~~~~~~
@@ -110,15 +142,20 @@ Runs a set of metrics defined in a JSON or YAML config file. Useful for reproduc
 
 .. code-block:: bash
 
-   aidrin batch path/to/config.yaml
-   aidrin batch path/to/config.yaml -v          # verbose
-   aidrin batch path/to/config.yaml --viz       # include visualization data in output
+   aidrin batch /path/to/my_project/batch_config.yaml
+   aidrin batch /path/to/my_project/batch_config.yaml -v          # verbose
 
-Config file format (YAML):
+Results are printed as JSON to stdout. Redirect to a file to save:
+
+.. code-block:: bash
+
+   aidrin batch /path/to/my_project/batch_config.yaml > results.json
+
+**Config file format (YAML):**
 
 .. code-block:: yaml
 
-   file-path: path/to/dataset.csv
+   file-path: /path/to/sample_dataset.csv
    file-type: .csv
 
    metrics:
@@ -127,30 +164,52 @@ Config file format (YAML):
      - outliers
      - class-imbalance
 
-   target-column: income
+   target-column: approved
 
-Results are printed as JSON to stdout. Redirect to a file to save:
+**Example** — fairness analysis on the sample dataset:
+
+.. code-block:: yaml
+
+   # /path/to/my_project/fairness_config.yaml
+
+   file-path: /path/to/sample_dataset.csv
+   file-type: .csv
+
+   metrics:
+     - statistical-rates
+     - representation-rate
+     - class-imbalance
+
+   target-column: approved
+   sensitive-attribute-column: ethnicity
+   columns:
+     - gender
+     - ethnicity
 
 .. code-block:: bash
 
-   aidrin batch config.yaml > results.json
+   aidrin batch /path/to/my_project/fairness_config.yaml > fairness_results.json
 
 ``aidrin add-custom-module``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Scaffolds a new custom metric module in the ``aidrin/custom_metrics/`` directory.
+Scaffolds a new custom metric module in a directory of your choice. Custom metrics live
+entirely outside the AIDRIN package — you own the file.
 
 .. code-block:: bash
 
-   aidrin add-custom-module my_audit
+   aidrin add-custom-module my_audit --dir /path/to/my_project
 
-This creates ``aidrin/custom_metrics/my_audit.py`` with a ``metric()`` and a ``remedy()`` method.
-Edit those methods to add your logic, then run via:
+This creates ``/path/to/my_project/my_audit.py`` with a ``metric()`` and a ``remedy()`` method.
+Edit those methods to add your logic, then run by passing the file path directly:
 
 .. code-block:: bash
 
-   aidrin run custom my_audit data.csv metric    # run the metric
-   aidrin run custom my_audit data.csv remedy    # run the remedy and save corrected CSV
+   aidrin run custom /path/to/my_project/my_audit.py /path/to/sample_dataset.csv metric    # run the metric
+   aidrin run custom /path/to/my_project/my_audit.py /path/to/sample_dataset.csv remedy    # run the remedy
+
+The remedy output CSV is saved to a ``remedy_data/`` folder next to the module file
+(``/path/to/my_project/remedy_data/my_audit_remedy.csv``).
 
 ----
 
@@ -208,31 +267,10 @@ Available Metrics
      - ``id-column``, ``eval-columns``
    * - Custom
      - ``custom``
-     - varies — see ``aidrin run custom -h``
+     - ``<name-or-path>``, varies — see ``aidrin run custom -h``
 
 Metric and category names accept either dashes or underscores interchangeably
 (e.g. ``class-imbalance`` and ``class_imbalance`` are equivalent).
-
-----
-
-Batch Config Examples
----------------------
-
-Example configs are bundled in the ``headless_demos/`` directory:
-
-.. code-block:: bash
-
-   # Data quality on a sensor dataset
-   aidrin batch headless_demos/01_data_quality.yaml
-
-   # Feature analysis on loan applications
-   aidrin batch headless_demos/02_feature_analysis.yaml
-
-   # Fairness metrics
-   aidrin batch headless_demos/03_fairness.yaml
-
-   # Privacy / data governance
-   aidrin batch headless_demos/04_privacy.yaml
 
 ----
 
@@ -247,164 +285,180 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
    from aidrin.headless import HeadlessConfig
 
    # Single metric
-   result = run_metric("completeness", "path/to/data.csv")
+   result = run_metric("completeness", "/path/to/sample_dataset.csv")
 
    # Fast data quality bundle
-   result = run_data_quality("path/to/data.csv")
+   result = run_data_quality("/path/to/sample_dataset.csv")
 
    # Batch from config
-   config = HeadlessConfig.from_file("config.yaml")
+   config = HeadlessConfig.from_file("/path/to/my_project/batch_config.yaml")
    result = run_batch_metrics(config)
 
 For the web interface's lower-level functional API, see the :ref:`web_usage` page.
 
 ----
 
-.. _adroit_integration:
+.. _agentic_integration:
 
-ADROIT
-------
+Agentic Evaluation
+------------------
 
-**ADROIT** (Agentic Data Readiness via Orchestrated Intelligent Toolkit) is an LLM-powered data
-readiness agent built on top of the AIDRIN CLI. While the ``aidrin`` CLI runs quantitative,
-metric-driven evaluations, ADROIT adds a *question-answering* layer: given domain-specific
-literature (papers, regulatory documents, standards), ADROIT automatically answers data readiness
-questions against an actual dataset and generates actionable, domain-grounded remediation
-recommendations.
+The **agentic evaluation** component extends the AIDRIN CLI with a question-answering layer for
+domain-aware data readiness assessment. Where the ``aidrin`` CLI runs quantitative, metric-driven
+evaluations, the agentic component lets you pose natural-language questions about your data against
+a body of domain literature — papers, regulatory documents, standards — and receive evidence-backed
+answers along with actionable remediation recommendations.
 
-ADROIT is provided as a separate optional extra (``aidrin[adroit]``) because it requires LLM API
-access and heavier dependencies not needed for standard CLI or web interface use. See
-:ref:`cli_installation` for installation instructions.
+.. note::
 
-How ADROIT Works
-~~~~~~~~~~~~~~~~
+   The agentic component is an optional extra (``aidrin[agentic]``) because it requires LLM API
+   access and additional dependencies not needed for standard CLI or web interface use.
+   See :ref:`cli_installation` for installation instructions.
 
-ADROIT runs a five-stage pipeline for each data readiness question:
 
-1. **Data Profiler** — loads the dataset and computes compact summary statistics (counts, means,
-   missing ratios, top categories) to give the LLM structural context about the data.
+How It Works
+~~~~~~~~~~~~
 
-2. **Vector Retriever** — searches a pre-built FAISS vector index of domain literature (PDFs, text
-   files) to retrieve the most relevant passages for each question. If retrieval is disabled, the LLM
-   answers from its own knowledge and the dataset profile alone.
+Each question is processed through a five-stage pipeline:
 
-3. **Code Executor** — uses the retrieved context and profile to prompt an LLM to write executable
-   Python/pandas code, then runs that code directly against the dataset. A self-healing loop
-   automatically repairs failing code, up to a configurable number of attempts.
+1. **Data Profiler** — loads the dataset and computes compact summary statistics (row/column
+   counts, means, missing-value ratios, top categories) to give the LLM structural context about
+   the data.
 
-4. **Complexity Scorer** — scores each query on three dimensions (profile dependency, domain
-   knowledge dependency, code complexity) to classify queries as ``easy``, ``moderate``, or ``hard``.
+2. **Vector Retriever** — searches a pre-built FAISS vector index of your domain literature (PDFs,
+   text files) to retrieve the most relevant passages for each question. When retrieval is
+   disabled, the LLM answers from its own knowledge and the dataset profile alone.
+
+3. **Code Executor** — uses the retrieved passages and dataset profile to prompt an LLM to write
+   executable Python/pandas code, then runs that code directly against the dataset. A self-healing
+   loop automatically repairs failing code, up to a configurable number of attempts
+   (``executor.max_attempts``).
+
+4. **Complexity Scorer** — classifies each query as ``easy``, ``moderate``, or ``hard`` based on
+   three dimensions: profile dependency, domain-knowledge dependency, and code complexity.
 
 5. **Remediation Generator** — synthesises concrete, domain-grounded remediation recommendations
    for each finding, citing the same domain literature used during retrieval.
 
-Multiple questions can be processed in parallel via a configurable thread pool
-(``retrieval.max_workers``). All results are written to a timestamped JSON log.
+Multiple questions are processed in parallel via a configurable thread pool
+(``retrieval.max_workers``). Results are printed to stdout and optionally written to a JSON file.
 
-Worked Example: UCI Power Consumption Dataset
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This end-to-end example walks through using ADROIT on the
-`UCI Individual Household Electric Power Consumption <https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption>`_
-dataset — a real-world time-series dataset of ~2 million minute-level household energy readings
-with known data quality challenges including ~1.25% missing values.
+Commands
+~~~~~~~~
 
-The metadata, domain literature PDFs, and config are already bundled with the package.
-The only file you need to supply is the dataset itself.
+Two subcommands are available under ``aidrin agentic``:
 
-**Step 1: Set your API key**
+.. code-block:: bash
+
+   # Build (or rebuild) the vector index from your domain literature
+   aidrin agentic build-index -c /path/to/my_project/config.yaml
+
+   # Run the full evaluation pipeline
+   aidrin agentic run -c /path/to/my_project/config.yaml -o /path/to/my_project/results.json
+
+   # Run without rebuilding the index (use an existing one)
+   aidrin agentic run -c /path/to/my_project/config.yaml --skip-vector -o results.json
+
+All paths in ``config.yaml`` are resolved relative to the config file itself, so your project
+directory can live anywhere on disk.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Flag
+     - Description
+   * - ``-c`` / ``--config``
+     - Path to the YAML config file **(required)**
+   * - ``-o`` / ``--output``
+     - Path to write JSON results (optional; results are always printed to stdout regardless)
+   * - ``--skip-vector``
+     - Skip rebuilding the vector index and use the existing one (``run`` only)
+   * - ``-v`` / ``--verbose``
+     - Print vector build progress to stderr
+
+
+Quickstart: UCI Power Consumption Dataset
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This end-to-end example uses the
+`UCI Individual Household Electric Power Consumption
+<https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption>`_
+dataset — a real-world time-series dataset of ~2 million minute-level household energy readings.
+
+Step 1: Add the dataset
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The repository includes a ready-to-use example project at
+``examples/agentic/power_consumption/``. Download
+``household_power_consumption.zip`` from the UCI link above, extract it, and place the ``.txt``
+file in the ``data/`` subdirectory:
+
+Step 2: Add domain literature
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Download papers that cite the dataset (published 2016–2026) in the link above, and place their PDFs in
+``examples/agentic/power_consumption/sources/``.
+
+Your example project directory should then look like this:
+
+.. code-block:: text
+
+   examples/agentic/power_consumption/
+   ├── config.yaml          ← pre-configured, ready to use
+   ├── loader.py            ← handles the semicolon-separated .txt format
+   ├── data/
+   │   ├── metadata.txt                          ← included in repo
+   │   └── household_power_consumption.txt       ← add this
+   └── sources/
+       ├── paper1.pdf                            ← add one or more PDFs here
+       └── ...
+
+Step 3: Configure your API key and endpoint
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The included ``config.yaml`` is pre-configured for the standard OpenAI API. Set the environment
+variable to the key your endpoint requires:
 
 .. code-block:: bash
 
    export OPENAI_API_KEY="sk-..."
 
-**Step 2: Download and place the dataset**
-
-Download ``household_power_consumption.zip`` from:
-
-   https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption
-
-Extract and place ``household_power_consumption.txt`` at:
-
-.. code-block:: text
-
-   aidrin/adroit/
-   ├── configs/
-   │   └── power_consumption.yaml              ← bundled
-   └── use_cases/
-       └── power_consumption/
-           ├── data/
-           │   ├── metadata.txt                ← bundled
-           │   └── household_power_consumption.txt  ← add this
-           └── sources/
-               └── *.pdf                       ← bundled
-
-**Step 3: Build the vector store** (run once)
-
-.. code-block:: bash
-
-   python -m aidrin.adroit.vector_db_builder -c aidrin/adroit/configs/power_consumption.yaml
-
-**Step 4: Run the pipeline**
-
-.. code-block:: bash
-
-   python -m aidrin.adroit.run -c aidrin/adroit/configs/power_consumption.yaml -o aidrin/adroit/results/power_consumption.json
-
-Output is printed to stdout and written to the specified JSON file.
-
-Using ADROIT with Your Own Dataset
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Follow the same four steps, substituting your own dataset and literature.
-
-**Step 1: Set your API key**
-
-.. code-block:: bash
-
-   export OPENAI_API_KEY="sk-..."
-
-**Step 2: Prepare your dataset and domain literature**
-
-.. code-block:: text
-
-   aidrin/adroit/use_cases/
-   └── my_dataset/
-       ├── data/
-       │   ├── my_data.csv       # the dataset
-       │   └── metadata.csv      # column-level metadata (CSV or plain text)
-       └── sources/              # domain literature to index (PDF, TXT)
-           ├── reference.pdf
-           └── standards.txt
-
-**Step 3: Write a YAML config**
+If you are using a different OpenAI compatible endpoint (e.g. LBL CBORG), update ``llm.base_url``
+in the config and ensure all ``model`` and ``embedding_model`` values are names available on that
+provider:
 
 .. code-block:: yaml
 
-   # aidrin/adroit/configs/my_dataset.yaml
+   # examples/agentic/power_consumption/config.yaml
 
    paths:
-     data_csv: "./use_cases/my_dataset/data/my_data.csv"
-     metadata_csv: "./use_cases/my_dataset/data/metadata.csv"
+     data_loader: "./loader.py:load_dataset"
+     metadata_csv: "./data/metadata.txt"
+
+   llm:
+     base_url: "https://api.openai.com/v1"   # replace with your OpenAI compatible endpoint, e.g. https://api.cborg.lbl.gov
 
    profiling:
      full_summary: false
 
    vector_store:
      sources:
-       - ./use_cases/my_dataset/sources
-     embedding_model: text-embedding-3-large
+       - ./sources
+     embedding_model: text-embedding-ada-002
      chunk_size: 1000
      chunk_overlap: 200
-     vector_store_name: my_dataset_vector_store
+     vector_store_name: power_consumption_index
 
    retrieval:
      enabled: true
-     max_workers: 8
+     max_workers: 4
      answer_model: gpt-4o
      top_k: 3
      question:
-       - "Does the age feature satisfy the HIPAA Safe Harbor de-identification standard?"
+       - "Which European Union regulation is cited as requiring that the consequences of profiling be informed to the data subject? Return the name of the regulation as a string."
+       - "Return True if more than 80% of the data is resampled to align with the widely adopted industry standards for smart meter technology to reduce behavioral noise. Return False if not."
 
    executor:
      enabled: true
@@ -421,47 +475,148 @@ Follow the same four steps, substituting your own dataset and literature.
      model: gpt-4o
      context_chars: 3000
 
-**Step 4: Build the vector store and run**
+   output:
+     save_log: true
+
+Step 4: Build the vector index
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Run this once. Re-run only when your literature changes:
 
 .. code-block:: bash
 
-   python -m aidrin.adroit.vector_db_builder -c aidrin/adroit/configs/my_dataset.yaml
-   python -m aidrin.adroit.run -c aidrin/adroit/configs/my_dataset.yaml -o aidrin/adroit/results/output.json
+   aidrin agentic build-index -c examples/agentic/power_consumption/config.yaml
 
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
+Step 5: Run the pipeline
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-   * - Flag
-     - Description
-   * - ``-c`` / ``--config``
-     - Path to YAML config (required)
-   * - ``-o`` / ``--output``
-     - Path to write JSON results (optional; also printed to stdout)
+.. code-block:: bash
 
-Custom Data Loaders
-~~~~~~~~~~~~~~~~~~~
+   aidrin agentic run \
+     -c examples/agentic/power_consumption/config.yaml \
+     -o examples/agentic/power_consumption/results.json
 
-For datasets that require custom loading logic (multiple files, Parquet, HDF5, etc.), write a
-Python function that returns a ``pandas.DataFrame`` and reference it in the YAML config:
+On subsequent runs, skip rebuilding the index with ``--skip-vector``:
+
+.. code-block:: bash
+
+   aidrin agentic run \
+     -c examples/agentic/power_consumption/config.yaml \
+     --skip-vector \
+     -o examples/agentic/power_consumption/results.json
+
+Results are printed to stdout and written to ``examples/agentic/power_consumption/results.json``. Each result includes the question,
+the answer, the retrieved passages that informed it, the generated code (if applicable), a
+complexity classification, and remediation recommendations.
+
+
+Using Your Own Dataset
+~~~~~~~~~~~~~~~~~~~~~~
+
+Follow the same steps, substituting your own dataset and literature.
+
+Step 1: Set up your project directory
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: text
+
+   ~/my_project/
+   ├── config.yaml
+   ├── loader.py
+   ├── data/
+   │   ├── my_data.csv          # your dataset
+   │   └── metadata.txt         # column-level descriptions (plain text or CSV)
+   └── sources/                 # domain literature to index (PDF or TXT)
+       ├── reference.pdf
+       └── standards.txt
+
+Step 2: Define your custom data loader
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Implement ``loader.py`` in your project directory with a function ``load_dataset`` that returns a ``pandas.DataFrame`` of your dataset.
+This gives you full control over loading logic, and support for any file format.:
 
 .. code-block:: python
 
-   # my_project/loaders.py
+   # ~/my_project/loader.py
    import pandas as pd
    from pathlib import Path
 
    def load_dataset() -> pd.DataFrame:
-       return pd.read_parquet(Path("use_cases/my_dataset/data/my_data.parquet"))
+       return pd.read_csv(Path(__file__).parent / "data/my_data.csv")
+
+Then reference it in ``config.yaml`` via ``paths.data_loader`` (see Step 4). For datasets that
+require more complex loading — multiple files, Parquet, HDF5, etc. — replace the body of
+``load_dataset`` with whatever logic you need; the only requirement is that it returns a
+``pandas.DataFrame``.
+
+Step 3: Add domain literature
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Place your domain literature (PDFs, text files) in ``sources/`` and your dataset in ``data/``.
+
+Step 4: Configure your API key and write a config file
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Set the environment variable to the key your endpoint requires:
+
+.. code-block:: bash
+
+   export OPENAI_API_KEY="sk-..."
+
+Then create ``config.yaml``. If you are using a different OpenAI compatible endpoint (e.g. LBL CBORG), update
+``llm.base_url`` to point to it and ensure all ``model`` and ``embedding_model`` values are names
+available on that provider:
 
 .. code-block:: yaml
 
+   # ~/my_project/config.yaml
+
+   llm:
+     base_url: "https://api.openai.com/v1"   # replace with your OpenAI-compatible endpoint, e.g. https://api.cborg.lbl.gov
+
    paths:
-     data_loader: "my_project.loaders:load_dataset"
-     metadata_csv: "./use_cases/my_dataset/data/metadata.csv"
+     data_loader: "./loader.py:load_dataset"   # module:function relative to config dir
+     metadata_csv: "./data/metadata.txt"
 
-The built-in loader for the power consumption example is at:
+   profiling:
+     full_summary: false
 
-.. code-block:: text
+   vector_store:
+     sources:
+       - ./sources
+     embedding_model: text-embedding-ada-002
+     chunk_size: 1000
+     chunk_overlap: 200
+     vector_store_name: my_project_index # name for the FAISS index that will be created
 
-   aidrin.adroit.dataloaders.power_consumption:load_dataset
+   retrieval:
+     enabled: true
+     max_workers: 8
+     answer_model: gpt-5.2
+     top_k: 3
+     question:
+       - "Does the age feature satisfy the HIPAA Safe Harbor de-identification standard?"
+
+   executor:
+     enabled: true
+     max_attempts: 5
+     model: gpt-5.2
+     temperature: 0.0
+
+   complexity_scorer:
+     enabled: true
+     model: gpt-5.2
+
+   remediation:
+     enabled: true
+     model: gpt-5.2
+     context_chars: 3000
+
+Step 5: Build the index and run
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: bash
+
+   aidrin agentic build-index -c ~/my_project/config.yaml
+   aidrin agentic run -c ~/my_project/config.yaml -o ~/my_project/results.json

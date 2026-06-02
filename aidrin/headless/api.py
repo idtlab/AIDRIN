@@ -4,6 +4,7 @@ import re
 import sys
 import time
 import importlib.util
+import numpy as np
 import pandas as pd
 from typing import Any, Dict, List, Optional
 
@@ -112,6 +113,21 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "required_args": ["id-column", "eval-columns"],
     }
 }
+
+
+def _sanitize(obj: Any) -> Any:
+    """Recursively convert numpy scalars/arrays to native Python types."""
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
 
 
 def _normalize_list(value: Optional[Any]) -> Optional[List[str]]:
@@ -299,7 +315,7 @@ def run_metric(
                 result = _strip_visualizations(result)
             elapsed = time.time() - start_time
             _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-            return result
+            return _sanitize(result)
         except FileNotFoundError:
             raise ValueError(f"Unknown metric: {metric_name}") from None
 
@@ -313,16 +329,16 @@ def run_metric(
             result = _strip_visualizations(result)
         elapsed = time.time() - start_time
         _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-        return result
+        return _sanitize(result)
 
     def _finalize(result: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply post-processing: save images and strip visualizations."""
+        """Apply post-processing: save images, strip visualizations, sanitize types."""
         result = _maybe_save_images(metric_key, result, save_images, image_dir)
         if strip_visualizations:
             result = _strip_visualizations(result)
         elapsed = time.time() - start_time
         _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-        return result
+        return _sanitize(result)
 
     if metric_key == "correlations":
         columns = _normalize_list(kwargs.get("columns"))
@@ -583,13 +599,43 @@ class CustomDR(BaseDRAgent):
     return file_path
 
 
+def _resolve_custom_script(metric_name: str) -> str:
+    """Resolve a custom metric name or path to an absolute .py file path.
+
+    Resolution order:
+    1. If metric_name ends with .py or contains a path separator — treat as a direct path.
+    2. Check the current working directory for <name>.py.
+    3. Fall back to aidrin/custom_metrics/<name>.py inside the current working directory.
+    """
+    if metric_name.endswith(".py") or os.sep in metric_name or "/" in metric_name:
+        path = os.path.abspath(metric_name)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Custom metric file not found: {metric_name}")
+        return path
+
+    clean_name = _safe_slug(metric_name)
+
+    cwd_path = os.path.join(os.getcwd(), f"{clean_name}.py")
+    if os.path.exists(cwd_path):
+        return cwd_path
+
+    builtin_path = os.path.join(os.getcwd(), "aidrin", "custom_metrics", f"{clean_name}.py")
+    if os.path.exists(builtin_path):
+        return builtin_path
+
+    raise FileNotFoundError(
+        f"Custom metric '{clean_name}' not found in the current directory or aidrin/custom_metrics/. "
+        f"Pass a full path (e.g. aidrin run custom /path/to/{clean_name}.py ...) "
+        f"or run from the directory containing {clean_name}.py."
+    )
+
+
 def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[str, Any]:
     """
-    Dynamically loads and executes a CustomDR class from the custom_metrics folder.
+    Dynamically loads and executes a CustomDR class from any directory.
     """
-    custom_dir = os.path.join(os.getcwd(), "aidrin/custom_metrics")
-    clean_name = _safe_slug(metric_name)
-    script_path = os.path.join(custom_dir, f"{clean_name}.py")
+    script_path = _resolve_custom_script(metric_name)
+    clean_name = os.path.splitext(os.path.basename(script_path))[0]
 
     if not os.path.exists(script_path):
         raise FileNotFoundError(f"Custom metric file not found at: {script_path}")
@@ -613,14 +659,18 @@ def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[
     _log_progress(f"Executing custom metric: {metric_name}", kwargs.get("verbose", False))
     results = agent.metric(**kwargs)
 
+    if not isinstance(results, dict):
+        raise TypeError(
+            f"metric() in '{script_path}' must return a dict, got {type(results).__name__}"
+        )
+
     return results
 
 
 def run_custom_metric_remedy(metric_name: str, file_path: str, *, output_dir: Optional[str] = None, **kwargs) -> str:
     """Execute `remedy` on a custom metric and save the returned DataFrame as CSV."""
-    custom_dir = os.path.join(os.getcwd(), "aidrin/custom_metrics")
-    clean_name = _safe_slug(metric_name)
-    script_path = os.path.join(custom_dir, f"{clean_name}.py")
+    script_path = _resolve_custom_script(metric_name)
+    clean_name = os.path.splitext(os.path.basename(script_path))[0]
 
     if not os.path.exists(script_path):
         raise FileNotFoundError(f"Custom metric file not found at: {script_path}")
@@ -645,7 +695,7 @@ def run_custom_metric_remedy(metric_name: str, file_path: str, *, output_dir: Op
     if not isinstance(remedied, pd.DataFrame):
         raise TypeError("remedy() must return a pandas DataFrame")
 
-    target_dir = output_dir or os.path.join(custom_dir, "remedy_data")
+    target_dir = output_dir or os.path.join(os.path.dirname(script_path), "remedy_data")
     os.makedirs(target_dir, exist_ok=True)
     filename = f"{clean_name}_remedy.csv"
     output_path = os.path.join(target_dir, filename)

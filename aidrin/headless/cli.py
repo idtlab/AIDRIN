@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import List, Optional
 import os
 
@@ -209,20 +210,100 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
             parser.add_argument("sensitive_attribute_column", help="Sensitive attribute column", metavar="sensitive-attribute-column")
 
 
+def _agentic_build_index(args: argparse.Namespace) -> None:
+    try:
+        from aidrin.agentic.vector_db_builder import VectorDBBuilder
+    except ImportError:
+        sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
+        sys.exit(1)
+    result = VectorDBBuilder(Path(args.config).resolve()).build()
+    print(json.dumps(result, indent=2))
+
+
+def _agentic_run(args: argparse.Namespace) -> None:
+    try:
+        import yaml
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from aidrin.agentic.data_profiler import DataProfiler
+        from aidrin.agentic.vector_db_builder import VectorDBBuilder
+        from aidrin.agentic.run import _run_query, _json_safe
+        from aidrin.agentic.token_tracker import get_tracker
+    except ImportError:
+        sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
+        sys.exit(1)
+
+    config_path = Path(args.config).resolve()
+    get_tracker().reset()
+
+    profiler = DataProfiler(config_path=config_path)
+    profile_result = profiler.profile()
+
+    cfg = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+
+    if not args.skip_vector and cfg.get("vector_store"):
+        builder = VectorDBBuilder(config_path)
+        if not builder.exists():
+            vector_result = builder.build()
+            if getattr(args, "verbose", False):
+                sys.stderr.write(json.dumps(vector_result, indent=2) + "\n")
+
+    retrieval_cfg = cfg.get("retrieval", {}) or {}
+    questions_raw = retrieval_cfg.get("questions") or []
+    if not questions_raw:
+        single = retrieval_cfg.get("question", "")
+        questions_raw = single if isinstance(single, list) else ([single] if single else [])
+
+    def _parse_q(q):
+        return (q["text"], q.get("loader")) if isinstance(q, dict) else (q, None)
+
+    parsed_questions = [_parse_q(q) for q in questions_raw]
+
+    max_workers = int(retrieval_cfg.get("max_workers", 4))
+    query_results = []
+    if parsed_questions:
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
+            futures = {
+                pool.submit(_run_query, config_path, text, profile_result, loader): text
+                for text, loader in parsed_questions
+            }
+            for future in as_completed(futures):
+                try:
+                    query_results.append(future.result())
+                except Exception as exc:
+                    query_results.append({"question": futures[future], "error": str(exc)})
+
+    combined = _json_safe({
+        "profile": profile_result,
+        "queries": query_results,
+        "token_usage": get_tracker().to_dict(),
+    })
+
+    if args.output:
+        out = Path(args.output).resolve()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
+        sys.stderr.write(f"Results written to: {out}\n")
+
+    print(json.dumps(combined, indent=2, ensure_ascii=False))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="aidrin")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     create_parser = subparsers.add_parser(
         "add-custom-module",
-        help="Create a new custom module template (metric + remedy) in the 'aidrin/custom_metrics' directory",
+        help="Create a new custom module template (metric + remedy) in a directory you specify",
     )
     create_parser.add_argument(
         "name",
-        help=(
-            "Name of the custom module (e.g. 'my_audit'). This will create 'my_audit.py' in the "
-            "'aidrin/custom_metrics' directory. Make sure the name does not contain spaces or special characters."
-        ),
+        help="Name of the custom module (e.g. 'my_audit'). No spaces or special characters.",
+    )
+    create_parser.add_argument(
+        "--dir",
+        dest="custom_dir",
+        required=True,
+        help="Directory to create the module in (e.g. --dir /path/to/my_project)",
     )
 
     list_parser = subparsers.add_parser("list", help="List available metrics")
@@ -249,9 +330,9 @@ def main() -> None:
     # Custom metric / remedy runner
     custom_parser = run_subparsers.add_parser(
         "custom",
-        help="Run a custom metric or remedy (aidrin/custom_metrics)",
+        help="Run a custom metric or remedy from a .py file",
     )
-    custom_parser.add_argument("name", help="Custom metric module name (filename without .py)")
+    custom_parser.add_argument("name", help="Path to the custom module file (e.g. /path/to/my_audit.py)")
     custom_parser.add_argument("file_path", help="Path to the dataset CSV")
     custom_parser.add_argument("action", nargs="?", choices=["metric", "remedy"], default="metric", help="Run metric (default) or remedy")
     _configure_minimal_run_args(custom_parser)
@@ -274,6 +355,21 @@ def main() -> None:
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
 
+    # Agentic evaluation commands
+    agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
+    agentic_sub = agentic_parser.add_subparsers(dest="agentic_command", required=True)
+
+    build_parser = agentic_sub.add_parser("build-index", help="Build vector index from domain literature")
+    build_parser.add_argument("-c", "--config", required=True, help="Path to YAML config")
+    build_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
+
+    agentic_run_parser = agentic_sub.add_parser("run", help="Run the agentic evaluation pipeline")
+    agentic_run_parser.add_argument("-c", "--config", required=True, help="Path to YAML config")
+    agentic_run_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+    agentic_run_parser.add_argument("--skip-vector", dest="skip_vector", action="store_true",
+                                    help="Skip rebuilding the vector index; use existing one")
+    agentic_run_parser.add_argument("-v", "--verbose", action="store_true", help="Print vector build info to stderr")
+
     argv = sys.argv[1:]
     # Shortcut: allow `aidrin <metric> ...` (dash or underscore) to map to `aidrin run <metric> ...`
     if argv:
@@ -284,14 +380,13 @@ def main() -> None:
 
     try:
         if args.command == "add-custom-module":
-            DEFAULT_CUSTOM_DIR = os.path.join(os.getcwd(), "aidrin/custom_metrics")
+            target_dir = args.custom_dir or os.getcwd()
             try:
-                path = generate_metric_template(args.name, DEFAULT_CUSTOM_DIR)
+                path = generate_metric_template(args.name, target_dir)
                 print(f"Template successfully created at: {path}")
                 print("Edit the 'metric' and 'remedy' methods to add your logic.")
-                print("Run the metric via: aidrin run custom <metric_name> <file> metric")
-                print("Run the remedy via: aidrin run custom <metric_name> <file> remedy")
-                print("Both appear under the 'custom' category in `aidrin list` once added.")
+                print(f"Run the metric via: aidrin run custom {path} <dataset> metric")
+                print(f"Run the remedy via: aidrin run custom {path} <dataset> remedy")
             except FileExistsError as e:
                 print(f"{e}")
             return
@@ -384,6 +479,13 @@ def main() -> None:
                 _dump_result(_round_floats(result))
             else:
                 _summarize_data_quality(result)
+            return
+
+        if args.command == "agentic":
+            if args.agentic_command == "build-index":
+                _agentic_build_index(args)
+            elif args.agentic_command == "run":
+                _agentic_run(args)
             return
     except Exception as exc:
         sys.stderr.write(f"Error: {exc}\n")

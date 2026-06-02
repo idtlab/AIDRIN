@@ -43,7 +43,7 @@ try:
 except ImportError as exc:
     raise ImportError(
         "langchain-openai and langchain-text-splitters are required. "
-        "Install with: pip install 'aidrin[adroit]'"
+        "Install with: pip install 'aidrin[agentic]'"
     ) from exc
 
 try:
@@ -52,7 +52,12 @@ except ImportError:
     GoogleGenerativeAIEmbeddings = None  # type: ignore
 
 
-def _make_embeddings(model_name: str, openai_api_key: str | None = None, google_api_key: str | None = None):
+def _make_embeddings(
+    model_name: str,
+    openai_api_key: str | None = None,
+    google_api_key: str | None = None,
+    base_url: str | None = None,
+):
     if "gemini" in model_name or "embedding-001" in model_name:
         if GoogleGenerativeAIEmbeddings is None:
             raise ImportError(
@@ -63,7 +68,40 @@ def _make_embeddings(model_name: str, openai_api_key: str | None = None, google_
         if google_api_key:
             kwargs["google_api_key"] = google_api_key
         return GoogleGenerativeAIEmbeddings(**kwargs)
-    return OpenAIEmbeddings(model=model_name, api_key=openai_api_key)
+
+    kwargs: dict[str, Any] = {"model": model_name}
+    if openai_api_key:
+        kwargs["api_key"] = openai_api_key
+    if base_url:
+        kwargs["base_url"] = base_url
+    model = OpenAIEmbeddings(**kwargs)
+    if not base_url:
+        return model
+
+    # Wrap with fallback to standard OpenAI when a custom endpoint is configured.
+    fallback_kwargs: dict[str, Any] = {"model": model_name}
+    if openai_api_key:
+        fallback_kwargs["api_key"] = openai_api_key
+    fallback = OpenAIEmbeddings(**fallback_kwargs)
+
+    import sys as _sys
+
+    class _FallbackEmbeddings:
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            try:
+                return model.embed_documents(texts)
+            except Exception as exc:
+                _sys.stderr.write(f"[aidrin] Embedding via custom endpoint failed ({exc}); falling back to OpenAI API.\n")
+                return fallback.embed_documents(texts)
+
+        def embed_query(self, text: str) -> list[float]:
+            try:
+                return model.embed_query(text)
+            except Exception as exc:
+                _sys.stderr.write(f"[aidrin] Embedding via custom endpoint failed ({exc}); falling back to OpenAI API.\n")
+                return fallback.embed_query(text)
+
+    return _FallbackEmbeddings()
 
 
 class VectorDBBuilder:
@@ -76,14 +114,17 @@ class VectorDBBuilder:
         self.embedding_model_name: str = cfg["embedding_model"]
         self.openai_api_key = cfg["openai_api_key"]
         self.google_api_key = cfg["google_api_key"]
+        self.base_url: str | None = cfg["base_url"]
         self.chunk_size: int = cfg["chunk_size"]
         self.chunk_overlap: int = cfg["chunk_overlap"]
         self.output_dir: Path = cfg["output_dir"]
-        self.rebuild: bool = cfg["rebuild"]
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_path = self.output_dir / "metadata.json"
         self.index_path = self.output_dir / "index.faiss"
         self.embeddings_path = self.output_dir / "embeddings.npy"
+
+    def exists(self) -> bool:
+        return self.metadata_path.exists() and self.embeddings_path.exists()
 
     @staticmethod
     def _load_config(config_path: Path) -> dict[str, Any]:
@@ -92,8 +133,14 @@ class VectorDBBuilder:
         vector_cfg = cfg.get("vector_store") or {}
         sources = vector_cfg.get("sources", [])
         embedding_model = vector_cfg.get("embedding_model")
-        openai_api_key = vector_cfg.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+        llm_cfg = cfg.get("llm", {}) or {}
+        openai_api_key = (
+            vector_cfg.get("openai_api_key")
+            or llm_cfg.get("api_key")
+            or os.environ.get("OPENAI_API_KEY")
+        )
         google_api_key = vector_cfg.get("google_api_key") or os.environ.get("GOOGLE_API_KEY")
+        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
         if not embedding_model:
             raise ValueError("vector_store.embedding_model must be set in the config YAML.")
         if not sources:
@@ -115,7 +162,6 @@ class VectorDBBuilder:
 
         chunk_size = int(vector_cfg.get("chunk_size", 500))
         chunk_overlap = int(vector_cfg.get("chunk_overlap", 50))
-        rebuild = bool(vector_cfg.get("rebuild", False))
         store_name = vector_cfg.get("vector_store_name", "vector_store")
         default_output = (base.parent / store_name).resolve()
         output_dir = vector_cfg.get("vector_store_dir", default_output)
@@ -126,11 +172,11 @@ class VectorDBBuilder:
             "embedding_model": embedding_model,
             "openai_api_key": openai_api_key,
             "google_api_key": google_api_key,
+            "base_url": base_url,
             "vector_store_name": store_name,
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
             "output_dir": output_dir,
-            "rebuild": rebuild,
         }
 
     def _gather_files(self) -> list[Path]:
@@ -174,7 +220,7 @@ class VectorDBBuilder:
         return splitter.split_text(text)
 
     def _embed(self, texts: list[str]) -> tuple[list[list[float]], int]:
-        model = _make_embeddings(self.embedding_model_name, self.openai_api_key, self.google_api_key)
+        model = _make_embeddings(self.embedding_model_name, self.openai_api_key, self.google_api_key, self.base_url)
         vectors = model.embed_documents(texts)
         dims = len(vectors[0]) if vectors else 0
         return vectors, dims
@@ -196,13 +242,6 @@ class VectorDBBuilder:
 
     def build(self) -> dict[str, Any]:
         """Build and persist the vector index. Returns a summary dict."""
-        if not self.rebuild and self.metadata_path.exists() and self.embeddings_path.exists():
-            return {
-                "skipped": True,
-                "reason": "Vector store already exists. Set vector_store.rebuild: true to force rebuild.",
-                "output_dir": str(self.output_dir),
-            }
-
         is_gemini = "gemini" in self.embedding_model_name or "embedding-001" in self.embedding_model_name
         if is_gemini:
             if not (self.google_api_key or "GOOGLE_API_KEY" in os.environ):

@@ -4,7 +4,7 @@
 Web Application Installation
 =============================
 
-This page covers installation and setup of the **AIDRIN web interface**. For the CLI and ADROIT, see the :ref:`cli` page.
+This page covers installation and setup of the **AIDRIN web interface**. For the CLI and the agentic evaluation component, see the :ref:`cli` page.
 
 AIDRIN can be used in **three ways**:
 
