@@ -12,6 +12,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+try:
+    import langchain_openai  # noqa: F401
+    HAS_AGENTIC_DEPS = True
+except ImportError:
+    HAS_AGENTIC_DEPS = False
+
 import numpy as np
 import pandas as pd
 
@@ -76,6 +82,7 @@ def _run_cli(*argv: str) -> tuple[str, str, int]:
     return out_buf.getvalue(), err_buf.getvalue(), exit_code
 
 
+@unittest.skipUnless(HAS_AGENTIC_DEPS, "agentic extras not installed (pip install 'aidrin[agentic]')")
 class TestAgenticCLI(unittest.TestCase):
 
     def setUp(self):
