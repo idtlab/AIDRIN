@@ -3,8 +3,13 @@
 {% block title %}AIDRIN - Inspector{% endblock %}
 
 {% block head_extra %}
-  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"
+          integrity="sha512-pumBsjNRGGqkPzKHndZMaAG+bir374sORyzM3uulLV14lN5LyykqNk8eEeUlUkB3U0M4FApyaHraT65ihJhDpQ=="
+          crossorigin="anonymous"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"
+          integrity="sha512-78KH17QLT5e55GJqP76vutp1D2iAoy06WcYBXB6iBCsmO6wWzx0Qdg8EDpm8mKXv68BcvHOyeeP4wxAL0twJGQ=="
+          crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   <script>
     var retrieveFileUrl = "{{ url_for('core.retrieve_uploaded_file') }}";

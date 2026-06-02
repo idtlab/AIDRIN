@@ -145,8 +145,8 @@ def custom_metrics():
             final_dict = ensure_json_serializable(final_dict)
 
         except Exception as e:
-            metric_time_log.error("Custom Metric error: %s", e)
-            return jsonify({"error": str(e)}), 500
+            metric_time_log.error("Custom Metric error: %s", e, exc_info=True)
+            return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
         finally:
             if module_name and module_name in sys.modules:

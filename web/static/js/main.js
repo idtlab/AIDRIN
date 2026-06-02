@@ -1657,8 +1657,9 @@ function updateAsyncTaskWithResults(taskId, metricName, results) {
     asyncElement.style.padding = "0";
     asyncElement.style.textAlign = "left";
 
-    // Replace the content
-    asyncElement.innerHTML = completedHtml;
+    // Replace the content (sanitized — completedHtml interpolates server result
+    // fields that may derive from user-uploaded data)
+    asyncElement.innerHTML = DOMPurify.sanitize(completedHtml);
   }
 }
 

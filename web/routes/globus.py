@@ -73,7 +73,8 @@ def auth():
         }
         return redirect(auth_url)
     except ValueError as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error("Globus auth URL error: %s", e, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
 
 @globus_bp.route("/callback")
@@ -104,8 +105,8 @@ def callback():
         return redirect(url_for("core.inspector"))
 
     except Exception as e:
-        logger.error("Globus Auth callback error: %s", e)
-        return jsonify({"error": f"Authentication failed: {str(e)}"}), 500
+        logger.error("Globus Auth callback error: %s", e, exc_info=True)
+        return jsonify({"error": "Authentication failed"}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -219,8 +220,8 @@ def submit():
         })
 
     except Exception as e:
-        logger.error("Globus submit error: %s", e)
-        return jsonify({"error": f"Failed to submit task: {str(e)}"}), 500
+        logger.error("Globus submit error: %s", e, exc_info=True)
+        return jsonify({"error": "Failed to submit task"}), 500
 
 
 @globus_bp.route("/cache-summary", methods=["POST"])
@@ -269,5 +270,5 @@ def check_task_status(task_id):
         return jsonify(result)
 
     except Exception as e:
-        logger.error("Globus check-task error: %s", e)
-        return jsonify({"status": "failed", "error": str(e)}), 500
+        logger.error("Globus check-task error: %s", e, exc_info=True)
+        return jsonify({"status": "failed", "error": "An internal error occurred"}), 500
