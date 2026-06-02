@@ -111,10 +111,30 @@ Terminal 1 – Redis Server
 Terminal 2 – Celery Worker
 """"""""""""""""""""""""""
 
+**macOS / Linux:**
+
 .. code-block:: bash
 
    conda activate aidrin-env
    PYTHONPATH=. celery -A worker.make_celery worker --beat --loglevel=info
+
+**Windows:**
+
+If you see errors such as:
+
+- ``-B option does not work on Windows. Please run celery beat as a separate service.``
+- ``Can't pickle local object 'celery_init_app.<locals>.FlaskTask'``
+
+Use the ``solo`` pool instead (no ``--beat`` required for local development):
+
+.. code-block:: powershell
+
+   conda activate aidrin-env
+   $env:PYTHONPATH = "."
+   celery -A worker.make_celery worker --loglevel=info --pool=solo
+
+If you use a venv rather than Conda, activate it first and set ``PYTHONPATH`` the
+same way before running the ``celery`` command.
 
 Terminal 3 – Flask Server
 """""""""""""""""""""""""
