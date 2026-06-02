@@ -836,9 +836,12 @@ function switchUploadTab(tab) {
     return;
   }
 
-  const base = "upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2";
-  const activeClass = "border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500";
-  const inactiveClass = "border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400";
+  const base =
+    "upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2";
+  const activeClass =
+    "border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500";
+  const inactiveClass =
+    "border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400";
 
   // Hide all panels and deactivate all tabs
   localPanel.classList.add("hidden");
