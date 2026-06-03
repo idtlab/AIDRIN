@@ -275,6 +275,26 @@ def privacy_metrics_docs():
 # Uploading, Retrieving, Clearing File Routes
 
 
+@main.app_errorhandler(413)
+def file_too_large(error):
+    """Server-side backstop when an upload exceeds MAX_CONTENT_LENGTH."""
+    max_mb = current_app.config.get("MAX_CONTENT_LENGTH", 0) // (1024 * 1024)
+    file_upload_time_log.warning("Upload rejected: file exceeds %d MB limit", max_mb)
+    message = f"File too large. The maximum upload size is {max_mb} MB."
+
+    if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+        return jsonify({"error": message}), 413
+
+    return (
+        f"<!DOCTYPE html><html><head><meta charset='utf-8'><title>File too large</title></head>"
+        f"<body style='font-family:sans-serif;text-align:center;padding:3em;'>"
+        f"<h2>File too large</h2><p>{message}</p>"
+        f"<p><a href='{url_for('upload_file')}'>Go back to upload</a></p>"
+        f"</body></html>",
+        413,
+    )
+
+
 @main.route('/upload_file', methods=['GET', 'POST'])
 def upload_file():
 

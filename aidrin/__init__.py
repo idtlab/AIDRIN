@@ -13,6 +13,22 @@ def create_app():
     @app.context_processor
     def inject_version():
         return dict(app_version=__version__)  # global variable to access version in templates
+
+    # Maximum upload size (default 100 MB; override per deployment via AIDRIN_MAX_UPLOAD_MB)
+    try:
+        max_upload_mb = int(os.environ.get("AIDRIN_MAX_UPLOAD_MB", 100))
+    except ValueError:
+        max_upload_mb = 100
+    app.config["MAX_CONTENT_LENGTH"] = max_upload_mb * 1024 * 1024
+
+    @app.context_processor
+    def inject_upload_limit():
+        # expose the upload limit to templates for client-side validation
+        return dict(
+            max_upload_mb=max_upload_mb,
+            max_upload_bytes=app.config["MAX_CONTENT_LENGTH"],
+        )
+
     app.secret_key = "aidrin"
     # Celery Config
     app.config["CELERY"] = {

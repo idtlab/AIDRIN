@@ -33,6 +33,15 @@ function uploadForm() {
     return;
   }
 
+  // Check the file does not exceed the server's upload size limit
+  const maxBytes = parseInt(form.dataset.maxUploadBytes, 10);
+  if (maxBytes && fileInput.files[0].size > maxBytes) {
+    const maxMb = form.dataset.maxUploadMb || Math.round(maxBytes / (1024 * 1024));
+    alert(`File too large. The maximum upload size is ${maxMb} MB.`);
+    fileInput.value = "";
+    return;
+  }
+
   // Submit the form normally
   form.submit();
 }

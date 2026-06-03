@@ -32,7 +32,7 @@
     </p>
     </div>
 
-    <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: row; ">
+    <form id="uploadForm" method="post" enctype="multipart/form-data" data-max-upload-bytes="{{ max_upload_bytes }}" data-max-upload-mb="{{ max_upload_mb }}" style="display: flex; flex-direction: row; ">
         <div style="display: flex; width: 35%; flex-direction:column;">
             <select id="fileTypeSelector" name="fileTypeSelector" class="fileType" style="margin:0; border-radius: 10px 10px 0 0; padding: 15px; width:100%; max-width:none; text-align:center; font-size:1.5em;">
                 <option disabled value="" {% if not file_type%}selected{% endif %}>Select a File Type</option>
