@@ -37,24 +37,36 @@ def homepage():
 @core_bp.route("/inspector", methods=["GET", "POST"])
 def inspector():
     if request.method == "POST":
+        from web.routes.utils import (
+            save_uploaded_files, get_uploaded_files, set_active_file,
+        )
+        from aidrin.file_handling.file_parser import infer_file_type
         file_upload_time_log.info("File upload initiated (workspace)")
-        file = request.files["file"]
-
-        if file:
+        uploads = [u for u in request.files.getlist("file") if u and u.filename]
+        if uploads:
             cleared_count = clear_all_user_cache()
             file_upload_time_log.info(
                 "Cache cleared for new file upload: %d entries removed", cleared_count
             )
-
-            display_name = file.filename
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            file.save(file_path)
-
-            session["uploaded_file_name"] = display_name
-            session["uploaded_file_path"] = file_path
-            session["uploaded_file_type"] = request.form.get("fileTypeSelector")
-
+            entries = get_uploaded_files()
+            new_entries = []
+            for up in uploads:
+                display_name = up.filename
+                stored = f"{uuid.uuid4().hex}_{secure_filename(up.filename)}"
+                path = os.path.join(current_app.config["UPLOAD_FOLDER"], stored)
+                up.save(path)
+                entry = {
+                    "id": uuid.uuid4().hex,
+                    "name": display_name,
+                    "type": infer_file_type(display_name) or "",
+                    "path": path,
+                    "source": "local",
+                }
+                entries.append(entry)
+                new_entries.append(entry)
+            save_uploaded_files(entries)
+            first = sorted(new_entries, key=lambda e: e["name"].lower())[0]
+            set_active_file(first["id"])
             return redirect(url_for("core.inspector"))
 
     uploaded_file_name = session.get("uploaded_file_name", "")
