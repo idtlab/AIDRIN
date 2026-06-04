@@ -30,3 +30,29 @@ def test_single_file_upload_still_works(client):
     files = client.get("/files").get_json()
     assert len(files["files"]) == 1
     assert files["active_file_id"] is not None
+
+
+def test_globus_active_file_not_wiped_by_local_existence_check(app, client):
+    from web.routes.utils import save_uploaded_files
+    with app.test_request_context("/"):
+        from flask import session
+        session["user_id"] = "u-g"
+        save_uploaded_files([{
+            "id": "g1", "name": "r.csv", "type": ".csv",
+            "path": "/remote/only/r.csv", "source": "globus", "endpoint_id": "ep",
+        }])
+    with client.session_transaction() as sess:
+        sess["user_id"] = "u-g"
+        sess["active_file_id"] = "g1"
+        sess["uploaded_file_path"] = "/remote/only/r.csv"
+        sess["uploaded_file_name"] = "r.csv"
+        sess["uploaded_file_type"] = ".csv"
+        sess["globus_file_path"] = "/remote/only/r.csv"
+        sess["globus_file_name"] = "r.csv"
+        sess["globus_file_type"] = ".csv"
+        sess["globus_endpoint_id"] = "ep"
+    r = client.get("/inspector")
+    assert r.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess.get("active_file_id") == "g1"
+        assert sess.get("uploaded_file_path") == "/remote/only/r.csv"

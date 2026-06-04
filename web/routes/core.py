@@ -73,8 +73,14 @@ def inspector():
     uploaded_file_path = session.get("uploaded_file_path", "")
     file_type = session.get("uploaded_file_type", "")
 
-    # Validate session: clear stale data if file no longer exists or type is missing
-    if uploaded_file_path and (
+    # Determine if the active file is a remote Globus file — skip local-existence checks for it
+    from web.routes.utils import get_active_file
+    active = get_active_file()
+    is_globus = bool(active and active.get("source") == "globus")
+
+    # Validate session: clear stale data if file no longer exists or type is missing.
+    # Skip local-existence check for Globus remote files (path lives on a remote endpoint).
+    if uploaded_file_path and not is_globus and (
         not os.path.exists(uploaded_file_path) or not file_type
     ):
         file_upload_time_log.warning(
@@ -92,7 +98,7 @@ def inspector():
     file_preview = None
     current_checked_keys = None
 
-    if uploaded_file_path and file_type in [".h5", ".json", ".npz"]:
+    if uploaded_file_path and not is_globus and file_type in [".h5", ".json", ".npz"]:
         try:
             if file_type in READER_MAP:
                 reader = READER_MAP[file_type](uploaded_file_path, file_upload_time_log)
