@@ -25,6 +25,67 @@ def get_current_user_id():
     return session["user_id"]
 
 
+# ---------------------------------------------------------------------------
+# Multi-file store + active-file shim
+# ---------------------------------------------------------------------------
+
+def _files_cache_key():
+    return f"uploaded_files:{get_current_user_id()}"
+
+
+def get_uploaded_files():
+    """Return the server-side list of uploaded files for the current user."""
+    return current_app.TEMP_RESULTS_CACHE.get(_files_cache_key(), [])
+
+
+def save_uploaded_files(files):
+    """Persist the file list server-side (kept out of the session cookie)."""
+    current_app.TEMP_RESULTS_CACHE[_files_cache_key()] = files
+
+
+def get_active_file():
+    """Return the active file entry dict, or None."""
+    active_id = session.get("active_file_id")
+    for f in get_uploaded_files():
+        if f["id"] == active_id:
+            return f
+    return None
+
+
+def set_active_file(file_id):
+    """Make file_id active and mirror its identity into the legacy session keys.
+
+    Returns True if the file exists, else False. For a Globus entry, also
+    repopulates the globus_* keys that the remote path + cache still read.
+    """
+    entry = next((f for f in get_uploaded_files() if f["id"] == file_id), None)
+    if entry is None:
+        return False
+    session["active_file_id"] = file_id
+    session["uploaded_file_path"] = entry["path"]
+    session["uploaded_file_name"] = entry["name"]
+    session["uploaded_file_type"] = entry["type"]
+    if entry.get("source") == "globus":
+        session["globus_file_path"] = entry["path"]
+        session["globus_file_name"] = entry["name"]
+        session["globus_file_type"] = entry["type"]
+        session["globus_endpoint_id"] = entry.get("endpoint_id")
+    else:
+        for k in ("globus_file_path", "globus_file_name",
+                  "globus_file_type", "globus_endpoint_id"):
+            session.pop(k, None)
+    return True
+
+
+def clear_uploaded_files():
+    """Remove the file list and all active/legacy file pointers."""
+    current_app.TEMP_RESULTS_CACHE.pop(_files_cache_key(), None)
+    for k in ("active_file_id", "uploaded_file_path", "uploaded_file_name",
+              "uploaded_file_type", "globus_file_path", "globus_file_name",
+              "globus_file_type", "globus_endpoint_id"):
+        session.pop(k, None)
+
+
 def generate_metric_cache_key(file_name, metric_type, **params):
     """Generate a user-specific cache key for metrics."""
     user_id = get_current_user_id()
