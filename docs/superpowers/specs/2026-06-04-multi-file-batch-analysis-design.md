@@ -83,8 +83,7 @@ def summarize_files(file_infos):
 
     per_file = {
         "name": str, "type": str,
-        "records": int|None, "features": int|None,
-        "completeness": float|None,   # row-wise, 0..1 (see note below)
+        "records": int|None, "features": int|None,  # from a single read; NO metrics
         "size_bytes": int|None,
         "status": "ok"|"error",
         "error": str|None,            # short message when status == "error"
@@ -103,11 +102,12 @@ def summarize_files(file_infos):
   `None` (unsupported/missing name) or a `str` (read error message) →
   `status:"error"` with that message. (This is the same tri-state the
   `load_dataframe` helper handles — see dependency note.)
-- Computes lightweight stats **without Celery** so it is cheap to call
-  synchronously. **Completeness must use the same row-wise definition as the
-  existing metric** (`completeness.py`): `1 - df.isnull().any(axis=1).mean()`
-  (fraction of rows with no missing value), **not** a cell-wise mean — otherwise
-  the summary column would disagree with the per-file Data Quality result.
+- **Phase 1 computes NO metrics** — only structural facts available from a single
+  read: `records` (`len(df)`), `features` (`len(df.columns)`), `size_bytes`
+  (`os.path.getsize`, no parse), and load `status`. Completeness/duplicates/etc.
+  are deliberately excluded here; they remain in the per-file Data Quality view.
+  (Keeping metrics out also avoids the row-wise-vs-cell-wise completeness
+  question entirely for now.)
 - A file that fails to load becomes a `status: "error"` row with a short
   message — **one bad file never aborts the batch**.
 - **Synchronous cost:** summarizing up to 50 files (combined up to the request
@@ -161,11 +161,14 @@ file-management endpoints need to be multi-file aware.
 3. **Switch active file:** `POST /files/<id>/activate` → `set_active_file(id)` →
    the frontend re-renders the inspector for the new active file, in local or
    Globus mode depending on the entry's `source`.
-4. **Combined summary:** `GET /files/summary`. **Local** files are summarized
-   directly via `aidrin.summarize_files`. **Globus** files are listed with
-   metadata only (name, type, size, source; stats shown as `n/a`) in phase 1 —
-   computing remote stats would require a per-file Globus Compute call, deferred
-   to a later phase.
+4. **Combined summary:** after a multi-file upload the inspector **lands on the
+   combined summary** (the batch overview), not a single file's panels.
+   `GET /files/summary`: **local** files go through `aidrin.summarize_files`
+   (one read → records, features, size, status — no metrics); the web route
+   decorates each row with `source`. **Globus** files are listed with metadata
+   only (name, type, size, source; records/features `n/a`) — no remote read in
+   phase 1. Clicking any row activates that file and drills into its existing
+   per-file panels.
 5. **Metrics:** unchanged — they read the active file through the legacy keys
    (local) or the restored Globus context (remote).
 
@@ -211,10 +214,16 @@ New `infer_file_type(filename)` in `aidrin/file_handling/file_parser.py`:
 - **File switcher:** a list (in the sidebar) of uploaded files, each showing
   name + type/status badge, the active one highlighted; click to activate;
   per-file remove button.
-- **Combined summary panel:** a new view rendering the per-file overview table
-  (name, type, #records, #features, completeness, size, status) and the totals;
-  clicking a row activates that file. Errors render inline per row. Globus rows
-  show metadata only with stats as `n/a` (phase 1).
+- **Combined summary ("Batch Overview"):** the **default landing view** after a
+  multi-file upload. Two parts:
+  - **Totals strip** (cards): `# files`, `# loaded OK` / `# failed`,
+    `total records`, files-by-type, files-by-source, total size.
+  - **Per-file table**: columns **File · Type · Source · Records · Features ·
+    Size · Status** (no metrics column in phase 1). Failed rows show the friendly
+    error inline (`—` for stats); Globus rows show a "remote" badge with
+    records/features `n/a`. Clicking a row activates that file → its per-file
+    panels.
+  - **Table + totals only** — no charts in phase 1.
 - **Globus panel:** allow selecting multiple remote files; each selected file is
   appended to the shared list as a `source:"globus"` entry. Activating one keeps
   the inspector in `globus_mode` (remote execution).
@@ -265,11 +274,11 @@ New `infer_file_type(filename)` in `aidrin/file_handling/file_parser.py`:
 
 ## Testing
 
-- **Core:** `summarize_files` — per-file stats, totals, mixed types, a failing
-  file among good ones, empty input, and `read_file` returning each of
-  `DataFrame`/`None`/`str`. Assert `completeness` equals the existing row-wise
-  metric on the same data. `infer_file_type` — each supported extension, Excel
-  variants, unknown extension.
+- **Core:** `summarize_files` — records/features/size/status + totals, mixed
+  types, a failing file among good ones, empty input, and `read_file` returning
+  each of `DataFrame`/`None`/`str`. Assert **no metric** fields are present
+  (records = `len(df)`, features = `len(df.columns)` only). `infer_file_type` —
+  each supported extension, Excel variants, unknown extension.
 - **Web (integration):** multi-file upload builds the list and sets an active
   file; `activate` updates the legacy keys and an existing metric still works;
   `/files/summary` shape + totals; `remove` deletes file + entry; **removing the
