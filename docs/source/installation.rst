@@ -127,6 +127,13 @@ Terminal 3 – Flask Server
 Once running, visit:
 `http://127.0.0.1:5000 <http://127.0.0.1:5000>`_
 
+.. note::
+
+   The maximum upload size defaults to **1 GB**. To change it for a deployment,
+   set the ``AIDRIN_MAX_UPLOAD_MB`` environment variable (in megabytes) before
+   starting the Flask server, e.g.
+   ``AIDRIN_MAX_UPLOAD_MB=2048 flask --app 'web:create_app()' run``.
+
 ----
 
 Option 2: Install from PyPI
