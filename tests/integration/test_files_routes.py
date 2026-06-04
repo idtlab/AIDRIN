@@ -73,3 +73,47 @@ def test_cache_key_uses_active_file_id_not_display_name(app):
         set_active_file("f2")
         k2 = generate_metric_cache_key("dup.csv", "classimbalance", classes="y")
         assert k1 != k2  # same display name, different files -> different keys
+
+
+def _seed(app, client, entries):
+    from web.routes.utils import save_uploaded_files
+    with client.session_transaction() as sess:
+        sess["user_id"] = "u-test"
+    with app.test_request_context("/"):
+        from flask import session
+        session["user_id"] = "u-test"
+        save_uploaded_files(entries)
+
+
+def test_files_list_and_activate(app, client):
+    _seed(app, client, [
+        {"id": "f1", "name": "a.csv", "type": ".csv", "path": "/a.csv", "source": "local"},
+        {"id": "f2", "name": "b.csv", "type": ".csv", "path": "/b.csv", "source": "local"},
+    ])
+    r = client.get("/files")
+    data = r.get_json()
+    assert {f["id"] for f in data["files"]} == {"f1", "f2"}
+    r = client.post("/files/f2/activate")
+    assert r.get_json()["success"] is True
+    with client.session_transaction() as sess:
+        assert sess["active_file_id"] == "f2"
+
+
+def test_files_activate_unknown_404(app, client):
+    _seed(app, client, [])
+    r = client.post("/files/nope/activate")
+    assert r.status_code == 404
+
+
+def test_files_remove_active_activates_next(app, client, tmp_path):
+    p = tmp_path / "a.csv"; p.write_text("x\n1\n")
+    _seed(app, client, [
+        {"id": "f1", "name": "a.csv", "type": ".csv", "path": str(p), "source": "local"},
+        {"id": "f2", "name": "b.csv", "type": ".csv", "path": "/b.csv", "source": "local"},
+    ])
+    client.post("/files/f1/activate")
+    r = client.post("/files/f1/remove")
+    assert r.get_json()["success"] is True
+    with client.session_transaction() as sess:
+        assert sess["active_file_id"] == "f2"
+    assert not p.exists()
