@@ -288,10 +288,11 @@ def cached_result(metric_name):
         or session.get("globus_file_name")
         or ""
     )
-    if not file_name:
+    if not file_name and not session.get("active_file_id"):
         return jsonify({"cached": False})
 
-    cache_key = f"user:{user_id}:file:{file_name}:{metric_name}"
+    file_token = session.get("active_file_id") or file_name
+    cache_key = f"user:{user_id}:file:{file_token}:{metric_name}"
     entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
     if entry and entry.get("data"):
         resp = {"cached": True, "data": entry["data"]}

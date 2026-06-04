@@ -89,7 +89,8 @@ def clear_uploaded_files():
 def generate_metric_cache_key(file_name, metric_type, **params):
     """Generate a user-specific cache key for metrics."""
     user_id = get_current_user_id()
-    cache_parts = [f"user:{user_id}", f"file:{file_name}"]
+    file_token = session.get("active_file_id") or file_name
+    cache_parts = [f"user:{user_id}", f"file:{file_token}"]
 
     if metric_type == "dp":
         features = params.get("features", [])
@@ -177,8 +178,10 @@ def store_result(metric, final_dict):
     # Also store a persistent user-scoped copy for the cache info page
     user_id = get_current_user_id()
     metric_short = metric.rsplit(".", 1)[-1] if "." in metric else metric
-    file_name = session.get("uploaded_file_name") or session.get("globus_file_name") or "unknown"
-    user_key = f"user:{user_id}:file:{file_name}:{metric_short}"
+    file_token = session.get("active_file_id") or (
+        session.get("uploaded_file_name") or session.get("globus_file_name") or "unknown"
+    )
+    user_key = f"user:{user_id}:file:{file_token}:{metric_short}"
     current_app.TEMP_RESULTS_CACHE[user_key] = {
         "data": formatted_final_dict,
         "timestamp": time.time(),

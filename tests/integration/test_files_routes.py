@@ -57,3 +57,19 @@ def test_set_active_unknown_id_returns_false(app):
     with app.test_request_context("/"):
         save_uploaded_files([])
         assert set_active_file("nope") is False
+
+
+def test_cache_key_uses_active_file_id_not_display_name(app):
+    from web.routes.utils import (
+        save_uploaded_files, set_active_file, generate_metric_cache_key,
+    )
+    with app.test_request_context("/"):
+        save_uploaded_files([
+            {"id": "f1", "name": "dup.csv", "type": ".csv", "path": "/a/dup.csv", "source": "local"},
+            {"id": "f2", "name": "dup.csv", "type": ".csv", "path": "/b/dup.csv", "source": "local"},
+        ])
+        set_active_file("f1")
+        k1 = generate_metric_cache_key("dup.csv", "classimbalance", classes="y")
+        set_active_file("f2")
+        k2 = generate_metric_cache_key("dup.csv", "classimbalance", classes="y")
+        assert k1 != k2  # same display name, different files -> different keys
