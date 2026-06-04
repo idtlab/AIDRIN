@@ -117,3 +117,34 @@ def test_files_remove_active_activates_next(app, client, tmp_path):
     with client.session_transaction() as sess:
         assert sess["active_file_id"] == "f2"
     assert not p.exists()
+
+
+def test_files_summary_local(app, client, tmp_path):
+    a = tmp_path / "a.csv"; a.write_text("x,y\n1,2\n3,4\n")
+    _seed(app, client, [
+        {"id": "f1", "name": "a.csv", "type": ".csv", "path": str(a), "source": "local"},
+    ])
+    r = client.get("/files/summary")
+    data = r.get_json()
+    assert data["totals"]["file_count"] == 1
+    row = data["files"][0]
+    assert row["records"] == 2 and row["features"] == 2
+    assert row["source"] == "local"
+    assert row["id"] == "f1"
+    assert "completeness" not in row
+
+
+def test_files_summary_mixed_local_globus(app, client, tmp_path):
+    a = tmp_path / "a.csv"; a.write_text("x\n1\n")
+    _seed(app, client, [
+        {"id": "f1", "name": "a.csv", "type": ".csv", "path": str(a), "source": "local"},
+        {"id": "g1", "name": "r.csv", "type": ".csv", "path": "/remote/r.csv",
+         "source": "globus", "endpoint_id": "ep"},
+    ])
+    data = client.get("/files/summary").get_json()
+    assert data["totals"]["file_count"] == 2
+    assert data["totals"]["by_source"] == {"local": 1, "globus": 1}
+    g = next(f for f in data["files"] if f["id"] == "g1")
+    assert g["source"] == "globus"
+    assert g["records"] is None and g["features"] is None
+    assert g["status"] == "remote"

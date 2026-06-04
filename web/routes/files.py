@@ -25,6 +25,31 @@ def activate(file_id):
     return jsonify({"success": False, "message": "Unknown file"}), 404
 
 
+@files_bp.route("/files/summary", methods=["GET"])
+def summary():
+    import aidrin
+    files = get_uploaded_files()
+    local = [f for f in files if f.get("source") == "local"]
+    globus = [f for f in files if f.get("source") == "globus"]
+
+    local_summary = aidrin.summarize_files(
+        [(f["path"], f["name"], f["type"]) for f in local]
+    )
+    rows = []
+    for f, row in zip(local, local_summary["files"]):
+        rows.append({**row, "id": f["id"], "source": "local"})
+    for f in globus:
+        rows.append({
+            "id": f["id"], "name": f["name"], "type": f["type"], "source": "globus",
+            "records": None, "features": None, "size_bytes": None,
+            "status": "remote", "error": None,
+        })
+    totals = dict(local_summary["totals"])
+    totals["file_count"] = len(files)
+    totals["by_source"] = {"local": len(local), "globus": len(globus)}
+    return jsonify({"files": rows, "totals": totals})
+
+
 @files_bp.route("/files/<file_id>/remove", methods=["POST"])
 def remove(file_id):
     files = get_uploaded_files()
