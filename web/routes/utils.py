@@ -11,7 +11,39 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from flask import current_app, jsonify, redirect, request, session, url_for
 
+from aidrin.file_handling.file_parser import read_file
+
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# File loading
+# ---------------------------------------------------------------------------
+
+def load_dataframe(file_info):
+    """Read a file into a DataFrame, normalizing failures.
+
+    ``read_file`` returns a DataFrame on success, or ``None`` / an error-message
+    string on failure. This wrapper collapses those failure modes into a single
+    ``(df, message)`` shape so route handlers can surface a clean error instead
+    of crashing when they call DataFrame methods on a non-DataFrame value.
+
+    Returns
+    -------
+    tuple
+        ``(DataFrame, None)`` on success, or ``(None, message)`` on failure.
+    """
+    result = read_file(file_info)
+    if isinstance(result, pd.DataFrame):
+        return result, None
+    if isinstance(result, str):
+        # read_file already produced a descriptive message (parse error,
+        # missing parquet engine, file too large, file not found, ...)
+        return None, result
+    return None, (
+        "Could not read the file. The format may be unsupported or the file "
+        "may be corrupted."
+    )
 
 
 # ---------------------------------------------------------------------------
