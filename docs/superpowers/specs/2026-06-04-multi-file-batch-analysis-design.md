@@ -165,10 +165,13 @@ file-management endpoints need to be multi-file aware.
    combined summary** (the batch overview), not a single file's panels.
    `GET /files/summary`: **local** files go through `aidrin.summarize_files`
    (one read → records, features, size, status — no metrics); the web route
-   decorates each row with `source`. **Globus** files are listed with metadata
-   only (name, type, size, source; records/features `n/a`) — no remote read in
-   phase 1. Clicking any row activates that file and drills into its existing
-   per-file panels.
+   decorates each row with `source`. **Globus** files appear immediately with
+   metadata (name, type, size, source); their records/features are fetched
+   **asynchronously** via the existing remote `_summary_statistics` (which already
+   returns `records_count`/`features_count`, `web/globus.py:144-145`) and stream
+   into the row when ready — reusing the `globus_summary:{endpoint_id}:{file_path}`
+   cache so already-viewed files are instant. Clicking any row activates that file
+   and drills into its per-file panels.
 5. **Metrics:** unchanged — they read the active file through the legacy keys
    (local) or the restored Globus context (remote).
 
@@ -180,7 +183,7 @@ file-management endpoints need to be multi-file aware.
 | `GET /files` | List `uploaded_files` (+ which is active) for the switcher. |
 | `POST /files/<id>/activate` | Set the active file. |
 | `POST /files/<id>/remove` | Remove a file (delete local file from disk + list). **If the removed file was active**, activate the next remaining file (or, if none remain, clear `uploaded_file_*` so the inspector returns to the upload panel). Always re-run `set_active_file`. |
-| `GET /files/summary` | Combined per-file overview + totals (Globus = metadata only). |
+| `GET /files/summary` | Combined per-file overview + totals (local synchronous; Globus records/features fetched async via existing remote summary). |
 | Globus selection route | Append into the shared list (`source:"globus"`, `endpoint_id`); fold in `globus_file_*`. |
 | All metric / summary / feature routes | **Unchanged**; execution dispatched by source (local routes vs `remote_metric_runner`). |
 
@@ -219,10 +222,14 @@ New `infer_file_type(filename)` in `aidrin/file_handling/file_parser.py`:
   - **Totals strip** (cards): `# files`, `# loaded OK` / `# failed`,
     `total records`, files-by-type, files-by-source, total size.
   - **Per-file table**: columns **File · Type · Source · Records · Features ·
-    Size · Status** (no metrics column in phase 1). Failed rows show the friendly
-    error inline (`—` for stats); Globus rows show a "remote" badge with
-    records/features `n/a`. Clicking a row activates that file → its per-file
-    panels.
+    Size · Status** (no metrics column in phase 1), **sorted by file name**
+    (case-insensitive). Failed rows show the friendly error inline (`—` for
+    stats). Clicking a row activates that file → its per-file panels.
+  - **Local vs Globus rows:** local rows render fully on first paint (synchronous
+    read). Globus rows render with metadata immediately and a "loading…"
+    records/features cell that **fills in asynchronously** from the remote
+    `_summary_statistics` (cached per file). `total records` updates as remote
+    counts arrive.
   - **Table + totals only** — no charts in phase 1.
 - **Globus panel:** allow selecting multiple remote files; each selected file is
   appended to the shared list as a `source:"globus"` entry. Activating one keeps
@@ -288,7 +295,9 @@ New `infer_file_type(filename)` in `aidrin/file_handling/file_parser.py`:
   re-key (store then retrieve).
 - **Globus:** multi-file selection appends to the shared list (mocked); a Globus
   active file is **not** wiped by the local `os.path.exists` stale check, and the
-  shim repopulates `globus_file_*`/`globus_endpoint_id`.
+  shim repopulates `globus_file_*`/`globus_endpoint_id`; the batch overview
+  fills a Globus row's records/features from the remote `_summary_statistics`
+  result (mocked) and serves a second request from the `globus_summary` cache.
 - **Session storage:** a 50-file list with long remote paths persists (does not
   overflow the cookie) — verifies the server-side storage decision.
 - Follow TDD (red → green) per the existing reader/route test patterns.
