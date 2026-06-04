@@ -57,10 +57,16 @@ The single-file assumption is deep in the web layer:
   already supports multiple files by iteration. The CLI/headless mode (on other
   branches) is likewise config/arg driven and session-free.
 
-**Note on dependencies:** the per-file error handling described here mirrors the
-`load_dataframe` helper and friendly-error mapping introduced on the
-`parquet-support` branch. If this feature lands before that work is merged, it
-should include an equivalent helper; otherwise it reuses it.
+**Note on dependencies (two separate branches):**
+- The per-file error handling mirrors the `load_dataframe` helper + friendly-error
+  mapping on the **`parquet-support`** branch (`web/routes/utils.py`). It is a
+  non-trivial helper; if this feature lands first, replicate it here.
+- `MAX_CONTENT_LENGTH` (the request-size cap this spec relies on) is on the
+  **`upload-size-limit`** branch (`web/__init__.py`), *not* `parquet-support`. It
+  is absent on `develop`/this branch today.
+
+These are independent branches; neither is on `develop` yet, so this design must
+not assume either exists until merged.
 
 ## Architecture: Two Layers
 
@@ -78,7 +84,7 @@ def summarize_files(file_infos):
     per_file = {
         "name": str, "type": str,
         "records": int|None, "features": int|None,
-        "completeness": float|None,   # fraction of non-null cells, 0..1
+        "completeness": float|None,   # row-wise, 0..1 (see note below)
         "size_bytes": int|None,
         "status": "ok"|"error",
         "error": str|None,            # short message when status == "error"
@@ -92,11 +98,21 @@ def summarize_files(file_infos):
     """
 ```
 
-- Reads each file via `read_file`; computes lightweight stats **without Celery**
-  (e.g. completeness = `df.notna().to_numpy().mean()`), so it is cheap and safe
-  to call synchronously.
+- Reads each file via `read_file`, which returns **`DataFrame | None | str`**.
+  `summarize_files` must branch on all three: a `DataFrame` → `status:"ok"`;
+  `None` (unsupported/missing name) or a `str` (read error message) →
+  `status:"error"` with that message. (This is the same tri-state the
+  `load_dataframe` helper handles — see dependency note.)
+- Computes lightweight stats **without Celery** so it is cheap to call
+  synchronously. **Completeness must use the same row-wise definition as the
+  existing metric** (`completeness.py`): `1 - df.isnull().any(axis=1).mean()`
+  (fraction of rows with no missing value), **not** a cell-wise mean — otherwise
+  the summary column would disagree with the per-file Data Quality result.
 - A file that fails to load becomes a `status: "error"` row with a short
   message — **one bad file never aborts the batch**.
+- **Synchronous cost:** summarizing up to 50 files (combined up to the request
+  cap) can be slow. Phase 1 reads each file once; if this proves too heavy,
+  apply a per-file row/size cap for the summary pass (note, not yet enforced).
 - Lives in the core package (e.g. `aidrin/batch.py`), re-exported from
   `aidrin/__init__.py`. Consumed by the web combined-summary endpoint, the CLI's
   batch mode, and library users.
@@ -105,16 +121,24 @@ def summarize_files(file_infos):
 
 A presentation-only construct in the Flask session:
 
-- `session["uploaded_files"]`: list of
+- `uploaded_files`: list of
   `{"id": uuid, "name": str, "type": str, "path": str, "source": "local"|"globus"}`.
   Globus entries additionally carry `endpoint_id` (and the remote path lives in
   `path`). The previously top-level `globus_file_*` keys are **folded into the
-  entry**, not kept separately.
-- `session["active_file_id"]`: the currently selected file's id.
+  entry**, not kept separately. **Stored server-side** (keyed by `user_id`), not
+  in the cookie — see Limits (session storage).
+- `session["active_file_id"]`: the currently selected file's id (small pointer,
+  kept in the cookie).
 - A `set_active_file(file_id)` helper sets `active_file_id` **and writes the
   active file's path/name/type into the existing `uploaded_file_*` session
-  keys**. For a Globus entry it also restores the Globus execution context
-  (endpoint id + remote path) the frontend's `globus_mode` needs.
+  keys**. For a **Globus** entry it must ALSO repopulate the exact legacy keys
+  that downstream code still reads — `globus_file_path`, `globus_file_name`,
+  `globus_file_type`, and `globus_endpoint_id` — because `core.py:118-122,179-182,288`,
+  `utils.py:119`, `llm.py:218`, `routes/globus.py:131-143`, and the
+  `globus_summary:{endpoint_id}:{file_path}` cache key all depend on them. So
+  "folding `globus_file_*` into the list entry" means they are no longer the
+  *source of truth* (the list is) — but the shim re-derives them for the active
+  file so existing consumers keep working.
 
 This compatibility shim means every existing **local** metric route, the ~10
 read sites, and the templates keep working **unchanged** — they always operate on
@@ -152,7 +176,7 @@ file-management endpoints need to be multi-file aware.
 | `POST /inspector` | Accept multiple files; build the list; infer types. |
 | `GET /files` | List `uploaded_files` (+ which is active) for the switcher. |
 | `POST /files/<id>/activate` | Set the active file. |
-| `POST /files/<id>/remove` | Remove a file (delete from disk + list). |
+| `POST /files/<id>/remove` | Remove a file (delete local file from disk + list). **If the removed file was active**, activate the next remaining file (or, if none remain, clear `uploaded_file_*` so the inspector returns to the upload panel). Always re-run `set_active_file`. |
 | `GET /files/summary` | Combined per-file overview + totals (Globus = metadata only). |
 | Globus selection route | Append into the shared list (`source:"globus"`, `endpoint_id`); fold in `globus_file_*`. |
 | All metric / summary / feature routes | **Unchanged**; execution dispatched by source (local routes vs `remote_metric_runner`). |
@@ -166,11 +190,24 @@ New `infer_file_type(filename)` in `aidrin/file_handling/file_parser.py`:
   `".xls, .xlsb, .xlsx, .xlsm"`; the map points `.xls/.xlsb/.xlsx/.xlsm` at it).
 - Unknown extension → `None` → the file is listed with `status: "error"`
   ("Unsupported file type") and cannot be made active.
+- **Caveat:** the inferred value is a READER_MAP *key*, which for Excel is the
+  combined string `".xls, .xlsb, .xlsx, .xlsm"` — and `uploaded_file_type` is
+  reused as a literal filename suffix in `custom.py:137`
+  (`remedied_{session_id}{file_type}`). That is already broken for Excel today;
+  this design must not make it worse — store a real extension alongside the
+  reader key (e.g. derive the suffix from the original filename, not the key).
 
 ## Frontend (inspector)
 
 - **Upload dropzone:** add `multiple`; support multi-file drag-drop. **Remove**
-  the "File type" `<select>` (type is inferred).
+  the "File type" `<select>` (type is inferred). Note this is **not** a one-line
+  change: today the upload is a native full-page form POST → redirect
+  (`main.js:45` `form.submit()`, `core.py:58`). Multi-file upload with per-file
+  status/error rows implies an **AJAX upload** (`fetch` + `FormData`) and a
+  client-rendered file list — a real rewrite of `uploadForm()`. Removing the
+  `<select>` also drops its `accept`-attribute filtering and the existing
+  client-side "select a file type" validation guard (`main.js:31`); replace with
+  extension-based client validation.
 - **File switcher:** a list (in the sidebar) of uploaded files, each showing
   name + type/status badge, the active one highlighted; click to activate;
   per-file remove button.
@@ -187,16 +224,29 @@ New `infer_file_type(filename)` in `aidrin/file_handling/file_parser.py`:
 - Per-file metric caching already works because the cache key includes the file.
 - **Change:** key the cache on the **unique stored filename / file_id** instead
   of the display `file_name`, to prevent collisions when two files in a batch
-  share a display name. Update `generate_metric_cache_key` and the `store_result`
-  user-key accordingly.
+  share a display name. This must move **all four** file-name-derived sites
+  together or cached results become unretrievable: `generate_metric_cache_key`,
+  the `store_result` user-key (`user:{id}:file:{name}:{metric}`), the
+  `cached_result` lookup (`core.py:286-294`), and the `clear_all_user_cache`
+  prefix match. (Telemetry `trace_metric(file_name=...)` may keep the display
+  name — cosmetic only.)
 
 ## Limits
 
-- `MAX_CONTENT_LENGTH` already caps the **whole** multipart request (the
-  parquet/upload-limit work sets this; default 1 GB) — this naturally bounds the
-  combined batch size. No per-file cap needed.
+- `MAX_CONTENT_LENGTH` (from the `upload-size-limit` branch; default 1 GB) caps
+  the **whole** multipart request, bounding the combined batch size.
 - New `AIDRIN_MAX_UPLOAD_FILES` (default **50**) bounds the number of files per
-  batch; exceeding it returns a clear error and rejects the upload.
+  batch.
+- **Enforcement ordering:** `MAX_CONTENT_LENGTH` is enforced by Flask **before**
+  the body is parsed (returns a bare 413); `AIDRIN_MAX_UPLOAD_FILES` can only be
+  checked **after** parsing `getlist("file")`. Add a friendly 413 handler and a
+  clear "too many files" message so the two limits don't produce confusing UX.
+- **Session storage (important):** Flask's default session is a client-side
+  signed cookie (~4 KB). A 50-entry `uploaded_files` list — especially with long
+  remote Globus paths — can exceed that and **silently drop the session**.
+  Therefore store `uploaded_files` **server-side** (e.g. in `TEMP_RESULTS_CACHE`
+  keyed by `user_id`), keeping only small pointers (`active_file_id`, the legacy
+  `uploaded_file_*`/`globus_file_*` shim values) in the cookie.
 
 ## Error Handling
 
@@ -204,19 +254,34 @@ New `infer_file_type(filename)` in `aidrin/file_handling/file_parser.py`:
   with a short message; the batch continues. The active-file detail view shows
   the friendly read error (existing `load_dataframe` behavior).
 - **Too many files / unsupported type:** clear, user-facing messages.
+- **Active Globus file vs. local existence check:** the inspector's stale-session
+  validation (`core.py:65-78`) and several routes guard on
+  `os.path.exists(uploaded_file_path)`. A Globus active file's path is **remote**,
+  so this is `False` on the AIDRIN server and would wrongly **wipe the session**.
+  Add a `source == "globus"` bypass to every such existence check (treat remote
+  files as present; let the Globus path handle reachability).
 - **Empty batch / no active file:** the inspector falls back to the upload panel
   (existing stale-session handling generalizes to "no files").
 
 ## Testing
 
 - **Core:** `summarize_files` — per-file stats, totals, mixed types, a failing
-  file among good ones, empty input. `infer_file_type` — each supported
-  extension, Excel variants, unknown extension.
+  file among good ones, empty input, and `read_file` returning each of
+  `DataFrame`/`None`/`str`. Assert `completeness` equals the existing row-wise
+  metric on the same data. `infer_file_type` — each supported extension, Excel
+  variants, unknown extension.
 - **Web (integration):** multi-file upload builds the list and sets an active
   file; `activate` updates the legacy keys and an existing metric still works;
-  `/files/summary` shape + totals; `remove` deletes file + entry; per-file error
-  appears in the summary without 500s; `AIDRIN_MAX_UPLOAD_FILES` enforced.
-- **Globus:** multi-file transfer appends to the shared list (mocked transfer).
+  `/files/summary` shape + totals; `remove` deletes file + entry; **removing the
+  active file** activates the next (or returns to the upload panel); per-file
+  error appears in the summary without 500s; `AIDRIN_MAX_UPLOAD_FILES` enforced
+  (and ordering vs. the 413 size cap); cached metric results survive the file_id
+  re-key (store then retrieve).
+- **Globus:** multi-file selection appends to the shared list (mocked); a Globus
+  active file is **not** wiped by the local `os.path.exists` stale check, and the
+  shim repopulates `globus_file_*`/`globus_endpoint_id`.
+- **Session storage:** a 50-file list with long remote paths persists (does not
+  overflow the cookie) — verifies the server-side storage decision.
 - Follow TDD (red → green) per the existing reader/route test patterns.
 
 ## Phase 2 Seam (relational / different schemas)
