@@ -5,6 +5,7 @@ registered when ``globus-compute-sdk`` is installed.
 """
 
 import logging
+import uuid
 
 from flask import (
     Blueprint,
@@ -23,6 +24,7 @@ from web.globus import (
     submit_metric,
     check_task,
 )
+from web.routes.utils import get_uploaded_files, save_uploaded_files, set_active_file
 
 logger = logging.getLogger(__name__)
 
@@ -194,11 +196,32 @@ def submit():
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
 
-        # Store endpoint info in session for subsequent metric submissions
-        session["globus_endpoint_id"] = endpoint_id
-        session["globus_file_path"] = file_path
-        session["globus_file_name"] = file_name
-        session["globus_file_type"] = file_type
+        # Add the selected Globus file to the shared multi-file list and make it
+        # active.  set_active_file() repopulates the globus_* session keys so
+        # any downstream code that still reads those keys continues to work.
+        entries = get_uploaded_files()
+        # Avoid duplicate entries for the same endpoint + path combination.
+        existing = next(
+            (e for e in entries
+             if e.get("source") == "globus"
+             and e.get("endpoint_id") == endpoint_id
+             and e.get("path") == file_path),
+            None,
+        )
+        if existing is None:
+            entry = {
+                "id": uuid.uuid4().hex,
+                "name": file_name,
+                "type": file_type,
+                "path": file_path,
+                "source": "globus",
+                "endpoint_id": endpoint_id,
+            }
+            entries.append(entry)
+            save_uploaded_files(entries)
+        else:
+            entry = existing
+        set_active_file(entry["id"])  # also repopulates globus_* session keys
 
         task_id = submit_metric(
             client, endpoint_id, metric_name,
