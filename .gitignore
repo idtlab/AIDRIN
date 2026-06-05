@@ -172,3 +172,10 @@ noisy/
 
 dump.rdb
 celerybeat-schedule.db
+
+# Runtime data (uploads, persisted file lists, scratch test data)
+data/
+
+# Runtime-generated custom metrics & remedy data (package keeps __init__.py + base_dr.py)
+aidrin/custom_metrics/customDR_*.py
+aidrin/custom_metrics/remedy_data/
