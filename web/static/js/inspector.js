@@ -2005,11 +2005,6 @@ function loadBatchOverview() {
           isGlobus ? "…" : (f.records ?? "—"),
           isGlobus ? "…" : (f.features ?? "—"),
           fmtBytes(f.size_bytes),
-          f.status === "ok"
-            ? "✅"
-            : f.status === "remote"
-              ? "🌐 remote"
-              : `⚠️ ${f.error || "error"}`,
         ];
         cells.forEach((text, idx) => {
           const td = document.createElement("td");
