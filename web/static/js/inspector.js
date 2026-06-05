@@ -58,8 +58,18 @@ function showPanel(panelId, pushHistory) {
   }
 
   // Lazy init CodeMirror for custom metrics
-  if (panelId === "custom-metrics" && !codeMirrorEditor) {
-    initCodeMirror();
+  if (panelId === "custom-metrics") {
+    if (!codeMirrorEditor) {
+      initCodeMirror();
+    } else {
+      // The editor may have been created or had setValue() called while the
+      // panel was hidden (e.g. on a reload where the hash restored this panel
+      // and batch-mode then showed the overview). CodeMirror renders blank in
+      // that case until refreshed once the panel is visible again.
+      setTimeout(function () {
+        codeMirrorEditor.refresh();
+      }, 0);
+    }
   }
 
   // Close mobile sidebar after selection
