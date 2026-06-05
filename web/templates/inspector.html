@@ -86,12 +86,17 @@
       {% endif %}
 
       {% if uploaded_file_path and not globus_mode %}
+        // Always initialise the workspace so the active file's summary and
+        // feature dropdowns are populated (initWorkspace also calls
+        // loadFileSwitcher internally).
+        initWorkspace();
         {% if file_count > 1 %}
-          showPanel('batch-overview');
+          // Batch mode: also load the overview list and surface it as the
+          // landing panel.  showPanel is synchronous inside initWorkspace
+          // (called before any fetch), so this call wins and leaves the
+          // batch-overview visible.
           loadBatchOverview();
-          loadFileSwitcher();
-        {% else %}
-          initWorkspace();
+          showPanel('batch-overview');
         {% endif %}
       {% elif globus_mode %}
         // Globus mode — flag for workspaceSubmit to route through Globus
@@ -100,6 +105,7 @@
         window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
         window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
+        loadFileSwitcher();
         showPanel('data-overview');
         // Show Globus info banner + loading spinner for summary stats
         var ws = document.getElementById('workspace-summary');
