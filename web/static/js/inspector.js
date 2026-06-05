@@ -1943,6 +1943,115 @@ function renderWorkspaceHistograms(histograms) {
   container.innerHTML = html;
 }
 
+// ==================== Batch Overview ====================
+
+function fmtBytes(n) {
+  if (!n && n !== 0) return "—";
+  const u = ["B", "KB", "MB", "GB"];
+  let i = 0,
+    v = n;
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
+}
+
+function loadBatchOverview() {
+  fetch("/files/summary")
+    .then((r) => r.json())
+    .then((data) => {
+      const totals = document.getElementById("batch-totals");
+      if (totals) {
+        const t = data.totals || {};
+        totals.innerHTML = "";
+        [
+          ["Files", t.file_count ?? 0],
+          ["Loaded OK", t.ok_count ?? 0],
+          ["Failed", t.error_count ?? 0],
+          ["Total records", (t.total_records ?? 0).toLocaleString()],
+        ].forEach(([label, value]) => {
+          const card = document.createElement("div");
+          card.className =
+            "p-3 bg-gray-50 dark:bg-gray-700/50 rounded text-center";
+          const v = document.createElement("div");
+          v.className = "text-2xl font-bold";
+          v.textContent = value;
+          const k = document.createElement("div");
+          k.className = "text-xs uppercase text-gray-500";
+          k.textContent = label;
+          card.appendChild(v);
+          card.appendChild(k);
+          totals.appendChild(card);
+        });
+      }
+
+      const tbody = document.getElementById("batch-rows");
+      if (!tbody) return;
+      const rows = [...(data.files || [])].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      );
+      tbody.innerHTML = "";
+      rows.forEach((f) => {
+        const tr = document.createElement("tr");
+        tr.className =
+          "border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer";
+        const isGlobus = f.source === "globus";
+        const cells = [
+          f.name,
+          f.type || "?",
+          f.source,
+          isGlobus ? "…" : (f.records ?? "—"),
+          isGlobus ? "…" : (f.features ?? "—"),
+          fmtBytes(f.size_bytes),
+          f.status === "ok"
+            ? "✅"
+            : f.status === "remote"
+              ? "🌐 remote"
+              : `⚠️ ${f.error || "error"}`,
+        ];
+        cells.forEach((text, idx) => {
+          const td = document.createElement("td");
+          td.className =
+            "px-3 py-2" + (idx >= 3 && idx <= 5 ? " text-right" : "");
+          td.textContent = text;
+          if (isGlobus && (idx === 3 || idx === 4)) {
+            td.dataset.globusId = f.id;
+            td.dataset.field = idx === 3 ? "records" : "features";
+          }
+          tr.appendChild(td);
+        });
+        tr.addEventListener("click", () => activateFile(f.id));
+        tbody.appendChild(tr);
+        if (isGlobus) fetchGlobusCount(f);
+      });
+    })
+    .catch((err) => console.error("Failed to load batch overview:", err));
+}
+
+/**
+ * Fetch records/features counts for a Globus remote file entry.
+ *
+ * NOTE (DONE_WITH_CONCERNS): A clean reuse of fetchGlobusSummary() is not
+ * feasible here without a significant refactor. fetchGlobusSummary() reads
+ * endpoint/path/name/type from the single-file globals
+ * (window.AIDRIN_GLOBUS_ENDPOINT etc.) and is tightly coupled to the
+ * single-file DOM elements (globus-summary-loading, globus-summary-content).
+ * In a batch context each Globus row has its own endpoint/path metadata stored
+ * server-side but not exposed to the frontend as per-file globals. Properly
+ * reusing the Globus Compute submit/poll flow would require:
+ *   1. Exposing per-file endpoint_id + file_path from /files/summary,
+ *   2. Factoring out a generic submitGlobusTask(endpoint, path, ...) helper,
+ *   3. Wiring per-row polling that updates the specific td cells.
+ * Until that refactor lands, Globus rows show "n/a" to keep the UI consistent.
+ */
+function fetchGlobusCount(f) {
+  const cells = document.querySelectorAll(`[data-globus-id="${f.id}"]`);
+  cells.forEach((td) => {
+    td.textContent = "n/a";
+  });
+}
+
 // ==================== File Switcher ====================
 
 function loadFileSwitcher() {

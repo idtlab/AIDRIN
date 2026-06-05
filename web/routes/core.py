@@ -150,6 +150,9 @@ def inspector():
     effective_file_name = uploaded_file_name or globus_file_name
     effective_file_type = file_type or globus_file_type
 
+    from web.routes.utils import get_uploaded_files as _get_uploaded_files
+    file_count = len(_get_uploaded_files())
+
     try:
         return render_template(
             "inspector.html",
@@ -167,6 +170,7 @@ def inspector():
             globus_endpoint_id=globus_endpoint_id,
             llm_available=llm_available,
             llm_configured=llm_configured,
+            file_count=file_count,
         )
     except Exception as e:
         file_upload_time_log.error("Error rendering workspace: %s", e, exc_info=True)

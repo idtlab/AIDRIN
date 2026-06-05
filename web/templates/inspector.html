@@ -55,6 +55,7 @@
 
         <!-- Metric configuration panels (only one visible at a time) -->
         <div id="panels-container">
+          {% include '_panels/_batch_overview.html' %}
           {% include '_panels/_data_overview.html' %}
           {% include '_panels/_data_quality.html' %}
           {% include '_panels/_feature_relevance.html' %}
@@ -85,7 +86,13 @@
       {% endif %}
 
       {% if uploaded_file_path and not globus_mode %}
-        initWorkspace();
+        {% if file_count > 1 %}
+          showPanel('batch-overview');
+          loadBatchOverview();
+          loadFileSwitcher();
+        {% else %}
+          initWorkspace();
+        {% endif %}
       {% elif globus_mode %}
         // Globus mode — flag for workspaceSubmit to route through Globus
         window.AIDRIN_GLOBUS_MODE = true;
