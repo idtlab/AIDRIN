@@ -2052,48 +2052,95 @@ function fetchGlobusCount(f) {
   });
 }
 
-// ==================== File Switcher ====================
+// ==================== Top-Bar File Selector ====================
 
-function loadFileSwitcher() {
+let _fileSelectorFiles = [];
+let _fileSelectorActiveId = null;
+
+function loadFileSelector() {
   fetch("/files")
     .then((r) => r.json())
     .then((data) => {
-      const ul = document.getElementById("file-switcher-list");
-      if (!ul) return;
-      const files = [...data.files].sort((a, b) =>
-        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
-      );
-      ul.innerHTML = "";
-      if (files.length === 0) {
-        const li = document.createElement("li");
-        li.className = "text-xs text-gray-400 px-2 py-1";
-        li.textContent = "No files uploaded";
-        ul.appendChild(li);
-        return;
+      _fileSelectorFiles = data.files || [];
+      _fileSelectorActiveId = data.active_file_id;
+      const count = document.getElementById("file-selector-count");
+      if (count) {
+        if (_fileSelectorFiles.length > 1) {
+          count.textContent = `${_fileSelectorFiles.length} ▾`;
+          count.classList.remove("hidden");
+        } else {
+          count.classList.add("hidden");
+        }
       }
-      files.forEach((f) => {
-        const li = document.createElement("li");
-        const active = f.id === data.active_file_id;
-        li.className =
-          "flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-sm " +
-          (active
-            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30"
-            : "hover:bg-gray-100 dark:hover:bg-gray-700");
-        const name = document.createElement("span");
-        name.className = "truncate flex-1";
-        name.textContent = f.name;
-        const type = document.createElement("span");
-        type.className = "text-xs text-gray-400";
-        type.textContent = f.type || "?";
-        li.appendChild(name);
-        li.appendChild(type);
-        li.addEventListener("click", () => activateFile(f.id));
-        ul.appendChild(li);
-      });
+      renderFileSelectorList();
     })
-    .catch((err) => {
-      console.error("Failed to load file switcher:", err);
-    });
+    .catch((err) => console.error("Failed to load file selector:", err));
+}
+
+function renderFileSelectorList() {
+  const ul = document.getElementById("file-selector-list");
+  if (!ul) return;
+  const q = (
+    document.getElementById("file-selector-search")?.value || ""
+  ).toLowerCase();
+  const files = [..._fileSelectorFiles]
+    .filter((f) => f.name.toLowerCase().includes(q))
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  ul.innerHTML = "";
+  if (files.length === 0) {
+    const li = document.createElement("li");
+    li.className = "px-3 py-2 text-xs text-gray-400";
+    li.textContent = "No matching files";
+    ul.appendChild(li);
+    return;
+  }
+  files.forEach((f) => {
+    const li = document.createElement("li");
+    const active = f.id === _fileSelectorActiveId;
+    li.className =
+      "flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm " +
+      (active
+        ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30"
+        : "hover:bg-black/5 dark:hover:bg-white/10");
+    const name = document.createElement("span");
+    name.className = "truncate flex-1";
+    name.textContent = f.name;
+    const type = document.createElement("span");
+    type.className = "text-xs text-gray-400";
+    type.textContent = f.type || "?";
+    li.appendChild(name);
+    li.appendChild(type);
+    li.addEventListener("click", () => activateFile(f.id));
+    ul.appendChild(li);
+  });
+}
+
+function toggleFileSelector(event) {
+  if (event) event.stopPropagation();
+  const dd = document.getElementById("file-selector-dropdown");
+  if (!dd) return;
+  const willOpen = dd.classList.contains("hidden");
+  dd.classList.toggle("hidden");
+  if (willOpen) {
+    const search = document.getElementById("file-selector-search");
+    if (search) {
+      search.value = "";
+      renderFileSelectorList();
+      search.focus();
+    }
+    document.addEventListener("click", _closeFileSelectorOnOutside);
+  } else {
+    document.removeEventListener("click", _closeFileSelectorOnOutside);
+  }
+}
+
+function _closeFileSelectorOnOutside(e) {
+  const wrap = document.getElementById("file-selector-dropdown");
+  const btn = document.getElementById("file-selector-btn");
+  if (wrap && !wrap.contains(e.target) && btn && !btn.contains(e.target)) {
+    wrap.classList.add("hidden");
+    document.removeEventListener("click", _closeFileSelectorOnOutside);
+  }
 }
 
 function activateFile(fileId) {
@@ -2120,8 +2167,8 @@ function activateFile(fileId) {
  * Fetches summary statistics and populates feature dropdowns.
  */
 function initWorkspace() {
-  // Populate file switcher in sidebar
-  loadFileSwitcher();
+  // Populate top-bar file selector
+  loadFileSelector();
 
   // Restore panel from URL hash, or default to data-overview
   const hash = location.hash.replace("#", "");

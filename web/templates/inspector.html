@@ -88,7 +88,7 @@
       {% if uploaded_file_path and not globus_mode %}
         // Always initialise the workspace so the active file's summary and
         // feature dropdowns are populated (initWorkspace also calls
-        // loadFileSwitcher internally).
+        // loadFileSelector internally).
         initWorkspace();
         {% if file_count > 1 %}
           // Batch mode: also load the overview list and surface it as the
@@ -105,7 +105,7 @@
         window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
         window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
-        loadFileSwitcher();
+        loadFileSelector();
         showPanel('data-overview');
         // Show Globus info banner + loading spinner for summary stats
         var ws = document.getElementById('workspace-summary');
