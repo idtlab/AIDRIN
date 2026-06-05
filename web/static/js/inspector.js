@@ -1973,12 +1973,13 @@ function loadBatchOverview() {
         ].forEach(([label, value]) => {
           const card = document.createElement("div");
           card.className =
-            "p-3 bg-gray-50 dark:bg-gray-700/50 rounded text-center";
+            "p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center";
           const v = document.createElement("div");
-          v.className = "text-2xl font-bold";
+          v.className = "text-3xl font-bold text-gray-900 dark:text-white";
           v.textContent = value;
           const k = document.createElement("div");
-          k.className = "text-xs uppercase text-gray-500";
+          k.className =
+            "text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide";
           k.textContent = label;
           card.appendChild(v);
           card.appendChild(k);
