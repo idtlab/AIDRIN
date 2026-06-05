@@ -23,10 +23,28 @@ def test_ok_file_reports_structure_no_metrics():
     assert row["status"] == "ok"
     assert row["records"] == 2
     assert row["features"] == 2
+    assert row["numerical"] == 2  # both columns are integers
+    assert row["categorical"] == 0
     assert row["size_bytes"] > 0
     assert row["error"] is None
     assert set(row.keys()) == {"name", "type", "records", "features",
+                               "numerical", "categorical",
                                "size_bytes", "status", "error"}
+
+
+def test_numeric_and_categorical_counts():
+    import pandas as pd
+    f = tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w")
+    pd.DataFrame({"age": [1, 2], "city": ["A", "B"], "score": [1.0, 2.0]}).to_csv(
+        f.name, index=False
+    )
+    f.close()
+    try:
+        row = summarize_files([(f.name, "d.csv", ".csv")])["files"][0]
+    finally:
+        os.unlink(f.name)
+    assert row["numerical"] == 2  # age, score
+    assert row["categorical"] == 1  # city
 
 
 def test_unsupported_type_is_error_not_crash():

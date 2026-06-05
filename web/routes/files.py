@@ -41,7 +41,8 @@ def summary():
     for f in globus:
         rows.append({
             "id": f["id"], "name": f["name"], "type": f["type"], "source": "globus",
-            "records": None, "features": None, "size_bytes": None,
+            "records": None, "features": None,
+            "numerical": None, "categorical": None, "size_bytes": None,
             "status": "remote", "error": None,
         })
     totals = dict(local_summary["totals"])

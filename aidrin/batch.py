@@ -13,6 +13,7 @@ def _summarize_one(file_info):
         return {
             "name": name, "type": file_type,
             "records": None, "features": None,
+            "numerical": None, "categorical": None,
             "size_bytes": None, "status": "error",
             "error": "No file path provided.",
         }
@@ -25,10 +26,14 @@ def _summarize_one(file_info):
 
     result = read_file(file_info)  # DataFrame | None | str
     if isinstance(result, pd.DataFrame):
+        # Same dtype convention as the Data Overview panel: numeric vs string.
+        numerical = int(sum(pd.api.types.is_numeric_dtype(d) for d in result.dtypes))
+        categorical = int(sum(pd.api.types.is_string_dtype(d) for d in result.dtypes))
         return {
             "name": name, "type": file_type,
             "records": int(len(result)),
             "features": int(len(result.columns)),
+            "numerical": numerical, "categorical": categorical,
             "size_bytes": size, "status": "ok", "error": None,
         }
 
@@ -39,6 +44,7 @@ def _summarize_one(file_info):
     return {
         "name": name, "type": file_type,
         "records": None, "features": None,
+        "numerical": None, "categorical": None,
         "size_bytes": size, "status": "error", "error": message,
     }
 

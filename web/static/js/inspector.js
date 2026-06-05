@@ -2004,12 +2004,13 @@ function loadBatchOverview() {
           f.source,
           isGlobus ? "…" : (f.records ?? "—"),
           isGlobus ? "…" : (f.features ?? "—"),
+          isGlobus ? "n/a" : (f.numerical ?? "—"),
+          isGlobus ? "n/a" : (f.categorical ?? "—"),
           fmtBytes(f.size_bytes),
         ];
         cells.forEach((text, idx) => {
           const td = document.createElement("td");
-          td.className =
-            "px-3 py-2" + (idx >= 3 && idx <= 5 ? " text-right" : "");
+          td.className = "px-3 py-2" + (idx >= 3 ? " text-right" : "");
           td.textContent = text;
           if (isGlobus && (idx === 3 || idx === 4)) {
             td.dataset.globusId = f.id;
