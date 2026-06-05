@@ -80,6 +80,11 @@ def custom_metrics():
         folder = None
         try:
             df = read_file(file_info)
+            if df is None or isinstance(df, str):
+                return jsonify({
+                    "error": "The dataset could not be read — it may have been "
+                             "removed. Please re-upload your file."
+                }), 400
             final_dict["Custom Metric Evaluation"] = {}
 
             folder = current_app.config.get("CUSTOM_METRICS_FOLDER", "custom_metrics")
@@ -135,7 +140,10 @@ def custom_metrics():
                 remedy_folder = current_app.config["REMEDY_FOLDER"]
                 os.makedirs(remedy_folder, exist_ok=True)
 
-                remedy_filename = f"remedied_{session['session_id']}{data_file_type}"
+                # Remedied data is always written as CSV, so name it .csv
+                # regardless of the input format (data_file_type is a reader key,
+                # which for Excel is not even a valid single extension).
+                remedy_filename = f"remedied_{session['session_id']}.csv"
                 remedy_filepath = os.path.join(remedy_folder, remedy_filename)
                 new_data.to_csv(remedy_filepath, index=False)
 
