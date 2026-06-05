@@ -174,17 +174,6 @@
       const sel = document.getElementById('fileTypeSelect');
       if (sel) sel.addEventListener('change', filterFiles);
 
-      // File type selector enables file input
-      const fileTypeEl = document.getElementById('fileTypeSelector');
-      const fileInput = document.getElementById('file');
-      const fileMsg = document.getElementById('FileUploadMessage');
-      if (fileTypeEl && fileInput && fileMsg) {
-        fileTypeEl.addEventListener('change', function() {
-          updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
-        });
-        updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
-      }
-
       // Drag and drop support for the upload dropzone
       const dropzone = document.getElementById('fileUploadContainer');
       const fileInput2 = document.getElementById('file');
