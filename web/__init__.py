@@ -62,6 +62,29 @@ def create_app():
     }
     app.config.from_prefixed_env()
 
+    # Maximum upload size (default 1 GB; override via AIDRIN_MAX_UPLOAD_MB).
+    try:
+        max_upload_mb = int(os.environ.get("AIDRIN_MAX_UPLOAD_MB", 1024))
+    except ValueError:
+        max_upload_mb = 1024
+    app.config["MAX_CONTENT_LENGTH"] = max_upload_mb * 1024 * 1024
+
+    # Maximum number of files per upload batch.
+    try:
+        app.config["AIDRIN_MAX_UPLOAD_FILES"] = int(
+            os.environ.get("AIDRIN_MAX_UPLOAD_FILES", 50)
+        )
+    except ValueError:
+        app.config["AIDRIN_MAX_UPLOAD_FILES"] = 50
+
+    @app.errorhandler(413)
+    def _request_too_large(error):
+        from flask import jsonify, request
+        msg = "Upload too large for the server limit."
+        if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+            return jsonify({"success": False, "message": msg}), 413
+        return msg, 413
+
     # Initialize in-memory cache
     app.TEMP_RESULTS_CACHE = {}
 

@@ -44,6 +44,12 @@ def inspector():
         file_upload_time_log.info("File upload initiated (workspace)")
         uploads = [u for u in request.files.getlist("file") if u and u.filename]
         if uploads:
+            max_files = current_app.config.get("AIDRIN_MAX_UPLOAD_FILES", 50)
+            if len(get_uploaded_files()) + len(uploads) > max_files:
+                return jsonify({
+                    "success": False,
+                    "message": f"Too many files. The maximum is {max_files} per batch.",
+                }), 400
             cleared_count = clear_all_user_cache()
             file_upload_time_log.info(
                 "Cache cleared for new file upload: %d entries removed", cleared_count

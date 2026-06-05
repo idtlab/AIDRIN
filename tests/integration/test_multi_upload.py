@@ -56,3 +56,18 @@ def test_globus_active_file_not_wiped_by_local_existence_check(app, client):
     with client.session_transaction() as sess:
         assert sess.get("active_file_id") == "g1"
         assert sess.get("uploaded_file_path") == "/remote/only/r.csv"
+
+
+def test_too_many_files_rejected(client, app):
+    app.config["AIDRIN_MAX_UPLOAD_FILES"] = 2
+    r = _upload(client, ["a.csv", "b.csv", "c.csv"])
+    assert r.status_code == 400
+    data = r.get_json()
+    assert data and data["success"] is False
+    assert "2" in data["message"] or "many" in data["message"].lower()
+
+
+def test_under_file_limit_ok(client, app):
+    app.config["AIDRIN_MAX_UPLOAD_FILES"] = 5
+    r = _upload(client, ["a.csv", "b.csv"])
+    assert r.status_code == 302
