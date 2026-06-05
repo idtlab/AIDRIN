@@ -2,7 +2,9 @@
 
 import io
 import base64
+import json
 import logging
+import os
 import time
 import uuid
 
@@ -29,18 +31,37 @@ def get_current_user_id():
 # Multi-file store + active-file shim
 # ---------------------------------------------------------------------------
 
-def _files_cache_key():
-    return f"uploaded_files:{get_current_user_id()}"
+def _files_store_path():
+    """Path of the current user's persisted file-list JSON.
+
+    Stored on disk (not in the in-memory cache or the session cookie) so the
+    batch survives app restarts — e.g. the Flask dev-server auto-reload that
+    fires when a custom metric writes a .py into the package — and is shared
+    across worker processes. Lives outside UPLOAD_FOLDER so the upload cleanup
+    doesn't remove it.
+    """
+    base = os.path.dirname(current_app.config["UPLOAD_FOLDER"])
+    store_dir = os.path.join(base, "filelists")
+    os.makedirs(store_dir, exist_ok=True)
+    return os.path.join(store_dir, f"{get_current_user_id()}.json")
 
 
 def get_uploaded_files():
-    """Return the server-side list of uploaded files for the current user."""
-    return current_app.TEMP_RESULTS_CACHE.get(_files_cache_key(), [])
+    """Return the persisted list of uploaded files for the current user."""
+    try:
+        with open(_files_store_path()) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return []
 
 
 def save_uploaded_files(files):
-    """Persist the file list server-side (kept out of the session cookie)."""
-    current_app.TEMP_RESULTS_CACHE[_files_cache_key()] = files
+    """Persist the file list to disk (survives restarts; not in the cookie)."""
+    try:
+        with open(_files_store_path(), "w") as fh:
+            json.dump(files, fh)
+    except OSError:
+        logger.warning("Could not persist uploaded file list", exc_info=True)
 
 
 def get_active_file():
@@ -79,7 +100,10 @@ def set_active_file(file_id):
 
 def clear_uploaded_files():
     """Remove the file list and all active/legacy file pointers."""
-    current_app.TEMP_RESULTS_CACHE.pop(_files_cache_key(), None)
+    try:
+        os.remove(_files_store_path())
+    except OSError:
+        pass
     for k in ("active_file_id", "uploaded_file_path", "uploaded_file_name",
               "uploaded_file_type", "globus_file_path", "globus_file_name",
               "globus_file_type", "globus_endpoint_id"):
