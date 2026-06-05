@@ -50,6 +50,19 @@ def inspector():
                     "success": False,
                     "message": f"Too many files. The maximum is {max_files} per batch.",
                 }), 400
+            # Reject unsupported file types up front with a clear message, so a
+            # file with no inferable reader never enters the list and silently
+            # gets cleared by the stale-session check.
+            unsupported = [u.filename for u in uploads if infer_file_type(u.filename) is None]
+            if unsupported:
+                supported = ", ".join(label for _ext, label in SUPPORTED_FILE_TYPES)
+                return jsonify({
+                    "success": False,
+                    "message": (
+                        f"Unsupported file type: {', '.join(unsupported)}. "
+                        f"Supported formats: {supported}."
+                    ),
+                }), 400
             cleared_count = clear_all_user_cache()
             file_upload_time_log.info(
                 "Cache cleared for new file upload: %d entries removed", cleared_count

@@ -71,3 +71,35 @@ def test_under_file_limit_ok(client, app):
     app.config["AIDRIN_MAX_UPLOAD_FILES"] = 5
     r = _upload(client, ["a.csv", "b.csv"])
     assert r.status_code == 302
+
+
+def test_unsupported_file_rejected_with_clear_message(client):
+    import io as _io
+    r = client.post(
+        "/inspector",
+        data={"file": [(_io.BytesIO(b"hello"), "notes.txt")]},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert r.status_code == 400
+    data = r.get_json()
+    assert data["success"] is False
+    assert "unsupported" in data["message"].lower()
+    assert "notes.txt" in data["message"]
+    # nothing was saved into the file list
+    assert client.get("/files").get_json()["files"] == []
+
+
+def test_batch_with_one_unsupported_file_rejected(client):
+    import io as _io
+    r = client.post(
+        "/inspector",
+        data={"file": [
+            (_io.BytesIO(b"a,b\n1,2\n"), "good.csv"),
+            (_io.BytesIO(b"x"), "bad.txt"),
+        ]},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert r.status_code == 400
+    assert client.get("/files").get_json()["files"] == []
