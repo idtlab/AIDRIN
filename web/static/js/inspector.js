@@ -1943,6 +1943,67 @@ function renderWorkspaceHistograms(histograms) {
   container.innerHTML = html;
 }
 
+// ==================== File Switcher ====================
+
+function loadFileSwitcher() {
+  fetch("/files")
+    .then((r) => r.json())
+    .then((data) => {
+      const ul = document.getElementById("file-switcher-list");
+      if (!ul) return;
+      const files = [...data.files].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      );
+      ul.innerHTML = "";
+      if (files.length === 0) {
+        const li = document.createElement("li");
+        li.className = "text-xs text-gray-400 px-2 py-1";
+        li.textContent = "No files uploaded";
+        ul.appendChild(li);
+        return;
+      }
+      files.forEach((f) => {
+        const li = document.createElement("li");
+        const active = f.id === data.active_file_id;
+        li.className =
+          "flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-sm " +
+          (active
+            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30"
+            : "hover:bg-gray-100 dark:hover:bg-gray-700");
+        const name = document.createElement("span");
+        name.className = "truncate flex-1";
+        name.textContent = f.name;
+        const type = document.createElement("span");
+        type.className = "text-xs text-gray-400";
+        type.textContent = f.type || "?";
+        li.appendChild(name);
+        li.appendChild(type);
+        li.addEventListener("click", () => activateFile(f.id));
+        ul.appendChild(li);
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to load file switcher:", err);
+    });
+}
+
+function activateFile(fileId) {
+  fetch(`/files/${fileId}/activate`, { method: "POST" })
+    .then((r) => r.json())
+    .then((b) => {
+      if (b.success) {
+        window.location.reload();
+      } else if (typeof showToast === "function") {
+        showToast(b.message || "Could not switch file", "error");
+      }
+    })
+    .catch((err) => {
+      console.error("Failed to activate file:", err);
+      if (typeof showToast === "function")
+        showToast("Could not switch file", "error");
+    });
+}
+
 // ==================== Workspace Init ====================
 
 /**
@@ -1950,6 +2011,9 @@ function renderWorkspaceHistograms(histograms) {
  * Fetches summary statistics and populates feature dropdowns.
  */
 function initWorkspace() {
+  // Populate file switcher in sidebar
+  loadFileSwitcher();
+
   // Restore panel from URL hash, or default to data-overview
   const hash = location.hash.replace("#", "");
   const initialPanel =
