@@ -121,10 +121,11 @@ def create_app():
         except Exception as e:
             startup_log.warning("Failed to delete %s: %s", file_path, e)
 
-    # Custom metrics folder stays inside the aidrin package (dynamic import target)
-    import aidrin as _aidrin_pkg
-    aidrin_root = os.path.dirname(_aidrin_pkg.__file__)
-    custom_metrics_folder = os.path.join(aidrin_root, "custom_metrics")
+    # Runtime custom-metric files live OUTSIDE the package, at the project root,
+    # so writing/deleting them does NOT trigger the Flask --debug auto-reloader
+    # (which watches .py files under the package). The base class they import,
+    # `aidrin.custom_metrics.base_dr`, still resolves via the installed package.
+    custom_metrics_folder = os.path.join(project_root, "data", "custom_metrics")
     os.makedirs(custom_metrics_folder, exist_ok=True)
     app.config["CUSTOM_METRICS_FOLDER"] = custom_metrics_folder
     app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {"py"}
