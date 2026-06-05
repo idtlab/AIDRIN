@@ -214,9 +214,19 @@ New `infer_file_type(filename)` in `aidrin/file_handling/file_parser.py`:
   `<select>` also drops its `accept`-attribute filtering and the existing
   client-side "select a file type" validation guard (`main.js:31`); replace with
   extension-based client validation.
-- **File switcher:** a list (in the sidebar) of uploaded files, each showing
-  name + type/status badge, the active one highlighted; click to activate;
-  per-file remove button.
+- **File switcher (top-bar selector):** the active-file chip already in the top
+  bar (`topbar.html`, the `{{ uploaded_file_name }}` block) becomes a
+  **searchable dropdown**. It shows the active file name + a count badge
+  (e.g. "3 ▾"); clicking opens a popover with a filter input and a scrollable
+  list of all files (name + type/status badge, active highlighted); click an
+  item → `POST /files/<id>/activate` → reload. This **replaces** the sidebar
+  file list (removed), so the sidebar stays focused on metric navigation. The
+  top-bar anchor is always visible and the searchable+scrollable list scales to
+  many files (virtualize/paginate for hundreds — out of phase-1 scope). The
+  Batch Overview table remains the place to browse/scan files (and the future
+  home for search/filter/bulk-remove). Reuses `GET /files` +
+  `POST /files/<id>/activate`; no new backend. With a single file it renders as
+  today (plain name, no dropdown affordance).
 - **Combined summary ("Batch Overview"):** the **default landing view** after a
   multi-file upload. Two parts:
   - **Totals strip** (cards): `# files`, `# loaded OK` / `# failed`,
