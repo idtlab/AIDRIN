@@ -86,7 +86,12 @@ def inspector():
             save_uploaded_files(entries)
             first = sorted(new_entries, key=lambda e: e["name"].lower())[0]
             set_active_file(first["id"])
-            return redirect(url_for("core.inspector"))
+            # Land on the batch overview for a multi-file batch, else the
+            # single file's data overview.
+            target = url_for("core.inspector")
+            if len(entries) > 1:
+                target += "#batch-overview"
+            return redirect(target)
 
     uploaded_file_name = session.get("uploaded_file_name", "")
     uploaded_file_path = session.get("uploaded_file_path", "")

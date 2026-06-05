@@ -2155,6 +2155,8 @@ function activateFile(fileId) {
     .then((r) => r.json())
     .then((b) => {
       if (b.success) {
+        // Land on the new file's Data Overview, not the batch list.
+        window.location.hash = "data-overview";
         window.location.reload();
       } else if (typeof showToast === "function") {
         showToast(b.message || "Could not switch file", "error");
@@ -2182,6 +2184,8 @@ function initWorkspace() {
   const initialPanel =
     hash && document.getElementById("panel-" + hash) ? hash : "data-overview";
   showPanel(initialPanel, false); // false = don't push to history on init
+  // Populate the batch overview when it's the landing panel (e.g. fresh upload)
+  if (initialPanel === "batch-overview") loadBatchOverview();
   // Replace current history entry so back button works from the first panel
   history.replaceState({ panel: initialPanel }, "", "#" + initialPanel);
 
