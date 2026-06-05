@@ -2008,12 +2008,15 @@ function loadBatchOverview() {
         tr.className =
           "border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer";
         const isGlobus = f.source === "globus";
+        // Globus (remote) files show "n/a" for data-derived stats — phase 1
+        // does not pull remote data for the overview. (Per-row remote counts
+        // are a documented follow-up.)
         const cells = [
           f.name,
           f.type || "?",
           f.source,
-          isGlobus ? "…" : (f.records ?? "—"),
-          isGlobus ? "…" : (f.features ?? "—"),
+          isGlobus ? "n/a" : (f.records ?? "—"),
+          isGlobus ? "n/a" : (f.features ?? "—"),
           isGlobus ? "n/a" : (f.numerical ?? "—"),
           isGlobus ? "n/a" : (f.categorical ?? "—"),
           fmtBytes(f.size_bytes),
@@ -2022,41 +2025,13 @@ function loadBatchOverview() {
           const td = document.createElement("td");
           td.className = "px-3 py-2" + (idx >= 3 ? " text-right" : "");
           td.textContent = text;
-          if (isGlobus && (idx === 3 || idx === 4)) {
-            td.dataset.globusId = f.id;
-            td.dataset.field = idx === 3 ? "records" : "features";
-          }
           tr.appendChild(td);
         });
         tr.addEventListener("click", () => activateFile(f.id));
         tbody.appendChild(tr);
-        if (isGlobus) fetchGlobusCount(f);
       });
     })
     .catch((err) => console.error("Failed to load batch overview:", err));
-}
-
-/**
- * Fetch records/features counts for a Globus remote file entry.
- *
- * NOTE (DONE_WITH_CONCERNS): A clean reuse of fetchGlobusSummary() is not
- * feasible here without a significant refactor. fetchGlobusSummary() reads
- * endpoint/path/name/type from the single-file globals
- * (window.AIDRIN_GLOBUS_ENDPOINT etc.) and is tightly coupled to the
- * single-file DOM elements (globus-summary-loading, globus-summary-content).
- * In a batch context each Globus row has its own endpoint/path metadata stored
- * server-side but not exposed to the frontend as per-file globals. Properly
- * reusing the Globus Compute submit/poll flow would require:
- *   1. Exposing per-file endpoint_id + file_path from /files/summary,
- *   2. Factoring out a generic submitGlobusTask(endpoint, path, ...) helper,
- *   3. Wiring per-row polling that updates the specific td cells.
- * Until that refactor lands, Globus rows show "n/a" to keep the UI consistent.
- */
-function fetchGlobusCount(f) {
-  const cells = document.querySelectorAll(`[data-globus-id="${f.id}"]`);
-  cells.forEach((td) => {
-    td.textContent = "n/a";
-  });
 }
 
 // ==================== Top-Bar File Selector ====================

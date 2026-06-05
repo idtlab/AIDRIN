@@ -234,6 +234,11 @@ def clear_file():
             except Exception as e:
                 file_upload_time_log.warning("Failed to cancel Globus tasks on clear: %s", e)
 
+    # Remove the disk-backed file list BEFORE clearing the session — it needs
+    # user_id (in the session) to resolve the per-user file path.
+    from web.routes.utils import clear_uploaded_files
+    clear_uploaded_files()
+
     session.pop("uploaded_file_path", None)
     session.pop("uploaded_file_name", None)
     session.pop("uploaded_file_type", None)

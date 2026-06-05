@@ -9,7 +9,7 @@ from web import create_app
 
 
 @pytest.fixture
-def app():
+def app(tmp_path):
     """Create a new Flask app instance for testing."""
     app = create_app()
     app.config.update(TESTING=True)
@@ -17,6 +17,18 @@ def app():
     # Run Celery tasks eagerly (synchronously) so no Redis is required
     app.config["CELERY"]["task_always_eager"] = True
     app.config["CELERY"]["task_eager_propagates"] = True
+
+    # Isolate runtime dirs from the real data/ folder so tests don't pollute it
+    # (uploads, the per-user file lists under <UPLOAD_FOLDER>/../filelists, and
+    # generated custom metrics).
+    uploads = tmp_path / "uploads"
+    custom_metrics = tmp_path / "custom_metrics"
+    remedy = custom_metrics / "remedy_data"
+    for d in (uploads, custom_metrics, remedy):
+        d.mkdir(parents=True, exist_ok=True)
+    app.config["UPLOAD_FOLDER"] = str(uploads)
+    app.config["CUSTOM_METRICS_FOLDER"] = str(custom_metrics)
+    app.config["REMEDY_FOLDER"] = str(remedy)
 
     return app
 
