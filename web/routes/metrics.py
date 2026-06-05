@@ -64,6 +64,25 @@ metrics_bp = Blueprint("metrics", __name__)
 metric_time_log = logging.getLogger("metric")
 
 
+def _unreadable_response(file):
+    """Return a response when read_file didn't yield a DataFrame, else None.
+
+    read_file returns a DataFrame on success, or None / an error string when the
+    file is missing or unreadable (e.g. it was cleaned up). Without this guard,
+    the metric routes call DataFrame methods on a string and crash with
+    'str'/'NoneType' object has no attribute 'columns'.
+    """
+    if file is not None and not isinstance(file, str):
+        return None  # it's a DataFrame
+    message = (
+        "The dataset could not be read — it may have been removed. "
+        "Please re-upload your file."
+    )
+    if request.method == "POST":
+        return jsonify({"error": message}), 400
+    return redirect(url_for("core.inspector"))
+
+
 # ---------------------------------------------------------------------------
 # Data Quality
 # ---------------------------------------------------------------------------
@@ -149,6 +168,9 @@ def fairness():
     file_type = session.get("uploaded_file_type")
     file_info = (file_path, file_name, file_type)
     file = read_file(file_info)
+    _guard = _unreadable_response(file)
+    if _guard is not None:
+        return _guard
 
     if request.method == "POST":
         start_time = time.time()
@@ -427,6 +449,9 @@ def class_imbalance():
     file_type = session.get("uploaded_file_type")
     file_info = (file_path, file_name, file_type)
     file = read_file(file_info)
+    _guard = _unreadable_response(file)
+    if _guard is not None:
+        return _guard
 
     if request.method == "POST":
         start_time = time.time()
@@ -512,6 +537,9 @@ def privacy_preservation():
     file_type = session.get("uploaded_file_type")
     file_info = (file_path, file_name, file_type)
     file = read_file(file_info)
+    _guard = _unreadable_response(file)
+    if _guard is not None:
+        return _guard
 
     if request.method == "POST":
         start_time = time.time()
@@ -723,6 +751,9 @@ def hipaa_compliance():
         start_time = time.time()
         try:
             df = read_file(file_info)
+            _guard = _unreadable_response(df)
+            if _guard is not None:
+                return _guard
             selected_columns = request.form.getlist("HIPAA identifiers for HIPAA compliance")
             detected_hipaa = detect_hipaa_identifiers(df, selected_columns)
 
