@@ -216,3 +216,16 @@ def test_globus_add_requires_auth(globus_client):
         "/globus/add-files", json={"endpoint_id": "e", "path": "/p"}
     )
     assert r.status_code == 401
+
+
+def test_remote_list_files_operation(tmp_path):
+    """The __list_files__ op of remote_metric_runner lists files (stdlib only)."""
+    from web.globus import remote_metric_runner
+    (tmp_path / "a.csv").write_text("x")
+    (tmp_path / "b.json").write_text("x")
+    (tmp_path / "sub").mkdir()  # subdirectory excluded (non-recursive)
+    out = remote_metric_runner("__list_files__", str(tmp_path), "", "")
+    assert sorted(p.split("/")[-1] for p in out["files"]) == ["a.csv", "b.json"]
+    one = remote_metric_runner("__list_files__", str(tmp_path / "a.csv"), "", "")
+    assert one["files"] == [str(tmp_path / "a.csv")]
+    assert "error" in remote_metric_runner("__list_files__", "/no/such/path", "", "")

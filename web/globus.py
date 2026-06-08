@@ -45,7 +45,27 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     This function is serialised and sent to the remote endpoint, where it
     imports ``aidrin`` locally and dispatches to the requested metric.
     The remote environment must have ``pip install aidrin`` completed.
+
+    The special ``metric_name == "__list_files__"`` enumerates the data files at
+    ``file_path`` (a file -> just it; a directory -> its files, non-recursive).
+    It is handled here (rather than as a separate registered function) so it
+    reuses this proven, already-registered function. Needs only stdlib.
     """
+    if metric_name == "__list_files__":
+        import os
+        try:
+            if os.path.isfile(file_path):
+                return {"files": [file_path]}
+            if os.path.isdir(file_path):
+                return {"files": sorted(
+                    os.path.join(file_path, f)
+                    for f in os.listdir(file_path)
+                    if os.path.isfile(os.path.join(file_path, f))
+                )}
+            return {"error": f"Path not found on the remote endpoint: {file_path}"}
+        except Exception as e:  # noqa: BLE001
+            return {"error": f"Could not list '{file_path}': {e}"}
+
     # Ensure matplotlib uses non-interactive backend on remote endpoint
     import matplotlib
     matplotlib.use("Agg")
@@ -429,48 +449,15 @@ def register_function(client, force=False):
 # ---------------------------------------------------------------------------
 
 
-def remote_list_data_files(path):
-    """Run on the remote endpoint: enumerate data files at ``path``.
-
-    If ``path`` is a file, return just that file. If it's a directory, return
-    the files directly inside it (non-recursive). Returns
-    ``{"files": [abs_path, ...]}`` or ``{"error": str}``. Pure stdlib so it does
-    not depend on the endpoint's installed ``aidrin`` version.
-    """
-    import os
-
-    try:
-        if os.path.isfile(path):
-            return {"files": [path]}
-        if os.path.isdir(path):
-            files = sorted(
-                os.path.join(path, f)
-                for f in os.listdir(path)
-                if os.path.isfile(os.path.join(path, f))
-            )
-            return {"files": files}
-        return {"error": f"Path not found on the remote endpoint: {path}"}
-    except Exception as e:  # noqa: BLE001
-        return {"error": f"Could not list '{path}': {e}"}
-
-
-def register_list_function(client, force=False):
-    """Register remote_list_data_files with Globus Compute; return its UUID."""
-    cache_key = "remote_list_data_files"
-    if not force and cache_key in _function_uuid_cache:
-        return _function_uuid_cache[cache_key]
-
-    func_uuid = client.register_function(remote_list_data_files)
-    _function_uuid_cache[cache_key] = func_uuid
-    logger.info("Registered remote_list_data_files with Globus Compute: %s", func_uuid)
-    return func_uuid
-
-
 def submit_list_files(client, endpoint_id, path):
-    """Submit a remote file-listing task; return the task UUID string."""
-    func_uuid = register_list_function(client)
-    task_id = client.run(path, endpoint_id=endpoint_id, function_id=func_uuid)
-    return str(task_id)
+    """Submit a remote file-listing task; return the task UUID string.
+
+    Reuses the proven ``remote_metric_runner`` (via its ``__list_files__``
+    operation) rather than registering a separate function, so it goes through
+    the same registration/serialisation path that already works for metrics.
+    """
+    name = path.rstrip("/").split("/")[-1]
+    return submit_metric(client, endpoint_id, "__list_files__", path, name, "")
 
 
 # ---------------------------------------------------------------------------
