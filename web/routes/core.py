@@ -363,7 +363,7 @@ def summary_statistics():
         return jsonify(response_data)
     except Exception as e:
         file_upload_time_log.error("Error computing summary statistics: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"})
+        return jsonify({"success": False, "message": "An internal error occurred"})
 
 
 @core_bp.route("/feature-set", methods=["POST"])
