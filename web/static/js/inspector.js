@@ -431,6 +431,21 @@ function workspaceSubmit(targetUrl) {
             gFormData.getAll("quasi identifiers for entropy risk"),
           ),
         };
+      } else if (
+        gFormData.get("differential privacy") === "yes" ||
+        gFormData.get("single attribute risk score") === "yes" ||
+        gFormData.get("multiple attribute risk score") === "yes"
+      ) {
+        // These privacy metrics have no remote handler yet — tell the user
+        // plainly instead of silently falling back to k-anonymity.
+        if (typeof showToast === "function")
+          showToast(
+            "That privacy metric isn't available for remote (Globus) files yet. " +
+              "Remotely supported: k-anonymity, l-diversity, t-closeness, entropy risk. " +
+              "Use a locally uploaded file for the others.",
+            "error",
+          );
+        return;
       }
     } else {
       remoteDisplayName = metricDisplayMap[remoteName] || remoteName;
