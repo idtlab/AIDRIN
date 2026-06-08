@@ -431,10 +431,20 @@ def get_compute_client(tokens):
 def register_function(client, force=False):
     """Register the remote_metric_runner function with Globus Compute.
 
-    Returns the function UUID. Re-registers on every server restart
-    to ensure the latest code is used.
+    The cache key includes a hash of the function's current source, so any edit
+    to remote_metric_runner (once the running process has reloaded it) forces a
+    fresh registration — the endpoint then runs the new code. Without this, a
+    stale cached registration would keep executing the old function.
     """
-    cache_key = "remote_metric_runner"
+    import hashlib
+    import inspect
+
+    try:
+        src = inspect.getsource(remote_metric_runner)
+        digest = hashlib.sha1(src.encode("utf-8")).hexdigest()[:12]
+    except (OSError, TypeError):
+        digest = "nosrc"
+    cache_key = f"remote_metric_runner:{digest}"
     if not force and cache_key in _function_uuid_cache:
         return _function_uuid_cache[cache_key]
 
