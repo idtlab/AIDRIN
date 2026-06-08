@@ -66,6 +66,46 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         except Exception as e:  # noqa: BLE001
             return {"error": f"Could not list '{file_path}': {e}"}
 
+    if metric_name == "__summarize_files__":
+        # Structural batch overview (records, features, numerical, categorical,
+        # size) for a list of remote files. Computed INLINE with read_file +
+        # pandas (both present in any aidrin install) — NOT via
+        # aidrin.summarize_files, which may not exist on the endpoint's released
+        # aidrin. Mirrors aidrin.summarize_files' output so values match local.
+        # params["file_infos"]: list of [path, name, type].
+        import os
+        import pandas as pd
+        from aidrin.file_handling.file_parser import read_file as _read_file
+
+        out = []
+        for fi in (params.get("file_infos") or []):
+            p, n, t = fi[0], fi[1], fi[2]
+            try:
+                size = os.path.getsize(p) if p and os.path.exists(p) else None
+            except OSError:
+                size = None
+            df = _read_file((p, n, t))
+            if isinstance(df, pd.DataFrame):
+                out.append({
+                    "name": n, "type": t,
+                    "records": int(len(df)),
+                    "features": int(len(df.columns)),
+                    "numerical": int(sum(
+                        pd.api.types.is_numeric_dtype(d) for d in df.dtypes)),
+                    "categorical": int(sum(
+                        pd.api.types.is_string_dtype(d) for d in df.dtypes)),
+                    "size_bytes": size, "status": "ok", "error": None,
+                })
+            else:
+                msg = df if isinstance(df, str) else "Could not read the file."
+                out.append({
+                    "name": n, "type": t,
+                    "records": None, "features": None,
+                    "numerical": None, "categorical": None,
+                    "size_bytes": size, "status": "error", "error": msg,
+                })
+        return {"files": out}
+
     # Ensure matplotlib uses non-interactive backend on remote endpoint
     import matplotlib
     matplotlib.use("Agg")

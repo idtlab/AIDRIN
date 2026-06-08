@@ -255,3 +255,24 @@ def test_run_with_retry_reraises_other_errors(monkeypatch):
     with pytest.raises(ValueError):
         _run_with_retry(client, "a")
     assert client.run.call_count == 1
+
+
+def test_remote_summarize_files_matches_local(tmp_path):
+    """remote_metric_runner('__summarize_files__') computes stats inline
+    (read_file + pandas), matching aidrin.summarize_files — no dependency on the
+    endpoint having the new summarize_files."""
+    import pandas as pd
+    import aidrin
+    from web.globus import remote_metric_runner
+    p = tmp_path / "x.csv"
+    pd.DataFrame({"age": [1, 2, 3], "city": ["A", "B", "C"]}).to_csv(p, index=False)
+    infos = [[str(p), "x.csv", ".csv"]]
+    remote = remote_metric_runner("__summarize_files__", "", "", "", file_infos=infos)
+    local = aidrin.summarize_files([(str(p), "x.csv", ".csv")])
+    r, l = remote["files"][0], local["files"][0]
+    for k in ("records", "features", "numerical", "categorical", "status"):
+        assert r[k] == l[k]
+    # unreadable file -> error row, never raises
+    bad = remote_metric_runner("__summarize_files__", "", "", "",
+                               file_infos=[["/no/such.csv", "x.csv", ".csv"]])
+    assert bad["files"][0]["status"] == "error"
