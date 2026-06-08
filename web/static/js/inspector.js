@@ -1196,7 +1196,11 @@ function _setClearSessionButtonsDisabled(disabled) {
   document.querySelectorAll('button[onclick="clearFile()"]').forEach((btn) => {
     btn.disabled = disabled;
     if (disabled) {
-      btn.classList.add("opacity-50", "cursor-not-allowed", "pointer-events-none");
+      btn.classList.add(
+        "opacity-50",
+        "cursor-not-allowed",
+        "pointer-events-none",
+      );
       btn.setAttribute("aria-disabled", "true");
       btn.title = "Please wait — server is processing";
     } else {
@@ -1230,11 +1234,7 @@ function _globusTaskDone() {
 
 function _responseHasAsyncTasks(data) {
   return Object.values(data || {}).some(
-    (v) =>
-      typeof v === "object" &&
-      v !== null &&
-      v.is_async &&
-      v.task_id,
+    (v) => typeof v === "object" && v !== null && v.is_async && v.task_id,
   );
 }
 
