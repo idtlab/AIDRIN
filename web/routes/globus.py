@@ -395,6 +395,13 @@ def add_files():
                     stats_rows = (
                         overview.get("files", []) if isinstance(overview, dict) else []
                     )
+                    _ok = sum(1 for r in stats_rows if r.get("status") == "ok")
+                    logger.info(
+                        "Globus overview result: %d/%d files read OK; "
+                        "sample_row=%s top_error=%s",
+                        _ok, len(stats_rows),
+                        (stats_rows[0] if stats_rows else None), overview_error,
+                    )
                     if not stats_rows and not overview_error:
                         overview_error = f"Unexpected remote response: {overview!r}"[:200]
                     for entry, row in zip(pending, stats_rows):
