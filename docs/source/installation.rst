@@ -111,10 +111,30 @@ Terminal 1 – Redis Server
 Terminal 2 – Celery Worker
 """"""""""""""""""""""""""
 
+**macOS / Linux:**
+
 .. code-block:: bash
 
    conda activate aidrin-env
    PYTHONPATH=. celery -A worker.make_celery worker --beat --loglevel=info
+
+**Windows:**
+
+If you see errors such as:
+
+- ``-B option does not work on Windows. Please run celery beat as a separate service.``
+- ``Can't pickle local object 'celery_init_app.<locals>.FlaskTask'``
+
+Use the ``solo`` pool instead (no ``--beat`` required for local development):
+
+.. code-block:: powershell
+
+   conda activate aidrin-env
+   $env:PYTHONPATH = "."
+   celery -A worker.make_celery worker --loglevel=info --pool=solo
+
+If you use a venv rather than Conda, activate it first and set ``PYTHONPATH`` the
+same way before running the ``celery`` command.
 
 Terminal 3 – Flask Server
 """""""""""""""""""""""""
@@ -123,6 +143,23 @@ Terminal 3 – Flask Server
 
    conda activate aidrin-env
    flask --app 'web:create_app()' run --debug
+
+.. note::
+
+   **Windows:** If you see ``-B option does not work on Windows`` or
+   ``Can't pickle local object 'celery_init_app.<locals>.FlaskTask'``, drop
+   ``--beat`` from the worker command and use ``--pool=solo`` instead:
+
+   .. code-block:: powershell
+
+      PYTHONPATH=. celery -A worker.make_celery worker --pool=solo --loglevel=info
+
+   To run periodic tasks, start Beat in a **separate** terminal (optional for
+   local development):
+
+   .. code-block:: powershell
+
+      PYTHONPATH=. celery -A worker.make_celery beat --loglevel=info
 
 Once running, visit:
 `http://127.0.0.1:5000 <http://127.0.0.1:5000>`_
