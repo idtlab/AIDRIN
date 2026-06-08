@@ -475,6 +475,33 @@ def submit_list_files(client, endpoint_id, path):
 # ---------------------------------------------------------------------------
 
 
+def _run_with_retry(client, *args, max_attempts=5, **kwargs):
+    """client.run with retry on the transient 'endpoint already in use' (409).
+
+    Globus Compute returns 409 RESOURCE_CONFLICT when the endpoint is busy with
+    a concurrent submission and asks the caller to retry; back off and re-submit.
+    """
+    import time
+
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            return client.run(*args, **kwargs)
+        except Exception as e:  # noqa: BLE001
+            msg = str(e)
+            transient = (
+                getattr(e, "http_status", None) == 409
+                or "RESOURCE_CONFLICT" in msg
+                or "already in use" in msg.lower()
+            )
+            if transient and attempt < max_attempts - 1:
+                last_err = e
+                time.sleep(1.0 * (attempt + 1))  # 1s, 2s, 3s, 4s
+                continue
+            raise
+    raise last_err  # pragma: no cover
+
+
 def submit_metric(client, endpoint_id, metric_name, file_path, file_name, file_type, **params):
     """Submit a metric computation task to a remote Globus Compute endpoint.
 
@@ -485,7 +512,8 @@ def submit_metric(client, endpoint_id, metric_name, file_path, file_name, file_t
     # Pass all arguments as positional args to avoid kwarg conflicts
     # with endpoint_id/function_id. The remote_metric_runner signature is:
     # remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
-    task_id = client.run(
+    task_id = _run_with_retry(
+        client,
         metric_name, file_path, file_name, file_type,
         endpoint_id=endpoint_id,
         function_id=func_uuid,

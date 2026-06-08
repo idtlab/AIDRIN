@@ -229,3 +229,29 @@ def test_remote_list_files_operation(tmp_path):
     one = remote_metric_runner("__list_files__", str(tmp_path / "a.csv"), "", "")
     assert one["files"] == [str(tmp_path / "a.csv")]
     assert "error" in remote_metric_runner("__list_files__", "/no/such/path", "", "")
+
+
+def test_run_with_retry_recovers_from_409(monkeypatch):
+    """_run_with_retry re-submits on the transient 'endpoint in use' (409)."""
+    monkeypatch.setattr("time.sleep", lambda *_a, **_k: None)  # no real delay
+    from web.globus import _run_with_retry
+
+    class _Conflict(Exception):
+        http_status = 409
+
+    client = MagicMock()
+    client.run.side_effect = [_Conflict("RESOURCE_CONFLICT: already in use"),
+                              _Conflict("again"), "task-ok"]
+    out = _run_with_retry(client, "a", endpoint_id="e", function_id="f")
+    assert out == "task-ok"
+    assert client.run.call_count == 3
+
+
+def test_run_with_retry_reraises_other_errors(monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda *_a, **_k: None)
+    from web.globus import _run_with_retry
+    client = MagicMock()
+    client.run.side_effect = ValueError("boom")
+    with pytest.raises(ValueError):
+        _run_with_retry(client, "a")
+    assert client.run.call_count == 1
