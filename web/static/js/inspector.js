@@ -1115,6 +1115,11 @@ function loadGlobusDataset() {
       ) {
         showToast(`Skipped ${data.skipped.length} unsupported file(s)`, "info");
       }
+      if (data.overview_error && typeof showToast === "function") {
+        // The files were added, but the per-file stats (records/features) could
+        // not be computed remotely — surface why instead of silent dashes.
+        showToast("File stats unavailable: " + data.overview_error, "error");
+      }
       // Reload — the session now has the active Globus file; the inspector
       // shows the workspace (or the batch overview for a multi-file folder).
       window.location.href = "/inspector";
@@ -2007,18 +2012,17 @@ function loadBatchOverview() {
         const tr = document.createElement("tr");
         tr.className =
           "border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer";
-        const isGlobus = f.source === "globus";
-        // Globus (remote) files show "n/a" for data-derived stats — phase 1
-        // does not pull remote data for the overview. (Per-row remote counts
-        // are a documented follow-up.)
+        // Records/features/numerical/categorical come from the backend for both
+        // local and globus files (globus stats are computed on the endpoint at
+        // add time); "—" until available.
         const cells = [
           f.name,
           f.type || "?",
           f.source,
-          isGlobus ? "n/a" : (f.records ?? "—"),
-          isGlobus ? "n/a" : (f.features ?? "—"),
-          isGlobus ? "n/a" : (f.numerical ?? "—"),
-          isGlobus ? "n/a" : (f.categorical ?? "—"),
+          f.records ?? "—",
+          f.features ?? "—",
+          f.numerical ?? "—",
+          f.categorical ?? "—",
           fmtBytes(f.size_bytes),
         ];
         cells.forEach((text, idx) => {

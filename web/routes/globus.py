@@ -29,6 +29,26 @@ from web.routes.utils import get_uploaded_files, save_uploaded_files, set_active
 
 logger = logging.getLogger(__name__)
 
+
+def _poll_result(client, task_id, timeout=120):
+    """Block until a short Globus Compute task finishes; return its result.
+
+    Raises on remote failure or timeout. Used for the quick, interactive
+    listing/overview tasks submitted during add-files.
+    """
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status = check_task(client, task_id)
+        state = status.get("status")
+        if state == "completed":
+            return status.get("result")
+        if state == "failed":
+            raise RuntimeError(status.get("error", "Remote task failed"))
+        time.sleep(1)
+    raise TimeoutError("Remote task timed out")
+
 globus_bp = Blueprint("globus", __name__, url_prefix="/globus")
 
 
@@ -333,6 +353,46 @@ def add_files():
             if first_id is None:
                 first_id = entry["id"]
 
+        # Pull a structural overview (records/features/numerical/categorical/
+        # size) for the just-added globus files, computed on the endpoint via the
+        # same aidrin.summarize_files used for local batches, and cache it on each
+        # entry so /files/summary doesn't re-fetch it on every page load.
+        # Recompute for entries that have NO usable stats yet — i.e. missing the
+        # records key OR cached as None from an earlier failed attempt (so a
+        # retry isn't permanently blocked).
+        pending = [
+            e for e in entries
+            if e.get("source") == "globus"
+            and e.get("endpoint_id") == endpoint_id
+            and e.get("records") is None
+        ]
+        overview_error = None
+        if pending:
+            try:
+                infos = [[e["path"], e["name"], e["type"]] for e in pending]
+                overview_task = submit_metric(
+                    client, endpoint_id, "__summarize_files__", "", "", "",
+                    file_infos=infos,
+                )
+                overview = _poll_result(client, overview_task, timeout=120)
+                if isinstance(overview, dict) and overview.get("error"):
+                    overview_error = overview["error"]  # e.g. "Unknown metric: ..."
+                stats_rows = (
+                    overview.get("files", []) if isinstance(overview, dict) else []
+                )
+                if not stats_rows and not overview_error:
+                    overview_error = f"Unexpected remote response: {overview!r}"[:200]
+                for entry, row in zip(pending, stats_rows):
+                    for key in (
+                        "records", "features", "numerical",
+                        "categorical", "size_bytes", "status", "error",
+                    ):
+                        entry[key] = row.get(key)
+            except Exception as ex:  # noqa: BLE001
+                # Overview is best-effort: a failure here must not block adding.
+                overview_error = str(ex)
+                logger.warning("Globus batch overview unavailable: %s", ex)
+
         save_uploaded_files(entries)
         if first_id:
             set_active_file(first_id)  # repopulates globus_* session keys
@@ -347,6 +407,7 @@ def add_files():
             "added": added,
             "skipped": skipped,
             "active_file_id": first_id,
+            "overview_error": overview_error,  # why per-file stats are missing
         })
 
     except Exception as e:
