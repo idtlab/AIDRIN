@@ -443,14 +443,21 @@ def register_function(client, force=False):
         src = inspect.getsource(remote_metric_runner)
         digest = hashlib.sha1(src.encode("utf-8")).hexdigest()[:12]
     except (OSError, TypeError):
+        src = ""
         digest = "nosrc"
+    supports_list = "__list_files__" in src
     cache_key = f"remote_metric_runner:{digest}"
     if not force and cache_key in _function_uuid_cache:
         return _function_uuid_cache[cache_key]
 
     func_uuid = client.register_function(remote_metric_runner)
     _function_uuid_cache[cache_key] = func_uuid
-    logger.info("Registered remote_metric_runner with Globus Compute: %s", func_uuid)
+    # The supports_list flag tells you whether the LOADED code is current: if it
+    # logs False, the server process is running stale code — restart it.
+    logger.info(
+        "Registered remote_metric_runner: func_uuid=%s src_hash=%s supports __list_files__=%s",
+        func_uuid, digest, supports_list,
+    )
     return func_uuid
 
 
@@ -475,12 +482,15 @@ def submit_list_files(client, endpoint_id, path):
 # ---------------------------------------------------------------------------
 
 
-def _run_with_retry(client, *args, max_attempts=5, **kwargs):
+def _run_with_retry(client, *args, max_attempts=8, **kwargs):
     """client.run with retry on the transient 'endpoint already in use' (409).
 
-    Globus Compute returns 409 RESOURCE_CONFLICT when the endpoint is busy with
-    a concurrent submission and asks the caller to retry; back off and re-submit.
+    Globus Compute returns 409 RESOURCE_CONFLICT when the endpoint is busy with a
+    concurrent submission and asks the caller to retry. Concurrent submitters that
+    back off on an identical schedule keep colliding, so use exponential backoff
+    with full jitter to de-correlate retries and ride out a busy endpoint.
     """
+    import random
     import time
 
     last_err = None
@@ -494,11 +504,13 @@ def _run_with_retry(client, *args, max_attempts=5, **kwargs):
                 or "RESOURCE_CONFLICT" in msg
                 or "already in use" in msg.lower()
             )
-            if transient and attempt < max_attempts - 1:
-                last_err = e
-                time.sleep(1.0 * (attempt + 1))  # 1s, 2s, 3s, 4s
-                continue
-            raise
+            if not (transient and attempt < max_attempts - 1):
+                raise
+            last_err = e
+            # full jitter over an exponentially growing window, capped at 8s:
+            # sleep ~U(0, min(8, 0.5 * 2**attempt))
+            backoff = min(8.0, 0.5 * (2 ** attempt))
+            time.sleep(random.uniform(0.0, backoff))
     raise last_err  # pragma: no cover
 
 
