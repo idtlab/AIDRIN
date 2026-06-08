@@ -458,7 +458,8 @@ Notes
   - Both use the same codebase, ensuring identical functionality. The web application is ideal for users who prefer a browser-based interface.
 
 - **File Formats**: The web application supports CSV, Excel, JSON, NumPy (``.npz``),
-  and HDF5 (``.h5``) files for data uploads, and DCAT/DataCite JSON for metadata
+  HDF5 (``.h5``), and Parquet (``.parquet``) files for data uploads, and
+  DCAT/DataCite JSON for metadata
   in the Understandability and Usability dimension.  For HDF5 files, fill-value
   sentinels (``_FillValue``, ``missing_value``, and the HDF5 native fill value) are
   automatically converted to ``NaN`` so that all metrics — completeness, outliers,

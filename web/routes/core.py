@@ -15,11 +15,12 @@ from flask import (
     url_for,
 )
 from werkzeug.utils import secure_filename
-from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP, read_file
+from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP
 from web.routes.utils import (
     clear_all_user_cache,
     ensure_json_serializable,
     get_current_user_id,
+    load_dataframe,
     summary_histograms,
 )
 
@@ -324,7 +325,9 @@ def summary_statistics():
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
         file_info = (file_path, file_name, file_type)
-        df = read_file(file_info)
+        df, load_error = load_dataframe(file_info)
+        if load_error:
+            return jsonify({"success": False, "message": load_error}), 200
 
         summary_statistics = df.describe().map(
             lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
@@ -360,7 +363,7 @@ def summary_statistics():
         return jsonify(response_data)
     except Exception as e:
         file_upload_time_log.error("Error computing summary statistics: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"})
+        return jsonify({"success": False, "message": "An internal error occurred"})
 
 
 @core_bp.route("/feature-set", methods=["POST"])
@@ -376,7 +379,9 @@ def extract_features():
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
         file_info = (file_path, file_name, file_type)
-        df = read_file(file_info)
+        df, load_error = load_dataframe(file_info)
+        if load_error:
+            return jsonify({"success": False, "message": load_error}), 200
 
         numerical_columns = [
             col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)

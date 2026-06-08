@@ -21,8 +21,9 @@ What We Can Do
 - Provide **quantitative metrics** for dataset readiness and visualizations of results.
 - Analyze **DCAT and DataCite JSON metadata** for FAIR compliance.
 - Identify **missing or incomplete metadata elements**.
-- Work with **structured tabular datasets** (CSV, Excel, JSON, NumPy ``.npz``, and
-  HDF5 ``.h5``) for data readiness checks.  For HDF5 files, format-native missing
+- Work with **structured tabular datasets** (CSV, Excel, JSON, NumPy ``.npz``,
+  HDF5 ``.h5``, and Parquet ``.parquet``) for data readiness checks.  For HDF5
+  files, format-native missing
   data sentinels (``_FillValue``, ``missing_value``, and the dataset's HDF5 fill
   value) are automatically normalised to ``NaN`` before any metric is computed,
   ensuring accurate completeness, outlier, and privacy scores.
@@ -38,8 +39,14 @@ What We Cannot Do
 File and Size Limits
 --------------------
 
-- Maximum supported file size: **100 MB per file** (web interface may vary depending on server resources).
-- If a file exceeds the limits, the system will time out.
+- Maximum upload size: **1 GB per file** by default. Uploads larger than the limit
+  are rejected immediately with an HTTP ``413`` response before the file is saved,
+  so no partial data is stored.
+- The limit is configurable per deployment via the ``AIDRIN_MAX_UPLOAD_MB``
+  environment variable (value in megabytes). For example, ``AIDRIN_MAX_UPLOAD_MB=2048``
+  raises the cap to 2 GB.
+- Even within the upload cap, very large datasets may exceed the Celery task time
+  limits or available server memory during analysis.
 
 Data Privacy and Storage
 ------------------------
