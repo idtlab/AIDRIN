@@ -103,3 +103,29 @@ def test_batch_with_one_unsupported_file_rejected(client):
     )
     assert r.status_code == 400
     assert client.get("/files").get_json()["files"] == []
+
+
+def test_multi_upload_lands_on_batch_overview(client):
+    """A fresh multi-file upload renders the inspector landing on Batch Overview."""
+    r = _upload(client, ["one.csv", "two.csv"])
+    assert r.status_code == 302
+    # the flag is set in the session by the upload POST
+    with client.session_transaction() as sess:
+        assert sess.get("land_on_batch") is True
+    # ...and the next inspector render consumes it and emits the landing block.
+    # Use the unique comment marker — the sidebar button also calls showPanel.
+    marker = "surface the batch overview as the landing"
+    html = client.get("/inspector").get_data(as_text=True)
+    assert marker in html
+    # flag is one-shot: a second render no longer lands on batch overview
+    html2 = client.get("/inspector").get_data(as_text=True)
+    assert marker not in html2
+
+
+def test_single_upload_does_not_land_on_batch_overview(client):
+    r = _upload(client, ["solo.csv"])
+    assert r.status_code == 302
+    with client.session_transaction() as sess:
+        assert sess.get("land_on_batch") is not True
+    html = client.get("/inspector").get_data(as_text=True)
+    assert "surface the batch overview as the landing" not in html

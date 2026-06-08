@@ -2,7 +2,6 @@ import importlib
 import importlib.util
 import logging
 import os
-import runpy
 import sys
 import tempfile
 import time
@@ -117,17 +116,6 @@ def custom_metrics():
                 return jsonify(
                     {"error": f"{custom_metric_class.__name__}.metric() must return a dictionary"}
                 ), 400
-
-            module_globals = runpy.run_path(custom_metric_file_path)
-
-            custom_metric_class = module_globals.get("CustomDR")
-            if not custom_metric_class or not issubclass(custom_metric_class, BaseDRAgent):
-                return jsonify({"error": "CustomDR class not found or invalid"}), 400
-
-            instance = custom_metric_class(dataset=df)
-            metric_results = instance.metric()
-            if not isinstance(metric_results, dict):
-                return jsonify({"error": "metric() must return a dictionary"}), 400
 
             final_dict["Custom Metric Evaluation"] = metric_results
 

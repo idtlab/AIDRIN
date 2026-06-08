@@ -86,12 +86,12 @@ def inspector():
             save_uploaded_files(entries)
             first = sorted(new_entries, key=lambda e: e["name"].lower())[0]
             set_active_file(first["id"])
-            # Land on the batch overview for a multi-file batch, else the
-            # single file's data overview.
-            target = url_for("core.inspector")
-            if len(entries) > 1:
-                target += "#batch-overview"
-            return redirect(target)
+            # Land on the batch overview for a multi-file batch (a one-shot flag
+            # consumed on the next render — a URL fragment can't be used because
+            # the AJAX upload follows the redirect via fetch, which strips it).
+            # A single file lands on its data overview.
+            session["land_on_batch"] = len(entries) > 1
+            return redirect(url_for("core.inspector"))
 
     uploaded_file_name = session.get("uploaded_file_name", "")
     uploaded_file_path = session.get("uploaded_file_path", "")
@@ -170,10 +170,13 @@ def inspector():
 
     from web.routes.utils import get_uploaded_files as _get_uploaded_files
     file_count = len(_get_uploaded_files())
+    # One-shot: a fresh multi-file upload lands on the batch overview.
+    land_on_batch = session.pop("land_on_batch", False)
 
     try:
         return render_template(
             "inspector.html",
+            land_on_batch=land_on_batch,
             uploaded_file_path=effective_file_path or "",
             uploaded_file_name=effective_file_name or "",
             file_type=effective_file_type or "",
