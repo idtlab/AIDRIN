@@ -368,30 +368,53 @@ def add_files():
         ]
         overview_error = None
         if pending:
+            # Guard: is THIS server's loaded remote_metric_runner new enough to
+            # do remote stats? If not, the process is running stale code — say so
+            # plainly rather than failing silently into dashes.
+            import inspect as _inspect
+            from web.globus import remote_metric_runner as _runner
             try:
-                infos = [[e["path"], e["name"], e["type"]] for e in pending]
-                overview_task = submit_metric(
-                    client, endpoint_id, "__summarize_files__", "", "", "",
-                    file_infos=infos,
+                _runner_src = _inspect.getsource(_runner)
+            except (OSError, TypeError):
+                _runner_src = ""
+            if "__summarize_files__" not in _runner_src:
+                overview_error = (
+                    "This AIDRIN server is running an outdated build and cannot "
+                    "compute remote file stats — please fully restart the server."
                 )
-                overview = _poll_result(client, overview_task, timeout=120)
-                if isinstance(overview, dict) and overview.get("error"):
-                    overview_error = overview["error"]  # e.g. "Unknown metric: ..."
-                stats_rows = (
-                    overview.get("files", []) if isinstance(overview, dict) else []
-                )
-                if not stats_rows and not overview_error:
-                    overview_error = f"Unexpected remote response: {overview!r}"[:200]
-                for entry, row in zip(pending, stats_rows):
-                    for key in (
-                        "records", "features", "numerical",
-                        "categorical", "size_bytes", "status", "error",
-                    ):
-                        entry[key] = row.get(key)
-            except Exception as ex:  # noqa: BLE001
-                # Overview is best-effort: a failure here must not block adding.
-                overview_error = str(ex)
-                logger.warning("Globus batch overview unavailable: %s", ex)
+            else:
+                try:
+                    infos = [[e["path"], e["name"], e["type"]] for e in pending]
+                    overview_task = submit_metric(
+                        client, endpoint_id, "__summarize_files__", "", "", "",
+                        file_infos=infos,
+                    )
+                    overview = _poll_result(client, overview_task, timeout=120)
+                    if isinstance(overview, dict) and overview.get("error"):
+                        overview_error = overview["error"]  # e.g. "Unknown metric: ..."
+                    stats_rows = (
+                        overview.get("files", []) if isinstance(overview, dict) else []
+                    )
+                    if not stats_rows and not overview_error:
+                        overview_error = f"Unexpected remote response: {overview!r}"[:200]
+                    for entry, row in zip(pending, stats_rows):
+                        for key in (
+                            "records", "features", "numerical",
+                            "categorical", "size_bytes", "status", "error",
+                        ):
+                            entry[key] = row.get(key)
+                    # If the endpoint read every file but they all errored, surface
+                    # the first reason (e.g. a parse error / missing dependency).
+                    if (stats_rows and not overview_error
+                            and all(r.get("status") == "error" for r in stats_rows)):
+                        overview_error = (
+                            stats_rows[0].get("error")
+                            or "The endpoint could not read the remote files"
+                        )
+                except Exception as ex:  # noqa: BLE001
+                    # Overview is best-effort: a failure here must not block adding.
+                    overview_error = str(ex)
+                    logger.warning("Globus batch overview unavailable: %s", ex)
 
         save_uploaded_files(entries)
         if first_id:
