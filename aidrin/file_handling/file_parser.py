@@ -152,5 +152,5 @@ def read_file(file_info):
         return df
 
     except Exception as e:
-        file_upload_time_log.error("Error while Reading File", exc_info=True)
+        file_upload_time_log.error(f"Error while Reading File: {e}", exc_info=True)
         return "Unable to read the uploaded file."
