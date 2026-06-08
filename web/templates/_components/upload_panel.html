@@ -31,7 +31,7 @@
     <!-- Local upload card -->
     <div id="local-upload" class="{{ 'hidden' if globus_available and globus_authenticated else '' }}">
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
-        <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('core.inspector') }}">
+        <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('core.inspector') }}" data-max-upload-bytes="{{ max_upload_bytes }}" data-max-upload-mb="{{ max_upload_mb }}">
 
           <!-- File type selector -->
           <label for="fileTypeSelector" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">File type</label>
