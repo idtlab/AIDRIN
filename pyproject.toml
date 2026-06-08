@@ -9,9 +9,13 @@ dynamic = ["version"]
 readme = "README.md"
 description = "A tool to evaluate the readiness of data for AI"
 requires-python = ">=3.10"
+license = {file = "LICENSE.txt"}
+keywords = ["data readiness for AI", "AI readiness"]
+
 maintainers = [
     {name = "Kaveen Hiniduma", email = "hiniduma.1@osu.edu"},
     {name = "Suren Byna", email = "byna.1@osu.edu"},
+    {name = "Jean Luca Bez", email = "jlbez@lbl.gov"}
 ]
 dependencies = [
     "flask>=3.1.3",
@@ -32,6 +36,9 @@ dependencies = [
     "pgeocode>=0.5.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Source = "https://github.com/idtlab/AIDRIN"
 
 [project.optional-dependencies]
 # Legacy extras kept for backward compatibility with pip users.
@@ -91,7 +98,7 @@ docs = [
 aidrin = "aidrin.headless.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["aidrin*", "web*", "worker*"]
+include = ["aidrin*"]
 
 [tool.setuptools.package-data]
 "aidrin.agentic" = []

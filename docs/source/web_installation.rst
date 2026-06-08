@@ -139,10 +139,16 @@ For quick use in Python scripts or Jupyter notebooks:
 
 .. code-block:: bash
 
-   pip install -i https://test.pypi.org/simple/ aidrin==<version>
+   pip install aidrin
+
+To pin a specific version:
+
+.. code-block:: bash
+
+   pip install aidrin==<version>
 
 Replace ``<version>`` with the latest from
-`PyPI versions <https://test.pypi.org/project/aidrin/#history>`_.
+`PyPI versions <https://pypi.org/project/aidrin/#history>`_.
 
 Verify installation:
 

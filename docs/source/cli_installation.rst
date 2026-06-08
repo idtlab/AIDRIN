@@ -12,8 +12,10 @@ For web application installation, see the :ref:`web_installation` page.
 
 ----
 
-Base CLI
---------
+Option 1: Install from Source
+------------------------------
+
+Use this if you want the latest development version or plan to contribute:
 
 .. code-block:: bash
 
@@ -31,8 +33,19 @@ Once installed, the ``aidrin`` command is available system-wide:
 
 ----
 
+Option 2: Install from PyPI
+----------------------------
+
+The simplest way to get the CLI:
+
+.. code-block:: bash
+
+   pip install aidrin
+
+----
+
 Agentic Evaluation (Optional)
------------------------------
+------------------------------
 
 The **agentic evaluation** component is AIDRIN's domain-aware data readiness evaluation extension.
 It uses LLMs and retrieval-augmented generation over domain literature to answer dataset-specific
@@ -40,6 +53,10 @@ readiness questions. It requires additional dependencies — install it as a sep
 
 .. code-block:: bash
 
+   # PyPI install
+   pip install "aidrin[agentic]"
+
+   # Source install
    pip install -e ".[agentic]"
 
 .. note::
