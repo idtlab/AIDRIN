@@ -1066,11 +1066,10 @@ function loadGlobusDataset() {
     .getElementById("globus-endpoint-id")
     ?.value?.trim();
   const filePath = document.getElementById("globus-file-path")?.value?.trim();
-  const fileType = document.getElementById("globus-file-type")?.value;
 
   if (!endpointId || !filePath) {
     if (typeof showToast === "function")
-      showToast("Please fill in endpoint UUID and file path", "error");
+      showToast("Please fill in endpoint UUID and file/folder path", "error");
     return;
   }
 
@@ -1091,22 +1090,16 @@ function loadGlobusDataset() {
     el.classList.add("opacity-50");
   });
 
-  const fileName = filePath.split("/").pop();
-
   if (typeof showToast === "function")
-    showToast("Connecting to remote endpoint...", "info");
+    showToast("Listing files on the remote endpoint...", "info");
 
-  fetch("/globus/submit", {
+  // Add the remote file, or every supported file in the remote folder. The
+  // server lists the path on the endpoint and infers each type from its
+  // extension.
+  fetch("/globus/add-files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint_id: endpointId,
-      file_path: filePath,
-      file_name: fileName,
-      file_type: fileType,
-      metric_name: "completeness",
-      params: {},
-    }),
+    body: JSON.stringify({ endpoint_id: endpointId, path: filePath }),
   })
     .then((r) => r.json())
     .then((data) => {
@@ -1115,14 +1108,21 @@ function loadGlobusDataset() {
         if (typeof showToast === "function") showToast(data.error, "error");
         return;
       }
-      // Reload the page — session now has globus file info,
-      // inspector will show sidebar + panels
+      if (
+        data.skipped &&
+        data.skipped.length &&
+        typeof showToast === "function"
+      ) {
+        showToast(`Skipped ${data.skipped.length} unsupported file(s)`, "info");
+      }
+      // Reload — the session now has the active Globus file; the inspector
+      // shows the workspace (or the batch overview for a multi-file folder).
       window.location.href = "/inspector";
     })
     .catch((err) => {
       _reEnableGlobusForm();
       if (typeof showToast === "function")
-        showToast("Failed to connect: " + err.message, "error");
+        showToast("Failed to add remote files: " + err.message, "error");
     });
 }
 

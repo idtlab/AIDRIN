@@ -425,6 +425,55 @@ def register_function(client, force=False):
 
 
 # ---------------------------------------------------------------------------
+# Remote file listing (for adding a file OR a directory to the batch)
+# ---------------------------------------------------------------------------
+
+
+def remote_list_data_files(path):
+    """Run on the remote endpoint: enumerate data files at ``path``.
+
+    If ``path`` is a file, return just that file. If it's a directory, return
+    the files directly inside it (non-recursive). Returns
+    ``{"files": [abs_path, ...]}`` or ``{"error": str}``. Pure stdlib so it does
+    not depend on the endpoint's installed ``aidrin`` version.
+    """
+    import os
+
+    try:
+        if os.path.isfile(path):
+            return {"files": [path]}
+        if os.path.isdir(path):
+            files = sorted(
+                os.path.join(path, f)
+                for f in os.listdir(path)
+                if os.path.isfile(os.path.join(path, f))
+            )
+            return {"files": files}
+        return {"error": f"Path not found on the remote endpoint: {path}"}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"Could not list '{path}': {e}"}
+
+
+def register_list_function(client, force=False):
+    """Register remote_list_data_files with Globus Compute; return its UUID."""
+    cache_key = "remote_list_data_files"
+    if not force and cache_key in _function_uuid_cache:
+        return _function_uuid_cache[cache_key]
+
+    func_uuid = client.register_function(remote_list_data_files)
+    _function_uuid_cache[cache_key] = func_uuid
+    logger.info("Registered remote_list_data_files with Globus Compute: %s", func_uuid)
+    return func_uuid
+
+
+def submit_list_files(client, endpoint_id, path):
+    """Submit a remote file-listing task; return the task UUID string."""
+    func_uuid = register_list_function(client)
+    task_id = client.run(path, endpoint_id=endpoint_id, function_id=func_uuid)
+    return str(task_id)
+
+
+# ---------------------------------------------------------------------------
 # Task submission and status
 # ---------------------------------------------------------------------------
 

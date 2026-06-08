@@ -156,3 +156,63 @@ def test_globus_submit_sets_legacy_session_keys(globus_client):
         assert sess.get("globus_file_name") == "other.parquet"
         assert sess.get("globus_file_type") == ".parquet"
         assert sess.get("globus_endpoint_id") == "ep-456"
+
+
+# ---------------------------------------------------------------------------
+# /globus/add-files — file or directory, server-side type inference
+# ---------------------------------------------------------------------------
+
+
+def _add_files(client, path, files_result, endpoint="ep-dir"):
+    """POST /globus/add-files with the remote listing mocked to files_result."""
+    with patch("web.routes.globus.get_compute_client", return_value=MagicMock()), \
+         patch("web.routes.globus.submit_list_files", return_value="list-task"), \
+         patch("web.routes.globus.check_task",
+               return_value={"status": "completed", "result": {"files": files_result}}):
+        return client.post(
+            "/globus/add-files", json={"endpoint_id": endpoint, "path": path}
+        )
+
+
+def test_globus_add_directory_adds_supported_skips_others(globus_client):
+    client = globus_client
+    _set_globus_auth(client)
+    r = _add_files(client, "/remote/data/", [
+        "/remote/data/a.csv",
+        "/remote/data/b.json",
+        "/remote/data/notes.txt",  # unsupported -> skipped
+    ])
+    assert r.status_code == 200, r.get_data(as_text=True)
+    data = r.get_json()
+    assert set(data["added"]) == {"a.csv", "b.json"}
+    assert data["skipped"] == ["notes.txt"]
+    files = client.get("/files").get_json()
+    names = {f["name"]: f["type"] for f in files["files"]}
+    assert names == {"a.csv": ".csv", "b.json": ".json"}  # types inferred
+    assert files["active_file_id"] == data["active_file_id"]
+
+
+def test_globus_add_single_file(globus_client):
+    client = globus_client
+    _set_globus_auth(client)
+    r = _add_files(client, "/remote/data/x.csv", ["/remote/data/x.csv"])
+    assert r.status_code == 200
+    assert r.get_json()["added"] == ["x.csv"]
+    files = client.get("/files").get_json()["files"]
+    assert [f["name"] for f in files] == ["x.csv"]
+
+
+def test_globus_add_all_unsupported_errors(globus_client):
+    client = globus_client
+    _set_globus_auth(client)
+    r = _add_files(client, "/remote/data/", ["/remote/a.txt", "/remote/b.bin"])
+    assert r.status_code == 400
+    assert "supported" in r.get_json()["error"].lower()
+    assert client.get("/files").get_json()["files"] == []
+
+
+def test_globus_add_requires_auth(globus_client):
+    r = globus_client.post(
+        "/globus/add-files", json={"endpoint_id": "e", "path": "/p"}
+    )
+    assert r.status_code == 401

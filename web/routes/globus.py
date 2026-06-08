@@ -22,6 +22,7 @@ from web.globus import (
     exchange_code_for_tokens,
     get_compute_client,
     submit_metric,
+    submit_list_files,
     check_task,
 )
 from web.routes.utils import get_uploaded_files, save_uploaded_files, set_active_file
@@ -245,6 +246,112 @@ def submit():
     except Exception as e:
         logger.error("Globus submit error: %s", e, exc_info=True)
         return jsonify({"error": "Failed to submit task"}), 500
+
+
+@globus_bp.route("/add-files", methods=["POST"])
+def add_files():
+    """Add a remote file OR every supported file in a remote directory.
+
+    Body: ``{"endpoint_id": "...", "path": "/remote/file-or-dir"}``.
+
+    Ships a listing function to the endpoint (blocking with a timeout), then
+    infers each file's type server-side (so it doesn't depend on the endpoint's
+    aidrin version), adds the supported ones to the shared batch as
+    ``source:"globus"`` entries, and activates the first new one. Unsupported
+    files are reported as ``skipped``.
+    """
+    import time
+    from aidrin.file_handling.file_parser import infer_file_type
+
+    if not session.get("globus_authenticated"):
+        return jsonify({"error": "Not authenticated with Globus"}), 401
+
+    data = request.get_json() or {}
+    endpoint_id = data.get("endpoint_id")
+    path = data.get("path")
+    if not endpoint_id or not path:
+        return jsonify({"error": "Missing required fields: endpoint_id, path"}), 400
+
+    try:
+        client = get_compute_client(session.get("globus_tokens", {}))
+        task_id = submit_list_files(client, endpoint_id, path)
+
+        # Block for the listing result (it's quick on the endpoint).
+        deadline = time.time() + 60
+        result = None
+        while time.time() < deadline:
+            status = check_task(client, task_id)
+            if status.get("status") == "completed":
+                result = status.get("result")
+                break
+            if status.get("status") == "failed":
+                return jsonify({"error": status.get("error", "Remote listing failed")}), 502
+            time.sleep(1)
+        if result is None:
+            return jsonify({"error": "Timed out listing remote files"}), 504
+        if isinstance(result, dict) and result.get("error"):
+            return jsonify({"error": result["error"]}), 400
+
+        files = result.get("files", []) if isinstance(result, dict) else []
+        if not files:
+            return jsonify({"error": "No files found at that path"}), 400
+
+        max_files = current_app.config.get("AIDRIN_MAX_UPLOAD_FILES", 50)
+        entries = get_uploaded_files()
+        added, skipped = [], []
+        first_id = None
+        for p in files:
+            name = p.rstrip("/").split("/")[-1]
+            ftype = infer_file_type(name)
+            if not ftype:
+                skipped.append(name)
+                continue
+            if len(entries) >= max_files:
+                skipped.append(name)
+                continue
+            existing = next(
+                (e for e in entries
+                 if e.get("source") == "globus"
+                 and e.get("endpoint_id") == endpoint_id
+                 and e.get("path") == p),
+                None,
+            )
+            if existing is not None:
+                if first_id is None:
+                    first_id = existing["id"]
+                continue
+            entry = {
+                "id": uuid.uuid4().hex,
+                "name": name,
+                "type": ftype,
+                "path": p,
+                "source": "globus",
+                "endpoint_id": endpoint_id,
+            }
+            entries.append(entry)
+            added.append(name)
+            if first_id is None:
+                first_id = entry["id"]
+
+        save_uploaded_files(entries)
+        if first_id:
+            set_active_file(first_id)  # repopulates globus_* session keys
+
+        if not added and not first_id:
+            return jsonify({
+                "error": "No supported files found. Supported: CSV, Excel, "
+                         "JSON, NumPy (.npz), HDF5."
+            }), 400
+
+        return jsonify({
+            "added": added,
+            "skipped": skipped,
+            "active_file_id": first_id,
+        })
+
+    except Exception as e:
+        logger.error("Globus add-files error: %s", e, exc_info=True)
+        return jsonify({"error": "Failed to add remote files"}), 500
 
 
 @globus_bp.route("/cache-summary", methods=["POST"])
