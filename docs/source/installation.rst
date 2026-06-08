@@ -144,6 +144,23 @@ Terminal 3 – Flask Server
    conda activate aidrin-env
    flask --app 'web:create_app()' run --debug
 
+.. note::
+
+   **Windows:** If you see ``-B option does not work on Windows`` or
+   ``Can't pickle local object 'celery_init_app.<locals>.FlaskTask'``, drop
+   ``--beat`` from the worker command and use ``--pool=solo`` instead:
+
+   .. code-block:: powershell
+
+      PYTHONPATH=. celery -A worker.make_celery worker --pool=solo --loglevel=info
+
+   To run periodic tasks, start Beat in a **separate** terminal (optional for
+   local development):
+
+   .. code-block:: powershell
+
+      PYTHONPATH=. celery -A worker.make_celery beat --loglevel=info
+
 Once running, visit:
 `http://127.0.0.1:5000 <http://127.0.0.1:5000>`_
 
