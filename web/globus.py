@@ -543,6 +543,10 @@ def _run_with_retry(client, *args, max_attempts=8, **kwargs):
                 getattr(e, "http_status", None) == 409
                 or "RESOURCE_CONFLICT" in msg
                 or "already in use" in msg.lower()
+                # Endpoint failed to start the task worker (often transient on
+                # busy/HPC endpoints): "Failed to start ... (SystemExit) 73".
+                or "Failed to start" in msg
+                or "SystemExit" in msg
             )
             if not (transient and attempt < max_attempts - 1):
                 raise
