@@ -436,6 +436,23 @@ function workspaceSubmit(targetUrl) {
       remoteDisplayName = metricDisplayMap[remoteName] || remoteName;
     }
 
+    // Guard: privacy metrics need at least one quasi-identifier — catch it here
+    // for instant feedback instead of a slow remote round-trip that errors.
+    const qiMetrics = [
+      "k_anonymity",
+      "l_diversity",
+      "t_closeness",
+      "entropy_risk",
+    ];
+    if (
+      qiMetrics.includes(remoteName) &&
+      (!remoteParams.quasi_ids || remoteParams.quasi_ids.length === 0)
+    ) {
+      if (typeof showToast === "function")
+        showToast("Please select at least one quasi-identifier.", "error");
+      return;
+    }
+
     submitGlobusMetric(remoteName, remoteParams, remoteDisplayName);
     return;
   }

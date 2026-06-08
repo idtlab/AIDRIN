@@ -468,3 +468,21 @@ class TestEntropyRisk(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_privacy_metrics_reject_empty_quasi_identifiers():
+    """Empty quasi-identifiers return a clear error, not a pandas 'No group
+    keys passed!' crash (this is what reached the UI for Globus k-anonymity)."""
+    import pandas as pd
+    from aidrin.structured_data_metrics.privacy_measure import (
+        compute_k_anonymity,
+        compute_l_diversity,
+        compute_t_closeness,
+        compute_entropy_risk,
+    )
+    df = pd.DataFrame({"a": [1, 2, 3], "s": ["x", "y", "z"]})
+    msg = "Please select at least one quasi-identifier."
+    assert compute_k_anonymity([], df) == {"Error": msg}
+    assert compute_entropy_risk([], df) == {"Error": msg}
+    assert compute_l_diversity([], "s", df) == {"Error": msg}
+    assert compute_t_closeness([], "s", df) == {"Error": msg}
