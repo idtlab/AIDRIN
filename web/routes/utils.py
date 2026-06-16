@@ -193,14 +193,14 @@ def ensure_json_serializable(obj):
     return obj
 
 
-def summary_histograms(df):
+def summary_histograms(df, figsize=(4, 3), dpi=150):
     """Generate base64-encoded KDE distribution plots for all numeric columns."""
     text_color = "#6b7280"
     curve_color = "#4485F4"
 
     line_graphs = {}
     for column in df.select_dtypes(include="number").columns:
-        fig, ax = plt.subplots(figsize=(4, 3))
+        fig, ax = plt.subplots(figsize=figsize)
         fig.patch.set_alpha(0)
         ax.set_facecolor("none")
 
@@ -214,7 +214,7 @@ def summary_histograms(df):
         fig.tight_layout(pad=0.5)
 
         img_buffer = io.BytesIO()
-        fig.savefig(img_buffer, format="png", dpi=150, transparent=True)
+        fig.savefig(img_buffer, format="png", dpi=dpi, transparent=True)
         img_buffer.seek(0)
         encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
 
@@ -224,3 +224,75 @@ def summary_histograms(df):
         img_buffer.close()
 
     return line_graphs
+
+
+def categorical_distribution_charts(df, top_n=10):
+    """Generate base64-encoded pie charts for categorical columns.
+
+    Shows the top *top_n* values per column; remaining values are grouped
+    into an "Other" slice when applicable.
+    """
+    text_color = "#6b7280"
+    palette = [
+        "#4485F4", "#34A853", "#FBBC05", "#EA4335", "#9C27B0",
+        "#00ACC1", "#FF7043", "#8D6E63", "#78909C", "#AB47BC",
+    ]
+    charts = {}
+
+    cat_cols = df.select_dtypes(include=["object", "string", "category"]).columns
+    for column in cat_cols:
+        series = df[column].dropna()
+        if len(series) == 0:
+            continue
+
+        vc = series.value_counts()
+        if len(vc) > top_n:
+            top = vc.head(top_n)
+            other_count = int(vc.iloc[top_n:].sum())
+            labels = [str(v) for v in top.index]
+            sizes = [int(v) for v in top.values]
+            if other_count > 0:
+                labels.append("Other")
+                sizes.append(other_count)
+        else:
+            labels = [str(v) for v in vc.index]
+            sizes = [int(v) for v in vc.values]
+
+        n_slices = len(labels)
+        colors = [palette[i % len(palette)] for i in range(n_slices)]
+
+        fig, ax = plt.subplots(figsize=(5, 5))
+        fig.patch.set_alpha(0)
+
+        wedges, _, autotexts = ax.pie(
+            sizes,
+            labels=None,
+            autopct=lambda pct: f"{pct:.1f}%" if pct >= 4 else "",
+            colors=colors,
+            startangle=90,
+            pctdistance=0.75,
+            textprops={"color": text_color, "fontsize": 8},
+        )
+        for t in autotexts:
+            t.set_fontsize(7)
+
+        ax.legend(
+            wedges,
+            labels,
+            loc="center left",
+            bbox_to_anchor=(1, 0.5),
+            fontsize=8,
+            frameon=False,
+            labelcolor=text_color,
+        )
+        ax.set_title(str(column), fontsize=10, color=text_color, pad=8)
+        fig.tight_layout()
+
+        img_buffer = io.BytesIO()
+        fig.savefig(img_buffer, format="png", dpi=150, transparent=True, bbox_inches="tight")
+        img_buffer.seek(0)
+        charts[str(column)] = base64.b64encode(img_buffer.read()).decode("utf-8")
+        plt.close(fig)
+        img_buffer.close()
+
+    return charts

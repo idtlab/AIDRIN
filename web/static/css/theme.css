@@ -313,8 +313,27 @@ html.dark .info-text {
 }
 
 .info-icon:hover .info-text,
-.info-text:hover {
+.info-text:hover,
+.info-icon:focus-within .info-text {
   display: block !important;
+}
+
+/* Readiness report: show tooltip below icon (avoids clipping in tables) */
+#panel-readiness-report .info-icon--below .info-text {
+  left: auto;
+  right: 0;
+  top: calc(100% + 6px);
+  margin-left: 0;
+}
+
+#panel-readiness-report th .info-icon,
+#panel-readiness-report .inline-flex .info-icon {
+  flex-shrink: 0;
+}
+
+/* Let readiness tooltips extend outside scrollable table wrappers when possible */
+#panel-readiness-report table {
+  overflow: visible;
 }
 
 .info-text a {
