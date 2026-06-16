@@ -67,7 +67,9 @@ class hdf5Reader(BaseFileReader):
                     # Non-default native fill: the producer explicitly chose
                     # this value, so it is intentional.
                     explicit.add(native)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, RuntimeError):
+            # h5py raises RuntimeError when the producer never set a fill value
+            # ("fill value is undefined") — treat as no native sentinel.
             pass
 
         return explicit, uncertain

@@ -258,3 +258,18 @@ class TestCompletenessAccuracy:
 
         completeness = 1 - col.isnull().mean()
         assert abs(completeness - 0.6) < 1e-9
+
+
+class TestUndefinedNativeFillValue:
+
+    def test_int32_without_explicit_fillvalue_reads_successfully(self, tmp_path, logger):
+        """int32 datasets without _FillValue attrs must read without error."""
+        data = np.array([16, 12, 21, 21, 36], dtype=np.int32)
+        fpath = str(tmp_path / "undefined_fill.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("lengths", data=data)
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert len(df) == len(data)
+        assert df.iloc[:, 0].tolist() == data.tolist()
