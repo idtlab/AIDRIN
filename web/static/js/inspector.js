@@ -10,6 +10,7 @@
 let activePanel = "data-overview";
 let codeMirrorEditor = null;
 let lastMetricResult = null; // Store last result for JSON download
+let _readinessReportLoaded = false; // Lazy-load guard for the Readiness Report panel
 
 /**
  * Show a metric panel by ID, hiding all others.
@@ -60,6 +61,13 @@ function showPanel(panelId, pushHistory) {
   // Lazy init CodeMirror for custom metrics
   if (panelId === "custom-metrics" && !codeMirrorEditor) {
     initCodeMirror();
+  }
+
+  // Lazy load the data overview + data quality into the Readiness Report
+  // panel on first open
+  if (panelId === "readiness-report" && !_readinessReportLoaded) {
+    _readinessReportLoaded = true;
+    loadReadinessReport();
   }
 
   // Close mobile sidebar after selection
@@ -1907,10 +1915,23 @@ function submitCustomMetric() {
 /**
  * Render histogram images in the data overview panel.
  * @param {Object} histograms - Dict of {column_theme: base64_img} from /summary-statistics
+ * @param {string} [containerId]
+ * @param {boolean} [skipHeading]
+ * @param {string} [layout] - "compact" (default) or "large" for readiness report
  */
-function renderWorkspaceHistograms(histograms) {
-  const container = document.getElementById("workspace-histograms");
+function renderWorkspaceHistograms(histograms, containerId, skipHeading, layout) {
+  const container = document.getElementById(
+    containerId || "workspace-histograms",
+  );
   if (!container) return;
+
+  const isLarge = layout === "large";
+  const gridClass = isLarge
+    ? "grid grid-cols-1 sm:grid-cols-2 gap-6"
+    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
+  const imgClass = isLarge
+    ? "w-full h-auto object-contain"
+    : "w-full";
 
   // Always use the light variant — CSS filter handles dark mode
   const columns = {};
@@ -1926,14 +1947,17 @@ function renderWorkspaceHistograms(histograms) {
     return;
   }
 
-  let html =
-    '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Feature Distributions</h3>';
-  html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">';
+  let html = "";
+  if (!skipHeading) {
+    html +=
+      '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Feature Distributions</h3>';
+  }
+  html += `<div class="${gridClass}">`;
 
   for (const [colName, base64] of Object.entries(columns)) {
     html += `
       <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-        <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="w-full" />
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="${imgClass}" />
         <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${colName}</div>
       </div>
     `;
@@ -1943,26 +1967,47 @@ function renderWorkspaceHistograms(histograms) {
   container.innerHTML = html;
 }
 
-// ==================== Workspace Init ====================
+/**
+ * Render categorical distribution pie charts (base64 PNG per column).
+ */
+function renderCategoricalPieCharts(charts, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || !charts) return;
+
+  const entries = Object.entries(charts);
+  if (entries.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  let html = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">';
+  for (const [colName, base64] of entries) {
+    html += `
+      <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden p-2">
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="w-full h-auto object-contain mx-auto" style="max-width: 420px;" />
+      </div>`;
+  }
+  html += "</div>";
+  container.innerHTML = html;
+}
 
 /**
- * Initialize the workspace after file upload.
- * Fetches summary statistics and populates feature dropdowns.
+ * Fetch summary statistics from the backend and render the stat cards,
+ * summary table, and feature-distribution histograms into the given
+ * containers. Reused by both the Data Overview panel and the
+ * Readiness Report panel.
+ *
+ * @param {string} summaryContainerId - element ID for the stats/table.
+ * @param {string} histogramsContainerId - element ID for the histograms.
  */
-function initWorkspace() {
-  // Restore panel from URL hash, or default to data-overview
-  const hash = location.hash.replace("#", "");
-  const initialPanel =
-    hash && document.getElementById("panel-" + hash) ? hash : "data-overview";
-  showPanel(initialPanel, false); // false = don't push to history on init
-  // Replace current history entry so back button works from the first panel
-  history.replaceState({ panel: initialPanel }, "", "#" + initialPanel);
+function loadDataOverview(summaryContainerId, histogramsContainerId) {
+  const summaryId = summaryContainerId || "workspace-summary";
+  const histogramsId = histogramsContainerId || "workspace-histograms";
 
-  // Fetch summary statistics
   fetch("/summary-statistics")
     .then((r) => r.json())
     .then((data) => {
-      const container = document.getElementById("workspace-summary");
+      const container = document.getElementById(summaryId);
       if (!container) return;
 
       if (data.success) {
@@ -2038,19 +2083,905 @@ function initWorkspace() {
 
         container.innerHTML = html;
 
-        // Render histograms in the data overview panel
+        // Render histograms below the summary table
         if (data.histograms) {
-          renderWorkspaceHistograms(data.histograms);
+          renderWorkspaceHistograms(data.histograms, histogramsId);
         }
       } else {
         container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Could not load summary: ${data.message}</p>`;
       }
     })
     .catch((err) => {
-      const container = document.getElementById("workspace-summary");
+      const container = document.getElementById(summaryId);
       if (container)
         container.innerHTML = `<p class="text-sm" style="color: red;">Error loading summary: ${err.message}</p>`;
     });
+}
+
+/**
+ * Map a readiness status string to Tailwind color classes.
+ */
+function _dqStatusClasses(status) {
+  switch (status) {
+    case "good":
+      return {
+        text: "text-green-700 dark:text-green-400",
+        bar: "bg-green-500",
+        badge:
+          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      };
+    case "warning":
+      return {
+        text: "text-amber-700 dark:text-amber-400",
+        bar: "bg-amber-500",
+        badge:
+          "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+      };
+    case "poor":
+      return {
+        text: "text-red-700 dark:text-red-400",
+        bar: "bg-red-500",
+        badge: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      };
+    default:
+      return {
+        text: "text-gray-500 dark:text-gray-400",
+        bar: "bg-gray-400",
+        badge:
+          "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+      };
+  }
+}
+
+/** Format a 0–1 score as a whole percentage, or "N/A" if missing. */
+function _pct(value) {
+  if (value === null || value === undefined || isNaN(value)) return "N/A";
+  return `${Math.round(value * 100)}%`;
+}
+
+/**
+ * Fetch the aggregated readiness report and render the Data Quality
+ * scorecard (KPI tiles + overall grade + "needs attention" lists +
+ * a collapsible details view with the original charts).
+ */
+function loadReadinessReport() {
+  const overviewContainer = document.getElementById("readiness-summary");
+  const dqContainer = document.getElementById("readiness-data-quality");
+  const impactContainer = document.getElementById("readiness-impact");
+  const fairnessContainer = document.getElementById("readiness-fairness");
+
+  fetch("/readiness-report")
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.success) {
+        const msg = `<p class="text-sm" style="color: var(--textColorSecondary);">Could not load readiness report: ${resp.message || "unknown error"}</p>`;
+        if (overviewContainer) overviewContainer.innerHTML = msg;
+        if (dqContainer) dqContainer.innerHTML = msg;
+        if (impactContainer) impactContainer.innerHTML = msg;
+        if (fairnessContainer) fairnessContainer.innerHTML = msg;
+        return;
+      }
+      if (overviewContainer)
+        renderReadinessDatasetOverview(overviewContainer, resp.dataset_overview || {});
+      if (dqContainer)
+        renderReadinessDataQuality(dqContainer, resp.data_quality || {});
+      if (impactContainer)
+        renderReadinessImpact(impactContainer, resp.impact_on_ai || {});
+      if (fairnessContainer)
+        renderReadinessFairness(fairnessContainer, resp.fairness_bias || {});
+    })
+    .catch((err) => {
+      const msg = `<p class="text-sm" style="color: red;">Error loading readiness report: ${err.message}</p>`;
+      if (overviewContainer) overviewContainer.innerHTML = msg;
+      if (dqContainer) dqContainer.innerHTML = msg;
+      if (impactContainer) impactContainer.innerHTML = msg;
+      if (fairnessContainer) fairnessContainer.innerHTML = msg;
+    });
+}
+
+/** Escape text for safe inclusion in readiness info tooltips. */
+function _escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Readiness metric definitions shown in info-icon tooltips. */
+const _READINESS_METRIC_INFO = {
+  feature_profile:
+    "A per-column snapshot of whether each feature is usable for modeling. Combines missingness, cardinality, and value balance into a readiness status (Good / Warning / Poor).",
+  pct_missing:
+    "Share of rows where this feature is missing (null/NaN). High missingness reduces reliability and may require imputation or dropping the column.",
+  n_unique:
+    "Number of distinct non-missing values. Very low values suggest constants; very high values relative to row count may indicate IDs or free text.",
+  pct_dominant:
+    "Share of rows taken by the most frequent value (the mode). Values near 100% mean the column is almost constant and usually carries little signal.",
+  profile_status:
+    "Readiness verdict for this feature. Poor: high missingness, constant, or ID-like. Warning: moderate issues. Good: no major issues detected.",
+  overall_dq_grade:
+    "Average of the data-quality KPIs (completeness, uniqueness, outlier-cleanliness). Higher is better — indicates how clean the dataset is overall.",
+  completeness:
+    "Overall share of non-missing values across all features. Same measure as the Completeness metric on the Data Quality tab.",
+  uniqueness:
+    "1 minus the proportion of duplicate rows. Low uniqueness means many exact duplicate records, which can bias models and inflate metrics.",
+  outlier_cleanliness:
+    "1 minus the mean outlier proportion across numerical features (IQR method). Lower values mean more extreme values that may need review.",
+  features_analyzed:
+    "Number of columns included in the automated correlation scan after pruning constants, ID-like fields, and high-cardinality categoricals.",
+  leakage_risk_pairs:
+    "Feature pairs with correlation |score| ≥ 0.95 — nearly duplicate or derived from each other. Can inflate model performance or indicate redundant inputs (not necessarily target leakage).",
+  redundant_pairs:
+    "Feature pairs with correlation |score| between 0.8 and 0.95 — strongly related and likely redundant. Consider keeping only one from each pair.",
+  isolated_features:
+    "Features whose strongest correlation to any other feature is below 0.1. May be uninformative noise, identifiers, or weakly related fields worth reviewing.",
+  most_related_pairs:
+    "The feature pairs with the highest absolute correlation scores from the automated scan — quick view of the strongest relationships in the data.",
+  overall_fairness_grade:
+    "Average of fairness KPIs (representation balance, label balance, outcome parity). Higher suggests more balanced representation and outcomes under the automated checks.",
+  representation_balance:
+    "1 divided by the worst group probability ratio across auto-selected sensitive attributes. Low values mean some groups are much more represented than others.",
+  label_balance:
+    "Derived from the Imbalance Degree of the auto-selected target column. 0 means perfectly balanced classes; higher imbalance degree means a skewed label distribution.",
+  outcome_parity:
+    "1 minus the maximum TSD (standard deviation of class rates across sensitive groups). Flags when outcome rates differ substantially by group.",
+  representation_imbalance:
+    "Sensitive attributes where the largest group probability ratio exceeds the threshold — one category dominates representation.",
+  minority_classes:
+    "Target classes that make up less than 5% of rows. Rare classes are harder to learn and can hurt model fairness and recall.",
+  outcome_disparities:
+    "Target classes whose outcome rates vary most across sensitive groups (high TSD). Suggests uneven outcomes by group.",
+  cdd_disparities:
+    "Sensitive groups flagged by Conditional Demographic Disparity — rejected outcomes outweigh accepted ones disproportionately (positive class is auto-selected as the most frequent target value).",
+};
+
+/**
+ * Info-icon tooltip matching existing metric panels (see theme.css .info-icon).
+ * @param {string} key - key in _READINESS_METRIC_INFO
+ */
+function _readinessInfoIcon(key) {
+  const text = _READINESS_METRIC_INFO[key];
+  if (!text) return "";
+  return `<span class="info-icon info-icon--below" tabindex="0" role="button" aria-label="More information">i<span class="info-text">${_escapeHtml(text)}</span></span>`;
+}
+
+/** Table header cell with label + info tooltip. */
+function _readinessTh(label, infoKey, alignRight) {
+  const align = alignRight ? " text-right" : "";
+  return `<th class="px-3 py-2 relative whitespace-nowrap${align}"><span class="inline-flex items-center${alignRight ? " justify-end w-full" : ""}">${label}${_readinessInfoIcon(infoKey)}</span></th>`;
+}
+
+/** Format byte count as a human-readable size string. */
+function _formatBytes(bytes) {
+  if (bytes == null || isNaN(bytes)) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Badge HTML for per-feature readiness status. */
+function _profileStatusBadge(status) {
+  const cls = _dqStatusClasses(status);
+  const label = status === "good" ? "Good" : status === "warning" ? "Warning" : status === "poor" ? "Poor" : "—";
+  return `<span class="px-2 py-0.5 rounded text-xs font-medium ${cls.badge}">${label}</span>`;
+}
+
+/**
+ * Render the dataset overview: file metadata, KPI tiles, per-feature readiness
+ * profile, and collapsible detailed statistics / distributions / histograms.
+ */
+function renderReadinessDatasetOverview(container, overview) {
+  if (overview.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Dataset overview unavailable: ${overview.error}</p>`;
+    return;
+  }
+
+  const meta = overview.file_metadata || {};
+  const profiles = overview.feature_profiles || [];
+
+  // --- File metadata ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-sm">
+      <p class="font-semibold text-gray-900 dark:text-white mb-2">${meta.file_name || "Dataset"}</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-gray-600 dark:text-gray-300">
+        <div><span class="text-gray-500 dark:text-gray-400">Type:</span> ${meta.file_type || "—"}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Size:</span> ${_formatBytes(meta.file_size_bytes)}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Memory:</span> ${_formatBytes(meta.memory_bytes)}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Rows:</span> ${(meta.rows || 0).toLocaleString()}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Columns:</span> ${meta.columns || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Numerical:</span> ${meta.numerical_count || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Categorical:</span> ${meta.categorical_count || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Other:</span> ${(meta.datetime_count || 0) + (meta.boolean_count || 0)}</div>
+      </div>
+    </div>`;
+
+  // --- KPI tiles ---
+  html += `
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${(meta.rows || 0).toLocaleString()}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Records</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.columns || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Features</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.numerical_count || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Numerical</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.categorical_count || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Categorical</div>
+      </div>
+    </div>`;
+
+  // --- Per-feature readiness profile ---
+  const poorCount = profiles.filter((p) => p.status === "poor").length;
+  const warnCount = profiles.filter((p) => p.status === "warning").length;
+
+  html += `
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-sm font-semibold text-gray-900 dark:text-white inline-flex items-center">Per-feature readiness profile${_readinessInfoIcon("feature_profile")}</p>
+      <span class="text-xs text-gray-500 dark:text-gray-400">
+        ${poorCount ? `<span class="text-red-600 dark:text-red-400">${poorCount} poor</span>` : ""}
+        ${warnCount ? `${poorCount ? " · " : ""}<span class="text-amber-600 dark:text-amber-400">${warnCount} warning</span>` : ""}
+        ${!poorCount && !warnCount ? "all good" : ""}
+      </span>
+    </div>`;
+
+  html += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4">`;
+  html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  html += `<th class="px-3 py-2">Feature</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Dtype</th>`;
+  html += _readinessTh("% missing", "pct_missing", true);
+  html += _readinessTh("# unique", "n_unique", true);
+  html += _readinessTh("% dominant", "pct_dominant", true);
+  html += _readinessTh("Status", "profile_status", false);
+  html += `<th class="px-3 py-2">Summary</th>`;
+  html += `</tr></thead><tbody>`;
+
+  profiles.forEach((p, i) => {
+    const stripe = i % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50";
+    html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+    html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${p.feature}</td>`;
+    html += `<td class="px-3 py-2 capitalize">${p.type}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs">${p.dtype}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${_pct(p.pct_missing)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.n_unique}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.pct_dominant != null ? _pct(p.pct_dominant) : "—"}</td>`;
+    html += `<td class="px-3 py-2">${_profileStatusBadge(p.status)}</td>`;
+    html += `<td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title="${p.summary || ""}">${p.summary || "—"}</td>`;
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  // --- Collapsible detailed statistics ---
+  let detailsInner = "";
+
+  const numSummary = overview.numerical_summary || {};
+  const numFeatures = Object.keys(numSummary);
+  if (numFeatures.length > 0) {
+    const allStats = Object.keys(numSummary[numFeatures[0]] || {});
+    const preferredOrder = [
+      "count", "min", "25th percentile", "50th percentile", "mean",
+      "75th percentile", "max", "std",
+    ];
+    const statKeys = preferredOrder
+      .filter((s) => allStats.includes(s))
+      .concat(allStats.filter((s) => !preferredOrder.includes(s)));
+
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical summary statistics</p>`;
+    detailsInner += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+    detailsInner += `<thead class="text-xs uppercase bg-gray-50 dark:bg-gray-700"><tr><th class="px-3 py-2">Feature</th>`;
+    statKeys.forEach((s) => {
+      detailsInner += `<th class="px-3 py-2 text-right">${s}</th>`;
+    });
+    detailsInner += `</tr></thead><tbody>`;
+    numFeatures.forEach((feat, i) => {
+      const stripe = i % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50";
+      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${feat}</td>`;
+      statKeys.forEach((s) => {
+        detailsInner += `<td class="px-3 py-2 font-mono text-xs text-right">${numSummary[feat][s] ?? "—"}</td>`;
+      });
+      detailsInner += `</tr>`;
+    });
+    detailsInner += `</tbody></table></div>`;
+  }
+
+  const catCharts = overview.categorical_charts || {};
+  const catChartCols = Object.keys(catCharts);
+  if (catChartCols.length > 0) {
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical value distributions</p>`;
+    detailsInner += `<div id="readiness-categorical-charts" class="mb-4"></div>`;
+  }
+
+  if (overview.histograms && Object.keys(overview.histograms).length > 0) {
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 mt-4">Feature distributions (numerical)</p>`;
+    detailsInner += `<div id="readiness-histograms-inner" class="mb-4"></div>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed statistics &amp; distributions
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (catChartCols.length > 0) {
+    renderCategoricalPieCharts(overview.categorical_charts, "readiness-categorical-charts");
+  }
+  if (overview.histograms) {
+    renderWorkspaceHistograms(
+      overview.histograms,
+      "readiness-histograms-inner",
+      true,
+      "large",
+    );
+  }
+}
+
+/**
+ * Render the Data Quality scorecard into the given container.
+ */
+function renderReadinessDataQuality(container, dq) {
+  if (dq.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data quality unavailable: ${dq.error}</p>`;
+    return;
+  }
+  const kpis = dq.kpis || [];
+      const gradeCls = _dqStatusClasses(dq.grade_status);
+
+      // --- Overall grade + KPI tiles ---
+      let html = `
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall data quality grade${_readinessInfoIcon("overall_dq_grade")}</span>
+          <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(dq.grade)}</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+      kpis.forEach((k) => {
+        const cls = _dqStatusClasses(k.status);
+        const widthPct =
+          k.value === null || k.value === undefined
+            ? 0
+            : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+        html += `
+          <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+            <div class="flex items-baseline justify-between">
+              <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
+              <span class="text-2xl font-bold ${cls.text}">${_pct(k.value)}</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+              <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+            </div>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
+          </div>`;
+      });
+      html += "</div>";
+
+      // --- Needs attention ---
+      const na = dq.needs_attention || {};
+      const incomplete = na.incomplete_features || [];
+      const outlierFeats = na.outlier_features || [];
+      const dupRows = na.duplicate_rows || 0;
+
+      const naItems = [];
+      if (incomplete.length) {
+        const top = incomplete
+          .slice(0, 6)
+          .map(
+            (f) =>
+              `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${_pct(f.completeness)} complete</span></li>`,
+          )
+          .join("");
+        const more =
+          incomplete.length > 6
+            ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${incomplete.length - 6} more</li>`
+            : "";
+        naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Incomplete features (${incomplete.length})${_readinessInfoIcon("completeness")}</p>
+            <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${top}${more}</ul>
+          </div>`);
+      }
+      if (outlierFeats.length) {
+        const top = outlierFeats
+          .slice(0, 6)
+          .map(
+            (f) =>
+              `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${_pct(f.outlier_proportion)} outliers</span></li>`,
+          )
+          .join("");
+        const more =
+          outlierFeats.length > 6
+            ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${outlierFeats.length - 6} more</li>`
+            : "";
+        naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Features with outliers (${outlierFeats.length})${_readinessInfoIcon("outlier_cleanliness")}</p>
+            <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${top}${more}</ul>
+          </div>`);
+      }
+      if (dupRows && dupRows > 0) {
+        naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Duplicate rows${_readinessInfoIcon("uniqueness")}</p>
+            <p class="text-sm text-gray-700 dark:text-gray-300">${_pct(dupRows)} of rows are exact duplicates.</p>
+          </div>`);
+      }
+
+      if (naItems.length) {
+        html += `
+          <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+            <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
+          </div>`;
+      } else {
+        html += `
+          <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+            <p class="text-sm text-green-800 dark:text-green-400">No data quality issues detected — all features complete, no duplicates, no outliers.</p>
+          </div>`;
+      }
+
+      // --- Collapsible details (original charts) ---
+      const det = dq.details || {};
+      let detailsInner = "";
+      if (det.completeness && det.completeness.visualization) {
+        detailsInner += `
+          <div class="mb-4">
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Completeness by feature</p>
+            <img src="data:image/png;base64,${det.completeness.visualization}" alt="Completeness chart" class="w-full max-w-2xl" />
+          </div>`;
+      }
+      if (det.outliers && det.outliers.visualization) {
+        detailsInner += `
+          <div class="mb-4">
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Outliers by feature</p>
+            <img src="data:image/png;base64,${det.outliers.visualization}" alt="Outliers chart" class="w-full max-w-2xl" />
+          </div>`;
+      } else if (det.outliers && det.outliers.error) {
+        detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Outliers: ${det.outliers.error}</p>`;
+      }
+
+      if (detailsInner) {
+        html += `
+          <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+            <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+              Show detailed charts
+            </summary>
+            <div class="mt-4">${detailsInner}</div>
+          </details>`;
+      }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+}
+
+/**
+ * Render the Impact on AI scorecard (automated all-pairs correlation signals:
+ * redundancy, leakage risk, isolated features) into the given container.
+ */
+function renderReadinessImpact(container, impact) {
+  if (impact.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Impact on AI unavailable: ${impact.error}</p>`;
+    return;
+  }
+
+  const redundant = impact.redundant_pairs || [];
+  const leakage = impact.leakage_pairs || [];
+  const isolated = impact.isolated_features || [];
+  const topPairs = impact.top_pairs || [];
+  const dropped = impact.columns_dropped || [];
+  const analyzed = impact.columns_analyzed || 0;
+
+  const fmtScore = (s) => (typeof s === "number" ? s.toFixed(2) : s);
+  const fmtPair = (p) =>
+    `<li class="flex justify-between gap-3"><span class="truncate">${p.a} \u2194 ${p.b}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtScore(p.score)}</span></li>`;
+
+  // --- Stat tiles ---
+  const tiles = [
+    { label: "Features analyzed", value: analyzed, status: "neutral", infoKey: "features_analyzed" },
+    {
+      label: "Leakage-risk pairs",
+      value: leakage.length,
+      status: leakage.length ? "poor" : "good",
+      infoKey: "leakage_risk_pairs",
+    },
+    {
+      label: "Redundant pairs",
+      value: redundant.length,
+      status: redundant.length ? "warning" : "good",
+      infoKey: "redundant_pairs",
+    },
+    {
+      label: "Isolated features",
+      value: isolated.length,
+      status: isolated.length ? "warning" : "good",
+      infoKey: "isolated_features",
+    },
+  ];
+
+  let html = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">';
+  tiles.forEach((t) => {
+    const cls = _dqStatusClasses(t.status);
+    const valColor =
+      t.status === "neutral" ? "text-gray-900 dark:text-white" : cls.text;
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold ${valColor}">${t.value}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide inline-flex items-center justify-center flex-wrap gap-0">${t.label}${_readinessInfoIcon(t.infoKey)}</div>
+      </div>`;
+  });
+  html += "</div>";
+
+  // --- Needs attention ---
+  const naItems = [];
+  if (leakage.length) {
+    const items = leakage.slice(0, 6).map(fmtPair).join("");
+    const more =
+      leakage.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${leakage.length - 6} more</li>`
+        : "";
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Leakage risk (|score| &ge; 0.95)${_readinessInfoIcon("leakage_risk_pairs")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}${more}</ul>
+      </div>`);
+  }
+  if (redundant.length) {
+    const items = redundant.slice(0, 6).map(fmtPair).join("");
+    const more =
+      redundant.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${redundant.length - 6} more</li>`
+        : "";
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Redundant pairs (|score| &ge; 0.8)${_readinessInfoIcon("redundant_pairs")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}${more}</ul>
+      </div>`);
+  }
+  if (isolated.length) {
+    const items = isolated
+      .slice(0, 10)
+      .map((f) => `<li class="truncate">${f}</li>`)
+      .join("");
+    const more =
+      isolated.length > 10
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${isolated.length - 10} more</li>`
+        : "";
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Isolated features (no strong relationships)${_readinessInfoIcon("isolated_features")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}${more}</ul>
+      </div>`);
+  }
+
+  if (naItems.length) {
+    html += `
+      <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+        <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">${naItems.join("")}</div>
+      </div>`;
+  } else {
+    html += `
+      <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+        <p class="text-sm text-green-800 dark:text-green-400">No redundancy, leakage risk, or isolated features detected.</p>
+      </div>`;
+  }
+
+  // --- Most-related pairs table ---
+  if (topPairs.length) {
+    html +=
+      '<div class="mb-4"><p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 inline-flex items-center">Most-related feature pairs' +
+      _readinessInfoIcon("most_related_pairs") +
+      "</p>";
+    html +=
+      '<div class="relative overflow-x-auto rounded-lg shadow-sm"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
+    html +=
+      '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr><th class="px-4 py-2">Feature A</th><th class="px-4 py-2">Feature B</th><th class="px-4 py-2 text-right">Score</th></tr></thead><tbody>';
+    topPairs.forEach((p, i) => {
+      const stripe =
+        i % 2 === 0
+          ? "bg-white dark:bg-gray-800"
+          : "bg-gray-50 dark:bg-gray-700/50";
+      html += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${p.a}</td><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${p.b}</td><td class="px-4 py-2 font-mono text-xs text-right">${fmtScore(p.score)}</td></tr>`;
+    });
+    html += "</tbody></table></div></div>";
+  }
+
+  // --- Collapsible details (heatmaps + excluded columns) ---
+  const det = impact.details || {};
+  let detailsInner = "";
+  if (det.numerical_visualization) {
+    const method = det.numerical_method ? ` (${det.numerical_method})` : "";
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical correlation${method}</p>
+        <img src="data:image/png;base64,${det.numerical_visualization}" alt="Numerical correlation heatmap" class="w-full max-w-2xl" />
+      </div>`;
+  }
+  if (det.categorical_visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical correlation (Theil's U)</p>
+        <img src="data:image/png;base64,${det.categorical_visualization}" alt="Categorical correlation heatmap" class="w-full max-w-2xl" />
+      </div>`;
+  }
+  if (dropped.length) {
+    const items = dropped
+      .map(
+        (d) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400 dark:text-gray-500">${d.reason}</span></li>`,
+      )
+      .join("");
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded columns (${dropped.length})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show correlation heatmaps &amp; excluded columns
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+}
+
+/**
+ * Render the Fairness & Bias scorecard (auto-selected columns, four metrics,
+ * selection criteria, needs-attention lists, collapsible charts).
+ */
+function renderReadinessFairness(container, fb) {
+  if (fb.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Fairness &amp; Bias unavailable: ${fb.error}</p>`;
+    return;
+  }
+
+  const sel = fb.auto_selection || {};
+  const criteria = sel.selection_criteria || {};
+  const sensCrit = criteria.sensitive_attributes || {};
+  const targetCrit = criteria.target_column || {};
+  const posCrit = criteria.positive_class || {};
+  const thresholds = criteria.thresholds || {};
+  const kpis = fb.kpis || [];
+  const na = fb.needs_attention || {};
+  const gradeCls = _dqStatusClasses(fb.grade_status);
+
+  // --- Auto-selection criteria (transparent) ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Sensitive attributes:</span> ${sensCrit.selected?.length ? sensCrit.selected.join(", ") : "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${sensCrit.rule || ""}</span></li>
+        <li><span class="font-medium">Target column:</span> ${targetCrit.selected || "none"}${targetCrit.reason ? ` (${targetCrit.reason})` : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${targetCrit.rule || ""}</span></li>
+        <li><span class="font-medium">CDD positive class:</span> ${posCrit.selected ?? "none"}${posCrit.reason ? ` (${posCrit.reason})` : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${posCrit.rule || ""}</span></li>
+        <li><span class="font-medium">Primary sensitive (statistical rate &amp; CDD):</span> ${sel.primary_sensitive || "none"}</li>
+        <li><span class="font-medium">Flags:</span>
+          representation ratio ≥ ${thresholds.representation_ratio_flag ?? "—"},
+          minority class &lt; ${_pct(thresholds.minority_class_share)},
+          TSD ≥ ${thresholds.tsd_disparity_flag ?? "—"},
+          imbalance degree good/warning &lt; ${thresholds.imbalance_degree_good ?? "—"} / ${thresholds.imbalance_degree_warning ?? "—"}
+        </li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall fairness grade${_readinessInfoIcon("overall_fairness_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(fb.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    const displayVal =
+      k.id === "label_balance" && k.raw_imbalance_degree != null
+        ? `ID ${Number(k.raw_imbalance_degree).toFixed(2)}`
+        : _pct(k.value);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-2xl font-bold ${cls.text}">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
+      </div>`;
+  });
+  html += "</div>";
+
+  // --- Needs attention ---
+  const naItems = [];
+  const repImbalance = na.representation_imbalance || [];
+  if (repImbalance.length) {
+    const items = repImbalance
+      .slice(0, 5)
+      .map(
+        (s) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${s.column}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">max ratio ${s.max_ratio}</span></li>`,
+      )
+      .join("");
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Representation imbalance (${repImbalance.length})${_readinessInfoIcon("representation_imbalance")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`);
+  }
+  const minorities = na.minority_classes || [];
+  if (minorities.length) {
+    const items = minorities
+      .map(
+        (m) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${m.class}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${_pct(m.share)} share</span></li>`,
+      )
+      .join("");
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Minority classes (${minorities.length})${_readinessInfoIcon("minority_classes")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`);
+  }
+  const outcomeDisp = na.outcome_disparities || [];
+  if (outcomeDisp.length) {
+    const items = outcomeDisp
+      .map(
+        (d) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${d.class}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">TSD ${d.tsd}</span></li>`,
+      )
+      .join("");
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Outcome-rate disparities (${outcomeDisp.length})${_readinessInfoIcon("outcome_disparities")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`);
+  }
+  const cddDisp = na.cdd_disparities || [];
+  if (cddDisp.length) {
+    const items = cddDisp
+      .map((d) => `<li class="truncate">${d.group}</li>`)
+      .join("");
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-1.5 inline-flex items-center">CDD flagged groups (${cddDisp.length})${_readinessInfoIcon("cdd_disparities")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`);
+  }
+
+  if (naItems.length) {
+    html += `
+      <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+        <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
+      </div>`;
+  } else {
+    html += `
+      <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+        <p class="text-sm text-green-800 dark:text-green-400">No fairness issues detected under the automated thresholds.</p>
+      </div>`;
+  }
+
+  // --- Collapsible details (charts) ---
+  const det = fb.details || {};
+  let detailsInner = "";
+
+  const repVis = det.representation_rate?.visualizations || {};
+  for (const [col, b64] of Object.entries(repVis)) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Representation rate — ${col}</p>
+        <img src="data:image/png;base64,${b64}" alt="Representation ${col}" class="w-full max-w-2xl" />
+      </div>`;
+  }
+  if (det.representation_rate?.error && !Object.keys(repVis).length) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Representation rate: ${det.representation_rate.error}</p>`;
+  }
+
+  if (det.class_imbalance?.visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Class imbalance — ${targetCrit.selected || "target"}</p>
+        <img src="data:image/png;base64,${det.class_imbalance.visualization}" alt="Class imbalance" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (det.class_imbalance?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Class imbalance: ${det.class_imbalance.error}</p>`;
+  }
+
+  if (det.statistical_rate?.visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Statistical rate — ${det.statistical_rate.sensitive} × ${det.statistical_rate.target}</p>
+        <img src="data:image/png;base64,${det.statistical_rate.visualization}" alt="Statistical rate" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (det.statistical_rate?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Statistical rate: ${det.statistical_rate.error}</p>`;
+  }
+
+  if (det.cdd?.disparities && !det.cdd.error) {
+    const rows = Object.entries(det.cdd.disparities)
+      .map(
+        ([grp, info]) =>
+          `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${grp}</td><td class="px-3 py-2">${info.disparity}</td></tr>`,
+      )
+      .join("");
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Conditional demographic disparity (positive: ${det.cdd.positive_class})</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Group</th><th class="px-3 py-2">Disparity</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+  } else if (det.cdd?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">CDD: ${det.cdd.error}</p>`;
+  }
+
+  const excluded = sensCrit.excluded || [];
+  if (excluded.length) {
+    const items = excluded
+      .map(
+        (d) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400">${d.reason}</span></li>`,
+      )
+      .join("");
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded sensitive candidates (${excluded.length})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts &amp; CDD table
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+}
+
+// ==================== Workspace Init ====================
+
+/**
+ * Initialize the workspace after file upload.
+ * Fetches summary statistics and populates feature dropdowns.
+ */
+function initWorkspace() {
+  // Restore panel from URL hash, or default to data-overview
+  const hash = location.hash.replace("#", "");
+  const initialPanel =
+    hash && document.getElementById("panel-" + hash) ? hash : "data-overview";
+  showPanel(initialPanel, false); // false = don't push to history on init
+  // Replace current history entry so back button works from the first panel
+  history.replaceState({ panel: initialPanel }, "", "#" + initialPanel);
+
+  // Fetch + render summary statistics into the Data Overview panel
+  loadDataOverview();
 
   // Populate feature dropdowns via /feature-set (same as metric.js does)
   fetch("/feature-set", { method: "POST" })

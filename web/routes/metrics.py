@@ -1,7 +1,9 @@
 import json
 import logging
+import os
 import time
 
+import pandas as pd
 from celery.result import AsyncResult
 from web.telemetry import get_tracer, trace_metric
 from flask import (
@@ -57,6 +59,8 @@ from web.routes.utils import (
     get_result_or_default,
     is_metric_cache_valid,
     store_result,
+    summary_histograms,
+    categorical_distribution_charts,
 )
 
 metrics_bp = Blueprint("metrics", __name__)
@@ -135,6 +139,922 @@ def data_quality():
             return store_result("metrics.data_quality", final_dict)
 
     return get_result_or_default("metrics.data_quality", file_path, file_name)
+
+
+# ---------------------------------------------------------------------------
+# Readiness Report (aggregated, non-interactive)
+# ---------------------------------------------------------------------------
+
+def _grade_label(score):
+    """Map a 0–1 readiness score to a coarse status label."""
+    if score is None:
+        return "unknown"
+    if score >= 0.9:
+        return "good"
+    if score >= 0.7:
+        return "warning"
+    return "poor"
+
+
+# Dataset-overview readiness thresholds (per-feature profile)
+_OVERVIEW_MISSING_WARNING = 0.05
+_OVERVIEW_MISSING_POOR = 0.20
+_OVERVIEW_DOMINANT_WARNING = 0.95
+_OVERVIEW_HIGH_CARDINALITY = 50
+_OVERVIEW_ID_UNIQUE_RATIO = 0.9
+_OVERVIEW_CAT_TOP_N = 5
+
+
+def _classify_feature_type(series):
+    """Map a pandas Series to a coarse feature type label."""
+    if pd.api.types.is_bool_dtype(series):
+        return "boolean"
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return "datetime"
+    if pd.api.types.is_numeric_dtype(series):
+        return "numerical"
+    return "categorical"
+
+
+def _feature_readiness_status(pct_missing, n_unique, n_rows, feat_type, pct_dominant):
+    """Derive a per-feature readiness status from profile statistics."""
+    if n_unique <= 1:
+        return "poor"
+    if pct_missing is not None and pct_missing > _OVERVIEW_MISSING_POOR:
+        return "poor"
+    if n_rows > 0 and n_unique / n_rows >= _OVERVIEW_ID_UNIQUE_RATIO:
+        return "poor"
+    if pct_missing is not None and pct_missing > _OVERVIEW_MISSING_WARNING:
+        return "warning"
+    if feat_type == "categorical" and n_unique > _OVERVIEW_HIGH_CARDINALITY:
+        return "warning"
+    if pct_dominant is not None and pct_dominant > _OVERVIEW_DOMINANT_WARNING:
+        return "warning"
+    return "good"
+
+
+def _feature_summary(series, feat_type, n_unique):
+    """Build a compact, type-specific summary string for one feature."""
+    non_null = series.dropna()
+    if len(non_null) == 0:
+        return "all missing"
+
+    if feat_type == "numerical":
+        mean = non_null.mean()
+        std = non_null.std()
+        if pd.notna(std) and std > 0:
+            return f"mean {mean:.2g}, std {std:.2g}"
+        return f"min {non_null.min():.2g} – max {non_null.max():.2g}"
+
+    if feat_type == "categorical":
+        vc = non_null.value_counts(normalize=True)
+        top_val = vc.index[0]
+        top_pct = vc.iloc[0] * 100
+        return f"{top_val} ({top_pct:.0f}%), {n_unique} categories"
+
+    if feat_type == "datetime":
+        return f"{non_null.min()} – {non_null.max()}"
+
+    if feat_type == "boolean":
+        true_pct = (non_null.astype(bool)).mean() * 100
+        return f"True {true_pct:.0f}%, False {100 - true_pct:.0f}%"
+
+    return f"{n_unique} unique values"
+
+
+def _build_feature_profiles(df):
+    """Compute a per-column readiness profile for every feature in *df*."""
+    n_rows = len(df)
+    profiles = []
+    type_counts = {"numerical": 0, "categorical": 0, "datetime": 0, "boolean": 0}
+
+    for col in df.columns:
+        series = df[col]
+        feat_type = _classify_feature_type(series)
+        type_counts[feat_type] = type_counts.get(feat_type, 0) + 1
+
+        n_missing = int(series.isnull().sum())
+        pct_missing = round(n_missing / n_rows, 4) if n_rows else 0.0
+        n_unique = int(series.nunique(dropna=True))
+
+        pct_dominant = None
+        non_null = series.dropna()
+        if len(non_null) > 0:
+            pct_dominant = round(
+                float(non_null.value_counts(normalize=True).iloc[0]), 4
+            )
+
+        profiles.append({
+            "feature": str(col),
+            "type": feat_type,
+            "dtype": str(series.dtype),
+            "pct_missing": pct_missing,
+            "n_unique": n_unique,
+            "pct_dominant": pct_dominant,
+            "status": _feature_readiness_status(
+                pct_missing, n_unique, n_rows, feat_type, pct_dominant
+            ),
+            "summary": _feature_summary(series, feat_type, n_unique),
+        })
+
+    return profiles, type_counts
+
+
+def _build_categorical_distributions(df, top_n=_OVERVIEW_CAT_TOP_N):
+    """Top-*n* value counts (with percentages) for each categorical column."""
+    distributions = {}
+    for col in df.columns:
+        if _classify_feature_type(df[col]) != "categorical":
+            continue
+        vc = df[col].value_counts(dropna=True)
+        total = len(df[col].dropna())
+        if total == 0:
+            distributions[str(col)] = []
+            continue
+        entries = []
+        for val, count in vc.head(top_n).items():
+            entries.append({
+                "value": str(val),
+                "count": int(count),
+                "pct": round(float(count) / total, 4),
+            })
+        distributions[str(col)] = entries
+    return distributions
+
+
+def _build_dataset_overview_section(file_info):
+    """Build the dataset-overview portion of the readiness report.
+
+    Returns file metadata, per-feature readiness profiles, numerical describe()
+    summary, categorical top-value distributions, and numerical histograms.
+    """
+    file_path, file_name, file_type = file_info
+    df = read_file(file_info)
+    if hasattr(df, "columns"):
+        df.columns = [str(c) for c in df.columns]
+
+    n_rows = len(df)
+    profiles, type_counts = _build_feature_profiles(df)
+
+    file_size_bytes = None
+    if file_path and os.path.exists(file_path):
+        try:
+            file_size_bytes = os.path.getsize(file_path)
+        except OSError:
+            pass
+
+    memory_bytes = int(df.memory_usage(deep=True).sum())
+
+    numerical_summary = {}
+    num_df = df.select_dtypes(include="number")
+    if not num_df.empty:
+        numerical_summary = num_df.describe().map(
+            lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
+        ).to_dict()
+        for v in numerical_summary.values():
+            for old_key in list(v.keys()):
+                if old_key in ["25%", "50%", "75%"]:
+                    new_key = old_key.replace("%", "th percentile")
+                    v[new_key] = v.pop(old_key)
+
+    return {
+        "file_metadata": {
+            "file_name": file_name,
+            "file_type": file_type,
+            "file_size_bytes": file_size_bytes,
+            "memory_bytes": memory_bytes,
+            "rows": n_rows,
+            "columns": len(df.columns),
+            "numerical_count": type_counts.get("numerical", 0),
+            "categorical_count": type_counts.get("categorical", 0),
+            "datetime_count": type_counts.get("datetime", 0),
+            "boolean_count": type_counts.get("boolean", 0),
+        },
+        "feature_profiles": profiles,
+        "numerical_summary": numerical_summary,
+        "categorical_distributions": _build_categorical_distributions(df),
+        "categorical_charts": categorical_distribution_charts(df),
+        "histograms": summary_histograms(df, figsize=(7, 4.5)),
+        "profile_thresholds": {
+            "missing_warning": _OVERVIEW_MISSING_WARNING,
+            "missing_poor": _OVERVIEW_MISSING_POOR,
+            "dominant_warning": _OVERVIEW_DOMINANT_WARNING,
+            "high_cardinality": _OVERVIEW_HIGH_CARDINALITY,
+            "id_unique_ratio": _OVERVIEW_ID_UNIQUE_RATIO,
+        },
+    }
+
+
+def _build_data_quality_section(file_info):
+    """Compute the data-quality portion of the readiness report.
+
+    Runs completeness, outliers, and duplicity (the same functions backing the
+    Data Quality tab), then derives readiness-oriented KPIs (normalized so that
+    higher is always better), an overall grade, and a "needs attention" list.
+
+    Returns a JSON-serializable dict, or ``{"error": str}`` on failure.
+    """
+    section = {}
+
+    # --- Completeness -----------------------------------------------------
+    compl = completeness(file_info)
+    compl_scores = compl.get("Completeness scores", {}) or {}
+    overall_completeness = compl.get("Overall Completeness")
+
+    # --- Outliers ---------------------------------------------------------
+    out = outliers(file_info)
+    out_scores_raw = out.get("Outlier scores", {}) if isinstance(out, dict) else {}
+    overall_outlier = None
+    out_scores = {}
+    if isinstance(out_scores_raw, dict):
+        overall_outlier = out_scores_raw.get("Overall outlier score")
+        out_scores = {
+            k: v for k, v in out_scores_raw.items() if k != "Overall outlier score"
+        }
+    outliers_error = out.get("Error") if isinstance(out, dict) else None
+
+    # --- Duplicity --------------------------------------------------------
+    dup = duplicity(file_info)
+    overall_duplicity = (
+        dup.get("Duplicity scores", {}).get("Overall duplicity of the dataset")
+        if isinstance(dup, dict)
+        else None
+    )
+
+    # --- Normalized KPIs (higher = better) --------------------------------
+    completeness_kpi = overall_completeness
+    uniqueness_kpi = (1 - overall_duplicity) if overall_duplicity is not None else None
+    outlier_clean_kpi = (1 - overall_outlier) if overall_outlier is not None else None
+
+    kpis = [
+        {
+            "id": "completeness",
+            "label": "Completeness",
+            "value": completeness_kpi,
+            "status": _grade_label(completeness_kpi),
+            "hint": "Share of non-missing values across the dataset.",
+        },
+        {
+            "id": "uniqueness",
+            "label": "Uniqueness",
+            "value": uniqueness_kpi,
+            "status": _grade_label(uniqueness_kpi),
+            "hint": "1 − proportion of duplicate rows.",
+        },
+        {
+            "id": "outlier_cleanliness",
+            "label": "Outlier-cleanliness",
+            "value": outlier_clean_kpi,
+            "status": _grade_label(outlier_clean_kpi),
+            "hint": "1 − mean outlier proportion (IQR method) across numerical features.",
+        },
+    ]
+
+    present = [k["value"] for k in kpis if k["value"] is not None]
+    grade = sum(present) / len(present) if present else None
+
+    # --- Needs attention --------------------------------------------------
+    incomplete = sorted(
+        (
+            {"feature": col, "completeness": score}
+            for col, score in compl_scores.items()
+            if isinstance(score, (int, float)) and score < 1.0
+        ),
+        key=lambda x: x["completeness"],
+    )
+    high_outliers = sorted(
+        (
+            {"feature": col, "outlier_proportion": score}
+            for col, score in out_scores.items()
+            if isinstance(score, (int, float)) and score > 0
+        ),
+        key=lambda x: x["outlier_proportion"],
+        reverse=True,
+    )
+
+    section = {
+        "grade": grade,
+        "grade_status": _grade_label(grade),
+        "kpis": kpis,
+        "needs_attention": {
+            "incomplete_features": incomplete,
+            "outlier_features": high_outliers,
+            "duplicate_rows": (
+                overall_duplicity if overall_duplicity not in (None, 0) else 0
+            ),
+        },
+        "details": {
+            "completeness": {
+                "overall": overall_completeness,
+                "scores": compl_scores,
+                "visualization": compl.get("Completeness Visualization"),
+            },
+            "outliers": {
+                "overall": overall_outlier,
+                "scores": out_scores,
+                "visualization": out.get("Outliers Visualization") if isinstance(out, dict) else None,
+                "error": outliers_error,
+            },
+            "duplicity": {"overall": overall_duplicity},
+        },
+    }
+    return section
+
+
+# Impact-on-AI tuning constants
+_CORR_MAX_COLUMNS = 25          # cap analysed columns to keep heatmaps readable
+_CORR_HIGH_CARD_MAX = 50        # drop categorical columns with more unique values
+_CORR_ID_UNIQUE_RATIO = 0.9     # drop categorical columns that look like IDs
+_CORR_REDUNDANT_THRESHOLD = 0.8 # |score| at/above which a pair is "redundant"
+_CORR_LEAKAGE_THRESHOLD = 0.95  # |score| at/above which a pair is "leakage risk"
+_CORR_ISOLATED_THRESHOLD = 0.1  # max |score| below which a feature is "isolated"
+
+
+def _prune_columns_for_corr(df):
+    """Select columns worth feeding into the all-pairs correlation analysis.
+
+    Drops columns that are useless or pathological for correlation:
+    constants, ID-like / high-cardinality categoricals. Numerical columns are
+    always kept (they are cheap to correlate). The result is capped at
+    ``_CORR_MAX_COLUMNS`` (numerical prioritized) to keep the computation and
+    heatmaps tractable.
+
+    Returns ``(kept_columns, dropped)`` where *dropped* is a list of
+    ``{"feature": str, "reason": str}``.
+    """
+    n_rows = max(len(df), 1)
+    numeric_cols = list(df.select_dtypes(exclude=["object", "string", "category"]).columns)
+    categorical_cols = list(df.select_dtypes(include=["object", "string", "category"]).columns)
+
+    kept_numeric = []
+    kept_categorical = []
+    dropped = []
+
+    for col in numeric_cols:
+        if df[col].nunique(dropna=True) <= 1:
+            dropped.append({"feature": col, "reason": "constant column"})
+        else:
+            kept_numeric.append(col)
+
+    for col in categorical_cols:
+        nunique = df[col].nunique(dropna=True)
+        if nunique <= 1:
+            dropped.append({"feature": col, "reason": "constant column"})
+        elif nunique / n_rows >= _CORR_ID_UNIQUE_RATIO:
+            dropped.append({"feature": col, "reason": "ID-like (near-unique values)"})
+        elif nunique > _CORR_HIGH_CARD_MAX:
+            dropped.append({"feature": col, "reason": f"high cardinality ({nunique} categories)"})
+        else:
+            kept_categorical.append(col)
+
+    # Cap total columns, prioritizing numerical features
+    kept = kept_numeric + kept_categorical
+    if len(kept) > _CORR_MAX_COLUMNS:
+        for col in kept[_CORR_MAX_COLUMNS:]:
+            dropped.append({"feature": col, "reason": "exceeded column cap"})
+        kept = kept[:_CORR_MAX_COLUMNS]
+
+    return kept, dropped
+
+
+def _pairwise_signals(scores):
+    """Derive readiness signals from a flat ``{"a vs b": score}`` mapping.
+
+    Collapses the symmetric/asymmetric directional entries into one record per
+    unordered pair (keeping the largest-magnitude score), then classifies pairs
+    as redundant or leakage-risk and flags features that are not meaningfully
+    related to anything else ("isolated").
+    """
+    pair_max = {}
+    for key, val in scores.items():
+        if " vs " not in key or not isinstance(val, (int, float)):
+            continue
+        a, b = key.split(" vs ", 1)
+        if a == b:
+            continue
+        ukey = tuple(sorted([a, b]))
+        abs_score = abs(val)
+        if ukey not in pair_max or abs_score > pair_max[ukey]["abs_score"]:
+            pair_max[ukey] = {
+                "a": ukey[0],
+                "b": ukey[1],
+                "score": round(float(val), 3),
+                "abs_score": abs_score,
+            }
+
+    pairs = list(pair_max.values())
+    pairs.sort(key=lambda p: p["abs_score"], reverse=True)
+
+    leakage = [
+        {"a": p["a"], "b": p["b"], "score": p["score"]}
+        for p in pairs
+        if p["abs_score"] >= _CORR_LEAKAGE_THRESHOLD
+    ]
+    redundant = [
+        {"a": p["a"], "b": p["b"], "score": p["score"]}
+        for p in pairs
+        if _CORR_REDUNDANT_THRESHOLD <= p["abs_score"] < _CORR_LEAKAGE_THRESHOLD
+    ]
+    top = [{"a": p["a"], "b": p["b"], "score": p["score"]} for p in pairs[:8]]
+
+    # Per-feature connectivity: the strongest relationship each feature has
+    connectivity = {}
+    for p in pairs:
+        connectivity[p["a"]] = max(connectivity.get(p["a"], 0.0), p["abs_score"])
+        connectivity[p["b"]] = max(connectivity.get(p["b"], 0.0), p["abs_score"])
+    isolated = sorted(
+        f for f, c in connectivity.items() if c < _CORR_ISOLATED_THRESHOLD
+    )
+
+    return {
+        "redundant": redundant,
+        "leakage": leakage,
+        "top": top,
+        "isolated": isolated,
+    }
+
+
+def _build_impact_on_ai_section(file_info):
+    """Compute the Impact-on-AI portion of the readiness report.
+
+    Runs an automated, non-interactive all-pairs correlation analysis (numerical
+    via vectorized pandas correlation, categorical via Theil's U) over a pruned,
+    capped set of columns, then derives redundancy / leakage / isolation signals.
+
+    Returns a JSON-serializable dict, or ``{"error": str}`` on failure.
+    """
+    df = read_file(file_info)
+    if hasattr(df, "columns"):
+        df.columns = [str(c) for c in df.columns]
+
+    kept, dropped = _prune_columns_for_corr(df)
+    if len(kept) < 2:
+        return {
+            "error": "Not enough usable columns for correlation analysis after pruning.",
+            "columns_analyzed": len(kept),
+            "columns_dropped": dropped,
+        }
+
+    corr = calc_correlations(kept, file_info)
+    if isinstance(corr, dict) and "Message" in corr:
+        return {"error": corr["Message"], "columns_dropped": dropped}
+
+    scores = corr.get("Correlation Scores", {}) if isinstance(corr, dict) else {}
+    signals = _pairwise_signals(scores)
+    cat = corr.get("Correlations Analysis Categorical", {}) or {}
+    num = corr.get("Correlations Analysis Numerical", {}) or {}
+
+    return {
+        "columns_analyzed": len(kept),
+        "columns_dropped": dropped,
+        "redundant_pairs": signals["redundant"],
+        "leakage_pairs": signals["leakage"],
+        "isolated_features": signals["isolated"],
+        "top_pairs": signals["top"],
+        "details": {
+            "categorical_visualization": cat.get(
+                "Correlations Analysis Categorical Visualization"
+            ),
+            "numerical_visualization": num.get(
+                "Correlations Analysis Numerical Visualization"
+            ),
+            "numerical_method": num.get("Method"),
+        },
+    }
+
+
+# Fairness & Bias tuning constants
+_FAIRNESS_SENSITIVE_MIN_UNIQUE = 2
+_FAIRNESS_SENSITIVE_MAX_UNIQUE = 30
+_FAIRNESS_MAX_SENSITIVE_COLS = 5
+_FAIRNESS_ID_UNIQUE_RATIO = 0.9
+_FAIRNESS_TARGET_MAX_UNIQUE = 30
+_FAIRNESS_REP_RATIO_FLAG = 3.0       # probability ratio at/above which representation is flagged
+_FAIRNESS_MINORITY_SHARE = 0.05      # class share below which a label is "minority"
+_FAIRNESS_IMBALANCE_GOOD = 0.5       # imbalance degree below this → good
+_FAIRNESS_IMBALANCE_WARNING = 1.0    # below this → warning, else poor
+_FAIRNESS_TSD_FLAG = 0.15            # TSD above this → outcome-rate disparity flagged
+_FAIRNESS_SENSITIVE_NAME_HINTS = (
+    "gender", "sex", "race", "ethnic", "age", "religion", "marital",
+    "disability", "national", "origin", "minority",
+)
+_FAIRNESS_TARGET_NAME_HINTS = (
+    "label", "target", "class", "outcome", "decision", "y", "income",
+)
+
+
+def _fairness_name_hint_score(col_name, hints):
+    """Return a higher score when *col_name* matches an earlier hint substring."""
+    lower = col_name.lower()
+    best = 0
+    for i, hint in enumerate(hints):
+        if hint in lower:
+            best = max(best, len(hints) - i)
+    return best
+
+
+def _auto_select_fairness_columns(df):
+    """Pick sensitive attributes and a target column for automated fairness checks.
+
+    Returns a dict with selected columns, exclusion reasons, and the
+    auto-selected positive class (mode of the target) for CDD.
+    """
+    n_rows = max(len(df), 1)
+    cat_cols = list(df.select_dtypes(include=["object", "string", "category"]).columns)
+
+    sensitive_candidates = []
+    excluded_sensitive = []
+
+    for col in cat_cols:
+        nunique = df[col].nunique(dropna=True)
+        if nunique < _FAIRNESS_SENSITIVE_MIN_UNIQUE:
+            excluded_sensitive.append({"feature": col, "reason": "constant column"})
+        elif nunique > _FAIRNESS_SENSITIVE_MAX_UNIQUE:
+            excluded_sensitive.append({
+                "feature": col,
+                "reason": f"high cardinality ({nunique} categories, max {_FAIRNESS_SENSITIVE_MAX_UNIQUE})",
+            })
+        elif nunique / n_rows >= _FAIRNESS_ID_UNIQUE_RATIO:
+            excluded_sensitive.append({"feature": col, "reason": "ID-like (near-unique values)"})
+        else:
+            sensitive_candidates.append({
+                "feature": col,
+                "nunique": int(nunique),
+                "name_hint_score": _fairness_name_hint_score(col, _FAIRNESS_SENSITIVE_NAME_HINTS),
+            })
+
+    sensitive_candidates.sort(
+        key=lambda c: (-c["name_hint_score"], c["nunique"], c["feature"])
+    )
+    selected_sensitive = [c["feature"] for c in sensitive_candidates[:_FAIRNESS_MAX_SENSITIVE_COLS]]
+    for c in sensitive_candidates[_FAIRNESS_MAX_SENSITIVE_COLS:]:
+        excluded_sensitive.append({"feature": c["feature"], "reason": "exceeded sensitive-column cap"})
+
+    # Target: low-cardinality columns (2–30 unique), prefer name hints; exclude sensitives
+    target_candidates = []
+    sensitive_set = set(selected_sensitive)
+    for col in df.columns:
+        if col in sensitive_set:
+            continue
+        nunique = df[col].nunique(dropna=True)
+        if _FAIRNESS_SENSITIVE_MIN_UNIQUE <= nunique <= _FAIRNESS_TARGET_MAX_UNIQUE:
+            target_candidates.append({
+                "feature": col,
+                "nunique": int(nunique),
+                "name_hint_score": _fairness_name_hint_score(col, _FAIRNESS_TARGET_NAME_HINTS),
+            })
+
+    target_candidates.sort(
+        key=lambda c: (-c["name_hint_score"], c["nunique"], c["feature"])
+    )
+    target_col = target_candidates[0]["feature"] if target_candidates else None
+    target_reason = None
+    if target_col:
+        tc = target_candidates[0]
+        if tc["name_hint_score"] > 0:
+            target_reason = "matched target name hint"
+        elif tc == target_candidates[-1] and len(target_candidates) == 1:
+            target_reason = "only eligible low-cardinality column"
+        else:
+            target_reason = "lowest-cardinality eligible column (after name-hint priority)"
+
+    positive_class = None
+    positive_reason = None
+    if target_col is not None:
+        target_series = df[target_col].dropna()
+        if len(target_series) > 0:
+            positive_class = target_series.mode().iloc[0]
+            positive_reason = "most frequent class in auto-selected target"
+
+    primary_sensitive = selected_sensitive[0] if selected_sensitive else None
+
+    return {
+        "sensitive_columns": selected_sensitive,
+        "primary_sensitive": primary_sensitive,
+        "target_column": target_col,
+        "positive_class": positive_class,
+        "selection_criteria": {
+            "sensitive_attributes": {
+                "rule": (
+                    f"Categorical columns with {_FAIRNESS_SENSITIVE_MIN_UNIQUE}–"
+                    f"{_FAIRNESS_SENSITIVE_MAX_UNIQUE} unique values, excluding "
+                    "ID-like columns; prefer name hints "
+                    f"{list(_FAIRNESS_SENSITIVE_NAME_HINTS)}; "
+                    f"capped at {_FAIRNESS_MAX_SENSITIVE_COLS}."
+                ),
+                "name_hints": list(_FAIRNESS_SENSITIVE_NAME_HINTS),
+                "selected": selected_sensitive,
+                "excluded": excluded_sensitive,
+            },
+            "target_column": {
+                "rule": (
+                    f"Columns with {_FAIRNESS_SENSITIVE_MIN_UNIQUE}–{_FAIRNESS_TARGET_MAX_UNIQUE} "
+                    "unique values, excluding auto-selected sensitive columns; "
+                    "prefer name hints "
+                    f"{list(_FAIRNESS_TARGET_NAME_HINTS)}."
+                ),
+                "name_hints": list(_FAIRNESS_TARGET_NAME_HINTS),
+                "selected": target_col,
+                "reason": target_reason,
+            },
+            "positive_class": {
+                "rule": "Most frequent value in the auto-selected target (used for CDD only).",
+                "selected": str(positive_class) if positive_class is not None else None,
+                "reason": positive_reason,
+            },
+            "thresholds": {
+                "representation_ratio_flag": _FAIRNESS_REP_RATIO_FLAG,
+                "minority_class_share": _FAIRNESS_MINORITY_SHARE,
+                "imbalance_degree_good": _FAIRNESS_IMBALANCE_GOOD,
+                "imbalance_degree_warning": _FAIRNESS_IMBALANCE_WARNING,
+                "tsd_disparity_flag": _FAIRNESS_TSD_FLAG,
+            },
+        },
+    }
+
+
+def _parse_representation_flags(ratios_dict):
+    """Extract per-column max probability ratio and flag extreme imbalance."""
+    by_column = {}
+    if not isinstance(ratios_dict, dict) or "Error" in ratios_dict:
+        return [], None, ratios_dict.get("Error") if isinstance(ratios_dict, dict) else None
+
+    for key, ratio in ratios_dict.items():
+        if not isinstance(ratio, (int, float)) or "Column: '" not in key:
+            continue
+        # Key format: Column: 'col', Probability ratio for 'A' to 'B'
+        try:
+            col_part = key.split("Column: '", 1)[1]
+            col = col_part.split("',", 1)[0]
+        except IndexError:
+            continue
+        entry = by_column.setdefault(col, {"column": col, "max_ratio": 0.0, "flagged_pairs": []})
+        r = float(ratio)
+        if r > entry["max_ratio"]:
+            entry["max_ratio"] = round(r, 3)
+        if r >= _FAIRNESS_REP_RATIO_FLAG:
+            pair_part = key.split("Probability ratio for ", 1)[-1]
+            entry["flagged_pairs"].append({"pair": pair_part, "ratio": round(r, 3)})
+
+    summaries = sorted(by_column.values(), key=lambda x: x["max_ratio"], reverse=True)
+    worst = summaries[0]["max_ratio"] if summaries else None
+    rep_balance_kpi = min(1.0, 1.0 / worst) if worst and worst > 0 else None
+    return summaries, rep_balance_kpi, None
+
+
+def _imbalance_status(id_score):
+    if id_score is None:
+        return "unknown"
+    if id_score < _FAIRNESS_IMBALANCE_GOOD:
+        return "good"
+    if id_score < _FAIRNESS_IMBALANCE_WARNING:
+        return "warning"
+    return "poor"
+
+
+def _build_fairness_bias_section(file_info):
+    """Compute the Fairness & Bias portion of the readiness report.
+
+    Auto-selects sensitive attributes and a target, then runs representation
+    rate, class imbalance, statistical rate, and conditional demographic
+    disparity using the same functions as the Fairness & Bias tab.
+    """
+    df = read_file(file_info)
+    if hasattr(df, "columns"):
+        df.columns = [str(c) for c in df.columns]
+
+    selection = _auto_select_fairness_columns(df)
+    sensitive_cols = selection["sensitive_columns"]
+    target_col = selection["target_column"]
+    primary_sensitive = selection["primary_sensitive"]
+    positive_class = selection["positive_class"]
+
+    kpis = []
+    needs_attention = {
+        "representation_imbalance": [],
+        "minority_classes": [],
+        "outcome_disparities": [],
+        "cdd_disparities": [],
+    }
+    details = {}
+
+    # --- Representation Rate (all selected sensitive columns) ---------------
+    rep_error = None
+    rep_balance_kpi = None
+    if sensitive_cols:
+        ratios = calculate_representation_rate(sensitive_cols, file_info)
+        rep_summaries, rep_balance_kpi, rep_error = _parse_representation_flags(ratios)
+        needs_attention["representation_imbalance"] = [
+            s for s in rep_summaries if s["max_ratio"] >= _FAIRNESS_REP_RATIO_FLAG
+        ]
+        rep_visualizations = {}
+        for col in sensitive_cols:
+            try:
+                vis = create_representation_rate_vis([col], file_info)
+                if isinstance(vis, str):
+                    rep_visualizations[col] = vis
+            except Exception:
+                pass
+        details["representation_rate"] = {
+            "ratios": ratios if not rep_error else None,
+            "summaries": rep_summaries,
+            "visualizations": rep_visualizations,
+            "error": rep_error,
+        }
+    else:
+        details["representation_rate"] = {
+            "error": "No eligible sensitive-attribute columns found.",
+        }
+
+    kpis.append({
+        "id": "representation_balance",
+        "label": "Representation balance",
+        "value": rep_balance_kpi,
+        "status": _grade_label(rep_balance_kpi),
+        "hint": f"1 / worst group probability ratio (flagged when ratio ≥ {_FAIRNESS_REP_RATIO_FLAG}).",
+    })
+
+    # --- Class Imbalance (auto target) --------------------------------------
+    imbalance_degree = None
+    ci_error = None
+    if target_col:
+        ci_dict = _compute_class_imbalance(df, target_col, "EU")
+        if "Error" in ci_dict:
+            ci_error = ci_dict["Error"]
+        else:
+            imb = ci_dict.get("Imbalance degree") or {}
+            imbalance_degree = imb.get("Imbalance Degree score")
+            details["class_imbalance"] = {
+                "visualization": ci_dict.get("Class Imbalance Visualization"),
+                "imbalance_degree": imbalance_degree,
+            }
+            # Minority classes
+            vc = df[target_col].value_counts(normalize=True, dropna=True)
+            for cls, share in vc.items():
+                if share < _FAIRNESS_MINORITY_SHARE:
+                    needs_attention["minority_classes"].append({
+                        "class": str(cls),
+                        "share": round(float(share), 4),
+                    })
+    else:
+        details["class_imbalance"] = {"error": "No eligible target column found."}
+
+    label_balance_kpi = (
+        max(0.0, 1.0 - min(float(imbalance_degree) / 2.0, 1.0))
+        if imbalance_degree is not None
+        else None
+    )
+    kpis.append({
+        "id": "label_balance",
+        "label": "Label balance",
+        "value": label_balance_kpi,
+        "status": _imbalance_status(imbalance_degree),
+        "hint": (
+            f"Derived from Imbalance Degree (EU); 0 = balanced. "
+            f"Good < {_FAIRNESS_IMBALANCE_GOOD}, warning < {_FAIRNESS_IMBALANCE_WARNING}."
+        ),
+        "raw_imbalance_degree": imbalance_degree,
+    })
+
+    # --- Statistical Rate (primary sensitive + target) ----------------------
+    disparity_kpi = None
+    if primary_sensitive and target_col:
+        sr = calculate_statistical_rates(target_col, primary_sensitive, file_info)
+        if isinstance(sr, dict) and "Error" in sr:
+            details["statistical_rate"] = {"error": sr["Error"]}
+        else:
+            tsd_scores = sr.get("TSD scores") or {}
+            flagged = [
+                {"class": str(cls), "tsd": round(float(score), 4)}
+                for cls, score in tsd_scores.items()
+                if isinstance(score, (int, float)) and float(score) >= _FAIRNESS_TSD_FLAG
+            ]
+            flagged.sort(key=lambda x: x["tsd"], reverse=True)
+            needs_attention["outcome_disparities"] = flagged
+            max_tsd = max(
+                (float(v) for v in tsd_scores.values() if isinstance(v, (int, float))),
+                default=None,
+            )
+            disparity_kpi = max(0.0, 1.0 - min(max_tsd, 1.0)) if max_tsd is not None else None
+            details["statistical_rate"] = {
+                "sensitive": primary_sensitive,
+                "target": target_col,
+                "tsd_scores": tsd_scores,
+                "visualization": sr.get("Statistical Rate Visualization"),
+            }
+    else:
+        details["statistical_rate"] = {
+            "error": "Requires both a sensitive attribute and a target column.",
+        }
+
+    kpis.append({
+        "id": "outcome_parity",
+        "label": "Outcome parity",
+        "value": disparity_kpi,
+        "status": _grade_label(disparity_kpi),
+        "hint": (
+            f"1 − max TSD across classes (flagged when TSD ≥ {_FAIRNESS_TSD_FLAG}). "
+            "Uses primary sensitive attribute."
+        ),
+    })
+
+    # --- Conditional Demographic Disparity ----------------------------------
+    if primary_sensitive and target_col and positive_class is not None:
+        try:
+            cdd = conditional_demographic_disparity(
+                df[target_col].tolist(),
+                df[primary_sensitive].tolist(),
+                positive_class,
+            )
+            if isinstance(cdd, dict) and "Error" in cdd:
+                details["cdd"] = {"error": cdd["Error"]}
+            else:
+                disparities = (cdd or {}).get("Disparities") or {}
+                cdd_flagged = [
+                    {"group": str(grp), "disparity": info.get("disparity")}
+                    for grp, info in disparities.items()
+                    if str(info.get("disparity", "")).lower() == "true"
+                ]
+                needs_attention["cdd_disparities"] = cdd_flagged
+                details["cdd"] = {
+                    "sensitive": primary_sensitive,
+                    "target": target_col,
+                    "positive_class": str(positive_class),
+                    "disparities": disparities,
+                }
+        except Exception as e:
+            details["cdd"] = {"error": str(e)}
+    else:
+        details["cdd"] = {
+            "error": "Requires sensitive attribute, target, and auto-positive class.",
+        }
+
+    present = [k["value"] for k in kpis if k["value"] is not None]
+    grade = sum(present) / len(present) if present else None
+
+    return {
+        "grade": grade,
+        "grade_status": _grade_label(grade),
+        "auto_selection": selection,
+        "kpis": kpis,
+        "needs_attention": needs_attention,
+        "details": details,
+    }
+
+
+@metrics_bp.route("/readiness-report", methods=["GET"])
+def readiness_report():
+    """Return an aggregated, non-interactive data-readiness report as JSON.
+
+    Covers dataset overview, Data Quality, Impact-on-AI, and Fairness & Bias.
+    Designed to be extended with more pillars over time.
+    """
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+
+    if not file_path:
+        return jsonify({"success": False, "message": "No file uploaded"}), 200
+
+    file_info = (file_path, file_name, file_type)
+    start_time = time.time()
+    try:
+        try:
+            dataset_overview_section = _build_dataset_overview_section(file_info)
+        except Exception as e:
+            metric_time_log.error("Readiness report — dataset overview error: %s", e, exc_info=True)
+            dataset_overview_section = {"error": f"{type(e).__name__}: {e}"}
+
+        try:
+            data_quality_section = _build_data_quality_section(file_info)
+        except Exception as e:
+            metric_time_log.error("Readiness report — data quality error: %s", e, exc_info=True)
+            data_quality_section = {"error": f"{type(e).__name__}: {e}"}
+
+        try:
+            impact_section = _build_impact_on_ai_section(file_info)
+        except Exception as e:
+            metric_time_log.error("Readiness report — impact on AI error: %s", e, exc_info=True)
+            impact_section = {"error": f"{type(e).__name__}: {e}"}
+
+        try:
+            fairness_section = _build_fairness_bias_section(file_info)
+        except Exception as e:
+            metric_time_log.error("Readiness report — fairness & bias error: %s", e, exc_info=True)
+            fairness_section = {"error": f"{type(e).__name__}: {e}"}
+
+        response = ensure_json_serializable({
+            "success": True,
+            "dataset_overview": dataset_overview_section,
+            "data_quality": data_quality_section,
+            "impact_on_ai": impact_section,
+            "fairness_bias": fairness_section,
+        })
+        metric_time_log.info("Readiness report built in %.2f seconds", time.time() - start_time)
+        return jsonify(response)
+    except Exception as e:
+        metric_time_log.error("Readiness report error: %s", e, exc_info=True)
+        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 200
 
 
 # ---------------------------------------------------------------------------
