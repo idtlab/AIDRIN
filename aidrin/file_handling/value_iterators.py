@@ -167,6 +167,7 @@ def _hdf5_missing_mask(dataset, values, display_name):
         return missing_mask
 
     matched = set()
+    fill_match_count = 0
     for fill_value in all_fills:
         try:
             fill_mask = values == fill_value
@@ -174,30 +175,30 @@ def _hdf5_missing_mask(dataset, values, display_name):
             continue
         if np.any(fill_mask):
             matched.add(fill_value)
+            fill_match_count += int(np.asarray(fill_mask).sum())
             missing_mask |= fill_mask
 
     if not matched:
         return missing_mask
 
-    n_replaced = int(missing_mask.sum())
     uncertain_matched = matched & uncertain_fills
     if uncertain_matched:
         logger.warning(
             "Dataset '%s': %d/%d value(s) match the HDF5 default fill value %s "
-            "and will be replaced with NaN. If zero is a valid measurement here "
+            "and will be marked as missing. If zero is a valid measurement here "
             "(e.g. counts, indices), set a '_FillValue' attribute in the file to "
             "an unambiguous sentinel, or pass fill_values=[] at construction time "
-            "to suppress native fill value replacement.",
+            "to suppress native fill value missing handling.",
             display_name,
-            n_replaced,
+            fill_match_count,
             values.size,
             uncertain_matched,
         )
     else:
         logger.info(
-            "Dataset '%s': replaced %d/%d value(s) matching explicit fill sentinel(s) %s with NaN.",
+            "Dataset '%s': marked %d/%d value(s) matching explicit fill sentinel(s) %s as missing.",
             display_name,
-            n_replaced,
+            fill_match_count,
             values.size,
             matched,
         )

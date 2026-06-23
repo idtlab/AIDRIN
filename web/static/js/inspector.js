@@ -876,7 +876,7 @@ function renderScoresSection(scores, depth) {
     else if (
       key === "apply_remedy" &&
       typeof value === "string" &&
-      value.includes("/download-remedy/")
+      value.startsWith("/download-remedy/")
     ) {
       html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">`;
       html += `<span class="font-medium text-gray-900 dark:text-white">Remedied Dataset</span>`;
@@ -888,8 +888,8 @@ function renderScoresSection(scores, depth) {
     // Scalar → Flowbite list-group style row
     else {
       html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700 last:border-b-0">`;
-      html += `<span class="font-medium text-gray-900 dark:text-white">${key}</span>`;
-      html += `<span class="font-mono text-xs text-gray-500 dark:text-gray-400">${formatValue(value)}</span>`;
+      html += `<span class="font-medium text-gray-900 dark:text-white">${escapeHtml(key)}</span>`;
+      html += `<span class="font-mono text-xs text-gray-500 dark:text-gray-400">${escapeHtml(formatValue(value))}</span>`;
       html += `</div>`;
     }
   }
@@ -1393,8 +1393,9 @@ function initCustomOutlierEditor() {
   if (addButton) {
     addButton.addEventListener("click", () => addCustomOutlierRuleRow());
   }
-  if (document.getElementById("custom-outlier-editor")) {
-    loadCustomOutlierTargets();
+  const checkbox = document.getElementById("toggleButton_custom_outliers");
+  if (document.getElementById("custom-outlier-editor") && checkbox?.checked) {
+    toggleCustomOutlierEditor(checkbox);
   }
 }
 

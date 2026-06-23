@@ -79,6 +79,7 @@ def _validate_rules(rules):
         raise ValueError("custom outlier rules must be a non-empty list")
 
     seen_ids = set()
+    seen_keys = {}
     validated = []
     for index, raw_rule in enumerate(rules):
         if not isinstance(raw_rule, dict):
@@ -90,6 +91,13 @@ def _validate_rules(rules):
         if rule_id in seen_ids:
             raise ValueError(f"Duplicate custom outlier rule id: {rule_id}")
         seen_ids.add(rule_id)
+        rule_key = _internal_rule_key(rule_id)
+        if rule_key in seen_keys:
+            raise ValueError(
+                "Custom outlier rule ids resolve to the same output key: "
+                f"{seen_keys[rule_key]} and {rule_id}"
+            )
+        seen_keys[rule_key] = rule_id
 
         target = str(raw_rule.get("target", "")).strip()
         if not target:
@@ -201,7 +209,7 @@ def _build_missing_checker(block):
 
 def _invalid_reason(rule, value):
     if rule["criteria_type"] == "range":
-        numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        numeric = pd.to_numeric(value, errors="coerce")
         if pd.isna(numeric):
             return "non_numeric"
         number = float(numeric)
