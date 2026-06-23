@@ -81,7 +81,21 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
                 "a higher proportion of duplicated data points."
             )
             result["Duplicity"] = r
+        if "custom_outliers" in selected:
+            rules = params.get("custom_outlier_rules", [])
+            max_outliers = params.get("max_outliers", 100)
+            r = aidrin.calculate_custom_outliers(file_info, rules, max_outliers=max_outliers)
+            r["Description"] = (
+                "Custom criteria outliers are values that violate user-defined range "
+                "or regex rules on selected columns or native HDF5 datasets."
+            )
+            result["Custom Criteria Outliers"] = r
         return result
+
+    def _custom_outlier_targets():
+        """Discover selectable custom-outlier targets on the remote file."""
+        from aidrin.file_handling.value_iterators import iter_targets
+        return {"success": True, "targets": iter_targets(file_info)}
 
     def _summary_statistics():
         """Compute summary statistics + histograms on the remote file."""
@@ -220,6 +234,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     dispatch = {
         "summary_statistics": _summary_statistics,
         "data_quality": _data_quality,
+        "custom_outlier_targets": _custom_outlier_targets,
         "completeness": lambda: aidrin.calculate_completeness(file_info),
         "outliers": lambda: aidrin.calculate_outliers(file_info),
         "duplicates": lambda: aidrin.calculate_duplicates(file_info),

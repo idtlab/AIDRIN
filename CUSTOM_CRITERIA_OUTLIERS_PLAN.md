@@ -12,8 +12,8 @@ Implement this as an additive, minimal-impact feature. Existing Data Quality met
 - [x] Milestone 1 tests: Cover CSV/HDF5 targets, range/regex rules, missing/fill handling, validation, and preview caps.
 - [x] Milestone 2: Add local Flask route integration, target discovery, UI rule editor, and renderer escaping.
 - [x] Milestone 2 tests: Cover local `/data-quality` custom rules, target discovery, renderer escaping, and existing metric regressions.
-- [ ] Milestone 3: Add Globus target discovery/submission/remote dispatch behavior.
-- [ ] Milestone 3 tests: Cover Globus custom-criteria params and remote bundled results.
+- [x] Milestone 3: Add Globus target discovery/submission/remote dispatch behavior.
+- [x] Milestone 3 tests: Cover Globus custom-criteria params and remote bundled results.
 - [ ] Final validation: Run the full available test suite.
 - [ ] Delivery: Commit each milestone, push a branch, open PR over `develop`, monitor CI, and fix root causes until checks pass.
 

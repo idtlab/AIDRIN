@@ -1410,6 +1410,9 @@ function toggleCustomOutlierEditor(checkbox) {
 
 function loadCustomOutlierTargets() {
   const message = document.getElementById("custom-outlier-message");
+  if (window.AIDRIN_GLOBUS_MODE) {
+    return loadGlobusCustomOutlierTargets(message);
+  }
   return fetch("/custom-outlier-targets", { method: "POST" })
     .then((r) => r.json())
     .then((data) => {
@@ -1428,6 +1431,84 @@ function loadCustomOutlierTargets() {
         message.classList.remove("hidden");
       }
     });
+}
+
+function loadGlobusCustomOutlierTargets(message) {
+  const endpointId = window.AIDRIN_GLOBUS_ENDPOINT || "";
+  const filePath = window.AIDRIN_GLOBUS_FILE_PATH || "";
+  const fileName = window.AIDRIN_GLOBUS_FILE_NAME || "";
+  const fileType = window.AIDRIN_GLOBUS_FILE_TYPE || "";
+  if (!endpointId || !filePath) {
+    if (message) {
+      message.textContent = "Remote target discovery requires a loaded Globus file.";
+      message.classList.remove("hidden");
+    }
+    return Promise.resolve();
+  }
+  if (message) {
+    message.textContent = "Loading remote targets...";
+    message.classList.remove("hidden");
+  }
+  return fetch("/globus/submit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      endpoint_id: endpointId,
+      file_path: filePath,
+      file_name: fileName,
+      file_type: fileType,
+      metric_name: "custom_outlier_targets",
+      params: {},
+    }),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.error) throw new Error(data.error);
+      if (!data.task_id) return data.result || data;
+      return pollGlobusCustomOutlierTargets(data.task_id);
+    })
+    .then((result) => {
+      if (result && result.success) {
+        customOutlierTargets = result.targets || [];
+        updateCustomOutlierTargetOptions();
+        if (message) message.classList.add("hidden");
+      } else if (message) {
+        message.textContent =
+          (result && (result.message || result.error)) ||
+          "Remote target discovery failed.";
+        message.classList.remove("hidden");
+      }
+    })
+    .catch((err) => {
+      if (message) {
+        message.textContent = "Remote target discovery failed: " + err.message;
+        message.classList.remove("hidden");
+      }
+    });
+}
+
+function pollGlobusCustomOutlierTargets(taskId) {
+  let attempts = 0;
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      attempts += 1;
+      fetch(`/globus/check-task/${taskId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.status === "completed") {
+            resolve(data.result);
+          } else if (data.status === "failed") {
+            reject(new Error(data.error || "Task failed"));
+          } else if (attempts < 150) {
+            setTimeout(poll, 2000);
+          } else {
+            reject(new Error("Timed out waiting for remote target discovery"));
+          }
+        })
+        .catch(reject);
+    };
+    poll();
+  });
 }
 
 function addCustomOutlierRuleRow() {
