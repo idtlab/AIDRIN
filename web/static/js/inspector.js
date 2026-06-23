@@ -10,6 +10,8 @@
 let activePanel = "data-overview";
 let codeMirrorEditor = null;
 let lastMetricResult = null; // Store last result for JSON download
+let customOutlierTargets = [];
+let customOutlierRuleCounter = 0;
 
 /**
  * Show a metric panel by ID, hiding all others.
@@ -231,6 +233,7 @@ document.addEventListener("DOMContentLoaded", function () {
       sidebar.classList.toggle("-translate-x-full");
     });
   }
+  initCustomOutlierEditor();
 });
 
 // ==================== Form Submission ====================
@@ -353,12 +356,18 @@ function workspaceSubmit(targetUrl) {
         selected.push("duplicates");
         selectedNames.push("Duplicity");
       }
+      if (gFormData.get("custom_outliers") === "yes") {
+        selected.push("custom_outliers");
+        selectedNames.push("Custom Criteria Outliers");
+        remoteParams.custom_outlier_rules = serializeCustomOutlierRules();
+        remoteParams.max_outliers = Number(gFormData.get("max_outliers") || 100);
+      }
       if (selected.length === 0) {
         if (typeof showToast === "function")
           showToast("Please select at least one metric", "error");
         return;
       }
-      remoteParams = { selected: selected };
+      remoteParams.selected = selected;
       remoteDisplayName = selectedNames.join(", ");
     } else if (targetUrl === "/feature-relevance") {
       remoteName = "feature_relevance";
@@ -517,6 +526,12 @@ function workspaceSubmit(targetUrl) {
   for (const [shortName, joined] of Object.entries(collectedMulti)) {
     processedFormData.set(shortName, joined);
   }
+  if (targetUrl === "/data-quality") {
+    processedFormData.set(
+      "custom_outlier_rules",
+      JSON.stringify(serializeCustomOutlierRules()),
+    );
+  }
 
   // Save form state for cache restore
   try {
@@ -669,13 +684,13 @@ function renderWorkspaceResults(data, options) {
     html += `<div class="p-5 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">`;
 
     // Header
-    html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${type}</h3>`;
+    html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${escapeHtml(type)}</h3>`;
 
     if (error) {
-      html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error}</div>`;
+      html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error)}</div>`;
     } else {
       if (description) {
-        html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${description}</p>`;
+        html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${escapeHtml(description)}</p>`;
       }
 
       // Graph interpretation — rendered as a distinct callout below the plot/scores
@@ -695,7 +710,7 @@ function renderWorkspaceResults(data, options) {
             const imgStyle = isHeatmap
               ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
               : "";
-            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
+            html += `<img src="${escapeHtml(viz.src)}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
           }
           html += `</div>`;
         }
@@ -720,7 +735,7 @@ function renderWorkspaceResults(data, options) {
           <svg class="w-5 h-5 shrink-0 mt-0.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
           <div>
             <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Interpretation</div>
-            <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${interpretation}</p>
+            <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(interpretation)}</p>
           </div>
         </div>`;
       }
@@ -795,7 +810,7 @@ function renderScoresSection(scores, depth) {
       const count = Object.keys(value).length;
       html += `<div class="mb-4">`;
       if (depth === 0) {
-        html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${key} <span class="normal-case font-normal">(${count})</span></h4>`;
+        html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)} <span class="normal-case font-normal">(${count})</span></h4>`;
       }
       html += `<div class="relative overflow-x-auto rounded-lg shadow-sm">`;
       html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
@@ -810,8 +825,8 @@ function renderScoresSection(scores, depth) {
             ? "bg-white dark:bg-gray-800"
             : "bg-gray-50 dark:bg-gray-700/50";
         html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${k}</td>`;
-        html += `<td class="px-4 py-2 text-right font-mono text-xs">${formatValue(v)}</td>`;
+        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(k)}</td>`;
+        html += `<td class="px-4 py-2 text-right font-mono text-xs">${escapeHtml(formatValue(v))}</td>`;
         html += `</tr>`;
         rowIdx++;
       }
@@ -823,14 +838,14 @@ function renderScoresSection(scores, depth) {
       if (isDeep || Object.keys(value).length > 5) {
         html += `<details class="mb-3 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" ${depth === 0 ? "open" : ""}>`;
         html += `<summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">`;
-        html += `${key}<svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>`;
+        html += `${escapeHtml(key)}<svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>`;
         html += `</summary>`;
         html += `<div class="p-4 border-t border-gray-200 dark:border-gray-700">`;
         html += renderScoresSection(value, depth + 1);
         html += `</div></details>`;
       } else {
         html += `<div class="mb-4">`;
-        html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${key}</h4>`;
+        html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)}</h4>`;
         html += renderScoresSection(value, depth + 1);
         html += `</div>`;
       }
@@ -838,9 +853,9 @@ function renderScoresSection(scores, depth) {
     // Array
     else if (Array.isArray(value)) {
       html += `<div class="mb-4">`;
-      html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${key} <span class="normal-case font-normal">(${value.length})</span></h4>`;
+      html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)} <span class="normal-case font-normal">(${value.length})</span></h4>`;
       if (value.length > 0 && typeof value[0] !== "object") {
-        html += `<p class="text-sm text-gray-700 dark:text-gray-300">${value.map(formatValue).join(", ")}</p>`;
+        html += `<p class="text-sm text-gray-700 dark:text-gray-300">${escapeHtml(value.map(formatValue).join(", "))}</p>`;
       } else {
         value.forEach((item, i) => {
           if (isObject(item)) {
@@ -849,7 +864,7 @@ function renderScoresSection(scores, depth) {
             html += `<div class="mt-1">${renderScoresSection(item, depth + 1)}</div>`;
             html += `</details>`;
           } else {
-            html += `<div class="text-sm text-gray-700 dark:text-gray-300">${formatValue(item)}</div>`;
+            html += `<div class="text-sm text-gray-700 dark:text-gray-300">${escapeHtml(formatValue(item))}</div>`;
           }
         });
       }
@@ -863,7 +878,7 @@ function renderScoresSection(scores, depth) {
     ) {
       html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">`;
       html += `<span class="font-medium text-gray-900 dark:text-white">Remedied Dataset</span>`;
-      html += `<a href="${value}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 dark:bg-green-500 dark:hover:bg-green-600 transition-colors">`;
+      html += `<a href="${escapeHtml(value)}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 dark:bg-green-500 dark:hover:bg-green-600 transition-colors">`;
       html += `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>`;
       html += `Download CSV</a>`;
       html += `</div>`;
@@ -1365,6 +1380,184 @@ function submitGlobusMetric(metricName, params, displayName) {
     });
 }
 
+// ==================== Custom Criteria Outliers ====================
+
+function initCustomOutlierEditor() {
+  const addButton = document.getElementById("custom-outlier-add-rule");
+  if (addButton) {
+    addButton.addEventListener("click", () => addCustomOutlierRuleRow());
+  }
+  if (document.getElementById("custom-outlier-editor")) {
+    loadCustomOutlierTargets();
+  }
+}
+
+function toggleCustomOutlierEditor(checkbox) {
+  const editor = document.getElementById("custom-outlier-editor");
+  if (!editor) return;
+  editor.classList.toggle("hidden", !checkbox.checked);
+  if (checkbox.checked) {
+    loadCustomOutlierTargets().then(() => {
+      const list = document.getElementById("custom-outlier-rule-list");
+      if (list && list.children.length === 0) addCustomOutlierRuleRow();
+    });
+  }
+}
+
+function loadCustomOutlierTargets() {
+  const message = document.getElementById("custom-outlier-message");
+  return fetch("/custom-outlier-targets", { method: "POST" })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.success) {
+        customOutlierTargets = data.targets || [];
+        updateCustomOutlierTargetOptions();
+        if (message) message.classList.add("hidden");
+      } else if (message) {
+        message.textContent = data.message || "Unable to load targets.";
+        message.classList.remove("hidden");
+      }
+    })
+    .catch((err) => {
+      if (message) {
+        message.textContent = "Unable to load targets: " + err.message;
+        message.classList.remove("hidden");
+      }
+    });
+}
+
+function addCustomOutlierRuleRow() {
+  const list = document.getElementById("custom-outlier-rule-list");
+  if (!list) return;
+  customOutlierRuleCounter += 1;
+  const row = document.createElement("div");
+  row.className =
+    "custom-outlier-rule rounded-lg border border-gray-200 dark:border-gray-700 p-3";
+  row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
+  row.innerHTML = `
+    <div class="grid gap-3 md:grid-cols-2">
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
+        <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
+               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+      </label>
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Target
+        <select data-field="target"
+                class="custom-outlier-target mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+      </label>
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Criteria
+        <select data-field="criteria_type"
+                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+          <option value="range">Range</option>
+          <option value="regex">Regex</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+        <input type="checkbox" data-field="allow_missing" class="rounded border-gray-300" />
+        Allow missing values
+      </label>
+    </div>
+    <div data-section="range" class="grid gap-3 mt-3 md:grid-cols-4">
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
+        <input type="number" step="any" data-field="min"
+               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+      </label>
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Max
+        <input type="number" step="any" data-field="max"
+               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+      </label>
+      <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+        <input type="checkbox" data-field="min_inclusive" checked class="rounded border-gray-300" />
+        Include min
+      </label>
+      <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+        <input type="checkbox" data-field="max_inclusive" checked class="rounded border-gray-300" />
+        Include max
+      </label>
+    </div>
+    <div data-section="regex" class="hidden mt-3">
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Pattern
+        <input type="text" data-field="pattern" value=".*"
+               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+      </label>
+    </div>
+    <div class="flex justify-end mt-3">
+      <button type="button" data-action="remove"
+              class="px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+        Remove
+      </button>
+    </div>`;
+  list.appendChild(row);
+
+  row.querySelector('[data-field="criteria_type"]').addEventListener("change", () => {
+    updateCustomOutlierCriteriaSections(row);
+  });
+  row.querySelector('[data-action="remove"]').addEventListener("click", () => {
+    row.remove();
+    serializeCustomOutlierRules();
+  });
+  row.addEventListener("input", serializeCustomOutlierRules);
+  row.addEventListener("change", serializeCustomOutlierRules);
+
+  updateCustomOutlierTargetOptions(row);
+  updateCustomOutlierCriteriaSections(row);
+  serializeCustomOutlierRules();
+}
+
+function updateCustomOutlierTargetOptions(scope) {
+  const root = scope || document;
+  root.querySelectorAll(".custom-outlier-target").forEach((select) => {
+    const selected = select.value;
+    select.innerHTML = "";
+    customOutlierTargets.forEach((target) => {
+      const option = document.createElement("option");
+      option.value = target.name;
+      option.dataset.targetType = target.target_type;
+      option.textContent = target.display_label || target.name;
+      select.appendChild(option);
+    });
+    if (selected) select.value = selected;
+  });
+}
+
+function updateCustomOutlierCriteriaSections(row) {
+  const criteria = row.querySelector('[data-field="criteria_type"]')?.value;
+  row.querySelector('[data-section="range"]')?.classList.toggle("hidden", criteria !== "range");
+  row.querySelector('[data-section="regex"]')?.classList.toggle("hidden", criteria !== "regex");
+}
+
+function serializeCustomOutlierRules() {
+  const rows = document.querySelectorAll(".custom-outlier-rule");
+  const rules = [];
+  rows.forEach((row, index) => {
+    const targetSelect = row.querySelector('[data-field="target"]');
+    if (!targetSelect || !targetSelect.value) return;
+    const criteriaType = row.querySelector('[data-field="criteria_type"]')?.value || "range";
+    const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
+    const rule = {
+      id,
+      name: row.querySelector('[data-field="name"]')?.value || id,
+      target: targetSelect.value,
+      target_type: targetSelect.selectedOptions[0]?.dataset.targetType || "column",
+      criteria_type: criteriaType,
+      allow_missing: Boolean(row.querySelector('[data-field="allow_missing"]')?.checked),
+    };
+    if (criteriaType === "range") {
+      const min = row.querySelector('[data-field="min"]')?.value;
+      const max = row.querySelector('[data-field="max"]')?.value;
+      if (min !== "") rule.min = min;
+      if (max !== "") rule.max = max;
+      rule.min_inclusive = Boolean(row.querySelector('[data-field="min_inclusive"]')?.checked);
+      rule.max_inclusive = Boolean(row.querySelector('[data-field="max_inclusive"]')?.checked);
+    } else {
+      rule.pattern = row.querySelector('[data-field="pattern"]')?.value || "";
+    }
+    rules.push(rule);
+  });
+  const hidden = document.getElementById("custom-outlier-rules-json");
+  if (hidden) hidden.value = JSON.stringify(rules);
+  return rules;
+}
+
 // ==================== Layout Helpers ====================
 
 /**
@@ -1602,13 +1795,13 @@ function buildResultCard(type, results) {
   }
 
   let html = `<div class="p-5 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">`;
-  html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${type}</h3>`;
+  html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${escapeHtml(type)}</h3>`;
 
   if (error) {
-    html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error}</div>`;
+    html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error)}</div>`;
   } else {
     if (description) {
-      html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${description}</p>`;
+      html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${escapeHtml(description)}</p>`;
     }
 
     const hasViz = visualizations.length > 0;
@@ -1625,7 +1818,7 @@ function buildResultCard(type, results) {
           const imgStyle = isHeatmap
             ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
             : "";
-          html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
+          html += `<img src="${escapeHtml(viz.src)}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
         }
         html += `</div>`;
       }
@@ -1644,7 +1837,7 @@ function buildResultCard(type, results) {
         <svg class="w-5 h-5 shrink-0 mt-0.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
         <div>
           <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Interpretation</div>
-          <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${interpretation}</p>
+          <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(interpretation)}</p>
         </div>
       </div>`;
     }
