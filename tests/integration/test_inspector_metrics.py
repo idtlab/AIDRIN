@@ -106,6 +106,44 @@ def test_data_quality_no_selection(uploaded_client):
     assert response.status_code == 200
 
 
+def test_custom_outlier_targets_with_file(uploaded_client):
+    """Target discovery should return selectable column targets without overloading /feature-set."""
+    response = uploaded_client.post("/custom-outlier-targets")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["success"] is True
+    targets = data["targets"]
+    assert any(t["name"] == "age" and t["target_type"] == "column" for t in targets)
+
+
+def test_data_quality_custom_outliers(uploaded_client):
+    """Submit custom outlier rules through Data Quality."""
+    rules = [{
+        "id": "age-range",
+        "name": "Age range",
+        "target": "age",
+        "target_type": "column",
+        "criteria_type": "range",
+        "min": 26,
+        "max": 38,
+    }]
+    response = uploaded_client.post(
+        "/data-quality?return_type=json",
+        data={
+            "custom_outliers": "yes",
+            "custom_outlier_rules": json.dumps(rules),
+            "max_outliers": "2",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "Custom Criteria Outliers" in data
+    result = data["Custom Criteria Outliers"]
+    assert result["Rule summaries"]["age-range"]["outlier"] == 2
+    assert len(result["Outlier preview"]["age-range"]) == 2
+
+
 # -------------------------------------------------
 # Fairness metric
 # -------------------------------------------------
