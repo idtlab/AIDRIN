@@ -8,8 +8,6 @@ def detect_hipaa_identifiers(df, columns_to_scan, country='US'):
     Scans a DataFrame for HIPAA identifiers using Regex and
     pgeocode database validation for postal codes.
     """
-    nomi = pgeocode.Nominatim(country.lower())
-
     patterns = {
         "US_SSN": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
         "EMAIL_ADDRESS": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
@@ -37,10 +35,16 @@ def detect_hipaa_identifiers(df, columns_to_scan, country='US'):
         for value in series:
             for cand in postal_candidate_re.findall(value):
                 all_zip_candidates.add(cand.split('-')[0])
-        valid_zips = {
-            z for z in all_zip_candidates
-            if pd.notna(nomi.query_postal_code(z).place_name)
-        }
+        valid_zips = set()
+        if all_zip_candidates:
+            try:
+                nomi = pgeocode.Nominatim(country.lower())
+                valid_zips = {
+                    z for z in all_zip_candidates
+                    if pd.notna(nomi.query_postal_code(z).place_name)
+                }
+            except Exception:
+                valid_zips = set()
 
         for value in series:
             for entity_type, regex in patterns.items():

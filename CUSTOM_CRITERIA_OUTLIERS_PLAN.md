@@ -14,7 +14,7 @@ Implement this as an additive, minimal-impact feature. Existing Data Quality met
 - [x] Milestone 2 tests: Cover local `/data-quality` custom rules, target discovery, renderer escaping, and existing metric regressions.
 - [x] Milestone 3: Add Globus target discovery/submission/remote dispatch behavior.
 - [x] Milestone 3 tests: Cover Globus custom-criteria params and remote bundled results.
-- [ ] Final validation: Run the full available test suite.
+- [x] Final validation: Run the full available test suite.
 - [ ] Delivery: Commit each milestone, push a branch, open PR over `develop`, monitor CI, and fix root causes until checks pass.
 
 ## Key Interfaces
