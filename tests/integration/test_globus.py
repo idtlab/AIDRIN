@@ -1,5 +1,10 @@
 """Tests for Globus Compute integration (mocked — no real endpoint needed)."""
 
+import os
+import tempfile
+
+import pandas as pd
+
 from web.globus import is_globus_available, remote_metric_runner
 
 
@@ -94,3 +99,50 @@ def test_remote_runner_missing_file():
     """Non-existent file should return error dict."""
     result = remote_metric_runner("completeness", "/tmp/does_not_exist.csv", "missing.csv", ".csv")
     assert "error" in result or "Error" in str(result)
+
+
+def _write_csv(df):
+    tmp = tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w")
+    df.to_csv(tmp.name, index=False)
+    tmp.close()
+    return tmp.name, os.path.basename(tmp.name), ".csv"
+
+
+def test_remote_runner_custom_outlier_targets():
+    path, name, file_type = _write_csv(pd.DataFrame({"age": [25, 30], "label": ["a", "b"]}))
+    try:
+        result = remote_metric_runner("custom_outlier_targets", path, name, file_type)
+    finally:
+        os.unlink(path)
+
+    assert result["success"] is True
+    assert any(target["name"] == "age" for target in result["targets"])
+
+
+def test_remote_runner_data_quality_custom_outliers():
+    path, name, file_type = _write_csv(pd.DataFrame({"age": [25, 30, 45]}))
+    rules = [{
+        "id": "age-range",
+        "target": "age",
+        "target_type": "column",
+        "criteria_type": "range",
+        "min": 26,
+        "max": 40,
+    }]
+    try:
+        result = remote_metric_runner(
+            "data_quality",
+            path,
+            name,
+            file_type,
+            selected=["custom_outliers"],
+            custom_outlier_rules=rules,
+            max_outliers=1,
+        )
+    finally:
+        os.unlink(path)
+
+    assert "Custom Criteria Outliers" in result
+    custom = result["Custom Criteria Outliers"]
+    assert custom["Rule summaries"]["age-range"]["outlier"] == 2
+    assert len(custom["Outlier preview"]["age-range"]) == 1
