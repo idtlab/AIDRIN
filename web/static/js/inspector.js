@@ -360,7 +360,9 @@ function workspaceSubmit(targetUrl) {
         selected.push("custom_outliers");
         selectedNames.push("Custom Criteria Outliers");
         remoteParams.custom_outlier_rules = serializeCustomOutlierRules();
-        remoteParams.max_outliers = Number(gFormData.get("max_outliers") || 100);
+        remoteParams.max_outliers = Number(
+          gFormData.get("max_outliers") || 100,
+        );
       }
       if (selected.length === 0) {
         if (typeof showToast === "function")
@@ -1436,7 +1438,8 @@ function loadGlobusCustomOutlierTargets(message) {
   const fileType = window.AIDRIN_GLOBUS_FILE_TYPE || "";
   if (!endpointId || !filePath) {
     if (message) {
-      message.textContent = "Remote target discovery requires a loaded Globus file.";
+      message.textContent =
+        "Remote target discovery requires a loaded Globus file.";
       message.classList.remove("hidden");
     }
     return Promise.resolve();
@@ -1569,9 +1572,11 @@ function addCustomOutlierRuleRow() {
     </div>`;
   list.appendChild(row);
 
-  row.querySelector('[data-field="criteria_type"]').addEventListener("change", () => {
-    updateCustomOutlierCriteriaSections(row);
-  });
+  row
+    .querySelector('[data-field="criteria_type"]')
+    .addEventListener("change", () => {
+      updateCustomOutlierCriteriaSections(row);
+    });
   row.querySelector('[data-action="remove"]').addEventListener("click", () => {
     row.remove();
     serializeCustomOutlierRules();
@@ -1602,8 +1607,12 @@ function updateCustomOutlierTargetOptions(scope) {
 
 function updateCustomOutlierCriteriaSections(row) {
   const criteria = row.querySelector('[data-field="criteria_type"]')?.value;
-  row.querySelector('[data-section="range"]')?.classList.toggle("hidden", criteria !== "range");
-  row.querySelector('[data-section="regex"]')?.classList.toggle("hidden", criteria !== "regex");
+  row
+    .querySelector('[data-section="range"]')
+    ?.classList.toggle("hidden", criteria !== "range");
+  row
+    .querySelector('[data-section="regex"]')
+    ?.classList.toggle("hidden", criteria !== "regex");
 }
 
 function serializeCustomOutlierRules() {
@@ -1612,23 +1621,31 @@ function serializeCustomOutlierRules() {
   rows.forEach((row, index) => {
     const targetSelect = row.querySelector('[data-field="target"]');
     if (!targetSelect || !targetSelect.value) return;
-    const criteriaType = row.querySelector('[data-field="criteria_type"]')?.value || "range";
+    const criteriaType =
+      row.querySelector('[data-field="criteria_type"]')?.value || "range";
     const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
     const rule = {
       id,
       name: row.querySelector('[data-field="name"]')?.value || id,
       target: targetSelect.value,
-      target_type: targetSelect.selectedOptions[0]?.dataset.targetType || "column",
+      target_type:
+        targetSelect.selectedOptions[0]?.dataset.targetType || "column",
       criteria_type: criteriaType,
-      allow_missing: Boolean(row.querySelector('[data-field="allow_missing"]')?.checked),
+      allow_missing: Boolean(
+        row.querySelector('[data-field="allow_missing"]')?.checked,
+      ),
     };
     if (criteriaType === "range") {
       const min = row.querySelector('[data-field="min"]')?.value;
       const max = row.querySelector('[data-field="max"]')?.value;
       if (min !== "") rule.min = min;
       if (max !== "") rule.max = max;
-      rule.min_inclusive = Boolean(row.querySelector('[data-field="min_inclusive"]')?.checked);
-      rule.max_inclusive = Boolean(row.querySelector('[data-field="max_inclusive"]')?.checked);
+      rule.min_inclusive = Boolean(
+        row.querySelector('[data-field="min_inclusive"]')?.checked,
+      );
+      rule.max_inclusive = Boolean(
+        row.querySelector('[data-field="max_inclusive"]')?.checked,
+      );
     } else {
       rule.pattern = row.querySelector('[data-field="pattern"]')?.value || "";
     }
