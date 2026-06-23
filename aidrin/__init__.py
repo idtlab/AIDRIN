@@ -77,6 +77,29 @@ def calculate_outliers(file_info):
     return outliers.apply(args=(file_info,)).get()
 
 
+def calculate_custom_outliers(file_info, rules, max_outliers=100):
+    """Detect values that violate user-defined range or regex criteria.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``.
+    rules : list of dict
+        Custom criteria rules with required stable ``id`` values.
+    max_outliers : int, optional
+        Maximum detailed preview records to keep per rule.
+
+    Returns
+    -------
+    dict
+        ``{"Rule summaries": ..., "Outlier preview": ...}``, plus ``Errors``
+        for per-rule target/dtype problems.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.custom_outliers import custom_outliers
+    return custom_outliers.apply(args=(file_info, rules, max_outliers)).get()
+
+
 # ---------------------------------------------------------------------------
 # Fairness / Bias
 # ---------------------------------------------------------------------------
