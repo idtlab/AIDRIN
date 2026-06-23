@@ -202,6 +202,19 @@ def test_duplicate_rule_ids_raise_validation_error():
         _clean(fi[0])
 
 
+def test_sanitized_rule_key_collisions_raise_validation_error():
+    fi = _write_csv(pd.DataFrame({"a": [1]}))
+    rules = [
+        {"id": "a b", "target": "a", "target_type": "column", "criteria_type": "range", "min": 0},
+        {"id": "a_b", "target": "a", "target_type": "column", "criteria_type": "range", "max": 1},
+    ]
+    try:
+        with pytest.raises(ValueError, match="same output key"):
+            calculate_custom_outliers(fi, rules)
+    finally:
+        _clean(fi[0])
+
+
 def test_duplicate_targets_with_different_ids_are_supported():
     fi = _write_csv(pd.DataFrame({"a": [1, 10]}))
     rules = [
@@ -304,6 +317,22 @@ def test_hdf5_default_zero_policy_counts_missing_and_warns(hdf5_file_info, caplo
         }])
     assert result["Rule summaries"]["default-zero-range"]["missing"] == 2
     assert any("default fill value" in record.message for record in caplog.records)
+
+
+def test_hdf5_fill_log_counts_only_sentinel_matches(tmp_path, caplog):
+    path = tmp_path / "fill_count.h5"
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("values", data=np.array([np.nan, -9999.0]), fillvalue=-9999.0)
+
+    with caplog.at_level(logging.INFO):
+        block = next(iter_value_blocks((str(path), path.name, ".h5"), {
+            "name": "/values",
+            "target_type": "hdf5_dataset",
+        }))
+
+    assert block["missing_mask"].tolist() == [True, True]
+    messages = [record.message for record in caplog.records]
+    assert any("marked 1/2 value(s)" in message for message in messages)
 
 
 def test_public_api_exports_calculate_custom_outliers():

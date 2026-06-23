@@ -1,6 +1,9 @@
 import re
+import logging
 import pandas as pd
 import pgeocode
+
+logger = logging.getLogger(__name__)
 
 
 def detect_hipaa_identifiers(df, columns_to_scan, country='US'):
@@ -43,7 +46,12 @@ def detect_hipaa_identifiers(df, columns_to_scan, country='US'):
                     z for z in all_zip_candidates
                     if pd.notna(nomi.query_postal_code(z).place_name)
                 }
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Skipping HIPAA postal-code validation for country %s: %s",
+                    country,
+                    exc,
+                )
                 valid_zips = set()
 
         for value in series:
