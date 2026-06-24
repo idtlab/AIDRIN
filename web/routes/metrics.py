@@ -1696,63 +1696,90 @@ def _build_data_governance_section(file_info):
     }
 
 
-@metrics_bp.route("/readiness-report", methods=["GET"])
-def readiness_report():
-    """Return an aggregated, non-interactive data-readiness report as JSON.
+_READINESS_SECTION_BUILDERS = {
+    "dataset-overview": _build_dataset_overview_section,
+    "data-quality": _build_data_quality_section,
+    "impact-on-ai": _build_impact_on_ai_section,
+    "fairness-bias": _build_fairness_bias_section,
+    "data-governance": _build_data_governance_section,
+}
 
-    Covers dataset overview, Data Quality, Impact-on-AI, Fairness & Bias,
-    and Data Governance. Designed to be extended with more pillars over time.
-    """
+_READINESS_SECTION_RESPONSE_KEYS = {
+    "dataset-overview": "dataset_overview",
+    "data-quality": "data_quality",
+    "impact-on-ai": "impact_on_ai",
+    "fairness-bias": "fairness_bias",
+    "data-governance": "data_governance",
+}
+
+
+def _readiness_file_info():
+    """Return ``(file_path, file_name, file_type)`` from session, or *None*."""
     file_path = session.get("uploaded_file_path")
-    file_name = session.get("uploaded_file_name")
-    file_type = session.get("uploaded_file_type")
-
     if not file_path:
+        return None
+    return (
+        file_path,
+        session.get("uploaded_file_name"),
+        session.get("uploaded_file_type"),
+    )
+
+
+def _build_readiness_section(section, file_info):
+    """Build one readiness-report section; return error dict on failure."""
+    builder = _READINESS_SECTION_BUILDERS.get(section)
+    if builder is None:
+        return None
+    try:
+        return builder(file_info)
+    except Exception as e:
+        metric_time_log.error(
+            "Readiness report — %s error: %s", section, e, exc_info=True
+        )
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
+@metrics_bp.route("/readiness-report/<section>", methods=["GET"])
+def readiness_report_section(section):
+    """Return a single readiness-report section as JSON (for progressive UI loading)."""
+    if section not in _READINESS_SECTION_BUILDERS:
+        return jsonify({"success": False, "message": f"Unknown section: {section}"}), 404
+
+    file_info = _readiness_file_info()
+    if file_info is None:
         return jsonify({"success": False, "message": "No file uploaded"}), 200
 
-    file_info = (file_path, file_name, file_type)
+    start_time = time.time()
+    data = _build_readiness_section(section, file_info)
+    metric_time_log.info(
+        "Readiness report section %s built in %.2f seconds",
+        section,
+        time.time() - start_time,
+    )
+    return jsonify(ensure_json_serializable({
+        "success": True,
+        "section": section,
+        "data": data,
+    }))
+
+
+@metrics_bp.route("/readiness-report", methods=["GET"])
+def readiness_report():
+    """Return the full readiness report as JSON (all sections in one response)."""
+    file_info = _readiness_file_info()
+    if file_info is None:
+        return jsonify({"success": False, "message": "No file uploaded"}), 200
+
     start_time = time.time()
     try:
-        try:
-            dataset_overview_section = _build_dataset_overview_section(file_info)
-        except Exception as e:
-            metric_time_log.error("Readiness report — dataset overview error: %s", e, exc_info=True)
-            dataset_overview_section = {"error": f"{type(e).__name__}: {e}"}
+        response = {"success": True}
+        for slug in _READINESS_SECTION_BUILDERS:
+            response[_READINESS_SECTION_RESPONSE_KEYS[slug]] = _build_readiness_section(
+                slug, file_info
+            )
 
-        try:
-            data_quality_section = _build_data_quality_section(file_info)
-        except Exception as e:
-            metric_time_log.error("Readiness report — data quality error: %s", e, exc_info=True)
-            data_quality_section = {"error": f"{type(e).__name__}: {e}"}
-
-        try:
-            impact_section = _build_impact_on_ai_section(file_info)
-        except Exception as e:
-            metric_time_log.error("Readiness report — impact on AI error: %s", e, exc_info=True)
-            impact_section = {"error": f"{type(e).__name__}: {e}"}
-
-        try:
-            fairness_section = _build_fairness_bias_section(file_info)
-        except Exception as e:
-            metric_time_log.error("Readiness report — fairness & bias error: %s", e, exc_info=True)
-            fairness_section = {"error": f"{type(e).__name__}: {e}"}
-
-        try:
-            governance_section = _build_data_governance_section(file_info)
-        except Exception as e:
-            metric_time_log.error("Readiness report — data governance error: %s", e, exc_info=True)
-            governance_section = {"error": f"{type(e).__name__}: {e}"}
-
-        response = ensure_json_serializable({
-            "success": True,
-            "dataset_overview": dataset_overview_section,
-            "data_quality": data_quality_section,
-            "impact_on_ai": impact_section,
-            "fairness_bias": fairness_section,
-            "data_governance": governance_section,
-        })
         metric_time_log.info("Readiness report built in %.2f seconds", time.time() - start_time)
-        return jsonify(response)
+        return jsonify(ensure_json_serializable(response))
     except Exception as e:
         metric_time_log.error("Readiness report error: %s", e, exc_info=True)
         return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 200

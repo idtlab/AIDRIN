@@ -2189,49 +2189,88 @@ function _pct(value) {
   return `${Math.round(value * 100)}%`;
 }
 
-/**
- * Fetch the aggregated readiness report and render the Data Quality
- * scorecard (KPI tiles + overall grade + "needs attention" lists +
- * a collapsible details view with the original charts).
- */
-function loadReadinessReport() {
-  const overviewContainer = document.getElementById("readiness-summary");
-  const dqContainer = document.getElementById("readiness-data-quality");
-  const impactContainer = document.getElementById("readiness-impact");
-  const fairnessContainer = document.getElementById("readiness-fairness");
-  const governanceContainer = document.getElementById("readiness-governance");
+/** Show an error message inside one readiness section container. */
+function _readinessSectionError(container, message) {
+  if (!container) return;
+  container.classList.add("text-center", "py-8");
+  container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">${message}</p>`;
+}
 
-  fetch("/readiness-report")
+/**
+ * Fetch one readiness-report section and render it when ready.
+ * @param {string} section - URL slug (e.g. "data-quality")
+ * @param {HTMLElement} container
+ * @param {Function} renderFn - (container, data) => void
+ * @returns {Promise<void>}
+ */
+function _fetchReadinessSection(section, container, renderFn) {
+  if (!container) return Promise.resolve();
+  return fetch(`/readiness-report/${section}`)
     .then((r) => r.json())
     .then((resp) => {
       if (!resp.success) {
-        const msg = `<p class="text-sm" style="color: var(--textColorSecondary);">Could not load readiness report: ${resp.message || "unknown error"}</p>`;
-        if (overviewContainer) overviewContainer.innerHTML = msg;
-        if (dqContainer) dqContainer.innerHTML = msg;
-        if (impactContainer) impactContainer.innerHTML = msg;
-        if (fairnessContainer) fairnessContainer.innerHTML = msg;
-        if (governanceContainer) governanceContainer.innerHTML = msg;
+        _readinessSectionError(
+          container,
+          `Could not load ${section.replace(/-/g, " ")}: ${resp.message || "unknown error"}`,
+        );
         return;
       }
-      if (overviewContainer)
-        renderReadinessDatasetOverview(overviewContainer, resp.dataset_overview || {});
-      if (dqContainer)
-        renderReadinessDataQuality(dqContainer, resp.data_quality || {});
-      if (impactContainer)
-        renderReadinessImpact(impactContainer, resp.impact_on_ai || {});
-      if (fairnessContainer)
-        renderReadinessFairness(fairnessContainer, resp.fairness_bias || {});
-      if (governanceContainer)
-        renderReadinessGovernance(governanceContainer, resp.data_governance || {});
+      renderFn(container, resp.data || {});
     })
     .catch((err) => {
-      const msg = `<p class="text-sm" style="color: red;">Error loading readiness report: ${err.message}</p>`;
-      if (overviewContainer) overviewContainer.innerHTML = msg;
-      if (dqContainer) dqContainer.innerHTML = msg;
-      if (impactContainer) impactContainer.innerHTML = msg;
-      if (fairnessContainer) fairnessContainer.innerHTML = msg;
-      if (governanceContainer) governanceContainer.innerHTML = msg;
+      _readinessSectionError(container, `Error loading section: ${err.message}`);
     });
+}
+
+/**
+ * Load the readiness report with hybrid progressive rendering:
+ * dataset overview first, then remaining sections in parallel.
+ */
+function loadReadinessReport() {
+  const overviewContainer = document.getElementById("readiness-summary");
+
+  const parallelSections = [
+    {
+      section: "data-quality",
+      container: document.getElementById("readiness-data-quality"),
+      render: renderReadinessDataQuality,
+    },
+    {
+      section: "impact-on-ai",
+      container: document.getElementById("readiness-impact"),
+      render: renderReadinessImpact,
+    },
+    {
+      section: "fairness-bias",
+      container: document.getElementById("readiness-fairness"),
+      render: renderReadinessFairness,
+    },
+    {
+      section: "data-governance",
+      container: document.getElementById("readiness-governance"),
+      render: renderReadinessGovernance,
+    },
+  ];
+
+  const loadParallelSections = () => {
+    Promise.all(
+      parallelSections.map(({ section, container, render }) =>
+        _fetchReadinessSection(section, container, render),
+      ),
+    );
+  };
+
+  if (!overviewContainer) {
+    loadParallelSections();
+    return;
+  }
+
+  // Hybrid: overview first, then parallel for the rest (spinners stay until each resolves).
+  _fetchReadinessSection(
+    "dataset-overview",
+    overviewContainer,
+    renderReadinessDatasetOverview,
+  ).finally(loadParallelSections);
 }
 
 /** Escape text for safe inclusion in readiness info tooltips. */
