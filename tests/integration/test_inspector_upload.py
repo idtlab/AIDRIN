@@ -81,7 +81,7 @@ def test_clear_shows_upload_panel(uploaded_client):
     uploaded_client.post("/clear", follow_redirects=True)
     response = uploaded_client.get("/inspector")
     html = response.data.decode()
-    assert "AI Data Readiness Inspector" in html
+    assert "AI Data Readiness Infrastructure" in html
     assert 'id="sidebar"' not in html
 
 
@@ -102,4 +102,4 @@ def test_stale_session_cleared(uploaded_client, app):
     response = uploaded_client.get("/inspector")
     html = response.data.decode()
     assert 'id="sidebar"' not in html
-    assert "AI Data Readiness Inspector" in html
+    assert "AI Data Readiness Infrastructure" in html
