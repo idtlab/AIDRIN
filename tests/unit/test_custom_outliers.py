@@ -19,6 +19,7 @@ if "pkg_resources" not in sys.modules:
     sys.modules["pkg_resources"] = _pkg
 
 import aidrin
+import aidrin.file_handling.value_iterators as value_iterators
 from aidrin.file_handling.value_iterators import iter_targets, iter_value_blocks
 from aidrin.structured_data_metrics.custom_outliers import calculate_custom_outliers
 
@@ -89,6 +90,36 @@ def test_iter_value_blocks_hdf5_uses_native_locations(hdf5_file_info):
         "index": [1, 1],
         "display": "/group/data[1,1]",
     }
+
+
+def test_iter_value_blocks_hdf5_streams_regular_slices(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_iterators, "HDF5_BLOCK_ELEMENT_LIMIT", 4)
+    path = tmp_path / "streamed.h5"
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("matrix", data=np.arange(10).reshape(5, 2), fillvalue=-1)
+
+    file_info = (str(path), path.name, ".h5")
+    blocks = list(iter_value_blocks(file_info, {"name": "/matrix", "target_type": "hdf5_dataset"}))
+
+    assert [block["offset"] for block in blocks] == [[0, 0], [2, 0], [4, 0]]
+    assert [block["values"].shape for block in blocks] == [(2, 2), (2, 2), (1, 2)]
+    assert blocks[-1]["locate"]((0, 1)) == {
+        "path": "/matrix",
+        "index": [4, 1],
+        "display": "/matrix[4,1]",
+    }
+
+    result = calculate_custom_outliers(file_info, [{
+        "id": "max-five",
+        "target": "/matrix",
+        "target_type": "hdf5_dataset",
+        "criteria_type": "range",
+        "max": 5,
+    }])
+    summary = result["Rule summaries"]["max-five"]
+    assert summary["total"] == 10
+    assert summary["outlier"] == 4
+    assert result["Outlier preview"]["max-five"][0]["location"]["display"] == "/matrix[3,0]"
 
 
 def test_csv_regex_and_range_rules_report_expected_counts():
