@@ -986,6 +986,7 @@ def _build_fairness_bias_section(file_info):
             for cls, share in vc.items():
                 if share < _FAIRNESS_MINORITY_SHARE:
                     needs_attention["minority_classes"].append({
+                        "target_column": target_col,
                         "class": str(cls),
                         "share": round(float(share), 4),
                     })
@@ -1018,7 +1019,12 @@ def _build_fairness_bias_section(file_info):
         else:
             tsd_scores = sr.get("TSD scores") or {}
             flagged = [
-                {"class": str(cls), "tsd": round(float(score), 4)}
+                {
+                    "target_column": target_col,
+                    "sensitive_column": primary_sensitive,
+                    "class": str(cls),
+                    "tsd": round(float(score), 4),
+                }
                 for cls, score in tsd_scores.items()
                 if isinstance(score, (int, float)) and float(score) >= _FAIRNESS_TSD_FLAG
             ]
@@ -1064,7 +1070,13 @@ def _build_fairness_bias_section(file_info):
             else:
                 disparities = (cdd or {}).get("Disparities") or {}
                 cdd_flagged = [
-                    {"group": str(grp), "disparity": info.get("disparity")}
+                    {
+                        "sensitive_column": primary_sensitive,
+                        "target_column": target_col,
+                        "positive_class": str(positive_class),
+                        "group": str(grp),
+                        "disparity": info.get("disparity"),
+                    }
                     for grp, info in disparities.items()
                     if str(info.get("disparity", "")).lower() == "true"
                 ]
@@ -1113,6 +1125,7 @@ _GOV_HIPAA_MISSING_MAX = 0.50
 _GOV_DP_MAX_FEATURES = 2
 _GOV_DP_EPSILON = 0.1
 _GOV_SMALL_SAMPLE = 30
+_GOV_WORST_GROUPS_MAX = 5
 
 _GOV_K_GOOD = 5
 _GOV_K_WARNING = 2
@@ -1222,6 +1235,36 @@ def _hipaa_status(detected_phi):
     if serious:
         return "poor", 0.0
     return "warning", 0.5
+
+
+def _worst_equivalence_classes(df, quasi_identifiers, max_groups=_GOV_WORST_GROUPS_MAX):
+    """Return the smallest equivalence classes on *quasi_identifiers*."""
+    if not quasi_identifiers:
+        return [], 0
+
+    data = df.replace("?", pd.NA)
+    clean = data.dropna(subset=quasi_identifiers)
+    if clean.empty:
+        return [], 0
+
+    counts = clean.groupby(quasi_identifiers, dropna=False).size()
+    if counts.empty:
+        return [], 0
+
+    singleton_count = int((counts == 1).sum())
+    worst_groups = []
+    for keys, size in counts.nsmallest(max_groups).items():
+        if len(quasi_identifiers) == 1:
+            key_tuple = (keys,) if not isinstance(keys, tuple) else keys
+        else:
+            key_tuple = keys if isinstance(keys, tuple) else (keys,)
+        qi_values = {
+            qi: str(val) if pd.notna(val) else "?"
+            for qi, val in zip(quasi_identifiers, key_tuple)
+        }
+        worst_groups.append({"size": int(size), "qi_values": qi_values})
+
+    return worst_groups, singleton_count
 
 
 def _auto_select_governance_columns(df, fairness_target=None):
@@ -1503,10 +1546,17 @@ def _build_data_governance_section(file_info):
         if "Error" not in k_res:
             k_val = k_res.get("k-Value")
             if k_val is not None and k_val < _GOV_K_WARNING:
+                worst_groups, singleton_count = _worst_equivalence_classes(work_df, qi)
                 needs_attention["low_anonymity"].append({
                     "metric": "k-Anonymity",
                     "value": k_val,
-                    "detail": f"Minimum equivalence class size on QIs: {', '.join(qi)}",
+                    "quasi_identifiers": list(qi),
+                    "singleton_count": singleton_count,
+                    "worst_groups": worst_groups,
+                    "detail": (
+                        f"Minimum group size {k_val} on quasi-identifiers: "
+                        f"{', '.join(qi)}"
+                    ),
                 })
             details["k_anonymity"] = {
                 "quasi_identifiers": qi,
@@ -1539,7 +1589,12 @@ def _build_data_governance_section(file_info):
                 needs_attention["attribute_disclosure"].append({
                     "metric": "l-Diversity",
                     "value": l_val,
-                    "detail": f"Sensitive attribute '{sensitive}' lacks diversity in some QI groups",
+                    "sensitive_attribute": sensitive,
+                    "quasi_identifiers": list(qi),
+                    "detail": (
+                        f"Sensitive '{sensitive}' has only {l_val} distinct value(s) "
+                        f"in some groups defined by ({', '.join(qi)})"
+                    ),
                 })
             details["l_diversity"] = {
                 "quasi_identifiers": qi,
@@ -1575,7 +1630,12 @@ def _build_data_governance_section(file_info):
                 needs_attention["attribute_disclosure"].append({
                     "metric": "t-Closeness",
                     "value": t_val,
-                    "detail": f"Sensitive distribution diverges from global on '{sensitive}'",
+                    "sensitive_attribute": sensitive,
+                    "quasi_identifiers": list(qi),
+                    "detail": (
+                        f"Distribution of '{sensitive}' diverges from global "
+                        f"(max TVD {t_val}) within groups of ({', '.join(qi)})"
+                    ),
                 })
             details["t_closeness"] = {
                 "quasi_identifiers": qi,
@@ -1637,7 +1697,9 @@ def _build_data_governance_section(file_info):
                         needs_attention["high_linkage_risk"].append({
                             "metric": "Single-attribute risk",
                             "feature": q,
+                            "quasi_identifiers": [q],
                             "mean_risk": round(mean_risk, 4),
+                            "detail": f"Quasi-identifier '{q}' — mean MM risk {mean_risk:.2f}",
                         })
             except Exception as exc:
                 single_by_qi[q] = {"error": str(exc)}
@@ -1645,6 +1707,17 @@ def _build_data_governance_section(file_info):
             "id_column": id_col,
             "by_quasi_identifier": single_by_qi,
         }
+        if needs_attention["low_anonymity"] and single_by_qi:
+            worst_qi = None
+            for q, info in single_by_qi.items():
+                mr = info.get("mean_risk")
+                if mr is not None and (worst_qi is None or mr > worst_qi[1]):
+                    worst_qi = (q, mr)
+            if worst_qi:
+                needs_attention["low_anonymity"][0]["worst_single_qi"] = {
+                    "feature": worst_qi[0],
+                    "mean_risk": worst_qi[1],
+                }
     else:
         details["single_attribute_risk"] = {
             "error": "No categorical quasi-identifiers eligible for MM risk scoring.",
@@ -1678,8 +1751,13 @@ def _build_data_governance_section(file_info):
                     if multi_mean >= _GOV_MM_MULTI_WARNING:
                         needs_attention["high_linkage_risk"].append({
                             "metric": "Multiple-attribute risk",
-                            "features": mm_qis,
+                            "features": list(mm_qis),
+                            "quasi_identifiers": list(mm_qis),
                             "mean_risk": round(multi_mean, 4),
+                            "detail": (
+                                f"Combined QIs ({', '.join(mm_qis)}) — "
+                                f"mean MM risk {multi_mean:.2f}"
+                            ),
                         })
                 details["multiple_attribute_risk"] = {
                     "id_column": id_col,

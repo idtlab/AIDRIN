@@ -2281,6 +2281,64 @@ function _escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** Format quasi-identifier key/value pairs for display. */
+function _formatQiValues(qiValues) {
+  if (!qiValues || typeof qiValues !== "object") return "";
+  return Object.entries(qiValues)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ");
+}
+
+/**
+ * One needs-attention list row with optional secondary line (context/detail).
+ */
+function _readinessNaRow(primary, secondary, value) {
+  const valHtml = value
+    ? `<span class="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">${value}</span>`
+    : "";
+  const sub =
+    secondary
+      ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 pl-0">${_escapeHtml(secondary)}</p>`
+      : "";
+  return `<li>
+    <div class="flex justify-between gap-3 items-start">
+      <span class="text-sm text-gray-700 dark:text-gray-300 min-w-0">${primary}</span>
+      ${valHtml}
+    </div>${sub}
+  </li>`;
+}
+
+/** Needs-attention subsection with title and list body. */
+function _readinessNaBlock(title, infoKey, contextHtml, listHtml, tone) {
+  const titleCls =
+    tone === "red"
+      ? "text-red-700 dark:text-red-400"
+      : tone === "amber"
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-gray-600 dark:text-gray-300";
+  const ctx = contextHtml
+    ? `<p class="text-xs text-gray-500 dark:text-gray-400 mb-1.5">${contextHtml}</p>`
+    : "";
+  return `<div>
+    <p class="text-xs font-semibold ${titleCls} uppercase tracking-wide mb-1.5 inline-flex items-center">${title}${infoKey ? _readinessInfoIcon(infoKey) : ""}</p>
+    ${ctx}
+    <ul class="space-y-2">${listHtml}</ul>
+  </div>`;
+}
+
+/** Wrap needs-attention blocks in the standard amber/green panel. */
+function _renderReadinessNeedsAttentionPanel(naItems, emptyMessage) {
+  if (naItems.length) {
+    return `<div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+      <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
+    </div>`;
+  }
+  return `<div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+    <p class="text-sm text-green-800 dark:text-green-400">${emptyMessage}</p>
+  </div>`;
+}
+
 /** Readiness metric definitions shown in info-icon tooltips. */
 const _READINESS_METRIC_INFO = {
   feature_profile:
@@ -2729,7 +2787,11 @@ function renderReadinessImpact(container, impact) {
 
   const fmtScore = (s) => (typeof s === "number" ? s.toFixed(2) : s);
   const fmtPair = (p) =>
-    `<li class="flex justify-between gap-3"><span class="truncate">${p.a} \u2194 ${p.b}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtScore(p.score)}</span></li>`;
+    _readinessNaRow(
+      `<span class="font-mono">${_escapeHtml(p.a)}</span> ↔ <span class="font-mono">${_escapeHtml(p.b)}</span>`,
+      "Correlated feature pair",
+      `|score| ${fmtScore(p.score)}`,
+    );
 
   const selectedCols = colCrit.selected || [];
   const selectedPreview =
@@ -2791,11 +2853,15 @@ function renderReadinessImpact(container, impact) {
       leakage.length > 6
         ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${leakage.length - 6} more</li>`
         : "";
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Leakage risk (|score| &ge; 0.95)${_readinessInfoIcon("leakage_risk_pairs")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}${more}</ul>
-      </div>`);
+    naItems.push(
+      _readinessNaBlock(
+        `Leakage risk (|score| ≥ 0.95) (${leakage.length})`,
+        "leakage_risk_pairs",
+        null,
+        items + more,
+        "red",
+      ),
+    );
   }
   if (redundant.length) {
     const items = redundant.slice(0, 6).map(fmtPair).join("");
@@ -2803,40 +2869,47 @@ function renderReadinessImpact(container, impact) {
       redundant.length > 6
         ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${redundant.length - 6} more</li>`
         : "";
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Redundant pairs (|score| &ge; 0.8)${_readinessInfoIcon("redundant_pairs")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}${more}</ul>
-      </div>`);
+    naItems.push(
+      _readinessNaBlock(
+        `Redundant pairs (|score| ≥ 0.8) (${redundant.length})`,
+        "redundant_pairs",
+        null,
+        items + more,
+        "amber",
+      ),
+    );
   }
   if (isolated.length) {
     const items = isolated
       .slice(0, 10)
-      .map((f) => `<li class="truncate">${typeof f === "string" ? f : f.feature || f}</li>`)
+      .map((f) => {
+        const name = typeof f === "string" ? f : f.feature || f;
+        return _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(name)}</span>`,
+          "No strong correlation to other analyzed features",
+          null,
+        );
+      })
       .join("");
     const more =
       isolated.length > 10
         ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${isolated.length - 10} more</li>`
         : "";
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Isolated features (no strong relationships)${_readinessInfoIcon("isolated_features")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}${more}</ul>
-      </div>`);
+    naItems.push(
+      _readinessNaBlock(
+        `Isolated features (${isolated.length})`,
+        "isolated_features",
+        null,
+        items + more,
+        "amber",
+      ),
+    );
   }
 
-  if (naItems.length) {
-    html += `
-      <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
-        <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">${naItems.join("")}</div>
-      </div>`;
-  } else {
-    html += `
-      <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
-        <p class="text-sm text-green-800 dark:text-green-400">No redundancy, leakage risk, or isolated features detected.</p>
-      </div>`;
-  }
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No redundancy, leakage risk, or isolated features detected.",
+  );
 
   // --- Collapsible details ---
   const det = impact.details || {};
@@ -2983,69 +3056,106 @@ function renderReadinessFairness(container, fb) {
   if (repImbalance.length) {
     const items = repImbalance
       .slice(0, 5)
-      .map(
-        (s) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${s.column}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">max ratio ${s.max_ratio}</span></li>`,
-      )
+      .map((s) => {
+        const pairHint =
+          s.flagged_pairs && s.flagged_pairs.length
+            ? `Worst pair: ${s.flagged_pairs[0].pair} (ratio ${s.flagged_pairs[0].ratio})`
+            : "";
+        return _readinessNaRow(
+          `<span class="font-mono font-medium">${_escapeHtml(s.column)}</span>`,
+          pairHint,
+          `max ratio ${s.max_ratio}`,
+        );
+      })
       .join("");
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Representation imbalance (${repImbalance.length})${_readinessInfoIcon("representation_imbalance")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
-      </div>`);
-  }
-  const minorities = na.minority_classes || [];
-  if (minorities.length) {
-    const items = minorities
-      .map(
-        (m) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${m.class}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${_pct(m.share)} share</span></li>`,
-      )
-      .join("");
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Minority classes (${minorities.length})${_readinessInfoIcon("minority_classes")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
-      </div>`);
-  }
-  const outcomeDisp = na.outcome_disparities || [];
-  if (outcomeDisp.length) {
-    const items = outcomeDisp
-      .map(
-        (d) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${d.class}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">TSD ${d.tsd}</span></li>`,
-      )
-      .join("");
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Outcome-rate disparities (${outcomeDisp.length})${_readinessInfoIcon("outcome_disparities")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
-      </div>`);
-  }
-  const cddDisp = na.cdd_disparities || [];
-  if (cddDisp.length) {
-    const items = cddDisp
-      .map((d) => `<li class="truncate">${d.group}</li>`)
-      .join("");
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-1.5 inline-flex items-center">CDD flagged groups (${cddDisp.length})${_readinessInfoIcon("cdd_disparities")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
-      </div>`);
+    naItems.push(
+      _readinessNaBlock(
+        `Representation imbalance (${repImbalance.length})`,
+        "representation_imbalance",
+        "Sensitive attributes with extreme category probability ratios",
+        items,
+        "amber",
+      ),
+    );
   }
 
-  if (naItems.length) {
-    html += `
-      <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
-        <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
-      </div>`;
-  } else {
-    html += `
-      <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
-        <p class="text-sm text-green-800 dark:text-green-400">No fairness issues detected under the automated thresholds.</p>
-      </div>`;
+  const minorities = na.minority_classes || [];
+  if (minorities.length) {
+    const targetCol =
+      minorities[0].target_column || targetCrit.selected || "target";
+    const items = minorities
+      .map((m) =>
+        _readinessNaRow(
+          `<span class="truncate">${_escapeHtml(m.class)}</span>`,
+          `Class in <span class="font-mono">${_escapeHtml(targetCol)}</span>`,
+          `${_pct(m.share)} share`,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Minority classes (${minorities.length})`,
+        "minority_classes",
+        `Target column: <span class="font-mono font-medium">${_escapeHtml(targetCol)}</span>`,
+        items,
+        "amber",
+      ),
+    );
   }
+
+  const outcomeDisp = na.outcome_disparities || [];
+  if (outcomeDisp.length) {
+    const sensCol = outcomeDisp[0].sensitive_column || sel.primary_sensitive || "—";
+    const tgtCol = outcomeDisp[0].target_column || targetCrit.selected || "—";
+    const items = outcomeDisp
+      .map((d) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(d.target_column || tgtCol)}</span> = ${_escapeHtml(d.class)}`,
+          `Outcome rates vary by sensitive <span class="font-mono">${_escapeHtml(d.sensitive_column || sensCol)}</span>`,
+          `TSD ${d.tsd}`,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Outcome-rate disparities (${outcomeDisp.length})`,
+        "outcome_disparities",
+        `Sensitive <span class="font-mono">${_escapeHtml(sensCol)}</span> × target <span class="font-mono">${_escapeHtml(tgtCol)}</span>`,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const cddDisp = na.cdd_disparities || [];
+  if (cddDisp.length) {
+    const sensCol = cddDisp[0].sensitive_column || sel.primary_sensitive || "—";
+    const tgtCol = cddDisp[0].target_column || targetCrit.selected || "—";
+    const posClass = cddDisp[0].positive_class || posCrit.selected || "—";
+    const items = cddDisp
+      .map((d) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(d.sensitive_column || sensCol)}</span> = ${_escapeHtml(d.group)}`,
+          `CDD vs target <span class="font-mono">${_escapeHtml(d.target_column || tgtCol)}</span> (positive: ${_escapeHtml(String(d.positive_class ?? posClass))})`,
+          null,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `CDD flagged groups (${cddDisp.length})`,
+        "cdd_disparities",
+        `Sensitive <span class="font-mono">${_escapeHtml(sensCol)}</span> × target <span class="font-mono">${_escapeHtml(tgtCol)}</span>`,
+        items,
+        "red",
+      ),
+    );
+  }
+
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No fairness issues detected under the automated thresholds.",
+  );
 
   // --- Collapsible details (charts) ---
   const det = fb.details || {};
@@ -3217,74 +3327,122 @@ function renderReadinessGovernance(container, gov) {
   const naItems = [];
   const lowAnon = na.low_anonymity || [];
   if (lowAnon.length) {
-    const items = lowAnon
-      .map(
-        (x) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${x.metric}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${x.value}</span></li>`,
-      )
-      .join("");
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Low anonymity (${lowAnon.length})${_readinessInfoIcon("low_anonymity")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
-      </div>`);
+    let items = "";
+    lowAnon.forEach((x) => {
+      const qiList = (x.quasi_identifiers || []).join(", ");
+      items += _readinessNaRow(
+        `${_escapeHtml(x.metric)}: k = ${x.value}`,
+        x.detail || (qiList ? `Quasi-identifiers: ${qiList}` : null),
+        x.singleton_count != null ? `${x.singleton_count} singleton group(s)` : null,
+      );
+      (x.worst_groups || []).slice(0, 3).forEach((g) => {
+        items += _readinessNaRow(
+          `Smallest group (size ${g.size})`,
+          _formatQiValues(g.qi_values),
+          null,
+        );
+      });
+      if (x.worst_single_qi) {
+        items += _readinessNaRow(
+          `Highest single-QI risk: <span class="font-mono">${_escapeHtml(x.worst_single_qi.feature)}</span>`,
+          "May contribute to low k when combined with other quasi-identifiers",
+          `risk ${Number(x.worst_single_qi.mean_risk).toFixed(2)}`,
+        );
+      }
+    });
+    naItems.push(
+      _readinessNaBlock(
+        `Low anonymity (${lowAnon.length})`,
+        "low_anonymity",
+        lowAnon[0].quasi_identifiers?.length
+          ? `Quasi-identifiers: <span class="font-mono">${_escapeHtml(lowAnon[0].quasi_identifiers.join(", "))}</span>`
+          : null,
+        items,
+        "red",
+      ),
+    );
   }
+
   const hipaaPhi = na.hipaa_phi || [];
   if (hipaaPhi.length) {
     const items = hipaaPhi
       .slice(0, 6)
-      .map(
-        (x) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${x.column}</span><span class="font-mono text-xs ${x.serious ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}">${(x.types || []).join(", ") || x.total_flags + " flags"}</span></li>`,
+      .map((x) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(x.column)}</span>`,
+          (x.types || []).join(", ") || "Pattern match",
+          `${x.total_flags} flag(s)`,
+        ),
       )
       .join("");
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-1.5 inline-flex items-center">HIPAA pattern matches (${hipaaPhi.length})${_readinessInfoIcon("hipaa_phi")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
-      </div>`);
+    naItems.push(
+      _readinessNaBlock(
+        `HIPAA pattern matches (${hipaaPhi.length})`,
+        "hipaa_phi",
+        "Scanned text-like columns for HIPAA-style identifier patterns",
+        items,
+        "red",
+      ),
+    );
   }
+
   const linkage = na.high_linkage_risk || [];
   if (linkage.length) {
     const items = linkage
       .map((x) => {
-        const label = x.feature || (x.features || []).join(", ");
-        return `<li class="flex justify-between gap-3"><span class="truncate">${x.metric}: ${label}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${x.mean_risk}</span></li>`;
+        const qis = x.quasi_identifiers || x.features || [];
+        const featLabel = x.feature
+          ? `<span class="font-mono">${_escapeHtml(x.feature)}</span>`
+          : `<span class="font-mono">${_escapeHtml(qis.join(", "))}</span>`;
+        return _readinessNaRow(
+          `${_escapeHtml(x.metric)}: ${featLabel}`,
+          x.detail || (qis.length ? `Quasi-identifiers: ${qis.join(", ")}` : null),
+          `risk ${x.mean_risk}`,
+        );
       })
       .join("");
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">High linkage risk (${linkage.length})${_readinessInfoIcon("high_linkage_risk")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
-      </div>`);
+    naItems.push(
+      _readinessNaBlock(
+        `High linkage risk (${linkage.length})`,
+        "high_linkage_risk",
+        null,
+        items,
+        "amber",
+      ),
+    );
   }
+
   const attrDisc = na.attribute_disclosure || [];
   if (attrDisc.length) {
     const items = attrDisc
-      .map(
-        (x) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${x.metric}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${x.value}</span></li>`,
-      )
+      .map((x) => {
+        const qiList = (x.quasi_identifiers || []).join(", ");
+        const sens = x.sensitive_attribute || "—";
+        return _readinessNaRow(
+          `${_escapeHtml(x.metric)} = ${x.value}`,
+          x.detail ||
+            `Sensitive <span class="font-mono">${_escapeHtml(sens)}</span> within groups of (${qiList})`,
+          null,
+        );
+      })
       .join("");
-    naItems.push(`
-      <div>
-        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Attribute disclosure risk (${attrDisc.length})${_readinessInfoIcon("attribute_disclosure")}</p>
-        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
-      </div>`);
+    naItems.push(
+      _readinessNaBlock(
+        `Attribute disclosure risk (${attrDisc.length})`,
+        "attribute_disclosure",
+        attrDisc[0].sensitive_attribute
+          ? `Sensitive: <span class="font-mono">${_escapeHtml(attrDisc[0].sensitive_attribute)}</span>`
+          : null,
+        items,
+        "amber",
+      ),
+    );
   }
 
-  if (naItems.length) {
-    html += `
-      <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
-        <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
-      </div>`;
-  } else {
-    html += `
-      <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
-        <p class="text-sm text-green-800 dark:text-green-400">No governance issues detected under the automated thresholds.</p>
-      </div>`;
-  }
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No governance issues detected under the automated thresholds.",
+  );
 
   const det = gov.details || {};
   let detailsInner = "";
