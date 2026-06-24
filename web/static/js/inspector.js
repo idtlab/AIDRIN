@@ -2255,6 +2255,27 @@ function _readinessSectionError(container, message) {
   container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">${message}</p>`;
 }
 
+/** Human-readable section build duration (matches server log precision). */
+function _formatReadinessBuildTime(seconds) {
+  if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) {
+    return "";
+  }
+  return `Prepared in ${Number(seconds).toFixed(2)} seconds`;
+}
+
+/** Append build-time footer at the bottom of a readiness section container. */
+function _appendReadinessBuildTimeFooter(container, seconds) {
+  if (!container) return;
+  const label = _formatReadinessBuildTime(seconds);
+  if (!label) return;
+  container.querySelector(".readiness-build-time")?.remove();
+  const el = document.createElement("p");
+  el.className =
+    "readiness-build-time text-xs text-gray-400 dark:text-gray-500 mt-4 pt-3 border-t border-gray-200 dark:border-gray-700 text-right";
+  el.textContent = label;
+  container.appendChild(el);
+}
+
 /**
  * Fetch one readiness-report section and render it when ready.
  * @param {string} section - URL slug (e.g. "data-quality")
@@ -2274,7 +2295,12 @@ function _fetchReadinessSection(section, container, renderFn) {
         );
         return;
       }
-      renderFn(container, resp.data || {});
+      const data = resp.data || {};
+      renderFn(container, data);
+      _appendReadinessBuildTimeFooter(
+        container,
+        resp.build_time_seconds ?? data.build_time_seconds,
+      );
     })
     .catch((err) => {
       _readinessSectionError(container, `Error loading section: ${err.message}`);

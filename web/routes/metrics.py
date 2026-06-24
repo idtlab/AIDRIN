@@ -1920,15 +1920,17 @@ def readiness_report_section(section):
 
     start_time = time.time()
     data = _build_readiness_section(section, file_info)
+    build_time_seconds = round(time.time() - start_time, 2)
     metric_time_log.info(
         "Readiness report section %s built in %.2f seconds",
         section,
-        time.time() - start_time,
+        build_time_seconds,
     )
     return jsonify(ensure_json_serializable({
         "success": True,
         "section": section,
         "data": data,
+        "build_time_seconds": build_time_seconds,
     }))
 
 
@@ -1943,9 +1945,17 @@ def readiness_report():
     try:
         response = {"success": True}
         for slug in _READINESS_SECTION_BUILDERS:
-            response[_READINESS_SECTION_RESPONSE_KEYS[slug]] = _build_readiness_section(
-                slug, file_info
+            section_start = time.time()
+            section_data = _build_readiness_section(slug, file_info)
+            section_elapsed = round(time.time() - section_start, 2)
+            if isinstance(section_data, dict):
+                section_data = {**section_data, "build_time_seconds": section_elapsed}
+            metric_time_log.info(
+                "Readiness report section %s built in %.2f seconds",
+                slug,
+                section_elapsed,
             )
+            response[_READINESS_SECTION_RESPONSE_KEYS[slug]] = section_data
 
         metric_time_log.info("Readiness report built in %.2f seconds", time.time() - start_time)
         return jsonify(ensure_json_serializable(response))
