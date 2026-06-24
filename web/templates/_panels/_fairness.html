@@ -72,7 +72,7 @@
       </div>
     </div>
     <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
-      <button type="button" onclick="workspaceSubmit('/fairness');"
+      <button type="button" onclick="withSubmitGuard(this, () => workspaceSubmit('/fairness'));"
               class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
         Submit
       </button>

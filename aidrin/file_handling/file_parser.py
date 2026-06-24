@@ -6,6 +6,7 @@ from aidrin.file_handling.readers.excel_reader import excelReader
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
+from aidrin.file_handling.readers.parquet_reader import parquetReader
 
 # Notes:
 # To add support for new file types:
@@ -21,6 +22,7 @@ READER_MAP = {
     ".xls, .xlsb, .xlsx, .xlsm": excelReader,
     ".json": jsonReader,
     ".h5": hdf5Reader,
+    ".parquet": parquetReader,
     # Add additional file types here
 }
 
@@ -31,6 +33,7 @@ SUPPORTED_FILE_TYPES = [
     (".json", "JSON"),
     (".npz", "NumPy"),
     (".h5", "HDF5"),
+    (".parquet", "Parquet"),
     # Add additional file types here using the format:
     # (file_type,file_type_name)
 ]
@@ -149,5 +152,5 @@ def read_file(file_info):
         return df
 
     except Exception as e:
-        file_upload_time_log.error(f"Error while Reading File: {e}")
-        return str(e)
+        file_upload_time_log.error(f"Error while Reading File: {e}", exc_info=True)
+        return "Unable to read the uploaded file."

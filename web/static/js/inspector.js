@@ -244,6 +244,49 @@ document.addEventListener("DOMContentLoaded", function () {
 // ==================== Form Submission ====================
 
 /**
+ * Prevent duplicate submissions while a request is already in flight (issue #108).
+ * Disables the button and adds an `.is-submitting` class for the duration of the
+ * returned promise, restoring everything in `.finally()` so it recovers on both
+ * success and error. Handlers that return `undefined` (early validation returns)
+ * release the guard in the next microtask.
+ *
+ * @param {HTMLElement|null} button - The button that was clicked.
+ * @param {Function} taskFn - Submit function; should `return` its fetch promise.
+ * @returns {Promise|undefined} The guarded task promise, or `undefined` if a
+ *   submission for this button is already running.
+ */
+function withSubmitGuard(button, taskFn) {
+  if (!button) {
+    // No button to guard against; just run the task.
+    return Promise.resolve().then(taskFn);
+  }
+  if (button.dataset.submitting === "true") {
+    // A request triggered by this button is already running — ignore the click.
+    return;
+  }
+  button.dataset.submitting = "true";
+  // Capture the live text color so the spinner inherits the theme (works for
+  // dark/light mode, blue-on-white buttons, etc.) — the label is hidden via
+  // `color: transparent` in `.is-submitting`, so currentColor alone wouldn't
+  // do (it would be transparent too).
+  button.style.setProperty(
+    "--aidrin-spinner-color",
+    getComputedStyle(button).color,
+  );
+  button.disabled = true;
+  button.classList.add("is-submitting");
+
+  return Promise.resolve()
+    .then(taskFn)
+    .finally(() => {
+      button.dataset.submitting = "false";
+      button.disabled = false;
+      button.classList.remove("is-submitting");
+      button.style.removeProperty("--aidrin-spinner-color");
+    });
+}
+
+/**
  * Submit a metric form to a specific URL from the workspace.
  * Wraps the existing submitForm() logic but POSTs to a parameterized URL.
  * @param {string} targetUrl - The metric endpoint URL (e.g., '/data-quality')
@@ -517,8 +560,9 @@ function workspaceSubmit(targetUrl) {
       </div>`;
   }
 
-  // POST to the metric endpoint
-  fetch(targetUrl + "?return_type=json", {
+  // POST to the metric endpoint.
+  // Return the promise so withSubmitGuard re-enables the button when it settles.
+  return fetch(targetUrl + "?return_type=json", {
     method: "POST",
     body: processedFormData,
   })
@@ -1677,7 +1721,8 @@ function submitFairAssessment() {
   if (resultContainer)
     resultContainer.innerHTML = '<p class="text-center">Processing...</p>';
 
-  fetch("/fair-assessment", { method: "POST", body: formData })
+  // Return the promise so withSubmitGuard re-enables the button when it settles.
+  return fetch("/fair-assessment", { method: "POST", body: formData })
     .then((response) => response.json())
     .then((data) => {
       if (!resultContainer) return;
@@ -1891,7 +1936,8 @@ function submitCustomMetric() {
     document.getElementById("apply_remedy")?.checked ? "yes" : "no",
   );
 
-  fetch("/custom-metrics?return_type=json", {
+  // Return the promise so withSubmitGuard re-enables the button when it settles.
+  return fetch("/custom-metrics?return_type=json", {
     method: "POST",
     body: formData,
   })
@@ -2088,7 +2134,11 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
           renderWorkspaceHistograms(data.histograms, histogramsId);
         }
       } else {
-        container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Could not load summary: ${data.message}</p>`;
+        container.innerHTML = `
+          <div class="flex items-start gap-2 p-3 text-sm rounded-lg bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+            <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+            <span>${data.message}</span>
+          </div>`;
       }
     })
     .catch((err) => {

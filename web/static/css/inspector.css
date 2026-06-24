@@ -61,3 +61,37 @@ html.dark .relative.overflow-x-auto thead {
 .CodeMirror-scroll {
   min-height: 300px;
 }
+
+/* Submit-button loading state — prevents duplicate submissions (issue #108).
+   Applied by withSubmitGuard() in inspector.js for the duration of the
+   in-flight request. The label is made transparent (so the button keeps its
+   original width regardless of label length) and a spinner is overlaid via
+   ::after. The spinner's color is set inline by withSubmitGuard() to whatever
+   the button's text color was at click time, so it stays theme-aware. */
+button.is-submitting {
+  position: relative;
+  cursor: not-allowed !important;
+  pointer-events: none;
+  opacity: 0.75;
+  color: transparent !important;
+}
+
+button.is-submitting::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid var(--aidrin-spinner-color, #ffffff);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: aidrin-submit-spin 0.6s linear infinite;
+}
+
+@keyframes aidrin-submit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
