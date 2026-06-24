@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 HDF5_SUPPORTED_KINDS = {"b", "i", "u", "f", "S", "U"}
+HDF5_BLOCK_ELEMENT_LIMIT = 1_000_000
 
 
 def iter_targets(file_info):
@@ -119,36 +120,70 @@ def _iter_hdf5_value_blocks(file_path, target):
         if not _is_supported_hdf5_dataset(dataset):
             raise TypeError(f"Unsupported HDF5 dataset dtype for {path}: {dataset.dtype}")
 
-        values = dataset[()]
-        values = np.asarray(values)
-        if values.shape == ():
-            values = values.reshape(())
+        for selection, offset in _iter_hdf5_dataset_selections(dataset):
+            values = dataset[()] if selection is None else dataset[selection]
+            values = np.asarray(values)
+            if values.shape == ():
+                values = values.reshape(())
 
-        missing_mask = _hdf5_missing_mask(dataset, values, internal_path)
+            missing_mask = _hdf5_missing_mask(dataset, values, internal_path)
 
-        def locate(index_tuple):
-            normalized = tuple(int(i) for i in index_tuple)
-            suffix = "".join(f"[{','.join(str(i) for i in normalized)}]") if normalized else ""
-            return {
-                "path": path,
-                "index": list(normalized),
-                "display": f"{path}{suffix}",
+            def locate(index_tuple, block_offset=offset):
+                normalized = _global_hdf5_index(index_tuple, block_offset)
+                suffix = "".join(f"[{','.join(str(i) for i in normalized)}]") if normalized else ""
+                return {
+                    "path": path,
+                    "index": list(normalized),
+                    "display": f"{path}{suffix}",
+                }
+
+            yield {
+                "target": path,
+                "target_type": "hdf5_dataset",
+                "values": values,
+                "offset": list(offset) if offset else None,
+                "locate": locate,
+                "missing_mask": missing_mask,
             }
-
-        yield {
-            "target": path,
-            "target_type": "hdf5_dataset",
-            "values": values,
-            "offset": None,
-            "locate": locate,
-            "missing_mask": missing_mask,
-        }
 
 
 def _is_supported_hdf5_dataset(dataset):
     if dataset.dtype.kind in HDF5_SUPPORTED_KINDS:
         return True
     return h5py.check_string_dtype(dataset.dtype) is not None
+
+
+def _iter_hdf5_dataset_selections(dataset):
+    if dataset.shape == ():
+        yield None, ()
+        return
+
+    if dataset.chunks:
+        for selection in dataset.iter_chunks():
+            yield selection, _selection_offset(selection)
+        return
+
+    yield from _iter_regular_hdf5_slices(dataset.shape)
+
+
+def _iter_regular_hdf5_slices(shape):
+    trailing_elements = int(np.prod(shape[1:], dtype=np.int64)) if len(shape) > 1 else 1
+    rows_per_block = max(1, HDF5_BLOCK_ELEMENT_LIMIT // max(1, trailing_elements))
+    for start in range(0, int(shape[0]), rows_per_block):
+        stop = min(int(shape[0]), start + rows_per_block)
+        selection = (slice(start, stop),) + tuple(slice(0, int(dim)) for dim in shape[1:])
+        yield selection, _selection_offset(selection)
+
+
+def _selection_offset(selection):
+    return tuple(int(s.start or 0) for s in selection)
+
+
+def _global_hdf5_index(index_tuple, offset):
+    normalized = tuple(int(i) for i in index_tuple)
+    if not offset:
+        return normalized
+    return tuple(int(i) + int(o) for i, o in zip(normalized, offset))
 
 
 def _hdf5_missing_mask(dataset, values, display_name):
