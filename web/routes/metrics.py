@@ -438,6 +438,17 @@ def _build_data_quality_section(file_info):
     section = {
         "grade": grade,
         "grade_status": _grade_label(grade),
+        "auto_selection": {
+            "selection_criteria": {
+                "analysis_scope": {
+                    "rule": (
+                        "Completeness, outliers, and duplicity run on the full dataset "
+                        "automatically — no column selection required."
+                    ),
+                    "selected": "all columns",
+                },
+            },
+        },
         "kpis": kpis,
         "needs_attention": {
             "incomplete_features": incomplete,
@@ -607,13 +618,92 @@ def _build_impact_on_ai_section(file_info):
     cat = corr.get("Correlations Analysis Categorical", {}) or {}
     num = corr.get("Correlations Analysis Numerical", {}) or {}
 
+    leakage_pairs = signals["leakage"]
+    redundant_pairs = signals["redundant"]
+    isolated_features = signals["isolated"]
+    top_pairs = signals["top"]
+    n_kept = len(kept)
+
+    leakage_kpi = 1.0 if not leakage_pairs else max(0.0, 1.0 - len(leakage_pairs) / 5.0)
+    redundancy_kpi = max(0.0, 1.0 - min(len(redundant_pairs) / 10.0, 1.0))
+    informativeness_kpi = (
+        max(0.0, 1.0 - len(isolated_features) / n_kept) if n_kept else None
+    )
+
+    kpis = [
+        {
+            "id": "leakage_safety",
+            "label": "Leakage safety",
+            "value": leakage_kpi,
+            "status": "good" if not leakage_pairs else ("warning" if len(leakage_pairs) < 3 else "poor"),
+            "hint": (
+                f"No pairs with |score| ≥ {_CORR_LEAKAGE_THRESHOLD}; "
+                f"{len(leakage_pairs)} leakage-risk pair(s) found."
+            ),
+            "raw_count": len(leakage_pairs),
+        },
+        {
+            "id": "redundancy",
+            "label": "Redundancy",
+            "value": redundancy_kpi,
+            "status": _grade_label(redundancy_kpi),
+            "hint": (
+                f"1 − min(redundant pairs / 10, 1); "
+                f"{len(redundant_pairs)} pair(s) with |score| ≥ {_CORR_REDUNDANT_THRESHOLD}."
+            ),
+            "raw_count": len(redundant_pairs),
+        },
+        {
+            "id": "informativeness",
+            "label": "Informativeness",
+            "value": informativeness_kpi,
+            "status": _grade_label(informativeness_kpi),
+            "hint": (
+                f"Share of analyzed features with a strong relationship "
+                f"(max |score| ≥ {_CORR_ISOLATED_THRESHOLD})."
+            ),
+            "raw_count": len(isolated_features),
+        },
+    ]
+
+    present = [k["value"] for k in kpis if k["value"] is not None]
+    grade = sum(present) / len(present) if present else None
+
     return {
-        "columns_analyzed": len(kept),
+        "grade": grade,
+        "grade_status": _grade_label(grade),
+        "columns_analyzed": n_kept,
+        "auto_selection": {
+            "columns_selected": kept,
+            "selection_criteria": {
+                "columns_analyzed": {
+                    "rule": (
+                        f"Prune constants, ID-like categoricals (unique ratio ≥ "
+                        f"{_CORR_ID_UNIQUE_RATIO}), and high-cardinality categoricals "
+                        f"(>{_CORR_HIGH_CARD_MAX} categories); cap at {_CORR_MAX_COLUMNS} "
+                        "columns (numerical prioritized)."
+                    ),
+                    "selected": kept,
+                    "excluded": dropped,
+                },
+                "thresholds": {
+                    "redundant_threshold": _CORR_REDUNDANT_THRESHOLD,
+                    "leakage_threshold": _CORR_LEAKAGE_THRESHOLD,
+                    "isolated_threshold": _CORR_ISOLATED_THRESHOLD,
+                },
+            },
+        },
+        "kpis": kpis,
+        "needs_attention": {
+            "leakage_pairs": leakage_pairs,
+            "redundant_pairs": redundant_pairs,
+            "isolated_features": isolated_features,
+        },
+        "top_pairs": top_pairs,
         "columns_dropped": dropped,
-        "redundant_pairs": signals["redundant"],
-        "leakage_pairs": signals["leakage"],
-        "isolated_features": signals["isolated"],
-        "top_pairs": signals["top"],
+        "redundant_pairs": redundant_pairs,
+        "leakage_pairs": leakage_pairs,
+        "isolated_features": isolated_features,
         "details": {
             "categorical_visualization": cat.get(
                 "Correlations Analysis Categorical Visualization"

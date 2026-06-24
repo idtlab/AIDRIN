@@ -2295,6 +2295,8 @@ const _READINESS_METRIC_INFO = {
     "Readiness verdict for this feature. Poor: high missingness, constant, or ID-like. Warning: moderate issues. Good: no major issues detected.",
   overall_dq_grade:
     "Average of the data-quality KPIs (completeness, uniqueness, outlier-cleanliness). Higher is better — indicates how clean the dataset is overall.",
+  analysis_scope:
+    "This section evaluates every column automatically; no features or targets are chosen by the user.",
   completeness:
     "Overall share of non-missing values across all features. Same measure as the Completeness metric on the Data Quality tab.",
   uniqueness:
@@ -2311,6 +2313,14 @@ const _READINESS_METRIC_INFO = {
     "Features whose strongest correlation to any other feature is below 0.1. May be uninformative noise, identifiers, or weakly related fields worth reviewing.",
   most_related_pairs:
     "The feature pairs with the highest absolute correlation scores from the automated scan — quick view of the strongest relationships in the data.",
+  overall_impact_grade:
+    "Average of impact KPIs (leakage safety, redundancy, informativeness). Higher suggests healthier feature structure for modeling.",
+  leakage_safety:
+    "Whether any feature pairs exceed the leakage-risk correlation threshold (|score| ≥ 0.95). Fewer or no pairs is better.",
+  redundancy:
+    "Derived from the count of highly correlated redundant pairs (|score| ≥ 0.8). Lower redundancy is generally preferable.",
+  informativeness:
+    "Share of analyzed features that have at least one meaningful correlation to another feature — flags isolated or uninformative columns.",
   overall_fairness_grade:
     "Average of fairness KPIs (representation balance, label balance, outcome parity). Higher suggests more balanced representation and outcomes under the automated checks.",
   representation_balance:
@@ -2552,17 +2562,29 @@ function renderReadinessDataQuality(container, dq) {
     return;
   }
   const kpis = dq.kpis || [];
-      const gradeCls = _dqStatusClasses(dq.grade_status);
+  const gradeCls = _dqStatusClasses(dq.grade_status);
+  const scopeCrit =
+    (dq.auto_selection || {}).selection_criteria?.analysis_scope || {};
 
-      // --- Overall grade + KPI tiles ---
-      let html = `
+  // --- Analysis scope (no column auto-selection required) ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Analysis scope:</span> ${scopeCrit.selected || "all columns"}${_readinessInfoIcon("analysis_scope")}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${scopeCrit.rule || "All columns are evaluated automatically."}</span></li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall data quality grade${_readinessInfoIcon("overall_dq_grade")}</span>
           <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(dq.grade)}</span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
 
-      kpis.forEach((k) => {
+  kpis.forEach((k) => {
         const cls = _dqStatusClasses(k.status);
         const widthPct =
           k.value === null || k.value === undefined
@@ -2580,10 +2602,10 @@ function renderReadinessDataQuality(container, dq) {
             <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
           </div>`;
       });
-      html += "</div>";
+  html += "</div>";
 
-      // --- Needs attention ---
-      const na = dq.needs_attention || {};
+  // --- Needs attention ---
+  const na = dq.needs_attention || {};
       const incomplete = na.incomplete_features || [];
       const outlierFeats = na.outlier_features || [];
       const dupRows = na.duplicate_rows || 0;
@@ -2646,8 +2668,8 @@ function renderReadinessDataQuality(container, dq) {
           </div>`;
       }
 
-      // --- Collapsible details (original charts) ---
-      const det = dq.details || {};
+  // --- Collapsible details (original charts) ---
+  const det = dq.details || {};
       let detailsInner = "";
       if (det.completeness && det.completeness.visualization) {
         detailsInner += `
@@ -2690,49 +2712,73 @@ function renderReadinessImpact(container, impact) {
     return;
   }
 
-  const redundant = impact.redundant_pairs || [];
-  const leakage = impact.leakage_pairs || [];
-  const isolated = impact.isolated_features || [];
+  const autoSel = impact.auto_selection || {};
+  const crit = autoSel.selection_criteria || {};
+  const colCrit = crit.columns_analyzed || {};
+  const thresholds = crit.thresholds || {};
+  const kpis = impact.kpis || [];
+  const na = impact.needs_attention || {};
+  const gradeCls = _dqStatusClasses(impact.grade_status);
+
+  const leakage = na.leakage_pairs || impact.leakage_pairs || [];
+  const redundant = na.redundant_pairs || impact.redundant_pairs || [];
+  const isolated = na.isolated_features || impact.isolated_features || [];
   const topPairs = impact.top_pairs || [];
-  const dropped = impact.columns_dropped || [];
-  const analyzed = impact.columns_analyzed || 0;
+  const dropped = colCrit.excluded || impact.columns_dropped || [];
+  const analyzed = impact.columns_analyzed || (colCrit.selected || []).length;
 
   const fmtScore = (s) => (typeof s === "number" ? s.toFixed(2) : s);
   const fmtPair = (p) =>
     `<li class="flex justify-between gap-3"><span class="truncate">${p.a} \u2194 ${p.b}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtScore(p.score)}</span></li>`;
 
-  // --- Stat tiles ---
-  const tiles = [
-    { label: "Features analyzed", value: analyzed, status: "neutral", infoKey: "features_analyzed" },
-    {
-      label: "Leakage-risk pairs",
-      value: leakage.length,
-      status: leakage.length ? "poor" : "good",
-      infoKey: "leakage_risk_pairs",
-    },
-    {
-      label: "Redundant pairs",
-      value: redundant.length,
-      status: redundant.length ? "warning" : "good",
-      infoKey: "redundant_pairs",
-    },
-    {
-      label: "Isolated features",
-      value: isolated.length,
-      status: isolated.length ? "warning" : "good",
-      infoKey: "isolated_features",
-    },
-  ];
+  const selectedCols = colCrit.selected || [];
+  const selectedPreview =
+    selectedCols.length > 0
+      ? `${selectedCols.slice(0, 8).join(", ")}${selectedCols.length > 8 ? "…" : ""}`
+      : "none";
 
-  let html = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">';
-  tiles.forEach((t) => {
-    const cls = _dqStatusClasses(t.status);
-    const valColor =
-      t.status === "neutral" ? "text-gray-900 dark:text-white" : cls.text;
+  // --- Auto-selection criteria ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Columns analyzed (${analyzed}):</span> ${selectedPreview}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${colCrit.rule || ""}</span></li>
+        <li><span class="font-medium">Excluded columns:</span> ${dropped.length}</li>
+        <li><span class="font-medium">Thresholds:</span>
+          redundant |score| ≥ ${thresholds.redundant_threshold ?? "—"},
+          leakage |score| ≥ ${thresholds.leakage_threshold ?? "—"},
+          isolated max |score| &lt; ${thresholds.isolated_threshold ?? "—"}
+        </li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall impact grade${_readinessInfoIcon("overall_impact_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(impact.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    const displayVal =
+      k.raw_count != null ? `${k.raw_count} flagged` : _pct(k.value);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
     html += `
-      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
-        <div class="text-3xl font-bold ${valColor}">${t.value}</div>
-        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide inline-flex items-center justify-center flex-wrap gap-0">${t.label}${_readinessInfoIcon(t.infoKey)}</div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-2xl font-bold ${cls.text} shrink-0">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
       </div>`;
   });
   html += "</div>";
@@ -2766,7 +2812,7 @@ function renderReadinessImpact(container, impact) {
   if (isolated.length) {
     const items = isolated
       .slice(0, 10)
-      .map((f) => `<li class="truncate">${f}</li>`)
+      .map((f) => `<li class="truncate">${typeof f === "string" ? f : f.feature || f}</li>`)
       .join("");
     const more =
       isolated.length > 10
@@ -2792,29 +2838,29 @@ function renderReadinessImpact(container, impact) {
       </div>`;
   }
 
-  // --- Most-related pairs table ---
+  // --- Collapsible details ---
+  const det = impact.details || {};
+  let detailsInner = "";
+
   if (topPairs.length) {
-    html +=
-      '<div class="mb-4"><p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 inline-flex items-center">Most-related feature pairs' +
+    detailsInner +=
+      '<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 inline-flex items-center">Most-related feature pairs' +
       _readinessInfoIcon("most_related_pairs") +
       "</p>";
-    html +=
-      '<div class="relative overflow-x-auto rounded-lg shadow-sm"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
-    html +=
+    detailsInner +=
+      '<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
+    detailsInner +=
       '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr><th class="px-4 py-2">Feature A</th><th class="px-4 py-2">Feature B</th><th class="px-4 py-2 text-right">Score</th></tr></thead><tbody>';
     topPairs.forEach((p, i) => {
       const stripe =
         i % 2 === 0
           ? "bg-white dark:bg-gray-800"
           : "bg-gray-50 dark:bg-gray-700/50";
-      html += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${p.a}</td><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${p.b}</td><td class="px-4 py-2 font-mono text-xs text-right">${fmtScore(p.score)}</td></tr>`;
+      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${p.a}</td><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${p.b}</td><td class="px-4 py-2 font-mono text-xs text-right">${fmtScore(p.score)}</td></tr>`;
     });
-    html += "</tbody></table></div></div>";
+    detailsInner += "</tbody></table></div>";
   }
 
-  // --- Collapsible details (heatmaps + excluded columns) ---
-  const det = impact.details || {};
-  let detailsInner = "";
   if (det.numerical_visualization) {
     const method = det.numerical_method ? ` (${det.numerical_method})` : "";
     detailsInner += `
@@ -2843,11 +2889,12 @@ function renderReadinessImpact(container, impact) {
         <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
       </div>`;
   }
+
   if (detailsInner) {
     html += `
       <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
         <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
-          Show correlation heatmaps &amp; excluded columns
+          Show detailed charts &amp; tables
         </summary>
         <div class="mt-4">${detailsInner}</div>
       </details>`;
@@ -3103,16 +3150,7 @@ function renderReadinessGovernance(container, gov) {
   const na = gov.needs_attention || {};
   const gradeCls = _dqStatusClasses(gov.grade_status);
 
-  let html = "";
-
-  if (gov.small_sample_warning) {
-    html += `
-      <div class="p-3 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-sm text-amber-800 dark:text-amber-300">
-        Small dataset (&lt; ${thresholds.small_sample_rows ?? 30} rows) — privacy metrics may be unstable.
-      </div>`;
-  }
-
-  html += `
+  let html = `
     <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
       <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
       <ul class="space-y-2 text-gray-700 dark:text-gray-300">
@@ -3130,6 +3168,11 @@ function renderReadinessGovernance(container, gov) {
           MM single &lt; ${thresholds.mm_single_good ?? "—"}/${thresholds.mm_single_warning ?? "—"},
           MM combined &lt; ${thresholds.mm_multi_good ?? "—"}/${thresholds.mm_multi_warning ?? "—"}
         </li>
+        ${
+          gov.small_sample_warning
+            ? `<li><span class="font-medium text-amber-700 dark:text-amber-400">Note:</span> small dataset (&lt; ${thresholds.small_sample_rows ?? 30} rows) — privacy metrics may be unstable.</li>`
+            : ""
+        }
       </ul>
     </div>`;
 
