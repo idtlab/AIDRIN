@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import time
 
@@ -46,6 +47,8 @@ from aidrin.structured_data_metrics.privacy_measure import (
     compute_k_anonymity,
     compute_l_diversity,
     compute_t_closeness,
+    generate_multiple_attribute_MM_risk_scores,
+    generate_single_attribute_MM_risk_scores,
 )
 from aidrin.structured_data_metrics.representation_rate import (
     calculate_representation_rate,
@@ -1002,12 +1005,703 @@ def _build_fairness_bias_section(file_info):
     }
 
 
+# ---------------------------------------------------------------------------
+# Data Governance (readiness report)
+# ---------------------------------------------------------------------------
+
+_GOV_QI_MIN_UNIQUE = 2
+_GOV_QI_MAX_UNIQUE = 50
+_GOV_QI_MAX_COUNT = 4
+_GOV_ID_UNIQUE_RATIO = 0.9
+_GOV_NUMERIC_QI_MAX_UNIQUE = 20
+_GOV_MM_QI_MAX_UNIQUE = 100
+_GOV_MISSING_MAX = 0.20
+_GOV_SENSITIVE_MIN_UNIQUE = 2
+_GOV_SENSITIVE_MAX_UNIQUE = 30
+_GOV_HIPAA_MAX_COLUMNS = 40
+_GOV_HIPAA_MISSING_MAX = 0.50
+_GOV_DP_MAX_FEATURES = 2
+_GOV_DP_EPSILON = 0.1
+_GOV_SMALL_SAMPLE = 30
+
+_GOV_K_GOOD = 5
+_GOV_K_WARNING = 2
+_GOV_L_GOOD = 3
+_GOV_L_WARNING = 2
+_GOV_T_GOOD = 0.10
+_GOV_T_WARNING = 0.20
+_GOV_MM_SINGLE_GOOD = 0.3
+_GOV_MM_SINGLE_WARNING = 0.6
+_GOV_MM_MULTI_GOOD = 0.5
+_GOV_MM_MULTI_WARNING = 0.8
+
+_GOV_QI_NAME_HINTS = (
+    "zip", "postal", "gender", "sex", "age", "race", "ethnic", "city",
+    "state", "country", "birth", "dob", "county", "region", "marital",
+)
+_GOV_SENSITIVE_NAME_HINTS = (
+    "diagnosis", "disease", "condition", "salary", "income", "religion",
+    "health", "treatment", "medication", "outcome", "disability",
+)
+_GOV_ID_NAME_HINTS = (
+    "id", "uuid", "guid", "index", "record", "patient", "user", "member",
+    "row", "case",
+)
+_GOV_HIPAA_NAME_HINTS = (
+    "name", "address", "email", "phone", "ssn", "medical", "account",
+    "notes", "text", "comment",
+)
+_GOV_DP_NAME_HINTS = (
+    "age", "income", "salary", "score", "amount", "value", "rate", "count",
+    "weight", "height",
+)
+_GOV_HIPAA_SERIOUS_TYPES = frozenset({
+    "US_SSN", "MEDICAL_IDS", "VALID_POSTAL_CODE",
+})
+_SYNTHETIC_ID_COL = "__aidrin_row_index__"
+
+
+def _gov_name_hint_score(col_name, hints):
+    return _fairness_name_hint_score(col_name, hints)
+
+
+def _column_pct_missing(series, n_rows):
+    if n_rows <= 0:
+        return 1.0
+    return float(series.isna().sum()) / n_rows
+
+
+def _column_entropy_norm(series):
+    """Normalized Shannon entropy of value counts in [0, 1]."""
+    vc = series.dropna().value_counts(normalize=True)
+    if len(vc) <= 1:
+        return 0.0
+    ent = -sum(p * math.log2(p) for p in vc if p > 0)
+    max_ent = math.log2(len(vc))
+    return ent / max_ent if max_ent > 0 else 0.0
+
+
+def _k_anonymity_status(k_val):
+    if k_val is None:
+        return "unknown"
+    if k_val >= _GOV_K_GOOD:
+        return "good"
+    if k_val >= _GOV_K_WARNING:
+        return "warning"
+    return "poor"
+
+
+def _l_diversity_status(l_val):
+    if l_val is None:
+        return "unknown"
+    if l_val >= _GOV_L_GOOD:
+        return "good"
+    if l_val >= _GOV_L_WARNING:
+        return "warning"
+    return "poor"
+
+
+def _t_closeness_status(t_val):
+    if t_val is None:
+        return "unknown"
+    if t_val <= _GOV_T_GOOD:
+        return "good"
+    if t_val <= _GOV_T_WARNING:
+        return "warning"
+    return "poor"
+
+
+def _mm_risk_status(mean_risk, good=_GOV_MM_SINGLE_GOOD, warning=_GOV_MM_SINGLE_WARNING):
+    if mean_risk is None:
+        return "unknown"
+    if mean_risk < good:
+        return "good"
+    if mean_risk < warning:
+        return "warning"
+    return "poor"
+
+
+def _hipaa_status(detected_phi):
+    if not detected_phi:
+        return "good", 1.0
+    serious = any(
+        t in _GOV_HIPAA_SERIOUS_TYPES
+        for info in detected_phi.values()
+        for t in (info.get("potential_types_detected") or [])
+    )
+    if serious:
+        return "poor", 0.0
+    return "warning", 0.5
+
+
+def _auto_select_governance_columns(df, fairness_target=None):
+    """Pick columns for automated privacy and HIPAA checks in the readiness report."""
+    n_rows = max(len(df), 1)
+    excluded = []
+
+    # --- Sensitive attribute (before QIs so it can be excluded) ------------
+    sensitive_candidates = []
+    for col in df.columns:
+        feat_type = _classify_feature_type(df[col])
+        if feat_type not in ("categorical", "boolean"):
+            continue
+        nunique = df[col].nunique(dropna=True)
+        pct_miss = _column_pct_missing(df[col], n_rows)
+        if nunique < _GOV_SENSITIVE_MIN_UNIQUE:
+            continue
+        if nunique > _GOV_SENSITIVE_MAX_UNIQUE:
+            excluded.append({
+                "feature": col, "role": "sensitive",
+                "reason": f"high cardinality ({nunique} categories)",
+            })
+            continue
+        if pct_miss > _GOV_MISSING_MAX:
+            excluded.append({
+                "feature": col, "role": "sensitive",
+                "reason": f"high missingness ({pct_miss:.0%})",
+            })
+            continue
+        hint = _gov_name_hint_score(col, _GOV_SENSITIVE_NAME_HINTS)
+        fairness_boost = 1 if fairness_target and col == fairness_target else 0
+        sensitive_candidates.append({
+            "feature": col,
+            "nunique": int(nunique),
+            "name_hint_score": hint + fairness_boost,
+            "entropy": _column_entropy_norm(df[col]),
+        })
+
+    sensitive_candidates.sort(
+        key=lambda c: (-c["name_hint_score"], -c["entropy"], c["feature"])
+    )
+    sensitive_col = (
+        sensitive_candidates[0]["feature"] if sensitive_candidates else None
+    )
+
+    # --- ID column -----------------------------------------------------------
+    id_candidates = []
+    for col in df.columns:
+        if df[col].nunique(dropna=True) == n_rows and n_rows > 0:
+            id_candidates.append({
+                "feature": col,
+                "name_hint_score": _gov_name_hint_score(col, _GOV_ID_NAME_HINTS),
+            })
+    id_candidates.sort(key=lambda c: (-c["name_hint_score"], c["feature"]))
+    id_synthetic = not id_candidates
+    id_col = id_candidates[0]["feature"] if id_candidates else _SYNTHETIC_ID_COL
+
+    # --- Quasi-identifiers ---------------------------------------------------
+    qi_candidates = []
+    for col in df.columns:
+        if col == sensitive_col:
+            continue
+        if not id_synthetic and col == id_col:
+            continue
+        feat_type = _classify_feature_type(df[col])
+        if feat_type == "datetime":
+            excluded.append({"feature": col, "role": "quasi-identifier", "reason": "datetime column"})
+            continue
+        nunique = df[col].nunique(dropna=True)
+        pct_miss = _column_pct_missing(df[col], n_rows)
+        if nunique < _GOV_QI_MIN_UNIQUE:
+            excluded.append({"feature": col, "role": "quasi-identifier", "reason": "constant column"})
+            continue
+        if pct_miss > _GOV_MISSING_MAX:
+            excluded.append({
+                "feature": col, "role": "quasi-identifier",
+                "reason": f"high missingness ({pct_miss:.0%})",
+            })
+            continue
+        if nunique / n_rows >= _GOV_ID_UNIQUE_RATIO:
+            excluded.append({"feature": col, "role": "quasi-identifier", "reason": "ID-like (near-unique values)"})
+            continue
+        if feat_type in ("categorical", "boolean"):
+            if nunique > _GOV_QI_MAX_UNIQUE:
+                excluded.append({
+                    "feature": col, "role": "quasi-identifier",
+                    "reason": f"high cardinality ({nunique} categories)",
+                })
+                continue
+        elif feat_type == "numerical":
+            if nunique > _GOV_NUMERIC_QI_MAX_UNIQUE:
+                excluded.append({
+                    "feature": col, "role": "quasi-identifier",
+                    "reason": f"continuous numeric ({nunique} unique values)",
+                })
+                continue
+        else:
+            excluded.append({"feature": col, "role": "quasi-identifier", "reason": f"unsupported type ({feat_type})"})
+            continue
+
+        qi_candidates.append({
+            "feature": col,
+            "nunique": int(nunique),
+            "feat_type": feat_type,
+            "name_hint_score": _gov_name_hint_score(col, _GOV_QI_NAME_HINTS),
+        })
+
+    qi_candidates.sort(
+        key=lambda c: (-c["name_hint_score"], c["nunique"], c["feature"])
+    )
+    quasi_identifiers = [c["feature"] for c in qi_candidates[:_GOV_QI_MAX_COUNT]]
+    for c in qi_candidates[_GOV_QI_MAX_COUNT:]:
+        excluded.append({"feature": c["feature"], "role": "quasi-identifier", "reason": "exceeded QI cap"})
+
+    mm_quasi_identifiers = [
+        c["feature"] for c in qi_candidates[:_GOV_QI_MAX_COUNT]
+        if c["feat_type"] in ("categorical", "boolean")
+        and c["nunique"] <= _GOV_MM_QI_MAX_UNIQUE
+    ]
+
+    # --- HIPAA scan columns --------------------------------------------------
+    hipaa_candidates = []
+    for col in df.columns:
+        nunique = df[col].nunique(dropna=True)
+        if nunique <= 1:
+            continue
+        pct_miss = _column_pct_missing(df[col], n_rows)
+        feat_type = _classify_feature_type(df[col])
+        is_text = feat_type in ("categorical",) or str(df[col].dtype) in ("object", "string")
+        if is_text and pct_miss <= _GOV_HIPAA_MISSING_MAX:
+            avg_len = df[col].dropna().astype(str).str.len().mean()
+            hipaa_candidates.append({
+                "feature": col,
+                "name_hint_score": _gov_name_hint_score(col, _GOV_HIPAA_NAME_HINTS),
+                "avg_len": avg_len if pd.notna(avg_len) else 0,
+            })
+
+    hipaa_candidates.sort(
+        key=lambda c: (-c["name_hint_score"], -c["avg_len"], c["feature"])
+    )
+    hipaa_scan_columns = [c["feature"] for c in hipaa_candidates[:_GOV_HIPAA_MAX_COLUMNS]]
+    if not hipaa_scan_columns:
+        hipaa_scan_columns = [
+            col for col in df.columns if df[col].nunique(dropna=True) > 1
+        ][: _GOV_HIPAA_MAX_COLUMNS]
+
+    # --- DP numerical features -----------------------------------------------
+    dp_candidates = []
+    for col in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            continue
+        nunique = df[col].nunique(dropna=True)
+        if nunique <= 1:
+            continue
+        if nunique / n_rows >= _GOV_ID_UNIQUE_RATIO:
+            continue
+        if _column_pct_missing(df[col], n_rows) > _GOV_MISSING_MAX:
+            continue
+        dp_candidates.append({
+            "feature": col,
+            "name_hint_score": _gov_name_hint_score(col, _GOV_DP_NAME_HINTS),
+            "pct_missing": _column_pct_missing(df[col], n_rows),
+            "nunique": int(nunique),
+        })
+    dp_candidates.sort(
+        key=lambda c: (-c["name_hint_score"], c["pct_missing"], c["nunique"], c["feature"])
+    )
+    dp_features = [c["feature"] for c in dp_candidates[:_GOV_DP_MAX_FEATURES]]
+
+    return {
+        "quasi_identifiers": quasi_identifiers,
+        "mm_quasi_identifiers": mm_quasi_identifiers,
+        "sensitive_attribute": sensitive_col,
+        "id_column": id_col,
+        "id_synthetic": id_synthetic,
+        "hipaa_scan_columns": hipaa_scan_columns,
+        "dp_features": dp_features,
+        "dp_epsilon": _GOV_DP_EPSILON,
+        "selection_criteria": {
+            "quasi_identifiers": {
+                "rule": (
+                    f"Categorical/boolean with {_GOV_QI_MIN_UNIQUE}–{_GOV_QI_MAX_UNIQUE} "
+                    f"unique values; discrete numeric with {_GOV_QI_MIN_UNIQUE}–"
+                    f"{_GOV_NUMERIC_QI_MAX_UNIQUE}; exclude ID-like, datetime, "
+                    f"and >{_GOV_MISSING_MAX:.0%} missing; prefer name hints; "
+                    f"capped at {_GOV_QI_MAX_COUNT}."
+                ),
+                "name_hints": list(_GOV_QI_NAME_HINTS),
+                "selected": quasi_identifiers,
+                "excluded": [e for e in excluded if e["role"] == "quasi-identifier"],
+            },
+            "sensitive_attribute": {
+                "rule": (
+                    f"Categorical/boolean with {_GOV_SENSITIVE_MIN_UNIQUE}–"
+                    f"{_GOV_SENSITIVE_MAX_UNIQUE} unique values, excluding QIs; "
+                    "prefer sensitive name hints and fairness target when eligible."
+                ),
+                "name_hints": list(_GOV_SENSITIVE_NAME_HINTS),
+                "selected": sensitive_col,
+                "excluded": [e for e in excluded if e["role"] == "sensitive"],
+            },
+            "id_column": {
+                "rule": (
+                    "Exact-unique column preferred (name hints: id, uuid, patient, …); "
+                    "otherwise synthetic row index for linkage-risk scoring only."
+                ),
+                "selected": id_col,
+                "synthetic": id_synthetic,
+            },
+            "hipaa_scan_columns": {
+                "rule": (
+                    f"Text-like columns up to {_GOV_HIPAA_MAX_COLUMNS}, prefer HIPAA "
+                    "name hints; fallback to all non-constant columns."
+                ),
+                "name_hints": list(_GOV_HIPAA_NAME_HINTS),
+                "selected": hipaa_scan_columns,
+            },
+            "dp_features": {
+                "rule": (
+                    f"Up to {_GOV_DP_MAX_FEATURES} numerical, non-ID-like columns "
+                    f"(illustrative only, ε={_GOV_DP_EPSILON})."
+                ),
+                "selected": dp_features,
+                "epsilon": _GOV_DP_EPSILON,
+            },
+            "thresholds": {
+                "k_good": _GOV_K_GOOD,
+                "k_warning": _GOV_K_WARNING,
+                "l_good": _GOV_L_GOOD,
+                "l_warning": _GOV_L_WARNING,
+                "t_good": _GOV_T_GOOD,
+                "t_warning": _GOV_T_WARNING,
+                "mm_single_good": _GOV_MM_SINGLE_GOOD,
+                "mm_single_warning": _GOV_MM_SINGLE_WARNING,
+                "mm_multi_good": _GOV_MM_MULTI_GOOD,
+                "mm_multi_warning": _GOV_MM_MULTI_WARNING,
+                "small_sample_rows": _GOV_SMALL_SAMPLE,
+            },
+        },
+    }
+
+
+def _build_data_governance_section(file_info):
+    """Compute the Data Governance portion of the readiness report."""
+    df = read_file(file_info)
+    if hasattr(df, "columns"):
+        df.columns = [str(c) for c in df.columns]
+
+    n_rows = len(df)
+    fairness_sel = _auto_select_fairness_columns(df)
+    selection = _auto_select_governance_columns(
+        df, fairness_target=fairness_sel.get("target_column")
+    )
+    qi = selection["quasi_identifiers"]
+    mm_qis = selection["mm_quasi_identifiers"]
+    sensitive = selection["sensitive_attribute"]
+    id_col = selection["id_column"]
+    id_synthetic = selection["id_synthetic"]
+
+    work_df = df.copy()
+    if id_synthetic:
+        work_df[_SYNTHETIC_ID_COL] = range(len(work_df))
+        id_col = _SYNTHETIC_ID_COL
+
+    kpis = []
+    needs_attention = {
+        "low_anonymity": [],
+        "hipaa_phi": [],
+        "high_linkage_risk": [],
+        "attribute_disclosure": [],
+    }
+    details = {}
+    small_sample = n_rows < _GOV_SMALL_SAMPLE
+
+    # --- k-Anonymity ---------------------------------------------------------
+    k_val = None
+    if qi:
+        k_res = compute_k_anonymity(qi, work_df)
+        if "Error" not in k_res:
+            k_val = k_res.get("k-Value")
+            if k_val is not None and k_val < _GOV_K_WARNING:
+                needs_attention["low_anonymity"].append({
+                    "metric": "k-Anonymity",
+                    "value": k_val,
+                    "detail": f"Minimum equivalence class size on QIs: {', '.join(qi)}",
+                })
+            details["k_anonymity"] = {
+                "quasi_identifiers": qi,
+                "k_value": k_val,
+                "descriptive_statistics": k_res.get("descriptive_statistics"),
+                "visualization": k_res.get("k-Anonymity Visualization"),
+            }
+        else:
+            details["k_anonymity"] = {"error": k_res.get("Error")}
+    else:
+        details["k_anonymity"] = {"error": "No eligible quasi-identifier columns found."}
+
+    k_kpi = min(float(k_val) / _GOV_K_GOOD, 1.0) if k_val is not None else None
+    kpis.append({
+        "id": "anonymity_k",
+        "label": "Anonymity (k)",
+        "value": k_kpi,
+        "status": _k_anonymity_status(k_val),
+        "hint": f"k-Value ≥ {_GOV_K_GOOD} good, ≥ {_GOV_K_WARNING} warning (min group size on auto QIs).",
+        "raw_k": k_val,
+    })
+
+    # --- l-Diversity ---------------------------------------------------------
+    l_val = None
+    if qi and sensitive:
+        l_res = compute_l_diversity(qi, sensitive, work_df)
+        if "Error" not in l_res:
+            l_val = l_res.get("l-Value")
+            if l_val is not None and l_val < _GOV_L_WARNING:
+                needs_attention["attribute_disclosure"].append({
+                    "metric": "l-Diversity",
+                    "value": l_val,
+                    "detail": f"Sensitive attribute '{sensitive}' lacks diversity in some QI groups",
+                })
+            details["l_diversity"] = {
+                "quasi_identifiers": qi,
+                "sensitive_attribute": sensitive,
+                "l_value": l_val,
+                "descriptive_statistics": l_res.get("descriptive_statistics"),
+                "visualization": l_res.get("l-Diversity Visualization"),
+            }
+        else:
+            details["l_diversity"] = {"error": l_res.get("Error")}
+    else:
+        details["l_diversity"] = {
+            "error": "Requires quasi-identifiers and a sensitive attribute.",
+        }
+
+    l_kpi = min(float(l_val) / _GOV_L_GOOD, 1.0) if l_val is not None else None
+    kpis.append({
+        "id": "diversity_l",
+        "label": "Attribute diversity (l)",
+        "value": l_kpi,
+        "status": _l_diversity_status(l_val),
+        "hint": f"l-Value ≥ {_GOV_L_GOOD} good, ≥ {_GOV_L_WARNING} warning (min distinct sensitive values per QI group).",
+        "raw_l": l_val,
+    })
+
+    # --- t-Closeness ---------------------------------------------------------
+    t_val = None
+    if qi and sensitive:
+        t_res = compute_t_closeness(qi, sensitive, work_df)
+        if "Error" not in t_res:
+            t_val = t_res.get("t-Value")
+            if t_val is not None and t_val > _GOV_T_WARNING:
+                needs_attention["attribute_disclosure"].append({
+                    "metric": "t-Closeness",
+                    "value": t_val,
+                    "detail": f"Sensitive distribution diverges from global on '{sensitive}'",
+                })
+            details["t_closeness"] = {
+                "quasi_identifiers": qi,
+                "sensitive_attribute": sensitive,
+                "t_value": t_val,
+                "descriptive_statistics": t_res.get("descriptive_statistics"),
+                "visualization": t_res.get("t-Closeness Visualization"),
+            }
+        else:
+            details["t_closeness"] = {"error": t_res.get("Error")}
+    else:
+        details["t_closeness"] = {
+            "error": "Requires quasi-identifiers and a sensitive attribute.",
+        }
+
+    t_kpi = max(0.0, 1.0 - float(t_val) / _GOV_T_WARNING) if t_val is not None else None
+    kpis.append({
+        "id": "distribution_t",
+        "label": "Distribution leakage (t)",
+        "value": t_kpi,
+        "status": _t_closeness_status(t_val),
+        "hint": f"Max TVD ≤ {_GOV_T_GOOD} good, ≤ {_GOV_T_WARNING} warning (lower is better).",
+        "raw_t": t_val,
+    })
+
+    # --- Entropy risk --------------------------------------------------------
+    if qi:
+        e_res = compute_entropy_risk(qi, work_df)
+        if "Error" not in e_res:
+            details["entropy_risk"] = {
+                "quasi_identifiers": qi,
+                "entropy_value": e_res.get("Entropy-Value"),
+                "descriptive_statistics": e_res.get("descriptive_statistics"),
+                "visualization": e_res.get("Entropy Risk Visualization"),
+            }
+        else:
+            details["entropy_risk"] = {"error": e_res.get("Error")}
+    else:
+        details["entropy_risk"] = {"error": "No eligible quasi-identifier columns found."}
+
+    # --- Single-attribute MM risk ----------------------------------------------
+    worst_single_mean = None
+    single_by_qi = {}
+    if mm_qis:
+        for q in mm_qis:
+            try:
+                s_res = generate_single_attribute_MM_risk_scores(work_df, id_col, [q])
+                if "Error" in s_res:
+                    single_by_qi[q] = {"error": s_res["Error"]}
+                    continue
+                stats = (s_res.get("Descriptive statistics of the risk scores") or {}).get(q, {})
+                mean_risk = stats.get("mean")
+                if mean_risk is not None:
+                    mean_risk = float(mean_risk)
+                    single_by_qi[q] = {"mean_risk": round(mean_risk, 4), "stats": stats}
+                    if worst_single_mean is None or mean_risk > worst_single_mean:
+                        worst_single_mean = mean_risk
+                    if mean_risk >= _GOV_MM_SINGLE_WARNING:
+                        needs_attention["high_linkage_risk"].append({
+                            "metric": "Single-attribute risk",
+                            "feature": q,
+                            "mean_risk": round(mean_risk, 4),
+                        })
+            except Exception as exc:
+                single_by_qi[q] = {"error": str(exc)}
+        details["single_attribute_risk"] = {
+            "id_column": id_col,
+            "by_quasi_identifier": single_by_qi,
+        }
+    else:
+        details["single_attribute_risk"] = {
+            "error": "No categorical quasi-identifiers eligible for MM risk scoring.",
+        }
+
+    single_kpi = (
+        max(0.0, 1.0 - worst_single_mean) if worst_single_mean is not None else None
+    )
+    kpis.append({
+        "id": "single_linkage_risk",
+        "label": "Worst single-field risk",
+        "value": single_kpi,
+        "status": _mm_risk_status(worst_single_mean),
+        "hint": (
+            f"1 − worst mean MM risk across QIs; good < {_GOV_MM_SINGLE_GOOD}, "
+            f"warning < {_GOV_MM_SINGLE_WARNING}."
+        ),
+        "raw_worst_mean": round(worst_single_mean, 4) if worst_single_mean is not None else None,
+    })
+
+    # --- Multiple-attribute MM risk ------------------------------------------
+    multi_mean = None
+    if mm_qis:
+        try:
+            m_res = generate_multiple_attribute_MM_risk_scores(work_df, id_col, mm_qis)
+            if "Error" not in m_res:
+                m_stats = m_res.get("Descriptive statistics of the risk scores") or {}
+                multi_mean = m_stats.get("mean")
+                if multi_mean is not None:
+                    multi_mean = float(multi_mean)
+                    if multi_mean >= _GOV_MM_MULTI_WARNING:
+                        needs_attention["high_linkage_risk"].append({
+                            "metric": "Multiple-attribute risk",
+                            "features": mm_qis,
+                            "mean_risk": round(multi_mean, 4),
+                        })
+                details["multiple_attribute_risk"] = {
+                    "id_column": id_col,
+                    "quasi_identifiers": mm_qis,
+                    "mean_risk": round(multi_mean, 4) if multi_mean is not None else None,
+                    "dataset_risk_score": m_res.get("Dataset Risk Score"),
+                    "stats": m_stats,
+                    "visualization": m_res.get("Multiple attribute risk scoring Visualization"),
+                }
+            else:
+                details["multiple_attribute_risk"] = {"error": m_res.get("Error")}
+        except Exception as exc:
+            details["multiple_attribute_risk"] = {"error": str(exc)}
+    else:
+        details["multiple_attribute_risk"] = {
+            "error": "No categorical quasi-identifiers eligible for combined MM risk.",
+        }
+
+    multi_kpi = max(0.0, 1.0 - multi_mean) if multi_mean is not None else None
+    kpis.append({
+        "id": "linkage_risk",
+        "label": "Combined linkage risk",
+        "value": multi_kpi,
+        "status": _mm_risk_status(
+            multi_mean, good=_GOV_MM_MULTI_GOOD, warning=_GOV_MM_MULTI_WARNING
+        ),
+        "hint": (
+            f"1 − mean MM risk on combined QIs; good < {_GOV_MM_MULTI_GOOD}, "
+            f"warning < {_GOV_MM_MULTI_WARNING}."
+        ),
+        "raw_mean": round(multi_mean, 4) if multi_mean is not None else None,
+    })
+
+    # --- HIPAA ---------------------------------------------------------------
+    hipaa_cols = selection["hipaa_scan_columns"]
+    detected_phi = {}
+    if hipaa_cols:
+        detected_phi = detect_hipaa_identifiers(work_df, hipaa_cols)
+        for col, info in detected_phi.items():
+            types = info.get("potential_types_detected") or []
+            serious = [t for t in types if t in _GOV_HIPAA_SERIOUS_TYPES]
+            needs_attention["hipaa_phi"].append({
+                "column": col,
+                "total_flags": info.get("total_flags", 0),
+                "types": types,
+                "serious": bool(serious),
+                "examples": info.get("examples") or [],
+            })
+        details["hipaa"] = {
+            "columns_scanned": hipaa_cols,
+            "detected": detected_phi,
+        }
+    else:
+        details["hipaa"] = {"error": "No columns available to scan."}
+
+    hipaa_status, hipaa_kpi = _hipaa_status(detected_phi)
+    kpis.append({
+        "id": "phi_exposure",
+        "label": "PHI exposure",
+        "value": hipaa_kpi,
+        "status": hipaa_status,
+        "hint": "Pattern scan for HIPAA-like identifiers (SSN, medical IDs, postal codes, etc.). Not full Safe Harbor certification.",
+        "columns_flagged": len(detected_phi),
+    })
+
+    # --- Differential privacy (illustrative) -----------------------------------
+    dp_features = selection["dp_features"]
+    if dp_features:
+        try:
+            dp_res = return_noisy_stats(
+                dp_features, _GOV_DP_EPSILON, work_df, save_output=False
+            )
+            if "Error" not in dp_res:
+                details["differential_privacy"] = {
+                    "features": dp_features,
+                    "epsilon": _GOV_DP_EPSILON,
+                    "illustrative": True,
+                    "visualization": dp_res.get("DP Statistics Visualization"),
+                    "summary": {
+                        k: v for k, v in dp_res.items()
+                        if k.endswith("(before noise)") or k.endswith("(after noise)")
+                    },
+                }
+            else:
+                details["differential_privacy"] = {"error": dp_res.get("Error")}
+        except Exception as exc:
+            details["differential_privacy"] = {"error": str(exc)}
+    else:
+        details["differential_privacy"] = {
+            "error": "No eligible numerical columns for illustrative DP demo.",
+        }
+
+    grade_kpis = [k for k in kpis if k["value"] is not None]
+    grade = sum(k["value"] for k in grade_kpis) / len(grade_kpis) if grade_kpis else None
+
+    return {
+        "grade": grade,
+        "grade_status": _grade_label(grade),
+        "small_sample_warning": small_sample,
+        "auto_selection": selection,
+        "kpis": kpis,
+        "needs_attention": needs_attention,
+        "details": details,
+    }
+
+
 @metrics_bp.route("/readiness-report", methods=["GET"])
 def readiness_report():
     """Return an aggregated, non-interactive data-readiness report as JSON.
 
-    Covers dataset overview, Data Quality, Impact-on-AI, and Fairness & Bias.
-    Designed to be extended with more pillars over time.
+    Covers dataset overview, Data Quality, Impact-on-AI, Fairness & Bias,
+    and Data Governance. Designed to be extended with more pillars over time.
     """
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
@@ -1043,12 +1737,19 @@ def readiness_report():
             metric_time_log.error("Readiness report — fairness & bias error: %s", e, exc_info=True)
             fairness_section = {"error": f"{type(e).__name__}: {e}"}
 
+        try:
+            governance_section = _build_data_governance_section(file_info)
+        except Exception as e:
+            metric_time_log.error("Readiness report — data governance error: %s", e, exc_info=True)
+            governance_section = {"error": f"{type(e).__name__}: {e}"}
+
         response = ensure_json_serializable({
             "success": True,
             "dataset_overview": dataset_overview_section,
             "data_quality": data_quality_section,
             "impact_on_ai": impact_section,
             "fairness_bias": fairness_section,
+            "data_governance": governance_section,
         })
         metric_time_log.info("Readiness report built in %.2f seconds", time.time() - start_time)
         return jsonify(response)

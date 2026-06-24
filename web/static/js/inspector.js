@@ -2149,6 +2149,7 @@ function loadReadinessReport() {
   const dqContainer = document.getElementById("readiness-data-quality");
   const impactContainer = document.getElementById("readiness-impact");
   const fairnessContainer = document.getElementById("readiness-fairness");
+  const governanceContainer = document.getElementById("readiness-governance");
 
   fetch("/readiness-report")
     .then((r) => r.json())
@@ -2159,6 +2160,7 @@ function loadReadinessReport() {
         if (dqContainer) dqContainer.innerHTML = msg;
         if (impactContainer) impactContainer.innerHTML = msg;
         if (fairnessContainer) fairnessContainer.innerHTML = msg;
+        if (governanceContainer) governanceContainer.innerHTML = msg;
         return;
       }
       if (overviewContainer)
@@ -2169,6 +2171,8 @@ function loadReadinessReport() {
         renderReadinessImpact(impactContainer, resp.impact_on_ai || {});
       if (fairnessContainer)
         renderReadinessFairness(fairnessContainer, resp.fairness_bias || {});
+      if (governanceContainer)
+        renderReadinessGovernance(governanceContainer, resp.data_governance || {});
     })
     .catch((err) => {
       const msg = `<p class="text-sm" style="color: red;">Error loading readiness report: ${err.message}</p>`;
@@ -2176,6 +2180,7 @@ function loadReadinessReport() {
       if (dqContainer) dqContainer.innerHTML = msg;
       if (impactContainer) impactContainer.innerHTML = msg;
       if (fairnessContainer) fairnessContainer.innerHTML = msg;
+      if (governanceContainer) governanceContainer.innerHTML = msg;
     });
 }
 
@@ -2233,6 +2238,28 @@ const _READINESS_METRIC_INFO = {
     "Target classes whose outcome rates vary most across sensitive groups (high TSD). Suggests uneven outcomes by group.",
   cdd_disparities:
     "Sensitive groups flagged by Conditional Demographic Disparity — rejected outcomes outweigh accepted ones disproportionately (positive class is auto-selected as the most frequent target value).",
+  overall_governance_grade:
+    "Average of governance KPIs (anonymity, diversity, distribution leakage, linkage risk, PHI exposure). Higher suggests lower privacy and compliance risk under automated checks.",
+  anonymity_k:
+    "Minimum equivalence-class size (k) on auto-selected quasi-identifiers. Higher k means each QI combination appears in at least k rows — harder to re-identify individuals.",
+  diversity_l:
+    "Minimum l-diversity on the auto-selected sensitive attribute within QI groups. Higher l means more distinct sensitive values per group — harder to infer a specific sensitive value.",
+  distribution_t:
+    "Maximum t-closeness (TVD) between group and global sensitive-attribute distributions. Lower t means groups do not reveal unusually skewed sensitive information.",
+  single_linkage_risk:
+    "Worst mean Marketer/Prosecutor re-identification risk across single quasi-identifiers. Higher risk means one field alone can identify many individuals.",
+  linkage_risk:
+    "Mean MM re-identification risk when all auto-selected quasi-identifiers are combined — the realistic linkage-attack scenario.",
+  phi_exposure:
+    "HIPAA-style pattern scan on auto-selected text columns. Flags potential SSNs, medical IDs, postal codes, emails, etc. Not a full regulatory certification.",
+  low_anonymity:
+    "Privacy metrics (e.g. k-Anonymity) below warning thresholds — small equivalence classes increase re-identification risk.",
+  hipaa_phi:
+    "Columns where HIPAA-like identifier patterns were detected during the automated scan.",
+  high_linkage_risk:
+    "Quasi-identifiers or QI combinations with high Marketer/Prosecutor re-identification risk scores.",
+  attribute_disclosure:
+    "l-Diversity or t-Closeness signals suggesting sensitive-attribute values may be inferable within QI groups.",
 };
 
 /**
@@ -2956,6 +2983,256 @@ function renderReadinessFairness(container, fb) {
       <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
         <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
           Show detailed charts &amp; CDD table
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+}
+
+/**
+ * Render the Data Governance scorecard (auto-selected columns, privacy KPIs,
+ * HIPAA flags, needs-attention lists, collapsible charts).
+ */
+function renderReadinessGovernance(container, gov) {
+  if (gov.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data Governance unavailable: ${gov.error}</p>`;
+    return;
+  }
+
+  const sel = gov.auto_selection || {};
+  const criteria = sel.selection_criteria || {};
+  const qiCrit = criteria.quasi_identifiers || {};
+  const sensCrit = criteria.sensitive_attribute || {};
+  const idCrit = criteria.id_column || {};
+  const hipaaCrit = criteria.hipaa_scan_columns || {};
+  const dpCrit = criteria.dp_features || {};
+  const thresholds = criteria.thresholds || {};
+  const kpis = gov.kpis || [];
+  const na = gov.needs_attention || {};
+  const gradeCls = _dqStatusClasses(gov.grade_status);
+
+  let html = "";
+
+  if (gov.small_sample_warning) {
+    html += `
+      <div class="p-3 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-sm text-amber-800 dark:text-amber-300">
+        Small dataset (&lt; ${thresholds.small_sample_rows ?? 30} rows) — privacy metrics may be unstable.
+      </div>`;
+  }
+
+  html += `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Quasi-identifiers:</span> ${qiCrit.selected?.length ? qiCrit.selected.join(", ") : "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${qiCrit.rule || ""}</span></li>
+        <li><span class="font-medium">Sensitive attribute:</span> ${sensCrit.selected || "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${sensCrit.rule || ""}</span></li>
+        <li><span class="font-medium">ID column:</span> ${idCrit.selected || "none"}${idCrit.synthetic ? " (synthetic row index)" : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${idCrit.rule || ""}</span></li>
+        <li><span class="font-medium">HIPAA scan columns:</span> ${(hipaaCrit.selected || []).length} column(s)${hipaaCrit.selected?.length ? ` — ${hipaaCrit.selected.slice(0, 5).join(", ")}${hipaaCrit.selected.length > 5 ? "…" : ""}` : ""}</li>
+        <li><span class="font-medium">Thresholds:</span>
+          k ≥ ${thresholds.k_good ?? "—"}/${thresholds.k_warning ?? "—"},
+          l ≥ ${thresholds.l_good ?? "—"}/${thresholds.l_warning ?? "—"},
+          t ≤ ${thresholds.t_good ?? "—"}/${thresholds.t_warning ?? "—"},
+          MM single &lt; ${thresholds.mm_single_good ?? "—"}/${thresholds.mm_single_warning ?? "—"},
+          MM combined &lt; ${thresholds.mm_multi_good ?? "—"}/${thresholds.mm_multi_warning ?? "—"}
+        </li>
+      </ul>
+    </div>`;
+
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall governance grade${_readinessInfoIcon("overall_governance_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(gov.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    let displayVal = _pct(k.value);
+    if (k.id === "anonymity_k" && k.raw_k != null) displayVal = `k=${k.raw_k}`;
+    else if (k.id === "diversity_l" && k.raw_l != null) displayVal = `l=${k.raw_l}`;
+    else if (k.id === "distribution_t" && k.raw_t != null) displayVal = `t=${Number(k.raw_t).toFixed(3)}`;
+    else if (k.id === "single_linkage_risk" && k.raw_worst_mean != null)
+      displayVal = `${Number(k.raw_worst_mean).toFixed(2)} risk`;
+    else if (k.id === "linkage_risk" && k.raw_mean != null)
+      displayVal = `${Number(k.raw_mean).toFixed(2)} risk`;
+    else if (k.id === "phi_exposure" && k.columns_flagged != null)
+      displayVal = k.columns_flagged === 0 ? "None" : `${k.columns_flagged} col(s)`;
+
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-xl font-bold ${cls.text} shrink-0">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
+      </div>`;
+  });
+  html += "</div>";
+
+  const naItems = [];
+  const lowAnon = na.low_anonymity || [];
+  if (lowAnon.length) {
+    const items = lowAnon
+      .map(
+        (x) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${x.metric}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${x.value}</span></li>`,
+      )
+      .join("");
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Low anonymity (${lowAnon.length})${_readinessInfoIcon("low_anonymity")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`);
+  }
+  const hipaaPhi = na.hipaa_phi || [];
+  if (hipaaPhi.length) {
+    const items = hipaaPhi
+      .slice(0, 6)
+      .map(
+        (x) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${x.column}</span><span class="font-mono text-xs ${x.serious ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}">${(x.types || []).join(", ") || x.total_flags + " flags"}</span></li>`,
+      )
+      .join("");
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-1.5 inline-flex items-center">HIPAA pattern matches (${hipaaPhi.length})${_readinessInfoIcon("hipaa_phi")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`);
+  }
+  const linkage = na.high_linkage_risk || [];
+  if (linkage.length) {
+    const items = linkage
+      .map((x) => {
+        const label = x.feature || (x.features || []).join(", ");
+        return `<li class="flex justify-between gap-3"><span class="truncate">${x.metric}: ${label}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${x.mean_risk}</span></li>`;
+      })
+      .join("");
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">High linkage risk (${linkage.length})${_readinessInfoIcon("high_linkage_risk")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`);
+  }
+  const attrDisc = na.attribute_disclosure || [];
+  if (attrDisc.length) {
+    const items = attrDisc
+      .map(
+        (x) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${x.metric}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${x.value}</span></li>`,
+      )
+      .join("");
+    naItems.push(`
+      <div>
+        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5 inline-flex items-center">Attribute disclosure risk (${attrDisc.length})${_readinessInfoIcon("attribute_disclosure")}</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`);
+  }
+
+  if (naItems.length) {
+    html += `
+      <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+        <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
+      </div>`;
+  } else {
+    html += `
+      <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+        <p class="text-sm text-green-800 dark:text-green-400">No governance issues detected under the automated thresholds.</p>
+      </div>`;
+  }
+
+  const det = gov.details || {};
+  let detailsInner = "";
+
+  const chartMetrics = [
+    ["k_anonymity", "k-Anonymity", "visualization"],
+    ["l_diversity", "l-Diversity", "visualization"],
+    ["t_closeness", "t-Closeness", "visualization"],
+    ["entropy_risk", "Entropy risk", "visualization"],
+    ["multiple_attribute_risk", "Multiple-attribute linkage risk", "visualization"],
+    ["differential_privacy", "Differential privacy (illustrative)", "visualization"],
+  ];
+  chartMetrics.forEach(([key, title, visKey]) => {
+    const block = det[key];
+    if (block?.[visKey]) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${title}</p>
+          <img src="data:image/png;base64,${block[visKey]}" alt="${title}" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (block?.error) {
+      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${title}: ${block.error}</p>`;
+    }
+  });
+
+  const singleRisk = det.single_attribute_risk?.by_quasi_identifier || {};
+  const singleRows = Object.entries(singleRisk)
+    .filter(([, v]) => v.mean_risk != null)
+    .map(
+      ([q, v]) =>
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${q}</td><td class="px-3 py-2 font-mono text-xs">${v.mean_risk}</td></tr>`,
+    )
+    .join("");
+  if (singleRows) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Single-attribute MM risk by quasi-identifier</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Quasi-identifier</th><th class="px-3 py-2">Mean risk</th></tr></thead><tbody>${singleRows}</tbody></table>
+      </div>`;
+  }
+
+  const hipaaDet = det.hipaa?.detected || {};
+  const hipaaRows = Object.entries(hipaaDet)
+    .map(
+      ([col, info]) =>
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${col}</td><td class="px-3 py-2 text-xs">${(info.potential_types_detected || []).join(", ")}</td><td class="px-3 py-2 font-mono text-xs">${info.total_flags}</td></tr>`,
+    )
+    .join("");
+  if (hipaaRows) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">HIPAA scan results</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Column</th><th class="px-3 py-2">Types</th><th class="px-3 py-2">Flags</th></tr></thead><tbody>${hipaaRows}</tbody></table>
+      </div>`;
+  }
+
+  const qiExcluded = qiCrit.excluded || [];
+  if (qiExcluded.length) {
+    const items = qiExcluded
+      .map(
+        (d) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400">${d.reason}</span></li>`,
+      )
+      .join("");
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded quasi-identifier candidates (${qiExcluded.length})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+
+  if (dpCrit.selected?.length) {
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">DP demo features: ${dpCrit.selected.join(", ")} (ε=${dpCrit.epsilon ?? "—"}, illustrative only).</p>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts &amp; tables
         </summary>
         <div class="mt-4">${detailsInner}</div>
       </details>`;

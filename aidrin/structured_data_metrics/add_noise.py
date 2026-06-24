@@ -17,7 +17,7 @@ def add_laplace_noise(data, epsilon):
         raise Exception("Epsilon cannot be 0")
 
 
-def return_noisy_stats(add_noise_columns, epsilon, file_info):
+def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True):
     # Convert JSON back to DataFrame if needed, otherwise use DataFrame directly
     import pandas as pd
 
@@ -107,13 +107,15 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info):
     # Encode the combined image as base64
     combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode("utf-8")
     img_buf.close()
-    try:
-        # Create the new directory
-        os.makedirs("noisy", exist_ok=True)
-        df_drop_na.to_csv("noisy/noisy_data.csv", index=False)
-        stat_dict["Noisy file saved"] = "Successful"
-    except Exception:
-        stat_dict["Noisy file saved"] = "Error"
+    if save_output:
+        try:
+            os.makedirs("noisy", exist_ok=True)
+            df_drop_na.to_csv("noisy/noisy_data.csv", index=False)
+            stat_dict["Noisy file saved"] = "Successful"
+        except Exception:
+            stat_dict["Noisy file saved"] = "Error"
+    else:
+        stat_dict["Noisy file saved"] = "Skipped (readiness report preview only)"
 
     stat_dict["DP Statistics Visualization"] = combined_image_base64
 
