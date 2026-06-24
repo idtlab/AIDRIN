@@ -2183,10 +2183,69 @@ function _dqStatusClasses(status) {
   }
 }
 
-/** Format a 0–1 score as a whole percentage, or "N/A" if missing. */
-function _pct(value) {
-  if (value === null || value === undefined || isNaN(value)) return "N/A";
-  return `${Math.round(value * 100)}%`;
+/** Coerce readiness metric values to finite numbers. */
+function _readinessNums(values) {
+  return (values || [])
+    .map((v) => (typeof v === "number" ? v : parseFloat(v)))
+    .filter((v) => !Number.isNaN(v));
+}
+
+/**
+ * Decimal places for a group: default 2; if every value rounds to 0.00, use more
+ * (up to maxDecimals) so small non-zero values remain visible. Same precision
+ * is used for every value in the group.
+ */
+function _readinessDecimalPlaces(values, { minDecimals = 2, maxDecimals = 6 } = {}) {
+  const nums = _readinessNums(values);
+  if (!nums.length) return minDecimals;
+  if (nums.every((v) => v === 0)) return minDecimals;
+
+  for (let d = minDecimals; d <= maxDecimals; d++) {
+    const allRoundedZero = nums.every((v) => Number(v.toFixed(d)) === 0);
+    if (!allRoundedZero) return d;
+  }
+  return maxDecimals;
+}
+
+/** Decimal places for 0–1 ratios shown as percentages (value × 100). */
+function _readinessPctDecimals(values, options) {
+  return _readinessDecimalPlaces(
+    _readinessNums(values).map((v) => v * 100),
+    options,
+  );
+}
+
+/** Format a number with fixed decimals; integers omit the fractional part. */
+function _readinessNum(value, decimals = 2) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+  if (typeof value !== "number") return String(value);
+  if (Number.isInteger(value)) return value.toLocaleString();
+  return value.toFixed(decimals);
+}
+
+/** Build a formatter that uses one decimal precision for every value in *values*. */
+function _readinessNumFormatter(values, options) {
+  const nums = _readinessNums(values);
+  if (nums.length && nums.every((v) => Number.isInteger(v))) {
+    return (value) => {
+      if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+      return Number(value).toLocaleString();
+    };
+  }
+  const decimals = _readinessDecimalPlaces(nums, options);
+  return (value) => _readinessNum(value, decimals);
+}
+
+/** Build a percentage formatter (0–1 input) with group-consistent decimals. */
+function _readinessPctFormatter(values, options) {
+  const decimals = _readinessPctDecimals(values, options);
+  return (value) => _pct(value, decimals);
+}
+
+/** Format a 0–1 ratio as a percentage, or "N/A" if missing. */
+function _pct(value, decimals = 2) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+  return `${(value * 100).toFixed(decimals)}%`;
 }
 
 /** Show an error message inside one readiness section container. */
@@ -2525,15 +2584,20 @@ function renderReadinessDatasetOverview(container, overview) {
   html += `<th class="px-3 py-2">Summary</th>`;
   html += `</tr></thead><tbody>`;
 
+  const profilePctValues = profiles.flatMap((p) =>
+    [p.pct_missing, p.pct_dominant].filter((v) => v != null),
+  );
+  const fmtProfilePct = _readinessPctFormatter(profilePctValues);
+
   profiles.forEach((p, i) => {
     const stripe = i % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50";
     html += `<tr class="${stripe} border-b dark:border-gray-700">`;
     html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${p.feature}</td>`;
     html += `<td class="px-3 py-2 capitalize">${p.type}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs">${p.dtype}</td>`;
-    html += `<td class="px-3 py-2 font-mono text-xs text-right">${_pct(p.pct_missing)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${fmtProfilePct(p.pct_missing)}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.n_unique}</td>`;
-    html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.pct_dominant != null ? _pct(p.pct_dominant) : "—"}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.pct_dominant != null ? fmtProfilePct(p.pct_dominant) : "—"}</td>`;
     html += `<td class="px-3 py-2">${_profileStatusBadge(p.status)}</td>`;
     html += `<td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title="${p.summary || ""}">${p.summary || "—"}</td>`;
     html += `</tr>`;
@@ -2555,6 +2619,12 @@ function renderReadinessDatasetOverview(container, overview) {
       .filter((s) => allStats.includes(s))
       .concat(allStats.filter((s) => !preferredOrder.includes(s)));
 
+    const statFormatters = {};
+    statKeys.forEach((s) => {
+      const colVals = numFeatures.map((feat) => numSummary[feat][s]);
+      statFormatters[s] = _readinessNumFormatter(colVals);
+    });
+
     detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical summary statistics</p>`;
     detailsInner += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
     detailsInner += `<thead class="text-xs uppercase bg-gray-50 dark:bg-gray-700"><tr><th class="px-3 py-2">Feature</th>`;
@@ -2566,7 +2636,14 @@ function renderReadinessDatasetOverview(container, overview) {
       const stripe = i % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50";
       detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${feat}</td>`;
       statKeys.forEach((s) => {
-        detailsInner += `<td class="px-3 py-2 font-mono text-xs text-right">${numSummary[feat][s] ?? "—"}</td>`;
+        const raw = numSummary[feat][s];
+        const display =
+          raw === null || raw === undefined
+            ? "—"
+            : typeof raw === "number"
+              ? statFormatters[s](raw)
+              : raw;
+        detailsInner += `<td class="px-3 py-2 font-mono text-xs text-right">${display}</td>`;
       });
       detailsInner += `</tr>`;
     });
@@ -2623,6 +2700,8 @@ function renderReadinessDataQuality(container, dq) {
   const gradeCls = _dqStatusClasses(dq.grade_status);
   const scopeCrit =
     (dq.auto_selection || {}).selection_criteria?.analysis_scope || {};
+  const dqPctValues = [dq.grade, ...kpis.map((k) => k.value)].filter((v) => v != null);
+  const fmtDqPct = _readinessPctFormatter(dqPctValues);
 
   // --- Analysis scope (no column auto-selection required) ---
   let html = `
@@ -2638,7 +2717,7 @@ function renderReadinessDataQuality(container, dq) {
   html += `
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall data quality grade${_readinessInfoIcon("overall_dq_grade")}</span>
-          <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(dq.grade)}</span>
+          <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtDqPct(dq.grade)}</span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
 
@@ -2652,7 +2731,7 @@ function renderReadinessDataQuality(container, dq) {
           <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
             <div class="flex items-baseline justify-between">
               <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
-              <span class="text-2xl font-bold ${cls.text}">${_pct(k.value)}</span>
+              <span class="text-2xl font-bold ${cls.text}">${fmtDqPct(k.value)}</span>
             </div>
             <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
               <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
@@ -2667,6 +2746,12 @@ function renderReadinessDataQuality(container, dq) {
       const incomplete = na.incomplete_features || [];
       const outlierFeats = na.outlier_features || [];
       const dupRows = na.duplicate_rows || 0;
+      const naPctValues = [
+        ...incomplete.map((f) => f.completeness),
+        ...outlierFeats.map((f) => f.outlier_proportion),
+        dupRows > 0 ? dupRows : null,
+      ].filter((v) => v != null);
+      const fmtNaPct = _readinessPctFormatter(naPctValues);
 
       const naItems = [];
       if (incomplete.length) {
@@ -2674,7 +2759,7 @@ function renderReadinessDataQuality(container, dq) {
           .slice(0, 6)
           .map(
             (f) =>
-              `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${_pct(f.completeness)} complete</span></li>`,
+              `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.completeness)} complete</span></li>`,
           )
           .join("");
         const more =
@@ -2692,7 +2777,7 @@ function renderReadinessDataQuality(container, dq) {
           .slice(0, 6)
           .map(
             (f) =>
-              `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${_pct(f.outlier_proportion)} outliers</span></li>`,
+              `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.outlier_proportion)} outliers</span></li>`,
           )
           .join("");
         const more =
@@ -2709,7 +2794,7 @@ function renderReadinessDataQuality(container, dq) {
         naItems.push(`
           <div>
             <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Duplicate rows${_readinessInfoIcon("uniqueness")}</p>
-            <p class="text-sm text-gray-700 dark:text-gray-300">${_pct(dupRows)} of rows are exact duplicates.</p>
+            <p class="text-sm text-gray-700 dark:text-gray-300">${fmtNaPct(dupRows)} of rows are exact duplicates.</p>
           </div>`);
       }
 
@@ -2785,7 +2870,14 @@ function renderReadinessImpact(container, impact) {
   const dropped = colCrit.excluded || impact.columns_dropped || [];
   const analyzed = impact.columns_analyzed || (colCrit.selected || []).length;
 
-  const fmtScore = (s) => (typeof s === "number" ? s.toFixed(2) : s);
+  const impactScoreValues = [
+    ...leakage.map((p) => p.score),
+    ...redundant.map((p) => p.score),
+    ...topPairs.map((p) => p.score),
+  ];
+  const fmtScore = _readinessNumFormatter(impactScoreValues);
+  const impactPctValues = [impact.grade, ...kpis.map((k) => k.value)].filter((v) => v != null);
+  const fmtImpactPct = _readinessPctFormatter(impactPctValues);
   const fmtPair = (p) =>
     _readinessNaRow(
       `<span class="font-mono">${_escapeHtml(p.a)}</span> ↔ <span class="font-mono">${_escapeHtml(p.b)}</span>`,
@@ -2808,9 +2900,9 @@ function renderReadinessImpact(container, impact) {
           <span class="text-xs text-gray-500 dark:text-gray-400">${colCrit.rule || ""}</span></li>
         <li><span class="font-medium">Excluded columns:</span> ${dropped.length}</li>
         <li><span class="font-medium">Thresholds:</span>
-          redundant |score| ≥ ${thresholds.redundant_threshold ?? "—"},
-          leakage |score| ≥ ${thresholds.leakage_threshold ?? "—"},
-          isolated max |score| &lt; ${thresholds.isolated_threshold ?? "—"}
+          redundant |score| ≥ ${_readinessNum(thresholds.redundant_threshold)},
+          leakage |score| ≥ ${_readinessNum(thresholds.leakage_threshold)},
+          isolated max |score| &lt; ${_readinessNum(thresholds.isolated_threshold)}
         </li>
       </ul>
     </div>`;
@@ -2819,14 +2911,14 @@ function renderReadinessImpact(container, impact) {
   html += `
     <div class="flex items-center justify-between mb-4">
       <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall impact grade${_readinessInfoIcon("overall_impact_grade")}</span>
-      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(impact.grade)}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtImpactPct(impact.grade)}</span>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
 
   kpis.forEach((k) => {
     const cls = _dqStatusClasses(k.status);
     const displayVal =
-      k.raw_count != null ? `${k.raw_count} flagged` : _pct(k.value);
+      k.raw_count != null ? `${k.raw_count} flagged` : fmtImpactPct(k.value);
     const widthPct =
       k.value === null || k.value === undefined
         ? 0
@@ -2996,6 +3088,15 @@ function renderReadinessFairness(container, fb) {
   const kpis = fb.kpis || [];
   const na = fb.needs_attention || {};
   const gradeCls = _dqStatusClasses(fb.grade_status);
+  const fairnessPctValues = [fb.grade, ...kpis.map((k) => k.value)].filter((v) => v != null);
+  const fmtFairnessPct = _readinessPctFormatter(fairnessPctValues);
+  const fmtThresholdPct = _readinessPctFormatter(
+    thresholds.minority_class_share != null ? [thresholds.minority_class_share] : [],
+  );
+  const imbalanceVals = kpis
+    .filter((k) => k.id === "label_balance" && k.raw_imbalance_degree != null)
+    .map((k) => k.raw_imbalance_degree);
+  const fmtImbalance = _readinessNumFormatter(imbalanceVals);
 
   // --- Auto-selection criteria (transparent) ---
   let html = `
@@ -3010,10 +3111,10 @@ function renderReadinessFairness(container, fb) {
           <span class="text-xs text-gray-500 dark:text-gray-400">${posCrit.rule || ""}</span></li>
         <li><span class="font-medium">Primary sensitive (statistical rate &amp; CDD):</span> ${sel.primary_sensitive || "none"}</li>
         <li><span class="font-medium">Flags:</span>
-          representation ratio ≥ ${thresholds.representation_ratio_flag ?? "—"},
-          minority class &lt; ${_pct(thresholds.minority_class_share)},
-          TSD ≥ ${thresholds.tsd_disparity_flag ?? "—"},
-          imbalance degree good/warning &lt; ${thresholds.imbalance_degree_good ?? "—"} / ${thresholds.imbalance_degree_warning ?? "—"}
+          representation ratio ≥ ${_readinessNum(thresholds.representation_ratio_flag)},
+          minority class &lt; ${fmtThresholdPct(thresholds.minority_class_share)},
+          TSD ≥ ${_readinessNum(thresholds.tsd_disparity_flag)},
+          imbalance degree good/warning &lt; ${_readinessNum(thresholds.imbalance_degree_good)} / ${_readinessNum(thresholds.imbalance_degree_warning)}
         </li>
       </ul>
     </div>`;
@@ -3022,7 +3123,7 @@ function renderReadinessFairness(container, fb) {
   html += `
     <div class="flex items-center justify-between mb-4">
       <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall fairness grade${_readinessInfoIcon("overall_fairness_grade")}</span>
-      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(fb.grade)}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtFairnessPct(fb.grade)}</span>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
 
@@ -3030,8 +3131,8 @@ function renderReadinessFairness(container, fb) {
     const cls = _dqStatusClasses(k.status);
     const displayVal =
       k.id === "label_balance" && k.raw_imbalance_degree != null
-        ? `ID ${Number(k.raw_imbalance_degree).toFixed(2)}`
-        : _pct(k.value);
+        ? `ID ${fmtImbalance(k.raw_imbalance_degree)}`
+        : fmtFairnessPct(k.value);
     const widthPct =
       k.value === null || k.value === undefined
         ? 0
@@ -3054,17 +3155,22 @@ function renderReadinessFairness(container, fb) {
   const naItems = [];
   const repImbalance = na.representation_imbalance || [];
   if (repImbalance.length) {
+    const ratioValues = repImbalance.flatMap((s) => [
+      s.max_ratio,
+      ...(s.flagged_pairs || []).map((p) => p.ratio),
+    ]);
+    const fmtRatio = _readinessNumFormatter(ratioValues);
     const items = repImbalance
       .slice(0, 5)
       .map((s) => {
         const pairHint =
           s.flagged_pairs && s.flagged_pairs.length
-            ? `Worst pair: ${s.flagged_pairs[0].pair} (ratio ${s.flagged_pairs[0].ratio})`
+            ? `Worst pair: ${s.flagged_pairs[0].pair} (ratio ${fmtRatio(s.flagged_pairs[0].ratio)})`
             : "";
         return _readinessNaRow(
           `<span class="font-mono font-medium">${_escapeHtml(s.column)}</span>`,
           pairHint,
-          `max ratio ${s.max_ratio}`,
+          `max ratio ${fmtRatio(s.max_ratio)}`,
         );
       })
       .join("");
@@ -3083,12 +3189,13 @@ function renderReadinessFairness(container, fb) {
   if (minorities.length) {
     const targetCol =
       minorities[0].target_column || targetCrit.selected || "target";
+    const fmtMinorityShare = _readinessPctFormatter(minorities.map((m) => m.share));
     const items = minorities
       .map((m) =>
         _readinessNaRow(
           `<span class="truncate">${_escapeHtml(m.class)}</span>`,
           `Class in <span class="font-mono">${_escapeHtml(targetCol)}</span>`,
-          `${_pct(m.share)} share`,
+          `${fmtMinorityShare(m.share)} share`,
         ),
       )
       .join("");
@@ -3107,12 +3214,13 @@ function renderReadinessFairness(container, fb) {
   if (outcomeDisp.length) {
     const sensCol = outcomeDisp[0].sensitive_column || sel.primary_sensitive || "—";
     const tgtCol = outcomeDisp[0].target_column || targetCrit.selected || "—";
+    const fmtTsd = _readinessNumFormatter(outcomeDisp.map((d) => d.tsd));
     const items = outcomeDisp
       .map((d) =>
         _readinessNaRow(
           `<span class="font-mono">${_escapeHtml(d.target_column || tgtCol)}</span> = ${_escapeHtml(d.class)}`,
           `Outcome rates vary by sensitive <span class="font-mono">${_escapeHtml(d.sensitive_column || sensCol)}</span>`,
-          `TSD ${d.tsd}`,
+          `TSD ${fmtTsd(d.tsd)}`,
         ),
       )
       .join("");
@@ -3258,7 +3366,28 @@ function renderReadinessGovernance(container, gov) {
   const thresholds = criteria.thresholds || {};
   const kpis = gov.kpis || [];
   const na = gov.needs_attention || {};
+  const det = gov.details || {};
+  const singleRisk = det.single_attribute_risk?.by_quasi_identifier || {};
   const gradeCls = _dqStatusClasses(gov.grade_status);
+  const lowAnon = na.low_anonymity || [];
+  const linkage = na.high_linkage_risk || [];
+  const attrDisc = na.attribute_disclosure || [];
+  const govPctValues = [gov.grade, ...kpis.map((k) => k.value)].filter((v) => v != null);
+  const fmtGovPct = _readinessPctFormatter(govPctValues);
+  const govRiskValues = [
+    ...kpis.map((k) => k.raw_worst_mean ?? k.raw_mean).filter((v) => v != null),
+    ...linkage.map((x) => x.mean_risk),
+    ...lowAnon.flatMap((x) =>
+      x.worst_single_qi ? [x.worst_single_qi.mean_risk] : [],
+    ),
+    ...Object.values(singleRisk).map((v) => v.mean_risk).filter((v) => v != null),
+  ];
+  const govMetricValues = [
+    ...kpis.filter((k) => k.id === "distribution_t" && k.raw_t != null).map((k) => k.raw_t),
+    ...attrDisc.map((x) => x.value),
+  ];
+  const fmtGovRisk = _readinessNumFormatter(govRiskValues);
+  const fmtGovMetric = _readinessNumFormatter(govMetricValues);
 
   let html = `
     <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
@@ -3289,20 +3418,21 @@ function renderReadinessGovernance(container, gov) {
   html += `
     <div class="flex items-center justify-between mb-4">
       <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall governance grade${_readinessInfoIcon("overall_governance_grade")}</span>
-      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${_pct(gov.grade)}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtGovPct(gov.grade)}</span>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">`;
 
   kpis.forEach((k) => {
     const cls = _dqStatusClasses(k.status);
-    let displayVal = _pct(k.value);
+    let displayVal = fmtGovPct(k.value);
     if (k.id === "anonymity_k" && k.raw_k != null) displayVal = `k=${k.raw_k}`;
     else if (k.id === "diversity_l" && k.raw_l != null) displayVal = `l=${k.raw_l}`;
-    else if (k.id === "distribution_t" && k.raw_t != null) displayVal = `t=${Number(k.raw_t).toFixed(3)}`;
+    else if (k.id === "distribution_t" && k.raw_t != null)
+      displayVal = `t=${fmtGovMetric(k.raw_t)}`;
     else if (k.id === "single_linkage_risk" && k.raw_worst_mean != null)
-      displayVal = `${Number(k.raw_worst_mean).toFixed(2)} risk`;
+      displayVal = `${fmtGovRisk(k.raw_worst_mean)} risk`;
     else if (k.id === "linkage_risk" && k.raw_mean != null)
-      displayVal = `${Number(k.raw_mean).toFixed(2)} risk`;
+      displayVal = `${fmtGovRisk(k.raw_mean)} risk`;
     else if (k.id === "phi_exposure" && k.columns_flagged != null)
       displayVal = k.columns_flagged === 0 ? "None" : `${k.columns_flagged} col(s)`;
 
@@ -3325,7 +3455,7 @@ function renderReadinessGovernance(container, gov) {
   html += "</div>";
 
   const naItems = [];
-  const lowAnon = na.low_anonymity || [];
+
   if (lowAnon.length) {
     let items = "";
     lowAnon.forEach((x) => {
@@ -3346,7 +3476,7 @@ function renderReadinessGovernance(container, gov) {
         items += _readinessNaRow(
           `Highest single-QI risk: <span class="font-mono">${_escapeHtml(x.worst_single_qi.feature)}</span>`,
           "May contribute to low k when combined with other quasi-identifiers",
-          `risk ${Number(x.worst_single_qi.mean_risk).toFixed(2)}`,
+          `risk ${fmtGovRisk(x.worst_single_qi.mean_risk)}`,
         );
       }
     });
@@ -3386,9 +3516,9 @@ function renderReadinessGovernance(container, gov) {
     );
   }
 
-  const linkage = na.high_linkage_risk || [];
-  if (linkage.length) {
-    const items = linkage
+  const linkageNa = na.high_linkage_risk || [];
+  if (linkageNa.length) {
+    const items = linkageNa
       .map((x) => {
         const qis = x.quasi_identifiers || x.features || [];
         const featLabel = x.feature
@@ -3397,13 +3527,13 @@ function renderReadinessGovernance(container, gov) {
         return _readinessNaRow(
           `${_escapeHtml(x.metric)}: ${featLabel}`,
           x.detail || (qis.length ? `Quasi-identifiers: ${qis.join(", ")}` : null),
-          `risk ${x.mean_risk}`,
+          `risk ${fmtGovRisk(x.mean_risk)}`,
         );
       })
       .join("");
     naItems.push(
       _readinessNaBlock(
-        `High linkage risk (${linkage.length})`,
+        `High linkage risk (${linkageNa.length})`,
         "high_linkage_risk",
         null,
         items,
@@ -3412,14 +3542,14 @@ function renderReadinessGovernance(container, gov) {
     );
   }
 
-  const attrDisc = na.attribute_disclosure || [];
-  if (attrDisc.length) {
-    const items = attrDisc
+  const attrDiscNa = na.attribute_disclosure || [];
+  if (attrDiscNa.length) {
+    const items = attrDiscNa
       .map((x) => {
         const qiList = (x.quasi_identifiers || []).join(", ");
         const sens = x.sensitive_attribute || "—";
         return _readinessNaRow(
-          `${_escapeHtml(x.metric)} = ${x.value}`,
+          `${_escapeHtml(x.metric)} = ${fmtGovMetric(x.value)}`,
           x.detail ||
             `Sensitive <span class="font-mono">${_escapeHtml(sens)}</span> within groups of (${qiList})`,
           null,
@@ -3428,10 +3558,10 @@ function renderReadinessGovernance(container, gov) {
       .join("");
     naItems.push(
       _readinessNaBlock(
-        `Attribute disclosure risk (${attrDisc.length})`,
+        `Attribute disclosure risk (${attrDiscNa.length})`,
         "attribute_disclosure",
-        attrDisc[0].sensitive_attribute
-          ? `Sensitive: <span class="font-mono">${_escapeHtml(attrDisc[0].sensitive_attribute)}</span>`
+        attrDiscNa[0].sensitive_attribute
+          ? `Sensitive: <span class="font-mono">${_escapeHtml(attrDiscNa[0].sensitive_attribute)}</span>`
           : null,
         items,
         "amber",
@@ -3444,7 +3574,6 @@ function renderReadinessGovernance(container, gov) {
     "No governance issues detected under the automated thresholds.",
   );
 
-  const det = gov.details || {};
   let detailsInner = "";
 
   const chartMetrics = [
@@ -3468,12 +3597,11 @@ function renderReadinessGovernance(container, gov) {
     }
   });
 
-  const singleRisk = det.single_attribute_risk?.by_quasi_identifier || {};
   const singleRows = Object.entries(singleRisk)
     .filter(([, v]) => v.mean_risk != null)
     .map(
       ([q, v]) =>
-        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${q}</td><td class="px-3 py-2 font-mono text-xs">${v.mean_risk}</td></tr>`,
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${q}</td><td class="px-3 py-2 font-mono text-xs">${fmtGovRisk(v.mean_risk)}</td></tr>`,
     )
     .join("");
   if (singleRows) {

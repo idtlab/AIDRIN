@@ -311,14 +311,15 @@ def _build_dataset_overview_section(file_info):
     numerical_summary = {}
     num_df = df.select_dtypes(include="number")
     if not num_df.empty:
-        numerical_summary = num_df.describe().map(
-            lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
-        ).to_dict()
+        numerical_summary = num_df.describe().to_dict()
         for v in numerical_summary.values():
             for old_key in list(v.keys()):
                 if old_key in ["25%", "50%", "75%"]:
                     new_key = old_key.replace("%", "th percentile")
-                    v[new_key] = v.pop(old_key)
+                    v[new_key] = float(v.pop(old_key))
+            for stat_key, stat_val in list(v.items()):
+                if stat_val is not None and not isinstance(stat_val, str):
+                    v[stat_key] = float(stat_val)
 
     return {
         "file_metadata": {
