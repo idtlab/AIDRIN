@@ -2376,14 +2376,16 @@ function _formatQiValues(qiValues) {
 
 /**
  * One needs-attention list row with optional secondary line (context/detail).
+ * *primary* and *secondary* may contain safe HTML built by callers; user text
+ * must be escaped before passing in.
  */
 function _readinessNaRow(primary, secondary, value) {
   const valHtml = value
-    ? `<span class="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">${value}</span>`
+    ? `<span class="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">${_escapeHtml(value)}</span>`
     : "";
   const sub =
     secondary
-      ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 pl-0">${_escapeHtml(secondary)}</p>`
+      ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 pl-0">${secondary}</p>`
       : "";
   return `<li>
     <div class="flex justify-between gap-3 items-start">
