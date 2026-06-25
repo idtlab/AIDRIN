@@ -47,8 +47,8 @@ from aidrin.structured_data_metrics.privacy_measure import (
     compute_k_anonymity,
     compute_l_diversity,
     compute_t_closeness,
-    generate_multiple_attribute_MM_risk_scores,
-    generate_single_attribute_MM_risk_scores,
+    generate_multiple_attribute_MM_risk_scores_groupby,
+    generate_single_attribute_MM_risk_scores_groupby,
 )
 from aidrin.structured_data_metrics.representation_rate import (
     calculate_representation_rate,
@@ -1705,7 +1705,7 @@ def _build_data_governance_section(file_info, include_visualizations=False):
     if mm_qis:
         for q in mm_qis:
             try:
-                s_res = generate_single_attribute_MM_risk_scores(
+                s_res = generate_single_attribute_MM_risk_scores_groupby(
                     work_df, id_col, [q], include_visualization=include_visualizations
                 )
                 if "Error" in s_res:
@@ -1767,7 +1767,7 @@ def _build_data_governance_section(file_info, include_visualizations=False):
     multi_mean = None
     if mm_qis:
         try:
-            m_res = generate_multiple_attribute_MM_risk_scores(
+            m_res = generate_multiple_attribute_MM_risk_scores_groupby(
                 work_df, id_col, mm_qis, include_visualization=include_visualizations
             )
             if "Error" not in m_res:
@@ -2010,7 +2010,7 @@ def _build_data_governance_visualizations(file_info):
         if img:
             viz["t_closeness"] = img
     if mm_qis:
-        m_res = generate_multiple_attribute_MM_risk_scores(
+        m_res = generate_multiple_attribute_MM_risk_scores_groupby(
             work_df, id_col, mm_qis, include_visualization=True
         )
         img = m_res.get("Multiple attribute risk scoring Visualization")
