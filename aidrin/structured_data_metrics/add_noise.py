@@ -17,7 +17,7 @@ def add_laplace_noise(data, epsilon):
         raise Exception("Epsilon cannot be 0")
 
 
-def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True):
+def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True, include_visualization=True):
     # Convert JSON back to DataFrame if needed, otherwise use DataFrame directly
     import pandas as pd
 
@@ -43,18 +43,20 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True):
     num_cols = min(num_columns, max_columns_per_row)
 
     # Create subplots for the box plots
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(8, 8))
+    if include_visualization:
+        fig, axes = plt.subplots(num_rows, num_cols, figsize=(8, 8))
 
     for i, column in enumerate(add_noise_columns):
-        if num_rows == 1 and num_cols == 1:
-            current_ax = axes
-        elif num_rows == 1:
-            current_ax = axes[i % num_cols]
-        elif num_cols == 1:
-            current_ax = axes[i % num_rows, 0]
-        else:
-            row, col = divmod(i, num_cols)
-            current_ax = axes[row, col]
+        if include_visualization:
+            if num_rows == 1 and num_cols == 1:
+                current_ax = axes
+            elif num_rows == 1:
+                current_ax = axes[i % num_cols]
+            elif num_cols == 1:
+                current_ax = axes[i % num_rows, 0]
+            else:
+                row, col = divmod(i, num_cols)
+                current_ax = axes[row, col]
 
         noisy_feature = add_laplace_noise(df_drop_na[column], epsilon)
 
@@ -85,28 +87,31 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True):
         )
         df_drop_na[f'noisy_{column}'] = noisy_feature
 
-        # Box plot for the normal feature
-        current_ax.boxplot(
-            df_drop_na[column], positions=[0], widths=0.6, showfliers=False
-        )
-        current_ax.set_title(f"Normal vs Noisy representations: Feature {column}")
-        current_ax.set_ylabel("Value")
+        if include_visualization:
+            # Box plot for the normal feature
+            current_ax.boxplot(
+                df_drop_na[column], positions=[0], widths=0.6, showfliers=False
+            )
+            current_ax.set_title(f"Normal vs Noisy representations: Feature {column}")
+            current_ax.set_ylabel("Value")
 
-        # Box plot for the noisy feature
-        current_ax.boxplot(noisy_feature, positions=[1], widths=0.6, showfliers=False)
-        current_ax.set_ylabel("Value")
+            # Box plot for the noisy feature
+            current_ax.boxplot(noisy_feature, positions=[1], widths=0.6, showfliers=False)
+            current_ax.set_ylabel("Value")
 
-    # Adjust the spacing between subplots
-    plt.tight_layout()
+    if include_visualization:
+        # Adjust the spacing between subplots
+        plt.tight_layout()
 
-    # Save the chart as BytesIO
-    img_buf = BytesIO()
-    plt.savefig(img_buf, format="png")
-    img_buf.seek(0)
+        # Save the chart as BytesIO
+        img_buf = BytesIO()
+        plt.savefig(img_buf, format="png")
+        img_buf.seek(0)
 
-    # Encode the combined image as base64
-    combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode("utf-8")
-    img_buf.close()
+        # Encode the combined image as base64
+        combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode("utf-8")
+        img_buf.close()
+        stat_dict["DP Statistics Visualization"] = combined_image_base64
     if save_output:
         try:
             os.makedirs("noisy", exist_ok=True)
@@ -116,7 +121,5 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True):
             stat_dict["Noisy file saved"] = "Error"
     else:
         stat_dict["Noisy file saved"] = "Skipped (readiness report preview only)"
-
-    stat_dict["DP Statistics Visualization"] = combined_image_base64
 
     return stat_dict

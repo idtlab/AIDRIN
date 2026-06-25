@@ -285,7 +285,7 @@ def _build_categorical_distributions(df, top_n=_OVERVIEW_CAT_TOP_N):
     return distributions
 
 
-def _build_dataset_overview_section(file_info):
+def _build_dataset_overview_section(file_info, include_visualizations=False):
     """Build the dataset-overview portion of the readiness report.
 
     Returns file metadata, per-feature readiness profiles, numerical describe()
@@ -321,7 +321,7 @@ def _build_dataset_overview_section(file_info):
                 if stat_val is not None and not isinstance(stat_val, str):
                     v[stat_key] = float(stat_val)
 
-    return {
+    overview = {
         "file_metadata": {
             "file_name": file_name,
             "file_type": file_type,
@@ -337,8 +337,6 @@ def _build_dataset_overview_section(file_info):
         "feature_profiles": profiles,
         "numerical_summary": numerical_summary,
         "categorical_distributions": _build_categorical_distributions(df),
-        "categorical_charts": categorical_distribution_charts(df),
-        "histograms": summary_histograms(df, figsize=(7, 4.5)),
         "profile_thresholds": {
             "missing_warning": _OVERVIEW_MISSING_WARNING,
             "missing_poor": _OVERVIEW_MISSING_POOR,
@@ -346,10 +344,15 @@ def _build_dataset_overview_section(file_info):
             "high_cardinality": _OVERVIEW_HIGH_CARDINALITY,
             "id_unique_ratio": _OVERVIEW_ID_UNIQUE_RATIO,
         },
+        "visualizations_deferred": not include_visualizations,
     }
+    if include_visualizations:
+        overview["categorical_charts"] = categorical_distribution_charts(df)
+        overview["histograms"] = summary_histograms(df, figsize=(7, 4.5))
+    return overview
 
 
-def _build_data_quality_section(file_info):
+def _build_data_quality_section(file_info, include_visualizations=False):
     """Compute the data-quality portion of the readiness report.
 
     Runs completeness, outliers, and duplicity (the same functions backing the
@@ -361,12 +364,12 @@ def _build_data_quality_section(file_info):
     section = {}
 
     # --- Completeness -----------------------------------------------------
-    compl = completeness(file_info)
+    compl = completeness(file_info, include_visualization=include_visualizations)
     compl_scores = compl.get("Completeness scores", {}) or {}
     overall_completeness = compl.get("Overall Completeness")
 
     # --- Outliers ---------------------------------------------------------
-    out = outliers(file_info)
+    out = outliers(file_info, include_visualization=include_visualizations)
     out_scores_raw = out.get("Outlier scores", {}) if isinstance(out, dict) else {}
     overall_outlier = None
     out_scores = {}
@@ -462,16 +465,19 @@ def _build_data_quality_section(file_info):
             "completeness": {
                 "overall": overall_completeness,
                 "scores": compl_scores,
-                "visualization": compl.get("Completeness Visualization"),
+                "visualization": compl.get("Completeness Visualization") if include_visualizations else None,
+                "visualization_deferred": not include_visualizations,
             },
             "outliers": {
                 "overall": overall_outlier,
                 "scores": out_scores,
-                "visualization": out.get("Outliers Visualization") if isinstance(out, dict) else None,
+                "visualization": out.get("Outliers Visualization") if include_visualizations and isinstance(out, dict) else None,
+                "visualization_deferred": not include_visualizations,
                 "error": outliers_error,
             },
             "duplicity": {"overall": overall_duplicity},
         },
+        "visualizations_deferred": not include_visualizations,
     }
     return section
 
@@ -589,7 +595,7 @@ def _pairwise_signals(scores):
     }
 
 
-def _build_impact_on_ai_section(file_info):
+def _build_impact_on_ai_section(file_info, include_visualizations=False):
     """Compute the Impact-on-AI portion of the readiness report.
 
     Runs an automated, non-interactive all-pairs correlation analysis (numerical
@@ -610,7 +616,7 @@ def _build_impact_on_ai_section(file_info):
             "columns_dropped": dropped,
         }
 
-    corr = calc_correlations(kept, file_info)
+    corr = calc_correlations(kept, file_info, include_visualization=include_visualizations)
     if isinstance(corr, dict) and "Message" in corr:
         return {"error": corr["Message"], "columns_dropped": dropped}
 
@@ -708,12 +714,14 @@ def _build_impact_on_ai_section(file_info):
         "details": {
             "categorical_visualization": cat.get(
                 "Correlations Analysis Categorical Visualization"
-            ),
+            ) if include_visualizations else None,
             "numerical_visualization": num.get(
                 "Correlations Analysis Numerical Visualization"
-            ),
+            ) if include_visualizations else None,
             "numerical_method": num.get("Method"),
+            "visualizations_deferred": not include_visualizations,
         },
+        "visualizations_deferred": not include_visualizations,
     }
 
 
@@ -906,7 +914,7 @@ def _imbalance_status(id_score):
     return "poor"
 
 
-def _build_fairness_bias_section(file_info):
+def _build_fairness_bias_section(file_info, include_visualizations=False):
     """Compute the Fairness & Bias portion of the readiness report.
 
     Auto-selects sensitive attributes and a target, then runs representation
@@ -942,17 +950,19 @@ def _build_fairness_bias_section(file_info):
             s for s in rep_summaries if s["max_ratio"] >= _FAIRNESS_REP_RATIO_FLAG
         ]
         rep_visualizations = {}
-        for col in sensitive_cols:
-            try:
-                vis = create_representation_rate_vis([col], file_info)
-                if isinstance(vis, str):
-                    rep_visualizations[col] = vis
-            except Exception:
-                pass
+        if include_visualizations:
+            for col in sensitive_cols:
+                try:
+                    vis = create_representation_rate_vis([col], file_info)
+                    if isinstance(vis, str):
+                        rep_visualizations[col] = vis
+                except Exception:
+                    pass
         details["representation_rate"] = {
             "ratios": ratios if not rep_error else None,
             "summaries": rep_summaries,
             "visualizations": rep_visualizations,
+            "visualizations_deferred": not include_visualizations,
             "error": rep_error,
         }
     else:
@@ -972,14 +982,17 @@ def _build_fairness_bias_section(file_info):
     imbalance_degree = None
     ci_error = None
     if target_col:
-        ci_dict = _compute_class_imbalance(df, target_col, "EU")
+        ci_dict = _compute_class_imbalance(
+            df, target_col, "EU", include_visualization=include_visualizations
+        )
         if "Error" in ci_dict:
             ci_error = ci_dict["Error"]
         else:
             imb = ci_dict.get("Imbalance degree") or {}
             imbalance_degree = imb.get("Imbalance Degree score")
             details["class_imbalance"] = {
-                "visualization": ci_dict.get("Class Imbalance Visualization"),
+                "visualization": ci_dict.get("Class Imbalance Visualization") if include_visualizations else None,
+                "visualization_deferred": not include_visualizations,
                 "imbalance_degree": imbalance_degree,
             }
             # Minority classes
@@ -1014,7 +1027,10 @@ def _build_fairness_bias_section(file_info):
     # --- Statistical Rate (primary sensitive + target) ----------------------
     disparity_kpi = None
     if primary_sensitive and target_col:
-        sr = calculate_statistical_rates(target_col, primary_sensitive, file_info)
+        sr = calculate_statistical_rates(
+            target_col, primary_sensitive, file_info,
+            include_visualization=include_visualizations,
+        )
         if isinstance(sr, dict) and "Error" in sr:
             details["statistical_rate"] = {"error": sr["Error"]}
         else:
@@ -1040,7 +1056,8 @@ def _build_fairness_bias_section(file_info):
                 "sensitive": primary_sensitive,
                 "target": target_col,
                 "tsd_scores": tsd_scores,
-                "visualization": sr.get("Statistical Rate Visualization"),
+                "visualization": sr.get("Statistical Rate Visualization") if include_visualizations else None,
+                "visualization_deferred": not include_visualizations,
             }
     else:
         details["statistical_rate"] = {
@@ -1105,6 +1122,7 @@ def _build_fairness_bias_section(file_info):
         "kpis": kpis,
         "needs_attention": needs_attention,
         "details": details,
+        "visualizations_deferred": not include_visualizations,
     }
 
 
@@ -1508,7 +1526,7 @@ def _auto_select_governance_columns(df, fairness_target=None):
     }
 
 
-def _build_data_governance_section(file_info):
+def _build_data_governance_section(file_info, include_visualizations=False):
     """Compute the Data Governance portion of the readiness report."""
     df = read_file(file_info)
     if hasattr(df, "columns"):
@@ -1543,7 +1561,7 @@ def _build_data_governance_section(file_info):
     # --- k-Anonymity ---------------------------------------------------------
     k_val = None
     if qi:
-        k_res = compute_k_anonymity(qi, work_df)
+        k_res = compute_k_anonymity(qi, work_df, include_visualization=include_visualizations)
         if "Error" not in k_res:
             k_val = k_res.get("k-Value")
             if k_val is not None and k_val < _GOV_K_WARNING:
@@ -1563,7 +1581,8 @@ def _build_data_governance_section(file_info):
                 "quasi_identifiers": qi,
                 "k_value": k_val,
                 "descriptive_statistics": k_res.get("descriptive_statistics"),
-                "visualization": k_res.get("k-Anonymity Visualization"),
+                "visualization": k_res.get("k-Anonymity Visualization") if include_visualizations else None,
+                "visualization_deferred": not include_visualizations,
             }
         else:
             details["k_anonymity"] = {"error": k_res.get("Error")}
@@ -1583,7 +1602,7 @@ def _build_data_governance_section(file_info):
     # --- l-Diversity ---------------------------------------------------------
     l_val = None
     if qi and sensitive:
-        l_res = compute_l_diversity(qi, sensitive, work_df)
+        l_res = compute_l_diversity(qi, sensitive, work_df, include_visualization=include_visualizations)
         if "Error" not in l_res:
             l_val = l_res.get("l-Value")
             if l_val is not None and l_val < _GOV_L_WARNING:
@@ -1602,7 +1621,8 @@ def _build_data_governance_section(file_info):
                 "sensitive_attribute": sensitive,
                 "l_value": l_val,
                 "descriptive_statistics": l_res.get("descriptive_statistics"),
-                "visualization": l_res.get("l-Diversity Visualization"),
+                "visualization": l_res.get("l-Diversity Visualization") if include_visualizations else None,
+                "visualization_deferred": not include_visualizations,
             }
         else:
             details["l_diversity"] = {"error": l_res.get("Error")}
@@ -1624,7 +1644,7 @@ def _build_data_governance_section(file_info):
     # --- t-Closeness ---------------------------------------------------------
     t_val = None
     if qi and sensitive:
-        t_res = compute_t_closeness(qi, sensitive, work_df)
+        t_res = compute_t_closeness(qi, sensitive, work_df, include_visualization=include_visualizations)
         if "Error" not in t_res:
             t_val = t_res.get("t-Value")
             if t_val is not None and t_val > _GOV_T_WARNING:
@@ -1643,7 +1663,8 @@ def _build_data_governance_section(file_info):
                 "sensitive_attribute": sensitive,
                 "t_value": t_val,
                 "descriptive_statistics": t_res.get("descriptive_statistics"),
-                "visualization": t_res.get("t-Closeness Visualization"),
+                "visualization": t_res.get("t-Closeness Visualization") if include_visualizations else None,
+                "visualization_deferred": not include_visualizations,
             }
         else:
             details["t_closeness"] = {"error": t_res.get("Error")}
@@ -1664,13 +1685,14 @@ def _build_data_governance_section(file_info):
 
     # --- Entropy risk --------------------------------------------------------
     if qi:
-        e_res = compute_entropy_risk(qi, work_df)
+        e_res = compute_entropy_risk(qi, work_df, include_visualization=include_visualizations)
         if "Error" not in e_res:
             details["entropy_risk"] = {
                 "quasi_identifiers": qi,
                 "entropy_value": e_res.get("Entropy-Value"),
                 "descriptive_statistics": e_res.get("descriptive_statistics"),
-                "visualization": e_res.get("Entropy Risk Visualization"),
+                "visualization": e_res.get("Entropy Risk Visualization") if include_visualizations else None,
+                "visualization_deferred": not include_visualizations,
             }
         else:
             details["entropy_risk"] = {"error": e_res.get("Error")}
@@ -1683,7 +1705,9 @@ def _build_data_governance_section(file_info):
     if mm_qis:
         for q in mm_qis:
             try:
-                s_res = generate_single_attribute_MM_risk_scores(work_df, id_col, [q])
+                s_res = generate_single_attribute_MM_risk_scores(
+                    work_df, id_col, [q], include_visualization=include_visualizations
+                )
                 if "Error" in s_res:
                     single_by_qi[q] = {"error": s_res["Error"]}
                     continue
@@ -1743,7 +1767,9 @@ def _build_data_governance_section(file_info):
     multi_mean = None
     if mm_qis:
         try:
-            m_res = generate_multiple_attribute_MM_risk_scores(work_df, id_col, mm_qis)
+            m_res = generate_multiple_attribute_MM_risk_scores(
+                work_df, id_col, mm_qis, include_visualization=include_visualizations
+            )
             if "Error" not in m_res:
                 m_stats = m_res.get("Descriptive statistics of the risk scores") or {}
                 multi_mean = m_stats.get("mean")
@@ -1766,7 +1792,8 @@ def _build_data_governance_section(file_info):
                     "mean_risk": round(multi_mean, 4) if multi_mean is not None else None,
                     "dataset_risk_score": m_res.get("Dataset Risk Score"),
                     "stats": m_stats,
-                    "visualization": m_res.get("Multiple attribute risk scoring Visualization"),
+                    "visualization": m_res.get("Multiple attribute risk scoring Visualization") if include_visualizations else None,
+                    "visualization_deferred": not include_visualizations,
                 }
             else:
                 details["multiple_attribute_risk"] = {"error": m_res.get("Error")}
@@ -1829,14 +1856,16 @@ def _build_data_governance_section(file_info):
     if dp_features:
         try:
             dp_res = return_noisy_stats(
-                dp_features, _GOV_DP_EPSILON, work_df, save_output=False
+                dp_features, _GOV_DP_EPSILON, work_df,
+                save_output=False, include_visualization=include_visualizations,
             )
             if "Error" not in dp_res:
                 details["differential_privacy"] = {
                     "features": dp_features,
                     "epsilon": _GOV_DP_EPSILON,
                     "illustrative": True,
-                    "visualization": dp_res.get("DP Statistics Visualization"),
+                    "visualization": dp_res.get("DP Statistics Visualization") if include_visualizations else None,
+                    "visualization_deferred": not include_visualizations,
                     "summary": {
                         k: v for k, v in dp_res.items()
                         if k.endswith("(before noise)") or k.endswith("(after noise)")
@@ -1862,7 +1891,152 @@ def _build_data_governance_section(file_info):
         "kpis": kpis,
         "needs_attention": needs_attention,
         "details": details,
+        "visualizations_deferred": not include_visualizations,
     }
+
+
+def _build_dataset_overview_visualizations(file_info):
+    df = read_file(file_info)
+    if hasattr(df, "columns"):
+        df.columns = [str(c) for c in df.columns]
+    return {
+        "categorical_charts": categorical_distribution_charts(df),
+        "histograms": summary_histograms(df, figsize=(7, 4.5)),
+    }
+
+
+def _build_data_quality_visualizations(file_info):
+    compl = completeness(file_info, include_visualization=True)
+    out = outliers(file_info, include_visualization=True)
+    viz = {}
+    if compl.get("Completeness Visualization"):
+        viz["completeness"] = compl["Completeness Visualization"]
+    if isinstance(out, dict) and out.get("Outliers Visualization"):
+        viz["outliers"] = out["Outliers Visualization"]
+    return viz
+
+
+def _build_impact_on_ai_visualizations(file_info):
+    df = read_file(file_info)
+    if hasattr(df, "columns"):
+        df.columns = [str(c) for c in df.columns]
+    kept, _ = _prune_columns_for_corr(df)
+    if len(kept) < 2:
+        return {}
+    corr = calc_correlations(kept, file_info, include_visualization=True)
+    if isinstance(corr, dict) and "Message" in corr:
+        return {}
+    cat = corr.get("Correlations Analysis Categorical", {}) or {}
+    num = corr.get("Correlations Analysis Numerical", {}) or {}
+    viz = {}
+    cat_img = cat.get("Correlations Analysis Categorical Visualization")
+    num_img = num.get("Correlations Analysis Numerical Visualization")
+    if cat_img:
+        viz["categorical_correlation"] = cat_img
+    if num_img:
+        viz["numerical_correlation"] = num_img
+    return viz
+
+
+def _build_fairness_bias_visualizations(file_info):
+    df = read_file(file_info)
+    if hasattr(df, "columns"):
+        df.columns = [str(c) for c in df.columns]
+    selection = _auto_select_fairness_columns(df)
+    sensitive_cols = selection["sensitive_columns"]
+    target_col = selection["target_column"]
+    primary_sensitive = selection["primary_sensitive"]
+    viz = {}
+    for col in sensitive_cols:
+        try:
+            vis = create_representation_rate_vis([col], file_info)
+            if isinstance(vis, str):
+                viz[f"representation_rate.{col}"] = vis
+        except Exception:
+            pass
+    if target_col:
+        ci_dict = _compute_class_imbalance(df, target_col, "EU", include_visualization=True)
+        img = ci_dict.get("Class Imbalance Visualization")
+        if img:
+            viz["class_imbalance"] = img
+    if primary_sensitive and target_col:
+        sr = calculate_statistical_rates(
+            target_col, primary_sensitive, file_info, include_visualization=True,
+        )
+        if isinstance(sr, dict) and sr.get("Statistical Rate Visualization"):
+            viz["statistical_rate"] = sr["Statistical Rate Visualization"]
+    return viz
+
+
+def _build_data_governance_visualizations(file_info):
+    """Build only chart payloads for governance (metrics already computed on initial load)."""
+    df = read_file(file_info)
+    if hasattr(df, "columns"):
+        df.columns = [str(c) for c in df.columns]
+
+    fairness_sel = _auto_select_fairness_columns(df)
+    selection = _auto_select_governance_columns(
+        df, fairness_target=fairness_sel.get("target_column")
+    )
+    qi = selection["quasi_identifiers"]
+    mm_qis = selection["mm_quasi_identifiers"]
+    sensitive = selection["sensitive_attribute"]
+    id_col = selection["id_column"]
+    id_synthetic = selection["id_synthetic"]
+    dp_features = selection["dp_features"]
+
+    work_df = df.copy()
+    if id_synthetic:
+        work_df[_SYNTHETIC_ID_COL] = range(len(work_df))
+        id_col = _SYNTHETIC_ID_COL
+
+    viz = {}
+    if qi:
+        k_res = compute_k_anonymity(qi, work_df, include_visualization=True)
+        img = k_res.get("k-Anonymity Visualization")
+        if img:
+            viz["k_anonymity"] = img
+        e_res = compute_entropy_risk(qi, work_df, include_visualization=True)
+        img = e_res.get("Entropy Risk Visualization")
+        if img:
+            viz["entropy_risk"] = img
+    if qi and sensitive:
+        l_res = compute_l_diversity(qi, sensitive, work_df, include_visualization=True)
+        img = l_res.get("l-Diversity Visualization")
+        if img:
+            viz["l_diversity"] = img
+        t_res = compute_t_closeness(qi, sensitive, work_df, include_visualization=True)
+        img = t_res.get("t-Closeness Visualization")
+        if img:
+            viz["t_closeness"] = img
+    if mm_qis:
+        m_res = generate_multiple_attribute_MM_risk_scores(
+            work_df, id_col, mm_qis, include_visualization=True
+        )
+        img = m_res.get("Multiple attribute risk scoring Visualization")
+        if img:
+            viz["multiple_attribute_risk"] = img
+    if dp_features:
+        try:
+            dp_res = return_noisy_stats(
+                dp_features, _GOV_DP_EPSILON, work_df,
+                save_output=False, include_visualization=True,
+            )
+            img = dp_res.get("DP Statistics Visualization")
+            if img:
+                viz["differential_privacy"] = img
+        except Exception:
+            pass
+    return viz
+
+
+_READINESS_VIZ_BUILDERS = {
+    "dataset-overview": _build_dataset_overview_visualizations,
+    "data-quality": _build_data_quality_visualizations,
+    "impact-on-ai": _build_impact_on_ai_visualizations,
+    "fairness-bias": _build_fairness_bias_visualizations,
+    "data-governance": _build_data_governance_visualizations,
+}
 
 
 _READINESS_SECTION_BUILDERS = {
@@ -1894,18 +2068,54 @@ def _readiness_file_info():
     )
 
 
-def _build_readiness_section(section, file_info):
+def _build_readiness_section(section, file_info, include_visualizations=False):
     """Build one readiness-report section; return error dict on failure."""
     builder = _READINESS_SECTION_BUILDERS.get(section)
     if builder is None:
         return None
     try:
-        return builder(file_info)
+        return builder(file_info, include_visualizations=include_visualizations)
     except Exception as e:
         metric_time_log.error(
             "Readiness report — %s error: %s", section, e, exc_info=True
         )
         return {"error": f"{type(e).__name__}: {e}"}
+
+
+@metrics_bp.route("/readiness-report/<section>/visualizations", methods=["GET"])
+def readiness_report_visualizations(section):
+    """Return on-demand chart images for a readiness-report section."""
+    if section not in _READINESS_VIZ_BUILDERS:
+        return jsonify({"success": False, "message": f"Unknown section: {section}"}), 404
+
+    file_info = _readiness_file_info()
+    if file_info is None:
+        return jsonify({"success": False, "message": "No file uploaded"}), 200
+
+    start_time = time.time()
+    try:
+        visualizations = _READINESS_VIZ_BUILDERS[section](file_info)
+    except Exception as e:
+        metric_time_log.error(
+            "Readiness report visualizations — %s error: %s", section, e, exc_info=True
+        )
+        return jsonify({
+            "success": False,
+            "message": f"{type(e).__name__}: {e}",
+        }), 200
+
+    build_time_seconds = round(time.time() - start_time, 2)
+    metric_time_log.info(
+        "Readiness report section %s visualizations built in %.2f seconds",
+        section,
+        build_time_seconds,
+    )
+    return jsonify(ensure_json_serializable({
+        "success": True,
+        "section": section,
+        "visualizations": visualizations,
+        "build_time_seconds": build_time_seconds,
+    }))
 
 
 @metrics_bp.route("/readiness-report/<section>", methods=["GET"])
@@ -2302,10 +2512,11 @@ def class_imbalance():
     return get_result_or_default("metrics.class_imbalance", file_path, file_name)
 
 
-def _compute_class_imbalance(file, classes, dist_metric):
+def _compute_class_imbalance(file, classes, dist_metric, include_visualization=True):
     ci_dict = {}
     try:
-        ci_dict["Class Imbalance Visualization"] = class_distribution_plot(file, classes)
+        if include_visualization:
+            ci_dict["Class Imbalance Visualization"] = class_distribution_plot(file, classes)
         ci_dict["Description"] = (
             "The chart displays the distribution of classes within the "
             "specified feature, providing a visual representation of the "

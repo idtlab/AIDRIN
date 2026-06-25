@@ -2276,6 +2276,114 @@ function _appendReadinessBuildTimeFooter(container, seconds) {
   container.appendChild(el);
 }
 
+const _readinessVizCache = {};
+
+/** Placeholder for a chart that loads when the details panel is opened. */
+function _readinessVizSlot(section, vizKey, title) {
+  return `<div class="readiness-viz-slot mb-4" data-readiness-section="${_escapeHtml(section)}" data-readiness-viz="${_escapeHtml(vizKey)}">
+    <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${title}</p>
+    <div class="readiness-viz-content text-sm text-gray-500 dark:text-gray-400 py-4 text-center">Open this section to load chart…</div>
+  </div>`;
+}
+
+function _readinessVizSpinnerHtml() {
+  return `<div class="flex justify-center py-6" role="status">
+    <svg class="w-6 h-6 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+  </div>`;
+}
+
+function _applyReadinessVisualizations(section, root, vizMap) {
+  if (!root || !vizMap) return;
+
+  if (section === "dataset-overview") {
+    if (vizMap.categorical_charts) {
+      const catHost = root.querySelector("#readiness-categorical-charts");
+      if (catHost) {
+        renderCategoricalPieCharts(vizMap.categorical_charts, "readiness-categorical-charts");
+      }
+    }
+    if (vizMap.histograms) {
+      const histHost = root.querySelector("#readiness-histograms-inner");
+      if (histHost) {
+        renderWorkspaceHistograms(
+          vizMap.histograms,
+          "readiness-histograms-inner",
+          true,
+          "large",
+        );
+      }
+    }
+    return;
+  }
+
+  root.querySelectorAll(".readiness-viz-slot").forEach((slot) => {
+    const key = slot.dataset.readinessViz;
+    const target = slot.querySelector(".readiness-viz-content");
+    if (!target || !key) return;
+    const b64 = vizMap[key];
+    if (b64) {
+      target.innerHTML = `<img src="data:image/png;base64,${b64}" alt="${_escapeHtml(key)}" class="w-full max-w-2xl" />`;
+    } else {
+      target.innerHTML = `<p class="text-sm text-gray-500 dark:text-gray-400">Chart unavailable.</p>`;
+    }
+  });
+}
+
+function _loadReadinessSectionVisualizations(section, root) {
+  if (!root) return Promise.resolve();
+  const slots = root.querySelectorAll(".readiness-viz-slot");
+  if (!section || (!slots.length && section !== "dataset-overview")) {
+    return Promise.resolve();
+  }
+
+  if (_readinessVizCache[section]) {
+    _applyReadinessVisualizations(section, root, _readinessVizCache[section]);
+    return Promise.resolve();
+  }
+
+  slots.forEach((slot) => {
+    const target = slot.querySelector(".readiness-viz-content");
+    if (target) target.innerHTML = _readinessVizSpinnerHtml();
+  });
+  const catHost = root.querySelector("#readiness-categorical-charts");
+  const histHost = root.querySelector("#readiness-histograms-inner");
+  if (catHost && !catHost.childElementCount) catHost.innerHTML = _readinessVizSpinnerHtml();
+  if (histHost && !histHost.childElementCount) histHost.innerHTML = _readinessVizSpinnerHtml();
+
+  return fetch(`/readiness-report/${section}/visualizations`)
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.success) {
+        const msg = resp.message || "Could not load charts";
+        slots.forEach((slot) => {
+          const target = slot.querySelector(".readiness-viz-content");
+          if (target) target.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${_escapeHtml(msg)}</p>`;
+        });
+        return;
+      }
+      _readinessVizCache[section] = resp.visualizations || {};
+      _applyReadinessVisualizations(section, root, _readinessVizCache[section]);
+    })
+    .catch((err) => {
+      slots.forEach((slot) => {
+        const target = slot.querySelector(".readiness-viz-content");
+        if (target) {
+          target.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${_escapeHtml(err.message)}</p>`;
+        }
+      });
+    });
+}
+
+/** Fetch charts the first time a readiness details panel is expanded. */
+function _wireReadinessDetailsViz(detailsEl, section) {
+  if (!detailsEl || detailsEl.dataset.vizWired === "1") return;
+  detailsEl.dataset.vizWired = "1";
+  detailsEl.addEventListener("toggle", () => {
+    if (!detailsEl.open) return;
+    _loadReadinessSectionVisualizations(section, detailsEl);
+  });
+}
+
 /**
  * Fetch one readiness-report section and render it when ready.
  * @param {string} section - URL slug (e.g. "data-quality")
@@ -2680,12 +2788,19 @@ function renderReadinessDatasetOverview(container, overview) {
 
   const catCharts = overview.categorical_charts || {};
   const catChartCols = Object.keys(catCharts);
-  if (catChartCols.length > 0) {
+  const hasHistograms =
+    overview.histograms && Object.keys(overview.histograms).length > 0;
+  const vizDeferred = overview.visualizations_deferred;
+  const showCatCharts = catChartCols.length > 0 || (vizDeferred && (overview.categorical_distributions || {}).length);
+  const showHistograms =
+    hasHistograms || (vizDeferred && numFeatures.length > 0);
+
+  if (showCatCharts) {
     detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical value distributions</p>`;
     detailsInner += `<div id="readiness-categorical-charts" class="mb-4"></div>`;
   }
 
-  if (overview.histograms && Object.keys(overview.histograms).length > 0) {
+  if (showHistograms) {
     detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 mt-4">Feature distributions (numerical)</p>`;
     detailsInner += `<div id="readiness-histograms-inner" class="mb-4"></div>`;
   }
@@ -2703,16 +2818,23 @@ function renderReadinessDatasetOverview(container, overview) {
   container.classList.remove("text-center", "py-8");
   container.innerHTML = html;
 
-  if (catChartCols.length > 0) {
-    renderCategoricalPieCharts(overview.categorical_charts, "readiness-categorical-charts");
-  }
-  if (overview.histograms) {
-    renderWorkspaceHistograms(
-      overview.histograms,
-      "readiness-histograms-inner",
-      true,
-      "large",
-    );
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl && (showCatCharts || showHistograms)) {
+      _wireReadinessDetailsViz(detailsEl, "dataset-overview");
+    }
+  } else {
+    if (catChartCols.length > 0) {
+      renderCategoricalPieCharts(overview.categorical_charts, "readiness-categorical-charts");
+    }
+    if (hasHistograms) {
+      renderWorkspaceHistograms(
+        overview.histograms,
+        "readiness-histograms-inner",
+        true,
+        "large",
+      );
+    }
   }
 }
 
@@ -2841,36 +2963,50 @@ function renderReadinessDataQuality(container, dq) {
 
   // --- Collapsible details (original charts) ---
   const det = dq.details || {};
-      let detailsInner = "";
-      if (det.completeness && det.completeness.visualization) {
-        detailsInner += `
-          <div class="mb-4">
-            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Completeness by feature</p>
-            <img src="data:image/png;base64,${det.completeness.visualization}" alt="Completeness chart" class="w-full max-w-2xl" />
-          </div>`;
-      }
-      if (det.outliers && det.outliers.visualization) {
-        detailsInner += `
-          <div class="mb-4">
-            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Outliers by feature</p>
-            <img src="data:image/png;base64,${det.outliers.visualization}" alt="Outliers chart" class="w-full max-w-2xl" />
-          </div>`;
-      } else if (det.outliers && det.outliers.error) {
-        detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Outliers: ${det.outliers.error}</p>`;
-      }
+  const vizDeferred = dq.visualizations_deferred;
+  let detailsInner = "";
+  if (det.completeness) {
+    if (det.completeness.visualization) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Completeness by feature</p>
+          <img src="data:image/png;base64,${det.completeness.visualization}" alt="Completeness chart" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (vizDeferred || det.completeness.visualization_deferred) {
+      detailsInner += _readinessVizSlot("data-quality", "completeness", "Completeness by feature");
+    }
+  }
+  if (det.outliers) {
+    if (det.outliers.visualization) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Outliers by feature</p>
+          <img src="data:image/png;base64,${det.outliers.visualization}" alt="Outliers chart" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (det.outliers.error) {
+      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Outliers: ${det.outliers.error}</p>`;
+    } else if (vizDeferred || det.outliers.visualization_deferred) {
+      detailsInner += _readinessVizSlot("data-quality", "outliers", "Outliers by feature");
+    }
+  }
 
-      if (detailsInner) {
-        html += `
-          <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
-            <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
-              Show detailed charts
-            </summary>
-            <div class="mt-4">${detailsInner}</div>
-          </details>`;
-      }
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
 
   container.classList.remove("text-center", "py-8");
   container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "data-quality");
+  }
 }
 
 /**
@@ -3033,6 +3169,7 @@ function renderReadinessImpact(container, impact) {
 
   // --- Collapsible details ---
   const det = impact.details || {};
+  const vizDeferred = impact.visualizations_deferred || det.visualizations_deferred;
   let detailsInner = "";
 
   if (topPairs.length) {
@@ -3061,6 +3198,13 @@ function renderReadinessImpact(container, impact) {
         <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical correlation${method}</p>
         <img src="data:image/png;base64,${det.numerical_visualization}" alt="Numerical correlation heatmap" class="w-full max-w-2xl" />
       </div>`;
+  } else if (vizDeferred && analyzed >= 2) {
+    const method = det.numerical_method ? ` (${det.numerical_method})` : "";
+    detailsInner += _readinessVizSlot(
+      "impact-on-ai",
+      "numerical_correlation",
+      `Numerical correlation${method}`,
+    );
   }
   if (det.categorical_visualization) {
     detailsInner += `
@@ -3068,6 +3212,12 @@ function renderReadinessImpact(container, impact) {
         <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical correlation (Theil's U)</p>
         <img src="data:image/png;base64,${det.categorical_visualization}" alt="Categorical correlation heatmap" class="w-full max-w-2xl" />
       </div>`;
+  } else if (vizDeferred && analyzed >= 2) {
+    detailsInner += _readinessVizSlot(
+      "impact-on-ai",
+      "categorical_correlation",
+      "Categorical correlation (Theil's U)",
+    );
   }
   if (dropped.length) {
     const items = dropped
@@ -3095,6 +3245,11 @@ function renderReadinessImpact(container, impact) {
 
   container.classList.remove("text-center", "py-8");
   container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "impact-on-ai");
+  }
 }
 
 /**
@@ -3295,15 +3450,29 @@ function renderReadinessFairness(container, fb) {
 
   // --- Collapsible details (charts) ---
   const det = fb.details || {};
+  const vizDeferred =
+    fb.visualizations_deferred ||
+    det.representation_rate?.visualizations_deferred;
   let detailsInner = "";
 
   const repVis = det.representation_rate?.visualizations || {};
-  for (const [col, b64] of Object.entries(repVis)) {
-    detailsInner += `
-      <div class="mb-4">
-        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Representation rate — ${col}</p>
-        <img src="data:image/png;base64,${b64}" alt="Representation ${col}" class="w-full max-w-2xl" />
-      </div>`;
+  const sensCols = sensCrit.selected || [];
+  if (vizDeferred && sensCols.length && !det.representation_rate?.error) {
+    sensCols.forEach((col) => {
+      detailsInner += _readinessVizSlot(
+        "fairness-bias",
+        `representation_rate.${col}`,
+        `Representation rate — ${col}`,
+      );
+    });
+  } else {
+    for (const [col, b64] of Object.entries(repVis)) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Representation rate — ${col}</p>
+          <img src="data:image/png;base64,${b64}" alt="Representation ${col}" class="w-full max-w-2xl" />
+        </div>`;
+    }
   }
   if (det.representation_rate?.error && !Object.keys(repVis).length) {
     detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Representation rate: ${det.representation_rate.error}</p>`;
@@ -3317,6 +3486,15 @@ function renderReadinessFairness(container, fb) {
       </div>`;
   } else if (det.class_imbalance?.error) {
     detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Class imbalance: ${det.class_imbalance.error}</p>`;
+  } else if (
+    (vizDeferred || det.class_imbalance?.visualization_deferred) &&
+    targetCrit.selected
+  ) {
+    detailsInner += _readinessVizSlot(
+      "fairness-bias",
+      "class_imbalance",
+      `Class imbalance — ${targetCrit.selected || "target"}`,
+    );
   }
 
   if (det.statistical_rate?.visualization) {
@@ -3327,6 +3505,16 @@ function renderReadinessFairness(container, fb) {
       </div>`;
   } else if (det.statistical_rate?.error) {
     detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Statistical rate: ${det.statistical_rate.error}</p>`;
+  } else if (
+    (vizDeferred || det.statistical_rate?.visualization_deferred) &&
+    sel.primary_sensitive &&
+    targetCrit.selected
+  ) {
+    detailsInner += _readinessVizSlot(
+      "fairness-bias",
+      "statistical_rate",
+      `Statistical rate — ${sel.primary_sensitive} × ${targetCrit.selected}`,
+    );
   }
 
   if (det.cdd?.disparities && !det.cdd.error) {
@@ -3372,6 +3560,11 @@ function renderReadinessFairness(container, fb) {
 
   container.classList.remove("text-center", "py-8");
   container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "fairness-bias");
+  }
 }
 
 /**
@@ -3603,6 +3796,7 @@ function renderReadinessGovernance(container, gov) {
   );
 
   let detailsInner = "";
+  const vizDeferred = gov.visualizations_deferred;
 
   const chartMetrics = [
     ["k_anonymity", "k-Anonymity", "visualization"],
@@ -3622,6 +3816,8 @@ function renderReadinessGovernance(container, gov) {
         </div>`;
     } else if (block?.error) {
       detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${title}: ${block.error}</p>`;
+    } else if (block && (vizDeferred || block.visualization_deferred)) {
+      detailsInner += _readinessVizSlot("data-governance", key, title);
     }
   });
 
@@ -3686,6 +3882,11 @@ function renderReadinessGovernance(container, gov) {
 
   container.classList.remove("text-center", "py-8");
   container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "data-governance");
+  }
 }
 
 // ==================== Workspace Init ====================

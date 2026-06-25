@@ -56,7 +56,7 @@ def _is_column_normal(series: pd.Series) -> bool:
 
 
 @shared_task(bind=True, ignore_result=False)
-def calc_correlations(self: Task, columns: List[str], file_info):
+def calc_correlations(self: Task, columns: List[str], file_info, include_visualization=True):
     df = read_file(file_info)
     try:
         # Separate categorical and numerical columns
@@ -77,51 +77,52 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             )
             logger.debug("Categorical correlation matrix computed:\n%s", categorical_correlation["corr"])
 
-            corr_matrix = categorical_correlation["corr"]
-            n = len(corr_matrix.columns)
-            fig_size = max(6, n * 0.7)
-            text_color = "#6b7280"
+            if include_visualization:
+                corr_matrix = categorical_correlation["corr"]
+                n = len(corr_matrix.columns)
+                fig_size = max(6, n * 0.7)
+                text_color = "#6b7280"
 
-            fig, ax = plt.subplots(figsize=(fig_size, fig_size))
-            fig.patch.set_alpha(0)
-            ax.set_facecolor("none")
+                fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+                fig.patch.set_alpha(0)
+                ax.set_facecolor("none")
 
-            annot_size = max(7, min(10, 80 // max(n, 1)))
-            _ = sns.heatmap(
-                corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", ax=ax,
-                annot_kws={"size": annot_size},
-                linewidths=0.5, linecolor="#e5e7eb",
-                cbar=False,
-            )
+                annot_size = max(7, min(10, 80 // max(n, 1)))
+                _ = sns.heatmap(
+                    corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", ax=ax,
+                    annot_kws={"size": annot_size},
+                    linewidths=0.5, linecolor="#e5e7eb",
+                    cbar=False,
+                )
 
-            # Truncate long labels
-            x_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_xticklabels()]
-            y_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_yticklabels()]
-            ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9, color=text_color)
-            ax.set_yticklabels(y_labels, rotation=0, fontsize=9, color=text_color)
+                # Truncate long labels
+                x_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_xticklabels()]
+                y_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_yticklabels()]
+                ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9, color=text_color)
+                ax.set_yticklabels(y_labels, rotation=0, fontsize=9, color=text_color)
 
-            fig.tight_layout(pad=0.5)
+                fig.tight_layout(pad=0.5)
 
-            # Save the plot to a BytesIO object
-            image_stream_cat = BytesIO()
-            fig.savefig(image_stream_cat, format="png", dpi=150, transparent=True)
-            plt.close(fig)
+                # Save the plot to a BytesIO object
+                image_stream_cat = BytesIO()
+                fig.savefig(image_stream_cat, format="png", dpi=150, transparent=True)
+                plt.close(fig)
 
-            # Convert the plot to base64
-            base64_image_cat = base64.b64encode(image_stream_cat.getvalue()).decode(
-                "utf-8"
-            )
+                # Convert the plot to base64
+                base64_image_cat = base64.b64encode(image_stream_cat.getvalue()).decode(
+                    "utf-8"
+                )
 
-            # Close the BytesIO stream
-            image_stream_cat.close()
+                # Close the BytesIO stream
+                image_stream_cat.close()
 
-            result_dict["Correlations Analysis Categorical"][
-                "Correlations Analysis Categorical Visualization"
-            ] = base64_image_cat
-            result_dict["Correlations Analysis Categorical"]["Description"] = (
-                "Categorical correlations are calculated using Theil's U, with values ranging from 0 to 1. "
-                "A value of 1 indicates a perfect correlation, while a value of 0 indicates no correlation"
-            )
+                result_dict["Correlations Analysis Categorical"][
+                    "Correlations Analysis Categorical Visualization"
+                ] = base64_image_cat
+                result_dict["Correlations Analysis Categorical"]["Description"] = (
+                    "Categorical correlations are calculated using Theil's U, with values ranging from 0 to 1. "
+                    "A value of 1 indicates a perfect correlation, while a value of 0 indicates no correlation"
+                )
 
         # Check if there are numerical features
         if not numerical_columns.empty:
@@ -135,50 +136,51 @@ def calc_correlations(self: Task, columns: List[str], file_info):
             # Numerical-numerical correlations are computed dynamically based on normality.
             numerical_correlation = numerical_df.corr(method=corr_method)
 
-            n = len(numerical_correlation.columns)
-            fig_size = max(6, n * 0.7)
-            text_color = "#6b7280"
+            if include_visualization:
+                n = len(numerical_correlation.columns)
+                fig_size = max(6, n * 0.7)
+                text_color = "#6b7280"
 
-            fig, ax = plt.subplots(figsize=(fig_size, fig_size))
-            fig.patch.set_alpha(0)
-            ax.set_facecolor("none")
+                fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+                fig.patch.set_alpha(0)
+                ax.set_facecolor("none")
 
-            annot_size = max(7, min(10, 80 // max(n, 1)))
-            _ = sns.heatmap(
-                numerical_correlation, annot=True, cmap="coolwarm", fmt=".2f", ax=ax,
-                annot_kws={"size": annot_size},
-                linewidths=0.5, linecolor="#e5e7eb",
-                cbar=False,
-            )
+                annot_size = max(7, min(10, 80 // max(n, 1)))
+                _ = sns.heatmap(
+                    numerical_correlation, annot=True, cmap="coolwarm", fmt=".2f", ax=ax,
+                    annot_kws={"size": annot_size},
+                    linewidths=0.5, linecolor="#e5e7eb",
+                    cbar=False,
+                )
 
-            x_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_xticklabels()]
-            y_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_yticklabels()]
-            ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9, color=text_color)
-            ax.set_yticklabels(y_labels, rotation=0, fontsize=9, color=text_color)
+                x_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_xticklabels()]
+                y_labels = [t.get_text()[:12] + "..." if len(t.get_text()) > 12 else t.get_text() for t in ax.get_yticklabels()]
+                ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9, color=text_color)
+                ax.set_yticklabels(y_labels, rotation=0, fontsize=9, color=text_color)
 
-            fig.tight_layout(pad=0.5)
+                fig.tight_layout(pad=0.5)
 
-            # Save the plot to a BytesIO object
-            image_stream_num = BytesIO()
-            fig.savefig(image_stream_num, format="png", dpi=150, transparent=True)
-            plt.close(fig)
+                # Save the plot to a BytesIO object
+                image_stream_num = BytesIO()
+                fig.savefig(image_stream_num, format="png", dpi=150, transparent=True)
+                plt.close(fig)
 
-            # Convert the plot to base64
-            base64_image_num = base64.b64encode(image_stream_num.getvalue()).decode(
-                "utf-8"
-            )
+                # Convert the plot to base64
+                base64_image_num = base64.b64encode(image_stream_num.getvalue()).decode(
+                    "utf-8"
+                )
 
-            # Close the BytesIO stream
-            image_stream_num.close()
+                # Close the BytesIO stream
+                image_stream_num.close()
 
-            result_dict["Correlations Analysis Numerical"][
-                "Correlations Analysis Numerical Visualization"
-            ] = base64_image_num
-            result_dict["Correlations Analysis Numerical"]["Description"] = (
-                f"Numerical correlations are calculated using {corr_method.title()}'s correlation coefficient, with values "
-                "ranging from -1 to 1. A value of 1 indicates a perfect positive correlation, -1 indicates a perfect "
-                "negative correlation, and 0 indicates no correlation"
-            )
+                result_dict["Correlations Analysis Numerical"][
+                    "Correlations Analysis Numerical Visualization"
+                ] = base64_image_num
+                result_dict["Correlations Analysis Numerical"]["Description"] = (
+                    f"Numerical correlations are calculated using {corr_method.title()}'s correlation coefficient, with values "
+                    "ranging from -1 to 1. A value of 1 indicates a perfect positive correlation, -1 indicates a perfect "
+                    "negative correlation, and 0 indicates no correlation"
+                )
             result_dict["Correlations Analysis Numerical"]["Method"] = (
                 corr_method.title()
             )
