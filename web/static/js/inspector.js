@@ -2842,6 +2842,12 @@ function renderReadinessDatasetOverview(container, overview) {
 
   const meta = overview.file_metadata || {};
   const profiles = overview.feature_profiles || [];
+  const profileMeta = overview.feature_profiles_meta || {};
+  const statusCounts = profileMeta.status_counts || {};
+  const poorCount =
+    statusCounts.poor ?? profiles.filter((p) => p.status === "poor").length;
+  const warnCount =
+    statusCounts.warning ?? profiles.filter((p) => p.status === "warning").length;
 
   // --- File metadata ---
   let html = `
@@ -2881,9 +2887,6 @@ function renderReadinessDatasetOverview(container, overview) {
     </div>`;
 
   // --- Per-feature readiness profile ---
-  const poorCount = profiles.filter((p) => p.status === "poor").length;
-  const warnCount = profiles.filter((p) => p.status === "warning").length;
-
   html += `
     <div class="flex items-center justify-between mb-2">
       <p class="text-sm font-semibold text-gray-900 dark:text-white inline-flex items-center">Per-feature readiness profile${_readinessInfoIcon("feature_profile")}</p>
@@ -2893,6 +2896,10 @@ function renderReadinessDatasetOverview(container, overview) {
         ${!poorCount && !warnCount ? "all good" : ""}
       </span>
     </div>`;
+
+  if (profileMeta.truncated) {
+    html += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing ${profileMeta.shown.toLocaleString()} of ${profileMeta.total.toLocaleString()} features (prioritized: poor → warning → good).</p>`;
+  }
 
   html += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4">`;
   html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;

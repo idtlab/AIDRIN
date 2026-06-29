@@ -166,6 +166,8 @@ _OVERVIEW_DOMINANT_WARNING = 0.95
 _OVERVIEW_HIGH_CARDINALITY = 50
 _OVERVIEW_ID_UNIQUE_RATIO = 0.9
 _OVERVIEW_CAT_TOP_N = 5
+_OVERVIEW_MAX_FEATURE_PROFILES = 500
+_PROFILE_STATUS_RANK = {"poor": 0, "warning": 1, "good": 2}
 
 
 def _classify_feature_type(series):
@@ -263,6 +265,39 @@ def _build_feature_profiles(df):
     return profiles, type_counts
 
 
+def _prepare_feature_profiles_for_display(
+    profiles, max_profiles=_OVERVIEW_MAX_FEATURE_PROFILES
+):
+    """Cap profile rows for the report table, prioritizing poor then warning then good."""
+    status_counts = {"poor": 0, "warning": 0, "good": 0}
+    for profile in profiles:
+        status = profile.get("status", "good")
+        if status in status_counts:
+            status_counts[status] += 1
+
+    total = len(profiles)
+    meta = {
+        "total": total,
+        "shown": total,
+        "max": max_profiles,
+        "truncated": False,
+        "status_counts": status_counts,
+    }
+    if total <= max_profiles:
+        return profiles, meta
+
+    ranked = sorted(
+        enumerate(profiles),
+        key=lambda item: (
+            _PROFILE_STATUS_RANK.get(item[1].get("status"), 99),
+            item[0],
+        ),
+    )
+    meta["shown"] = max_profiles
+    meta["truncated"] = True
+    return [profile for _, profile in ranked[:max_profiles]], meta
+
+
 def _build_categorical_distributions(df, top_n=_OVERVIEW_CAT_TOP_N):
     """Top-*n* value counts (with percentages) for each categorical column."""
     distributions = {}
@@ -298,6 +333,7 @@ def _build_dataset_overview_section(file_info, include_visualizations=False):
 
     n_rows = len(df)
     profiles, type_counts = _build_feature_profiles(df)
+    display_profiles, profile_meta = _prepare_feature_profiles_for_display(profiles)
 
     file_size_bytes = None
     if file_path and os.path.exists(file_path):
@@ -334,7 +370,8 @@ def _build_dataset_overview_section(file_info, include_visualizations=False):
             "datetime_count": type_counts.get("datetime", 0),
             "boolean_count": type_counts.get("boolean", 0),
         },
-        "feature_profiles": profiles,
+        "feature_profiles": display_profiles,
+        "feature_profiles_meta": profile_meta,
         "numerical_summary": numerical_summary,
         "categorical_distributions": _build_categorical_distributions(df),
         "profile_thresholds": {
