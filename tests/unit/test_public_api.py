@@ -155,9 +155,7 @@ class TestPublicDataQuality(unittest.TestCase):
             "id": "age-range",
             "target": "age",
             "target_type": "column",
-            "criteria_type": "range",
-            "min": 20,
-            "max": 70,
+            "criteria": {"type": "range", "min": 20, "max": 70},
         }])
         self.assertIn("Rule summaries", result)
         self.assertIn("age-range", result["Rule summaries"])

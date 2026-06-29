@@ -41,6 +41,9 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert "remoteParams.max_export_rows" in source
     assert "remoteParams.scan_limit" in source
     assert "remoteParams.stop_after_outliers" in source
+    assert "criteria: serializeCustomOutlierCriteria(row)" in source
+    assert "function serializeCustomOutlierCondition(condition)" in source
+    assert "criteria_type:" not in source
     assert "function validateCustomOutlierRuleSelection(rules)" in source
     assert "!validateCustomOutlierRuleSelection(customOutlierRules)" in source
 

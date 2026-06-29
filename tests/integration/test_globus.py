@@ -125,9 +125,7 @@ def test_remote_runner_data_quality_custom_outliers():
         "id": "age-range",
         "target": "age",
         "target_type": "column",
-        "criteria_type": "range",
-        "min": 26,
-        "max": 40,
+        "criteria": {"type": "range", "min": 26, "max": 40},
     }]
     try:
         result = remote_metric_runner(

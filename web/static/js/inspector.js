@@ -1564,41 +1564,27 @@ function addCustomOutlierRuleRow() {
         <select data-field="target"
                 class="custom-outlier-target mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
       </label>
-      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Criteria
-        <select data-field="criteria_type"
-                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-          <option value="range">Range</option>
-          <option value="regex">Regex</option>
-        </select>
-      </label>
       <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
         <input type="checkbox" data-field="allow_missing" class="rounded border-gray-300" />
         Allow missing values
       </label>
     </div>
-    <div data-section="range" class="grid gap-3 mt-3 md:grid-cols-4">
-      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
-        <input type="number" step="any" data-field="min"
-               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
-      </label>
-      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Max
-        <input type="number" step="any" data-field="max"
-               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
-      </label>
-      <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
-        <input type="checkbox" data-field="min_inclusive" checked class="rounded border-gray-300" />
-        Include min
-      </label>
-      <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
-        <input type="checkbox" data-field="max_inclusive" checked class="rounded border-gray-300" />
-        Include max
-      </label>
-    </div>
-    <div data-section="regex" class="hidden mt-3">
-      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Pattern
-        <input type="text" data-field="pattern" value=".*"
-               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
-      </label>
+    <div data-section="criteria-tree" class="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Valid when
+          <select data-field="criteria_op"
+                  class="ml-2 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+            <option value="and">All conditions match</option>
+            <option value="or">Any condition matches</option>
+            <option value="not">No conditions match</option>
+          </select>
+        </label>
+        <button type="button" data-action="add-condition"
+                class="px-2.5 py-1 text-xs font-medium text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/20">
+          Add condition
+        </button>
+      </div>
+      <div data-section="criteria-conditions" class="space-y-2"></div>
     </div>
     <div class="flex justify-end mt-3">
       <button type="button" data-action="remove"
@@ -1608,21 +1594,81 @@ function addCustomOutlierRuleRow() {
     </div>`;
   list.appendChild(row);
 
-  row
-    .querySelector('[data-field="criteria_type"]')
-    .addEventListener("change", () => {
-      updateCustomOutlierCriteriaSections(row);
-    });
   row.querySelector('[data-action="remove"]').addEventListener("click", () => {
     row.remove();
     serializeCustomOutlierRules();
   });
+  row
+    .querySelector('[data-action="add-condition"]')
+    .addEventListener("click", () => {
+      addCustomOutlierConditionRow(row);
+      serializeCustomOutlierRules();
+    });
   row.addEventListener("input", serializeCustomOutlierRules);
   row.addEventListener("change", serializeCustomOutlierRules);
 
+  addCustomOutlierConditionRow(row);
   updateCustomOutlierTargetOptions(row);
-  updateCustomOutlierCriteriaSections(row);
   serializeCustomOutlierRules();
+}
+
+function addCustomOutlierConditionRow(ruleRow) {
+  const list = ruleRow.querySelector('[data-section="criteria-conditions"]');
+  if (!list) return;
+  const condition = document.createElement("div");
+  condition.className =
+    "custom-outlier-condition rounded-lg border border-gray-200 dark:border-gray-700 p-2";
+  condition.innerHTML = `
+    <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.7fr)_1fr_auto]">
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Type
+        <select data-field="condition_type"
+                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+          <option value="range">Range</option>
+          <option value="regex">Regex</option>
+        </select>
+      </label>
+      <div data-section="condition-range" class="grid gap-2 sm:grid-cols-4">
+        <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
+          <input type="number" step="any" data-field="condition_min"
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+        </label>
+        <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Max
+          <input type="number" step="any" data-field="condition_max"
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+        </label>
+        <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+          <input type="checkbox" data-field="condition_min_inclusive" checked class="rounded border-gray-300" />
+          Include min
+        </label>
+        <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+          <input type="checkbox" data-field="condition_max_inclusive" checked class="rounded border-gray-300" />
+          Include max
+        </label>
+      </div>
+      <div data-section="condition-regex" class="hidden">
+        <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Pattern
+          <input type="text" data-field="condition_pattern" value=".*"
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+        </label>
+      </div>
+      <button type="button" data-action="remove-condition"
+              class="self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+        Remove
+      </button>
+    </div>`;
+  list.appendChild(condition);
+  condition
+    .querySelector('[data-field="condition_type"]')
+    .addEventListener("change", () => {
+      updateCustomOutlierConditionSections(condition);
+    });
+  condition
+    .querySelector('[data-action="remove-condition"]')
+    .addEventListener("click", () => {
+      condition.remove();
+      serializeCustomOutlierRules();
+    });
+  updateCustomOutlierConditionSections(condition);
 }
 
 function updateCustomOutlierTargetOptions(scope) {
@@ -1641,24 +1687,12 @@ function updateCustomOutlierTargetOptions(scope) {
   });
 }
 
-function updateCustomOutlierCriteriaSections(row) {
-  const criteria = row.querySelector('[data-field="criteria_type"]')?.value;
-  row
-    .querySelector('[data-section="range"]')
-    ?.classList.toggle("hidden", criteria !== "range");
-  row
-    .querySelector('[data-section="regex"]')
-    ?.classList.toggle("hidden", criteria !== "regex");
-}
-
 function serializeCustomOutlierRules() {
   const rows = document.querySelectorAll(".custom-outlier-rule");
   const rules = [];
   rows.forEach((row, index) => {
     const targetSelect = row.querySelector('[data-field="target"]');
     if (!targetSelect || !targetSelect.value) return;
-    const criteriaType =
-      row.querySelector('[data-field="criteria_type"]')?.value || "range";
     const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
     const rule = {
       id,
@@ -1666,30 +1700,69 @@ function serializeCustomOutlierRules() {
       target: targetSelect.value,
       target_type:
         targetSelect.selectedOptions[0]?.dataset.targetType || "column",
-      criteria_type: criteriaType,
       allow_missing: Boolean(
         row.querySelector('[data-field="allow_missing"]')?.checked,
       ),
+      criteria: serializeCustomOutlierCriteria(row),
     };
-    if (criteriaType === "range") {
-      const min = row.querySelector('[data-field="min"]')?.value;
-      const max = row.querySelector('[data-field="max"]')?.value;
-      if (min !== "") rule.min = min;
-      if (max !== "") rule.max = max;
-      rule.min_inclusive = Boolean(
-        row.querySelector('[data-field="min_inclusive"]')?.checked,
-      );
-      rule.max_inclusive = Boolean(
-        row.querySelector('[data-field="max_inclusive"]')?.checked,
-      );
-    } else {
-      rule.pattern = row.querySelector('[data-field="pattern"]')?.value || "";
-    }
     rules.push(rule);
   });
   const hidden = document.getElementById("custom-outlier-rules-json");
   if (hidden) hidden.value = JSON.stringify(rules);
   return rules;
+}
+
+function updateCustomOutlierConditionSections(condition) {
+  const type = condition.querySelector('[data-field="condition_type"]')?.value;
+  condition
+    .querySelector('[data-section="condition-range"]')
+    ?.classList.toggle("hidden", type !== "range");
+  condition
+    .querySelector('[data-section="condition-regex"]')
+    ?.classList.toggle("hidden", type !== "regex");
+}
+
+function serializeCustomOutlierCriteria(row) {
+  const op = row.querySelector('[data-field="criteria_op"]')?.value || "and";
+  const conditions = Array.from(
+    row.querySelectorAll(".custom-outlier-condition"),
+  )
+    .map(serializeCustomOutlierCondition)
+    .filter(Boolean);
+  if (op === "not") {
+    return { op: "not", condition: conditions[0] };
+  }
+  return { op, conditions };
+}
+
+function serializeCustomOutlierCondition(condition) {
+  const type =
+    condition.querySelector('[data-field="condition_type"]')?.value || "range";
+  if (type === "regex") {
+    return {
+      type: "regex",
+      pattern:
+        condition.querySelector('[data-field="condition_pattern"]')?.value ||
+        "",
+    };
+  }
+
+  const min = condition.querySelector('[data-field="condition_min"]')?.value;
+  const max = condition.querySelector('[data-field="condition_max"]')?.value;
+  const criteria = {
+    type: "range",
+    min_inclusive: Boolean(
+      condition.querySelector('[data-field="condition_min_inclusive"]')
+        ?.checked,
+    ),
+    max_inclusive: Boolean(
+      condition.querySelector('[data-field="condition_max_inclusive"]')
+        ?.checked,
+    ),
+  };
+  if (min !== "") criteria.min = min;
+  if (max !== "") criteria.max = max;
+  return criteria;
 }
 
 function validateCustomOutlierRuleSelection(rules) {

@@ -171,42 +171,100 @@ def _validate_rules(rules):
         if target_type not in {"column", "hdf5_dataset"}:
             raise ValueError(f"Rule {rule_id} has unsupported target_type: {target_type}")
 
-        criteria_type = str(raw_rule.get("criteria_type", "")).strip()
-        if criteria_type not in {"range", "regex"}:
-            raise ValueError(f"Rule {rule_id} has unsupported criteria_type: {criteria_type}")
+        if "criteria_type" in raw_rule or any(
+            field in raw_rule for field in ("min", "max", "pattern", "min_inclusive", "max_inclusive")
+        ):
+            raise ValueError(f"Rule {rule_id} must use criteria tree syntax")
+        criteria = _validate_rule_criteria(raw_rule.get("criteria"), rule_id)
 
         rule = {
             "id": rule_id,
             "name": str(raw_rule.get("name") or rule_id),
             "target": target,
             "target_type": target_type,
-            "criteria_type": criteria_type,
+            "criteria": criteria,
             "allow_missing": bool(raw_rule.get("allow_missing", False)),
         }
 
-        if criteria_type == "range":
-            has_min = raw_rule.get("min") is not None and raw_rule.get("min") != ""
-            has_max = raw_rule.get("max") is not None and raw_rule.get("max") != ""
-            if not has_min and not has_max:
-                raise ValueError(f"Range rule {rule_id} requires min or max")
-            if has_min:
-                rule["min"] = _coerce_bound(raw_rule.get("min"), rule_id, "min")
-            if has_max:
-                rule["max"] = _coerce_bound(raw_rule.get("max"), rule_id, "max")
-            rule["min_inclusive"] = bool(raw_rule.get("min_inclusive", True))
-            rule["max_inclusive"] = bool(raw_rule.get("max_inclusive", True))
-        else:
-            pattern = raw_rule.get("pattern")
-            if pattern is None:
-                raise ValueError(f"Regex rule {rule_id} requires pattern")
-            try:
-                rule["pattern"] = str(pattern)
-                rule["_compiled_pattern"] = re.compile(rule["pattern"])
-            except re.error as exc:
-                raise ValueError(f"Regex rule {rule_id} has invalid pattern: {exc}")
-
         validated.append(rule)
     return validated
+
+
+def _validate_range_criteria(raw_rule, rule_id):
+    has_min = raw_rule.get("min") is not None and raw_rule.get("min") != ""
+    has_max = raw_rule.get("max") is not None and raw_rule.get("max") != ""
+    if not has_min and not has_max:
+        raise ValueError(f"Range rule {rule_id} requires min or max")
+
+    criteria = {
+        "type": "range",
+        "min_inclusive": bool(raw_rule.get("min_inclusive", True)),
+        "max_inclusive": bool(raw_rule.get("max_inclusive", True)),
+    }
+    if has_min:
+        criteria["min"] = _coerce_bound(raw_rule.get("min"), rule_id, "min")
+    if has_max:
+        criteria["max"] = _coerce_bound(raw_rule.get("max"), rule_id, "max")
+    return criteria
+
+
+def _validate_regex_criteria(raw_rule, rule_id):
+    pattern = raw_rule.get("pattern")
+    if pattern is None:
+        raise ValueError(f"Regex rule {rule_id} requires pattern")
+    try:
+        return {
+            "type": "regex",
+            "pattern": str(pattern),
+            "_compiled_pattern": re.compile(str(pattern)),
+        }
+    except re.error as exc:
+        raise ValueError(f"Regex rule {rule_id} has invalid pattern: {exc}")
+
+
+def _validate_rule_criteria(raw_criteria, rule_id):
+    if not isinstance(raw_criteria, dict):
+        raise ValueError(f"Rule {rule_id} requires criteria")
+    return _validate_criteria_node(raw_criteria, rule_id, "criteria")
+
+
+def _validate_criteria_node(node, rule_id, path):
+    if not isinstance(node, dict):
+        raise ValueError(f"Compound rule {rule_id} has invalid {path}")
+
+    op = str(node.get("op", "")).strip().lower()
+    if op:
+        if op in {"and", "or"}:
+            children = node.get("conditions")
+            if not isinstance(children, list) or not children:
+                raise ValueError(f"Compound rule {rule_id} {path}.{op} requires conditions")
+            return {
+                "op": op,
+                "conditions": [
+                    _validate_criteria_node(child, rule_id, f"{path}.conditions[{i}]")
+                    for i, child in enumerate(children)
+                ],
+            }
+        if op == "not":
+            child = node.get("condition")
+            if child is None:
+                children = node.get("conditions")
+                if isinstance(children, list) and len(children) == 1:
+                    child = children[0]
+            if child is None:
+                raise ValueError(f"Compound rule {rule_id} {path}.not requires condition")
+            return {
+                "op": "not",
+                "condition": _validate_criteria_node(child, rule_id, f"{path}.condition"),
+            }
+        raise ValueError(f"Compound rule {rule_id} has unsupported operator: {op}")
+
+    condition_type = str(node.get("type") or "").strip()
+    if condition_type == "range":
+        return _validate_range_criteria(node, rule_id)
+    if condition_type == "regex":
+        return _validate_regex_criteria(node, rule_id)
+    raise ValueError(f"Compound rule {rule_id} has unsupported condition type: {condition_type}")
 
 
 def _coerce_bound(value, rule_id, field):
@@ -231,7 +289,6 @@ def _base_summary(rule, max_outliers, scan_limit, stop_after_outliers, max_expor
         "name": rule["name"],
         "target": rule["target"],
         "target_type": rule["target_type"],
-        "criteria_type": rule["criteria_type"],
         "total": 0,
         "valid": 0,
         "outlier": 0,
@@ -280,6 +337,7 @@ def _apply_rule_to_block(
                 block,
                 value,
                 "missing",
+                "missing",
                 location,
                 summary,
                 preview,
@@ -292,7 +350,7 @@ def _apply_rule_to_block(
                 return True
             continue
 
-        reason = _invalid_reason(rule, value)
+        reason, flag = _invalid_result(rule, value)
         if reason is None:
             summary["valid"] += 1
             _record_hdf5_aggregate(rule, block, location, hdf5_aggregates, missing=False, outlier=False)
@@ -302,6 +360,7 @@ def _apply_rule_to_block(
                 block,
                 value,
                 reason,
+                flag,
                 location,
                 summary,
                 preview,
@@ -340,30 +399,56 @@ def _build_missing_checker(block):
     return lambda _idx, value: bool(pd.isna(value))
 
 
-def _invalid_reason(rule, value):
-    if rule["criteria_type"] == "range":
+def _invalid_result(rule, value):
+    return _criteria_invalid_result(rule["criteria"], value)
+
+
+def _criteria_invalid_result(criteria, value):
+    if criteria.get("op") == "and":
+        for child in criteria["conditions"]:
+            reason, flag = _criteria_invalid_result(child, value)
+            if reason is not None:
+                return reason, flag
+        return None, None
+    if criteria.get("op") == "or":
+        failures = []
+        for child in criteria["conditions"]:
+            reason, flag = _criteria_invalid_result(child, value)
+            if reason is None:
+                return None, None
+            failures.append((reason, flag))
+        if len(failures) == 1:
+            return failures[0]
+        return "or_mismatch", "no match"
+    if criteria.get("op") == "not":
+        reason, _flag = _criteria_invalid_result(criteria["condition"], value)
+        if reason is None:
+            return "not_mismatch", "NOT"
+        return None, None
+
+    if criteria["type"] == "range":
         numeric = pd.to_numeric(value, errors="coerce")
         if pd.isna(numeric):
-            return "non_numeric"
+            return "non_numeric", "NaN"
         number = float(numeric)
-        if "min" in rule:
-            if rule["min_inclusive"]:
-                if number < rule["min"]:
-                    return "below_min"
-            elif number <= rule["min"]:
-                return "below_min"
-        if "max" in rule:
-            if rule["max_inclusive"]:
-                if number > rule["max"]:
-                    return "above_max"
-            elif number >= rule["max"]:
-                return "above_max"
-        return None
+        if "min" in criteria:
+            if criteria["min_inclusive"]:
+                if number < criteria["min"]:
+                    return "below_min", _format_bound_flag("<", value, criteria["min"])
+            elif number <= criteria["min"]:
+                return "below_min", _format_bound_flag("<=", value, criteria["min"])
+        if "max" in criteria:
+            if criteria["max_inclusive"]:
+                if number > criteria["max"]:
+                    return "above_max", _format_bound_flag(">", value, criteria["max"])
+            elif number >= criteria["max"]:
+                return "above_max", _format_bound_flag(">=", value, criteria["max"])
+        return None, None
 
     text = _canonical_string(value)
-    if rule["_compiled_pattern"].fullmatch(text):
-        return None
-    return "regex_mismatch"
+    if criteria["_compiled_pattern"].fullmatch(text):
+        return None, None
+    return "regex_mismatch", f"!= /{criteria.get('pattern', '')}/"
 
 
 def _canonical_string(value):
@@ -379,6 +464,7 @@ def _record_outlier(
     block,
     value,
     reason,
+    flag,
     location,
     summary,
     preview,
@@ -396,7 +482,7 @@ def _record_outlier(
         "target_type": rule["target_type"],
         "value": _json_scalar(value),
         "reason": reason,
-        "flag": _format_outlier_flag(rule, value, reason),
+        "flag": flag or _format_outlier_flag(rule, value, reason),
         "location": location,
     }
     if len(preview) < max_outliers:
