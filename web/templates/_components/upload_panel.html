@@ -6,7 +6,7 @@
     <div class="flex flex-col items-center mb-6">
       <img src="/images/logoNoBackground.png" class="h-20 mb-4" alt="AIDRIN Logo" />
       <h2 class="text-2xl font-semibold text-center text-gray-900 dark:text-white">
-        AI Data Readiness Inspector
+        AI Data Readiness Infrastructure
       </h2>
       <a href="https://aidrin.readthedocs.io/en/latest/" target="_blank"
          class="text-sm mt-2 text-blue-600 dark:text-blue-400 hover:underline">
@@ -31,7 +31,7 @@
     <!-- Local upload card -->
     <div id="local-upload" class="{{ 'hidden' if globus_available and globus_authenticated else '' }}">
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
-        <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('core.inspector') }}">
+        <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('core.inspector') }}" data-max-upload-bytes="{{ max_upload_bytes }}" data-max-upload-mb="{{ max_upload_mb }}">
 
           <!-- File type selector -->
           <label for="fileTypeSelector" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">File type</label>
@@ -88,6 +88,7 @@
               <option value="npz">NPZ</option>
               <option value="xlsx">Excel</option>
               <option value="h5">HDF5</option>
+              <option value="parquet">Parquet</option>
             </select>
           </div>
           <div class="file-list" id="fileList"></div>

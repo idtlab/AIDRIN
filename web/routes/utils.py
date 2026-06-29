@@ -11,7 +11,61 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from flask import current_app, jsonify, redirect, request, session, url_for
 
+from aidrin.file_handling.file_parser import read_file
+
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# File loading
+# ---------------------------------------------------------------------------
+
+def load_dataframe(file_info):
+    """Read a file into a DataFrame, normalizing failures.
+
+    ``read_file`` returns a DataFrame on success, or ``None`` / an error-message
+    string on failure. This wrapper collapses those failure modes into a single
+    ``(df, message)`` shape so route handlers can surface a clean error instead
+    of crashing when they call DataFrame methods on a non-DataFrame value.
+
+    Returns
+    -------
+    tuple
+        ``(DataFrame, None)`` on success, or ``(None, message)`` on failure.
+    """
+    result = read_file(file_info)
+    if isinstance(result, pd.DataFrame):
+        return result, None
+    raw = result if isinstance(result, str) else None
+    if raw:
+        # Keep the full, verbose detail in the logs; show the user a short message.
+        logger.error("File read failed: %s", raw)
+    return None, _friendly_read_error(raw, file_info)
+
+
+def _friendly_read_error(raw, file_info):
+    """Translate read_file's raw failure into a short, user-facing message.
+
+    The full technical detail is preserved in the server logs by the caller;
+    only this concise message is shown in the UI.
+    """
+    file_type = ""
+    if isinstance(file_info, (list, tuple)) and len(file_info) >= 3 and file_info[2]:
+        file_type = str(file_info[2]).lstrip(".").upper()
+    label = f"{file_type} file" if file_type else "file"
+
+    text = (raw or "").lower()
+    if "usable engine" in text or "pyarrow" in text or "fastparquet" in text:
+        return (
+            "Parquet files can't be read because the server is missing the "
+            "'pyarrow' package."
+        )
+    if "file not found" in text:
+        return "The uploaded file could not be found. Please upload it again."
+    return (
+        f"The {label} could not be read. It may be empty, corrupted, or in an "
+        "unexpected format."
+    )
 
 
 # ---------------------------------------------------------------------------
