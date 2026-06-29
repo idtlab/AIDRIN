@@ -1822,6 +1822,13 @@ function handleAsyncResults(data) {
   }
 }
 
+function storeAsyncMetricResult(metricName, result) {
+  if (!lastMetricResult || typeof lastMetricResult !== "object") {
+    lastMetricResult = {};
+  }
+  lastMetricResult[metricName] = result;
+}
+
 /**
  * Poll an async metric task until complete, showing progress inline.
  */
@@ -1902,9 +1909,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
 
         if (response.status === "completed") {
           // Update stored result for download
-          if (lastMetricResult) {
-            lastMetricResult[metricName] = response.result;
-          }
+          storeAsyncMetricResult(metricName, response.result);
 
           // Check if result is a multi-metric bundle (e.g., data_quality returns
           // {Completeness: {...}, Outliers: {...}, Duplicity: {...}})
