@@ -137,9 +137,7 @@ def test_data_quality_custom_outliers(uploaded_client):
         "name": "Age range",
         "target": "age",
         "target_type": "column",
-        "criteria_type": "range",
-        "min": 26,
-        "max": 38,
+        "criteria": {"type": "range", "min": 26, "max": 38},
     }]
     response = uploaded_client.post(
         "/data-quality?return_type=json",

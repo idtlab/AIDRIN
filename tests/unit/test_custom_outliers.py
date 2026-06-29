@@ -38,6 +38,31 @@ def _clean(path):
         pass
 
 
+def _range_rule(rule_id, target, target_type="column", min_value=None, max_value=None, **kwargs):
+    criteria = {"type": "range"}
+    if min_value is not None:
+        criteria["min"] = min_value
+    if max_value is not None:
+        criteria["max"] = max_value
+    return {
+        "id": rule_id,
+        "target": target,
+        "target_type": target_type,
+        "criteria": criteria,
+        **kwargs,
+    }
+
+
+def _regex_rule(rule_id, target, pattern, target_type="column", **kwargs):
+    return {
+        "id": rule_id,
+        "target": target,
+        "target_type": target_type,
+        "criteria": {"type": "regex", "pattern": pattern},
+        **kwargs,
+    }
+
+
 @pytest.fixture
 def hdf5_file_info(tmp_path):
     path = tmp_path / "custom_outliers.h5"
@@ -109,13 +134,9 @@ def test_iter_value_blocks_hdf5_streams_regular_slices(tmp_path, monkeypatch):
         "display": "/matrix[4,1]",
     }
 
-    result = calculate_custom_outliers(file_info, [{
-        "id": "max-five",
-        "target": "/matrix",
-        "target_type": "hdf5_dataset",
-        "criteria_type": "range",
-        "max": 5,
-    }])
+    result = calculate_custom_outliers(file_info, [
+        _range_rule("max-five", "/matrix", target_type="hdf5_dataset", max_value=5)
+    ])
     summary = result["Rule summaries"]["max-five"]
     assert summary["total"] == 10
     assert summary["outlier"] == 4
@@ -130,21 +151,8 @@ def test_csv_regex_and_range_rules_report_expected_counts():
     })
     fi = _write_csv(df)
     rules = [
-        {
-            "id": "rupture-realization-integer",
-            "target": "Rupture Realization #",
-            "target_type": "column",
-            "criteria_type": "regex",
-            "pattern": "^[0-9]+$",
-        },
-        {
-            "id": "hypocenter-range",
-            "target": "Hypocenter Position (km) 2",
-            "target_type": "column",
-            "criteria_type": "range",
-            "min": -10,
-            "max": 20,
-        },
+        _regex_rule("rupture-realization-integer", "Rupture Realization #", "^[0-9]+$"),
+        _range_rule("hypocenter-range", "Hypocenter Position (km) 2", min_value=-10, max_value=20),
     ]
     try:
         result = calculate_custom_outliers(fi, rules)
@@ -162,13 +170,7 @@ def test_csv_regex_and_range_rules_report_expected_counts():
 
 def test_range_allows_one_sided_bounds_and_reports_non_numeric():
     fi = _write_csv(pd.DataFrame({"value": ["5", "bad", "12"]}))
-    rules = [{
-        "id": "max-only",
-        "target": "value",
-        "target_type": "column",
-        "criteria_type": "range",
-        "max": 10,
-    }]
+    rules = [_range_rule("max-only", "value", max_value=10)]
     try:
         result = calculate_custom_outliers(fi, rules)
     finally:
@@ -179,24 +181,107 @@ def test_range_allows_one_sided_bounds_and_reports_non_numeric():
     assert [item["flag"] for item in preview] == ["NaN", "> 10 by 2"]
 
 
+def test_compound_and_uses_all_conditions_as_valid_expression():
+    fi = _write_csv(pd.DataFrame({"value": [5, 12, 25]}))
+    rules = [{
+        "id": "range-and-even-text",
+        "target": "value",
+        "target_type": "column",
+        "criteria": {
+            "op": "and",
+            "conditions": [
+                {"type": "range", "min": 10, "max": 20},
+                {"type": "regex", "pattern": r"^\d+$"},
+            ],
+        },
+    }]
+    try:
+        result = calculate_custom_outliers(fi, rules)
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["range-and-even-text"]
+    assert summary["valid"] == 1
+    assert summary["outlier"] == 2
+    assert [row["flag"] for row in result["Outlier preview"]["range-and-even-text"]] == [
+        "< 10 by 5",
+        "> 20 by 5",
+    ]
+
+
+def test_compound_or_accepts_any_condition():
+    fi = _write_csv(pd.DataFrame({"value": [1, 5, 99]}))
+    rules = [{
+        "id": "edge-values",
+        "target": "value",
+        "target_type": "column",
+        "criteria": {
+            "op": "or",
+            "conditions": [
+                {"type": "range", "max": 1},
+                {"type": "range", "min": 90},
+            ],
+        },
+    }]
+    try:
+        result = calculate_custom_outliers(fi, rules)
+    finally:
+        _clean(fi[0])
+
+    preview = result["Outlier preview"]["edge-values"]
+    assert result["Rule summaries"]["edge-values"]["outlier"] == 1
+    assert preview[0]["value"] == 5
+    assert preview[0]["reason"] == "or_mismatch"
+    assert preview[0]["flag"] == "no match"
+
+
+def test_compound_not_inverts_condition():
+    fi = _write_csv(pd.DataFrame({"value": [1, 5, 9]}))
+    rules = [{
+        "id": "not-mid",
+        "target": "value",
+        "target_type": "column",
+        "criteria": {
+            "op": "not",
+            "condition": {"type": "range", "min": 3, "max": 7},
+        },
+    }]
+    try:
+        result = calculate_custom_outliers(fi, rules)
+    finally:
+        _clean(fi[0])
+
+    preview = result["Outlier preview"]["not-mid"]
+    assert result["Rule summaries"]["not-mid"]["outlier"] == 1
+    assert preview[0]["value"] == 5
+    assert preview[0]["reason"] == "not_mismatch"
+    assert preview[0]["flag"] == "NOT"
+
+
+def test_flat_rule_syntax_is_rejected():
+    fi = _write_csv(pd.DataFrame({"value": [1]}))
+    try:
+        with pytest.raises(ValueError, match="criteria tree syntax"):
+            calculate_custom_outliers(fi, [{
+                "id": "flat",
+                "target": "value",
+                "target_type": "column",
+                "criteria_type": "range",
+                "min": 0,
+            }])
+    finally:
+        _clean(fi[0])
+
+
 def test_missing_values_are_counted_separately_and_can_be_allowed():
     fi = _write_csv(pd.DataFrame({"value": [1, None, 3]}))
     try:
-        result = calculate_custom_outliers(fi, [{
-            "id": "missing-invalid",
-            "target": "value",
-            "target_type": "column",
-            "criteria_type": "range",
-            "min": 0,
-        }])
-        allowed = calculate_custom_outliers(fi, [{
-            "id": "missing-allowed",
-            "target": "value",
-            "target_type": "column",
-            "criteria_type": "range",
-            "min": 0,
-            "allow_missing": True,
-        }])
+        result = calculate_custom_outliers(fi, [
+            _range_rule("missing-invalid", "value", min_value=0)
+        ])
+        allowed = calculate_custom_outliers(fi, [
+            _range_rule("missing-allowed", "value", min_value=0, allow_missing=True)
+        ])
     finally:
         _clean(fi[0])
 
@@ -209,13 +294,9 @@ def test_missing_values_are_counted_separately_and_can_be_allowed():
 def test_regex_stringification_is_predictable_for_numbers():
     fi = _write_csv(pd.DataFrame({"value": [1, 2.5, 3]}))
     try:
-        result = calculate_custom_outliers(fi, [{
-            "id": "integer-text",
-            "target": "value",
-            "target_type": "column",
-            "criteria_type": "regex",
-            "pattern": "^[0-9]+$",
-        }])
+        result = calculate_custom_outliers(fi, [
+            _regex_rule("integer-text", "value", "^[0-9]+$")
+        ])
     finally:
         _clean(fi[0])
     assert result["Rule summaries"]["integer-text"]["outlier"] == 3
@@ -225,8 +306,8 @@ def test_regex_stringification_is_predictable_for_numbers():
 def test_duplicate_rule_ids_raise_validation_error():
     fi = _write_csv(pd.DataFrame({"a": [1]}))
     rules = [
-        {"id": "dup", "target": "a", "target_type": "column", "criteria_type": "range", "min": 0},
-        {"id": "dup", "target": "a", "target_type": "column", "criteria_type": "range", "max": 1},
+        _range_rule("dup", "a", min_value=0),
+        _range_rule("dup", "a", max_value=1),
     ]
     try:
         with pytest.raises(ValueError, match="Duplicate"):
@@ -238,8 +319,8 @@ def test_duplicate_rule_ids_raise_validation_error():
 def test_sanitized_rule_key_collisions_raise_validation_error():
     fi = _write_csv(pd.DataFrame({"a": [1]}))
     rules = [
-        {"id": "a b", "target": "a", "target_type": "column", "criteria_type": "range", "min": 0},
-        {"id": "a_b", "target": "a", "target_type": "column", "criteria_type": "range", "max": 1},
+        _range_rule("a b", "a", min_value=0),
+        _range_rule("a_b", "a", max_value=1),
     ]
     try:
         with pytest.raises(ValueError, match="same output key"):
@@ -251,8 +332,8 @@ def test_sanitized_rule_key_collisions_raise_validation_error():
 def test_duplicate_targets_with_different_ids_are_supported():
     fi = _write_csv(pd.DataFrame({"a": [1, 10]}))
     rules = [
-        {"id": "low", "target": "a", "target_type": "column", "criteria_type": "range", "min": 0},
-        {"id": "high", "target": "a", "target_type": "column", "criteria_type": "range", "max": 5},
+        _range_rule("low", "a", min_value=0),
+        _range_rule("high", "a", max_value=5),
     ]
     try:
         result = calculate_custom_outliers(fi, rules)
@@ -266,13 +347,9 @@ def test_invalid_regex_raises_validation_error():
     fi = _write_csv(pd.DataFrame({"a": ["x"]}))
     try:
         with pytest.raises(ValueError, match="invalid pattern"):
-            calculate_custom_outliers(fi, [{
-                "id": "bad-regex",
-                "target": "a",
-                "target_type": "column",
-                "criteria_type": "regex",
-                "pattern": "[",
-            }])
+            calculate_custom_outliers(fi, [
+                _regex_rule("bad-regex", "a", "[")
+            ])
     finally:
         _clean(fi[0])
 
@@ -280,13 +357,9 @@ def test_invalid_regex_raises_validation_error():
 def test_missing_target_is_reported_as_rule_error():
     fi = _write_csv(pd.DataFrame({"a": [1]}))
     try:
-        result = calculate_custom_outliers(fi, [{
-            "id": "missing-target",
-            "target": "b",
-            "target_type": "column",
-            "criteria_type": "range",
-            "min": 0,
-        }])
+        result = calculate_custom_outliers(fi, [
+            _range_rule("missing-target", "b", min_value=0)
+        ])
     finally:
         _clean(fi[0])
     assert result["Errors"][0]["rule_id"] == "missing-target"
@@ -296,13 +369,9 @@ def test_missing_target_is_reported_as_rule_error():
 def test_preview_is_capped_per_rule():
     fi = _write_csv(pd.DataFrame({"a": [100, 101, 102]}))
     try:
-        result = calculate_custom_outliers(fi, [{
-            "id": "cap",
-            "target": "a",
-            "target_type": "column",
-            "criteria_type": "range",
-            "max": 1,
-        }], max_outliers=2)
+        result = calculate_custom_outliers(fi, [
+            _range_rule("cap", "a", max_value=1)
+        ], max_outliers=2)
     finally:
         _clean(fi[0])
     assert result["Rule summaries"]["cap"]["outlier"] == 3
@@ -313,13 +382,9 @@ def test_preview_is_capped_per_rule():
 def test_custom_outlier_export_uses_separate_cap():
     fi = _write_csv(pd.DataFrame({"a": [100, 101, 102, 103]}))
     try:
-        result = calculate_custom_outliers(fi, [{
-            "id": "export-cap",
-            "target": "a",
-            "target_type": "column",
-            "criteria_type": "range",
-            "max": 1,
-        }], max_outliers=1, max_export_rows=3)
+        result = calculate_custom_outliers(fi, [
+            _range_rule("export-cap", "a", max_value=1)
+        ], max_outliers=1, max_export_rows=3)
     finally:
         _clean(fi[0])
 
@@ -335,13 +400,9 @@ def test_custom_outlier_export_uses_separate_cap():
 def test_scan_limit_stops_before_full_count():
     fi = _write_csv(pd.DataFrame({"a": [100, 101, 102, 103]}))
     try:
-        result = calculate_custom_outliers(fi, [{
-            "id": "limited",
-            "target": "a",
-            "target_type": "column",
-            "criteria_type": "range",
-            "max": 1,
-        }], scan_limit=2)
+        result = calculate_custom_outliers(fi, [
+            _range_rule("limited", "a", max_value=1)
+        ], scan_limit=2)
     finally:
         _clean(fi[0])
 
@@ -355,13 +416,9 @@ def test_scan_limit_stops_before_full_count():
 def test_stop_after_outliers_uses_preview_cap():
     fi = _write_csv(pd.DataFrame({"a": [100, 101, 102, 103]}))
     try:
-        result = calculate_custom_outliers(fi, [{
-            "id": "early",
-            "target": "a",
-            "target_type": "column",
-            "criteria_type": "range",
-            "max": 1,
-        }], max_outliers=2, stop_after_outliers=True)
+        result = calculate_custom_outliers(fi, [
+            _range_rule("early", "a", max_value=1)
+        ], max_outliers=2, stop_after_outliers=True)
     finally:
         _clean(fi[0])
 
@@ -373,14 +430,9 @@ def test_stop_after_outliers_uses_preview_cap():
 
 
 def test_hdf5_range_rule_counts_fill_values_as_missing(hdf5_file_info):
-    result = calculate_custom_outliers(hdf5_file_info, [{
-        "id": "waveform-x-range",
-        "target": "/S_01_01/X",
-        "target_type": "hdf5_dataset",
-        "criteria_type": "range",
-        "min": -1,
-        "max": 2,
-    }])
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule("waveform-x-range", "/S_01_01/X", target_type="hdf5_dataset", min_value=-1, max_value=2)
+    ])
     summary = result["Rule summaries"]["waveform-x-range"]
     assert summary["missing"] == 1
     assert summary["outlier"] == 2
@@ -389,25 +441,17 @@ def test_hdf5_range_rule_counts_fill_values_as_missing(hdf5_file_info):
 
 
 def test_hdf5_multidimensional_locations(hdf5_file_info):
-    result = calculate_custom_outliers(hdf5_file_info, [{
-        "id": "multi-range",
-        "target": "/group/data",
-        "target_type": "hdf5_dataset",
-        "criteria_type": "range",
-        "max": 10,
-    }])
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule("multi-range", "/group/data", target_type="hdf5_dataset", max_value=10)
+    ])
     preview = result["Outlier preview"]["multi-range"]
     assert preview[0]["location"]["display"] == "/group/data[1,1]"
 
 
 def test_hdf5_multidimensional_aggregates(hdf5_file_info):
-    result = calculate_custom_outliers(hdf5_file_info, [{
-        "id": "multi-range",
-        "target": "/group/data",
-        "target_type": "hdf5_dataset",
-        "criteria_type": "range",
-        "max": 10,
-    }])
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule("multi-range", "/group/data", target_type="hdf5_dataset", max_value=10)
+    ])
 
     aggregates = result["HDF5 aggregates"]["multi-range"]
     assert aggregates["by_leading_index"][0]["key"] == "1"
@@ -422,13 +466,9 @@ def test_hdf5_aggregate_counts_missing_outlier_once(tmp_path):
         dataset = h5.create_dataset("matrix", data=data, fillvalue=-9999.0)
         dataset.attrs["_FillValue"] = -9999.0
 
-    result = calculate_custom_outliers((str(path), path.name, ".h5"), [{
-        "id": "missing-aggregate",
-        "target": "/matrix",
-        "target_type": "hdf5_dataset",
-        "criteria_type": "range",
-        "min": 0,
-    }])
+    result = calculate_custom_outliers((str(path), path.name, ".h5"), [
+        _range_rule("missing-aggregate", "/matrix", target_type="hdf5_dataset", min_value=0)
+    ])
 
     row = result["HDF5 aggregates"]["missing-aggregate"]["by_leading_index"][0]
     assert row["key"] == "0"
@@ -439,14 +479,9 @@ def test_hdf5_aggregate_counts_missing_outlier_once(tmp_path):
 
 def test_hdf5_default_zero_policy_counts_missing_and_warns(hdf5_file_info, caplog):
     with caplog.at_level(logging.WARNING):
-        result = calculate_custom_outliers(hdf5_file_info, [{
-            "id": "default-zero-range",
-            "target": "/default_zero",
-            "target_type": "hdf5_dataset",
-            "criteria_type": "range",
-            "min": -1,
-            "max": 2,
-        }])
+        result = calculate_custom_outliers(hdf5_file_info, [
+            _range_rule("default-zero-range", "/default_zero", target_type="hdf5_dataset", min_value=-1, max_value=2)
+        ])
     assert result["Rule summaries"]["default-zero-range"]["missing"] == 2
     assert any("default fill value" in record.message for record in caplog.records)
 
