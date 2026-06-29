@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 
 from aidrin.file_handling.readers.csv_reader import csvReader
 from aidrin.file_handling.readers.excel_reader import excelReader
@@ -40,6 +41,60 @@ SUPPORTED_FILE_TYPES = [
 
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
+
+# ---------------------------------------------------------------------------
+# Frame cache
+#
+# The first ``read_file`` for an upload materialises the parsed DataFrame into an
+# on-disk Arrow/Feather artifact next to the source.  Subsequent calls (one per
+# metric task) reload that artifact instead of re-parsing the source.
+#
+# Only formats whose reader output round-trips through Feather without dtype or
+# value drift are cached (verified at pandas 2.2.1).  json/npz/hdf5 build object
+# and list columns that Feather would silently alter or reject, so they are never
+# cached and always parsed directly — preserving their exact original behaviour.
+# ---------------------------------------------------------------------------
+_FRAME_CACHE_SUFFIX = ".aidrin.feather"
+_CACHEABLE_FILE_TYPES = {".csv", ".parquet", ".xls, .xlsb, .xlsx, .xlsm"}
+
+
+def _frame_cache_enabled():
+    # Opt-out switch so the cache can be disabled without code changes.
+    return os.environ.get("AIDRIN_FRAME_CACHE", "1") != "0"
+
+
+def _frame_cache_path(file_path):
+    # Key on (size, mtime_ns) so any content change yields a different cache file
+    # name: a changed source simply misses the cache (and the old artifact is
+    # later reaped) rather than risking a stale read from a coarse mtime compare.
+    st = os.stat(file_path)
+    return f"{file_path}.{st.st_size}-{st.st_mtime_ns}{_FRAME_CACHE_SUFFIX}"
+
+
+def _write_frame_cache(cache_path, df):
+    """Best-effort atomic Feather write of ``df`` to ``cache_path``.
+
+    Returns ``True`` on success.  Returns ``False`` — leaving no artifact — on
+    any failure (unwritable directory, unserialisable frame, missing pyarrow) so
+    the caller can fall back to the in-memory frame without surfacing an error.
+    """
+    try:
+        cache_dir = os.path.dirname(cache_path) or "."
+        fd, tmp_path = tempfile.mkstemp(suffix=".tmp", dir=cache_dir)
+        os.close(fd)
+        try:
+            df.to_feather(tmp_path)
+            os.replace(tmp_path, cache_path)
+            return True
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+    except Exception as e:
+        file_upload_time_log.warning("Frame cache write skipped: %s", e)
+        return False
 
 
 def parse_file(file_info):
@@ -109,10 +164,15 @@ def filter_file(file_info, kept_keys):
 # Parses the uploaded file into a pandas database
 
 
-def read_file(file_info):
+def read_file(file_info, columns=None):
     """
 
     Parses a given file into pandas Dataframe.
+
+    For dtype-stable formats (csv, parquet, excel) the parsed frame is cached on
+    disk so that repeated calls for the same upload reload the cached artifact
+    instead of re-parsing the source.  ``columns`` lets a caller request only a
+    subset of columns, read directly from the cache when available.
 
     Parameters
     ----------
@@ -121,6 +181,8 @@ def read_file(file_info):
             -file_path: str, relative or absolute path of the file.
             -file_name: str, file name.
             -file_type: str, file format. Passed from front end select value.
+    columns: list of str, optional
+        When given, only these columns are returned.
     Returns
     ----------
     pd.Dataframe, None, or str
@@ -140,15 +202,40 @@ def read_file(file_info):
         file_upload_time_log.error(f"File not found: {file_path}")
         return f"File not found: {file_path}"
 
-    try:
-        df = None
-        if file_type in READER_MAP:
-            df = READER_MAP[file_type](file_path, file_upload_time_log).read()
-            file_upload_time_log.info("File successfully parsed!")
-            # file_upload_time_log.info(df.to_string())
-        else:
-            file_upload_time_log.warning(f"Unsupported file type: {file_type}")
+    if file_type not in READER_MAP:
+        file_upload_time_log.warning(f"Unsupported file type: {file_type}")
+        return None
 
+    try:
+        cacheable = _frame_cache_enabled() and file_type in _CACHEABLE_FILE_TYPES
+        cache_path = _frame_cache_path(file_path) if cacheable else None
+
+        # Fast path: reload a fresh cache without touching the source.
+        if cacheable and os.path.exists(cache_path):
+            try:
+                import pandas as pd
+
+                df = pd.read_feather(cache_path, columns=columns)
+                file_upload_time_log.info("File loaded from frame cache!")
+                return df
+            except Exception as e:
+                # Corrupt/unreadable cache — fall through and re-parse.
+                file_upload_time_log.warning(
+                    "Frame cache unreadable, rebuilding: %s", e
+                )
+
+        # Slow path: parse the source once.
+        df = READER_MAP[file_type](file_path, file_upload_time_log).read()
+        file_upload_time_log.info("File successfully parsed!")
+
+        # Best-effort cache for future calls. Failure is non-fatal: we still
+        # return the freshly parsed frame below, so a read-only directory or an
+        # unserialisable frame never turns a successful parse into an error.
+        if cacheable:
+            _write_frame_cache(cache_path, df)
+
+        if columns is not None:
+            df = df[columns]
         return df
 
     except Exception as e:

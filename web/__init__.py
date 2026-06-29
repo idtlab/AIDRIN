@@ -52,7 +52,11 @@ def create_app():
             "delete-old-custom-metrics": {
                 "task": "delete_old_custom_metrics",
                 "schedule": 120.0,
-            }
+            },
+            "delete-old-uploads": {
+                "task": "delete_old_uploads",
+                "schedule": 600.0,
+            },
         },
         "task_ignore_result": False,
         "task_soft_time_limit": 300,
@@ -107,8 +111,11 @@ def create_app():
     from web.routes import register_blueprints
     register_blueprints(app)
 
-    # Import task so Celery discovers it on startup
-    from worker.tasks import delete_old_custom_metrics  # noqa: F401
+    # Import tasks so Celery discovers them on startup
+    from worker.tasks import (  # noqa: F401
+        delete_old_custom_metrics,
+        delete_old_uploads,
+    )
 
     # project_root is the parent of web/
     project_root = os.path.dirname(app.root_path)
