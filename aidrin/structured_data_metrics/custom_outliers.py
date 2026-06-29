@@ -15,20 +15,34 @@ from aidrin.file_handling.value_iterators import (
 logger = logging.getLogger(__name__)
 
 
-def calculate_custom_outliers(file_info, rules, max_outliers=100):
+def calculate_custom_outliers(
+    file_info,
+    rules,
+    max_outliers=100,
+    scan_limit=None,
+    stop_after_outliers=False,
+    max_export_rows=10000,
+):
     """Evaluate custom range/regex outlier rules over iterator targets."""
     validated = _validate_rules(rules)
     max_outliers = _validate_max_outliers(max_outliers)
+    scan_limit = _validate_optional_non_negative_int(scan_limit, "scan_limit")
+    max_export_rows = _validate_optional_non_negative_int(max_export_rows, "max_export_rows")
+    stop_after_outliers = _coerce_bool(stop_after_outliers)
     target_map = _target_map(file_info)
 
     summaries = {}
     previews = {}
+    exports = {}
+    hdf5_aggregates = {}
     errors = []
 
     for rule in validated:
         key = _internal_rule_key(rule["id"])
-        summaries[key] = _base_summary(rule, max_outliers)
+        summaries[key] = _base_summary(rule, max_outliers, scan_limit, stop_after_outliers, max_export_rows)
         previews[key] = []
+        exports[key] = []
+        hdf5_aggregates[key] = _new_hdf5_aggregate_state()
 
         target = target_map.get((rule["target_type"], rule["target"]))
         if target is None:
@@ -39,7 +53,20 @@ def calculate_custom_outliers(file_info, rules, max_outliers=100):
 
         try:
             for block in iter_value_blocks(file_info, target):
-                _apply_rule_to_block(rule, block, summaries[key], previews[key], max_outliers)
+                should_stop = _apply_rule_to_block(
+                    rule,
+                    block,
+                    summaries[key],
+                    previews[key],
+                    exports[key],
+                    hdf5_aggregates[key],
+                    max_outliers,
+                    max_export_rows,
+                    scan_limit,
+                    stop_after_outliers,
+                )
+                if should_stop:
+                    break
         except Exception as exc:
             message = str(exc)
             summaries[key]["errors"] = [message]
@@ -49,19 +76,39 @@ def calculate_custom_outliers(file_info, rules, max_outliers=100):
         outlier_count = summaries[key]["outlier"]
         summaries[key]["outlier_rate"] = (outlier_count / total) if total else 0.0
         summaries[key]["truncated"] = outlier_count > len(previews[key])
+        summaries[key]["export_truncated"] = outlier_count > len(exports[key])
 
     result = {
         "Rule summaries": summaries,
         "Outlier preview": previews,
+        "Outlier export": exports,
     }
+    hdf5_summary = _finalize_hdf5_aggregates(hdf5_aggregates)
+    if hdf5_summary:
+        result["HDF5 aggregates"] = hdf5_summary
     if errors:
         result["Errors"] = errors
     return result
 
 
 @shared_task(bind=True, ignore_result=False)
-def custom_outliers(self: Task, file_info, rules, max_outliers=100):
-    return calculate_custom_outliers(file_info, rules, max_outliers=max_outliers)
+def custom_outliers(
+    self: Task,
+    file_info,
+    rules,
+    max_outliers=100,
+    scan_limit=None,
+    stop_after_outliers=False,
+    max_export_rows=10000,
+):
+    return calculate_custom_outliers(
+        file_info,
+        rules,
+        max_outliers=max_outliers,
+        scan_limit=scan_limit,
+        stop_after_outliers=stop_after_outliers,
+        max_export_rows=max_export_rows,
+    )
 
 
 def _validate_max_outliers(max_outliers):
@@ -72,6 +119,24 @@ def _validate_max_outliers(max_outliers):
     if value < 0:
         raise ValueError("max_outliers must be non-negative")
     return value
+
+
+def _validate_optional_non_negative_int(value, field):
+    if value in (None, ""):
+        return None
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} must be an integer")
+    if normalized < 0:
+        raise ValueError(f"{field} must be non-negative")
+    return normalized
+
+
+def _coerce_bool(value):
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 def _validate_rules(rules):
@@ -160,7 +225,7 @@ def _internal_rule_key(rule_id):
     return key or "rule"
 
 
-def _base_summary(rule, max_outliers):
+def _base_summary(rule, max_outliers, scan_limit, stop_after_outliers, max_export_rows):
     return {
         "id": rule["id"],
         "name": rule["name"],
@@ -173,31 +238,99 @@ def _base_summary(rule, max_outliers):
         "missing": 0,
         "outlier_rate": 0.0,
         "preview_limit": max_outliers,
+        "scan_limit": scan_limit,
+        "scan_stopped_early": False,
+        "stop_after_outliers": stop_after_outliers,
+        "export_limit": max_export_rows,
+        "export_truncated": False,
         "truncated": False,
     }
 
 
-def _apply_rule_to_block(rule, block, summary, preview, max_outliers):
+def _apply_rule_to_block(
+    rule,
+    block,
+    summary,
+    preview,
+    export_rows,
+    hdf5_aggregates,
+    max_outliers,
+    max_export_rows,
+    scan_limit,
+    stop_after_outliers,
+):
     values = block["values"]
     locate = block["locate"]
     is_missing = _build_missing_checker(block)
 
     for index_tuple, value in iter_indexed_values(values):
+        if _scan_limit_reached(summary, scan_limit):
+            return True
         summary["total"] += 1
+        location = locate(index_tuple)
         missing = is_missing(index_tuple, value)
         if missing:
             summary["missing"] += 1
             if rule["allow_missing"]:
+                _record_hdf5_aggregate(rule, block, location, hdf5_aggregates, missing=True, outlier=False)
                 summary["valid"] += 1
                 continue
-            _record_outlier(rule, block, value, "missing", locate(index_tuple), summary, preview, max_outliers)
+            _record_outlier(
+                rule,
+                block,
+                value,
+                "missing",
+                location,
+                summary,
+                preview,
+                export_rows,
+                max_outliers,
+                max_export_rows,
+                hdf5_aggregates,
+            )
+            if _should_stop_after_outlier(summary, stop_after_outliers, max_outliers):
+                return True
             continue
 
         reason = _invalid_reason(rule, value)
         if reason is None:
             summary["valid"] += 1
+            _record_hdf5_aggregate(rule, block, location, hdf5_aggregates, missing=False, outlier=False)
         else:
-            _record_outlier(rule, block, value, reason, locate(index_tuple), summary, preview, max_outliers)
+            _record_outlier(
+                rule,
+                block,
+                value,
+                reason,
+                location,
+                summary,
+                preview,
+                export_rows,
+                max_outliers,
+                max_export_rows,
+                hdf5_aggregates,
+            )
+            if _should_stop_after_outlier(summary, stop_after_outliers, max_outliers):
+                return True
+    return False
+
+
+def _scan_limit_reached(summary, scan_limit):
+    if scan_limit is None:
+        return False
+    reached = summary["total"] >= scan_limit
+    if reached:
+        summary["scan_stopped_early"] = True
+    return reached
+
+
+def _should_stop_after_outlier(summary, stop_after_outliers, max_outliers):
+    if not stop_after_outliers:
+        return False
+    reached = summary["outlier"] >= max_outliers
+    if reached:
+        summary["scan_stopped_early"] = True
+    return reached
 
 
 def _build_missing_checker(block):
@@ -241,17 +374,112 @@ def _canonical_string(value):
     return str(value)
 
 
-def _record_outlier(rule, block, value, reason, location, summary, preview, max_outliers):
+def _record_outlier(
+    rule,
+    block,
+    value,
+    reason,
+    location,
+    summary,
+    preview,
+    export_rows,
+    max_outliers,
+    max_export_rows,
+    hdf5_aggregates,
+):
     summary["outlier"] += 1
-    if len(preview) >= max_outliers:
-        return
-    preview.append({
+    _record_hdf5_aggregate(rule, block, location, hdf5_aggregates, missing=(reason == "missing"), outlier=True)
+    row = {
+        "rule_id": rule["id"],
+        "rule_name": rule["name"],
         "target": rule["target"],
         "target_type": rule["target_type"],
         "value": _json_scalar(value),
         "reason": reason,
         "location": location,
-    })
+    }
+    if len(preview) < max_outliers:
+        preview.append(row)
+    if max_export_rows is None or len(export_rows) < max_export_rows:
+        export_rows.append(row)
+
+
+def _new_hdf5_aggregate_state():
+    return {
+        "by_leading_index": {},
+        "by_chunk": {},
+    }
+
+
+def _record_hdf5_aggregate(rule, block, location, aggregate_state, missing, outlier):
+    if rule["target_type"] != "hdf5_dataset":
+        return
+    index = location.get("index")
+    if not isinstance(index, list) or len(index) <= 1:
+        return
+
+    leading_key = str(index[0])
+    _update_hdf5_aggregate_bucket(
+        aggregate_state["by_leading_index"],
+        leading_key,
+        label=f"index {index[0]}",
+        location=location,
+        missing=missing,
+        outlier=outlier,
+    )
+
+    offset = block.get("offset")
+    if offset:
+        chunk_key = ",".join(str(i) for i in offset)
+        _update_hdf5_aggregate_bucket(
+            aggregate_state["by_chunk"],
+            chunk_key,
+            label=f"offset [{chunk_key}]",
+            location=location,
+            missing=missing,
+            outlier=outlier,
+        )
+
+
+def _update_hdf5_aggregate_bucket(buckets, key, label, location, missing, outlier):
+    bucket = buckets.setdefault(
+        key,
+        {
+            "key": key,
+            "label": label,
+            "total": 0,
+            "missing": 0,
+            "outlier": 0,
+            "first_outlier": None,
+        },
+    )
+    bucket["total"] += 1
+    if missing:
+        bucket["missing"] += 1
+    if outlier:
+        bucket["outlier"] += 1
+        if bucket["first_outlier"] is None:
+            bucket["first_outlier"] = location
+
+
+def _finalize_hdf5_aggregates(aggregate_states, limit=50):
+    result = {}
+    for key, state in aggregate_states.items():
+        by_leading = _top_hdf5_aggregate_rows(state["by_leading_index"], limit)
+        by_chunk = _top_hdf5_aggregate_rows(state["by_chunk"], limit)
+        if by_leading or by_chunk:
+            result[key] = {}
+            if by_leading:
+                result[key]["by_leading_index"] = by_leading
+            if by_chunk:
+                result[key]["by_chunk"] = by_chunk
+    return result
+
+
+def _top_hdf5_aggregate_rows(buckets, limit):
+    rows = [row for row in buckets.values() if row["outlier"] or row["missing"]]
+    rows.sort(key=lambda row: (-row["outlier"], -row["missing"], row["key"]))
+    return rows[:limit]
 
 
 def _json_scalar(value):

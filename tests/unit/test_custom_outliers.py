@@ -308,6 +308,68 @@ def test_preview_is_capped_per_rule():
     assert len(result["Outlier preview"]["cap"]) == 2
 
 
+def test_custom_outlier_export_uses_separate_cap():
+    fi = _write_csv(pd.DataFrame({"a": [100, 101, 102, 103]}))
+    try:
+        result = calculate_custom_outliers(fi, [{
+            "id": "export-cap",
+            "target": "a",
+            "target_type": "column",
+            "criteria_type": "range",
+            "max": 1,
+        }], max_outliers=1, max_export_rows=3)
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["export-cap"]
+    assert summary["outlier"] == 4
+    assert summary["truncated"] is True
+    assert summary["export_truncated"] is True
+    assert len(result["Outlier preview"]["export-cap"]) == 1
+    assert len(result["Outlier export"]["export-cap"]) == 3
+    assert result["Outlier export"]["export-cap"][0]["rule_id"] == "export-cap"
+
+
+def test_scan_limit_stops_before_full_count():
+    fi = _write_csv(pd.DataFrame({"a": [100, 101, 102, 103]}))
+    try:
+        result = calculate_custom_outliers(fi, [{
+            "id": "limited",
+            "target": "a",
+            "target_type": "column",
+            "criteria_type": "range",
+            "max": 1,
+        }], scan_limit=2)
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["limited"]
+    assert summary["total"] == 2
+    assert summary["outlier"] == 2
+    assert summary["scan_limit"] == 2
+    assert summary["scan_stopped_early"] is True
+
+
+def test_stop_after_outliers_uses_preview_cap():
+    fi = _write_csv(pd.DataFrame({"a": [100, 101, 102, 103]}))
+    try:
+        result = calculate_custom_outliers(fi, [{
+            "id": "early",
+            "target": "a",
+            "target_type": "column",
+            "criteria_type": "range",
+            "max": 1,
+        }], max_outliers=2, stop_after_outliers=True)
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["early"]
+    assert summary["total"] == 2
+    assert summary["outlier"] == 2
+    assert summary["stop_after_outliers"] is True
+    assert summary["scan_stopped_early"] is True
+
+
 def test_hdf5_range_rule_counts_fill_values_as_missing(hdf5_file_info):
     result = calculate_custom_outliers(hdf5_file_info, [{
         "id": "waveform-x-range",
@@ -334,6 +396,43 @@ def test_hdf5_multidimensional_locations(hdf5_file_info):
     }])
     preview = result["Outlier preview"]["multi-range"]
     assert preview[0]["location"]["display"] == "/group/data[1,1]"
+
+
+def test_hdf5_multidimensional_aggregates(hdf5_file_info):
+    result = calculate_custom_outliers(hdf5_file_info, [{
+        "id": "multi-range",
+        "target": "/group/data",
+        "target_type": "hdf5_dataset",
+        "criteria_type": "range",
+        "max": 10,
+    }])
+
+    aggregates = result["HDF5 aggregates"]["multi-range"]
+    assert aggregates["by_leading_index"][0]["key"] == "1"
+    assert aggregates["by_leading_index"][0]["outlier"] == 1
+    assert aggregates["by_leading_index"][0]["first_outlier"]["display"] == "/group/data[1,1]"
+
+
+def test_hdf5_aggregate_counts_missing_outlier_once(tmp_path):
+    path = tmp_path / "missing_aggregate.h5"
+    with h5py.File(path, "w") as h5:
+        data = np.array([[1.0, -9999.0], [2.0, 3.0]])
+        dataset = h5.create_dataset("matrix", data=data, fillvalue=-9999.0)
+        dataset.attrs["_FillValue"] = -9999.0
+
+    result = calculate_custom_outliers((str(path), path.name, ".h5"), [{
+        "id": "missing-aggregate",
+        "target": "/matrix",
+        "target_type": "hdf5_dataset",
+        "criteria_type": "range",
+        "min": 0,
+    }])
+
+    row = result["HDF5 aggregates"]["missing-aggregate"]["by_leading_index"][0]
+    assert row["key"] == "0"
+    assert row["total"] == 2
+    assert row["missing"] == 1
+    assert row["outlier"] == 1
 
 
 def test_hdf5_default_zero_policy_counts_missing_and_warns(hdf5_file_info, caplog):

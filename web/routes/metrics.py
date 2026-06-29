@@ -82,7 +82,7 @@ def custom_outlier_targets():
         return jsonify({"success": True, "targets": ensure_json_serializable(targets)})
     except Exception as e:
         metric_time_log.error("Custom outlier target discovery failed: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 200
+        return jsonify({"success": False, "message": "Custom outlier target discovery failed."}), 200
 
 
 @metrics_bp.route("/data-quality", methods=["GET", "POST"])
@@ -150,13 +150,34 @@ def data_quality():
                         final_dict["Custom Criteria Outliers"] = {"Error": f"Invalid custom outlier rules JSON: {e}"}
                     else:
                         max_outliers = request.form.get("max_outliers", 100)
-                        with tracer.start_as_current_span("metric.custom_outliers"):
-                            custom_dict = custom_outliers(file_info, rules, max_outliers)
-                        custom_dict["Description"] = (
-                            "Custom criteria outliers are values that violate user-defined range "
-                            "or regex rules on selected columns or native HDF5 datasets."
-                        )
-                        final_dict["Custom Criteria Outliers"] = custom_dict
+                        scan_limit = request.form.get("scan_limit") or None
+                        stop_after_outliers = request.form.get("stop_after_outliers") == "yes"
+                        max_export_rows = request.form.get("max_export_rows", 10000)
+                        try:
+                            with tracer.start_as_current_span("metric.custom_outliers"):
+                                custom_dict = custom_outliers(
+                                    file_info,
+                                    rules,
+                                    max_outliers,
+                                    scan_limit,
+                                    stop_after_outliers,
+                                    max_export_rows,
+                                )
+                        except Exception as e:
+                            metric_time_log.error("Custom Criteria Outliers error: %s", e, exc_info=True)
+                            final_dict["Custom Criteria Outliers"] = {
+                                "Error": f"{type(e).__name__}: {e}",
+                                "Description": (
+                                    "Custom criteria outliers are values that violate user-defined range "
+                                    "or regex rules on selected columns or native HDF5 datasets."
+                                ),
+                            }
+                        else:
+                            custom_dict["Description"] = (
+                                "Custom criteria outliers are values that violate user-defined range "
+                                "or regex rules on selected columns or native HDF5 datasets."
+                            )
+                            final_dict["Custom Criteria Outliers"] = custom_dict
                     metric_time_log.info("Custom Criteria Outliers took %.2f seconds", time.time() - t0)
 
             except Exception as e:

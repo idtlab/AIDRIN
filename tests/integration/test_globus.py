@@ -138,6 +138,8 @@ def test_remote_runner_data_quality_custom_outliers():
             selected=["custom_outliers"],
             custom_outlier_rules=rules,
             max_outliers=1,
+            max_export_rows=2,
+            stop_after_outliers=False,
         )
     finally:
         os.unlink(path)
@@ -146,3 +148,23 @@ def test_remote_runner_data_quality_custom_outliers():
     custom = result["Custom Criteria Outliers"]
     assert custom["Rule summaries"]["age-range"]["outlier"] == 2
     assert len(custom["Outlier preview"]["age-range"]) == 1
+    assert len(custom["Outlier export"]["age-range"]) == 2
+
+
+def test_remote_runner_data_quality_custom_outlier_error_is_metric_scoped():
+    path, name, file_type = _write_csv(pd.DataFrame({"age": [25, 30, 45]}))
+    try:
+        result = remote_metric_runner(
+            "data_quality",
+            path,
+            name,
+            file_type,
+            selected=["completeness", "custom_outliers"],
+            custom_outlier_rules=[],
+        )
+    finally:
+        os.unlink(path)
+
+    assert "Completeness" in result
+    assert "Custom Criteria Outliers" in result
+    assert "Error" in result["Custom Criteria Outliers"]

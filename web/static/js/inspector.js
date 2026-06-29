@@ -357,12 +357,23 @@ function workspaceSubmit(targetUrl) {
         selectedNames.push("Duplicity");
       }
       if (gFormData.get("custom_outliers") === "yes") {
+        const customOutlierRules = serializeCustomOutlierRules();
+        if (!validateCustomOutlierRuleSelection(customOutlierRules)) return;
         selected.push("custom_outliers");
         selectedNames.push("Custom Criteria Outliers");
-        remoteParams.custom_outlier_rules = serializeCustomOutlierRules();
+        remoteParams.custom_outlier_rules = customOutlierRules;
         remoteParams.max_outliers = Number(
           gFormData.get("max_outliers") || 100,
         );
+        remoteParams.max_export_rows = Number(
+          gFormData.get("max_export_rows") || 10000,
+        );
+        const scanLimit = gFormData.get("scan_limit");
+        if (scanLimit !== null && scanLimit !== "") {
+          remoteParams.scan_limit = Number(scanLimit);
+        }
+        remoteParams.stop_after_outliers =
+          gFormData.get("stop_after_outliers") === "yes";
       }
       if (selected.length === 0) {
         if (typeof showToast === "function")
@@ -529,9 +540,17 @@ function workspaceSubmit(targetUrl) {
     processedFormData.set(shortName, joined);
   }
   if (targetUrl === "/data-quality") {
+    const customOutliersSelected = formData.get("custom_outliers") === "yes";
+    const customOutlierRules = serializeCustomOutlierRules();
+    if (
+      customOutliersSelected &&
+      !validateCustomOutlierRuleSelection(customOutlierRules)
+    ) {
+      return;
+    }
     processedFormData.set(
       "custom_outlier_rules",
-      JSON.stringify(serializeCustomOutlierRules()),
+      JSON.stringify(customOutlierRules),
     );
   }
 
@@ -833,6 +852,18 @@ function renderScoresSection(scores, depth) {
         rowIdx++;
       }
       html += `</tbody></table></div></div>`;
+    }
+    // Custom outlier export rows are downloaded instead of rendered inline.
+    else if (key === "Outlier export" && isObject(value)) {
+      const rows = flattenOutlierExportRows(value);
+      html += `<div class="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">`;
+      html += `<div class="flex flex-wrap items-center justify-between gap-3">`;
+      html += `<div>`;
+      html += `<h4 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)}</h4>`;
+      html += `<p class="mt-1 text-sm text-gray-600 dark:text-gray-300">${rows.length} downloadable row${rows.length === 1 ? "" : "s"}</p>`;
+      html += `</div>`;
+      html += `<button type="button" onclick="downloadCustomOutlierExportCsv()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors">Download CSV</button>`;
+      html += `</div></div>`;
     }
     // Nested dict → collapsible Flowbite accordion-style section
     else if (isObject(value) && Object.keys(value).length > 0) {
@@ -1657,6 +1688,19 @@ function serializeCustomOutlierRules() {
   return rules;
 }
 
+function validateCustomOutlierRuleSelection(rules) {
+  if (Array.isArray(rules) && rules.length > 0) return true;
+  const message = document.getElementById("custom-outlier-message");
+  if (message) {
+    message.textContent = "Add at least one custom outlier rule before submitting.";
+    message.classList.remove("hidden");
+  }
+  if (typeof showToast === "function") {
+    showToast("Add at least one custom outlier rule before submitting.", "error");
+  }
+  return false;
+}
+
 // ==================== Layout Helpers ====================
 
 /**
@@ -2051,6 +2095,95 @@ function downloadJSON() {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
+}
+
+function flattenOutlierExportRows(exportByRule) {
+  if (!exportByRule || typeof exportByRule !== "object") return [];
+  const rows = [];
+  for (const [ruleKey, ruleRows] of Object.entries(exportByRule)) {
+    if (!Array.isArray(ruleRows)) continue;
+    for (const row of ruleRows) {
+      if (!row || typeof row !== "object") continue;
+      rows.push({
+        rule_key: ruleKey,
+        rule_id: row.rule_id || "",
+        rule_name: row.rule_name || "",
+        target: row.target || "",
+        target_type: row.target_type || "",
+        value: row.value,
+        reason: row.reason || "",
+        location: row.location || {},
+      });
+    }
+  }
+  return rows;
+}
+
+function findCustomOutlierExport(result) {
+  if (!result || typeof result !== "object") return null;
+  const direct = result["Outlier export"];
+  if (direct && typeof direct === "object") return direct;
+  for (const value of Object.values(result)) {
+    if (value && typeof value === "object" && value["Outlier export"]) {
+      return value["Outlier export"];
+    }
+  }
+  return null;
+}
+
+function downloadCustomOutlierExportCsv() {
+  const exportByRule = findCustomOutlierExport(lastMetricResult);
+  const rows = flattenOutlierExportRows(exportByRule);
+  const headers = [
+    "rule_key",
+    "rule_id",
+    "rule_name",
+    "target",
+    "target_type",
+    "value",
+    "reason",
+    "location_display",
+    "location_path",
+    "location_index",
+    "source_line",
+    "row_index",
+  ];
+  const csvRows = [headers.join(",")];
+  for (const row of rows) {
+    const location = row.location || {};
+    const values = [
+      row.rule_key,
+      row.rule_id,
+      row.rule_name,
+      row.target,
+      row.target_type,
+      row.value,
+      row.reason,
+      location.display || "",
+      location.path || "",
+      Array.isArray(location.index) ? location.index.join(";") : "",
+      location.source_line ?? "",
+      location.row_index ?? "",
+    ];
+    csvRows.push(values.map(csvEscape).join(","));
+  }
+  const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "custom-outlier-export.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
 }
 
 // ==================== Checkbox Helpers ====================

@@ -84,11 +84,30 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         if "custom_outliers" in selected:
             rules = params.get("custom_outlier_rules", [])
             max_outliers = params.get("max_outliers", 100)
-            r = aidrin.calculate_custom_outliers(file_info, rules, max_outliers=max_outliers)
-            r["Description"] = (
-                "Custom criteria outliers are values that violate user-defined range "
-                "or regex rules on selected columns or native HDF5 datasets."
-            )
+            scan_limit = params.get("scan_limit")
+            stop_after_outliers = params.get("stop_after_outliers", False)
+            max_export_rows = params.get("max_export_rows", 10000)
+            try:
+                r = aidrin.calculate_custom_outliers(
+                    file_info,
+                    rules,
+                    max_outliers=max_outliers,
+                    scan_limit=scan_limit,
+                    stop_after_outliers=stop_after_outliers,
+                    max_export_rows=max_export_rows,
+                )
+                r["Description"] = (
+                    "Custom criteria outliers are values that violate user-defined range "
+                    "or regex rules on selected columns or native HDF5 datasets."
+                )
+            except Exception as e:
+                r = {
+                    "Error": f"{type(e).__name__}: {e}",
+                    "Description": (
+                        "Custom criteria outliers are values that violate user-defined range "
+                        "or regex rules on selected columns or native HDF5 datasets."
+                    ),
+                }
             result["Custom Criteria Outliers"] = r
         return result
 

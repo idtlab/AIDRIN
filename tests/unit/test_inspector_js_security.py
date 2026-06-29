@@ -37,4 +37,16 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     source = INSPECTOR_JS.read_text()
     assert "function serializeCustomOutlierRules()" in source
     assert 'processedFormData.set(\n      "custom_outlier_rules"' in source
-    assert "remoteParams.custom_outlier_rules = serializeCustomOutlierRules()" in source
+    assert "remoteParams.custom_outlier_rules = customOutlierRules" in source
+    assert "remoteParams.max_export_rows" in source
+    assert "remoteParams.scan_limit" in source
+    assert "remoteParams.stop_after_outliers" in source
+    assert "function validateCustomOutlierRuleSelection(rules)" in source
+    assert "!validateCustomOutlierRuleSelection(customOutlierRules)" in source
+
+
+def test_custom_outlier_export_downloads_csv_without_inline_row_rendering():
+    source = INSPECTOR_JS.read_text()
+    assert 'key === "Outlier export"' in source
+    assert "downloadCustomOutlierExportCsv()" in source
+    assert 'link.download = "custom-outlier-export.csv"' in source
