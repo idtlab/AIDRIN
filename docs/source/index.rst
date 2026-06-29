@@ -6,7 +6,7 @@
 AIDRIN Documentation
 ====================
 
-**AIDRIN** (AI Data Readiness Inspector) is an open-source tool designed to streamline the preparation and evaluation of datasets for artificial intelligence and machine learning workflows. AIDRIN enables researchers, data scientists, and developers to assess the quality, structure, and readiness of datasets through an intuitive, browser-based interface.
+**AIDRIN** (AI Data Readiness Infrastructure) is an open-source tool designed to streamline the preparation and evaluation of datasets for artificial intelligence and machine learning workflows. AIDRIN enables researchers, data scientists, and developers to assess the quality, structure, and readiness of datasets through an intuitive, browser-based interface.
 
 AIDRIN provides actionable, quantitative metrics to help evaluate datasets across multiple dimensions critical to AI and data science, including:
 
