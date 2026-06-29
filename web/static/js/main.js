@@ -61,6 +61,15 @@ function uploadForm() {
 
 //to clear
 function clearFile() {
+  if (
+    typeof window.isAidrinServerProcessing === "function" &&
+    window.isAidrinServerProcessing()
+  ) {
+    if (typeof showToast === "function")
+      showToast("Please wait — the server is still processing.", "info");
+    return;
+  }
+
   // Clear saved form states
   try {
     Object.keys(sessionStorage)
