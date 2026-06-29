@@ -594,11 +594,14 @@ function workspaceSubmit(targetUrl) {
 
       // Render sync results first (sets innerHTML), then start async polling (appends)
       renderWorkspaceResults(data);
+      // handleAsyncResults acquires one processing token per async task; release
+      // this request's own token unconditionally so the count reflects only the
+      // tasks still running (the last task to finish re-enables Clear session).
       handleAsyncResults(data);
       if (!_responseHasAsyncTasks(data)) {
         _setSubmitButtonsDisabled(false);
-        _endServerProcessing();
       }
+      _endServerProcessing();
     })
     .catch((error) => {
       console.error("Error:", error);
@@ -1382,6 +1385,8 @@ function handleAsyncResults(data) {
       results.is_async &&
       results.task_id
     ) {
+      // One token per task; released by pollAsyncMetric on every terminal path.
+      _beginServerProcessing();
       pollAsyncMetric(results.task_id, type, results.cache_key);
     }
   }
@@ -1397,7 +1402,10 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
   if (resultsSection) resultsSection.style.display = "block";
 
   const metricsDiv = document.getElementById("metrics");
-  if (!metricsDiv) return;
+  if (!metricsDiv) {
+    _globusTaskDone();
+    return;
+  }
 
   // Human-readable metric names for the spinner card
   const metricDisplayNames = {
@@ -1457,7 +1465,10 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
       .then((r) => r.json())
       .then((response) => {
         const card = document.getElementById(placeholderId);
-        if (!card) return;
+        if (!card) {
+          _globusTaskDone();
+          return;
+        }
 
         if (response.status === "completed") {
           // Update stored result for download
@@ -1526,6 +1537,10 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
           } else {
             _globusTaskDone();
           }
+        } else {
+          // Unknown/terminal status — release the token so Clear session can't
+          // stay disabled forever.
+          _globusTaskDone();
         }
       })
       .catch((err) => {
