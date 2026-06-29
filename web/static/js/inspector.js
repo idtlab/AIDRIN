@@ -1692,11 +1692,15 @@ function validateCustomOutlierRuleSelection(rules) {
   if (Array.isArray(rules) && rules.length > 0) return true;
   const message = document.getElementById("custom-outlier-message");
   if (message) {
-    message.textContent = "Add at least one custom outlier rule before submitting.";
+    message.textContent =
+      "Add at least one custom outlier rule before submitting.";
     message.classList.remove("hidden");
   }
   if (typeof showToast === "function") {
-    showToast("Add at least one custom outlier rule before submitting.", "error");
+    showToast(
+      "Add at least one custom outlier rule before submitting.",
+      "error",
+    );
   }
   return false;
 }
