@@ -5,7 +5,7 @@ import pandas as pd
 
 from aidrin.file_handling.readers.base_reader import BaseFileReader
 
-_OPENPYXL_EXTENSIONS = {".xlsx", ".xlsm", ".xlsb"}
+_OPENPYXL_EXTENSIONS = {".xlsx", ".xlsm"}
 
 
 class excelReader(BaseFileReader):
