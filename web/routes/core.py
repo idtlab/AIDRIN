@@ -337,9 +337,17 @@ def summary_statistics():
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200
 
-        summary_statistics = df.describe().map(
-            lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
-        ).to_dict()
+        # Restrict to numeric columns: describe() would otherwise fall back to
+        # object-column stats (top/freq are strings) and the numeric formatter
+        # below would fail on them. Datasets with no numerical features simply
+        # get an empty numerical summary (issue #125).
+        numeric_df = df.select_dtypes(include="number")
+        if numeric_df.shape[1] == 0:
+            summary_statistics = {}
+        else:
+            summary_statistics = numeric_df.describe().map(
+                lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
+            ).to_dict()
 
         histograms = summary_histograms(df)
 
