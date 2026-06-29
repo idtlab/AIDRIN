@@ -396,12 +396,43 @@ def _record_outlier(
         "target_type": rule["target_type"],
         "value": _json_scalar(value),
         "reason": reason,
+        "flag": _format_outlier_flag(rule, value, reason),
         "location": location,
     }
     if len(preview) < max_outliers:
         preview.append(row)
     if max_export_rows is None or len(export_rows) < max_export_rows:
         export_rows.append(row)
+
+
+def _format_outlier_flag(rule, value, reason):
+    if reason == "below_min" and "min" in rule:
+        return _format_bound_flag("<", value, rule["min"])
+    if reason == "above_max" and "max" in rule:
+        return _format_bound_flag(">", value, rule["max"])
+    if reason == "regex_mismatch":
+        return f"!= /{rule.get('pattern', '')}/"
+    if reason == "non_numeric":
+        return "NaN"
+    if reason == "missing":
+        return "missing"
+    return reason
+
+
+def _format_bound_flag(operator, value, bound):
+    try:
+        number = float(pd.to_numeric(value, errors="raise"))
+        delta = abs(number - float(bound))
+        return f"{operator} {_format_compact_number(bound)} by {_format_compact_number(delta)}"
+    except (TypeError, ValueError):
+        return f"{operator} {_format_compact_number(bound)}"
+
+
+def _format_compact_number(value):
+    try:
+        return f"{float(value):g}"
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def _new_hdf5_aggregate_state():

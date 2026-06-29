@@ -120,6 +120,7 @@ def test_iter_value_blocks_hdf5_streams_regular_slices(tmp_path, monkeypatch):
     assert summary["total"] == 10
     assert summary["outlier"] == 4
     assert result["Outlier preview"]["max-five"][0]["location"]["display"] == "/matrix[3,0]"
+    assert result["Outlier preview"]["max-five"][0]["flag"] == "> 5 by 1"
 
 
 def test_csv_regex_and_range_rules_report_expected_counts():
@@ -175,6 +176,7 @@ def test_range_allows_one_sided_bounds_and_reports_non_numeric():
 
     preview = result["Outlier preview"]["max-only"]
     assert [item["reason"] for item in preview] == ["non_numeric", "above_max"]
+    assert [item["flag"] for item in preview] == ["NaN", "> 10 by 2"]
 
 
 def test_missing_values_are_counted_separately_and_can_be_allowed():

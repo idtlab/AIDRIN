@@ -50,3 +50,13 @@ def test_custom_outlier_export_downloads_csv_without_inline_row_rendering():
     assert 'key === "Outlier export"' in source
     assert "downloadCustomOutlierExportCsv()" in source
     assert 'link.download = "custom-outlier-export.csv"' in source
+
+
+def test_custom_outlier_preview_uses_compact_overview_table():
+    source = INSPECTOR_JS.read_text()
+    assert 'key === "Outlier preview"' in source
+    assert "renderCustomOutlierPreviewTable(value)" in source
+    assert "flattenOutlierPreviewRows(previewByRule)" in source
+    assert "formatOutlierFlagFallback(reason)" in source
+    assert 'below_min: "< min"' in source
+    assert 'above_max: "> max"' in source

@@ -853,6 +853,10 @@ function renderScoresSection(scores, depth) {
       }
       html += `</tbody></table></div></div>`;
     }
+    // Custom outlier preview gets a compact scan-first table with per-row details.
+    else if (key === "Outlier preview" && isObject(value)) {
+      html += renderCustomOutlierPreviewTable(value);
+    }
     // Custom outlier export rows are downloaded instead of rendered inline.
     else if (key === "Outlier export" && isObject(value)) {
       const rows = flattenOutlierExportRows(value);
@@ -2125,6 +2129,89 @@ function flattenOutlierExportRows(exportByRule) {
     }
   }
   return rows;
+}
+
+function flattenOutlierPreviewRows(previewByRule) {
+  if (!previewByRule || typeof previewByRule !== "object") return [];
+  const rows = [];
+  for (const [ruleKey, ruleRows] of Object.entries(previewByRule)) {
+    if (!Array.isArray(ruleRows)) continue;
+    for (const row of ruleRows) {
+      if (!row || typeof row !== "object") continue;
+      rows.push({
+        rule_key: ruleKey,
+        rule_id: row.rule_id || "",
+        rule_name: row.rule_name || row.rule_id || ruleKey,
+        target: row.target || "",
+        target_type: row.target_type || "",
+        value: row.value,
+        reason: row.reason || "",
+        flag: row.flag || formatOutlierFlagFallback(row.reason),
+        location: row.location || {},
+        raw: row,
+      });
+    }
+  }
+  return rows;
+}
+
+function renderCustomOutlierPreviewTable(previewByRule) {
+  const rows = flattenOutlierPreviewRows(previewByRule);
+  let html = `<div class="mb-4">`;
+  html += `<div class="mb-2 flex flex-wrap items-center justify-between gap-2">`;
+  html += `<h4 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Outlier preview <span class="normal-case font-normal">(${rows.length})</span></h4>`;
+  html += `</div>`;
+  if (rows.length === 0) {
+    html += `<p class="text-sm text-gray-600 dark:text-gray-300">No preview rows.</p>`;
+    html += `</div>`;
+    return html;
+  }
+
+  html += `<div class="relative overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">`;
+  html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  html += `<th scope="col" class="px-3 py-2.5">Rule</th>`;
+  html += `<th scope="col" class="px-3 py-2.5">Location</th>`;
+  html += `<th scope="col" class="px-3 py-2.5 text-right">Value</th>`;
+  html += `<th scope="col" class="px-3 py-2.5">Flag</th>`;
+  html += `<th scope="col" class="px-3 py-2.5 text-right">Details</th>`;
+  html += `</tr></thead><tbody>`;
+  rows.forEach((row, index) => {
+    const stripe =
+      index % 2 === 0
+        ? "bg-white dark:bg-gray-800"
+        : "bg-gray-50 dark:bg-gray-700/50";
+    const locationDisplay =
+      row.location.display ||
+      row.location.path ||
+      formatValue(row.location.index || "");
+    html += `<tr class="${stripe} border-b dark:border-gray-700 last:border-b-0 align-top">`;
+    html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${escapeHtml(row.rule_name)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">${escapeHtml(formatValue(locationDisplay))}</td>`;
+    html += `<td class="px-3 py-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300">${escapeHtml(formatValue(row.value))}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(row.flag)}</td>`;
+    html += `<td class="px-3 py-2 text-right">`;
+    html += `<details class="inline-block text-left">`;
+    html += `<summary class="cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">Expand</summary>`;
+    html += `<div class="mt-2 min-w-72 max-w-xl rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">`;
+    html += `<div class="mb-2 text-xs text-gray-600 dark:text-gray-300"><span class="font-medium text-gray-900 dark:text-white">Target:</span> ${escapeHtml(row.target)}</div>`;
+    html += `<pre class="max-h-64 overflow-auto text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">${escapeHtml(JSON.stringify(row.raw, null, 2))}</pre>`;
+    html += `</div></details></td>`;
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  return html;
+}
+
+function formatOutlierFlagFallback(reason) {
+  const labels = {
+    below_min: "< min",
+    above_max: "> max",
+    regex_mismatch: "!=",
+    non_numeric: "NaN",
+    missing: "missing",
+  };
+  return labels[reason] || reason || "";
 }
 
 function findCustomOutlierExport(result) {
