@@ -78,4 +78,45 @@
       <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Computing governance metrics...</p>
     </div>
   </div>
+
+  <!-- FAIR Compliance (optional — requires metadata upload) -->
+  <div id="readiness-fair-card" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mt-4" data-readiness-pdf="conditional">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white">FAIR Compliance</h3>
+      <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Optional · requires metadata</span>
+    </div>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      Upload a JSON metadata file (DCAT or Datacite) to evaluate FAIR compliance. This section is not computed automatically.
+    </p>
+    <div id="readiness-fair-upload">
+      <form id="form-readiness-fair" method="post" enctype="multipart/form-data">
+        <div class="mb-4">
+          <label for="readiness-fair-metadata-type" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Metadata type</label>
+          <select name="metadata type" id="readiness-fair-metadata-type" required class="w-full" style="max-width: none;">
+            <option value="DCAT">DCAT</option>
+            <option value="Datacite">Datacite</option>
+          </select>
+        </div>
+        <div>
+          <label for="readiness-fair-file" class="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600 transition-colors">
+            <div class="flex flex-col items-center justify-center pt-4 pb-4">
+              <svg id="readinessFairUploadIcon" class="w-8 h-8 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <p class="mb-1 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+              <p id="readinessFairFileLabel" class="text-xs text-gray-500 dark:text-gray-400">JSON metadata file</p>
+            </div>
+            <input id="readiness-fair-file" type="file" name="metadata" accept=".json" required class="hidden" />
+          </label>
+        </div>
+        <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+          <button type="button" onclick="withSubmitGuard(this, submitReadinessFairAssessment);"
+                  class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+            Evaluate FAIR Compliance
+          </button>
+        </div>
+      </form>
+    </div>
+    <div id="readiness-fair-results" class="hidden"></div>
+  </div>
 </div>

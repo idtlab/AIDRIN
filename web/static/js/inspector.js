@@ -20,6 +20,8 @@ const _READINESS_REPORT_SECTIONS = [
   "data-governance",
 ];
 const _readinessSectionStatus = {};
+/** Optional FAIR Compliance state for the readiness report appendix. */
+let _readinessFairCompliance = { status: "idle", data: null };
 const _READINESS_MAX_DETAIL_LIST_ITEMS = 50;
 const _READINESS_MAX_DETAIL_TABLE_ROWS = 500;
 
@@ -1735,123 +1737,214 @@ function escapeHtml(str) {
 
 // ==================== FAIR Assessment ====================
 
-function submitFairAssessment() {
-  const form = document.getElementById("form-fair-assessment");
-  if (!form) return;
+function _wireFairFileInput(fileInput, labelEl, iconEl) {
+  if (!fileInput || !labelEl) return;
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length) {
+      labelEl.textContent = fileInput.files[0].name;
+      if (iconEl) {
+        iconEl.innerHTML =
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+        iconEl.classList.remove("text-gray-400");
+        iconEl.classList.add("text-green-500");
+      }
+    } else {
+      labelEl.textContent = "JSON metadata file";
+      if (iconEl) {
+        iconEl.innerHTML =
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
+        iconEl.classList.remove("text-green-500");
+        iconEl.classList.add("text-gray-400");
+      }
+    }
+  });
+}
+
+/** Build FAIR assessment result HTML (shared by panel and readiness report). */
+function buildFairAssessmentResultHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const totalCheck = checks["Total Checks"] || "";
+  const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
+  const totalPassed = totalMatch ? parseInt(totalMatch[1], 10) : 0;
+  const totalExpected = totalMatch ? parseInt(totalMatch[2], 10) : 1;
+  const totalPct = Math.round((totalPassed / totalExpected) * 100);
+
+  let html = `<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white">FAIR Compliance</h3>
+      <span class="text-sm font-medium text-gray-500 dark:text-gray-400">${totalPassed}/${totalExpected} checks passed</span>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+      <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
+    </div>
+    <div class="grid grid-cols-4 gap-3">`;
+
+  const fairKeys = ["Findable", "Accessible", "Interoperable", "Reusable"];
+  fairKeys.forEach((k) => {
+    const checkStr = checks[`${k} Checks`] || "0/0";
+    const m = checkStr.match(/(\d+)\/(\d+)/);
+    const passed = m ? parseInt(m[1], 10) : 0;
+    const total = m ? parseInt(m[2], 10) : 1;
+    const pct = Math.round((passed / total) * 100);
+    html += `<div class="text-center">
+      <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
+      <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
+        <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
+      </div>
+    </div>`;
+  });
+  html += "</div></div>";
+
+  html += '<div class="space-y-2 mb-4">';
+  fairKeys.forEach((k) => {
+    let val = "—";
+    const checkStr = checks[`${k} Checks`] || "";
+    if (data[k] !== undefined && typeof data[k] === "object") {
+      val = renderFairValue(data[k]);
+    } else if (data[k] !== undefined) {
+      val = `<div class="py-2 text-sm text-gray-700 dark:text-gray-300">${data[k]}</div>`;
+    }
+    html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <summary class="cursor-pointer flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+        <span>${k}</span>
+        <span class="text-xs text-gray-400 dark:text-gray-500">${checkStr}</span>
+      </summary>
+      <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">${val}</div>
+    </details>`;
+  });
+  html += "</div>";
+
+  const extraKeys = Object.keys(data).filter(
+    (k) => !fairKeys.includes(k) && k !== "Pie chart",
+  );
+  if (extraKeys.length > 0) {
+    html +=
+      '<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4">';
+    html +=
+      '<h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Detailed Results</h3>';
+    extraKeys.forEach((k) => {
+      const val = data[k];
+      if (typeof val === "object" && val !== null) {
+        html += `<details class="mb-2 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+            ${k}
+            <svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>
+          </summary>
+          <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+            <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
+          </div>
+        </details>`;
+      } else {
+        html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">
+          <span class="font-medium text-gray-900 dark:text-white">${k}</span>
+          <span class="text-gray-500 dark:text-gray-400">${val ?? "—"}</span>
+        </div>`;
+      }
+    });
+    html += "</div>";
+  }
+
+  return html;
+}
+
+function renderFairAssessmentResult(data, resultContainer) {
+  if (!resultContainer) return false;
+  if (data.error) {
+    resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
+    return false;
+  }
+  resultContainer.innerHTML = buildFairAssessmentResultHtml(data);
+  return true;
+}
+
+function submitFairAssessmentForm(form, resultContainer, callbacks) {
+  if (!form) return Promise.resolve();
 
   const formData = new FormData(form);
-  const resultContainer = document.getElementById("fair-result-container");
-  if (resultContainer)
-    resultContainer.innerHTML = '<p class="text-center">Processing...</p>';
+  if (resultContainer) {
+    resultContainer.classList.remove("hidden");
+    resultContainer.innerHTML = '<p class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">Processing…</p>';
+  }
 
-  // Return the promise so withSubmitGuard re-enables the button when it settles.
   return fetch("/fair-assessment", { method: "POST", body: formData })
     .then((response) => response.json())
     .then((data) => {
-      if (!resultContainer) return;
-
-      // Check for error response
-      if (data.error) {
-        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${data.error}</div>`;
-        return;
+      const ok = renderFairAssessmentResult(data, resultContainer);
+      if (ok) {
+        callbacks?.onSuccess?.(data);
+      } else {
+        callbacks?.onError?.(data);
       }
-
-      let html = "";
-
-      // Compliance summary bar — extract from FAIR Compliance Checks
-      const checks = data["FAIR Compliance Checks"] || {};
-      const totalCheck = checks["Total Checks"] || "";
-      const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
-      const totalPassed = totalMatch ? parseInt(totalMatch[1]) : 0;
-      const totalExpected = totalMatch ? parseInt(totalMatch[2]) : 1;
-      const totalPct = Math.round((totalPassed / totalExpected) * 100);
-
-      html += `<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-base font-semibold text-gray-900 dark:text-white">FAIR Compliance</h3>
-          <span class="text-sm font-medium text-gray-500 dark:text-gray-400">${totalPassed}/${totalExpected} checks passed</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
-          <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
-        </div>
-        <div class="grid grid-cols-4 gap-3">`;
-
-      // Per-principle mini bars
-      const fairKeys = ["Findable", "Accessible", "Interoperable", "Reusable"];
-      fairKeys.forEach((k) => {
-        const checkStr = checks[`${k} Checks`] || "0/0";
-        const m = checkStr.match(/(\d+)\/(\d+)/);
-        const passed = m ? parseInt(m[1]) : 0;
-        const total = m ? parseInt(m[2]) : 1;
-        const pct = Math.round((passed / total) * 100);
-        html += `<div class="text-center">
-          <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
-          <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
-          <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
-            <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
-          </div>
-        </div>`;
-      });
-      html += "</div></div>";
-
-      // FAIR principle details as collapsible accordions
-      html += '<div class="space-y-2 mb-4">';
-      fairKeys.forEach((k) => {
-        let val = "—";
-        let checkStr = checks[`${k} Checks`] || "";
-        if (data[k] !== undefined && typeof data[k] === "object") {
-          val = renderFairValue(data[k]);
-        } else if (data[k] !== undefined) {
-          val = `<div class="py-2 text-sm text-gray-700 dark:text-gray-300">${data[k]}</div>`;
-        }
-        html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <summary class="cursor-pointer flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-            <span>${k}</span>
-            <span class="text-xs text-gray-400 dark:text-gray-500">${checkStr}</span>
-          </summary>
-          <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">${val}</div>
-        </details>`;
-      });
-      html += "</div>";
-
-      // Other data (FAIR Compliance Checks, Other, Original Metadata)
-      const extraKeys = Object.keys(data).filter(
-        (k) => !fairKeys.includes(k) && k !== "Pie chart",
-      );
-      if (extraKeys.length > 0) {
-        html +=
-          '<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4">';
-        html +=
-          '<h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Detailed Results</h3>';
-        extraKeys.forEach((k) => {
-          const val = data[k];
-          if (typeof val === "object" && val !== null) {
-            html += `<details class="mb-2 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-              <summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                ${k}
-                <svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>
-              </summary>
-              <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-                <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
-              </div>
-            </details>`;
-          } else {
-            html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">
-              <span class="font-medium text-gray-900 dark:text-white">${k}</span>
-              <span class="text-gray-500 dark:text-gray-400">${val ?? "—"}</span>
-            </div>`;
-          }
-        });
-        html += "</div>";
-      }
-
-      resultContainer.innerHTML = html;
     })
     .catch((error) => {
       console.error("Error:", error);
-      if (resultContainer)
-        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">Error: ${error.message}</div>`;
+      if (resultContainer) {
+        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">Error: ${escapeHtml(error.message)}</div>`;
+      }
+      callbacks?.onError?.(error);
     });
+}
+
+function submitFairAssessment() {
+  return submitFairAssessmentForm(
+    document.getElementById("form-fair-assessment"),
+    document.getElementById("fair-result-container"),
+  );
+}
+
+function submitReadinessFairAssessment() {
+  _readinessFairCompliance = { status: "computing", data: null };
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  if (resultsEl) resultsEl.classList.remove("hidden");
+
+  return submitFairAssessmentForm(
+    document.getElementById("form-readiness-fair"),
+    resultsEl,
+    {
+      onSuccess(data) {
+        _readinessFairCompliance = { status: "ok", data };
+        uploadEl?.classList.add("hidden");
+      },
+      onError() {
+        _readinessFairCompliance = { status: "error", data: null };
+      },
+    },
+  );
+}
+
+function _resetReadinessFairSection() {
+  _readinessFairCompliance = { status: "idle", data: null };
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  const form = document.getElementById("form-readiness-fair");
+  uploadEl?.classList.remove("hidden");
+  if (resultsEl) {
+    resultsEl.classList.add("hidden");
+    resultsEl.innerHTML = "";
+  }
+  form?.reset();
+  const label = document.getElementById("readinessFairFileLabel");
+  const icon = document.getElementById("readinessFairUploadIcon");
+  if (label) label.textContent = "JSON metadata file";
+  if (icon) {
+    icon.innerHTML =
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
+    icon.classList.remove("text-green-500");
+    icon.classList.add("text-gray-400");
+  }
+}
+
+function initReadinessFairSection() {
+  const form = document.getElementById("form-readiness-fair");
+  if (!form || form.dataset.wired === "1") return;
+  form.dataset.wired = "1";
+  _wireFairFileInput(
+    document.getElementById("readiness-fair-file"),
+    document.getElementById("readinessFairFileLabel"),
+    document.getElementById("readinessFairUploadIcon"),
+  );
 }
 
 /** Render a FAIR value object as readable HTML with pass/fail badges */
@@ -2459,6 +2552,8 @@ function _fetchReadinessSection(section, container, renderFn) {
  */
 function loadReadinessReport() {
   _wireReadinessExportButton();
+  _resetReadinessFairSection();
+  initReadinessFairSection();
   _READINESS_REPORT_SECTIONS.forEach((section) => {
     _readinessSectionStatus[section] = "pending";
   });
@@ -2570,6 +2665,7 @@ function _pruneReadinessNodeForPdf(node) {
   node.querySelectorAll(".readiness-viz-slot").forEach((el) => el.remove());
   node.querySelectorAll(".info-icon").forEach((el) => el.remove());
   node.querySelectorAll(".readiness-build-time").forEach((el) => el.remove());
+  node.querySelectorAll("#readiness-fair-upload").forEach((el) => el.remove());
   node
     .querySelectorAll("#readiness-categorical-charts, #readiness-histograms-inner")
     .forEach((el) => el.remove());
@@ -2603,9 +2699,15 @@ function _normalizeReadinessPdfRoot(root) {
 
 /** Clone only scorecard sections for PDF (avoids copying huge collapsed detail trees). */
 function _buildSlimReadinessPanelForPdf(panel) {
+  const includeFair = _readinessFairCompliance?.status === "ok";
   const root = document.createElement("div");
   panel.querySelectorAll(":scope > div.rounded-lg.shadow-sm").forEach((card) => {
-    root.appendChild(_pruneReadinessNodeForPdf(card.cloneNode(true)));
+    if (card.dataset.readinessPdf === "conditional" && !includeFair) return;
+    const clone = _pruneReadinessNodeForPdf(card.cloneNode(true));
+    clone.querySelector("#readiness-fair-upload")?.remove();
+    const fairResults = clone.querySelector("#readiness-fair-results");
+    if (fairResults) fairResults.classList.remove("hidden");
+    root.appendChild(clone);
   });
   return _normalizeReadinessPdfRoot(root);
 }
@@ -4182,30 +4284,11 @@ function initWorkspace() {
   }
 
   // Handle FAIR assessment file input UI
-  const fairFile = document.getElementById("fair-file");
-  const fairLabel = document.getElementById("fairFileLabel");
-  const fairIcon = document.getElementById("fairUploadIcon");
-  if (fairFile && fairLabel) {
-    fairFile.addEventListener("change", () => {
-      if (fairFile.files.length) {
-        fairLabel.textContent = fairFile.files[0].name;
-        if (fairIcon) {
-          fairIcon.innerHTML =
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
-          fairIcon.classList.remove("text-gray-400");
-          fairIcon.classList.add("text-green-500");
-        }
-      } else {
-        fairLabel.textContent = "JSON metadata file";
-        if (fairIcon) {
-          fairIcon.innerHTML =
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
-          fairIcon.classList.remove("text-green-500");
-          fairIcon.classList.add("text-gray-400");
-        }
-      }
-    });
-  }
+  _wireFairFileInput(
+    document.getElementById("fair-file"),
+    document.getElementById("fairFileLabel"),
+    document.getElementById("fairUploadIcon"),
+  );
 }
 
 /**
