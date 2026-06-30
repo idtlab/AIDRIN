@@ -1,0 +1,56 @@
+# Agentic evaluation config — UCI Individual Household Electric Power Consumption
+#
+# Dataset: https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption
+#
+# Before running:
+#   1. Download the dataset and place household_power_consumption.txt in data/
+#   2. Download citing papers (2016-2026) and place PDFs in sources/
+#   3. Run: aidrin agentic build-index -c examples/agentic/power_consumption/config.yaml
+#   4. Run: aidrin agentic run -c examples/agentic/power_consumption/config.yaml -o examples/agentic/power_consumption/results.json
+#
+# All paths below are relative to this config file.
+llm:
+  base_url: "https://api.openai.com/v1"   # replace with any OpenAI-compatible endpoint (e.g. https://api.cborg.lbl.gov for LBL CBORG)
+
+paths:
+  data_loader: "./loader.py:load_dataset"
+  metadata_csv: "./data/metadata.txt"
+
+profiling:
+  full_summary: false
+
+vector_store:
+  sources:
+    - ./sources
+  embedding_model: text-embedding-ada-002
+  chunk_size: 1000
+  chunk_overlap: 200
+  vector_store_name: power_consumption_index
+
+retrieval:
+  enabled: true
+  max_workers: 4
+  answer_model: gpt-5.2
+  top_k: 3
+  question:
+    - "Which European Union regulation is cited as requiring that the consequences of profiling be informed to the data subject? Return the name of the regulation as a string."
+    - "Return True if more than 80% of the data is resampled to align with the widely adopted industry standards for smart meter technology to reduce behavioral noise. Return False if not."
+
+
+executor:
+  enabled: true
+  max_attempts: 5
+  model: gpt-5.2
+  temperature: 0.0
+
+complexity_scorer:
+  enabled: true
+  model: gpt-5.2
+
+remediation:
+  enabled: true
+  model: gpt-5.2
+  context_chars: 3000
+
+output:
+  save_log: true

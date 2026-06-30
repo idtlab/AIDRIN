@@ -1,7 +1,8 @@
 .. _usage:
+.. _web_usage:
 
-AIDRIN Usage
-============
+Web Application Usage
+=====================
 
 Usage via PyPI
 --------------
@@ -32,7 +33,7 @@ Using AIDRIN Functions
 ~~~~~~~~~~~~~~~~~~~~~~
 
 AIDRIN provides functions for data readiness and privacy analysis on datasets (e.g., CSV files). Below, we outline the key functions, their purpose, and what they return, using a sample dataset (``adult.csv``) as an example. You can download this dataset from the `UCI Machine Learning Repository <https://archive.ics.uci.edu/ml/datasets/adult>`_.
-You can find sample datasets in the `aidrin/datasets/test_data` directory.
+You can find sample datasets in the `examples/sample_data` directory of the repository, or download them directly from the web interface's **Sample Data** panel on the inspector page.
 
 Setting Up File Information
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -49,7 +50,7 @@ Most functions require a ``file_info`` tuple with the file path, name, and type:
 Available Functions
 ~~~~~~~~~~~~~~~~~~~
 
-Below are AIDRIN’s primary functions, their usage, and the type of output they return.
+Below are AIDRIN's primary functions, their usage, and the type of output they return.
 
 calculate_completeness
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -100,7 +101,7 @@ Calculates correlations between specified columns (numerical or categorical). Yo
    from aidrin import calculate_correlations
    result = calculate_correlations(columns=['age', 'education.num'], file_info=file_info)
 
-**Returns**: A dictionary with numerical correlation scores (automatically choosing Pearson’s or Spearman’s coefficient based on a normality check) and categorical correlation analysis using Theil's U statistic. It will also return a visualization (heatmap) of the correlations, and the selected numerical method is exposed under ``Correlations Analysis Numerical -> Method``.
+**Returns**: A dictionary with numerical correlation scores (automatically choosing Pearson's or Spearman's coefficient based on a normality check) and categorical correlation analysis using Theil's U statistic. It will also return a visualization (heatmap) of the correlations, and the selected numerical method is exposed under ``Correlations Analysis Numerical -> Method``.
 
 calculate_class_distribution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -229,9 +230,9 @@ Calculates entropy risk for quasi-identifier columns. It measures the uncertaint
 **Returns**: A dictionary with the entropy risk value, risk score, descriptive statistics, histogram data, and a visualization (bar chart).
 
 Local and Web Application Usage
--------------------------------
+--------------------------------
 
-AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Installation <./installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure and Organization**. Each dimension includes specific metrics to assess dataset readiness.
+AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Web Application Installation <./web_installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure and Organization**. Each dimension includes specific metrics to assess dataset readiness.
 
 Web Application Workflow
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -299,7 +300,7 @@ Assesses how dataset features influence AI through correlation and feature relev
 
 - **Correlation Analysis**:
 
-  - **Method**: For numerical columns, runs a normality check using the Shapiro–Wilk test (α = 0.05) on up to 5000 sampled rows; if the test does not reject normality it computes Pearson’s correlation coefficient; otherwise it uses Spearman’s rank correlation (both ranging from -1 to 1). When SciPy is unavailable, a skewness/kurtosis heuristic is used as a fallback. For categorical columns, it uses Theil's U statistic to measure association.
+  - **Method**: For numerical columns, runs a normality check using the Shapiro–Wilk test (α = 0.05) on up to 5000 sampled rows; if the test does not reject normality it computes Pearson's correlation coefficient; otherwise it uses Spearman's rank correlation (both ranging from -1 to 1). When SciPy is unavailable, a skewness/kurtosis heuristic is used as a fallback. For categorical columns, it uses Theil's U statistic to measure association.
   - **Parameters**: Select columns for analysis (numerical and/or categorical).
   - **Result**: Heatmap visualization of correlation coefficients.
 
@@ -383,7 +384,7 @@ It ensures your dataset is well-documented, discoverable, and reusable by others
 FAIR Compliance Report
 '''''''''''''''''''''''
 
-The **FAIR Compliance Report** analyzes your dataset’s metadata file (in **DCAT** or **DataCite JSON** format)
+The **FAIR Compliance Report** analyzes your dataset's metadata file (in **DCAT** or **DataCite JSON** format)
 and provides a detailed assessment against the FAIR criteria.
 
 How it Works
@@ -454,7 +455,7 @@ Notes
 ~~~~~
 
 - **Local vs. Web Application**:
-  - The local installation requires setting up Redis, Celery, and Flask (see `Installation <./installation.html>`_). The web application at `aidrin.io <https://aidrin.io>`_ handles these server-side, offering a no-setup alternative.
+  - The local installation requires setting up Redis, Celery, and Flask (see `Web Application Installation <./web_installation.html>`_). The web application at `aidrin.io <https://aidrin.io>`_ handles these server-side, offering a no-setup alternative.
   - Both use the same codebase, ensuring identical functionality. The web application is ideal for users who prefer a browser-based interface.
 
 - **File Formats**: The web application supports CSV, Excel, JSON, NumPy (``.npz``),
@@ -466,4 +467,175 @@ Notes
   feature relevance, and privacy — operate on accurately marked missing data.  See
   the ``calculate_completeness`` note above for the full sentinel-resolution order.
 - **Visualizations**: Generated downloadable plots (e.g., histograms, bar charts, heatmaps) are displayed in the web interface.
-- **JSON Reports**: Each dimension’s analysis generates a downloadable JSON report containing all metrics, statistics, and visualization data (where applicable).
+- **JSON Reports**: Each dimension's analysis generates a downloadable JSON report containing all metrics, statistics, and visualization data (where applicable).
+
+----
+
+Custom Metrics and Remedies
+----------------------------
+
+This section explains how to define custom metrics and remediation logic for your uploaded CSV files
+using the **CustomDR** class inside the CodeMirror editor. After uploading a dataset, you
+will navigate to a page where you can write Python code that extends the platform's data-review logic.
+
+Workflow
+~~~~~~~~
+
+1. Navigate to the file upload page and upload a CSV file.
+2. After upload, click the **Define Custom Metrics** button. You will be redirected to ``/customMetrics``.
+3. A CodeMirror Python editor appears, preloaded with an editable ``CustomDR`` class that inherits from ``BaseDRAgent`` and contains two methods:
+   - ``metric()``: returns a dictionary of metric results.
+   - ``remedy()``: returns a modified dataset based on your remediation logic.
+4. Write or modify your code inside the editor.
+5. Press **Save** to store your custom logic on the server (temporary, 1-hour expiration).
+6. Press **Submit** to execute your ``metric()`` function, and optionally your ``remedy()`` function if you have checked the **Apply Remedy** box.
+
+The platform will display your computed metric dictionary, any remediated dataset to download (if remedy is enabled), and any warnings or errors raised by your code.
+
+Understanding the ``CustomDR`` Base Class
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Below is the template initially shown in CodeMirror:
+
+.. code-block:: python
+
+    from aidrin.custom_metrics.base_dr import BaseDRAgent
+    from typing import Any
+    from typing import Dict, Union, Any
+
+    class CustomDR(BaseDRAgent):
+        def __init__(self, dataset: Any, **kwargs):
+            super().__init__(dataset, **kwargs)
+
+        def metric(self, **kwargs):
+            """
+            Implement your custom metric logic here.
+            """
+
+            # IMPLEMENT YOUR METRIC LOGIC BELOW
+            # Example: Calculating the total number of missing cells in the entire DataFrame
+
+            # df: pd.DataFrame = self.dataset
+            # return {
+            #   "total_missing_cells": df.isna().sum().to_dict()
+            # }
+
+            return {"message": "Placeholder metric. Implement your logic here."}
+
+        def remedy(self, metric_results: dict):
+            """
+            Applies custom remediation logic based on the calculated metrics.
+            """
+
+            # IMPLEMENT YOUR REMEDIATION LOGIC BELOW
+            # For example, filling null values with a default value
+
+            # df_remedied: pd.DataFrame = self.dataset.copy()
+            # df_remedied.fillna(0, inplace=True)
+            # return df_remedied
+
+            return self.dataset
+
+The goal is to replace the placeholder logic with your own custom metric and remediation steps.
+
+Implementing ``metric()``: Requirements and Tips
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Your ``metric()`` method:
+
+- Must return a **dictionary** whose keys are metric names and values are computed results.
+- Receives the dataset through ``self.dataset``.
+- May accept additional keyword arguments (depending on future UI extensions).
+- Should not mutate the dataset; all transformations belong in ``remedy()``.
+
+Example: Compute missing values, row count, and column datatypes.
+
+.. code-block:: python
+
+    def metric(self, **kwargs):
+        df = self.dataset
+
+        return {
+            "row_count": len(df),
+            "column_count": df.shape[1],
+            "missing_values": df.isna().sum().to_dict(),
+            "dtypes": df.dtypes.apply(lambda x: str(x)).to_dict(),
+        }
+
+Implementing ``remedy()``: Requirements and Tips
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``remedy()`` method receives the ``metric_results`` dictionary returned by ``metric()``.
+Use this method when you want to apply data-cleaning or transformation logic based on your computed metrics. Or, you can modify the dataset directly without relying on ``metric_results``.
+
+You must return the updated dataset at the end of ``remedy()``.
+
+Full Practical Example: A Combined Metric and Remedy Class
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The example below shows both ``metric()`` and ``remedy()`` implemented in a realistic workflow.
+
+.. code-block:: python
+
+    from aidrin.custom_metrics.base_dr import BaseDRAgent
+    import pandas as pd
+    from typing import Dict, Union, Any
+
+    class CustomDR(BaseDRAgent):
+        """
+        An agent focused on detecting and removing duplicate rows.
+        """
+
+        def __init__(self, dataset: Any, **kwargs):
+            super().__init__(dataset, **kwargs)
+
+        def metric(self, **kwargs) -> Dict[str, int]:
+            """
+            Calculates the total count of duplicate rows.
+            """
+            df: pd.DataFrame = self.dataset
+            duplicate_rows_count: int = df.duplicated().sum()
+
+            return {
+                "duplicate_rows_total": duplicate_rows_count,
+            }
+
+        def remedy(self, metric_results: Dict[str, Any]) -> pd.DataFrame:
+            """
+            Removes duplicate rows using the calculated metric results.
+            """
+            # Create a copy for safe modification to prevent side effects on the original state.
+            df_remedied: pd.DataFrame = self.dataset.copy()
+
+            duplicate_count = metric_results.get("duplicate_rows_total", 0)
+
+            if duplicate_count > 0:
+                df_remedied.drop_duplicates(inplace=True)
+
+            return df_remedied
+
+How the System Uses Your CustomDR Class
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When you click **Submit**:
+
+1. Your code is dynamically loaded and executed in an isolated environment.
+2. The system creates an instance of your ``CustomDR`` class.
+3. The system calls your ``metric()`` method to compute metrics.
+4. If **Apply Remedy** is checked, the system calls your ``remedy()`` method to get the modified dataset.
+5. Metrics and (optionally) the remedied data preview are displayed on the results section of the page.
+
+Best Practices for Writing Custom Metrics
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- **Do not mutate the dataset inside ``metric()``.**
+  All modifications belong in ``remedy()``.
+- Work on a **copy** of ``self.dataset`` in ``remedy()`` to avoid side effects.
+- Always return the modified dataset at the end of ``remedy()``.
+
+Data and Code Storage Rules
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Your custom metric code is stored temporarily for **1 hour**.
+- The (optional) remedied dataset is also stored for **1 hour**.
+- After expiration, all artifacts are safely removed.
