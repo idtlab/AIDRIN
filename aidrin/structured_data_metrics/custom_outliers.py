@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 
 import numpy as np
@@ -269,9 +270,12 @@ def _validate_criteria_node(node, rule_id, path):
 
 def _coerce_bound(value, rule_id, field):
     try:
-        return float(value)
+        bound = float(value)
     except (TypeError, ValueError):
         raise ValueError(f"Range rule {rule_id} has non-numeric {field}: {value}")
+    if not math.isfinite(bound):
+        raise ValueError(f"Range rule {rule_id} has non-finite {field}: {value}")
+    return bound
 
 
 def _target_map(file_info):

@@ -37,9 +37,13 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert "remoteParams.stop_after_outliers" in source
     assert "criteria: serializeCustomOutlierCriteria(row)" in source
     assert "function serializeCustomOutlierCondition(condition)" in source
+    assert 'return { op: "not", condition: { op: "or", conditions } }' in source
     assert "criteria_type:" not in source
     assert "function validateCustomOutlierRuleSelection(rules)" in source
     assert "!validateCustomOutlierRuleSelection(customOutlierRules)" in source
+    assert "function validateCustomOutlierCriteria(criteria, ruleName)" in source
+    assert "range condition requires min or max" in source
+    assert "requires a condition for NOT" in source
 
 
 def test_custom_outlier_export_downloads_csv_without_inline_row_rendering():

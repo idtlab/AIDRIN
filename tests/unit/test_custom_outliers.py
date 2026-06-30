@@ -273,6 +273,18 @@ def test_flat_rule_syntax_is_rejected():
         _clean(fi[0])
 
 
+@pytest.mark.parametrize("bound", ["nan", "inf", "-inf", float("nan"), float("inf")])
+def test_non_finite_range_bounds_are_rejected(bound):
+    fi = _write_csv(pd.DataFrame({"value": [1]}))
+    try:
+        with pytest.raises(ValueError, match="non-finite min"):
+            calculate_custom_outliers(fi, [
+                _range_rule("non-finite", "value", min_value=bound)
+            ])
+    finally:
+        _clean(fi[0])
+
+
 def test_missing_values_are_counted_separately_and_can_be_allowed():
     fi = _write_csv(pd.DataFrame({"value": [1, None, 3]}))
     try:

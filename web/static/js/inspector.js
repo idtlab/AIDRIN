@@ -1736,7 +1736,9 @@ function serializeCustomOutlierCriteria(row) {
 
   if (op === "not") {
     if (conditions.length === 0) return { op: "not", condition: null };
-    if (conditions.length === 1) return { op: "not", condition: conditions[0] };
+    if (conditions.length === 1) {
+      return { op: "not", condition: conditions[0] };
+    }
     return { op: "not", condition: { op: "or", conditions } };
   }
 
@@ -1774,18 +1776,68 @@ function serializeCustomOutlierCondition(condition) {
 }
 
 function validateCustomOutlierRuleSelection(rules) {
-  if (Array.isArray(rules) && rules.length > 0) return true;
+  if (!Array.isArray(rules) || rules.length === 0) {
+    return showCustomOutlierValidationError(
+      "Add at least one custom outlier rule before submitting.",
+    );
+  }
+  for (const rule of rules) {
+    const ruleName = rule.name || rule.id || "Custom outlier rule";
+    const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
+    if (error) return showCustomOutlierValidationError(error);
+  }
+  return true;
+}
+
+function validateCustomOutlierCriteria(criteria, ruleName) {
+  if (!criteria || typeof criteria !== "object") {
+    return `${ruleName} requires criteria.`;
+  }
+  if (criteria.op === "and" || criteria.op === "or") {
+    if (!Array.isArray(criteria.conditions) || criteria.conditions.length === 0) {
+      return `${ruleName} requires at least one condition.`;
+    }
+    for (const condition of criteria.conditions) {
+      const error = validateCustomOutlierCriteria(condition, ruleName);
+      if (error) return error;
+    }
+    return null;
+  }
+  if (criteria.op === "not") {
+    if (!criteria.condition) {
+      return `${ruleName} requires a condition for NOT.`;
+    }
+    return validateCustomOutlierCriteria(criteria.condition, ruleName);
+  }
+  if (criteria.type === "range") {
+    const hasMin = criteria.min !== undefined && criteria.min !== "";
+    const hasMax = criteria.max !== undefined && criteria.max !== "";
+    if (!hasMin && !hasMax) {
+      return `${ruleName} range condition requires min or max.`;
+    }
+    for (const field of ["min", "max"]) {
+      if (
+        criteria[field] !== undefined &&
+        criteria[field] !== "" &&
+        !Number.isFinite(Number(criteria[field]))
+      ) {
+        return `${ruleName} range ${field} must be a finite number.`;
+      }
+    }
+    return null;
+  }
+  if (criteria.type === "regex") return null;
+  return `${ruleName} has an unsupported condition type.`;
+}
+
+function showCustomOutlierValidationError(text) {
   const message = document.getElementById("custom-outlier-message");
   if (message) {
-    message.textContent =
-      "Add at least one custom outlier rule before submitting.";
+    message.textContent = text;
     message.classList.remove("hidden");
   }
   if (typeof showToast === "function") {
-    showToast(
-      "Add at least one custom outlier rule before submitting.",
-      "error",
-    );
+    showToast(text, "error");
   }
   return false;
 }
