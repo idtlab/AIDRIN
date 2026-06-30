@@ -2112,7 +2112,9 @@ function renderHdf5DatasetPicker(container, data) {
   }
 
   function datasetLength(ds) {
-    return Array.isArray(ds?.shape) && ds.shape.length === 1 ? ds.shape[0] : null;
+    return Array.isArray(ds?.shape) && ds.shape.length === 1
+      ? ds.shape[0]
+      : null;
   }
 
   function renderDatasetRow(ds) {
@@ -2158,7 +2160,9 @@ function renderHdf5DatasetPicker(container, data) {
 
   groups.forEach((group) => {
     const groupId = escapeHtml(group.id);
-    const memberPaths = (group.dataset_paths || []).map((path) => escapeHtml(path)).join(",");
+    const memberPaths = (group.dataset_paths || [])
+      .map((path) => escapeHtml(path))
+      .join(",");
     html += `
       <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/20" data-hdf5-group="${groupId}">
         <label class="flex items-center gap-3 px-3 py-2 border-b border-gray-200 dark:border-gray-600 cursor-pointer">
@@ -2202,7 +2206,9 @@ function renderHdf5DatasetPicker(container, data) {
   const errorEl = document.getElementById("hdf5-selection-error");
 
   function getSelectedCheckboxes() {
-    return Array.from(container.querySelectorAll(".hdf5-dataset-checkbox:checked"));
+    return Array.from(
+      container.querySelectorAll(".hdf5-dataset-checkbox:checked"),
+    );
   }
 
   function getSelectionAnchor() {
@@ -2255,7 +2261,9 @@ function renderHdf5DatasetPicker(container, data) {
         .filter(Boolean);
       const memberCbs = paths
         .map((path) =>
-          container.querySelector(`.hdf5-dataset-checkbox[value="${CSS.escape(path)}"]`),
+          container.querySelector(
+            `.hdf5-dataset-checkbox[value="${CSS.escape(path)}"]`,
+          ),
         )
         .filter(Boolean);
       const enabledMembers = memberCbs.filter((cb) => !cb.disabled);
