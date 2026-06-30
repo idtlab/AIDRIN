@@ -1002,12 +1002,14 @@ function renderGlobusSummary(data) {
       </div>
     `;
 
-    if (data.summary_statistics) {
+    if (
+      data.summary_statistics &&
+      Object.keys(data.summary_statistics).length > 0
+    ) {
       const features = Object.keys(data.summary_statistics);
-      const allStats =
-        features.length > 0
-          ? Object.keys(data.summary_statistics[features[0]])
-          : [];
+      const allStats = Object.keys(data.summary_statistics[features[0]]);
+      html +=
+        '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Numerical Features</h3>';
       const preferredOrder = [
         "count",
         "min",
@@ -1046,6 +1048,8 @@ function renderGlobusSummary(data) {
       });
       html += "</tbody></table></div>";
     }
+
+    html += buildCategoricalSummaryTable(data.categorical_summary);
 
     content.innerHTML = html;
   }
@@ -2048,6 +2052,55 @@ function submitCustomMetric() {
     });
 }
 
+/**
+ * Build the categorical-features summary table from the /summary-statistics
+ * `categorical_summary` payload. Returns "" when there are no categorical
+ * features so callers can append unconditionally.
+ * @param {Object} summary - {column: {count, unique, top, freq}}
+ */
+function buildCategoricalSummaryTable(summary) {
+  if (!summary || Object.keys(summary).length === 0) return "";
+  const cols = ["count", "unique", "top", "freq", "freq_pct"];
+  const labels = {
+    count: "Count",
+    unique: "Unique",
+    top: "Top",
+    freq: "Freq",
+    freq_pct: "Freq %",
+  };
+  let html =
+    '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mt-6 mb-3 uppercase tracking-wide">Categorical Features</h3>';
+  html += '<div class="relative overflow-x-auto rounded-lg shadow-sm">';
+  html +=
+    '<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
+  html +=
+    '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>';
+  html += '<th scope="col" class="px-4 py-3">Feature</th>';
+  cols.forEach((c) => {
+    html += `<th scope="col" class="px-4 py-3 text-right">${labels[c]}</th>`;
+  });
+  html += "</tr></thead><tbody>";
+  Object.keys(summary).forEach((feat, i) => {
+    const stripe =
+      i % 2 === 0
+        ? "bg-white dark:bg-gray-800"
+        : "bg-gray-50 dark:bg-gray-700/50";
+    const row = summary[feat] || {};
+    html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+    html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(feat)}</td>`;
+    cols.forEach((c) => {
+      let val;
+      if (c === "top") val = escapeHtml(String(row[c] ?? "—"));
+      else if (c === "freq_pct") val = `${row[c] ?? 0}%`;
+      else val = row[c] ?? "—";
+      html += `<td class="px-4 py-2 font-mono text-xs text-right">${val}</td>`;
+    });
+    html += "</tr>";
+  });
+  html += "</tbody></table></div>";
+  return html;
+}
+
 // ==================== Histograms ====================
 
 /**
@@ -2073,7 +2126,7 @@ function renderWorkspaceHistograms(histograms) {
   }
 
   let html =
-    '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Feature Distributions</h3>';
+    '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Numerical Feature Distributions</h3>';
   html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">';
 
   for (const [colName, base64] of Object.entries(columns)) {
@@ -2140,12 +2193,14 @@ function initWorkspace() {
         `;
 
         // Summary statistics table — pivoted: rows = features, columns = stats
-        if (data.summary_statistics) {
+        if (
+          data.summary_statistics &&
+          Object.keys(data.summary_statistics).length > 0
+        ) {
           const features = Object.keys(data.summary_statistics);
-          const allStats =
-            features.length > 0
-              ? Object.keys(data.summary_statistics[features[0]])
-              : [];
+          const allStats = Object.keys(data.summary_statistics[features[0]]);
+          html +=
+            '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Numerical Features</h3>';
           // Preferred order
           const preferredOrder = [
             "count",
@@ -2187,6 +2242,8 @@ function initWorkspace() {
 
           html += "</tbody></table></div>";
         }
+
+        html += buildCategoricalSummaryTable(data.categorical_summary);
 
         container.innerHTML = html;
 
