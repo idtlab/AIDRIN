@@ -273,3 +273,163 @@ class TestUndefinedNativeFillValue:
         assert df is not None
         assert len(df) == len(data)
         assert df.iloc[:, 0].tolist() == data.tolist()
+
+
+class TestIncompatibleRootLayout:
+
+    def _write_root_datasets(self, path, shapes):
+        with h5py.File(path, "w") as f:
+            for i, length in enumerate(shapes):
+                f.create_dataset(f"D{i}.values", data=np.arange(length, dtype=np.int32))
+
+    def test_parse_lists_root_dataset_paths(self, tmp_path, logger):
+        fpath = str(tmp_path / "multi_root.h5")
+        self._write_root_datasets(fpath, [16, 47])
+
+        paths = hdf5Reader(fpath, logger).parse()
+        assert paths == ["D0.values", "D1.values"]
+
+    def test_read_refuses_incompatible_root_flatten(self, tmp_path, logger):
+        fpath = str(tmp_path / "multi_root.h5")
+        self._write_root_datasets(fpath, [16, 47])
+
+        reader = hdf5Reader(fpath, logger)
+        assert reader.inventory()["type"] == "multi_dataset"
+        assert reader.read() is None
+
+    def test_read_selected_dataset_path(self, tmp_path, logger, monkeypatch):
+        mock_session = type("Session", (), {"get": lambda self, key, default=None: ["D0.values"] if key == "selected_keys" else default})()
+        monkeypatch.setattr(
+            "aidrin.file_handling.readers.hdf5_reader.session",
+            mock_session,
+        )
+
+        fpath = str(tmp_path / "multi_root.h5")
+        self._write_root_datasets(fpath, [16, 47])
+        df = hdf5Reader(fpath, logger).read()
+
+        assert df is not None
+        assert len(df) == 16
+        assert "D0.values" in df.columns
+
+    def test_read_multiple_compatible_datasets(self, tmp_path, logger, monkeypatch):
+        fpath = str(tmp_path / "multi_cols.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.fill_starts", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.nreqs", data=np.arange(16, 32, dtype=np.int32))
+            f.create_dataset("D1.lengths", data=np.arange(47, dtype=np.int32))
+
+        keys = ["D1.fill_starts", "D1.nreqs"]
+        mock_session = type(
+            "Session",
+            (),
+            {"get": lambda self, key, default=None: keys if key == "selected_keys" else default},
+        )()
+        monkeypatch.setattr(
+            "aidrin.file_handling.readers.hdf5_reader.session",
+            mock_session,
+        )
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert df.shape == (16, 2)
+        assert list(df.columns) == ["D1.fill_starts", "D1.nreqs"]
+
+    def test_read_multiple_incompatible_lengths_returns_none(self, tmp_path, logger, monkeypatch):
+        fpath = str(tmp_path / "multi_cols_bad.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.nreqs", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.lengths", data=np.arange(47, dtype=np.int32))
+
+        keys = ["D1.nreqs", "D1.lengths"]
+        mock_session = type(
+            "Session",
+            (),
+            {"get": lambda self, key, default=None: keys if key == "selected_keys" else default},
+        )()
+        monkeypatch.setattr(
+            "aidrin.file_handling.readers.hdf5_reader.session",
+            mock_session,
+        )
+
+        assert hdf5Reader(fpath, logger).read() is None
+
+    def test_inventory_includes_dot_prefix_groups(self, tmp_path, logger):
+        fpath = str(tmp_path / "grouped_root.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.fill_starts", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.nreqs", data=np.arange(16, 32, dtype=np.int32))
+            f.create_dataset("D2.fill_starts", data=np.arange(47, dtype=np.int32))
+            f.create_dataset("D2.nreqs", data=np.arange(47, 79, dtype=np.int32))
+
+        inv = hdf5Reader(fpath, logger).inventory()
+        assert inv["type"] == "multi_dataset"
+        groups = {group["id"]: group for group in inv["groups"]}
+        assert set(groups) == {"D1", "D2"}
+        assert groups["D1"]["dataset_paths"] == ["D1.fill_starts", "D1.nreqs"]
+        assert groups["D2"]["dataset_paths"] == ["D2.fill_starts", "D2.nreqs"]
+
+    def test_inventory_includes_hdf5_group_subtrees(self, tmp_path, logger):
+        fpath = str(tmp_path / "nested_groups.h5")
+        with h5py.File(fpath, "w") as f:
+            grp = f.create_group("runA")
+            grp.create_dataset("temp", data=np.arange(8, dtype=np.int32))
+            grp.create_dataset("pressure", data=np.arange(8, 16, dtype=np.int32))
+            f.create_dataset("solo", data=np.arange(3, dtype=np.int32))
+
+        inv = hdf5Reader(fpath, logger).inventory()
+        assert inv["type"] == "legacy"
+        groups = inv["groups"]
+        assert groups == []
+
+        reader = hdf5Reader(fpath, logger)
+        datasets = reader._list_datasets()
+        groups = reader._build_picker_groups(datasets)
+        assert len(groups) == 1
+        assert groups[0]["id"] == "runA"
+        assert set(groups[0]["dataset_paths"]) == {"runA/temp", "runA/pressure"}
+
+    def test_read_uses_explicit_selected_keys_without_session(self, tmp_path, logger):
+        fpath = str(tmp_path / "multi_cols_ok.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.fill_starts", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.nreqs", data=np.arange(16, 32, dtype=np.int32))
+            f.create_dataset("D1.lengths", data=np.arange(47, dtype=np.int32))
+
+        keys = ["D1.fill_starts", "D1.nreqs"]
+        df = hdf5Reader(fpath, logger, selected_keys=keys).read()
+        assert df is not None
+        assert df.shape == (16, 2)
+
+    def test_read_file_passes_selected_keys_for_celery(self, tmp_path, logger):
+        from aidrin.file_handling.file_parser import read_file
+
+        fpath = str(tmp_path / "multi_cols_ok.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.fill_starts", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.nreqs", data=np.arange(16, 32, dtype=np.int32))
+            f.create_dataset("D1.lengths", data=np.arange(47, dtype=np.int32))
+
+        keys = ["D1.fill_starts", "D1.nreqs"]
+        df = read_file((fpath, "multi_cols_ok.h5", ".h5", keys))
+        assert df is not None
+        assert df.shape == (16, 2)
+
+    def test_adult_sample_still_reads(self, logger):
+        from pathlib import Path
+
+        sample = (
+            Path(__file__).resolve().parents[2]
+            / "web"
+            / "static"
+            / "datasets"
+            / "test_data"
+            / "h5"
+            / "adult.h5"
+        )
+        if not sample.is_file():
+            pytest.skip("adult.h5 sample not available")
+
+        df = hdf5Reader(str(sample), logger).read()
+        assert df is not None
+        assert not df.empty

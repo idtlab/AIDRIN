@@ -51,6 +51,7 @@ from aidrin.structured_data_metrics.representation_rate import (
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 from web.routes.utils import (
+    build_file_info,
     ensure_json_serializable,
     format_dict_values,
     generate_metric_cache_key,
@@ -62,6 +63,7 @@ from web.routes.utils import (
 metrics_bp = Blueprint("metrics", __name__)
 
 metric_time_log = logging.getLogger("metric")
+METRIC_CELERY_TIMEOUT = 120
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +76,7 @@ def data_quality():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
+    file_info = build_file_info(file_path, file_name, file_type)
 
     if request.method == "POST":
         start_time = time.time()
@@ -147,7 +149,7 @@ def fairness():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
+    file_info = build_file_info(file_path, file_name, file_type)
     file = read_file(file_info)
 
     if request.method == "POST":
@@ -213,31 +215,39 @@ def fairness():
             target = request.form.get("target for conditional demographic disparity")
             sensitive = request.form.get("sensitive for conditional demographic disparity")
             accepted_value = request.form.get("target value for conditional demographic disparity")
-            try:
-                cdd_result = conditional_demographic_disparity.delay(
-                    file[target].to_list(), file[sensitive].to_list(), accepted_value
-                )
-                cdd_dict = cdd_result.get(timeout=60)
-            except Exception as e:
-                metric_time_log.error("Error during Conditional Demographic Disparity analysis: %s", e)
-                final_dict["Conditional Demographic Disparity"] = {"Error": str(e)}
-                cdd_dict = None
-            if cdd_dict is not None:
-                cdd_dict["Description"] = (
-                    "The conditional demographic disparity metric evaluates the distribution "
-                    "of outcomes categorized as positive and negative across various sensitive groups. "
-                    "The user specifies which outcome category is considered \"positive\" for the analysis, "
-                    "with all other outcome categories classified as \"negative\". The metric calculates the "
-                    "proportion of outcomes classified as \"positive\" and \"negative\" within each sensitive group."
-                    " A resulting disparity value of True indicates that within a specific sensitive group, "
-                    "the proportion of outcomes classified as \"negative\" exceeds the proportion classified as"
-                    " \"positive\". This metric provides insights into potential disparities in outcome distribution "
-                    "across sensitive groups based on the user-defined positive outcome criterion."
-                )
-                final_dict["Conditional Demographic Disparity"] = cdd_dict
-                metric_time_log.info(
-                    "Conditional Demographic Disparity took %.2f seconds", time.time() - t0
-                )
+            if not accepted_value or not str(accepted_value).strip():
+                final_dict["Conditional Demographic Disparity"] = {
+                    "Error": (
+                        "Please enter a target value for Conditional Demographic "
+                        "Disparity (a value that exists in the target column)."
+                    )
+                }
+            else:
+                try:
+                    cdd_result = conditional_demographic_disparity.delay(
+                        file[target].to_list(), file[sensitive].to_list(), accepted_value
+                    )
+                    cdd_dict = cdd_result.get(timeout=60)
+                except Exception as e:
+                    metric_time_log.error("Error during Conditional Demographic Disparity analysis: %s", e)
+                    final_dict["Conditional Demographic Disparity"] = {"Error": str(e)}
+                    cdd_dict = None
+                if cdd_dict is not None:
+                    cdd_dict["Description"] = (
+                        "The conditional demographic disparity metric evaluates the distribution "
+                        "of outcomes categorized as positive and negative across various sensitive groups. "
+                        "The user specifies which outcome category is considered \"positive\" for the analysis, "
+                        "with all other outcome categories classified as \"negative\". The metric calculates the "
+                        "proportion of outcomes classified as \"positive\" and \"negative\" within each sensitive group."
+                        " A resulting disparity value of True indicates that within a specific sensitive group, "
+                        "the proportion of outcomes classified as \"negative\" exceeds the proportion classified as"
+                        " \"positive\". This metric provides insights into potential disparities in outcome distribution "
+                        "across sensitive groups based on the user-defined positive outcome criterion."
+                    )
+                    final_dict["Conditional Demographic Disparity"] = cdd_dict
+                    metric_time_log.info(
+                        "Conditional Demographic Disparity took %.2f seconds", time.time() - t0
+                    )
 
         duration = time.time() - start_time
         metric_time_log.info("Fairness completed in %.2f seconds", duration)
@@ -276,11 +286,11 @@ def correlation_analysis():
                     if col.strip()
                 ]
                 columns = cat_cols + num_cols
-                file_info = (file_path, file_name, file_type)
+                file_info = build_file_info(file_path, file_name, file_type)
                 metric_time_log.info("Correlation Analysis: %d categorical, %d numerical columns", len(cat_cols), len(num_cols))
 
                 correlations_result = calc_correlations.delay(columns, file_info)
-                corr_dict = correlations_result.get()
+                corr_dict = correlations_result.get(timeout=METRIC_CELERY_TIMEOUT)
                 if "Message" in corr_dict:
                     metric_time_log.warning("Correlation analysis failed: %s", corr_dict["Message"])
                     final_dict["Error"] = corr_dict["Message"]
@@ -348,10 +358,10 @@ def feature_relevance():
                         "error": "The target feature cannot also be selected as an input feature. "
                                  "Please deselect it from the categorical/numerical features list.",
                     }), 200
-                file_info = (file_path, file_name, file_type)
+                file_info = build_file_info(file_path, file_name, file_type)
                 t0 = time.time()
                 data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
-                df_json = data_cleaning_result.get()
+                df_json = data_cleaning_result.get(timeout=METRIC_CELERY_TIMEOUT)
                 metric_time_log.info("Feature Relevance — data cleaning took %.2f seconds", time.time() - t0)
 
                 if isinstance(df_json, dict) and "Error" in df_json:
@@ -365,7 +375,7 @@ def feature_relevance():
             try:
                 t0 = time.time()
                 pearson_corr_result = pearson_correlation.delay(df_json, target)
-                correlations = pearson_corr_result.get()
+                correlations = pearson_corr_result.get(timeout=METRIC_CELERY_TIMEOUT)
                 metric_time_log.info("Feature Relevance — Pearson correlation took %.2f seconds", time.time() - t0)
 
                 if isinstance(correlations, dict) and "Error" in correlations:
@@ -381,7 +391,7 @@ def feature_relevance():
             try:
                 t0 = time.time()
                 plot_features_result = plot_features.delay(correlations, target)
-                f_plot = plot_features_result.get()
+                f_plot = plot_features_result.get(timeout=METRIC_CELERY_TIMEOUT)
                 metric_time_log.info("Feature Relevance — plot generation took %.2f seconds", time.time() - t0)
                 if f_plot is None:
                     return jsonify({"trigger": "correlationError", "error": "Visualization generation failed"}), 200
@@ -425,7 +435,7 @@ def class_imbalance():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
+    file_info = build_file_info(file_path, file_name, file_type)
     file = read_file(file_info)
 
     if request.method == "POST":
@@ -510,7 +520,7 @@ def privacy_preservation():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
+    file_info = build_file_info(file_path, file_name, file_type)
     file = read_file(file_info)
 
     if request.method == "POST":
@@ -716,7 +726,7 @@ def hipaa_compliance():
     data_file_path = session.get("uploaded_file_path")
     data_file_name = session.get("uploaded_file_name")
     data_file_type = session.get("uploaded_file_type")
-    file_info = (data_file_path, data_file_name, data_file_type)
+    file_info = build_file_info(data_file_path, data_file_name, data_file_type)
 
     if request.method == "POST":
         metric_time_log.info("HIPAA Compliance Evaluation Request Started")
