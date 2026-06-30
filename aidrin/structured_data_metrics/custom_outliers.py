@@ -269,9 +269,12 @@ def _validate_criteria_node(node, rule_id, path):
 
 def _coerce_bound(value, rule_id, field):
     try:
-        return float(value)
+        numeric = float(value)
     except (TypeError, ValueError):
         raise ValueError(f"Range rule {rule_id} has non-numeric {field}: {value}")
+    if not np.isfinite(numeric):
+        raise ValueError(f"Range rule {rule_id} has non-finite {field}: {value}")
+    return numeric
 
 
 def _target_map(file_info):

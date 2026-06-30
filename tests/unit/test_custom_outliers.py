@@ -181,6 +181,21 @@ def test_range_allows_one_sided_bounds_and_reports_non_numeric():
     assert [item["flag"] for item in preview] == ["NaN", "> 10 by 2"]
 
 
+def test_range_rejects_non_finite_bounds():
+    fi = _write_csv(pd.DataFrame({"value": [1, 2, 3]}))
+    try:
+        with pytest.raises(ValueError, match="non-finite min"):
+            calculate_custom_outliers(fi, [
+                _range_rule("nan-min", "value", min_value=float("nan"))
+            ])
+        with pytest.raises(ValueError, match="non-finite max"):
+            calculate_custom_outliers(fi, [
+                _range_rule("inf-max", "value", max_value=float("inf"))
+            ])
+    finally:
+        _clean(fi[0])
+
+
 def test_compound_and_uses_all_conditions_as_valid_expression():
     fi = _write_csv(pd.DataFrame({"value": [5, 12, 25]}))
     rules = [{

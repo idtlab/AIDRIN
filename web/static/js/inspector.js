@@ -1730,7 +1730,9 @@ function serializeCustomOutlierCriteria(row) {
     .map(serializeCustomOutlierCondition)
     .filter(Boolean);
   if (op === "not") {
-    return { op: "not", condition: conditions[0] };
+    if (conditions.length === 0) return { op: "not", condition: null };
+    if (conditions.length === 1) return { op: "not", condition: conditions[0] };
+    return { op: "not", condition: { op: "or", conditions } };
   }
   return { op, conditions };
 }
@@ -1766,18 +1768,61 @@ function serializeCustomOutlierCondition(condition) {
 }
 
 function validateCustomOutlierRuleSelection(rules) {
-  if (Array.isArray(rules) && rules.length > 0) return true;
+  if (!Array.isArray(rules) || rules.length === 0) {
+    const message = document.getElementById("custom-outlier-message");
+    if (message) {
+      message.textContent =
+        "Add at least one custom outlier rule before submitting.";
+      message.classList.remove("hidden");
+    }
+    if (typeof showToast === "function") {
+      showToast(
+        "Add at least one custom outlier rule before submitting.",
+        "error",
+      );
+    }
+    return false;
+  }
+
+  const hasValidRuleCriteria = (criteria) => {
+    if (!criteria || typeof criteria !== "object") return false;
+
+    const op = String(criteria.op || "").toLowerCase();
+    if (op === "and" || op === "or") {
+      return (
+        Array.isArray(criteria.conditions) &&
+        criteria.conditions.length > 0 &&
+        criteria.conditions.every(hasValidRuleCriteria)
+      );
+    }
+    if (op === "not") {
+      return hasValidRuleCriteria(criteria.condition);
+    }
+
+    const type = String(criteria.type || "").toLowerCase();
+    if (type === "range") {
+      const hasMin = criteria.min !== undefined && criteria.min !== "";
+      const hasMax = criteria.max !== undefined && criteria.max !== "";
+      return hasMin || hasMax;
+    }
+    if (type === "regex") {
+      return typeof criteria.pattern === "string" && criteria.pattern.trim() !== "";
+    }
+    return false;
+  };
+
+  const invalidRule = rules.find((rule) => !hasValidRuleCriteria(rule?.criteria));
+  if (!invalidRule) return true;
+
+  const invalidRuleName = invalidRule.name || invalidRule.id || "rule";
+  const errorText = `Custom outlier rule "${invalidRuleName}" has invalid criteria. Add at least one valid condition and include min and/or max for range conditions.`;
   const message = document.getElementById("custom-outlier-message");
   if (message) {
-    message.textContent =
-      "Add at least one custom outlier rule before submitting.";
+    message.textContent = errorText;
     message.classList.remove("hidden");
   }
   if (typeof showToast === "function") {
-    showToast(
-      "Add at least one custom outlier rule before submitting.",
-      "error",
-    );
+    showToast(errorText, "error");
   }
   return false;
 }
