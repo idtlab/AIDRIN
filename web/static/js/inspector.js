@@ -1794,7 +1794,10 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
     return `${ruleName} requires criteria.`;
   }
   if (criteria.op === "and" || criteria.op === "or") {
-    if (!Array.isArray(criteria.conditions) || criteria.conditions.length === 0) {
+    if (
+      !Array.isArray(criteria.conditions) ||
+      criteria.conditions.length === 0
+    ) {
       return `${ruleName} requires at least one condition.`;
     }
     for (const condition of criteria.conditions) {
