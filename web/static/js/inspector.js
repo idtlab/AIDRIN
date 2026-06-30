@@ -1733,9 +1733,13 @@ function serializeCustomOutlierCriteria(row) {
   )
     .map(serializeCustomOutlierCondition)
     .filter(Boolean);
+
   if (op === "not") {
-    return { op: "not", condition: conditions[0] };
+    if (conditions.length === 0) return { op: "not", condition: null };
+    if (conditions.length === 1) return { op: "not", condition: conditions[0] };
+    return { op: "not", condition: { op: "or", conditions } };
   }
+
   return { op, conditions };
 }
 
