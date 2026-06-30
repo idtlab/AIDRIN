@@ -3010,23 +3010,24 @@ function renderReadinessDatasetOverview(container, overview) {
   }
 
   const catCharts = overview.categorical_charts || {};
-  const catDistMeta = overview.categorical_distributions_meta || {};
   const catChartCols = Object.keys(catCharts);
   const hasHistograms =
     overview.histograms && Object.keys(overview.histograms).length > 0;
   const vizDeferred = overview.visualizations_deferred;
-  const catDists = overview.categorical_distributions || {};
+  const profileNumericalCount = profiles.filter((p) => p.type === "numerical").length;
+  const profileCategoricalCount = profiles.filter((p) => p.type === "categorical").length;
   const showCatCharts =
     catChartCols.length > 0 ||
-    (vizDeferred && Object.keys(catDists).length > 0);
+    (vizDeferred && profileCategoricalCount > 0);
   const showHistograms =
-    hasHistograms || (vizDeferred && (allNumFeatures.length > 0 || numMeta.total > 0));
+    hasHistograms || (vizDeferred && profileNumericalCount > 0);
+
+  if ((showCatCharts || showHistograms) && profileMeta.truncated) {
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Distribution charts use the same ${profileMeta.shown.toLocaleString()} features shown in the profile table above (prioritized: poor → warning → good).</p>`;
+  }
 
   if (showCatCharts) {
     detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical value distributions</p>`;
-    if (catDistMeta.truncated) {
-      detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing first ${catDistMeta.shown} of ${catDistMeta.total} categorical features.</p>`;
-    }
     detailsInner += `<div id="readiness-categorical-charts" class="mb-4"></div>`;
   }
 

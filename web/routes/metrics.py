@@ -341,6 +341,14 @@ def _prepare_feature_profiles_for_display(
     return [profile for _, profile in ranked[:max_profiles]], meta
 
 
+def _dataframe_for_overview_detail_charts(df, display_profiles):
+    """Subset *df* to capped profile-table features for overview detail charts."""
+    cols = [p["feature"] for p in display_profiles if p["feature"] in df.columns]
+    if not cols:
+        return df.iloc[:, :0]
+    return df[cols]
+
+
 def _build_categorical_distributions(df, top_n=_OVERVIEW_CAT_TOP_N, max_columns=None):
     """Top-*n* value counts (with percentages) for each categorical column."""
     distributions = {}
@@ -436,8 +444,9 @@ def _build_dataset_overview_section(file_info, include_visualizations=False):
         "visualizations_deferred": not include_visualizations,
     }
     if include_visualizations:
-        overview["categorical_charts"] = categorical_distribution_charts(df)
-        overview["histograms"] = summary_histograms(df, figsize=(7, 4.5))
+        chart_df = _dataframe_for_overview_detail_charts(df, display_profiles)
+        overview["categorical_charts"] = categorical_distribution_charts(chart_df)
+        overview["histograms"] = summary_histograms(chart_df, figsize=(7, 4.5))
     return overview
 
 
@@ -2008,9 +2017,12 @@ def _build_dataset_overview_visualizations(file_info):
     df = read_file(file_info)
     if hasattr(df, "columns"):
         df.columns = [str(c) for c in df.columns]
+    profiles, _ = _build_feature_profiles(df)
+    display_profiles, _ = _prepare_feature_profiles_for_display(profiles)
+    chart_df = _dataframe_for_overview_detail_charts(df, display_profiles)
     return {
-        "categorical_charts": categorical_distribution_charts(df),
-        "histograms": summary_histograms(df, figsize=(7, 4.5)),
+        "categorical_charts": categorical_distribution_charts(chart_df),
+        "histograms": summary_histograms(chart_df, figsize=(7, 4.5)),
     }
 
 

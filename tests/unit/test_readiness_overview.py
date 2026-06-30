@@ -8,6 +8,7 @@ from web.routes.metrics import (
     _build_categorical_distributions,
     _build_numerical_summary_for_overview,
     _cap_detail_list,
+    _dataframe_for_overview_detail_charts,
     _prepare_feature_profiles_for_display,
 )
 
@@ -43,6 +44,19 @@ class TestBuildCategoricalDistributions(unittest.TestCase):
         self.assertEqual(len(dists), 50)
         self.assertTrue(meta["truncated"])
         self.assertEqual(meta["total"], 80)
+
+
+class TestDataframeForOverviewDetailCharts(unittest.TestCase):
+    def test_uses_capped_profile_features_only(self):
+        profiles = (
+            [{"feature": f"p{i}", "status": "poor", "type": "numerical"} for i in range(3)]
+            + [{"feature": f"g{i}", "status": "good", "type": "numerical"} for i in range(10)]
+        )
+        df = pd.DataFrame({p["feature"]: range(5) for p in profiles})
+        display, meta = _prepare_feature_profiles_for_display(profiles, max_profiles=5)
+        self.assertTrue(meta["truncated"])
+        chart_df = _dataframe_for_overview_detail_charts(df, display)
+        self.assertEqual(list(chart_df.columns), [p["feature"] for p in display])
 
 
 class TestPrepareFeatureProfilesForDisplay(unittest.TestCase):
