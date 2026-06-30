@@ -731,7 +731,7 @@ function renderWorkspaceResults(data, options) {
             const imgStyle = isHeatmap
               ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
               : "";
-            html += `<img src="${escapeHtml(viz.src)}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
+            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
           }
           html += `</div>`;
         }
@@ -911,7 +911,7 @@ function renderScoresSection(scores, depth) {
     else if (
       key === "apply_remedy" &&
       typeof value === "string" &&
-      value.startsWith("/download-remedy/")
+      value.includes("/download-remedy/")
     ) {
       html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">`;
       html += `<span class="font-medium text-gray-900 dark:text-white">Remedied Dataset</span>`;
@@ -2051,7 +2051,7 @@ function buildResultCard(type, results) {
           const imgStyle = isHeatmap
             ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
             : "";
-          html += `<img src="${escapeHtml(viz.src)}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
+          html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
         }
         html += `</div>`;
       }

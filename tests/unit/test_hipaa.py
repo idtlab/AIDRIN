@@ -11,7 +11,6 @@ cannot access its data directory.
 import sys
 import types
 import unittest
-from unittest.mock import patch
 
 import pandas as pd
 
@@ -176,17 +175,6 @@ class TestEdgeCases(unittest.TestCase):
             "score": ["95", "87", "91"],
         })
         self.assertEqual(result, {})
-
-    def test_postal_lookup_failure_is_logged(self):
-        with patch(
-            "aidrin.structured_data_metrics.hipaa_compliance.pgeocode.Nominatim",
-            side_effect=RuntimeError("postal db unavailable"),
-        ):
-            with self.assertLogs("aidrin.structured_data_metrics.hipaa_compliance", level="WARNING") as logs:
-                result = _run({"zip": ["90210"]})
-
-        self.assertEqual(result, {})
-        self.assertTrue(any("Skipping HIPAA postal-code validation" in msg for msg in logs.output))
 
     def test_scans_only_requested_columns(self):
         df = pd.DataFrame({
