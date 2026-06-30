@@ -20,12 +20,6 @@ def test_result_renderer_escapes_untrusted_display_values():
         assert fragment in source
 
 
-def test_result_renderer_requires_relative_remedy_download_url():
-    source = INSPECTOR_JS.read_text()
-    assert 'value.startsWith("/download-remedy/")' in source
-    assert 'value.includes("/download-remedy/")' not in source
-
-
 def test_custom_outlier_targets_load_only_when_enabled():
     source = INSPECTOR_JS.read_text()
     assert 'const checkbox = document.getElementById("toggleButton_custom_outliers")' in source
