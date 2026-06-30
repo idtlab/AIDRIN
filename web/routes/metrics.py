@@ -167,7 +167,50 @@ _OVERVIEW_HIGH_CARDINALITY = 50
 _OVERVIEW_ID_UNIQUE_RATIO = 0.9
 _OVERVIEW_CAT_TOP_N = 5
 _OVERVIEW_MAX_FEATURE_PROFILES = 500
+_OVERVIEW_MAX_NUMERICAL_SUMMARY_COLS = 500
+_OVERVIEW_MAX_CATEGORICAL_DIST_COLS = 50
+_READINESS_MAX_DETAIL_LIST_ITEMS = 50
 _PROFILE_STATUS_RANK = {"poor": 0, "warning": 1, "good": 2}
+
+
+def _cap_detail_list(items, max_items):
+    """Return a capped list plus metadata for UI/PDF truncation notes."""
+    total = len(items)
+    if total <= max_items:
+        return items, {"total": total, "shown": total, "truncated": False}
+    return items[:max_items], {
+        "total": total,
+        "shown": max_items,
+        "truncated": True,
+    }
+
+
+def _build_numerical_summary_for_overview(num_df):
+    """Build describe() summary for overview details, capped on wide datasets."""
+    if num_df.empty:
+        return {}, {"total": 0, "shown": 0, "truncated": False}
+
+    total = len(num_df.columns)
+    cols = num_df.columns
+    truncated = total > _OVERVIEW_MAX_NUMERICAL_SUMMARY_COLS
+    if truncated:
+        cols = cols[:_OVERVIEW_MAX_NUMERICAL_SUMMARY_COLS]
+
+    numerical_summary = num_df[cols].describe().to_dict()
+    for v in numerical_summary.values():
+        for old_key in list(v.keys()):
+            if old_key in ["25%", "50%", "75%"]:
+                new_key = old_key.replace("%", "th percentile")
+                v[new_key] = float(v.pop(old_key))
+        for stat_key, stat_val in list(v.items()):
+            if stat_val is not None and not isinstance(stat_val, str):
+                v[stat_key] = float(stat_val)
+
+    return numerical_summary, {
+        "total": total,
+        "shown": len(cols),
+        "truncated": truncated,
+    }
 
 
 def _classify_feature_type(series):
@@ -298,12 +341,18 @@ def _prepare_feature_profiles_for_display(
     return [profile for _, profile in ranked[:max_profiles]], meta
 
 
-def _build_categorical_distributions(df, top_n=_OVERVIEW_CAT_TOP_N):
+def _build_categorical_distributions(df, top_n=_OVERVIEW_CAT_TOP_N, max_columns=None):
     """Top-*n* value counts (with percentages) for each categorical column."""
     distributions = {}
-    for col in df.columns:
-        if _classify_feature_type(df[col]) != "categorical":
-            continue
+    cat_cols = [
+        col for col in df.columns if _classify_feature_type(df[col]) == "categorical"
+    ]
+    total_cat = len(cat_cols)
+    truncated = False
+    if max_columns is not None and total_cat > max_columns:
+        cat_cols = cat_cols[:max_columns]
+        truncated = True
+    for col in cat_cols:
         vc = df[col].value_counts(dropna=True)
         total = len(df[col].dropna())
         if total == 0:
@@ -317,7 +366,12 @@ def _build_categorical_distributions(df, top_n=_OVERVIEW_CAT_TOP_N):
                 "pct": round(float(count) / total, 4),
             })
         distributions[str(col)] = entries
-    return distributions
+    meta = {
+        "total": total_cat,
+        "shown": len(cat_cols),
+        "truncated": truncated,
+    }
+    return distributions, meta
 
 
 def _build_dataset_overview_section(file_info, include_visualizations=False):
@@ -344,18 +398,14 @@ def _build_dataset_overview_section(file_info, include_visualizations=False):
 
     memory_bytes = int(df.memory_usage(deep=True).sum())
 
-    numerical_summary = {}
-    num_df = df.select_dtypes(include="number")
-    if not num_df.empty:
-        numerical_summary = num_df.describe().to_dict()
-        for v in numerical_summary.values():
-            for old_key in list(v.keys()):
-                if old_key in ["25%", "50%", "75%"]:
-                    new_key = old_key.replace("%", "th percentile")
-                    v[new_key] = float(v.pop(old_key))
-            for stat_key, stat_val in list(v.items()):
-                if stat_val is not None and not isinstance(stat_val, str):
-                    v[stat_key] = float(stat_val)
+    numerical_summary, numerical_summary_meta = _build_numerical_summary_for_overview(
+        df.select_dtypes(include="number")
+    )
+    categorical_distributions, categorical_distributions_meta = (
+        _build_categorical_distributions(
+            df, max_columns=_OVERVIEW_MAX_CATEGORICAL_DIST_COLS
+        )
+    )
 
     overview = {
         "file_metadata": {
@@ -373,7 +423,9 @@ def _build_dataset_overview_section(file_info, include_visualizations=False):
         "feature_profiles": display_profiles,
         "feature_profiles_meta": profile_meta,
         "numerical_summary": numerical_summary,
-        "categorical_distributions": _build_categorical_distributions(df),
+        "numerical_summary_meta": numerical_summary_meta,
+        "categorical_distributions": categorical_distributions,
+        "categorical_distributions_meta": categorical_distributions_meta,
         "profile_thresholds": {
             "missing_warning": _OVERVIEW_MISSING_WARNING,
             "missing_poor": _OVERVIEW_MISSING_POOR,
@@ -646,16 +698,19 @@ def _build_impact_on_ai_section(file_info, include_visualizations=False):
         df.columns = [str(c) for c in df.columns]
 
     kept, dropped = _prune_columns_for_corr(df)
+    dropped_capped, dropped_meta = _cap_detail_list(
+        dropped, _READINESS_MAX_DETAIL_LIST_ITEMS
+    )
     if len(kept) < 2:
         return {
             "error": "Not enough usable columns for correlation analysis after pruning.",
             "columns_analyzed": len(kept),
-            "columns_dropped": dropped,
+            "columns_dropped": dropped_capped,
         }
 
     corr = calc_correlations(kept, file_info, include_visualization=include_visualizations)
     if isinstance(corr, dict) and "Message" in corr:
-        return {"error": corr["Message"], "columns_dropped": dropped}
+        return {"error": corr["Message"], "columns_dropped": dropped_capped}
 
     scores = corr.get("Correlation Scores", {}) if isinstance(corr, dict) else {}
     signals = _pairwise_signals(scores)
@@ -728,7 +783,8 @@ def _build_impact_on_ai_section(file_info, include_visualizations=False):
                         "columns (numerical prioritized)."
                     ),
                     "selected": kept,
-                    "excluded": dropped,
+                    "excluded": dropped_capped,
+                    "excluded_meta": dropped_meta,
                 },
                 "thresholds": {
                     "redundant_threshold": _CORR_REDUNDANT_THRESHOLD,
@@ -744,7 +800,7 @@ def _build_impact_on_ai_section(file_info, include_visualizations=False):
             "isolated_features": isolated_features,
         },
         "top_pairs": top_pairs,
-        "columns_dropped": dropped,
+        "columns_dropped": dropped_capped,
         "redundant_pairs": redundant_pairs,
         "leakage_pairs": leakage_pairs,
         "isolated_features": isolated_features,
@@ -867,6 +923,10 @@ def _auto_select_fairness_columns(df):
 
     primary_sensitive = selected_sensitive[0] if selected_sensitive else None
 
+    excluded_capped, excluded_meta = _cap_detail_list(
+        excluded_sensitive, _READINESS_MAX_DETAIL_LIST_ITEMS
+    )
+
     return {
         "sensitive_columns": selected_sensitive,
         "primary_sensitive": primary_sensitive,
@@ -883,7 +943,8 @@ def _auto_select_fairness_columns(df):
                 ),
                 "name_hints": list(_FAIRNESS_SENSITIVE_NAME_HINTS),
                 "selected": selected_sensitive,
-                "excluded": excluded_sensitive,
+                "excluded": excluded_capped,
+                "excluded_meta": excluded_meta,
             },
             "target_column": {
                 "rule": (
@@ -1490,6 +1551,15 @@ def _auto_select_governance_columns(df, fairness_target=None):
     )
     dp_features = [c["feature"] for c in dp_candidates[:_GOV_DP_MAX_FEATURES]]
 
+    qi_excluded_raw = [e for e in excluded if e["role"] == "quasi-identifier"]
+    sens_excluded_raw = [e for e in excluded if e["role"] == "sensitive"]
+    qi_excluded, qi_excluded_meta = _cap_detail_list(
+        qi_excluded_raw, _READINESS_MAX_DETAIL_LIST_ITEMS
+    )
+    sens_excluded, sens_excluded_meta = _cap_detail_list(
+        sens_excluded_raw, _READINESS_MAX_DETAIL_LIST_ITEMS
+    )
+
     return {
         "quasi_identifiers": quasi_identifiers,
         "mm_quasi_identifiers": mm_quasi_identifiers,
@@ -1510,7 +1580,8 @@ def _auto_select_governance_columns(df, fairness_target=None):
                 ),
                 "name_hints": list(_GOV_QI_NAME_HINTS),
                 "selected": quasi_identifiers,
-                "excluded": [e for e in excluded if e["role"] == "quasi-identifier"],
+                "excluded": qi_excluded,
+                "excluded_meta": qi_excluded_meta,
             },
             "sensitive_attribute": {
                 "rule": (
@@ -1520,7 +1591,8 @@ def _auto_select_governance_columns(df, fairness_target=None):
                 ),
                 "name_hints": list(_GOV_SENSITIVE_NAME_HINTS),
                 "selected": sensitive_col,
-                "excluded": [e for e in excluded if e["role"] == "sensitive"],
+                "excluded": sens_excluded,
+                "excluded_meta": sens_excluded_meta,
             },
             "id_column": {
                 "rule": (

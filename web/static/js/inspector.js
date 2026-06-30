@@ -20,6 +20,20 @@ const _READINESS_REPORT_SECTIONS = [
   "data-governance",
 ];
 const _readinessSectionStatus = {};
+const _READINESS_MAX_DETAIL_LIST_ITEMS = 50;
+const _READINESS_MAX_DETAIL_TABLE_ROWS = 500;
+
+/** Render up to *maxItems* list entries plus a “+N more” tail when truncated. */
+function _readinessTruncatedListItems(items, maxItems, renderItem) {
+  const total = items.length;
+  const shown = items.slice(0, maxItems);
+  let html = shown.map(renderItem).join("");
+  const more = total - shown.length;
+  if (more > 0) {
+    html += `<li class="text-xs text-gray-400 dark:text-gray-500">+${more} more not shown</li>`;
+  }
+  return { html, total, shownCount: shown.length };
+}
 
 /**
  * Show a metric panel by ID, hiding all others.
@@ -2551,26 +2565,27 @@ function _stripReadinessPdfUnsafeClasses(root) {
   root.querySelectorAll("*").forEach(strip);
 }
 
-function _prepareReadinessPanelClone(source) {
-  const clone = source.cloneNode(true);
-  clone.removeAttribute("id");
-  clone.classList.remove("metric-panel", "hidden");
-  clone.classList.add("readiness-pdf-export");
-  clone.querySelector("#readiness-export-bar")?.remove();
-  clone.querySelectorAll("details").forEach((el) => el.remove());
-  clone.querySelectorAll(".readiness-viz-slot").forEach((el) => el.remove());
-  clone.querySelectorAll(".info-icon").forEach((el) => el.remove());
-  clone
+function _pruneReadinessNodeForPdf(node) {
+  node.querySelectorAll("details").forEach((el) => el.remove());
+  node.querySelectorAll(".readiness-viz-slot").forEach((el) => el.remove());
+  node.querySelectorAll(".info-icon").forEach((el) => el.remove());
+  node.querySelectorAll(".readiness-build-time").forEach((el) => el.remove());
+  node
     .querySelectorAll("#readiness-categorical-charts, #readiness-histograms-inner")
     .forEach((el) => el.remove());
-  _stripReadinessPdfUnsafeClasses(clone);
-  clone.style.cssText =
+  return node;
+}
+
+function _normalizeReadinessPdfRoot(root) {
+  root.classList.add("readiness-pdf-export");
+  _stripReadinessPdfUnsafeClasses(root);
+  root.style.cssText =
     "background:#ffffff;color:#111827;padding:0;opacity:1;animation:none;";
-  clone.querySelectorAll(".bg-white, .bg-gray-50").forEach((el) => {
+  root.querySelectorAll(".bg-white, .bg-gray-50").forEach((el) => {
     el.style.backgroundColor = el.classList.contains("bg-gray-50") ? "#f9fafb" : "#ffffff";
     el.style.color = "#111827";
   });
-  clone
+  root
     .querySelectorAll(
       ".bg-blue-50, .bg-amber-50, .bg-green-50, .bg-red-50, .bg-green-100, .bg-amber-100, .bg-red-100",
     )
@@ -2583,7 +2598,16 @@ function _prepareReadinessPanelClone(source) {
       else if (el.classList.contains("bg-amber-100")) el.style.backgroundColor = "#fef3c7";
       else if (el.classList.contains("bg-red-100")) el.style.backgroundColor = "#fee2e2";
     });
-  return clone;
+  return root;
+}
+
+/** Clone only scorecard sections for PDF (avoids copying huge collapsed detail trees). */
+function _buildSlimReadinessPanelForPdf(panel) {
+  const root = document.createElement("div");
+  panel.querySelectorAll(":scope > div.rounded-lg.shadow-sm").forEach((card) => {
+    root.appendChild(_pruneReadinessNodeForPdf(card.cloneNode(true)));
+  });
+  return _normalizeReadinessPdfRoot(root);
 }
 
 function _readinessPdfFilename() {
@@ -2609,7 +2633,7 @@ async function _exportReadinessReportPdf() {
   let host = null;
   try {
     const html2pdf = await _loadHtml2PdfLib();
-    const clone = _prepareReadinessPanelClone(panel);
+    const clone = _buildSlimReadinessPanelForPdf(panel);
     host = document.createElement("div");
     host.style.cssText =
       "position:fixed;left:-10000px;top:0;width:900px;background:#fff;padding:0;margin:0;";
@@ -2626,7 +2650,7 @@ async function _exportReadinessReportPdf() {
         filename: _readinessPdfFilename(),
         image: { type: "jpeg", quality: 0.95 },
         html2canvas: {
-          scale: 2,
+          scale: 1,
           useCORS: true,
           logging: false,
           backgroundColor: "#ffffff",
@@ -2936,7 +2960,9 @@ function renderReadinessDatasetOverview(container, overview) {
   let detailsInner = "";
 
   const numSummary = overview.numerical_summary || {};
-  const numFeatures = Object.keys(numSummary);
+  const numMeta = overview.numerical_summary_meta || {};
+  const allNumFeatures = Object.keys(numSummary);
+  const numFeatures = allNumFeatures.slice(0, _READINESS_MAX_DETAIL_TABLE_ROWS);
   if (numFeatures.length > 0) {
     const allStats = Object.keys(numSummary[numFeatures[0]] || {});
     const preferredOrder = [
@@ -2976,19 +3002,31 @@ function renderReadinessDatasetOverview(container, overview) {
       detailsInner += `</tr>`;
     });
     detailsInner += `</tbody></table></div>`;
+    if (numMeta.truncated || allNumFeatures.length > numFeatures.length) {
+      const total = numMeta.total || allNumFeatures.length;
+      const shown = numMeta.shown || numFeatures.length;
+      detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Showing first ${shown} of ${total} numerical features. Profile table lists prioritized features.</p>`;
+    }
   }
 
   const catCharts = overview.categorical_charts || {};
+  const catDistMeta = overview.categorical_distributions_meta || {};
   const catChartCols = Object.keys(catCharts);
   const hasHistograms =
     overview.histograms && Object.keys(overview.histograms).length > 0;
   const vizDeferred = overview.visualizations_deferred;
-  const showCatCharts = catChartCols.length > 0 || (vizDeferred && (overview.categorical_distributions || {}).length);
+  const catDists = overview.categorical_distributions || {};
+  const showCatCharts =
+    catChartCols.length > 0 ||
+    (vizDeferred && Object.keys(catDists).length > 0);
   const showHistograms =
-    hasHistograms || (vizDeferred && numFeatures.length > 0);
+    hasHistograms || (vizDeferred && (allNumFeatures.length > 0 || numMeta.total > 0));
 
   if (showCatCharts) {
     detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical value distributions</p>`;
+    if (catDistMeta.truncated) {
+      detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing first ${catDistMeta.shown} of ${catDistMeta.total} categorical features.</p>`;
+    }
     detailsInner += `<div id="readiness-categorical-charts" class="mb-4"></div>`;
   }
 
@@ -3412,15 +3450,17 @@ function renderReadinessImpact(container, impact) {
     );
   }
   if (dropped.length) {
-    const items = dropped
-      .map(
-        (d) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400 dark:text-gray-500">${d.reason}</span></li>`,
-      )
-      .join("");
+    const excludedMeta = colCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || dropped.length;
+    const { html: items } = _readinessTruncatedListItems(
+      dropped,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400 dark:text-gray-500">${d.reason}</span></li>`,
+    );
     detailsInner += `
       <div class="mb-2">
-        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded columns (${dropped.length})</p>
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded columns (${excludedTotal})</p>
         <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
       </div>`;
   }
@@ -3727,15 +3767,17 @@ function renderReadinessFairness(container, fb) {
 
   const excluded = sensCrit.excluded || [];
   if (excluded.length) {
-    const items = excluded
-      .map(
-        (d) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400">${d.reason}</span></li>`,
-      )
-      .join("");
+    const excludedMeta = sensCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || excluded.length;
+    const { html: items } = _readinessTruncatedListItems(
+      excluded,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400">${d.reason}</span></li>`,
+    );
     detailsInner += `
       <div class="mb-2">
-        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded sensitive candidates (${excluded.length})</p>
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded sensitive candidates (${excludedTotal})</p>
         <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
       </div>`;
   }
@@ -4045,15 +4087,17 @@ function renderReadinessGovernance(container, gov) {
 
   const qiExcluded = qiCrit.excluded || [];
   if (qiExcluded.length) {
-    const items = qiExcluded
-      .map(
-        (d) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400">${d.reason}</span></li>`,
-      )
-      .join("");
+    const excludedMeta = qiCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || qiExcluded.length;
+    const { html: items } = _readinessTruncatedListItems(
+      qiExcluded,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400">${d.reason}</span></li>`,
+    );
     detailsInner += `
       <div class="mb-2">
-        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded quasi-identifier candidates (${qiExcluded.length})</p>
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded quasi-identifier candidates (${excludedTotal})</p>
         <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
       </div>`;
   }
