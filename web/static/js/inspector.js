@@ -541,6 +541,9 @@ function workspaceSubmit(targetUrl) {
   // Show the results section and set loading state
   if (resultsSection) resultsSection.style.display = "block";
 
+  _beginServerProcessing();
+  _setSubmitButtonsDisabled(true);
+
   const resultsContainer = document.getElementById("metrics");
   if (resultsContainer) {
     resultsContainer.innerHTML = `
@@ -576,24 +579,37 @@ function workspaceSubmit(targetUrl) {
         const m = document.getElementById("metrics");
         if (m)
           m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${msg}</div>`;
+        _setSubmitButtonsDisabled(false);
+        _endServerProcessing();
         return;
       }
       if (data.message && !data.trigger && Object.keys(data).length <= 2) {
         const m = document.getElementById("metrics");
         if (m)
           m.innerHTML = `<div class="p-4 text-sm text-yellow-800 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 dark:text-yellow-300" role="alert">${data.message}</div>`;
+        _setSubmitButtonsDisabled(false);
+        _endServerProcessing();
         return;
       }
 
       // Render sync results first (sets innerHTML), then start async polling (appends)
       renderWorkspaceResults(data);
+      // handleAsyncResults acquires one processing token per async task; release
+      // this request's own token unconditionally so the count reflects only the
+      // tasks still running (the last task to finish re-enables Clear session).
       handleAsyncResults(data);
+      if (!_responseHasAsyncTasks(data)) {
+        _setSubmitButtonsDisabled(false);
+      }
+      _endServerProcessing();
     })
     .catch((error) => {
       console.error("Error:", error);
       const m = document.getElementById("metrics");
       if (m)
         m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error.message || String(error)}</div>`;
+      _setSubmitButtonsDisabled(false);
+      _endServerProcessing();
     });
 }
 
@@ -908,6 +924,8 @@ function fetchGlobusSummary() {
 
   if (!endpointId || !filePath) return;
 
+  _beginServerProcessing();
+
   fetch("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -926,21 +944,26 @@ function fetchGlobusSummary() {
         const loading = document.getElementById("globus-summary-loading");
         if (loading)
           loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+        _endServerProcessing();
         return;
       }
       // Cached result — render immediately without polling
       if (data.status === "completed" && data.result) {
         renderGlobusSummary(data.result);
+        _endServerProcessing();
         return;
       }
       if (data.task_id) {
         pollGlobusSummary(data.task_id);
+      } else {
+        _endServerProcessing();
       }
     })
     .catch((err) => {
       const loading = document.getElementById("globus-summary-loading");
       if (loading)
         loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${err.message}</div>`;
+      _endServerProcessing();
     });
 }
 
@@ -1064,6 +1087,7 @@ function pollGlobusSummary(taskId) {
       .then((response) => {
         if (response.status === "completed" && response.result) {
           renderGlobusSummary(response.result);
+          _endServerProcessing();
           // Cache the result so page reloads don't re-fetch
           fetch("/globus/cache-summary", {
             method: "POST",
@@ -1075,12 +1099,16 @@ function pollGlobusSummary(taskId) {
           if (loading)
             loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${response.error || "Failed to load summary"}</div>`;
           _unlockGlobusSidebar();
+          _endServerProcessing();
         } else if (attempts < maxAttempts) {
           setTimeout(poll, 2000);
+        } else {
+          _endServerProcessing();
         }
       })
       .catch((err) => {
         if (attempts < maxAttempts) setTimeout(poll, 3000);
+        else _endServerProcessing();
       });
   };
 
@@ -1179,6 +1207,22 @@ function _reEnableGlobusForm() {
 }
 
 let _globusSubmitInProgress = false;
+let _serverProcessingCount = 0;
+
+/** True while summary load, metric POST, or async polling is in flight. */
+window.isAidrinServerProcessing = function () {
+  return _serverProcessingCount > 0;
+};
+
+function _beginServerProcessing() {
+  _serverProcessingCount++;
+  _syncProcessingUI();
+}
+
+function _endServerProcessing() {
+  if (_serverProcessingCount > 0) _serverProcessingCount--;
+  _syncProcessingUI();
+}
 
 /** Disable or enable all submit buttons in metric panels. */
 function _setSubmitButtonsDisabled(disabled) {
@@ -1194,10 +1238,51 @@ function _setSubmitButtonsDisabled(disabled) {
     });
 }
 
-/** Called when a Globus task finishes (success or failure). */
+/** Disable or enable Clear session buttons in the top bar and mobile file chip. */
+function _setClearSessionButtonsDisabled(disabled) {
+  document.querySelectorAll('button[onclick="clearFile()"]').forEach((btn) => {
+    btn.disabled = disabled;
+    if (disabled) {
+      btn.classList.add(
+        "opacity-50",
+        "cursor-not-allowed",
+        "pointer-events-none",
+      );
+      btn.setAttribute("aria-disabled", "true");
+      btn.title = "Please wait — server is processing";
+    } else {
+      btn.classList.remove(
+        "opacity-50",
+        "cursor-not-allowed",
+        "pointer-events-none",
+      );
+      btn.removeAttribute("aria-disabled");
+      if (btn.getAttribute("aria-label") === "Clear uploaded file") {
+        btn.title = "Clear file";
+      } else if (btn.getAttribute("aria-label") === "New session") {
+        btn.title = "Clear session and start over";
+      } else {
+        btn.removeAttribute("title");
+      }
+    }
+  });
+}
+
+function _syncProcessingUI() {
+  _setClearSessionButtonsDisabled(_serverProcessingCount > 0);
+}
+
+/** Called when a metric or Globus task finishes (success or failure). */
 function _globusTaskDone() {
   _globusSubmitInProgress = false;
   _setSubmitButtonsDisabled(false);
+  _endServerProcessing();
+}
+
+function _responseHasAsyncTasks(data) {
+  return Object.values(data || {}).some(
+    (v) => typeof v === "object" && v !== null && v.is_async && v.task_id,
+  );
 }
 
 /** Submit a metric to run on a remote Globus Compute endpoint. */
@@ -1222,8 +1307,9 @@ function submitGlobusMetric(metricName, params, displayName) {
     return;
   }
 
-  // Block further submissions and disable submit buttons
+  // Block further submissions and disable submit / clear-session controls
   _globusSubmitInProgress = true;
+  _beginServerProcessing();
   _setSubmitButtonsDisabled(true);
 
   // Show results section with spinner
@@ -1299,6 +1385,8 @@ function handleAsyncResults(data) {
       results.is_async &&
       results.task_id
     ) {
+      // One token per task; released by pollAsyncMetric on every terminal path.
+      _beginServerProcessing();
       pollAsyncMetric(results.task_id, type, results.cache_key);
     }
   }
@@ -1314,7 +1402,10 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
   if (resultsSection) resultsSection.style.display = "block";
 
   const metricsDiv = document.getElementById("metrics");
-  if (!metricsDiv) return;
+  if (!metricsDiv) {
+    _globusTaskDone();
+    return;
+  }
 
   // Human-readable metric names for the spinner card
   const metricDisplayNames = {
@@ -1374,7 +1465,10 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
       .then((r) => r.json())
       .then((response) => {
         const card = document.getElementById(placeholderId);
-        if (!card) return;
+        if (!card) {
+          _globusTaskDone();
+          return;
+        }
 
         if (response.status === "completed") {
           // Update stored result for download
@@ -1440,7 +1534,13 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
 
           if (attempts < maxAttempts) {
             setTimeout(poll, 2000);
+          } else {
+            _globusTaskDone();
           }
+        } else {
+          // Unknown/terminal status — release the token so Clear session can't
+          // stay disabled forever.
+          _globusTaskDone();
         }
       })
       .catch((err) => {
@@ -2366,7 +2466,13 @@ function initWorkspace() {
   // Replace current history entry so back button works from the first panel
   history.replaceState({ panel: initialPanel }, "", "#" + initialPanel);
 
-  // Fetch summary statistics
+  // Fetch summary statistics and feature list (disable clear session while loading)
+  let initPending = 2;
+  const initTaskDone = () => {
+    if (--initPending === 0) _endServerProcessing();
+  };
+  _beginServerProcessing();
+
   fetch("/summary-statistics")
     .then((r) => r.json())
     .then((data) => {
@@ -2488,7 +2594,8 @@ function initWorkspace() {
       const container = document.getElementById("workspace-summary");
       if (container)
         container.innerHTML = `<p class="text-sm" style="color: red;">Error loading summary: ${err.message}</p>`;
-    });
+    })
+    .finally(initTaskDone);
 
   // Populate feature dropdowns via /feature-set (same as metric.js does)
   fetch("/feature-set", { method: "POST" })
@@ -2498,7 +2605,8 @@ function initWorkspace() {
         populateWorkspaceDropdowns(data);
       }
     })
-    .catch((err) => console.error("Error fetching features:", err));
+    .catch((err) => console.error("Error fetching features:", err))
+    .finally(initTaskDone);
 
   // Feature relevance: disable target feature in checkbox lists
   const targetDropdown = document.getElementById(

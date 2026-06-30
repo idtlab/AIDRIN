@@ -58,6 +58,13 @@ def inspector():
             session["uploaded_file_type"] = request.form.get("fileTypeSelector")
             session.pop("selected_keys", None)
 
+            # Track files this session created so /clear removes only these,
+            # never files belonging to other concurrent sessions.
+            owned_files = session.get("owned_files", [])
+            if file_path not in owned_files:
+                owned_files.append(file_path)
+            session["owned_files"] = owned_files
+
             return redirect(url_for("core.inspector"))
 
     uploaded_file_name = session.get("uploaded_file_name", "")
@@ -191,20 +198,21 @@ def clear_file():
             except Exception as e:
                 file_upload_time_log.warning("Failed to cancel Globus tasks on clear: %s", e)
 
+    # Capture this session's own files before clearing the session.
+    owned_files = session.get("owned_files", [])
+
     session.pop("uploaded_file_path", None)
     session.pop("uploaded_file_name", None)
     session.pop("uploaded_file_type", None)
     session.pop("minimize_preview", None)
     session.clear()
 
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
     try:
-        for filename in os.listdir(upload_folder):
-            file_path = os.path.join(upload_folder, filename)
-            if os.path.isfile(file_path):
+        for file_path in owned_files:
+            if file_path and os.path.isfile(file_path):
                 os.remove(file_path)
     except Exception:
-        file_upload_time_log.error("File Clear Failure: Unable to clear folder", exc_info=True)
+        file_upload_time_log.error("File Clear Failure: Unable to clear files", exc_info=True)
         return jsonify({"success": False, "error": "An internal error occurred"}), 500
 
     return redirect(url_for("core.inspector"))
@@ -432,9 +440,17 @@ def summary_statistics():
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200
 
-        summary_statistics = df.describe().map(
-            lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
-        ).to_dict()
+        # Restrict to numeric columns: describe() would otherwise fall back to
+        # object-column stats (top/freq are strings) and the numeric formatter
+        # below would fail on them. Datasets with no numerical features simply
+        # get an empty numerical summary (issue #125).
+        numeric_df = df.select_dtypes(include="number")
+        if numeric_df.shape[1] == 0:
+            summary_statistics = {}
+        else:
+            summary_statistics = numeric_df.describe().map(
+                lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
+            ).to_dict()
 
         histograms = summary_histograms(df)
 

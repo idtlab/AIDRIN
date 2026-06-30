@@ -104,9 +104,16 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         ]
         all_features = numerical_columns + categorical_columns
 
-        summary = df.describe().map(
-            lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
-        ).to_dict()
+        # Restrict to numeric columns: describe() would otherwise fall back to
+        # object-column stats (top/freq are strings) and the numeric formatter
+        # below would fail on them when there are no numerical features (#125).
+        numeric_df = df.select_dtypes(include="number")
+        if numeric_df.shape[1] == 0:
+            summary = {}
+        else:
+            summary = numeric_df.describe().map(
+                lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
+            ).to_dict()
 
         # Rename percentile keys
         for v in summary.values():
