@@ -3,7 +3,7 @@
 Guidance for anyone (human or AI) working in the **AIDRIN** repository. Read this before making
 changes. Full docs: https://aidrin.readthedocs.io.
 
-**AIDRIN** (AI Data Readiness Inspector) helps teams both **assess and improve** how ready a dataset
+**AIDRIN** (AI Data Readiness Infrastructure) helps teams both **assess and improve** how ready a dataset
 is for AI/ML workflows. It runs quantitative readiness metrics across **data quality** (completeness,
 duplicity, outliers), **fairness/bias** (class imbalance, representation and statistical rates,
 demographic disparity), **privacy** (k-anonymity, l-diversity, t-closeness, entropy and attribute
