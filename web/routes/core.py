@@ -11,6 +11,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    send_from_directory,
     session,
     url_for,
 )
@@ -55,6 +56,13 @@ def inspector():
             session["uploaded_file_name"] = display_name
             session["uploaded_file_path"] = file_path
             session["uploaded_file_type"] = request.form.get("fileTypeSelector")
+
+            # Track files this session created so /clear removes only these,
+            # never files belonging to other concurrent sessions.
+            owned_files = session.get("owned_files", [])
+            if file_path not in owned_files:
+                owned_files.append(file_path)
+            session["owned_files"] = owned_files
 
             return redirect(url_for("core.inspector"))
 
@@ -150,6 +158,17 @@ def inspector():
         return "<h1>Workspace render error</h1>", 500
 
 
+_SAMPLE_DATA_TYPES = {"csv", "json", "h5", "parquet", "xlsx", "npz", "dcat"}
+
+
+@core_bp.route("/sample-data/<file_type>/<path:filename>")
+def sample_data(file_type, filename):
+    if file_type not in _SAMPLE_DATA_TYPES:
+        return jsonify({"error": "Invalid file type"}), 400
+    base = current_app.config["SAMPLE_DATA_FOLDER"]
+    return send_from_directory(os.path.join(base, file_type), filename, as_attachment=True)
+
+
 @core_bp.route("/upload-file", methods=["GET", "POST"])
 def upload_file():
     """Legacy route — redirects to the inspector."""
@@ -189,20 +208,21 @@ def clear_file():
             except Exception as e:
                 file_upload_time_log.warning("Failed to cancel Globus tasks on clear: %s", e)
 
+    # Capture this session's own files before clearing the session.
+    owned_files = session.get("owned_files", [])
+
     session.pop("uploaded_file_path", None)
     session.pop("uploaded_file_name", None)
     session.pop("uploaded_file_type", None)
     session.pop("minimize_preview", None)
     session.clear()
 
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
     try:
-        for filename in os.listdir(upload_folder):
-            file_path = os.path.join(upload_folder, filename)
-            if os.path.isfile(file_path):
+        for file_path in owned_files:
+            if file_path and os.path.isfile(file_path):
                 os.remove(file_path)
     except Exception:
-        file_upload_time_log.error("File Clear Failure: Unable to clear folder", exc_info=True)
+        file_upload_time_log.error("File Clear Failure: Unable to clear files", exc_info=True)
         return jsonify({"success": False, "error": "An internal error occurred"}), 500
 
     return redirect(url_for("core.inspector"))
@@ -329,17 +349,30 @@ def summary_statistics():
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200
 
-        summary_statistics = df.describe().map(
-            lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
-        ).to_dict()
+        # Restrict to numeric columns: describe() would otherwise fall back to
+        # object-column stats (top/freq are strings) and the numeric formatter
+        # below would fail on them. Datasets with no numerical features simply
+        # get an empty numerical summary (issue #125).
+        numeric_df = df.select_dtypes(include="number")
+        if numeric_df.shape[1] == 0:
+            summary_statistics = {}
+        else:
+            summary_statistics = numeric_df.describe().map(
+                lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
+            ).to_dict()
 
         histograms = summary_histograms(df)
 
+        # Booleans are treated as categorical (they're excluded from describe()
+        # and select_dtypes("number") above, so they belong with the categorical
+        # summary, not the numerical one).
         numerical_columns = [
-            col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)
+            col for col, dtype in df.dtypes.items()
+            if pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
         ]
         categorical_columns = [
-            col for col, dtype in df.dtypes.items() if pd.api.types.is_string_dtype(dtype)
+            col for col, dtype in df.dtypes.items()
+            if pd.api.types.is_string_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
         ]
         all_features = numerical_columns + categorical_columns
 
@@ -348,6 +381,23 @@ def summary_statistics():
                 if old_key in ["25%", "50%", "75%"]:
                     new_key = old_key.replace("%", "th percentile")
                     v[new_key] = v.pop(old_key)
+
+        # Per-column summary for categorical features (describe() above only
+        # covers numerical columns). Reports non-null count, distinct values,
+        # the most frequent value, its frequency, and that frequency as a
+        # percentage of the non-null values.
+        categorical_summary = {}
+        for col in categorical_columns:
+            counts = df[col].value_counts(dropna=True)
+            count = int(df[col].notna().sum())
+            freq = int(counts.iloc[0]) if not counts.empty else 0
+            categorical_summary[str(col)] = {
+                "count": count,
+                "unique": int(df[col].nunique(dropna=True)),
+                "top": str(counts.index[0]) if not counts.empty else "—",
+                "freq": freq,
+                "freq_pct": round(freq / count * 100, 1) if count else 0.0,
+            }
 
         response_data = ensure_json_serializable({
             "success": True,
@@ -358,6 +408,7 @@ def summary_statistics():
             "numerical_features": list(numerical_columns),
             "all_features": all_features,
             "summary_statistics": summary_statistics,
+            "categorical_summary": categorical_summary,
             "histograms": histograms,
         })
         return jsonify(response_data)

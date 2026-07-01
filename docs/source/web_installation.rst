@@ -1,7 +1,10 @@
 .. _installation:
+.. _web_installation:
 
-Installation
-============
+Web Application Installation
+=============================
+
+This page covers installation and setup of the **AIDRIN web interface**. For the CLI and the agentic evaluation component, see the :ref:`cli` page.
 
 AIDRIN can be used in **three ways**:
 
@@ -86,7 +89,7 @@ Install Redis Locally
 **Windows**:
 
 - Use `Windows Subsystem for Linux (WSL) <https://learn.microsoft.com/en-us/windows/wsl/install>`_ and follow Linux instructions, or
-- Download Redis from `Microsoft’s archive <https://github.com/microsoftarchive/redis/releases>`_.
+- Download Redis from `Microsoft's archive <https://github.com/microsoftarchive/redis/releases>`_.
 
 Verify Redis is running:
 
@@ -180,10 +183,16 @@ For quick use in Python scripts or Jupyter notebooks:
 
 .. code-block:: bash
 
-   pip install -i https://test.pypi.org/simple/ aidrin==<version>
+   pip install aidrin
+
+To pin a specific version:
+
+.. code-block:: bash
+
+   pip install aidrin==<version>
 
 Replace ``<version>`` with the latest from
-`PyPI versions <https://test.pypi.org/project/aidrin/#history>`_.
+`PyPI versions <https://pypi.org/project/aidrin/#history>`_.
 
 Verify installation:
 
@@ -192,7 +201,7 @@ Verify installation:
    import aidrin
    print(aidrin.__version__)
 
-See :ref:`usage` for examples.
+See :ref:`web_usage` for examples.
 
 ----
 

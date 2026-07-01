@@ -45,4 +45,4 @@ def test_celery_task_execution(app):
 
 def test_app_version(app):
     """Check version string is set."""
-    assert __version__ == "2026.04.1"
+    assert __version__

@@ -47,12 +47,14 @@ class CustomDR(BaseDRAgent):
 
         return {"message": "Placeholder metric. Implement your logic here."}
 
-    def remedy(self, metric_results: dict):
+    def remedy(self, **kwargs):
         """
         Applies custom remediation logic based on the calculated metrics.
+        Access metric results via kwargs.get("metric_results", {}).
         """
 
         # IMPLEMENT YOUR REMEDIATION LOGIC BELOW
+        # metric_results = kwargs.get("metric_results", {})
         # For example, filling null values with a default value
 
         # df_remedied: pd.DataFrame = self.dataset.copy()
@@ -126,7 +128,7 @@ def custom_metrics():
             final_dict["Custom Metric Evaluation"] = metric_results
 
             if request.form.get("apply_remedy") == "yes":
-                new_data = custom_metric_instance.remedy(metric_results)
+                new_data = custom_metric_instance.remedy(metric_results=metric_results)
 
                 if not isinstance(new_data, pd.DataFrame):
                     return jsonify({"error": "remedy() must return a pandas DataFrame"}), 400

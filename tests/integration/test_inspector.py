@@ -62,7 +62,7 @@ def test_inspector_get_no_file(client):
     response = client.get("/inspector")
     assert response.status_code == 200
     html = response.data.decode()
-    assert "AI Data Readiness Inspector" in html
+    assert "AI Data Readiness Infrastructure" in html
     assert "Select a File Type" in html
     assert "https://aidrin.readthedocs.io/en/latest/" in html
 
@@ -70,6 +70,13 @@ def test_inspector_get_no_file(client):
 def test_inspector_contains_version(uploaded_client):
     """Version string should appear in the sidebar when a file is uploaded."""
     response = uploaded_client.get("/inspector")
+    html = response.data.decode()
+    assert f"v{__version__}" in html
+
+
+def test_upload_panel_contains_version(client):
+    """Version string should appear on the upload panel before any file is uploaded."""
+    response = client.get("/inspector")
     html = response.data.decode()
     assert f"v{__version__}" in html
 
