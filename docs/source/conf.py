@@ -6,10 +6,12 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+from aidrin._version import __version__
+
 project = 'AIDRIN'
 copyright = '2025, IDT Lab'
 author = 'IDT Lab'
-release = '1.0.0'
+release = __version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
