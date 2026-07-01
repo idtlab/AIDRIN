@@ -1,6 +1,6 @@
 {% extends '_base.html' %}
 
-{% block title %}AIDRIN - Inspector{% endblock %}
+{% block title %}AIDRIN - Infrastructure{% endblock %}
 
 {% block head_extra %}
   <script src="https://code.jquery.com/jquery-3.6.4.min.js"
@@ -131,13 +131,14 @@
       { name: 'adult.h5', type: 'h5', size: '3.7 MB' },
       { name: 'adult.json', type: 'json', size: '13.4 MB' },
       { name: 'adult.npz', type: 'npz', size: '484 KB' },
+      { name: 'adult.parquet', type: 'parquet', size: '525 KB' },
       { name: 'adult.xlsx', type: 'xlsx', size: '2.1 MB' },
       { name: 'BUTTER-E.json', type: 'dcat', size: '5 KB' },
       { name: 'EGS_Collab_Experiment.json', type: 'dcat', size: '6 KB' },
       { name: 'employees.h5', type: 'h5', size: '1.1 MB' },
       { name: 'employees.json', type: 'json', size: '2 KB' },
-      { name: 'employees.xlsx', type: 'xlsx', size: '5 KB' },
       { name: 'smallSample.csv', type: 'csv', size: '29 bytes' },
+      { name: 'smallSample.xlsx', type: 'xlsx', size: '5 KB' },
     ];
 
     function toggleSampleData() {
@@ -157,7 +158,7 @@
         item.innerHTML = `<div class="file-content"><div class="file-name">${file.name} <span class="file-size">${file.size}</span></div><div class="file-type">${file.type}</div></div>`;
         item.addEventListener('click', () => {
           const link = document.createElement('a');
-          link.href = `/static/datasets/test_data/${file.type}/${file.name}`;
+          link.href = `/sample-data/${file.type}/${file.name}`;
           link.download = file.name;
           document.body.appendChild(link);
           link.click();

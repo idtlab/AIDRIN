@@ -165,7 +165,7 @@ On the remote machine where your data is located:
    # Start the endpoint
    globus-compute-endpoint start aidrin-endpoint
 
-   # Get the endpoint UUID (copy this for the inspector)
+   # Get the endpoint UUID (copy this for the infrastructure)
    globus-compute-endpoint list
 
 For local testing, you can run an endpoint on the same machine:
@@ -182,11 +182,11 @@ Stop an endpoint with ``globus-compute-endpoint stop <name>``.
 
 - ``aidrin`` must be installed (``pip install aidrin``)
 - Network access to authenticate with Globus
-- The file path entered in the inspector must be accessible from the endpoint machine
+- The file path entered in the infrastructure must be accessible from the endpoint machine
 
 **Usage:**
 
-1. In the inspector, select the "Remote (Globus)" tab
+1. In the infrastructure, select the "Remote (Globus)" tab
 2. Click "Sign in with Globus" (redirects to Globus Auth)
 3. Paste the Globus Compute endpoint UUID
 4. Enter the file path as it exists on the remote machine (e.g., ``/home/user/data/adult.csv``)
@@ -263,7 +263,7 @@ the explanation callout for transparency.
 Debugging the Web Interface
 ============================
 
-AIDRIN's inspector UI includes debug logging that is disabled by default to keep the browser console clean. To enable verbose logging during development:
+AIDRIN's infrastructure UI includes debug logging that is disabled by default to keep the browser console clean. To enable verbose logging during development:
 
 1. Open the browser's developer console (F12 → Console).
 2. Run:

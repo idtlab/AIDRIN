@@ -87,7 +87,7 @@ def test_publications_has_return_link(client):
     """Publications page should have a link back to inspector."""
     response = client.get("/publications")
     html = response.data.decode()
-    assert "Return to Inspector" in html
+    assert "Return to Infrastructure" in html
 
 
 # -------------------------------------------------

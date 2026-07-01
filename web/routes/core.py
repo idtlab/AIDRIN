@@ -11,15 +11,17 @@ from flask import (
     render_template,
     request,
     send_file,
+    send_from_directory,
     session,
     url_for,
 )
 from werkzeug.utils import secure_filename
-from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP, read_file
+from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP
 from web.routes.utils import (
     clear_all_user_cache,
     ensure_json_serializable,
     get_current_user_id,
+    load_dataframe,
     summary_histograms,
 )
 
@@ -69,6 +71,9 @@ def inspector():
             )
             entries = get_uploaded_files()
             new_entries = []
+            # Track files this session created so /clear removes only these,
+            # never files belonging to other concurrent sessions.
+            owned_files = session.get("owned_files", [])
             for up in uploads:
                 display_name = up.filename
                 stored = f"{uuid.uuid4().hex}_{secure_filename(up.filename)}"
@@ -83,6 +88,9 @@ def inspector():
                 }
                 entries.append(entry)
                 new_entries.append(entry)
+                if path not in owned_files:
+                    owned_files.append(path)
+            session["owned_files"] = owned_files
             save_uploaded_files(entries)
             first = sorted(new_entries, key=lambda e: e["name"].lower())[0]
             set_active_file(first["id"])
@@ -198,6 +206,17 @@ def inspector():
         return "<h1>Workspace render error</h1>", 500
 
 
+_SAMPLE_DATA_TYPES = {"csv", "json", "h5", "parquet", "xlsx", "npz", "dcat"}
+
+
+@core_bp.route("/sample-data/<file_type>/<path:filename>")
+def sample_data(file_type, filename):
+    if file_type not in _SAMPLE_DATA_TYPES:
+        return jsonify({"error": "Invalid file type"}), 400
+    base = current_app.config["SAMPLE_DATA_FOLDER"]
+    return send_from_directory(os.path.join(base, file_type), filename, as_attachment=True)
+
+
 @core_bp.route("/upload-file", methods=["GET", "POST"])
 def upload_file():
     """Legacy route — redirects to the inspector."""
@@ -242,20 +261,23 @@ def clear_file():
     from web.routes.utils import clear_uploaded_files
     clear_uploaded_files()
 
+    # Capture this session's own files before clearing the session, so the
+    # physical files get removed below (clear_uploaded_files drops the list
+    # metadata; this removes the saved files owned by this session).
+    owned_files = session.get("owned_files", [])
+
     session.pop("uploaded_file_path", None)
     session.pop("uploaded_file_name", None)
     session.pop("uploaded_file_type", None)
     session.pop("minimize_preview", None)
     session.clear()
 
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
     try:
-        for filename in os.listdir(upload_folder):
-            file_path = os.path.join(upload_folder, filename)
-            if os.path.isfile(file_path):
+        for file_path in owned_files:
+            if file_path and os.path.isfile(file_path):
                 os.remove(file_path)
     except Exception:
-        file_upload_time_log.error("File Clear Failure: Unable to clear folder", exc_info=True)
+        file_upload_time_log.error("File Clear Failure: Unable to clear files", exc_info=True)
         return jsonify({"success": False, "error": "An internal error occurred"}), 500
 
     return redirect(url_for("core.inspector"))
@@ -379,11 +401,21 @@ def summary_statistics():
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
         file_info = (file_path, file_name, file_type)
-        df = read_file(file_info)
+        df, load_error = load_dataframe(file_info)
+        if load_error:
+            return jsonify({"success": False, "message": load_error}), 200
 
-        summary_statistics = df.describe().map(
-            lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
-        ).to_dict()
+        # Restrict to numeric columns: describe() would otherwise fall back to
+        # object-column stats (top/freq are strings) and the numeric formatter
+        # below would fail on them. Datasets with no numerical features simply
+        # get an empty numerical summary (issue #125).
+        numeric_df = df.select_dtypes(include="number")
+        if numeric_df.shape[1] == 0:
+            summary_statistics = {}
+        else:
+            summary_statistics = numeric_df.describe().map(
+                lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
+            ).to_dict()
 
         histograms = summary_histograms(df)
 
@@ -415,7 +447,7 @@ def summary_statistics():
         return jsonify(response_data)
     except Exception as e:
         file_upload_time_log.error("Error computing summary statistics: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"})
+        return jsonify({"success": False, "message": "An internal error occurred"})
 
 
 @core_bp.route("/feature-set", methods=["POST"])
@@ -431,7 +463,9 @@ def extract_features():
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
         file_info = (file_path, file_name, file_type)
-        df = read_file(file_info)
+        df, load_error = load_dataframe(file_info)
+        if load_error:
+            return jsonify({"success": False, "message": load_error}), 200
 
         numerical_columns = [
             col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)

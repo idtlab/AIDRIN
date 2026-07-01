@@ -62,7 +62,9 @@ def create_app():
     }
     app.config.from_prefixed_env()
 
-    # Maximum upload size (default 1 GB; override via AIDRIN_MAX_UPLOAD_MB).
+    # Maximum upload size (default 1 GB; override per deployment via AIDRIN_MAX_UPLOAD_MB).
+    # Set after from_prefixed_env so AIDRIN_MAX_UPLOAD_MB takes precedence. Flask rejects
+    # larger request bodies with 413 before the file is ever saved.
     try:
         max_upload_mb = int(os.environ.get("AIDRIN_MAX_UPLOAD_MB", 1024))
     except ValueError:
@@ -77,13 +79,32 @@ def create_app():
     except ValueError:
         app.config["AIDRIN_MAX_UPLOAD_FILES"] = 50
 
+    @app.context_processor
+    def inject_upload_limit():
+        # expose the upload limit to templates for client-side validation
+        return dict(
+            max_upload_mb=max_upload_mb,
+            max_upload_bytes=app.config["MAX_CONTENT_LENGTH"],
+        )
+
     @app.errorhandler(413)
-    def _request_too_large(error):
-        from flask import jsonify, request
-        msg = "Upload too large for the server limit."
+    def file_too_large(error):
+        from flask import jsonify, request, url_for
+        max_mb = app.config.get("MAX_CONTENT_LENGTH", 0) // (1024 * 1024)
+        message = f"File too large. The maximum upload size is {max_mb} MB."
+        logging.getLogger("file_upload").warning(
+            "Upload rejected: file exceeds %d MB limit", max_mb
+        )
         if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
-            return jsonify({"success": False, "message": msg}), 413
-        return msg, 413
+            return jsonify({"error": message}), 413
+        return (
+            f"<!DOCTYPE html><html><head><meta charset='utf-8'><title>File too large</title></head>"
+            f"<body style='font-family:sans-serif;text-align:center;padding:3em;'>"
+            f"<h2>File too large</h2><p>{message}</p>"
+            f"<p><a href='{url_for('core.inspector')}'>Go back to upload</a></p>"
+            f"</body></html>",
+            413,
+        )
 
     # Initialize in-memory cache
     app.TEMP_RESULTS_CACHE = {}
@@ -120,6 +141,10 @@ def create_app():
                     startup_log.info("Cleaned up old file on startup: %s", filename)
         except Exception as e:
             startup_log.warning("Failed to delete %s: %s", file_path, e)
+
+    # Sample data folder (served via /sample-data/ route)
+    sample_data_folder = os.path.join(project_root, "examples", "sample_data")
+    app.config["SAMPLE_DATA_FOLDER"] = sample_data_folder
 
     # Runtime custom-metric files live OUTSIDE the package, at the project root,
     # so writing/deleting them does NOT trigger the Flask --debug auto-reloader

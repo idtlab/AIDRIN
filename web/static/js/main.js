@@ -30,6 +30,25 @@ function uploadForm() {
       showToast("Please select at least one file", "error");
     return;
   }
+  // Check the upload does not exceed the server's size limit. MAX_CONTENT_LENGTH
+  // caps the whole request body, so check the combined size of all files.
+  const maxBytes = parseInt(form.dataset.maxUploadBytes, 10);
+  if (maxBytes) {
+    let total = 0;
+    for (const f of fileInput.files) total += f.size;
+    if (total > maxBytes) {
+      const maxMb =
+        form.dataset.maxUploadMb || Math.round(maxBytes / (1024 * 1024));
+      if (typeof showToast === "function")
+        showToast(
+          `Upload too large. The maximum total upload size is ${maxMb} MB.`,
+          "error",
+        );
+      fileInput.value = "";
+      return;
+    }
+  }
+
   const data = new FormData();
   for (const f of fileInput.files) data.append("file", f);
   fetch(form.action, {
@@ -63,6 +82,15 @@ function uploadForm() {
 
 //to clear
 function clearFile() {
+  if (
+    typeof window.isAidrinServerProcessing === "function" &&
+    window.isAidrinServerProcessing()
+  ) {
+    if (typeof showToast === "function")
+      showToast("Please wait — the server is still processing.", "info");
+    return;
+  }
+
   // Clear saved form states
   try {
     Object.keys(sessionStorage)

@@ -1,7 +1,10 @@
 .. _installation:
+.. _web_installation:
 
-Installation
-============
+Web Application Installation
+=============================
+
+This page covers installation and setup of the **AIDRIN web interface**. For the CLI and the agentic evaluation component, see the :ref:`cli` page.
 
 AIDRIN can be used in **three ways**:
 
@@ -86,7 +89,7 @@ Install Redis Locally
 **Windows**:
 
 - Use `Windows Subsystem for Linux (WSL) <https://learn.microsoft.com/en-us/windows/wsl/install>`_ and follow Linux instructions, or
-- Download Redis from `Microsoft’s archive <https://github.com/microsoftarchive/redis/releases>`_.
+- Download Redis from `Microsoft's archive <https://github.com/microsoftarchive/redis/releases>`_.
 
 Verify Redis is running:
 
@@ -111,10 +114,30 @@ Terminal 1 – Redis Server
 Terminal 2 – Celery Worker
 """"""""""""""""""""""""""
 
+**macOS / Linux:**
+
 .. code-block:: bash
 
    conda activate aidrin-env
    PYTHONPATH=. celery -A worker.make_celery worker --beat --loglevel=info
+
+**Windows:**
+
+If you see errors such as:
+
+- ``-B option does not work on Windows. Please run celery beat as a separate service.``
+- ``Can't pickle local object 'celery_init_app.<locals>.FlaskTask'``
+
+Use the ``solo`` pool instead (no ``--beat`` required for local development):
+
+.. code-block:: powershell
+
+   conda activate aidrin-env
+   $env:PYTHONPATH = "."
+   celery -A worker.make_celery worker --loglevel=info --pool=solo
+
+If you use a venv rather than Conda, activate it first and set ``PYTHONPATH`` the
+same way before running the ``celery`` command.
 
 Terminal 3 – Flask Server
 """""""""""""""""""""""""
@@ -124,8 +147,32 @@ Terminal 3 – Flask Server
    conda activate aidrin-env
    flask --app 'web:create_app()' run --debug
 
+.. note::
+
+   **Windows:** If you see ``-B option does not work on Windows`` or
+   ``Can't pickle local object 'celery_init_app.<locals>.FlaskTask'``, drop
+   ``--beat`` from the worker command and use ``--pool=solo`` instead:
+
+   .. code-block:: powershell
+
+      PYTHONPATH=. celery -A worker.make_celery worker --pool=solo --loglevel=info
+
+   To run periodic tasks, start Beat in a **separate** terminal (optional for
+   local development):
+
+   .. code-block:: powershell
+
+      PYTHONPATH=. celery -A worker.make_celery beat --loglevel=info
+
 Once running, visit:
 `http://127.0.0.1:5000 <http://127.0.0.1:5000>`_
+
+.. note::
+
+   The maximum upload size defaults to **1 GB**. To change it for a deployment,
+   set the ``AIDRIN_MAX_UPLOAD_MB`` environment variable (in megabytes) before
+   starting the Flask server, e.g.
+   ``AIDRIN_MAX_UPLOAD_MB=2048 flask --app 'web:create_app()' run``.
 
 ----
 
@@ -136,10 +183,16 @@ For quick use in Python scripts or Jupyter notebooks:
 
 .. code-block:: bash
 
-   pip install -i https://test.pypi.org/simple/ aidrin==<version>
+   pip install aidrin
+
+To pin a specific version:
+
+.. code-block:: bash
+
+   pip install aidrin==<version>
 
 Replace ``<version>`` with the latest from
-`PyPI versions <https://test.pypi.org/project/aidrin/#history>`_.
+`PyPI versions <https://pypi.org/project/aidrin/#history>`_.
 
 Verify installation:
 
@@ -148,7 +201,7 @@ Verify installation:
    import aidrin
    print(aidrin.__version__)
 
-See :ref:`usage` for examples.
+See :ref:`web_usage` for examples.
 
 ----
 
