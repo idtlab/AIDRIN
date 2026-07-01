@@ -1,6 +1,6 @@
 """Tests for the public API exposed via ``aidrin.__init__``.
 
-These verify that every function documented in ``usage.rst`` is importable
+These verify that every function documented in ``web_usage.rst`` is importable
 directly from ``aidrin`` and returns the expected dict structure on a small
 synthetic dataset — no Flask, Celery broker, or Redis required.
 """
@@ -168,7 +168,8 @@ class TestPublicFairness(unittest.TestCase):
         self.assertIn("Imbalance Degree score", result)
 
     def test_calculate_class_distribution_includes_visualization(self):
-        import aidrin, base64
+        import aidrin
+        import base64
         result = aidrin.calculate_class_distribution("label", self.fi)
         vis = result.get("Class Distribution Visualization", "")
         self.assertTrue(len(vis) > 0)
@@ -258,7 +259,8 @@ class TestPublicImpactOnAI(unittest.TestCase):
         self.assertGreater(len(result["Feature Relevance scores"]), 0)
 
     def test_calculate_feature_relevance_returns_visualization(self):
-        import aidrin, base64
+        import aidrin
+        import base64
         result = aidrin.calculate_feature_relevance(self.fi, target_col="label")
         vis = result.get("Feature Relevance Visualization", "")
         if vis:
@@ -289,15 +291,14 @@ class TestPublicImpactOnAI(unittest.TestCase):
         self.assertNotIn("Error", result)
 
     def test_calculate_correlations_returns_visualization(self):
-        import aidrin, base64
+        import aidrin
+        import base64
         result = aidrin.calculate_correlations(["age", "income", "sex"], self.fi)
-        vis = result.get("Correlations Visualization") or result.get("Visualization") or ""
         for key, val in result.items():
             if isinstance(val, str) and len(val) > 100:
                 # Try to decode — valid base64 means it's a visualization
                 try:
                     base64.b64decode(val)
-                    vis = val
                     break
                 except Exception:
                     pass

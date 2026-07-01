@@ -14,19 +14,23 @@
       </a>
     </div>
 
-    {% if globus_available %}
-    <!-- Tab switcher: Upload / Globus -->
+    <!-- Tab switcher: Upload / Globus (conditional) / ADROIT -->
     <div class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
       <button type="button" onclick="switchUploadTab('local')" id="tab-local"
-              class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' if globus_authenticated else 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' }}">
+              class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' if globus_available and globus_authenticated else 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' }}">
         Upload File
       </button>
+      {% if globus_available %}
       <button type="button" onclick="switchUploadTab('globus')" id="tab-globus"
               class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' if globus_authenticated else 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' }}">
         Remote (Globus)
       </button>
+      {% endif %}
+      <button type="button" onclick="switchUploadTab('cli')" id="tab-cli"
+              class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400">
+        CLI
+      </button>
     </div>
-    {% endif %}
 
     <!-- Local upload card -->
     <div id="local-upload" class="{{ 'hidden' if globus_available and globus_authenticated else '' }}">
@@ -102,5 +106,38 @@
       {% include '_components/globus_panel.html' %}
     </div>
     {% endif %}
+
+    <!-- CLI panel -->
+    <div id="cli-panel" class="hidden">
+      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+        <div class="flex items-start gap-3 mb-4">
+          <div class="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--primaryColor, #2563eb)20;">
+            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Command Line Interface</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Use AIDRIN directly from your terminal</p>
+          </div>
+        </div>
+
+        <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
+          AIDRIN can be used from the command line without the web interface, enabling scripted and automated data readiness workflows. Install the package and run evaluations directly against your datasets.
+        </p>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
+          The CLI is installed separately from the web interface — see the documentation for installation instructions and usage examples.
+        </p>
+
+        <a href="https://aidrin.readthedocs.io/en/latest/cli.html" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
+           style="background-color: var(--primaryColor, #2563eb);">
+          View CLI Documentation
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+          </svg>
+        </a>
+      </div>
+    </div>
   </div>
 </div>

@@ -882,36 +882,45 @@ function renderScoresSection(scores, depth) {
 
 // ==================== Globus Compute ====================
 
-/** Switch between Upload and Globus tabs on the landing page. */
+/** Switch between Upload, Globus, and CLI tabs on the landing page. */
 function switchUploadTab(tab) {
   const localPanel = document.getElementById("local-upload");
   const globusPanel = document.getElementById("globus-panel");
+  const cliPanel = document.getElementById("cli-panel");
   const tabLocal = document.getElementById("tab-local");
   const tabGlobus = document.getElementById("tab-globus");
+  const tabCli = document.getElementById("tab-cli");
 
-  if (!localPanel || !globusPanel) {
-    console.error("switchUploadTab: missing elements", {
-      localPanel: !!localPanel,
-      globusPanel: !!globusPanel,
-    });
+  if (!localPanel) {
+    console.error("switchUploadTab: localPanel not found");
     return;
   }
 
+  const base =
+    "upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2";
   const activeClass =
     "border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500";
   const inactiveClass =
     "border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400";
 
-  if (tab === "globus") {
-    localPanel.classList.add("hidden");
+  // Hide all panels and deactivate all tabs
+  localPanel.classList.add("hidden");
+  if (globusPanel) globusPanel.classList.add("hidden");
+  if (cliPanel) cliPanel.classList.add("hidden");
+  if (tabLocal) tabLocal.className = `${base} ${inactiveClass}`;
+  if (tabGlobus) tabGlobus.className = `${base} ${inactiveClass}`;
+  if (tabCli) tabCli.className = `${base} ${inactiveClass}`;
+
+  // Activate the selected tab and panel
+  if (tab === "globus" && globusPanel) {
     globusPanel.classList.remove("hidden");
-    tabLocal.className = `upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 ${inactiveClass}`;
-    tabGlobus.className = `upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 ${activeClass}`;
+    if (tabGlobus) tabGlobus.className = `${base} ${activeClass}`;
+  } else if (tab === "cli" && cliPanel) {
+    cliPanel.classList.remove("hidden");
+    if (tabCli) tabCli.className = `${base} ${activeClass}`;
   } else {
     localPanel.classList.remove("hidden");
-    globusPanel.classList.add("hidden");
-    tabLocal.className = `upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 ${activeClass}`;
-    tabGlobus.className = `upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 ${inactiveClass}`;
+    if (tabLocal) tabLocal.className = `${base} ${activeClass}`;
   }
 }
 

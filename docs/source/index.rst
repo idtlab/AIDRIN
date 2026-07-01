@@ -1,14 +1,11 @@
-.. AIDRIN documentation master file, created by
-   sphinx-quickstart on Wed Jul 23 13:03:56 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+.. AIDRIN documentation master file
 
 AIDRIN Documentation
 ====================
 
 **AIDRIN** (AI Data Readiness Infrastructure) is an open-source tool designed to streamline the preparation and evaluation of datasets for artificial intelligence and machine learning workflows. AIDRIN enables researchers, data scientists, and developers to assess the quality, structure, and readiness of datasets through an intuitive, browser-based interface.
 
-AIDRIN provides actionable, quantitative metrics to help evaluate datasets across multiple dimensions critical to AI and data science, including:
+AIDRIN evaluates datasets across six dimensions:
 
 - **Data Quality**
 - **Data Governance**
@@ -17,31 +14,49 @@ AIDRIN provides actionable, quantitative metrics to help evaluate datasets acros
 - **Impact on AI**
 - **Data Structure and Organization**
 
-Whether validating training data for machine learning models, ensuring responsible data stewardship, or preparing datasets for research and production, AIDRIN offers a practical and extensible solution.
-
-Built with a modern technology stack including Flask, Celery, and Redis, AIDRIN is lightweight yet powerful. Its asynchronous architecture supports scalable data processing, and its interactive design ensures accessibility for users across technical levels.
-
 .. image:: _static/pillars.png
    :alt: Pillars of Data Readiness for AI
    :align: center
    :width: 80%
 
-Key Features
-------------
+----
 
-- **Comprehensive Data Readiness Metrics**: Assess datasets using well-defined indicators across multiple dimensions.
-- **Interactive Web Dashboard**: Explore and analyze datasets via a responsive, user-friendly interface.
-- **Lightweight & Modular Architecture**: Designed for adaptability, extensibility, and ease of integration.
-- **Scalable Backend Infrastructure**: Powered by Flask for the web interface, Celery for background processing, and Redis for reliable task management.
+Two Ways to Use AIDRIN
+-----------------------
 
+**Web Interface**
+   An interactive, browser-based dashboard. Upload a dataset, select dimensions and metrics, and
+   explore results with visualizations and downloadable reports — no coding required. Available
+   hosted at `aidrin.io <https://aidrin.io>`_ or self-hosted locally.
+   See :ref:`web_installation` and :ref:`web_usage`.
+
+**Command Line Interface (CLI)**
+   Run data readiness metrics directly from your terminal or Python scripts. Suitable for
+   automated pipelines, CI workflows, and headless environments. Also includes an **agentic
+   evaluation** component for domain-aware data readiness question answering and remediation
+   grounded in scientific literature.
+   See :ref:`cli_installation` and :ref:`cli_usage`.
+
+----
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Web Interface
 
-   installation
-   usage
-   custom_metrics
+   web_installation
+   web_usage
+
+.. toctree::
+   :maxdepth: 2
+   :caption: CLI Interface
+
+   cli_installation
+   cli_usage
+
+.. toctree::
+   :maxdepth: 2
+   :caption: More
+
    appfl_integration
    testing
    contributing
