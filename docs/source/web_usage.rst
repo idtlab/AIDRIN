@@ -522,7 +522,7 @@ Below is the template initially shown in CodeMirror:
 
             return {"message": "Placeholder metric. Implement your logic here."}
 
-        def remedy(self, metric_results: dict):
+        def remedy(self, **kwargs**):
             """
             Applies custom remediation logic based on the calculated metrics.
             """

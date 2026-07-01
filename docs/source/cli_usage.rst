@@ -269,9 +269,6 @@ Available Metrics
      - ``custom``
      - ``<name-or-path>``, varies — see ``aidrin run custom -h``
 
-Metric and category names accept either dashes or underscores interchangeably
-(e.g. ``class-imbalance`` and ``class_imbalance`` are equivalent).
-
 ----
 
 Using AIDRIN as a Python Library
