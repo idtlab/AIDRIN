@@ -11,6 +11,7 @@ from .api import (
     run_batch_metrics,
     run_data_quality,
     run_metric,
+    summarize_dataset,
     generate_metric_template,
     run_custom_metric_remedy,
 )
@@ -128,6 +129,37 @@ def _summarize_metric(metric_name: str, result: dict) -> None:
                 print(f"{k}: [{len(v)} items]")
             else:
                 print(f"{k}: {_fmt(v)}")
+
+
+def _print_summary_table(result: dict, file_path: str) -> None:
+    """Print a human-readable summary of summarize_dataset output."""
+    import os
+    name = os.path.basename(file_path)
+    rows = result["shape"]["rows"]
+    cols = result["shape"]["columns"]
+    print(f"{name} — {rows:,} rows × {cols} columns")
+
+    numerical = result.get("numerical", {})
+    if numerical:
+        print(f"\nNumerical ({len(numerical)}):")
+        for col, s in numerical.items():
+            print(
+                f"  {col:<22} mean={_fmt(s['mean']):<12} std={_fmt(s['std']):<12}"
+                f" min={_fmt(s['min']):<10} max={_fmt(s['max']):<10} missing={s['missing']}"
+            )
+
+    categorical = result.get("categorical", {})
+    if categorical:
+        print(f"\nCategorical ({len(categorical)}):")
+        for col, s in categorical.items():
+            pct = 100.0 * s["freq"] / s["count"] if s["count"] else 0.0
+            print(
+                f"  {col:<22} {s['unique']:>6} unique"
+                f"  top={str(s['top'])[:16]:<18} ({pct:.1f}%)  missing={s['missing']}"
+            )
+
+    if result.get("truncated"):
+        print(f"\n[truncated to {result['max_features']} features — pass --max-features to adjust]")
 
 
 def _build_run_kwargs(args: argparse.Namespace) -> dict:
@@ -355,6 +387,16 @@ def main() -> None:
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
 
+    # Dataset summary command
+    summarize_parser = subparsers.add_parser("summarize", help="Describe numerical and categorical features of a dataset")
+    summarize_parser.add_argument("file_path", help="Path to the dataset")
+    summarize_parser.add_argument("--file-type", dest="file_type", default=None, help="File type override (csv, parquet, xlsx, hdf5, json, npz)")
+    summarize_parser.add_argument(
+        "--max-features", dest="max_features", type=int, default=None,
+        help="Limit stats to N features (split evenly between numerical and categorical)"
+    )
+    summarize_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print human-readable table instead of JSON")
+
     # Agentic evaluation commands
     agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
     agentic_sub = agentic_parser.add_subparsers(dest="agentic_command", required=True)
@@ -466,6 +508,18 @@ def main() -> None:
                 strip_visualizations=args.no_viz,
             )
             _dump_result(_round_floats(result))
+            return
+
+        if args.command == "summarize":
+            result = summarize_dataset(
+                args.file_path,
+                file_type=args.file_type,
+                max_features=args.max_features,
+            )
+            if args.human_readable:
+                _print_summary_table(result, args.file_path)
+            else:
+                _dump_result(_round_floats(result))
             return
 
         if args.command == "data-quality":
