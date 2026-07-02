@@ -34,13 +34,18 @@ logger = logging.getLogger(__name__)
 VALID_ROLES = ("continuous", "categorical", "identifier")
 
 # Cardinality thresholds (fractions are of the row count).
-_ID_UNIQUE_RATIO = 0.98        # near-unique integer column -> identifier
-_ID_NAME_MIN_RATIO = 0.10      # id-like name needs at least this spread to be an id
-_ID_MIN_UNIQUE = 50            # ... and enough distinct values that near-uniqueness
-                               # is meaningful (tiny datasets are trivially unique)
-_CATEGORICAL_MAX_UNIQUE = 20   # at most this many distinct values ...
-_CATEGORICAL_MAX_RATIO = 0.50  # ... AND distinct/rows below this (guards tiny
-                               # datasets where every value is trivially distinct)
+# A near-unique integer column reads as an identifier.
+_ID_UNIQUE_RATIO = 0.98
+# An id-like name needs at least this spread to be treated as an identifier.
+_ID_NAME_MIN_RATIO = 0.10
+# ... and enough distinct values that near-uniqueness is meaningful
+# (tiny datasets are trivially unique).
+_ID_MIN_UNIQUE = 50
+# A column is categorical when it has at most this many distinct values ...
+_CATEGORICAL_MAX_UNIQUE = 20
+# ... AND distinct/rows is below this (guards tiny datasets where every value
+# is trivially distinct).
+_CATEGORICAL_MAX_RATIO = 0.50
 
 _ID_NAME_TOKENS = {"id", "idx", "index", "key", "uid", "guid", "uuid", "pk"}
 

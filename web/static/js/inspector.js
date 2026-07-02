@@ -2130,7 +2130,8 @@ function buildHistogramSection(histograms, title) {
   if (Object.keys(columns).length === 0) return "";
 
   let html = `<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">${title}</h3>`;
-  html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">';
+  html +=
+    '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">';
   for (const [colName, base64] of Object.entries(columns)) {
     html += `
       <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
@@ -2154,7 +2155,10 @@ function renderWorkspaceHistograms(histograms, categoricalHistograms) {
   if (!container) return;
   container.innerHTML =
     buildHistogramSection(histograms, "Numerical Feature Distributions") +
-    buildHistogramSection(categoricalHistograms, "Categorical Feature Distributions");
+    buildHistogramSection(
+      categoricalHistograms,
+      "Categorical Feature Distributions",
+    );
 }
 
 /**
@@ -2207,7 +2211,9 @@ const ROLES_VISIBLE_LIMIT = 14;
 
 /** Live-filter the column-role rows by name substring and/or selected role. */
 function filterColumnRoles() {
-  const q = (document.getElementById("roles-search")?.value || "").toLowerCase();
+  const q = (
+    document.getElementById("roles-search")?.value || ""
+  ).toLowerCase();
   let matched = 0;
   document.querySelectorAll("#column-roles-grid .role-row").forEach((row) => {
     const col = (row.getAttribute("data-col") || "").toLowerCase();
@@ -2342,8 +2348,10 @@ function renderWorkspaceSummary(data) {
       .concat(allStats.filter((s) => !preferredOrder.includes(s)));
 
     html += '<div class="relative overflow-x-auto rounded-lg shadow-sm">';
-    html += '<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
-    html += '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>';
+    html +=
+      '<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
+    html +=
+      '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>';
     html += '<th scope="col" class="px-4 py-3">Feature</th>';
     statKeys.forEach((s) => {
       html += `<th scope="col" class="px-4 py-3 text-right">${s}</th>`;
@@ -2367,7 +2375,10 @@ function renderWorkspaceSummary(data) {
   html += buildCategoricalSummaryTable(data.categorical_summary);
 
   // Identifiers: excluded from stats/plots, listed for transparency
-  if (data.identifier_summary && Object.keys(data.identifier_summary).length > 0) {
+  if (
+    data.identifier_summary &&
+    Object.keys(data.identifier_summary).length > 0
+  ) {
     html +=
       '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mt-6 mb-2 uppercase tracking-wide">Identifiers</h3>';
     html +=
