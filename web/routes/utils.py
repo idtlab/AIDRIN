@@ -3,6 +3,7 @@
 import io
 import base64
 import logging
+import re
 import time
 import uuid
 
@@ -14,6 +15,86 @@ from flask import current_app, jsonify, redirect, request, session, url_for
 from aidrin.file_handling.file_parser import read_file
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Semantic column-role inference
+# ---------------------------------------------------------------------------
+#
+# Metrics historically keyed off the pandas dtype (``select_dtypes``), which
+# mislabels numeric columns that are really categorical codes (e.g. a class
+# label ``flavor`` with values -1/1/2/5/21) or identifiers (e.g. a near-unique
+# ``jetIndex``). Those get meaningless means, KDE plots, and correlations.
+#
+# ``infer_column_roles`` assigns each column a *semantic role* — one of
+# ``continuous``, ``categorical``, or ``identifier`` — from dtype + cardinality
+# (+ a light column-name hint for ids). The result is a suggestion the user can
+# override; ``overrides`` takes precedence over the heuristic.
+
+VALID_ROLES = ("continuous", "categorical", "identifier")
+
+# Cardinality thresholds (fractions are of the row count).
+_ID_UNIQUE_RATIO = 0.98        # near-unique integer column -> identifier
+_ID_NAME_MIN_RATIO = 0.10      # id-like name needs at least this spread to be an id
+_ID_MIN_UNIQUE = 50            # ... and enough distinct values that near-uniqueness
+                               # is meaningful (tiny datasets are trivially unique)
+_CATEGORICAL_MAX_UNIQUE = 20   # at most this many distinct values ...
+_CATEGORICAL_MAX_RATIO = 0.50  # ... AND distinct/rows below this (guards tiny
+                               # datasets where every value is trivially distinct)
+
+_ID_NAME_TOKENS = {"id", "idx", "index", "key", "uid", "guid", "uuid", "pk"}
+
+
+def _looks_like_id_name(name) -> bool:
+    """True when a column name's leading/trailing token looks like an identifier."""
+    # Split camelCase then snake/space/dash: "eventIndex" -> ["event", "index"].
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(name))
+    parts = [p.lower() for p in re.split(r"[_\s\-]+", spaced) if p]
+    if not parts:
+        return False
+    return parts[-1] in _ID_NAME_TOKENS or parts[0] in _ID_NAME_TOKENS
+
+
+def infer_column_roles(df, overrides=None):
+    """Return ``{column: role}`` where role is continuous/categorical/identifier.
+
+    ``overrides`` (``{column: role}``) wins over the heuristic; unknown columns
+    or invalid role strings in ``overrides`` are ignored.
+    """
+    roles = {}
+    n = len(df)
+    for col in df.columns:
+        series = df[col]
+        dtype = series.dtype
+
+        if not pd.api.types.is_numeric_dtype(dtype) or pd.api.types.is_bool_dtype(dtype):
+            roles[col] = "categorical"
+            continue
+
+        nunique = int(series.nunique(dropna=True))
+        ratio = nunique / n if n else 0.0
+        is_int = pd.api.types.is_integer_dtype(dtype)
+
+        if is_int and nunique >= _ID_MIN_UNIQUE and ratio >= _ID_UNIQUE_RATIO:
+            roles[col] = "identifier"
+        elif (
+            is_int
+            and nunique >= _ID_MIN_UNIQUE
+            and _looks_like_id_name(col)
+            and ratio >= _ID_NAME_MIN_RATIO
+        ):
+            roles[col] = "identifier"
+        elif nunique <= _CATEGORICAL_MAX_UNIQUE and ratio <= _CATEGORICAL_MAX_RATIO:
+            roles[col] = "categorical"
+        else:
+            roles[col] = "continuous"
+
+    if overrides:
+        for col, role in overrides.items():
+            if col in roles and role in VALID_ROLES:
+                roles[col] = role
+
+    return roles
 
 
 # ---------------------------------------------------------------------------
@@ -247,13 +328,31 @@ def ensure_json_serializable(obj):
     return obj
 
 
-def summary_histograms(df):
-    """Generate base64-encoded KDE distribution plots for all numeric columns."""
+def _fig_to_base64(fig):
+    img_buffer = io.BytesIO()
+    fig.savefig(img_buffer, format="png", dpi=150, transparent=True)
+    img_buffer.seek(0)
+    encoded = base64.b64encode(img_buffer.read()).decode("utf-8")
+    plt.close(fig)
+    img_buffer.close()
+    return encoded
+
+
+def summary_histograms(df, columns=None):
+    """Generate base64-encoded KDE distribution plots.
+
+    ``columns`` restricts the plots to the given columns (used to plot only
+    columns whose semantic role is *continuous*); when ``None`` it falls back
+    to every numeric column for backward compatibility.
+    """
     text_color = "#6b7280"
     curve_color = "#4485F4"
 
+    if columns is None:
+        columns = list(df.select_dtypes(include="number").columns)
+
     line_graphs = {}
-    for column in df.select_dtypes(include="number").columns:
+    for column in columns:
         fig, ax = plt.subplots(figsize=(4, 3))
         fig.patch.set_alpha(0)
         ax.set_facecolor("none")
@@ -267,14 +366,45 @@ def summary_histograms(df):
             spine.set_color(text_color)
         fig.tight_layout(pad=0.5)
 
-        img_buffer = io.BytesIO()
-        fig.savefig(img_buffer, format="png", dpi=150, transparent=True)
-        img_buffer.seek(0)
-        encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
-
         # Store as _light for backward compat with JS picker
-        line_graphs[f"{column}_light"] = encoded_img
-        plt.close(fig)
-        img_buffer.close()
+        line_graphs[f"{column}_light"] = _fig_to_base64(fig)
 
     return line_graphs
+
+
+def categorical_bars(df, columns, max_categories=20):
+    """Generate base64-encoded bar charts of value counts for categorical columns.
+
+    KDE curves are meaningless for discrete/coded columns, so categorical
+    columns (including numeric codes like ``flavor``) get a value-count bar
+    chart instead. High-cardinality columns show only the top ``max_categories``.
+    """
+    text_color = "#6b7280"
+    bar_color = "#4485F4"
+
+    bars = {}
+    for column in columns:
+        counts = df[column].value_counts(dropna=True).head(max_categories)
+        if counts.empty:
+            continue
+
+        fig, ax = plt.subplots(figsize=(4, 3))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
+
+        ax.bar([str(i) for i in counts.index], counts.values, color=bar_color)
+
+        ax.set_xlabel("Category", fontsize=10, color=text_color)
+        ax.set_ylabel("Count", fontsize=10, color=text_color)
+        ax.tick_params(colors=text_color, labelsize=8)
+        if len(counts) > 6:
+            for label in ax.get_xticklabels():
+                label.set_rotation(45)
+                label.set_ha("right")
+        for spine in ax.spines.values():
+            spine.set_color(text_color)
+        fig.tight_layout(pad=0.5)
+
+        bars[f"{column}_light"] = _fig_to_base64(fig)
+
+    return bars
