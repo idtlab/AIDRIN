@@ -74,6 +74,13 @@ def test_inspector_contains_version(uploaded_client):
     assert f"v{__version__}" in html
 
 
+def test_upload_panel_contains_version(client):
+    """Version string should appear on the upload panel before any file is uploaded."""
+    response = client.get("/inspector")
+    html = response.data.decode()
+    assert f"v{__version__}" in html
+
+
 def test_inspector_no_sidebar_without_file(client):
     """Sidebar should not appear when no file is uploaded."""
     response = client.get("/inspector")

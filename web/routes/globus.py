@@ -49,6 +49,7 @@ def _poll_result(client, task_id, timeout=120):
         time.sleep(1)
     raise TimeoutError("Remote task timed out")
 
+
 globus_bp = Blueprint("globus", __name__, url_prefix="/globus")
 
 

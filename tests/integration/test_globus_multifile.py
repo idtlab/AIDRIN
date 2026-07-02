@@ -5,6 +5,7 @@ even in environments where globus-compute-sdk is not installed, and mocks the
 external Globus calls so no real endpoint is needed.
 """
 
+import os
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -225,7 +226,7 @@ def test_remote_list_files_operation(tmp_path):
     (tmp_path / "b.json").write_text("x")
     (tmp_path / "sub").mkdir()  # subdirectory excluded (non-recursive)
     out = remote_metric_runner("__list_files__", str(tmp_path), "", "")
-    assert sorted(p.split("/")[-1] for p in out["files"]) == ["a.csv", "b.json"]
+    assert sorted(os.path.basename(p) for p in out["files"]) == ["a.csv", "b.json"]
     one = remote_metric_runner("__list_files__", str(tmp_path / "a.csv"), "", "")
     assert one["files"] == [str(tmp_path / "a.csv")]
     assert "error" in remote_metric_runner("__list_files__", "/no/such/path", "", "")
