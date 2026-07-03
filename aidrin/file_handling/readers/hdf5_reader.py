@@ -150,6 +150,24 @@ class hdf5Reader(BaseFileReader):
 
         return sorted(groups.values(), key=lambda group: group["label"].lower())
 
+    def _is_pandas_pytables_store(self):
+        """True for pandas HDFStore / PyTables frame layouts (e.g. adult.h5)."""
+        with h5py.File(self.file_path, "r") as f:
+            if "PYTABLES_FORMAT_VERSION" in f.attrs:
+                return True
+
+            def visitor(_name, obj):
+                if isinstance(obj, h5py.Group):
+                    pandas_type = obj.attrs.get("pandas_type")
+                    if pandas_type in (b"frame", "frame"):
+                        raise StopIteration
+
+            try:
+                f.visititems(visitor)
+            except StopIteration:
+                return True
+        return False
+
     def _is_incompatible_root_layout(self, datasets):
         """True when several root-level 1D arrays have mismatched lengths.
 
@@ -165,6 +183,35 @@ class hdf5Reader(BaseFileReader):
         lengths = {ds["shape"][0] for ds in root}
         return len(lengths) > 1
 
+    def _is_grouped_hierarchical_layout(self, datasets):
+        """True for station-grouped files (EQSIM/rechdf5) with mixed 1D lengths.
+
+        Root may hold only a few scalars while waveforms and metadata live under
+        repeated group subtrees (``S_01_01/X``, ``S_01_01/Y``, …).  Pandas
+        HDFStore files are excluded so ``adult.h5`` keeps auto-reading.
+        """
+        if self._is_pandas_pytables_store():
+            return False
+
+        nested = [ds for ds in datasets if "/" in ds["path"]]
+        if len(nested) < 4:
+            return False
+
+        groups = self._build_picker_groups(datasets)
+        if len(groups) < 2:
+            return False
+
+        lengths = set()
+        for ds in nested:
+            if ds["ndim"] == 1 and ds["shape"]:
+                lengths.add(ds["shape"][0])
+        return len(lengths) > 1
+
+    def _needs_dataset_selection(self, datasets):
+        return self._is_incompatible_root_layout(datasets) or self._is_grouped_hierarchical_layout(
+            datasets
+        )
+
     def inventory(self):
         """Summarize datasets and classify the overall layout."""
         datasets = self._list_datasets()
@@ -172,7 +219,7 @@ class hdf5Reader(BaseFileReader):
             layout = "empty"
         elif len(datasets) == 1:
             layout = "single_dataset"
-        elif self._is_incompatible_root_layout(datasets):
+        elif self._needs_dataset_selection(datasets):
             layout = "multi_dataset"
         else:
             layout = "legacy"
@@ -260,12 +307,11 @@ class hdf5Reader(BaseFileReader):
         if not (hasattr(data, "dtype") and data.dtype.kind in ("f", "i", "u")):
             return data
 
-        explicit_fills, uncertain_fills = self._collect_fill_values(dataset)
-        all_fills = explicit_fills | uncertain_fills
-        if not all_fills:
+        explicit_fills, _uncertain_fills = self._collect_fill_values(dataset)
+        if not explicit_fills:
             return data
 
-        matched = {fv for fv in all_fills if (data == fv).any()}
+        matched = {fv for fv in explicit_fills if (data == fv).any()}
         if not matched:
             return data
 
@@ -274,27 +320,12 @@ class hdf5Reader(BaseFileReader):
             mask |= data == fv
         n_replaced = int(mask.sum())
 
-        uncertain_matched = matched & uncertain_fills
-        if uncertain_matched:
-            self.logger.warning(
-                f"Dataset '{name}': {n_replaced}/"
-                f"{data.size} value(s) match the HDF5 "
-                f"default fill value {uncertain_matched} "
-                f"and will be replaced with NaN. "
-                f"If zero is a valid measurement here "
-                f"(e.g. counts, indices), set a "
-                f"'_FillValue' attribute in the file to "
-                f"an unambiguous sentinel, or pass "
-                f"fill_values=[] at construction time to "
-                f"suppress native fill value replacement."
-            )
-        else:
-            self.logger.info(
-                f"Dataset '{name}': replaced "
-                f"{n_replaced}/{data.size} value(s) "
-                f"matching explicit fill sentinel(s) "
-                f"{matched} with NaN."
-            )
+        self.logger.info(
+            f"Dataset '{name}': replaced "
+            f"{n_replaced}/{data.size} value(s) "
+            f"matching explicit fill sentinel(s) "
+            f"{matched} with NaN."
+        )
 
         data = data.astype(np.float64)
         data[mask] = np.nan
@@ -351,9 +382,9 @@ class hdf5Reader(BaseFileReader):
                     return self._read_compatible_dataset_paths(selected)
                 n = len(inv["datasets"])
                 self.logger.warning(
-                    "HDF5 file has %d root-level datasets with incompatible "
-                    "1D shapes; refusing to flatten into one table. "
-                    "Use parse() to list dataset paths and select compatible ones.",
+                    "HDF5 file has %d datasets in an incompatible layout; "
+                    "refusing to flatten into one table. "
+                    "Use parse() / inventory() to list paths and select compatible ones.",
                     n,
                 )
                 return None
@@ -396,49 +427,7 @@ class hdf5Reader(BaseFileReader):
                 try:
                     if isinstance(obj, h5py.Dataset):
                         data = obj[()]
-                        # Translate fill-value sentinels to NaN so that
-                        # pd.isnull()-based metrics (completeness, outliers, …)
-                        # correctly detect missing data.
-                        if hasattr(data, "dtype") and data.dtype.kind in ("f", "i", "u"):
-                            explicit_fills, uncertain_fills = self._collect_fill_values(obj)
-                            all_fills = explicit_fills | uncertain_fills
-                            if all_fills:
-                                # Only iterate sentinels that actually appear in
-                                # the data, so we can report accurately and avoid
-                                # unnecessary dtype promotion.
-                                matched = {fv for fv in all_fills if (data == fv).any()}
-                                if matched:
-                                    mask = np.zeros(data.shape, dtype=bool)
-                                    for fv in matched:
-                                        mask |= data == fv
-                                    n_replaced = int(mask.sum())
-
-                                    uncertain_matched = matched & uncertain_fills
-                                    if uncertain_matched:
-                                        # The only sentinel that matched is the
-                                        # HDF5 default zero — it may be valid data.
-                                        self.logger.warning(
-                                            f"Dataset '{name}': {n_replaced}/"
-                                            f"{data.size} value(s) match the HDF5 "
-                                            f"default fill value {uncertain_matched} "
-                                            f"and will be replaced with NaN. "
-                                            f"If zero is a valid measurement here "
-                                            f"(e.g. counts, indices), set a "
-                                            f"'_FillValue' attribute in the file to "
-                                            f"an unambiguous sentinel, or pass "
-                                            f"fill_values=[] at construction time to "
-                                            f"suppress native fill value replacement."
-                                        )
-                                    else:
-                                        self.logger.info(
-                                            f"Dataset '{name}': replaced "
-                                            f"{n_replaced}/{data.size} value(s) "
-                                            f"matching explicit fill sentinel(s) "
-                                            f"{matched} with NaN."
-                                        )
-
-                                    data = data.astype(np.float64)
-                                    data[mask] = np.nan
+                        data = self._apply_fill_values(data, obj, name)
                         # If it's a 1D or structured dataset, load it into dicts
                         if isinstance(data, (list, tuple)) or hasattr(data, "dtype"):
                             try:
