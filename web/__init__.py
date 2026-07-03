@@ -134,6 +134,10 @@ def create_app():
         except Exception as e:
             startup_log.warning("Failed to delete %s: %s", file_path, e)
 
+    # Sample data folder (served via /sample-data/ route)
+    sample_data_folder = os.path.join(project_root, "examples", "sample_data")
+    app.config["SAMPLE_DATA_FOLDER"] = sample_data_folder
+
     # Custom metrics folder stays inside the aidrin package (dynamic import target)
     import aidrin as _aidrin_pkg
     aidrin_root = os.path.dirname(_aidrin_pkg.__file__)

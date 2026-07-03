@@ -45,7 +45,7 @@ def configure():
         "model": "gpt-4o-mini"
     }
     """
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "No JSON body provided"}), 400
 
@@ -94,7 +94,7 @@ def test_connection():
     if not is_llm_available():
         return jsonify({"error": "openai package not installed"}), 400
 
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data or not data.get("api_key"):
         return jsonify({"error": "API key is required"}), 400
 
@@ -142,7 +142,7 @@ def explain():
     if not config or not config.get("api_key"):
         return jsonify({"error": "LLM not configured"}), 400
 
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "No JSON body provided"}), 400
 
@@ -201,7 +201,7 @@ def cache_explanation():
     from web.routes.utils import get_current_user_id
     from flask import current_app
 
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "No JSON body provided"}), 400
 

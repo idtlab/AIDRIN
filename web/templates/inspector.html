@@ -128,8 +128,8 @@
       { name: 'EGS_Collab_Experiment.json', type: 'dcat', size: '6 KB' },
       { name: 'employees.h5', type: 'h5', size: '1.1 MB' },
       { name: 'employees.json', type: 'json', size: '2 KB' },
-      { name: 'employees.xlsx', type: 'xlsx', size: '5 KB' },
       { name: 'smallSample.csv', type: 'csv', size: '29 bytes' },
+      { name: 'smallSample.xlsx', type: 'xlsx', size: '5 KB' },
     ];
 
     function toggleSampleData() {
@@ -149,7 +149,7 @@
         item.innerHTML = `<div class="file-content"><div class="file-name">${file.name} <span class="file-size">${file.size}</span></div><div class="file-type">${file.type}</div></div>`;
         item.addEventListener('click', () => {
           const link = document.createElement('a');
-          link.href = `/static/datasets/test_data/${file.type}/${file.name}`;
+          link.href = `/sample-data/${file.type}/${file.name}`;
           link.download = file.name;
           document.body.appendChild(link);
           link.click();
