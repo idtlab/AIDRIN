@@ -466,11 +466,16 @@ def summary_statistics():
 
         histograms = summary_histograms(df)
 
+        # Booleans are treated as categorical (they're excluded from describe()
+        # and select_dtypes("number") above, so they belong with the categorical
+        # summary, not the numerical one).
         numerical_columns = [
-            col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)
+            col for col, dtype in df.dtypes.items()
+            if pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
         ]
         categorical_columns = [
-            col for col, dtype in df.dtypes.items() if pd.api.types.is_string_dtype(dtype)
+            col for col, dtype in df.dtypes.items()
+            if pd.api.types.is_string_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
         ]
         all_features = numerical_columns + categorical_columns
 
@@ -490,6 +495,19 @@ def summary_statistics():
                 hdf5_multi_dataset = True
                 selected_dataset_keys = selected
 
+        categorical_summary = {}
+        for col in categorical_columns:
+            counts = df[col].value_counts(dropna=True)
+            count = int(df[col].notna().sum())
+            freq = int(counts.iloc[0]) if not counts.empty else 0
+            categorical_summary[str(col)] = {
+                "count": count,
+                "unique": int(df[col].nunique(dropna=True)),
+                "top": str(counts.index[0]) if not counts.empty else "—",
+                "freq": freq,
+                "freq_pct": round(freq / count * 100, 1) if count else 0.0,
+            }
+
         response_data = ensure_json_serializable({
             "success": True,
             "message": "File uploaded successfully",
@@ -499,6 +517,7 @@ def summary_statistics():
             "numerical_features": list(numerical_columns),
             "all_features": all_features,
             "summary_statistics": summary_statistics,
+            "categorical_summary": categorical_summary,
             "histograms": histograms,
             "hdf5_multi_dataset": hdf5_multi_dataset,
             "selected_dataset_keys": selected_dataset_keys,

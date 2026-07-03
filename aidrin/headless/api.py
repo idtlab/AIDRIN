@@ -1,4 +1,5 @@
 import base64
+import math
 import os
 import re
 import sys
@@ -224,6 +225,74 @@ def get_metric_info(name: str) -> Dict[str, Any]:
         "category": metric["category"],
         "description": metric["description"],
         "required_args": list(metric.get("required_args", [])),
+    }
+
+
+def summarize_dataset(
+    file_path: str,
+    file_type: Optional[str] = None,
+    max_features: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Return shape, per-column descriptive stats, and missing counts for a dataset."""
+    from pathlib import Path
+    from aidrin.file_handling.file_parser import read_file
+
+    path = Path(file_path)
+    ext = f".{file_type}" if file_type else path.suffix.lower()
+    df = read_file((file_path, path.name, ext))
+
+    num_cols = df.select_dtypes(include="number").columns.tolist()
+    cat_cols = df.select_dtypes(include="object").columns.tolist()
+    missing = df.isnull().sum()
+
+    if max_features and max_features >= 2:
+        alloc_num = math.ceil(max_features / 2)
+        alloc_cat = math.floor(max_features / 2)
+        if len(num_cols) < alloc_num:
+            alloc_cat = min(len(cat_cols), alloc_cat + alloc_num - len(num_cols))
+        elif len(cat_cols) < alloc_cat:
+            alloc_num = min(len(num_cols), alloc_num + alloc_cat - len(cat_cols))
+        num_display = num_cols[:alloc_num]
+        cat_display = cat_cols[:alloc_cat]
+        truncated = len(num_cols) > alloc_num or len(cat_cols) > alloc_cat
+    else:
+        num_display, cat_display, truncated = num_cols, cat_cols, False
+
+    numerical: Dict[str, Any] = {}
+    if num_display:
+        desc = df[num_display].describe()
+        for col in num_display:
+            numerical[col] = {
+                "count": int(desc.loc["count", col]),
+                "mean": float(desc.loc["mean", col]),
+                "std": float(desc.loc["std", col]),
+                "min": float(desc.loc["min", col]),
+                "25%": float(desc.loc["25%", col]),
+                "50%": float(desc.loc["50%", col]),
+                "75%": float(desc.loc["75%", col]),
+                "max": float(desc.loc["max", col]),
+                "missing": int(missing[col]),
+            }
+
+    categorical: Dict[str, Any] = {}
+    if cat_display:
+        desc = df[cat_display].describe()
+        for col in cat_display:
+            categorical[col] = {
+                "count": int(desc.loc["count", col]),
+                "unique": int(desc.loc["unique", col]),
+                "top": str(desc.loc["top", col]),
+                "freq": int(desc.loc["freq", col]),
+                "missing": int(missing[col]),
+            }
+
+    return {
+        "shape": {"rows": len(df), "columns": len(df.columns)},
+        "columns": df.columns.tolist(),
+        "numerical": numerical,
+        "categorical": categorical,
+        "truncated": truncated,
+        "max_features": max_features,
     }
 
 

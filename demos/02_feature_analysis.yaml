@@ -1,0 +1,34 @@
+file_path: demos/loan_applications.csv
+file_type: .csv
+metrics:
+  - correlations
+  - feature_relevance
+  - class_imbalance
+
+columns:
+  - age
+  - income
+  - credit_score
+  - employment_years
+  - education
+  - gender
+  - ethnicity
+  - loan_amount
+  - loan_purpose
+  - approved
+
+cat_columns:
+  - education
+  - gender
+  - ethnicity
+  - loan_purpose
+
+num_columns:
+  - age
+  - income
+  - credit_score
+  - employment_years
+  - loan_amount
+
+target_column: approved
+distance_metric: EU

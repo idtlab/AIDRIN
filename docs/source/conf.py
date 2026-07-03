@@ -6,10 +6,19 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import os
+
+# Read the version from aidrin/_version.py directly (without importing the
+# package) so the docs build works without aidrin and its deps installed.
+_version_globals = {}
+_version_path = os.path.join(os.path.dirname(__file__), "..", "..", "aidrin", "_version.py")
+with open(_version_path) as _version_file:
+    exec(_version_file.read(), _version_globals)
+
 project = 'AIDRIN'
 copyright = '2025, IDT Lab'
 author = 'IDT Lab'
-release = '1.0.0'
+release = _version_globals["__version__"]
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

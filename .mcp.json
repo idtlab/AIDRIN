@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "aidrin": {
+      "type": "stdio",
+      "command": "aidrin-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}
