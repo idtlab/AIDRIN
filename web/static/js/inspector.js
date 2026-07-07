@@ -2521,7 +2521,10 @@ function returnToHdf5DatasetPicker() {
       } else if (container) {
         const p = document.createElement("p");
         p.className = "text-sm text-red-600 dark:text-red-400";
-        p.textContent = data.message || data.error || "Failed to return to dataset selection.";
+        p.textContent =
+          data.message ||
+          data.error ||
+          "Failed to return to dataset selection.";
         container.replaceChildren(p);
       }
     })
