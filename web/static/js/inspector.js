@@ -2190,7 +2190,7 @@ function renderHdf5DatasetPicker(container, data) {
         <input type="checkbox" class="mt-1 hdf5-dataset-checkbox" value="${escapedPath}" ${isChecked} />
         <div class="min-w-0">
           <div class="font-medium text-gray-900 dark:text-white">${escapedPath}</div>
-          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${ds.dtype || ""}${shape ? ` · shape ${shape}` : ""}${ds.size != null ? ` · ${ds.size} values` : ""}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${escapeHtml(ds.dtype || "")}${shape ? ` · shape ${shape}` : ""}${ds.size != null ? ` · ${ds.size} values` : ""}</div>
         </div>
       </label>`;
   }
