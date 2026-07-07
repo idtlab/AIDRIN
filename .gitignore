@@ -171,7 +171,6 @@ aidrin/custom_metrics/remedy_data/
 
 # Agentic examples — user-supplied files and generated outputs (download/run separately)
 examples/agentic/power_consumption/data/household_power_consumption.txt
-examples/agentic/power_consumption/sources/
 examples/agentic/power_consumption/results.json
 examples/agentic/power_consumption/results*.json
 examples/agentic/**/*_vector_store/

@@ -37,25 +37,34 @@ Prerequisites
 
 - **Claude Code** installed (CLI, desktop app, or IDE extension). See the
   `Claude Code documentation <https://docs.anthropic.com/en/docs/claude-code>`_.
-- **AIDRIN** installed in a Python 3.10+ environment. See :ref:`cli_installation`.
+- **AIDRIN** installed in a Python 3.10+ environment with its conda/virtual environment
+  activated. If you haven't done this yet, follow :ref:`cli_installation` first, then return here.
 
 ----
 
 Setup
 -----
 
-Step 1 — Install AIDRIN
-~~~~~~~~~~~~~~~~~~~~~~~~
+Step 1 — Install AIDRIN with MCP support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From the AIDRIN repository root. The MCP server requires the ``[mcp]`` extra
-(a bare install puts the script on PATH but ``mcp`` itself is absent, causing
-a ``ModuleNotFoundError`` at runtime):
+Once your environment is active, add the ``[mcp]`` extra from the repository root:
 
 .. code-block:: bash
 
-   pip install -e '.[mcp]'   # pip path
-   # or, with uv:
+   pip install -e '.[mcp]'
+
+Or, with ``uv``:
+
+.. code-block:: bash
+
    uv sync --group mcp
+
+Verify the command is on your PATH before continuing:
+
+.. code-block:: bash
+
+   which aidrin-mcp   # should print a path inside your active environment
 
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

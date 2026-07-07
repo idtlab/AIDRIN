@@ -1,0 +1,19 @@
+file_path: demos/patient_records.csv
+file_type: .csv
+metrics:
+  - single_attribute_risk
+  - multiple_attribute_risk
+  - differential_privacy
+
+id_column: patient_id
+
+eval_columns:
+  - age
+  - zip_code
+  - gender
+
+columns:
+  - blood_pressure_systolic
+  - cholesterol
+
+epsilon: 1.0
