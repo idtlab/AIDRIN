@@ -21,15 +21,32 @@
       <!-- Center: file info (visible only when a file is loaded) -->
       {% if uploaded_file_path %}
       <div class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-lg text-sm" style="background: var(--backgroundColor);">
+        <div class="relative">
+          <button id="file-selector-btn" type="button" onclick="toggleFileSelector(event)"
+                  class="flex items-center gap-2 max-w-xs">
+            {% if globus_mode %}
+            <!-- Globus remote file icon -->
+            <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.893 13.393l-1.135-1.135a2.252 2.252 0 01-.421-.585l-1.08-2.16a.414.414 0 00-.663-.107.827.827 0 01-.812.21l-1.273-.363a.89.89 0 00-.738 1.595l.587.39c.59.395.674 1.23.172 1.732l-.2.2c-.212.212-.33.498-.33.796v.41c0 .409-.11.809-.32 1.158l-1.315 2.191a2.11 2.11 0 01-1.81 1.025 1.055 1.055 0 01-1.055-1.055v-1.172c0-.92-.56-1.747-1.414-2.089l-.655-.261a2.25 2.25 0 01-1.383-2.46l.007-.042a2.25 2.25 0 01.29-.787l.09-.15a2.25 2.25 0 012.37-1.048l1.178.236a1.125 1.125 0 001.302-.795l.208-.73a1.125 1.125 0 00-.578-1.315l-.665-.332-.091.091a2.25 2.25 0 01-1.591.659h-.18c-.249 0-.487.1-.662.274a.931.931 0 01-1.458-1.137l1.411-2.353a2.25 2.25 0 00.286-.76m11.928 9.869A9 9 0 008.965 3.525m11.928 9.868A9 9 0 118.965 3.525"/></svg>
+            {% else %}
+            <!-- Local file icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" viewBox="0 -960 960 960" fill="currentColor"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
+            {% endif %}
+            <span id="file-selector-active" class="font-medium truncate">{{ uploaded_file_name }}</span>
+            <span id="file-selector-count" class="text-xs text-gray-400 hidden"></span>
+            <svg class="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div id="file-selector-dropdown"
+               class="hidden absolute left-0 mt-2 w-72 max-h-80 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-[var(--secondaryColor)] shadow-lg z-50">
+            <div class="p-2 border-b border-gray-200 dark:border-gray-700">
+              <input id="file-selector-search" type="text" placeholder="Filter files…"
+                     oninput="renderFileSelectorList()"
+                     class="w-full px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-transparent" />
+            </div>
+            <ul id="file-selector-list" class="max-h-64 overflow-y-auto py-1"></ul>
+          </div>
+        </div>
         {% if globus_mode %}
-        <!-- Globus remote file indicator -->
-        <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.893 13.393l-1.135-1.135a2.252 2.252 0 01-.421-.585l-1.08-2.16a.414.414 0 00-.663-.107.827.827 0 01-.812.21l-1.273-.363a.89.89 0 00-.738 1.595l.587.39c.59.395.674 1.23.172 1.732l-.2.2c-.212.212-.33.498-.33.796v.41c0 .409-.11.809-.32 1.158l-1.315 2.191a2.11 2.11 0 01-1.81 1.025 1.055 1.055 0 01-1.055-1.055v-1.172c0-.92-.56-1.747-1.414-2.089l-.655-.261a2.25 2.25 0 01-1.383-2.46l.007-.042a2.25 2.25 0 01.29-.787l.09-.15a2.25 2.25 0 012.37-1.048l1.178.236a1.125 1.125 0 001.302-.795l.208-.73a1.125 1.125 0 00-.578-1.315l-.665-.332-.091.091a2.25 2.25 0 01-1.591.659h-.18c-.249 0-.487.1-.662.274a.931.931 0 01-1.458-1.137l1.411-2.353a2.25 2.25 0 00.286-.76m11.928 9.869A9 9 0 008.965 3.525m11.928 9.868A9 9 0 118.965 3.525"/></svg>
-        <span class="font-medium">{{ uploaded_file_name }}</span>
         <span class="text-xs text-gray-400 dark:text-gray-500">via Globus</span>
-        {% else %}
-        <!-- Local file indicator -->
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 -960 960 960" fill="currentColor"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
-        <span class="font-medium">{{ uploaded_file_name }}</span>
         {% endif %}
         <button onclick="clearFile()" class="ml-1 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" title="Clear file" aria-label="Clear uploaded file">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>

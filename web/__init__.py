@@ -71,6 +71,14 @@ def create_app():
         max_upload_mb = 1024
     app.config["MAX_CONTENT_LENGTH"] = max_upload_mb * 1024 * 1024
 
+    # Maximum number of files per upload batch.
+    try:
+        app.config["AIDRIN_MAX_UPLOAD_FILES"] = int(
+            os.environ.get("AIDRIN_MAX_UPLOAD_FILES", 50)
+        )
+    except ValueError:
+        app.config["AIDRIN_MAX_UPLOAD_FILES"] = 50
+
     @app.context_processor
     def inject_upload_limit():
         # expose the upload limit to templates for client-side validation
@@ -138,10 +146,11 @@ def create_app():
     sample_data_folder = os.path.join(project_root, "examples", "sample_data")
     app.config["SAMPLE_DATA_FOLDER"] = sample_data_folder
 
-    # Custom metrics folder stays inside the aidrin package (dynamic import target)
-    import aidrin as _aidrin_pkg
-    aidrin_root = os.path.dirname(_aidrin_pkg.__file__)
-    custom_metrics_folder = os.path.join(aidrin_root, "custom_metrics")
+    # Runtime custom-metric files live OUTSIDE the package, at the project root,
+    # so writing/deleting them does NOT trigger the Flask --debug auto-reloader
+    # (which watches .py files under the package). The base class they import,
+    # `aidrin.custom_metrics.base_dr`, still resolves via the installed package.
+    custom_metrics_folder = os.path.join(project_root, "data", "custom_metrics")
     os.makedirs(custom_metrics_folder, exist_ok=True)
     app.config["CUSTOM_METRICS_FOLDER"] = custom_metrics_folder
     app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {"py"}

@@ -24,39 +24,60 @@ function togglePillarDropdown(id) {
 //for uploads
 function uploadForm() {
   const form = document.getElementById("uploadForm");
-  const fileTypeSelector = document.getElementById("fileTypeSelector");
   const fileInput = document.getElementById("file");
-
-  // Check if file type is selected
-  if (!fileTypeSelector.value) {
-    if (typeof showToast === "function")
-      showToast("Please select a file type first", "error");
-    return;
-  }
-
-  // Check if file is selected
   if (!fileInput.files || fileInput.files.length === 0) {
     if (typeof showToast === "function")
-      showToast("Please select a file to upload", "error");
+      showToast("Please select at least one file", "error");
     return;
   }
-
-  // Check the file does not exceed the server's upload size limit
+  // Check the upload does not exceed the server's size limit. MAX_CONTENT_LENGTH
+  // caps the whole request body, so check the combined size of all files.
   const maxBytes = parseInt(form.dataset.maxUploadBytes, 10);
-  if (maxBytes && fileInput.files[0].size > maxBytes) {
-    const maxMb =
-      form.dataset.maxUploadMb || Math.round(maxBytes / (1024 * 1024));
-    if (typeof showToast === "function")
-      showToast(
-        `File too large. The maximum upload size is ${maxMb} MB.`,
-        "error",
-      );
-    fileInput.value = "";
-    return;
+  if (maxBytes) {
+    let total = 0;
+    for (const f of fileInput.files) total += f.size;
+    if (total > maxBytes) {
+      const maxMb =
+        form.dataset.maxUploadMb || Math.round(maxBytes / (1024 * 1024));
+      if (typeof showToast === "function")
+        showToast(
+          `Upload too large. The maximum total upload size is ${maxMb} MB.`,
+          "error",
+        );
+      fileInput.value = "";
+      return;
+    }
   }
 
-  // Submit the form normally
-  form.submit();
+  const data = new FormData();
+  for (const f of fileInput.files) data.append("file", f);
+  fetch(form.action, {
+    method: "POST",
+    body: data,
+    headers: { Accept: "application/json" },
+  })
+    .then((r) => {
+      if (r.redirected) {
+        window.location.href = r.url;
+        return null;
+      }
+      if (r.ok) {
+        window.location.reload();
+        return null;
+      }
+      return r.json().catch(() => ({
+        success: false,
+        message: `Upload failed (${r.status})`,
+      }));
+    })
+    .then((body) => {
+      if (body && body.success === false && typeof showToast === "function")
+        showToast(body.message || "Upload failed", "error");
+    })
+    .catch((err) => {
+      if (typeof showToast === "function")
+        showToast("Upload failed: " + err.message, "error");
+    });
 }
 
 //to clear
@@ -91,29 +112,6 @@ function clearFile() {
       console.error("Error:", error);
       openErrorPopup("File Clear", error); // call error popup
     });
-}
-
-//changes file upload ability
-function updateFileInputBasedOnType(
-  fileTypeElement,
-  fileInput,
-  fileUploadMessage,
-) {
-  const fileType = fileTypeElement.value;
-  //if a filetype is present, set to that filetype only, otherwise disable
-  if (fileType) {
-    fileInput.disabled = false;
-    fileInput.setAttribute("accept", fileType);
-    debugLog("USER SELECTED FILETYPE: " + fileType);
-    fileUploadMessage.style.opacity = "1";
-    fileUploadMessage.textContent = "Click to upload or drag and drop";
-  } else {
-    fileInput.disabled = true;
-    fileInput.removeAttribute("accept");
-    fileUploadMessage.style.opacity = "0.6";
-    fileUploadMessage.textContent = "Select a file type first";
-    debugLog("FILE UPLOAD DISABLED");
-  }
 }
 
 // Add these functions before the submitForm function

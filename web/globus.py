@@ -45,7 +45,67 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     This function is serialised and sent to the remote endpoint, where it
     imports ``aidrin`` locally and dispatches to the requested metric.
     The remote environment must have ``pip install aidrin`` completed.
+
+    The special ``metric_name == "__list_files__"`` enumerates the data files at
+    ``file_path`` (a file -> just it; a directory -> its files, non-recursive).
+    It is handled here (rather than as a separate registered function) so it
+    reuses this proven, already-registered function. Needs only stdlib.
     """
+    if metric_name == "__list_files__":
+        import os
+        try:
+            if os.path.isfile(file_path):
+                return {"files": [file_path]}
+            if os.path.isdir(file_path):
+                return {"files": sorted(
+                    os.path.join(file_path, f)
+                    for f in os.listdir(file_path)
+                    if os.path.isfile(os.path.join(file_path, f))
+                )}
+            return {"error": f"Path not found on the remote endpoint: {file_path}"}
+        except Exception as e:  # noqa: BLE001
+            return {"error": f"Could not list '{file_path}': {e}"}
+
+    if metric_name == "__summarize_files__":
+        # Structural batch overview (records, features, numerical, categorical,
+        # size) for a list of remote files. Computed INLINE with read_file +
+        # pandas (both present in any aidrin install) — NOT via
+        # aidrin.summarize_files, which may not exist on the endpoint's released
+        # aidrin. Mirrors aidrin.summarize_files' output so values match local.
+        # params["file_infos"]: list of [path, name, type].
+        import os
+        import pandas as pd
+        from aidrin.file_handling.file_parser import read_file as _read_file
+
+        out = []
+        for fi in (params.get("file_infos") or []):
+            p, n, t = fi[0], fi[1], fi[2]
+            try:
+                size = os.path.getsize(p) if p and os.path.exists(p) else None
+            except OSError:
+                size = None
+            df = _read_file((p, n, t))
+            if isinstance(df, pd.DataFrame):
+                out.append({
+                    "name": n, "type": t,
+                    "records": int(len(df)),
+                    "features": int(len(df.columns)),
+                    "numerical": int(sum(
+                        pd.api.types.is_numeric_dtype(d) for d in df.dtypes)),
+                    "categorical": int(sum(
+                        pd.api.types.is_string_dtype(d) for d in df.dtypes)),
+                    "size_bytes": size, "status": "ok", "error": None,
+                })
+            else:
+                msg = df if isinstance(df, str) else "Could not read the file."
+                out.append({
+                    "name": n, "type": t,
+                    "records": None, "features": None,
+                    "numerical": None, "categorical": None,
+                    "size_bytes": size, "status": "error", "error": msg,
+                })
+        return {"files": out}
+
     # Ensure matplotlib uses non-interactive backend on remote endpoint
     import matplotlib
     matplotlib.use("Agg")
@@ -439,22 +499,91 @@ def get_compute_client(tokens):
 def register_function(client, force=False):
     """Register the remote_metric_runner function with Globus Compute.
 
-    Returns the function UUID. Re-registers on every server restart
-    to ensure the latest code is used.
+    The cache key includes a hash of the function's current source, so any edit
+    to remote_metric_runner (once the running process has reloaded it) forces a
+    fresh registration — the endpoint then runs the new code. Without this, a
+    stale cached registration would keep executing the old function.
     """
-    cache_key = "remote_metric_runner"
+    import hashlib
+    import inspect
+
+    try:
+        src = inspect.getsource(remote_metric_runner)
+        digest = hashlib.sha1(src.encode("utf-8")).hexdigest()[:12]
+    except (OSError, TypeError):
+        src = ""
+        digest = "nosrc"
+    supports_list = "__list_files__" in src
+    cache_key = f"remote_metric_runner:{digest}"
     if not force and cache_key in _function_uuid_cache:
         return _function_uuid_cache[cache_key]
 
     func_uuid = client.register_function(remote_metric_runner)
     _function_uuid_cache[cache_key] = func_uuid
-    logger.info("Registered remote_metric_runner with Globus Compute: %s", func_uuid)
+    # The supports_list flag tells you whether the LOADED code is current: if it
+    # logs False, the server process is running stale code — restart it.
+    logger.info(
+        "Registered remote_metric_runner: func_uuid=%s src_hash=%s supports __list_files__=%s",
+        func_uuid, digest, supports_list,
+    )
     return func_uuid
+
+
+# ---------------------------------------------------------------------------
+# Remote file listing (for adding a file OR a directory to the batch)
+# ---------------------------------------------------------------------------
+
+
+def submit_list_files(client, endpoint_id, path):
+    """Submit a remote file-listing task; return the task UUID string.
+
+    Reuses the proven ``remote_metric_runner`` (via its ``__list_files__``
+    operation) rather than registering a separate function, so it goes through
+    the same registration/serialisation path that already works for metrics.
+    """
+    name = path.rstrip("/").split("/")[-1]
+    return submit_metric(client, endpoint_id, "__list_files__", path, name, "")
 
 
 # ---------------------------------------------------------------------------
 # Task submission and status
 # ---------------------------------------------------------------------------
+
+
+def _run_with_retry(client, *args, max_attempts=8, **kwargs):
+    """client.run with retry on the transient 'endpoint already in use' (409).
+
+    Globus Compute returns 409 RESOURCE_CONFLICT when the endpoint is busy with a
+    concurrent submission and asks the caller to retry. Concurrent submitters that
+    back off on an identical schedule keep colliding, so use exponential backoff
+    with full jitter to de-correlate retries and ride out a busy endpoint.
+    """
+    import random
+    import time
+
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            return client.run(*args, **kwargs)
+        except Exception as e:  # noqa: BLE001
+            msg = str(e)
+            transient = (
+                getattr(e, "http_status", None) == 409
+                or "RESOURCE_CONFLICT" in msg
+                or "already in use" in msg.lower()
+                # Endpoint failed to start the task worker (often transient on
+                # busy/HPC endpoints): "Failed to start ... (SystemExit) 73".
+                or "Failed to start" in msg
+                or "SystemExit" in msg
+            )
+            if not (transient and attempt < max_attempts - 1):
+                raise
+            last_err = e
+            # full jitter over an exponentially growing window, capped at 8s:
+            # sleep ~U(0, min(8, 0.5 * 2**attempt))
+            backoff = min(8.0, 0.5 * (2 ** attempt))
+            time.sleep(random.uniform(0.0, backoff))
+    raise last_err  # pragma: no cover
 
 
 def submit_metric(client, endpoint_id, metric_name, file_path, file_name, file_type, **params):
@@ -467,7 +596,8 @@ def submit_metric(client, endpoint_id, metric_name, file_path, file_name, file_t
     # Pass all arguments as positional args to avoid kwarg conflicts
     # with endpoint_id/function_id. The remote_metric_runner signature is:
     # remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
-    task_id = client.run(
+    task_id = _run_with_retry(
+        client,
         metric_name, file_path, file_name, file_type,
         endpoint_id=endpoint_id,
         function_id=func_uuid,

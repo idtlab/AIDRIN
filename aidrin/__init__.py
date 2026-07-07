@@ -334,8 +334,20 @@ def compute_entropy_risk(quasi_identifiers, file_info):
     return _fn(quasi_identifiers, file_info)
 
 
+# ---------------------------------------------------------------------------
+# Batch / Structural Overview
+# ---------------------------------------------------------------------------
+
+def summarize_files(file_infos):
+    """Per-file structural overview + totals for a batch of files (no metrics)."""
+    from aidrin.batch import summarize_files as _fn
+    return _fn(file_infos)
+
+
 __all__ = [
     "__version__",
+    # Batch / Structural Overview
+    "summarize_files",
     # Data Quality
     "calculate_completeness",
     "calculate_duplicates",

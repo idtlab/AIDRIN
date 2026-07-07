@@ -38,6 +38,37 @@ SUPPORTED_FILE_TYPES = [
     # (file_type,file_type_name)
 ]
 
+# Map a real file extension to the READER_MAP key that handles it.
+# Excel uses a single combined reader key, so all its extensions point at it.
+_EXCEL_KEY = ".xls, .xlsb, .xlsx, .xlsm"
+EXTENSION_MAP = {
+    ".csv": ".csv",
+    ".json": ".json",
+    ".npz": ".npz",
+    ".h5": ".h5",
+    ".parquet": ".parquet",   # resolves only once a parquet reader is registered in READER_MAP
+    ".xls": _EXCEL_KEY,
+    ".xlsb": _EXCEL_KEY,
+    ".xlsx": _EXCEL_KEY,
+    ".xlsm": _EXCEL_KEY,
+}
+
+
+def file_extension(filename):
+    """Return the lowercased real extension (e.g. ``.csv``), or ``""``."""
+    return os.path.splitext(filename or "")[1].lower()
+
+
+def infer_file_type(filename):
+    """Return the READER_MAP key for a filename's extension, or None.
+
+    Only returns a key that is actually registered in READER_MAP on this
+    install (e.g. ``.parquet`` resolves only if the parquet reader exists).
+    """
+    key = EXTENSION_MAP.get(file_extension(filename))
+    return key if key in READER_MAP else None
+
+
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
 

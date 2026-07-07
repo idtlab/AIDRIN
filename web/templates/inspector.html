@@ -55,6 +55,7 @@
 
         <!-- Metric configuration panels (only one visible at a time) -->
         <div id="panels-container">
+          {% include '_panels/_batch_overview.html' %}
           {% include '_panels/_data_overview.html' %}
           {% include '_panels/_data_quality.html' %}
           {% include '_panels/_feature_relevance.html' %}
@@ -85,7 +86,14 @@
       {% endif %}
 
       {% if uploaded_file_path and not globus_mode %}
+        // Initialise the workspace; it restores the panel from the URL hash
+        // (#data-overview when switching files, etc.).
         initWorkspace();
+        {% if land_on_batch %}
+          // Fresh multi-file upload: surface the batch overview as the landing.
+          loadBatchOverview();
+          showPanel('batch-overview');
+        {% endif %}
       {% elif globus_mode %}
         // Globus mode — flag for workspaceSubmit to route through Globus
         window.AIDRIN_GLOBUS_MODE = true;
@@ -93,6 +101,7 @@
         window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
         window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
+        loadFileSelector();
         showPanel('data-overview');
         // Show Globus info banner + loading spinner for summary stats
         var ws = document.getElementById('workspace-summary');
@@ -174,17 +183,6 @@
       renderFiles();
       const sel = document.getElementById('fileTypeSelect');
       if (sel) sel.addEventListener('change', filterFiles);
-
-      // File type selector enables file input
-      const fileTypeEl = document.getElementById('fileTypeSelector');
-      const fileInput = document.getElementById('file');
-      const fileMsg = document.getElementById('FileUploadMessage');
-      if (fileTypeEl && fileInput && fileMsg) {
-        fileTypeEl.addEventListener('change', function() {
-          updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
-        });
-        updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
-      }
 
       // Drag and drop support for the upload dropzone
       const dropzone = document.getElementById('fileUploadContainer');

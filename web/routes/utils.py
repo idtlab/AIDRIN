@@ -2,7 +2,9 @@
 
 import io
 import base64
+import json
 import logging
+import os
 import time
 import uuid
 
@@ -79,10 +81,94 @@ def get_current_user_id():
     return session["user_id"]
 
 
+# ---------------------------------------------------------------------------
+# Multi-file store + active-file shim
+# ---------------------------------------------------------------------------
+
+def _files_store_path():
+    """Path of the current user's persisted file-list JSON.
+
+    Stored on disk (not in the in-memory cache or the session cookie) so the
+    batch survives app restarts — e.g. the Flask dev-server auto-reload that
+    fires when a custom metric writes a .py into the package — and is shared
+    across worker processes. Lives outside UPLOAD_FOLDER so the upload cleanup
+    doesn't remove it.
+    """
+    base = os.path.dirname(current_app.config["UPLOAD_FOLDER"])
+    store_dir = os.path.join(base, "filelists")
+    os.makedirs(store_dir, exist_ok=True)
+    return os.path.join(store_dir, f"{get_current_user_id()}.json")
+
+
+def get_uploaded_files():
+    """Return the persisted list of uploaded files for the current user."""
+    try:
+        with open(_files_store_path()) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return []
+
+
+def save_uploaded_files(files):
+    """Persist the file list to disk (survives restarts; not in the cookie)."""
+    try:
+        with open(_files_store_path(), "w") as fh:
+            json.dump(files, fh)
+    except OSError:
+        logger.warning("Could not persist uploaded file list", exc_info=True)
+
+
+def get_active_file():
+    """Return the active file entry dict, or None."""
+    active_id = session.get("active_file_id")
+    for f in get_uploaded_files():
+        if f["id"] == active_id:
+            return f
+    return None
+
+
+def set_active_file(file_id):
+    """Make file_id active and mirror its identity into the legacy session keys.
+
+    Returns True if the file exists, else False. For a Globus entry, also
+    repopulates the globus_* keys that the remote path + cache still read.
+    """
+    entry = next((f for f in get_uploaded_files() if f["id"] == file_id), None)
+    if entry is None:
+        return False
+    session["active_file_id"] = file_id
+    session["uploaded_file_path"] = entry["path"]
+    session["uploaded_file_name"] = entry["name"]
+    session["uploaded_file_type"] = entry["type"]
+    if entry.get("source") == "globus":
+        session["globus_file_path"] = entry["path"]
+        session["globus_file_name"] = entry["name"]
+        session["globus_file_type"] = entry["type"]
+        session["globus_endpoint_id"] = entry.get("endpoint_id")
+    else:
+        for k in ("globus_file_path", "globus_file_name",
+                  "globus_file_type", "globus_endpoint_id"):
+            session.pop(k, None)
+    return True
+
+
+def clear_uploaded_files():
+    """Remove the file list and all active/legacy file pointers."""
+    try:
+        os.remove(_files_store_path())
+    except OSError:
+        pass
+    for k in ("active_file_id", "uploaded_file_path", "uploaded_file_name",
+              "uploaded_file_type", "globus_file_path", "globus_file_name",
+              "globus_file_type", "globus_endpoint_id"):
+        session.pop(k, None)
+
+
 def generate_metric_cache_key(file_name, metric_type, **params):
     """Generate a user-specific cache key for metrics."""
     user_id = get_current_user_id()
-    cache_parts = [f"user:{user_id}", f"file:{file_name}"]
+    file_token = session.get("active_file_id") or file_name
+    cache_parts = [f"user:{user_id}", f"file:{file_token}"]
 
     if metric_type == "dp":
         features = params.get("features", [])
@@ -170,8 +256,10 @@ def store_result(metric, final_dict):
     # Also store a persistent user-scoped copy for the cache info page
     user_id = get_current_user_id()
     metric_short = metric.rsplit(".", 1)[-1] if "." in metric else metric
-    file_name = session.get("uploaded_file_name") or session.get("globus_file_name") or "unknown"
-    user_key = f"user:{user_id}:file:{file_name}:{metric_short}"
+    file_token = session.get("active_file_id") or (
+        session.get("uploaded_file_name") or session.get("globus_file_name") or "unknown"
+    )
+    user_key = f"user:{user_id}:file:{file_token}:{metric_short}"
     current_app.TEMP_RESULTS_CACHE[user_key] = {
         "data": formatted_final_dict,
         "timestamp": time.time(),

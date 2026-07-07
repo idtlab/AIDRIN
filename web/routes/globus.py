@@ -5,6 +5,7 @@ registered when ``globus-compute-sdk`` is installed.
 """
 
 import logging
+import uuid
 
 from flask import (
     Blueprint,
@@ -21,10 +22,33 @@ from web.globus import (
     exchange_code_for_tokens,
     get_compute_client,
     submit_metric,
+    submit_list_files,
     check_task,
 )
+from web.routes.utils import get_uploaded_files, save_uploaded_files, set_active_file
 
 logger = logging.getLogger(__name__)
+
+
+def _poll_result(client, task_id, timeout=120):
+    """Block until a short Globus Compute task finishes; return its result.
+
+    Raises on remote failure or timeout. Used for the quick, interactive
+    listing/overview tasks submitted during add-files.
+    """
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status = check_task(client, task_id)
+        state = status.get("status")
+        if state == "completed":
+            return status.get("result")
+        if state == "failed":
+            raise RuntimeError(status.get("error", "Remote task failed"))
+        time.sleep(1)
+    raise TimeoutError("Remote task timed out")
+
 
 globus_bp = Blueprint("globus", __name__, url_prefix="/globus")
 
@@ -194,11 +218,32 @@ def submit():
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
 
-        # Store endpoint info in session for subsequent metric submissions
-        session["globus_endpoint_id"] = endpoint_id
-        session["globus_file_path"] = file_path
-        session["globus_file_name"] = file_name
-        session["globus_file_type"] = file_type
+        # Add the selected Globus file to the shared multi-file list and make it
+        # active.  set_active_file() repopulates the globus_* session keys so
+        # any downstream code that still reads those keys continues to work.
+        entries = get_uploaded_files()
+        # Avoid duplicate entries for the same endpoint + path combination.
+        existing = next(
+            (e for e in entries
+             if e.get("source") == "globus"
+             and e.get("endpoint_id") == endpoint_id
+             and e.get("path") == file_path),
+            None,
+        )
+        if existing is None:
+            entry = {
+                "id": uuid.uuid4().hex,
+                "name": file_name,
+                "type": file_type,
+                "path": file_path,
+                "source": "globus",
+                "endpoint_id": endpoint_id,
+            }
+            entries.append(entry)
+            save_uploaded_files(entries)
+        else:
+            entry = existing
+        set_active_file(entry["id"])  # also repopulates globus_* session keys
 
         task_id = submit_metric(
             client, endpoint_id, metric_name,
@@ -222,6 +267,183 @@ def submit():
     except Exception as e:
         logger.error("Globus submit error: %s", e, exc_info=True)
         return jsonify({"error": "Failed to submit task"}), 500
+
+
+@globus_bp.route("/add-files", methods=["POST"])
+def add_files():
+    """Add a remote file OR every supported file in a remote directory.
+
+    Body: ``{"endpoint_id": "...", "path": "/remote/file-or-dir"}``.
+
+    Ships a listing function to the endpoint (blocking with a timeout), then
+    infers each file's type server-side (so it doesn't depend on the endpoint's
+    aidrin version), adds the supported ones to the shared batch as
+    ``source:"globus"`` entries, and activates the first new one. Unsupported
+    files are reported as ``skipped``.
+    """
+    import time
+    from aidrin.file_handling.file_parser import infer_file_type
+
+    if not session.get("globus_authenticated"):
+        return jsonify({"error": "Not authenticated with Globus"}), 401
+
+    data = request.get_json() or {}
+    endpoint_id = data.get("endpoint_id")
+    path = data.get("path")
+    if not endpoint_id or not path:
+        return jsonify({"error": "Missing required fields: endpoint_id, path"}), 400
+
+    try:
+        client = get_compute_client(session.get("globus_tokens", {}))
+        task_id = submit_list_files(client, endpoint_id, path)
+
+        # Block for the listing result (it's quick on the endpoint).
+        deadline = time.time() + 60
+        result = None
+        while time.time() < deadline:
+            status = check_task(client, task_id)
+            if status.get("status") == "completed":
+                result = status.get("result")
+                break
+            if status.get("status") == "failed":
+                return jsonify({"error": status.get("error", "Remote listing failed")}), 502
+            time.sleep(1)
+        if result is None:
+            return jsonify({"error": "Timed out listing remote files"}), 504
+        if isinstance(result, dict) and result.get("error"):
+            return jsonify({"error": result["error"]}), 400
+
+        files = result.get("files", []) if isinstance(result, dict) else []
+        if not files:
+            return jsonify({"error": "No files found at that path"}), 400
+
+        max_files = current_app.config.get("AIDRIN_MAX_UPLOAD_FILES", 50)
+        entries = get_uploaded_files()
+        added, skipped = [], []
+        first_id = None
+        for p in files:
+            name = p.rstrip("/").split("/")[-1]
+            ftype = infer_file_type(name)
+            if not ftype:
+                skipped.append(name)
+                continue
+            if len(entries) >= max_files:
+                skipped.append(name)
+                continue
+            existing = next(
+                (e for e in entries
+                 if e.get("source") == "globus"
+                 and e.get("endpoint_id") == endpoint_id
+                 and e.get("path") == p),
+                None,
+            )
+            if existing is not None:
+                if first_id is None:
+                    first_id = existing["id"]
+                continue
+            entry = {
+                "id": uuid.uuid4().hex,
+                "name": name,
+                "type": ftype,
+                "path": p,
+                "source": "globus",
+                "endpoint_id": endpoint_id,
+            }
+            entries.append(entry)
+            added.append(name)
+            if first_id is None:
+                first_id = entry["id"]
+
+        # Pull a structural overview (records/features/numerical/categorical/
+        # size) for the just-added globus files, computed on the endpoint via the
+        # same aidrin.summarize_files used for local batches, and cache it on each
+        # entry so /files/summary doesn't re-fetch it on every page load.
+        # Recompute for entries that have NO usable stats yet — i.e. missing the
+        # records key OR cached as None from an earlier failed attempt (so a
+        # retry isn't permanently blocked).
+        pending = [
+            e for e in entries
+            if e.get("source") == "globus"
+            and e.get("endpoint_id") == endpoint_id
+            and e.get("records") is None
+        ]
+        overview_error = None
+        if pending:
+            # Guard: is THIS server's loaded remote_metric_runner new enough to
+            # do remote stats? If not, the process is running stale code — say so
+            # plainly rather than failing silently into dashes.
+            import inspect as _inspect
+            from web.globus import remote_metric_runner as _runner
+            try:
+                _runner_src = _inspect.getsource(_runner)
+            except (OSError, TypeError):
+                _runner_src = ""
+            if "__summarize_files__" not in _runner_src:
+                overview_error = (
+                    "This AIDRIN server is running an outdated build and cannot "
+                    "compute remote file stats — please fully restart the server."
+                )
+            else:
+                try:
+                    infos = [[e["path"], e["name"], e["type"]] for e in pending]
+                    overview_task = submit_metric(
+                        client, endpoint_id, "__summarize_files__", "", "", "",
+                        file_infos=infos,
+                    )
+                    overview = _poll_result(client, overview_task, timeout=120)
+                    if isinstance(overview, dict) and overview.get("error"):
+                        overview_error = overview["error"]  # e.g. "Unknown metric: ..."
+                    stats_rows = (
+                        overview.get("files", []) if isinstance(overview, dict) else []
+                    )
+                    _ok = sum(1 for r in stats_rows if r.get("status") == "ok")
+                    logger.info(
+                        "Globus overview result: %d/%d files read OK; "
+                        "sample_row=%s top_error=%s",
+                        _ok, len(stats_rows),
+                        (stats_rows[0] if stats_rows else None), overview_error,
+                    )
+                    if not stats_rows and not overview_error:
+                        overview_error = f"Unexpected remote response: {overview!r}"[:200]
+                    for entry, row in zip(pending, stats_rows):
+                        for key in (
+                            "records", "features", "numerical",
+                            "categorical", "size_bytes", "status", "error",
+                        ):
+                            entry[key] = row.get(key)
+                    # If the endpoint read every file but they all errored, surface
+                    # the first reason (e.g. a parse error / missing dependency).
+                    if (stats_rows and not overview_error
+                            and all(r.get("status") == "error" for r in stats_rows)):
+                        overview_error = (
+                            stats_rows[0].get("error")
+                            or "The endpoint could not read the remote files"
+                        )
+                except Exception as ex:  # noqa: BLE001
+                    # Overview is best-effort: a failure here must not block adding.
+                    overview_error = str(ex)
+                    logger.warning("Globus batch overview unavailable: %s", ex)
+
+        save_uploaded_files(entries)
+        if first_id:
+            set_active_file(first_id)  # repopulates globus_* session keys
+
+        if not added and not first_id:
+            return jsonify({
+                "error": "No supported files found. Supported: CSV, Excel, "
+                         "JSON, NumPy (.npz), HDF5."
+            }), 400
+
+        return jsonify({
+            "added": added,
+            "skipped": skipped,
+            "active_file_id": first_id,
+            "overview_error": overview_error,  # why per-file stats are missing
+        })
+
+    except Exception as e:
+        logger.error("Globus add-files error: %s", e, exc_info=True)
+        return jsonify({"error": "Failed to add remote files"}), 500
 
 
 @globus_bp.route("/cache-summary", methods=["POST"])

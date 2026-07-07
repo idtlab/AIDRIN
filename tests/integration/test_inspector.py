@@ -63,7 +63,7 @@ def test_inspector_get_no_file(client):
     assert response.status_code == 200
     html = response.data.decode()
     assert "AI Data Readiness Infrastructure" in html
-    assert "Select a File Type" in html
+    assert "Click to upload" in html
     assert "https://aidrin.readthedocs.io/en/latest/" in html
 
 

@@ -517,6 +517,8 @@ def compute_k_anonymity(quasi_identifiers: List[str], file_info):
         "k-Anonymity Visualization": base64_str}``
         or ``{"Error": str}`` on validation failure.
     """
+    if not quasi_identifiers:
+        return {"Error": "Please select at least one quasi-identifier."}
     # Handle both DataFrame and tuple inputs
     if isinstance(file_info, tuple):
         data = read_file(file_info)
@@ -634,6 +636,8 @@ def compute_l_diversity(
         "l-Diversity Visualization": base64_str}``
         or ``{"Error": str}`` on validation failure.
     """
+    if not quasi_identifiers:
+        return {"Error": "Please select at least one quasi-identifier."}
     # Handle both DataFrame and tuple inputs
     if isinstance(file_info, tuple):
         data = read_file(file_info)
@@ -765,6 +769,8 @@ def compute_t_closeness(
         where ``t-Value`` is in ``[0, 1]``,
         or ``{"Error": str}`` on validation failure.
     """
+    if not quasi_identifiers:
+        return {"Error": "Please select at least one quasi-identifier."}
     # Handle both DataFrame and tuple inputs
     if isinstance(file_info, tuple):
         data = read_file(file_info)
@@ -895,6 +901,8 @@ def compute_entropy_risk(quasi_identifiers, file_info):
         where ``Entropy-Value >= 0``,
         or ``{"Error": str}`` on validation failure.
     """
+    if not quasi_identifiers:
+        return {"Error": "Please select at least one quasi-identifier."}
     # Handle both DataFrame and tuple inputs
     if isinstance(file_info, tuple):
         data = read_file(file_info)

@@ -58,8 +58,18 @@ function showPanel(panelId, pushHistory) {
   }
 
   // Lazy init CodeMirror for custom metrics
-  if (panelId === "custom-metrics" && !codeMirrorEditor) {
-    initCodeMirror();
+  if (panelId === "custom-metrics") {
+    if (!codeMirrorEditor) {
+      initCodeMirror();
+    } else {
+      // The editor may have been created or had setValue() called while the
+      // panel was hidden (e.g. on a reload where the hash restored this panel
+      // and batch-mode then showed the overview). CodeMirror renders blank in
+      // that case until refreshed once the panel is visible again.
+      setTimeout(function () {
+        codeMirrorEditor.refresh();
+      }, 0);
+    }
   }
 
   // Close mobile sidebar after selection
@@ -464,9 +474,41 @@ function workspaceSubmit(targetUrl) {
             gFormData.getAll("quasi identifiers for entropy risk"),
           ),
         };
+      } else if (
+        gFormData.get("differential privacy") === "yes" ||
+        gFormData.get("single attribute risk score") === "yes" ||
+        gFormData.get("multiple attribute risk score") === "yes"
+      ) {
+        // These privacy metrics have no remote handler yet — tell the user
+        // plainly instead of silently falling back to k-anonymity.
+        if (typeof showToast === "function")
+          showToast(
+            "That privacy metric isn't available for remote (Globus) files yet. " +
+              "Remotely supported: k-anonymity, l-diversity, t-closeness, entropy risk. " +
+              "Use a locally uploaded file for the others.",
+            "error",
+          );
+        return;
       }
     } else {
       remoteDisplayName = metricDisplayMap[remoteName] || remoteName;
+    }
+
+    // Guard: privacy metrics need at least one quasi-identifier — catch it here
+    // for instant feedback instead of a slow remote round-trip that errors.
+    const qiMetrics = [
+      "k_anonymity",
+      "l_diversity",
+      "t_closeness",
+      "entropy_risk",
+    ];
+    if (
+      qiMetrics.includes(remoteName) &&
+      (!remoteParams.quasi_ids || remoteParams.quasi_ids.length === 0)
+    ) {
+      if (typeof showToast === "function")
+        showToast("Please select at least one quasi-identifier.", "error");
+      return;
     }
 
     submitGlobusMetric(remoteName, remoteParams, remoteDisplayName);
@@ -1141,11 +1183,10 @@ function loadGlobusDataset() {
     .getElementById("globus-endpoint-id")
     ?.value?.trim();
   const filePath = document.getElementById("globus-file-path")?.value?.trim();
-  const fileType = document.getElementById("globus-file-type")?.value;
 
   if (!endpointId || !filePath) {
     if (typeof showToast === "function")
-      showToast("Please fill in endpoint UUID and file path", "error");
+      showToast("Please fill in endpoint UUID and file/folder path", "error");
     return;
   }
 
@@ -1166,22 +1207,16 @@ function loadGlobusDataset() {
     el.classList.add("opacity-50");
   });
 
-  const fileName = filePath.split("/").pop();
-
   if (typeof showToast === "function")
-    showToast("Connecting to remote endpoint...", "info");
+    showToast("Listing files on the remote endpoint...", "info");
 
-  fetch("/globus/submit", {
+  // Add the remote file, or every supported file in the remote folder. The
+  // server lists the path on the endpoint and infers each type from its
+  // extension.
+  fetch("/globus/add-files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint_id: endpointId,
-      file_path: filePath,
-      file_name: fileName,
-      file_type: fileType,
-      metric_name: "completeness",
-      params: {},
-    }),
+    body: JSON.stringify({ endpoint_id: endpointId, path: filePath }),
   })
     .then((r) => r.json())
     .then((data) => {
@@ -1190,14 +1225,26 @@ function loadGlobusDataset() {
         if (typeof showToast === "function") showToast(data.error, "error");
         return;
       }
-      // Reload the page — session now has globus file info,
-      // inspector will show sidebar + panels
+      if (
+        data.skipped &&
+        data.skipped.length &&
+        typeof showToast === "function"
+      ) {
+        showToast(`Skipped ${data.skipped.length} unsupported file(s)`, "info");
+      }
+      if (data.overview_error && typeof showToast === "function") {
+        // The files were added, but the per-file stats (records/features) could
+        // not be computed remotely — surface why instead of silent dashes.
+        showToast("File stats unavailable: " + data.overview_error, "error");
+      }
+      // Reload — the session now has the active Globus file; the inspector
+      // shows the workspace (or the batch overview for a multi-file folder).
       window.location.href = "/inspector";
     })
     .catch((err) => {
       _reEnableGlobusForm();
       if (typeof showToast === "function")
-        showToast("Failed to connect: " + err.message, "error");
+        showToast("Failed to add remote files: " + err.message, "error");
     });
 }
 
@@ -2151,6 +2198,196 @@ function renderWorkspaceHistograms(histograms) {
   container.innerHTML = html;
 }
 
+// ==================== Batch Overview ====================
+
+function fmtBytes(n) {
+  if (!n && n !== 0) return "—";
+  const u = ["B", "KB", "MB", "GB"];
+  let i = 0,
+    v = n;
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
+}
+
+function loadBatchOverview() {
+  fetch("/files/summary")
+    .then((r) => r.json())
+    .then((data) => {
+      const totals = document.getElementById("batch-totals");
+      if (totals) {
+        const t = data.totals || {};
+        totals.innerHTML = "";
+        [
+          ["Files", t.file_count ?? 0],
+          ["Loaded OK", t.ok_count ?? 0],
+          ["Failed", t.error_count ?? 0],
+          ["Total records", (t.total_records ?? 0).toLocaleString()],
+        ].forEach(([label, value]) => {
+          const card = document.createElement("div");
+          card.className =
+            "p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center";
+          const v = document.createElement("div");
+          v.className = "text-3xl font-bold text-gray-900 dark:text-white";
+          v.textContent = value;
+          const k = document.createElement("div");
+          k.className =
+            "text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide";
+          k.textContent = label;
+          card.appendChild(v);
+          card.appendChild(k);
+          totals.appendChild(card);
+        });
+      }
+
+      const tbody = document.getElementById("batch-rows");
+      if (!tbody) return;
+      const rows = [...(data.files || [])].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      );
+      tbody.innerHTML = "";
+      rows.forEach((f) => {
+        const tr = document.createElement("tr");
+        tr.className =
+          "border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer";
+        // Records/features/numerical/categorical come from the backend for both
+        // local and globus files (globus stats are computed on the endpoint at
+        // add time); "—" until available.
+        const cells = [
+          f.name,
+          f.type || "?",
+          f.source,
+          f.records ?? "—",
+          f.features ?? "—",
+          f.numerical ?? "—",
+          f.categorical ?? "—",
+          fmtBytes(f.size_bytes),
+        ];
+        cells.forEach((text, idx) => {
+          const td = document.createElement("td");
+          td.className = "px-3 py-2" + (idx >= 3 ? " text-right" : "");
+          td.textContent = text;
+          tr.appendChild(td);
+        });
+        tr.addEventListener("click", () => activateFile(f.id));
+        tbody.appendChild(tr);
+      });
+    })
+    .catch((err) => console.error("Failed to load batch overview:", err));
+}
+
+// ==================== Top-Bar File Selector ====================
+
+let _fileSelectorFiles = [];
+let _fileSelectorActiveId = null;
+
+function loadFileSelector() {
+  fetch("/files")
+    .then((r) => r.json())
+    .then((data) => {
+      _fileSelectorFiles = data.files || [];
+      _fileSelectorActiveId = data.active_file_id;
+      const count = document.getElementById("file-selector-count");
+      if (count) {
+        if (_fileSelectorFiles.length > 1) {
+          count.textContent = `${_fileSelectorFiles.length} ▾`;
+          count.classList.remove("hidden");
+        } else {
+          count.classList.add("hidden");
+        }
+      }
+      renderFileSelectorList();
+    })
+    .catch((err) => console.error("Failed to load file selector:", err));
+}
+
+function renderFileSelectorList() {
+  const ul = document.getElementById("file-selector-list");
+  if (!ul) return;
+  const q = (
+    document.getElementById("file-selector-search")?.value || ""
+  ).toLowerCase();
+  const files = [..._fileSelectorFiles]
+    .filter((f) => f.name.toLowerCase().includes(q))
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  ul.innerHTML = "";
+  if (files.length === 0) {
+    const li = document.createElement("li");
+    li.className = "px-3 py-2 text-xs text-gray-400";
+    li.textContent = "No matching files";
+    ul.appendChild(li);
+    return;
+  }
+  files.forEach((f) => {
+    const li = document.createElement("li");
+    const active = f.id === _fileSelectorActiveId;
+    li.className =
+      "flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm " +
+      (active
+        ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30"
+        : "hover:bg-black/5 dark:hover:bg-white/10");
+    const name = document.createElement("span");
+    name.className = "truncate flex-1";
+    name.textContent = f.name;
+    const type = document.createElement("span");
+    type.className = "text-xs text-gray-400";
+    type.textContent = f.type || "?";
+    li.appendChild(name);
+    li.appendChild(type);
+    li.addEventListener("click", () => activateFile(f.id));
+    ul.appendChild(li);
+  });
+}
+
+function toggleFileSelector(event) {
+  if (event) event.stopPropagation();
+  const dd = document.getElementById("file-selector-dropdown");
+  if (!dd) return;
+  const willOpen = dd.classList.contains("hidden");
+  dd.classList.toggle("hidden");
+  if (willOpen) {
+    const search = document.getElementById("file-selector-search");
+    if (search) {
+      search.value = "";
+      renderFileSelectorList();
+      search.focus();
+    }
+    document.addEventListener("click", _closeFileSelectorOnOutside);
+  } else {
+    document.removeEventListener("click", _closeFileSelectorOnOutside);
+  }
+}
+
+function _closeFileSelectorOnOutside(e) {
+  const wrap = document.getElementById("file-selector-dropdown");
+  const btn = document.getElementById("file-selector-btn");
+  if (wrap && !wrap.contains(e.target) && btn && !btn.contains(e.target)) {
+    wrap.classList.add("hidden");
+    document.removeEventListener("click", _closeFileSelectorOnOutside);
+  }
+}
+
+function activateFile(fileId) {
+  fetch(`/files/${fileId}/activate`, { method: "POST" })
+    .then((r) => r.json())
+    .then((b) => {
+      if (b.success) {
+        // Land on the new file's Data Overview, not the batch list.
+        window.location.hash = "data-overview";
+        window.location.reload();
+      } else if (typeof showToast === "function") {
+        showToast(b.message || "Could not switch file", "error");
+      }
+    })
+    .catch((err) => {
+      console.error("Failed to activate file:", err);
+      if (typeof showToast === "function")
+        showToast("Could not switch file", "error");
+    });
+}
+
 // ==================== Workspace Init ====================
 
 /**
@@ -2158,11 +2395,16 @@ function renderWorkspaceHistograms(histograms) {
  * Fetches summary statistics and populates feature dropdowns.
  */
 function initWorkspace() {
+  // Populate top-bar file selector
+  loadFileSelector();
+
   // Restore panel from URL hash, or default to data-overview
   const hash = location.hash.replace("#", "");
   const initialPanel =
     hash && document.getElementById("panel-" + hash) ? hash : "data-overview";
   showPanel(initialPanel, false); // false = don't push to history on init
+  // Populate the batch overview when it's the landing panel (e.g. fresh upload)
+  if (initialPanel === "batch-overview") loadBatchOverview();
   // Replace current history entry so back button works from the first panel
   history.replaceState({ panel: initialPanel }, "", "#" + initialPanel);
 

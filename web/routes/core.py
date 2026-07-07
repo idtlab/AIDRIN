@@ -39,39 +39,80 @@ def homepage():
 @core_bp.route("/inspector", methods=["GET", "POST"])
 def inspector():
     if request.method == "POST":
+        from web.routes.utils import (
+            save_uploaded_files, get_uploaded_files, set_active_file,
+        )
+        from aidrin.file_handling.file_parser import infer_file_type
         file_upload_time_log.info("File upload initiated (workspace)")
-        file = request.files["file"]
-
-        if file:
+        uploads = [u for u in request.files.getlist("file") if u and u.filename]
+        if uploads:
+            max_files = current_app.config.get("AIDRIN_MAX_UPLOAD_FILES", 50)
+            if len(get_uploaded_files()) + len(uploads) > max_files:
+                return jsonify({
+                    "success": False,
+                    "message": f"Too many files. The maximum is {max_files} per batch.",
+                }), 400
+            # Reject unsupported file types up front with a clear message, so a
+            # file with no inferable reader never enters the list and silently
+            # gets cleared by the stale-session check.
+            unsupported = [u.filename for u in uploads if infer_file_type(u.filename) is None]
+            if unsupported:
+                supported = ", ".join(label for _ext, label in SUPPORTED_FILE_TYPES)
+                return jsonify({
+                    "success": False,
+                    "message": (
+                        f"Unsupported file type: {', '.join(unsupported)}. "
+                        f"Supported formats: {supported}."
+                    ),
+                }), 400
             cleared_count = clear_all_user_cache()
             file_upload_time_log.info(
                 "Cache cleared for new file upload: %d entries removed", cleared_count
             )
-
-            display_name = file.filename
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            file.save(file_path)
-
-            session["uploaded_file_name"] = display_name
-            session["uploaded_file_path"] = file_path
-            session["uploaded_file_type"] = request.form.get("fileTypeSelector")
-
+            entries = get_uploaded_files()
+            new_entries = []
             # Track files this session created so /clear removes only these,
             # never files belonging to other concurrent sessions.
             owned_files = session.get("owned_files", [])
-            if file_path not in owned_files:
-                owned_files.append(file_path)
+            for up in uploads:
+                display_name = up.filename
+                stored = f"{uuid.uuid4().hex}_{secure_filename(up.filename)}"
+                path = os.path.join(current_app.config["UPLOAD_FOLDER"], stored)
+                up.save(path)
+                entry = {
+                    "id": uuid.uuid4().hex,
+                    "name": display_name,
+                    "type": infer_file_type(display_name) or "",
+                    "path": path,
+                    "source": "local",
+                }
+                entries.append(entry)
+                new_entries.append(entry)
+                if path not in owned_files:
+                    owned_files.append(path)
             session["owned_files"] = owned_files
-
+            save_uploaded_files(entries)
+            first = sorted(new_entries, key=lambda e: e["name"].lower())[0]
+            set_active_file(first["id"])
+            # Land on the batch overview for a multi-file batch (a one-shot flag
+            # consumed on the next render — a URL fragment can't be used because
+            # the AJAX upload follows the redirect via fetch, which strips it).
+            # A single file lands on its data overview.
+            session["land_on_batch"] = len(entries) > 1
             return redirect(url_for("core.inspector"))
 
     uploaded_file_name = session.get("uploaded_file_name", "")
     uploaded_file_path = session.get("uploaded_file_path", "")
     file_type = session.get("uploaded_file_type", "")
 
-    # Validate session: clear stale data if file no longer exists or type is missing
-    if uploaded_file_path and (
+    # Determine if the active file is a remote Globus file — skip local-existence checks for it
+    from web.routes.utils import get_active_file
+    active = get_active_file()
+    is_globus = bool(active and active.get("source") == "globus")
+
+    # Validate session: clear stale data if file no longer exists or type is missing.
+    # Skip local-existence check for Globus remote files (path lives on a remote endpoint).
+    if uploaded_file_path and not is_globus and (
         not os.path.exists(uploaded_file_path) or not file_type
     ):
         file_upload_time_log.warning(
@@ -89,7 +130,7 @@ def inspector():
     file_preview = None
     current_checked_keys = None
 
-    if uploaded_file_path and file_type in [".h5", ".json", ".npz"]:
+    if uploaded_file_path and not is_globus and file_type in [".h5", ".json", ".npz"]:
         try:
             if file_type in READER_MAP:
                 reader = READER_MAP[file_type](uploaded_file_path, file_upload_time_log)
@@ -135,9 +176,15 @@ def inspector():
     effective_file_name = uploaded_file_name or globus_file_name
     effective_file_type = file_type or globus_file_type
 
+    from web.routes.utils import get_uploaded_files as _get_uploaded_files
+    file_count = len(_get_uploaded_files())
+    # One-shot: a fresh multi-file upload lands on the batch overview.
+    land_on_batch = session.pop("land_on_batch", False)
+
     try:
         return render_template(
             "inspector.html",
+            land_on_batch=land_on_batch,
             uploaded_file_path=effective_file_path or "",
             uploaded_file_name=effective_file_name or "",
             file_type=effective_file_type or "",
@@ -152,6 +199,7 @@ def inspector():
             globus_endpoint_id=globus_endpoint_id,
             llm_available=llm_available,
             llm_configured=llm_configured,
+            file_count=file_count,
         )
     except Exception as e:
         file_upload_time_log.error("Error rendering workspace: %s", e, exc_info=True)
@@ -208,7 +256,14 @@ def clear_file():
             except Exception as e:
                 file_upload_time_log.warning("Failed to cancel Globus tasks on clear: %s", e)
 
-    # Capture this session's own files before clearing the session.
+    # Remove the disk-backed file list BEFORE clearing the session — it needs
+    # user_id (in the session) to resolve the per-user file path.
+    from web.routes.utils import clear_uploaded_files
+    clear_uploaded_files()
+
+    # Capture this session's own files before clearing the session, so the
+    # physical files get removed below (clear_uploaded_files drops the list
+    # metadata; this removes the saved files owned by this session).
     owned_files = session.get("owned_files", [])
 
     session.pop("uploaded_file_path", None)
@@ -309,10 +364,11 @@ def cached_result(metric_name):
         or session.get("globus_file_name")
         or ""
     )
-    if not file_name:
+    if not file_name and not session.get("active_file_id"):
         return jsonify({"cached": False})
 
-    cache_key = f"user:{user_id}:file:{file_name}:{metric_name}"
+    file_token = session.get("active_file_id") or file_name
+    cache_key = f"user:{user_id}:file:{file_token}:{metric_name}"
     entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
     if entry and entry.get("data"):
         resp = {"cached": True, "data": entry["data"]}

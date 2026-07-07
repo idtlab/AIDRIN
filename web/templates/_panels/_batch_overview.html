@@ -1,0 +1,37 @@
+<!-- Batch Overview panel: totals strip + per-file table (shown after multi-file upload) -->
+<div id="panel-batch-overview" class="metric-panel hidden">
+  <div
+    class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5"
+  >
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      Batch Overview
+    </h2>
+
+    <!-- Totals strip -->
+    <div
+      id="batch-totals"
+      class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6"
+    ></div>
+
+    <!-- Per-file table -->
+    <div class="relative overflow-x-auto rounded-lg shadow-sm">
+      <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+        <thead
+          class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"
+        >
+          <tr>
+            <th scope="col" class="px-3 py-2.5">File</th>
+            <th scope="col" class="px-3 py-2.5">Type</th>
+            <th scope="col" class="px-3 py-2.5">Source</th>
+            <th scope="col" class="px-3 py-2.5 text-right">Records</th>
+            <th scope="col" class="px-3 py-2.5 text-right">Features</th>
+            <th scope="col" class="px-3 py-2.5 text-right">Numerical</th>
+            <th scope="col" class="px-3 py-2.5 text-right">Categorical</th>
+            <th scope="col" class="px-3 py-2.5 text-right">Size</th>
+          </tr>
+        </thead>
+        <tbody id="batch-rows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>

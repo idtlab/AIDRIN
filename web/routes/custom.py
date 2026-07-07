@@ -2,8 +2,8 @@ import importlib
 import importlib.util
 import logging
 import os
-import runpy
 import sys
+import tempfile
 import time
 import uuid
 
@@ -81,6 +81,11 @@ def custom_metrics():
         folder = None
         try:
             df = read_file(file_info)
+            if df is None or isinstance(df, str):
+                return jsonify({
+                    "error": "The dataset could not be read — it may have been "
+                             "removed. Please re-upload your file."
+                }), 400
             final_dict["Custom Metric Evaluation"] = {}
 
             folder = current_app.config.get("CUSTOM_METRICS_FOLDER", "custom_metrics")
@@ -114,17 +119,6 @@ def custom_metrics():
                     {"error": f"{custom_metric_class.__name__}.metric() must return a dictionary"}
                 ), 400
 
-            module_globals = runpy.run_path(custom_metric_file_path)
-
-            custom_metric_class = module_globals.get("CustomDR")
-            if not custom_metric_class or not issubclass(custom_metric_class, BaseDRAgent):
-                return jsonify({"error": "CustomDR class not found or invalid"}), 400
-
-            instance = custom_metric_class(dataset=df)
-            metric_results = instance.metric()
-            if not isinstance(metric_results, dict):
-                return jsonify({"error": "metric() must return a dictionary"}), 400
-
             final_dict["Custom Metric Evaluation"] = metric_results
 
             if request.form.get("apply_remedy") == "yes":
@@ -136,7 +130,10 @@ def custom_metrics():
                 remedy_folder = current_app.config["REMEDY_FOLDER"]
                 os.makedirs(remedy_folder, exist_ok=True)
 
-                remedy_filename = f"remedied_{session['session_id']}{data_file_type}"
+                # Remedied data is always written as CSV, so name it .csv
+                # regardless of the input format (data_file_type is a reader key,
+                # which for Excel is not even a valid single extension).
+                remedy_filename = f"remedied_{session['session_id']}.csv"
                 remedy_filepath = os.path.join(remedy_folder, remedy_filename)
                 new_data.to_csv(remedy_filepath, index=False)
 
@@ -170,6 +167,26 @@ def download_remedy(filename):
     return send_from_directory(remedy_folder, filename, as_attachment=True)
 
 
+def _atomic_write(path, text):
+    """Write text to path atomically (temp file + rename).
+
+    Avoids leaving a truncated/empty file if the process is interrupted
+    mid-write — which the Flask --debug reloader can do, since these files live
+    inside the watched package and writing one triggers a reload.
+    """
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
 @custom_bp.route("/load-custom-metric", methods=["GET"])
 def load_custom_metric():
     folder = current_app.config.get("CUSTOM_METRICS_FOLDER", "custom_metrics")
@@ -180,12 +197,15 @@ def load_custom_metric():
     filename = f"customDR_{session['session_id']}.py"
     file_path = os.path.join(folder, filename)
 
-    if not os.path.exists(file_path):
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(_STARTER_TEMPLATE)
+    # (Re)write the starter template if the file is missing OR empty, so the
+    # editor never loads a blank document.
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        _atomic_write(file_path, _STARTER_TEMPLATE)
 
     with open(file_path, encoding="utf-8") as f:
         code = f.read()
+    if not code.strip():
+        code = _STARTER_TEMPLATE
 
     response = make_response(code)
     response.headers["Content-Type"] = "text/plain; charset=utf-8"
@@ -204,7 +224,6 @@ def save_custom_metric_text():
     filename = f"customDR_{session['session_id']}.py"
     file_path = os.path.join(folder, filename)
 
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(code)
+    _atomic_write(file_path, code)
 
     return jsonify({"message": "Custom metric saved successfully"})
