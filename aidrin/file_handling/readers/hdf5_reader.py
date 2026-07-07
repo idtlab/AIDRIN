@@ -311,7 +311,7 @@ class hdf5Reader(BaseFileReader):
         if not explicit_fills:
             return data
 
-        matched = {fv for fv in explicit_fills if (data == fv).any()}
+        matched = {fv for fv in explicit_fills if np.any(data == fv)}
         if not matched:
             return data
 

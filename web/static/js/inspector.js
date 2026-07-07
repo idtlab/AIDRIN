@@ -586,7 +586,7 @@ function workspaceSubmit(targetUrl) {
       if (data.message && !data.trigger && Object.keys(data).length <= 2) {
         const m = document.getElementById("metrics");
         if (m)
-          m.innerHTML = `<div class="p-4 text-sm text-yellow-800 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 dark:text-yellow-300" role="alert">${data.message}</div>`;
+          m.innerHTML = `<div class="p-4 text-sm text-yellow-800 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 dark:text-yellow-300" role="alert">${escapeHtml(data.message)}</div>`;
         _setSubmitButtonsDisabled(false);
         _endServerProcessing();
         return;
@@ -2215,7 +2215,7 @@ function renderHdf5DatasetPicker(container, data) {
   let html = `
     <div class="flex items-start gap-2 p-3 mb-4 text-sm rounded-lg bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
       <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-      <span>${data.message || "Select compatible datasets to analyze."}</span>
+      <span>${escapeHtml(data.message || "Select compatible datasets to analyze.")}</span>
     </div>
     <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Select one dataset, multiple compatible 1D arrays, or use a group checkbox to select a whole subtree at once.</p>
     <div class="space-y-3 max-h-96 overflow-y-auto mb-4">`;
@@ -2469,12 +2469,18 @@ function selectHdf5Datasets(paths) {
       if (resp.success) {
         initWorkspace();
       } else if (container) {
-        container.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${resp.error || "Failed to select dataset(s)."}</p>`;
+        const p = document.createElement("p");
+        p.className = "text-sm text-red-600 dark:text-red-400";
+        p.textContent = resp.error || "Failed to select dataset(s).";
+        container.replaceChildren(p);
       }
     })
     .catch((err) => {
       if (container) {
-        container.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">Error: ${err.message}</p>`;
+        const p = document.createElement("p");
+        p.className = "text-sm text-red-600 dark:text-red-400";
+        p.textContent = "Error: " + err.message;
+        container.replaceChildren(p);
       }
     });
 }
@@ -2513,12 +2519,18 @@ function returnToHdf5DatasetPicker() {
         renderHdf5DatasetPicker(container, data);
         showPanel("data-overview", false);
       } else if (container) {
-        container.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${data.message || data.error || "Failed to return to dataset selection."}</p>`;
+        const p = document.createElement("p");
+        p.className = "text-sm text-red-600 dark:text-red-400";
+        p.textContent = data.message || data.error || "Failed to return to dataset selection.";
+        container.replaceChildren(p);
       }
     })
     .catch((err) => {
       if (container) {
-        container.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">Error: ${err.message}</p>`;
+        const p = document.createElement("p");
+        p.className = "text-sm text-red-600 dark:text-red-400";
+        p.textContent = "Error: " + err.message;
+        container.replaceChildren(p);
       }
     });
 }
@@ -2660,14 +2672,19 @@ function initWorkspace() {
         container.innerHTML = `
           <div class="flex items-start gap-2 p-3 text-sm rounded-lg bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
             <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-            <span>${data.message}</span>
+            <span>${escapeHtml(data.message)}</span>
           </div>`;
       }
     })
     .catch((err) => {
       const container = document.getElementById("workspace-summary");
-      if (container)
-        container.innerHTML = `<p class="text-sm" style="color: red;">Error loading summary: ${err.message}</p>`;
+      if (container) {
+        const p = document.createElement("p");
+        p.className = "text-sm";
+        p.style.color = "red";
+        p.textContent = "Error loading summary: " + err.message;
+        container.replaceChildren(p);
+      }
     })
     .finally(initTaskDone);
 

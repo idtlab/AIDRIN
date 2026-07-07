@@ -129,7 +129,7 @@ def read_file(file_info):
     """
     file_upload_time_log.info("File parsing initiated...")
 
-    file_path, file_name, file_type = file_info[:3][:3]
+    file_path, file_name, file_type = file_info[:3]
     selected_keys = file_info[3] if len(file_info) > 3 else None
     # path and name are passed from flask, if not in session = None
     if not file_path and file_name:
