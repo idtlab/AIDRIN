@@ -109,13 +109,14 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
-   # Custom criteria outliers with inline rules JSON
+   # Custom criteria outliers with simple rule shorthand
+   aidrin run outliers-custom /path/to/sample_dataset.csv \
+     --rule "score >= 0 && score <= 1"
+
+   # Custom criteria outliers with inline rules JSON for compound rules
    aidrin run outliers-custom /path/to/sample_dataset.csv \
      '[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]' \
      --max-outliers 100
-
-Use ``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited
-preview or export rows for custom criteria outliers.
 
    # Impact on AI
    aidrin run correlations /path/to/sample_dataset.csv "age,income,credit_score"
@@ -131,6 +132,12 @@ preview or export rows for custom criteria outliers.
    aidrin run l-diversity /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run t-closeness /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
+
+For custom criteria outliers, repeat ``--rule`` to add multiple simple column
+rules. The shorthand supports same-target conditions joined by ``&&``. Use the
+JSON form for ``OR``, ``NOT``, nested criteria, or HDF5 targets. Use
+``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
+or export rows.
 
 Options available on all ``run`` subcommands:
 

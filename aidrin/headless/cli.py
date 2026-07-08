@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -23,6 +24,71 @@ def _parse_list(value: Optional[str]) -> Optional[List[str]]:
         return None
     items = [item.strip() for item in value.split(",") if item.strip()]
     return items or None
+
+
+def _parse_custom_outlier_rule_texts(rule_texts: Optional[List[str]]) -> Optional[List[dict]]:
+    if not rule_texts:
+        return None
+
+    rules = []
+    for index, rule_text in enumerate(rule_texts, start=1):
+        target = None
+        conditions = []
+        for part in re.split(r"\s*&&\s*", rule_text):
+            part = part.strip()
+            if not part:
+                raise ValueError(f"Empty condition in --rule: {rule_text}")
+            match = re.fullmatch(r"(.+?)\s*(>=|<=|==|~=|>|<)\s*(.+)", part)
+            if not match:
+                raise ValueError(
+                    "--rule supports simple conditions like "
+                    "'score >= 0 && score <= 1' or 'name ~= ^[A-Z]+$'"
+                )
+            condition_target, operator, raw_value = (
+                match.group(1).strip(),
+                match.group(2),
+                match.group(3).strip(),
+            )
+            if not condition_target:
+                raise ValueError(f"Missing target in --rule condition: {part}")
+            if target is None:
+                target = condition_target
+            elif condition_target != target:
+                raise ValueError("--rule && shorthand must use the same target in every condition")
+
+            if operator == "~=":
+                conditions.append({"type": "regex", "pattern": raw_value})
+                continue
+
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"Numeric --rule condition requires a finite number: {part}") from exc
+            if not value == value or value in (float("inf"), float("-inf")):
+                raise ValueError(f"Numeric --rule condition requires a finite number: {part}")
+
+            if operator == ">=":
+                conditions.append({"type": "range", "min": value, "min_inclusive": True})
+            elif operator == ">":
+                conditions.append({"type": "range", "min": value, "min_inclusive": False})
+            elif operator == "<=":
+                conditions.append({"type": "range", "max": value, "max_inclusive": True})
+            elif operator == "<":
+                conditions.append({"type": "range", "max": value, "max_inclusive": False})
+            elif operator == "==":
+                conditions.append({"type": "range", "min": value, "max": value})
+
+        assert target is not None
+        criteria = conditions[0] if len(conditions) == 1 else {"op": "and", "conditions": conditions}
+        rule_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", target).strip("-") or f"rule-{index}"
+        rules.append({
+            "id": f"{rule_id}-{index}",
+            "name": rule_text,
+            "target": target,
+            "target_type": "column",
+            "criteria": criteria,
+        })
+    return rules
 
 
 def _dump_result(result: object) -> None:
@@ -163,6 +229,11 @@ def _print_summary_table(result: dict, file_path: str) -> None:
 
 
 def _build_run_kwargs(args: argparse.Namespace) -> dict:
+    rule_texts = getattr(args, "rule_texts", None)
+    parsed_rules = _parse_custom_outlier_rule_texts(rule_texts)
+    rules_json = getattr(args, "rules_json", None)
+    if parsed_rules is not None and rules_json:
+        raise ValueError("Use either rules-json or --rule, not both")
     return {
         "columns": _parse_list(getattr(args, "columns", None)),
         "target_column": getattr(args, "target_column", None),
@@ -176,7 +247,8 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "num_columns": _parse_list(getattr(args, "num_columns", None)),
         "y_true_column": getattr(args, "y_true_column", None),
         "sensitive_attribute_column": getattr(args, "sensitive_attribute_column", None),
-        "rules_json": getattr(args, "rules_json", None),
+        "rules": parsed_rules,
+        "rules_json": rules_json,
         "max_outliers": getattr(args, "max_outliers", 100),
         "max_export_rows": getattr(args, "max_export_rows", 10000),
         "scan_limit": getattr(args, "scan_limit", None),
@@ -246,6 +318,7 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
         elif arg == "rules-json":
             parser.add_argument(
                 "rules_json",
+                nargs="?",
                 help="JSON array of custom outlier rules. Use 0 for unlimited preview/export caps.",
                 metavar="rules-json",
             )
@@ -368,6 +441,16 @@ def main() -> None:
         mparser.add_argument("file_path", help="Path to the dataset CSV")
         _add_required_metric_args(mparser, meta.get("required_args", []))
         if metric_name == "outliers_custom":
+            mparser.add_argument(
+                "--rule",
+                dest="rule_texts",
+                action="append",
+                help=(
+                    "Simple rule shorthand, repeatable. Supports same-target conditions "
+                    "joined by &&, e.g. --rule 'score >= 0 && score <= 1'. "
+                    "Use rules-json for OR/NOT/nested rules."
+                ),
+            )
             mparser.add_argument("--max-outliers", type=int, default=100, help="Preview cap per rule; 0 means unlimited")
             mparser.add_argument("--max-export-rows", type=int, default=10000, help="Export row cap per rule; 0 means unlimited")
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum values to scan per rule")
