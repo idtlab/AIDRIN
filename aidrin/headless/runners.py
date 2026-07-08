@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -7,6 +8,7 @@ from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
+from aidrin.structured_data_metrics.custom_outliers import custom_outliers
 from aidrin.structured_data_metrics.duplicity import duplicity
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
@@ -84,6 +86,30 @@ def run_duplicity(file_path: str, file_type: Optional[str], file_name: Optional[
 def run_outliers(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(outliers, file_info)
+
+
+def run_outliers_custom(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    rules: Any,
+    max_outliers: int = 100,
+    scan_limit: Optional[int] = None,
+    stop_after_outliers: bool = False,
+    max_export_rows: int = 10000,
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    if isinstance(rules, str):
+        rules = json.loads(rules)
+    return _call_task(
+        custom_outliers,
+        file_info,
+        rules,
+        max_outliers,
+        scan_limit,
+        stop_after_outliers,
+        max_export_rows,
+    )
 
 
 def run_correlations(

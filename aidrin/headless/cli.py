@@ -176,6 +176,11 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "num_columns": _parse_list(getattr(args, "num_columns", None)),
         "y_true_column": getattr(args, "y_true_column", None),
         "sensitive_attribute_column": getattr(args, "sensitive_attribute_column", None),
+        "rules_json": getattr(args, "rules_json", None),
+        "max_outliers": getattr(args, "max_outliers", 100),
+        "max_export_rows": getattr(args, "max_export_rows", 10000),
+        "scan_limit": getattr(args, "scan_limit", None),
+        "stop_after_outliers": getattr(args, "stop_after_outliers", False),
         # Default to no image generation/saving for headless usage
         "save_images": getattr(args, "save_images", False),
         "image_dir": getattr(args, "image_dir", None),
@@ -238,6 +243,12 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
             )
         elif arg == "y-true-column":
             parser.add_argument("y_true_column", help="Ground truth column", metavar="y-true-column")
+        elif arg == "rules-json":
+            parser.add_argument(
+                "rules_json",
+                help="JSON array of custom outlier rules. Use 0 for unlimited preview/export caps.",
+                metavar="rules-json",
+            )
         elif arg == "sensitive-attribute-column":
             parser.add_argument("sensitive_attribute_column", help="Sensitive attribute column", metavar="sensitive-attribute-column")
 
@@ -356,6 +367,11 @@ def main() -> None:
         mparser = run_subparsers.add_parser(metric_cli, help=meta["description"] + extra_help)
         mparser.add_argument("file_path", help="Path to the dataset CSV")
         _add_required_metric_args(mparser, meta.get("required_args", []))
+        if metric_name == "outliers_custom":
+            mparser.add_argument("--max-outliers", type=int, default=100, help="Preview cap per rule; 0 means unlimited")
+            mparser.add_argument("--max-export-rows", type=int, default=10000, help="Export row cap per rule; 0 means unlimited")
+            mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum values to scan per rule")
+            mparser.add_argument("--stop-after-outliers", action="store_true", help="Stop scanning after preview cap is reached")
         _configure_minimal_run_args(mparser)
         mparser.set_defaults(_metric_key=metric_name, _action="metric")
 
@@ -417,7 +433,7 @@ def main() -> None:
     if argv:
         metric_key = argv[0].replace("-", "_")
         if metric_key in METRIC_REGISTRY:
-            argv = ["run", metric_key] + argv[1:]
+            argv = ["run", metric_key.replace("_", "-")] + argv[1:]
     args = parser.parse_args(argv)
 
     try:

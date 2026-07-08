@@ -109,6 +109,14 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
+   # Custom criteria outliers with inline rules JSON
+   aidrin run outliers-custom /path/to/sample_dataset.csv \
+     '[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]' \
+     --max-outliers 100
+
+Use ``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited
+preview or export rows for custom criteria outliers.
+
    # Impact on AI
    aidrin run correlations /path/to/sample_dataset.csv "age,income,credit_score"
    aidrin run feature-relevance /path/to/sample_dataset.csv "gender,education" "age,income,credit_score" approved
@@ -232,6 +240,9 @@ Available Metrics
    * - Data Quality
      - ``outliers``
      - —
+   * - Data Quality
+     - ``outliers-custom``
+     - ``rules-json``
    * - Impact on AI
      - ``correlations``
      - ``columns``
@@ -283,6 +294,14 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
 
    # Single metric
    result = run_metric("completeness", "/path/to/sample_dataset.csv")
+
+   # Custom criteria outliers
+   result = run_metric(
+       "outliers-custom",
+       "/path/to/sample_dataset.csv",
+       rules_json='[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]',
+       max_outliers=100,
+   )
 
    # Fast data quality bundle
    result = run_data_quality("/path/to/sample_dataset.csv")

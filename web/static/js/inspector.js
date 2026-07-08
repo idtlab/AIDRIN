@@ -362,11 +362,13 @@ function workspaceSubmit(targetUrl) {
         selected.push("custom_outliers");
         selectedNames.push("Custom Criteria Outliers");
         remoteParams.custom_outlier_rules = customOutlierRules;
-        remoteParams.max_outliers = Number(
-          gFormData.get("max_outliers") || 100,
+        remoteParams.max_outliers = customOutlierLimitValue(
+          gFormData.get("max_outliers"),
+          100,
         );
-        remoteParams.max_export_rows = Number(
-          gFormData.get("max_export_rows") || 10000,
+        remoteParams.max_export_rows = customOutlierLimitValue(
+          gFormData.get("max_export_rows"),
+          10000,
         );
         const scanLimit = gFormData.get("scan_limit");
         if (scanLimit !== null && scanLimit !== "") {
@@ -551,6 +553,14 @@ function workspaceSubmit(targetUrl) {
     processedFormData.set(
       "custom_outlier_rules",
       JSON.stringify(customOutlierRules),
+    );
+    processedFormData.set(
+      "max_outliers",
+      String(customOutlierLimitValue(formData.get("max_outliers"), 100)),
+    );
+    processedFormData.set(
+      "max_export_rows",
+      String(customOutlierLimitValue(formData.get("max_export_rows"), 10000)),
     );
   }
 
@@ -1843,6 +1853,14 @@ function showCustomOutlierValidationError(text) {
     showToast(text, "error");
   }
   return false;
+}
+
+function customOutlierLimitValue(rawValue, defaultValue) {
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    return defaultValue;
+  }
+  const value = Number(rawValue);
+  return Number.isFinite(value) && value >= 0 ? value : defaultValue;
 }
 
 // ==================== Layout Helpers ====================

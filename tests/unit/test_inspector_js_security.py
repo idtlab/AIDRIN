@@ -1,7 +1,9 @@
 from pathlib import Path
 
 
-INSPECTOR_JS = Path(__file__).resolve().parents[2] / "web" / "static" / "js" / "inspector.js"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
+DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_quality.html"
 
 
 def test_result_renderer_escapes_untrusted_display_values():
@@ -44,6 +46,13 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert "function validateCustomOutlierCriteria(criteria, ruleName)" in source
     assert "range condition requires min or max" in source
     assert "requires a condition for NOT" in source
+    assert "customOutlierLimitValue(formData.get(\"max_outliers\"), 100)" in source
+    assert "customOutlierLimitValue(\n          gFormData.get(\"max_outliers\")," in source
+
+
+def test_custom_outlier_preview_cap_placeholder_documents_default():
+    source = DATA_QUALITY_PANEL.read_text()
+    assert 'name="max_outliers" placeholder="default: 100"' in source
 
 
 def test_custom_outlier_export_downloads_csv_without_inline_row_rendering():

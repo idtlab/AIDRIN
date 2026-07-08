@@ -26,9 +26,9 @@ def calculate_custom_outliers(
 ):
     """Evaluate custom range/regex outlier rules over iterator targets."""
     validated = _validate_rules(rules)
-    max_outliers = _validate_max_outliers(max_outliers)
+    max_outliers = _validate_cap(max_outliers, 100, "max_outliers")
     scan_limit = _validate_optional_non_negative_int(scan_limit, "scan_limit")
-    max_export_rows = _validate_optional_non_negative_int(max_export_rows, "max_export_rows")
+    max_export_rows = _validate_cap(max_export_rows, 10000, "max_export_rows")
     stop_after_outliers = _coerce_bool(stop_after_outliers)
     target_map = _target_map(file_info)
 
@@ -112,14 +112,16 @@ def custom_outliers(
     )
 
 
-def _validate_max_outliers(max_outliers):
+def _validate_cap(value, default, field):
+    if value in (None, ""):
+        return default
     try:
-        value = int(max_outliers)
+        normalized = int(value)
     except (TypeError, ValueError):
-        raise ValueError("max_outliers must be an integer")
-    if value < 0:
-        raise ValueError("max_outliers must be non-negative")
-    return value
+        raise ValueError(f"{field} must be an integer")
+    if normalized < 0:
+        raise ValueError(f"{field} must be non-negative")
+    return normalized
 
 
 def _validate_optional_non_negative_int(value, field):
@@ -388,7 +390,7 @@ def _scan_limit_reached(summary, scan_limit):
 
 
 def _should_stop_after_outlier(summary, stop_after_outliers, max_outliers):
-    if not stop_after_outliers:
+    if not stop_after_outliers or _is_unlimited(max_outliers):
         return False
     reached = summary["outlier"] >= max_outliers
     if reached:
@@ -489,10 +491,14 @@ def _record_outlier(
         "flag": flag or _format_outlier_flag(rule, value, reason),
         "location": location,
     }
-    if len(preview) < max_outliers:
+    if _is_unlimited(max_outliers) or len(preview) < max_outliers:
         preview.append(row)
-    if max_export_rows is None or len(export_rows) < max_export_rows:
+    if _is_unlimited(max_export_rows) or len(export_rows) < max_export_rows:
         export_rows.append(row)
+
+
+def _is_unlimited(limit):
+    return limit == 0
 
 
 def _format_outlier_flag(rule, value, reason):

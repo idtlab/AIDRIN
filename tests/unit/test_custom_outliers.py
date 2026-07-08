@@ -391,6 +391,38 @@ def test_preview_is_capped_per_rule():
     assert len(result["Outlier preview"]["cap"]) == 2
 
 
+def test_empty_preview_cap_uses_default():
+    fi = _write_csv(pd.DataFrame({"a": list(range(105))}))
+    try:
+        result = calculate_custom_outliers(fi, [
+            _range_rule("empty-cap-default", "a", max_value=1)
+        ], max_outliers="")
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["empty-cap-default"]
+    assert summary["outlier"] == 103
+    assert summary["preview_limit"] == 100
+    assert summary["truncated"] is True
+    assert len(result["Outlier preview"]["empty-cap-default"]) == 100
+
+
+def test_zero_preview_cap_is_unlimited():
+    fi = _write_csv(pd.DataFrame({"a": [100, 101, 102]}))
+    try:
+        result = calculate_custom_outliers(fi, [
+            _range_rule("unlimited-preview", "a", max_value=1)
+        ], max_outliers=0)
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["unlimited-preview"]
+    assert summary["outlier"] == 3
+    assert summary["preview_limit"] == 0
+    assert summary["truncated"] is False
+    assert len(result["Outlier preview"]["unlimited-preview"]) == 3
+
+
 def test_custom_outlier_export_uses_separate_cap():
     fi = _write_csv(pd.DataFrame({"a": [100, 101, 102, 103]}))
     try:
@@ -407,6 +439,22 @@ def test_custom_outlier_export_uses_separate_cap():
     assert len(result["Outlier preview"]["export-cap"]) == 1
     assert len(result["Outlier export"]["export-cap"]) == 3
     assert result["Outlier export"]["export-cap"][0]["rule_id"] == "export-cap"
+
+
+def test_zero_export_cap_is_unlimited():
+    fi = _write_csv(pd.DataFrame({"a": [100, 101, 102, 103]}))
+    try:
+        result = calculate_custom_outliers(fi, [
+            _range_rule("unlimited-export", "a", max_value=1)
+        ], max_outliers=1, max_export_rows=0)
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["unlimited-export"]
+    assert summary["outlier"] == 4
+    assert summary["export_limit"] == 0
+    assert summary["export_truncated"] is False
+    assert len(result["Outlier export"]["unlimited-export"]) == 4
 
 
 def test_scan_limit_stops_before_full_count():

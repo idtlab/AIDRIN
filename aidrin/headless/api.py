@@ -22,6 +22,7 @@ from .runners import (
     run_l_diversity,
     run_multiple_attribute_risk,
     run_outliers,
+    run_outliers_custom,
     run_representation_rate,
     run_single_attribute_risk,
     run_statistical_rates,
@@ -47,6 +48,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Outlier proportions for numerical columns.",
         "runner": run_outliers,
         "required_args": [],
+    },
+    "outliers_custom": {
+        "category": "data-quality",
+        "description": "Custom criteria outlier checks using user-provided range, regex, and compound rules.",
+        "runner": run_outliers_custom,
+        "required_args": ["rules-json"],
     },
     "correlations": {
         "category": "impact-of-data-on-AI",
@@ -217,11 +224,12 @@ def list_available_metrics(category: Optional[str] = None) -> List[Dict[str, Any
 
 
 def get_metric_info(name: str) -> Dict[str, Any]:
-    metric = METRIC_REGISTRY.get(name)
+    metric_key = name.strip().lower().replace("-", "_")
+    metric = METRIC_REGISTRY.get(metric_key)
     if not metric:
         raise ValueError(f"Unknown metric: {name}")
     return {
-        "name": name,
+        "name": metric_key.replace("_", "-"),
         "category": metric["category"],
         "description": metric["description"],
         "required_args": list(metric.get("required_args", [])),
@@ -378,7 +386,7 @@ def run_metric(
     strip_visualizations: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    metric_key = metric_name.strip().lower()
+    metric_key = metric_name.strip().lower().replace("-", "_")
     metric = METRIC_REGISTRY.get(metric_key)
     if not metric:
         # Try resolving as a custom metric
@@ -421,6 +429,22 @@ def run_metric(
         if not columns:
             raise ValueError("columns is required for correlations")
         result = metric["runner"](file_path, file_type, file_name, columns)
+        return _finalize(result)
+
+    if metric_key == "outliers_custom":
+        rules = kwargs.get("rules") or kwargs.get("rules_json")
+        if not rules:
+            raise ValueError("rules_json is required for outliers_custom")
+        result = metric["runner"](
+            file_path,
+            file_type,
+            file_name,
+            rules,
+            kwargs.get("max_outliers", 100),
+            kwargs.get("scan_limit"),
+            bool(kwargs.get("stop_after_outliers", False)),
+            kwargs.get("max_export_rows", 10000),
+        )
         return _finalize(result)
 
     if metric_key == "feature_relevance":

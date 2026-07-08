@@ -92,6 +92,11 @@ def run_aidrin_metric(
     file_path: str,
     metric: str,
     file_type: str | None = None,
+    rules_json: str | None = None,
+    max_outliers: int = 100,
+    max_export_rows: int = 10000,
+    scan_limit: int | None = None,
+    stop_after_outliers: bool = False,
     columns: str | None = None,
     target_column: str | None = None,
     cat_columns: str | None = None,
@@ -112,8 +117,13 @@ def run_aidrin_metric(
 
     Args:
         file_path: Absolute path to the dataset.
-        metric: Metric name, e.g. completeness, k_anonymity, class_imbalance.
+        metric: Metric name, e.g. completeness, outliers-custom, k_anonymity, class_imbalance.
         file_type: File-type override.
+        rules_json: JSON array of custom outlier rules when metric is outliers-custom.
+        max_outliers: Preview cap per custom outlier rule; 0 means unlimited.
+        max_export_rows: Export row cap per custom outlier rule; 0 means unlimited.
+        scan_limit: Optional maximum values to scan per custom outlier rule.
+        stop_after_outliers: Stop scanning after the preview cap is reached.
         columns: Comma-separated columns (required by: correlations, representation_rate).
         target_column: Target/label column (required by: class_imbalance, feature_relevance).
         cat_columns: Comma-separated categorical columns (feature_relevance).
@@ -131,6 +141,11 @@ def run_aidrin_metric(
         k: v
         for k, v in [
             ("columns", columns),
+            ("rules_json", rules_json),
+            ("max_outliers", max_outliers),
+            ("max_export_rows", max_export_rows),
+            ("scan_limit", scan_limit),
+            ("stop_after_outliers", stop_after_outliers),
             ("target_column", target_column),
             ("cat_columns", cat_columns),
             ("num_columns", num_columns),
@@ -152,6 +167,46 @@ def run_aidrin_metric(
         strip_visualizations=True,
         save_images=False,
         **kwargs,
+    )
+    return _dumps(result)
+
+
+@mcp_server.tool()
+def run_custom_outlier_check(
+    file_path: str,
+    rules_json: str,
+    file_type: str | None = None,
+    max_outliers: int = 100,
+    max_export_rows: int = 10000,
+    scan_limit: int | None = None,
+    stop_after_outliers: bool = False,
+) -> str:
+    """
+    Run Custom Criteria Outliers against selected dataset targets.
+    Rules are a JSON array using the same criteria-tree syntax as the web UI:
+    each rule has id, target, target_type, criteria, and optional name/allow_missing.
+    Criteria support numeric ranges, regex patterns, and nested and/or/not operators.
+
+    Args:
+        file_path: Absolute path to the dataset.
+        rules_json: JSON array of custom outlier rules.
+        file_type: Optional file-type override.
+        max_outliers: Preview cap per rule; 0 means unlimited.
+        max_export_rows: Export row cap per rule; 0 means unlimited.
+        scan_limit: Optional maximum values to scan per rule.
+        stop_after_outliers: Stop scanning after the preview cap is reached.
+    """
+    result = run_metric(
+        "outliers-custom",
+        file_path,
+        file_type=file_type,
+        rules_json=rules_json,
+        max_outliers=max_outliers,
+        max_export_rows=max_export_rows,
+        scan_limit=scan_limit,
+        stop_after_outliers=stop_after_outliers,
+        strip_visualizations=True,
+        save_images=False,
     )
     return _dumps(result)
 
