@@ -1598,6 +1598,7 @@ function addCustomOutlierRuleRow() {
           Add condition
         </button>
       </div>
+      <p class="mb-2 text-xs text-gray-600 dark:text-gray-300">Values that do not satisfy these conditions are flagged.</p>
       <div data-section="criteria-conditions" class="space-y-2"></div>
     </div>
     <div class="flex justify-end mt-3">
@@ -2316,6 +2317,7 @@ function renderCustomOutlierPreviewTable(previewByRule) {
   html += `<div class="mb-2 flex flex-wrap items-center justify-between gap-2">`;
   html += `<h4 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Outlier preview <span class="normal-case font-normal">(${rows.length})</span></h4>`;
   html += `</div>`;
+  html += `<p class="mb-2 text-xs text-gray-600 dark:text-gray-300">Preview rows failed a valid-value condition.</p>`;
   if (rows.length === 0) {
     html += `<p class="text-sm text-gray-600 dark:text-gray-300">No preview rows.</p>`;
     html += `</div>`;
@@ -2328,7 +2330,7 @@ function renderCustomOutlierPreviewTable(previewByRule) {
   html += `<th scope="col" class="px-3 py-2.5">Rule</th>`;
   html += `<th scope="col" class="px-3 py-2.5">Location</th>`;
   html += `<th scope="col" class="px-3 py-2.5 text-right">Value</th>`;
-  html += `<th scope="col" class="px-3 py-2.5">Flag</th>`;
+  html += `<th scope="col" class="px-3 py-2.5">Why flagged</th>`;
   html += `<th scope="col" class="px-3 py-2.5 text-right">Details</th>`;
   html += `</tr></thead><tbody>`;
   rows.forEach((row, index) => {

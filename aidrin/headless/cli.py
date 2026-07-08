@@ -448,7 +448,7 @@ def main() -> None:
                 help=(
                     "Simple rule shorthand, repeatable. Supports same-target conditions "
                     "joined by &&, e.g. --rule 'score >= 0 && score <= 1'. "
-                    "Use rules-json for OR/NOT/nested rules."
+                    "Rules describe valid values; use rules-json for OR/NOT/nested rules."
                 ),
             )
             mparser.add_argument("--max-outliers", type=int, default=100, help="Preview cap per rule; 0 means unlimited")

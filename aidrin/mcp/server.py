@@ -119,7 +119,7 @@ def run_aidrin_metric(
         file_path: Absolute path to the dataset.
         metric: Metric name, e.g. completeness, outliers-custom, k_anonymity, class_imbalance.
         file_type: File-type override.
-        rules_json: JSON array of custom outlier rules when metric is outliers-custom.
+        rules_json: JSON array of valid-value rules when metric is outliers-custom.
         max_outliers: Preview cap per custom outlier rule; 0 means unlimited.
         max_export_rows: Export row cap per custom outlier rule; 0 means unlimited.
         scan_limit: Optional maximum values to scan per custom outlier rule.
@@ -185,11 +185,13 @@ def run_custom_outlier_check(
     Run Custom Criteria Outliers against selected dataset targets.
     Rules are a JSON array using the same criteria-tree syntax as the web UI:
     each rule has id, target, target_type, criteria, and optional name/allow_missing.
-    Criteria support numeric ranges, regex patterns, and nested and/or/not operators.
+    Criteria define expected valid values and support numeric ranges, regex
+    patterns, and nested and/or/not operators. Values that do not satisfy the
+    rule are flagged as outliers.
 
     Args:
         file_path: Absolute path to the dataset.
-        rules_json: JSON array of custom outlier rules.
+        rules_json: JSON array of valid-value rules.
         file_type: Optional file-type override.
         max_outliers: Preview cap per rule; 0 means unlimited.
         max_export_rows: Export row cap per rule; 0 means unlimited.

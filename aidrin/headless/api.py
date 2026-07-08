@@ -51,7 +51,7 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
     "outliers_custom": {
         "category": "data-quality",
-        "description": "Custom criteria outlier checks using user-provided range, regex, and compound rules.",
+        "description": "Flags values that fail user-provided valid-value range, regex, and compound rules.",
         "runner": run_outliers_custom,
         "required_args": ["rules-json"],
     },

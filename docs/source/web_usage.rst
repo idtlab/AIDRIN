@@ -162,7 +162,7 @@ Identifies outliers in numerical columns using the Interquartile Range (IQR) met
 calculate_custom_outliers
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Identifies values that violate user-defined criteria for a selected target. Rules can check numeric ranges, regular expression matches, missing values, or nested criteria combined with ``and``, ``or``, and ``not``. This is useful when domain-specific validity rules are more appropriate than the default IQR outlier method.
+Identifies values that fail user-defined valid-value criteria for a selected target. Each rule describes expected valid values; values that do not satisfy the rule are flagged as outliers. Rules can check numeric ranges, regular expression matches, missing values, or nested criteria combined with ``and``, ``or``, and ``not``. This is useful when domain-specific validity rules are more appropriate than the default IQR outlier method.
 
 **Usage**:
 
@@ -333,7 +333,7 @@ Evaluates the quality of the dataset through metrics that assess completeness, d
 
 - **Custom Criteria Outliers**:
 
-  - **Method**: Evaluates user-defined criteria against selected columns or HDF5 datasets. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
+  - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
   - **Parameters**: Target, criteria rules, maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached.
   - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable.
 

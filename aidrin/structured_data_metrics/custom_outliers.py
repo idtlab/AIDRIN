@@ -24,7 +24,7 @@ def calculate_custom_outliers(
     stop_after_outliers=False,
     max_export_rows=10000,
 ):
-    """Evaluate custom range/regex outlier rules over iterator targets."""
+    """Flag values that fail custom valid-value rules over iterator targets."""
     validated = _validate_rules(rules)
     max_outliers = _validate_cap(max_outliers, 100, "max_outliers")
     scan_limit = _validate_optional_non_negative_int(scan_limit, "scan_limit")

@@ -75,6 +75,17 @@ def test_custom_outlier_preview_uses_compact_overview_table():
     assert 'key === "Outlier preview"' in source
     assert "renderCustomOutlierPreviewTable(value)" in source
     assert "flattenOutlierPreviewRows(previewByRule)" in source
+    assert "Preview rows failed a valid-value condition." in source
+    assert "Why flagged" in source
     assert "formatOutlierFlagFallback(reason)" in source
     assert 'below_min: "< min"' in source
     assert 'above_max: "> max"' in source
+
+
+def test_custom_outlier_ui_explains_valid_value_semantics():
+    panel = DATA_QUALITY_PANEL.read_text()
+    script = INSPECTOR_JS.read_text()
+    expected = "Values that do not satisfy these conditions are flagged."
+    assert "Rules define expected valid values." in panel
+    assert expected in panel
+    assert expected in script

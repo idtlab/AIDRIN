@@ -85,7 +85,10 @@ def calculate_custom_outliers(
     stop_after_outliers=False,
     max_export_rows=10000,
 ):
-    """Detect values that violate user-defined range or regex criteria.
+    """Detect values that fail user-defined valid-value criteria.
+
+    Each rule describes expected valid values for a target; values that do not
+    satisfy the rule are flagged as outliers.
 
     Parameters
     ----------
