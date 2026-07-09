@@ -1159,7 +1159,6 @@ function loadGlobusDataset() {
   if (loadBtn) {
     loadBtn.disabled = true;
     loadBtn.classList.add("opacity-50", "cursor-not-allowed");
-    loadBtn.textContent = "Connecting...";
   }
   inputs.forEach((el) => {
     el.disabled = true;
@@ -1168,7 +1167,7 @@ function loadGlobusDataset() {
 
   const fileName = filePath.split("/").pop();
 
-  if (loadBtn) loadBtn.textContent = "Checking endpoint...";
+  if (loadBtn) _globusBtnLoading(loadBtn, "Checking endpoint...");
   if (typeof showToast === "function")
     showToast("Checking endpoint compatibility...", "info");
 
@@ -1187,12 +1186,13 @@ function loadGlobusDataset() {
         const msg =
           data.warnings && data.warnings.length
             ? data.warnings.join(" ")
-            : data.error || "Endpoint is not compatible with this AIDRIN server.";
+            : data.error ||
+              "Endpoint is not compatible with this AIDRIN server.";
         if (typeof showToast === "function") showToast(msg, "error");
         return;
       }
       // Step 2: endpoint is compatible — proceed to load the dataset.
-      if (loadBtn) loadBtn.textContent = "Connecting...";
+      if (loadBtn) _globusBtnLoading(loadBtn, "Connecting...");
       _submitGlobusDataset(endpointId, filePath, fileName, fileType);
     })
     .catch((err) => {
@@ -1235,6 +1235,20 @@ function _submitGlobusDataset(endpointId, filePath, fileName, fileType) {
       if (typeof showToast === "function")
         showToast("Failed to connect: " + err.message, "error");
     });
+}
+
+// Show a spinner + label inside the Globus load button while it's busy.
+function _globusBtnLoading(btn, label) {
+  btn.innerHTML =
+    '<span class="inline-flex items-center justify-center gap-2">' +
+    '<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">' +
+    '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+    '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>' +
+    "</svg>" +
+    "<span>" +
+    label +
+    "</span>" +
+    "</span>";
 }
 
 function _reEnableGlobusForm() {

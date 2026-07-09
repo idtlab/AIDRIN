@@ -301,8 +301,9 @@ def check_endpoint_compatibility(client, endpoint_id, timeout=30):
             "local": {"aidrin": local_aidrin, "python": local_python},
             "remote": {"aidrin": "unknown", "python": "unknown"},
             "warnings": [
-                "The endpoint's aidrin version is incompatible with this "
-                f"server. Install aidrin {local_aidrin} on the endpoint."
+                "The endpoint could not load AIDRIN's remote task code. "
+                f"Install aidrin {local_aidrin} in the endpoint's worker "
+                "environment, then restart the endpoint."
             ],
         }
         # Full remote traceback goes to the server log only — never the UI.
