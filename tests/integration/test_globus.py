@@ -197,3 +197,39 @@ def test_globus_check_endpoint_without_auth(client):
 
     response = client.post("/globus/check-endpoint", json={"endpoint_id": "x"})
     assert response.status_code == 401
+
+
+class _FailingProbeClient:
+    """Client whose endpoint cannot deserialise the probe (old aidrin)."""
+
+    def __init__(self, exc):
+        self._exc = exc
+
+    def register_function(self, fn):
+        return "fake-func-uuid"
+
+    def run(self, *args, **kwargs):
+        return "fake-task-uuid"
+
+    def get_result(self, task_id):
+        raise self._exc
+
+
+def test_check_endpoint_compatibility_old_endpoint_missing_probe():
+    """Endpoint too old to have aidrin.compute.remote → incompatible, clear message."""
+    client = _FailingProbeClient(
+        ModuleNotFoundError("No module named 'aidrin.compute'")
+    )
+    report = check_endpoint_compatibility(client, "endpoint-uuid")
+    assert report["compatible"] is False
+    assert any("too old" in w for w in report["warnings"])
+    assert report["remote"]["aidrin"] == "unknown"
+
+
+def test_check_endpoint_compatibility_infra_error_propagates():
+    """A non-probe error (e.g. timeout) is not masked as a version issue."""
+    import pytest
+
+    client = _FailingProbeClient(TimeoutError("endpoint offline"))
+    with pytest.raises(TimeoutError):
+        check_endpoint_compatibility(client, "endpoint-uuid")

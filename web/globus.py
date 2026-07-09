@@ -269,10 +269,47 @@ def check_endpoint_compatibility(client, endpoint_id, timeout=30):
     major.minor difference is a **warning** — dill can often cross minor
     versions but it is the classic cause of deserialisation errors.
     """
-    remote = _run_probe_sync(client, endpoint_id, timeout=timeout)
-
     local_aidrin = AIDRIN_VERSION
     local_python = ".".join(map(str, sys.version_info[:3]))
+
+    try:
+        remote = _run_probe_sync(client, endpoint_id, timeout=timeout)
+    except Exception as e:
+        # If the endpoint's aidrin predates this change it has no
+        # ``aidrin.compute.remote`` module / ``remote_env_probe`` to
+        # reconstruct, so the probe fails to deserialise there. Treat that as a
+        # clear incompatibility (upgrade the endpoint) rather than a 500 — but
+        # let genuine infra errors (timeout, offline, auth) propagate.
+        detail = str(e)
+        lowered = detail.lower()
+        probe_missing = any(
+            s in lowered
+            for s in (
+                "no module named",
+                "modulenotfound",
+                "cannot import",
+                "importerror",
+                "attributeerror",
+                "remote_env_probe",
+                "aidrin.compute",
+            )
+        )
+        if not probe_missing:
+            raise
+        report = {
+            "compatible": False,
+            "local": {"aidrin": local_aidrin, "python": local_python},
+            "remote": {"aidrin": "unknown", "python": "unknown"},
+            "warnings": [
+                "Endpoint could not run the environment probe — its aidrin is "
+                "too old (missing 'aidrin.compute.remote'). Reinstall/upgrade "
+                f"aidrin on the endpoint to match {local_aidrin}. "
+                f"(detail: {detail})"
+            ],
+        }
+        logger.warning("Endpoint %s probe failed (old aidrin?): %s", endpoint_id, detail)
+        return report
+
     remote_aidrin = remote.get("aidrin_version", "unknown")
     remote_python = remote.get("python_version", "unknown")
 
