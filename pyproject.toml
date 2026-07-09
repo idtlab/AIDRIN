@@ -31,6 +31,7 @@ dependencies = [
     "dython>=0.7.5",
     "setuptools<81",  # dython requires pkg_resources, removed in setuptools>=82
     "shap>=0.48.0",
+    "numba>=0.61",
     "h5py>=3.14.0",
     "openpyxl>=3.1.5",
     "pgeocode>=0.5.0",
