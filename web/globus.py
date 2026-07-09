@@ -301,12 +301,11 @@ def check_endpoint_compatibility(client, endpoint_id, timeout=30):
             "local": {"aidrin": local_aidrin, "python": local_python},
             "remote": {"aidrin": "unknown", "python": "unknown"},
             "warnings": [
-                "Endpoint could not run the environment probe — its aidrin is "
-                "too old (missing 'aidrin.compute.remote'). Reinstall/upgrade "
-                f"aidrin on the endpoint to match {local_aidrin}. "
-                f"(detail: {detail})"
+                "The endpoint's aidrin version is incompatible with this "
+                f"server. Install aidrin {local_aidrin} on the endpoint."
             ],
         }
+        # Full remote traceback goes to the server log only — never the UI.
         logger.warning("Endpoint %s probe failed (old aidrin?): %s", endpoint_id, detail)
         return report
 

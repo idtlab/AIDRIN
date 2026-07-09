@@ -1168,6 +1168,42 @@ function loadGlobusDataset() {
 
   const fileName = filePath.split("/").pop();
 
+  if (loadBtn) loadBtn.textContent = "Checking endpoint...";
+  if (typeof showToast === "function")
+    showToast("Checking endpoint compatibility...", "info");
+
+  // Step 1: verify the endpoint's aidrin/Python versions match this server
+  // BEFORE submitting any work. Blocks connection on an incompatible or
+  // too-old endpoint instead of failing later during metric polling.
+  fetch("/globus/check-endpoint", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint_id: endpointId }),
+  })
+    .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok || data.compatible === false) {
+        _reEnableGlobusForm();
+        const msg =
+          data.warnings && data.warnings.length
+            ? data.warnings.join(" ")
+            : data.error || "Endpoint is not compatible with this AIDRIN server.";
+        if (typeof showToast === "function") showToast(msg, "error");
+        return;
+      }
+      // Step 2: endpoint is compatible — proceed to load the dataset.
+      if (loadBtn) loadBtn.textContent = "Connecting...";
+      _submitGlobusDataset(endpointId, filePath, fileName, fileType);
+    })
+    .catch((err) => {
+      _reEnableGlobusForm();
+      if (typeof showToast === "function")
+        showToast("Endpoint check failed: " + err.message, "error");
+    });
+}
+
+// Submit the initial metric once the endpoint has been verified compatible.
+function _submitGlobusDataset(endpointId, filePath, fileName, fileType) {
   if (typeof showToast === "function")
     showToast("Connecting to remote endpoint...", "info");
 
@@ -1677,7 +1713,11 @@ function buildResultCard(type, results) {
  */
 function showToast(message, type, duration) {
   type = type || "info";
-  duration = duration || 4000;
+  // Errors stay until the user dismisses them (via the X); other toasts
+  // auto-close. An explicit duration always wins; duration 0 = persistent.
+  if (duration === undefined) {
+    duration = type === "error" ? 0 : 4000;
+  }
 
   const colors = {
     success: {
@@ -1721,12 +1761,14 @@ function showToast(message, type, duration) {
     toast.style.transform = "translateY(0)";
   });
 
-  // Auto-dismiss
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    toast.style.transform = "translateY(-8px)";
-    setTimeout(() => toast.remove(), 300);
-  }, duration);
+  // Auto-dismiss (skipped when duration is 0 — persistent, close via the X)
+  if (duration > 0) {
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(-8px)";
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  }
 }
 
 // ==================== JSON Download ====================

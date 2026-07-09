@@ -222,7 +222,7 @@ def test_check_endpoint_compatibility_old_endpoint_missing_probe():
     )
     report = check_endpoint_compatibility(client, "endpoint-uuid")
     assert report["compatible"] is False
-    assert any("too old" in w for w in report["warnings"])
+    assert any(aidrin.__version__ in w for w in report["warnings"])
     assert report["remote"]["aidrin"] == "unknown"
 
 
