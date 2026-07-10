@@ -10,6 +10,8 @@
 let activePanel = "data-overview";
 let codeMirrorEditor = null;
 let lastMetricResult = null; // Store last result for JSON download
+let customOutlierTargets = [];
+let customOutlierRuleCounter = 0;
 
 /**
  * Show a metric panel by ID, hiding all others.
@@ -231,6 +233,7 @@ document.addEventListener("DOMContentLoaded", function () {
       sidebar.classList.toggle("-translate-x-full");
     });
   }
+  initCustomOutlierEditor();
 });
 
 // ==================== Form Submission ====================
@@ -353,12 +356,33 @@ function workspaceSubmit(targetUrl) {
         selected.push("duplicates");
         selectedNames.push("Duplicity");
       }
+      if (gFormData.get("custom_outliers") === "yes") {
+        const customOutlierRules = serializeCustomOutlierRules();
+        if (!validateCustomOutlierRuleSelection(customOutlierRules)) return;
+        selected.push("custom_outliers");
+        selectedNames.push("Custom Criteria Outliers");
+        remoteParams.custom_outlier_rules = customOutlierRules;
+        remoteParams.max_outliers = customOutlierLimitValue(
+          gFormData.get("max_outliers"),
+          100,
+        );
+        remoteParams.max_export_rows = customOutlierLimitValue(
+          gFormData.get("max_export_rows"),
+          10000,
+        );
+        const scanLimit = gFormData.get("scan_limit");
+        if (scanLimit !== null && scanLimit !== "") {
+          remoteParams.scan_limit = Number(scanLimit);
+        }
+        remoteParams.stop_after_outliers =
+          gFormData.get("stop_after_outliers") === "yes";
+      }
       if (selected.length === 0) {
         if (typeof showToast === "function")
           showToast("Please select at least one metric", "error");
         return;
       }
-      remoteParams = { selected: selected };
+      remoteParams.selected = selected;
       remoteDisplayName = selectedNames.join(", ");
     } else if (targetUrl === "/feature-relevance") {
       remoteName = "feature_relevance";
@@ -517,6 +541,28 @@ function workspaceSubmit(targetUrl) {
   for (const [shortName, joined] of Object.entries(collectedMulti)) {
     processedFormData.set(shortName, joined);
   }
+  if (targetUrl === "/data-quality") {
+    const customOutliersSelected = formData.get("custom_outliers") === "yes";
+    const customOutlierRules = serializeCustomOutlierRules();
+    if (
+      customOutliersSelected &&
+      !validateCustomOutlierRuleSelection(customOutlierRules)
+    ) {
+      return;
+    }
+    processedFormData.set(
+      "custom_outlier_rules",
+      JSON.stringify(customOutlierRules),
+    );
+    processedFormData.set(
+      "max_outliers",
+      String(customOutlierLimitValue(formData.get("max_outliers"), 100)),
+    );
+    processedFormData.set(
+      "max_export_rows",
+      String(customOutlierLimitValue(formData.get("max_export_rows"), 10000)),
+    );
+  }
 
   // Save form state for cache restore
   try {
@@ -669,13 +715,13 @@ function renderWorkspaceResults(data, options) {
     html += `<div class="p-5 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">`;
 
     // Header
-    html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${type}</h3>`;
+    html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${escapeHtml(type)}</h3>`;
 
     if (error) {
-      html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error}</div>`;
+      html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error)}</div>`;
     } else {
       if (description) {
-        html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${description}</p>`;
+        html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${escapeHtml(description)}</p>`;
       }
 
       // Graph interpretation — rendered as a distinct callout below the plot/scores
@@ -720,7 +766,7 @@ function renderWorkspaceResults(data, options) {
           <svg class="w-5 h-5 shrink-0 mt-0.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
           <div>
             <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Interpretation</div>
-            <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${interpretation}</p>
+            <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(interpretation)}</p>
           </div>
         </div>`;
       }
@@ -795,7 +841,7 @@ function renderScoresSection(scores, depth) {
       const count = Object.keys(value).length;
       html += `<div class="mb-4">`;
       if (depth === 0) {
-        html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${key} <span class="normal-case font-normal">(${count})</span></h4>`;
+        html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)} <span class="normal-case font-normal">(${count})</span></h4>`;
       }
       html += `<div class="relative overflow-x-auto rounded-lg shadow-sm">`;
       html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
@@ -810,12 +856,28 @@ function renderScoresSection(scores, depth) {
             ? "bg-white dark:bg-gray-800"
             : "bg-gray-50 dark:bg-gray-700/50";
         html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${k}</td>`;
-        html += `<td class="px-4 py-2 text-right font-mono text-xs">${formatValue(v)}</td>`;
+        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(k)}</td>`;
+        html += `<td class="px-4 py-2 text-right font-mono text-xs">${escapeHtml(formatValue(v))}</td>`;
         html += `</tr>`;
         rowIdx++;
       }
       html += `</tbody></table></div></div>`;
+    }
+    // Custom outlier preview gets a compact scan-first table with per-row details.
+    else if (key === "Outlier preview" && isObject(value)) {
+      html += renderCustomOutlierPreviewTable(value);
+    }
+    // Custom outlier export rows are downloaded instead of rendered inline.
+    else if (key === "Outlier export" && isObject(value)) {
+      const rows = flattenOutlierExportRows(value);
+      html += `<div class="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">`;
+      html += `<div class="flex flex-wrap items-center justify-between gap-3">`;
+      html += `<div>`;
+      html += `<h4 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)}</h4>`;
+      html += `<p class="mt-1 text-sm text-gray-600 dark:text-gray-300">${rows.length} downloadable row${rows.length === 1 ? "" : "s"}</p>`;
+      html += `</div>`;
+      html += `<button type="button" onclick="downloadCustomOutlierExportCsv()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors">Download CSV</button>`;
+      html += `</div></div>`;
     }
     // Nested dict → collapsible Flowbite accordion-style section
     else if (isObject(value) && Object.keys(value).length > 0) {
@@ -823,14 +885,14 @@ function renderScoresSection(scores, depth) {
       if (isDeep || Object.keys(value).length > 5) {
         html += `<details class="mb-3 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" ${depth === 0 ? "open" : ""}>`;
         html += `<summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">`;
-        html += `${key}<svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>`;
+        html += `${escapeHtml(key)}<svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>`;
         html += `</summary>`;
         html += `<div class="p-4 border-t border-gray-200 dark:border-gray-700">`;
         html += renderScoresSection(value, depth + 1);
         html += `</div></details>`;
       } else {
         html += `<div class="mb-4">`;
-        html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${key}</h4>`;
+        html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)}</h4>`;
         html += renderScoresSection(value, depth + 1);
         html += `</div>`;
       }
@@ -838,9 +900,9 @@ function renderScoresSection(scores, depth) {
     // Array
     else if (Array.isArray(value)) {
       html += `<div class="mb-4">`;
-      html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${key} <span class="normal-case font-normal">(${value.length})</span></h4>`;
+      html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)} <span class="normal-case font-normal">(${value.length})</span></h4>`;
       if (value.length > 0 && typeof value[0] !== "object") {
-        html += `<p class="text-sm text-gray-700 dark:text-gray-300">${value.map(formatValue).join(", ")}</p>`;
+        html += `<p class="text-sm text-gray-700 dark:text-gray-300">${escapeHtml(value.map(formatValue).join(", "))}</p>`;
       } else {
         value.forEach((item, i) => {
           if (isObject(item)) {
@@ -849,7 +911,7 @@ function renderScoresSection(scores, depth) {
             html += `<div class="mt-1">${renderScoresSection(item, depth + 1)}</div>`;
             html += `</details>`;
           } else {
-            html += `<div class="text-sm text-gray-700 dark:text-gray-300">${formatValue(item)}</div>`;
+            html += `<div class="text-sm text-gray-700 dark:text-gray-300">${escapeHtml(formatValue(item))}</div>`;
           }
         });
       }
@@ -863,7 +925,7 @@ function renderScoresSection(scores, depth) {
     ) {
       html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">`;
       html += `<span class="font-medium text-gray-900 dark:text-white">Remedied Dataset</span>`;
-      html += `<a href="${value}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 dark:bg-green-500 dark:hover:bg-green-600 transition-colors">`;
+      html += `<a href="${escapeHtml(value)}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 dark:bg-green-500 dark:hover:bg-green-600 transition-colors">`;
       html += `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>`;
       html += `Download CSV</a>`;
       html += `</div>`;
@@ -871,8 +933,8 @@ function renderScoresSection(scores, depth) {
     // Scalar → Flowbite list-group style row
     else {
       html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700 last:border-b-0">`;
-      html += `<span class="font-medium text-gray-900 dark:text-white">${key}</span>`;
-      html += `<span class="font-mono text-xs text-gray-500 dark:text-gray-400">${formatValue(value)}</span>`;
+      html += `<span class="font-medium text-gray-900 dark:text-white">${escapeHtml(key)}</span>`;
+      html += `<span class="font-mono text-xs text-gray-500 dark:text-gray-400">${escapeHtml(formatValue(value))}</span>`;
       html += `</div>`;
     }
   }
@@ -1419,6 +1481,439 @@ function submitGlobusMetric(metricName, params, displayName) {
     });
 }
 
+// ==================== Custom Criteria Outliers ====================
+
+function initCustomOutlierEditor() {
+  const addButton = document.getElementById("custom-outlier-add-rule");
+  if (addButton) {
+    addButton.addEventListener("click", () => addCustomOutlierRuleRow());
+  }
+  const checkbox = document.getElementById("toggleButton_custom_outliers");
+  if (document.getElementById("custom-outlier-editor") && checkbox?.checked) {
+    toggleCustomOutlierEditor(checkbox);
+  }
+}
+
+function toggleCustomOutlierEditor(checkbox) {
+  const editor = document.getElementById("custom-outlier-editor");
+  if (!editor) return;
+  editor.classList.toggle("hidden", !checkbox.checked);
+  if (checkbox.checked) {
+    loadCustomOutlierTargets().then(() => {
+      const list = document.getElementById("custom-outlier-rule-list");
+      if (list && list.children.length === 0) addCustomOutlierRuleRow();
+    });
+  }
+}
+
+function loadCustomOutlierTargets() {
+  const message = document.getElementById("custom-outlier-message");
+  if (window.AIDRIN_GLOBUS_MODE) {
+    return loadGlobusCustomOutlierTargets(message);
+  }
+  return fetch("/custom-outlier-targets", { method: "POST" })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.success) {
+        customOutlierTargets = data.targets || [];
+        updateCustomOutlierTargetOptions();
+        if (message) message.classList.add("hidden");
+      } else if (message) {
+        message.textContent = data.message || "Unable to load targets.";
+        message.classList.remove("hidden");
+      }
+    })
+    .catch((err) => {
+      if (message) {
+        message.textContent = "Unable to load targets: " + err.message;
+        message.classList.remove("hidden");
+      }
+    });
+}
+
+function loadGlobusCustomOutlierTargets(message) {
+  const endpointId = window.AIDRIN_GLOBUS_ENDPOINT || "";
+  const filePath = window.AIDRIN_GLOBUS_FILE_PATH || "";
+  const fileName = window.AIDRIN_GLOBUS_FILE_NAME || "";
+  const fileType = window.AIDRIN_GLOBUS_FILE_TYPE || "";
+  if (!endpointId || !filePath) {
+    if (message) {
+      message.textContent =
+        "Remote target discovery requires a loaded Globus file.";
+      message.classList.remove("hidden");
+    }
+    return Promise.resolve();
+  }
+  if (message) {
+    message.textContent = "Loading remote targets...";
+    message.classList.remove("hidden");
+  }
+  return fetch("/globus/submit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      endpoint_id: endpointId,
+      file_path: filePath,
+      file_name: fileName,
+      file_type: fileType,
+      metric_name: "custom_outlier_targets",
+      params: {},
+    }),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.error) throw new Error(data.error);
+      if (!data.task_id) return data.result || data;
+      return pollGlobusCustomOutlierTargets(data.task_id);
+    })
+    .then((result) => {
+      if (result && result.success) {
+        customOutlierTargets = result.targets || [];
+        updateCustomOutlierTargetOptions();
+        if (message) message.classList.add("hidden");
+      } else if (message) {
+        message.textContent =
+          (result && (result.message || result.error)) ||
+          "Remote target discovery failed.";
+        message.classList.remove("hidden");
+      }
+    })
+    .catch((err) => {
+      if (message) {
+        message.textContent = "Remote target discovery failed: " + err.message;
+        message.classList.remove("hidden");
+      }
+    });
+}
+
+function pollGlobusCustomOutlierTargets(taskId) {
+  let attempts = 0;
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      attempts += 1;
+      fetch(`/globus/check-task/${taskId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.status === "completed") {
+            resolve(data.result);
+          } else if (data.status === "failed") {
+            reject(new Error(data.error || "Task failed"));
+          } else if (attempts < 150) {
+            setTimeout(poll, 2000);
+          } else {
+            reject(new Error("Timed out waiting for remote target discovery"));
+          }
+        })
+        .catch(reject);
+    };
+    poll();
+  });
+}
+
+function addCustomOutlierRuleRow() {
+  const list = document.getElementById("custom-outlier-rule-list");
+  if (!list) return;
+  customOutlierRuleCounter += 1;
+  const row = document.createElement("div");
+  row.className =
+    "custom-outlier-rule rounded-lg border border-gray-200 dark:border-gray-700 p-3";
+  row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
+  row.innerHTML = `
+    <div class="grid gap-3 md:grid-cols-2">
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
+        <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
+               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+      </label>
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Target
+        <select data-field="target"
+                class="custom-outlier-target mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+      </label>
+      <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+        <input type="checkbox" data-field="allow_missing" class="rounded border-gray-300" />
+        Allow missing values
+      </label>
+    </div>
+    <div data-section="criteria-tree" class="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Valid when
+          <select data-field="criteria_op"
+                  class="ml-2 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+            <option value="and">All conditions match</option>
+            <option value="or">Any condition matches</option>
+            <option value="not">No conditions match</option>
+          </select>
+        </label>
+        <button type="button" data-action="add-condition"
+                class="px-2.5 py-1 text-xs font-medium text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/20">
+          Add condition
+        </button>
+      </div>
+      <p class="mb-2 text-xs text-gray-600 dark:text-gray-300">Values that do not satisfy these conditions are flagged.</p>
+      <div data-section="criteria-conditions" class="space-y-2"></div>
+    </div>
+    <div class="flex justify-end mt-3">
+      <button type="button" data-action="remove"
+              class="px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+        Remove
+      </button>
+    </div>`;
+  list.appendChild(row);
+
+  row.querySelector('[data-action="remove"]').addEventListener("click", () => {
+    row.remove();
+    serializeCustomOutlierRules();
+  });
+  row
+    .querySelector('[data-action="add-condition"]')
+    .addEventListener("click", () => {
+      addCustomOutlierConditionRow(row);
+      serializeCustomOutlierRules();
+    });
+  row.addEventListener("input", serializeCustomOutlierRules);
+  row.addEventListener("change", serializeCustomOutlierRules);
+
+  addCustomOutlierConditionRow(row);
+  updateCustomOutlierTargetOptions(row);
+  serializeCustomOutlierRules();
+}
+
+function addCustomOutlierConditionRow(ruleRow) {
+  const list = ruleRow.querySelector('[data-section="criteria-conditions"]');
+  if (!list) return;
+  const condition = document.createElement("div");
+  condition.className =
+    "custom-outlier-condition rounded-lg border border-gray-200 dark:border-gray-700 p-2";
+  condition.innerHTML = `
+    <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.7fr)_1fr_auto]">
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Type
+        <select data-field="condition_type"
+                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+          <option value="range">Range</option>
+          <option value="regex">Regex</option>
+        </select>
+      </label>
+      <div data-section="condition-range" class="grid gap-2 sm:grid-cols-4">
+        <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
+          <input type="number" step="any" data-field="condition_min"
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+        </label>
+        <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Max
+          <input type="number" step="any" data-field="condition_max"
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+        </label>
+        <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+          <input type="checkbox" data-field="condition_min_inclusive" checked class="rounded border-gray-300" />
+          Include min
+        </label>
+        <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+          <input type="checkbox" data-field="condition_max_inclusive" checked class="rounded border-gray-300" />
+          Include max
+        </label>
+      </div>
+      <div data-section="condition-regex" class="hidden">
+        <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Pattern
+          <input type="text" data-field="condition_pattern" value=".*"
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+        </label>
+      </div>
+      <button type="button" data-action="remove-condition"
+              class="self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+        Remove
+      </button>
+    </div>`;
+  list.appendChild(condition);
+  condition
+    .querySelector('[data-field="condition_type"]')
+    .addEventListener("change", () => {
+      updateCustomOutlierConditionSections(condition);
+    });
+  condition
+    .querySelector('[data-action="remove-condition"]')
+    .addEventListener("click", () => {
+      condition.remove();
+      serializeCustomOutlierRules();
+    });
+  updateCustomOutlierConditionSections(condition);
+}
+
+function updateCustomOutlierTargetOptions(scope) {
+  const root = scope || document;
+  root.querySelectorAll(".custom-outlier-target").forEach((select) => {
+    const selected = select.value;
+    select.innerHTML = "";
+    customOutlierTargets.forEach((target) => {
+      const option = document.createElement("option");
+      option.value = target.name;
+      option.dataset.targetType = target.target_type;
+      option.textContent = target.display_label || target.name;
+      select.appendChild(option);
+    });
+    if (selected) select.value = selected;
+  });
+}
+
+function serializeCustomOutlierRules() {
+  const rows = document.querySelectorAll(".custom-outlier-rule");
+  const rules = [];
+  rows.forEach((row, index) => {
+    const targetSelect = row.querySelector('[data-field="target"]');
+    if (!targetSelect || !targetSelect.value) return;
+    const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
+    const rule = {
+      id,
+      name: row.querySelector('[data-field="name"]')?.value || id,
+      target: targetSelect.value,
+      target_type:
+        targetSelect.selectedOptions[0]?.dataset.targetType || "column",
+      allow_missing: Boolean(
+        row.querySelector('[data-field="allow_missing"]')?.checked,
+      ),
+      criteria: serializeCustomOutlierCriteria(row),
+    };
+    rules.push(rule);
+  });
+  const hidden = document.getElementById("custom-outlier-rules-json");
+  if (hidden) hidden.value = JSON.stringify(rules);
+  return rules;
+}
+
+function updateCustomOutlierConditionSections(condition) {
+  const type = condition.querySelector('[data-field="condition_type"]')?.value;
+  condition
+    .querySelector('[data-section="condition-range"]')
+    ?.classList.toggle("hidden", type !== "range");
+  condition
+    .querySelector('[data-section="condition-regex"]')
+    ?.classList.toggle("hidden", type !== "regex");
+}
+
+function serializeCustomOutlierCriteria(row) {
+  const op = row.querySelector('[data-field="criteria_op"]')?.value || "and";
+  const conditions = Array.from(
+    row.querySelectorAll(".custom-outlier-condition"),
+  )
+    .map(serializeCustomOutlierCondition)
+    .filter(Boolean);
+
+  if (op === "not") {
+    if (conditions.length === 0) return { op: "not", condition: null };
+    if (conditions.length === 1) {
+      return { op: "not", condition: conditions[0] };
+    }
+    return { op: "not", condition: { op: "or", conditions } };
+  }
+
+  return { op, conditions };
+}
+
+function serializeCustomOutlierCondition(condition) {
+  const type =
+    condition.querySelector('[data-field="condition_type"]')?.value || "range";
+  if (type === "regex") {
+    return {
+      type: "regex",
+      pattern:
+        condition.querySelector('[data-field="condition_pattern"]')?.value ||
+        "",
+    };
+  }
+
+  const min = condition.querySelector('[data-field="condition_min"]')?.value;
+  const max = condition.querySelector('[data-field="condition_max"]')?.value;
+  const criteria = {
+    type: "range",
+    min_inclusive: Boolean(
+      condition.querySelector('[data-field="condition_min_inclusive"]')
+        ?.checked,
+    ),
+    max_inclusive: Boolean(
+      condition.querySelector('[data-field="condition_max_inclusive"]')
+        ?.checked,
+    ),
+  };
+  if (min !== "") criteria.min = min;
+  if (max !== "") criteria.max = max;
+  return criteria;
+}
+
+function validateCustomOutlierRuleSelection(rules) {
+  if (!Array.isArray(rules) || rules.length === 0) {
+    return showCustomOutlierValidationError(
+      "Add at least one custom outlier rule before submitting.",
+    );
+  }
+  for (const rule of rules) {
+    const ruleName = rule.name || rule.id || "Custom outlier rule";
+    const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
+    if (error) return showCustomOutlierValidationError(error);
+  }
+  return true;
+}
+
+function validateCustomOutlierCriteria(criteria, ruleName) {
+  if (!criteria || typeof criteria !== "object") {
+    return `${ruleName} requires criteria.`;
+  }
+  if (criteria.op === "and" || criteria.op === "or") {
+    if (
+      !Array.isArray(criteria.conditions) ||
+      criteria.conditions.length === 0
+    ) {
+      return `${ruleName} requires at least one condition.`;
+    }
+    for (const condition of criteria.conditions) {
+      const error = validateCustomOutlierCriteria(condition, ruleName);
+      if (error) return error;
+    }
+    return null;
+  }
+  if (criteria.op === "not") {
+    if (!criteria.condition) {
+      return `${ruleName} requires a condition for NOT.`;
+    }
+    return validateCustomOutlierCriteria(criteria.condition, ruleName);
+  }
+  if (criteria.type === "range") {
+    const hasMin = criteria.min !== undefined && criteria.min !== "";
+    const hasMax = criteria.max !== undefined && criteria.max !== "";
+    if (!hasMin && !hasMax) {
+      return `${ruleName} range condition requires min or max.`;
+    }
+    for (const field of ["min", "max"]) {
+      if (
+        criteria[field] !== undefined &&
+        criteria[field] !== "" &&
+        !Number.isFinite(Number(criteria[field]))
+      ) {
+        return `${ruleName} range ${field} must be a finite number.`;
+      }
+    }
+    return null;
+  }
+  if (criteria.type === "regex") return null;
+  return `${ruleName} has an unsupported condition type.`;
+}
+
+function showCustomOutlierValidationError(text) {
+  const message = document.getElementById("custom-outlier-message");
+  if (message) {
+    message.textContent = text;
+    message.classList.remove("hidden");
+  }
+  if (typeof showToast === "function") {
+    showToast(text, "error");
+  }
+  return false;
+}
+
+function customOutlierLimitValue(rawValue, defaultValue) {
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    return defaultValue;
+  }
+  const value = Number(rawValue);
+  return Number.isFinite(value) && value >= 0 ? value : defaultValue;
+}
+
 // ==================== Layout Helpers ====================
 
 /**
@@ -1453,6 +1948,13 @@ function handleAsyncResults(data) {
       pollAsyncMetric(results.task_id, type, results.cache_key);
     }
   }
+}
+
+function storeAsyncMetricResult(metricName, result) {
+  if (!lastMetricResult || typeof lastMetricResult !== "object") {
+    lastMetricResult = {};
+  }
+  lastMetricResult[metricName] = result;
 }
 
 /**
@@ -1535,9 +2037,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
 
         if (response.status === "completed") {
           // Update stored result for download
-          if (lastMetricResult) {
-            lastMetricResult[metricName] = response.result;
-          }
+          storeAsyncMetricResult(metricName, response.result);
 
           // Check if result is a multi-metric bundle (e.g., data_quality returns
           // {Completeness: {...}, Outliers: {...}, Duplicity: {...}})
@@ -1656,13 +2156,13 @@ function buildResultCard(type, results) {
   }
 
   let html = `<div class="p-5 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">`;
-  html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${type}</h3>`;
+  html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${escapeHtml(type)}</h3>`;
 
   if (error) {
-    html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error}</div>`;
+    html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error)}</div>`;
   } else {
     if (description) {
-      html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${description}</p>`;
+      html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${escapeHtml(description)}</p>`;
     }
 
     const hasViz = visualizations.length > 0;
@@ -1698,7 +2198,7 @@ function buildResultCard(type, results) {
         <svg class="w-5 h-5 shrink-0 mt-0.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
         <div>
           <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Interpretation</div>
-          <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${interpretation}</p>
+          <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(interpretation)}</p>
         </div>
       </div>`;
     }
@@ -1819,6 +2319,179 @@ function downloadJSON() {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
+}
+
+function flattenOutlierExportRows(exportByRule) {
+  if (!exportByRule || typeof exportByRule !== "object") return [];
+  const rows = [];
+  for (const [ruleKey, ruleRows] of Object.entries(exportByRule)) {
+    if (!Array.isArray(ruleRows)) continue;
+    for (const row of ruleRows) {
+      if (!row || typeof row !== "object") continue;
+      rows.push({
+        rule_key: ruleKey,
+        rule_id: row.rule_id || "",
+        rule_name: row.rule_name || "",
+        target: row.target || "",
+        target_type: row.target_type || "",
+        value: row.value,
+        reason: row.reason || "",
+        location: row.location || {},
+      });
+    }
+  }
+  return rows;
+}
+
+function flattenOutlierPreviewRows(previewByRule) {
+  if (!previewByRule || typeof previewByRule !== "object") return [];
+  const rows = [];
+  for (const [ruleKey, ruleRows] of Object.entries(previewByRule)) {
+    if (!Array.isArray(ruleRows)) continue;
+    for (const row of ruleRows) {
+      if (!row || typeof row !== "object") continue;
+      rows.push({
+        rule_key: ruleKey,
+        rule_id: row.rule_id || "",
+        rule_name: row.rule_name || row.rule_id || ruleKey,
+        target: row.target || "",
+        target_type: row.target_type || "",
+        value: row.value,
+        reason: row.reason || "",
+        flag: row.flag || formatOutlierFlagFallback(row.reason),
+        location: row.location || {},
+        raw: row,
+      });
+    }
+  }
+  return rows;
+}
+
+function renderCustomOutlierPreviewTable(previewByRule) {
+  const rows = flattenOutlierPreviewRows(previewByRule);
+  let html = `<div class="mb-4">`;
+  html += `<div class="mb-2 flex flex-wrap items-center justify-between gap-2">`;
+  html += `<h4 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Outlier preview <span class="normal-case font-normal">(${rows.length})</span></h4>`;
+  html += `</div>`;
+  html += `<p class="mb-2 text-xs text-gray-600 dark:text-gray-300">Preview rows failed a valid-value condition.</p>`;
+  if (rows.length === 0) {
+    html += `<p class="text-sm text-gray-600 dark:text-gray-300">No preview rows.</p>`;
+    html += `</div>`;
+    return html;
+  }
+
+  html += `<div class="relative overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">`;
+  html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  html += `<th scope="col" class="px-3 py-2.5">Rule</th>`;
+  html += `<th scope="col" class="px-3 py-2.5">Location</th>`;
+  html += `<th scope="col" class="px-3 py-2.5 text-right">Value</th>`;
+  html += `<th scope="col" class="px-3 py-2.5">Why flagged</th>`;
+  html += `<th scope="col" class="px-3 py-2.5 text-right">Details</th>`;
+  html += `</tr></thead><tbody>`;
+  rows.forEach((row, index) => {
+    const stripe =
+      index % 2 === 0
+        ? "bg-white dark:bg-gray-800"
+        : "bg-gray-50 dark:bg-gray-700/50";
+    const locationDisplay =
+      row.location.display ||
+      row.location.path ||
+      formatValue(row.location.index || "");
+    html += `<tr class="${stripe} border-b dark:border-gray-700 last:border-b-0 align-top">`;
+    html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${escapeHtml(row.rule_name)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">${escapeHtml(formatValue(locationDisplay))}</td>`;
+    html += `<td class="px-3 py-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300">${escapeHtml(formatValue(row.value))}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(row.flag)}</td>`;
+    html += `<td class="px-3 py-2 text-right">`;
+    html += `<details class="inline-block text-left">`;
+    html += `<summary class="cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">Expand</summary>`;
+    html += `<div class="mt-2 min-w-72 max-w-xl rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">`;
+    html += `<div class="mb-2 text-xs text-gray-600 dark:text-gray-300"><span class="font-medium text-gray-900 dark:text-white">Target:</span> ${escapeHtml(row.target)}</div>`;
+    html += `<pre class="max-h-64 overflow-auto text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">${escapeHtml(JSON.stringify(row.raw, null, 2))}</pre>`;
+    html += `</div></details></td>`;
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  return html;
+}
+
+function formatOutlierFlagFallback(reason) {
+  const labels = {
+    below_min: "< min",
+    above_max: "> max",
+    regex_mismatch: "!=",
+    non_numeric: "NaN",
+    missing: "missing",
+  };
+  return labels[reason] || reason || "";
+}
+
+function findCustomOutlierExport(result) {
+  if (!result || typeof result !== "object") return null;
+  const direct = result["Outlier export"];
+  if (direct && typeof direct === "object") return direct;
+  for (const value of Object.values(result)) {
+    if (value && typeof value === "object" && value["Outlier export"]) {
+      return value["Outlier export"];
+    }
+  }
+  return null;
+}
+
+function downloadCustomOutlierExportCsv() {
+  const exportByRule = findCustomOutlierExport(lastMetricResult);
+  const rows = flattenOutlierExportRows(exportByRule);
+  const headers = [
+    "rule_key",
+    "rule_id",
+    "rule_name",
+    "target",
+    "target_type",
+    "value",
+    "reason",
+    "location_display",
+    "location_path",
+    "location_index",
+    "source_line",
+    "row_index",
+  ];
+  const csvRows = [headers.join(",")];
+  for (const row of rows) {
+    const location = row.location || {};
+    const values = [
+      row.rule_key,
+      row.rule_id,
+      row.rule_name,
+      row.target,
+      row.target_type,
+      row.value,
+      row.reason,
+      location.display || "",
+      location.path || "",
+      Array.isArray(location.index) ? location.index.join(";") : "",
+      location.source_line ?? "",
+      location.row_index ?? "",
+    ];
+    csvRows.push(values.map(csvEscape).join(","));
+  }
+  const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "custom-outlier-export.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
 }
 
 // ==================== Checkbox Helpers ====================

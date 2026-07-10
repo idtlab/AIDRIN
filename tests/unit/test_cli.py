@@ -170,6 +170,7 @@ class TestListCommand(unittest.TestCase):
         self.assertIn("completeness", text)
         self.assertIn("duplicity", text)
         self.assertIn("outliers", text)
+        self.assertIn("outliers-custom", text)
 
     def test_list_category_filter(self):
         stdout, _, _ = _run_cli("list", "--category", "data-quality")
@@ -259,6 +260,52 @@ class TestRunCommand(unittest.TestCase):
         stdout, _, _ = _run_cli("run", "outliers", self.csv)
         data = json.loads(stdout)
         self.assertIn("Outlier scores", data)
+
+    def test_run_outliers_custom_returns_json(self):
+        rules = json.dumps([{
+            "id": "age-range",
+            "target": "age",
+            "target_type": "column",
+            "criteria": {"type": "range", "min": 20, "max": 60},
+        }])
+        stdout, _, code = _run_cli(
+            "run",
+            "outliers-custom",
+            self.csv,
+            rules,
+            "--max-outliers",
+            "0",
+        )
+        self.assertEqual(code, 0)
+        data = json.loads(stdout)
+        self.assertIn("Rule summaries", data)
+        self.assertEqual(data["Rule summaries"]["age-range"]["preview_limit"], 0)
+
+    def test_run_outliers_custom_accepts_rule_shorthand(self):
+        stdout, _, code = _run_cli(
+            "run",
+            "outliers-custom",
+            self.csv,
+            "--rule",
+            "age >= 20 && age <= 60",
+            "--max-outliers",
+            "0",
+        )
+        self.assertEqual(code, 0)
+        data = json.loads(stdout)
+        self.assertIn("age-1", data["Rule summaries"])
+        self.assertEqual(data["Rule summaries"]["age-1"]["preview_limit"], 0)
+
+    def test_run_outliers_custom_rejects_mixed_target_shorthand(self):
+        _, stderr, code = _run_cli(
+            "run",
+            "outliers-custom",
+            self.csv,
+            "--rule",
+            "age >= 20 && income <= 100000",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("same target", stderr)
 
     def test_run_correlations_exits_zero(self):
         _, _, code = _run_cli("run", "correlations", self.csv, "age,income,sex")

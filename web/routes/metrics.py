@@ -14,12 +14,14 @@ from flask import (
     url_for,
 )
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import (
     calc_imbalance_degree,
     class_distribution_plot,
 )
 from aidrin.structured_data_metrics.completeness import completeness
+from aidrin.structured_data_metrics.custom_outliers import custom_outliers
 from aidrin.structured_data_metrics.conditional_demo_disp import (
     conditional_demographic_disparity,
 )
@@ -70,6 +72,21 @@ METRIC_CELERY_TIMEOUT = 120
 # Data Quality
 # ---------------------------------------------------------------------------
 
+@metrics_bp.route("/custom-outlier-targets", methods=["GET", "POST"])
+def custom_outlier_targets():
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    if not file_path:
+        return jsonify({"success": False, "message": "No file uploaded"}), 200
+    try:
+        targets = iter_targets((file_path, file_name, file_type))
+        return jsonify({"success": True, "targets": ensure_json_serializable(targets)})
+    except Exception as e:
+        metric_time_log.error("Custom outlier target discovery failed: %s", e, exc_info=True)
+        return jsonify({"success": False, "message": "Custom outlier target discovery failed."}), 200
+
+
 @metrics_bp.route("/data-quality", methods=["GET", "POST"])
 def data_quality():
     final_dict = {}
@@ -80,7 +97,7 @@ def data_quality():
 
     if request.method == "POST":
         start_time = time.time()
-        selected = [m for m in ("completeness", "outliers", "duplicity") if request.form.get(m) == "yes"]
+        selected = [m for m in ("completeness", "outliers", "duplicity", "custom_outliers") if request.form.get(m) == "yes"]
         metric_time_log.info("Data Quality request started: %s", selected)
 
         tracer = get_tracer()
@@ -126,6 +143,44 @@ def data_quality():
                     )
                     final_dict["Duplicity"] = dup_dict
                     metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
+
+                if "custom_outliers" in selected:
+                    t0 = time.time()
+                    try:
+                        rules = json.loads(request.form.get("custom_outlier_rules", "[]"))
+                    except json.JSONDecodeError as e:
+                        final_dict["Custom Criteria Outliers"] = {"Error": f"Invalid custom outlier rules JSON: {e}"}
+                    else:
+                        max_outliers = request.form.get("max_outliers", 100)
+                        scan_limit = request.form.get("scan_limit") or None
+                        stop_after_outliers = request.form.get("stop_after_outliers") == "yes"
+                        max_export_rows = request.form.get("max_export_rows", 10000)
+                        try:
+                            with tracer.start_as_current_span("metric.custom_outliers"):
+                                custom_dict = custom_outliers(
+                                    file_info,
+                                    rules,
+                                    max_outliers,
+                                    scan_limit,
+                                    stop_after_outliers,
+                                    max_export_rows,
+                                )
+                        except Exception as e:
+                            metric_time_log.error("Custom Criteria Outliers error: %s", e, exc_info=True)
+                            final_dict["Custom Criteria Outliers"] = {
+                                "Error": f"{type(e).__name__}: {e}",
+                                "Description": (
+                                    "Custom criteria outliers are values that violate user-defined range "
+                                    "or regex rules on selected columns or native HDF5 datasets."
+                                ),
+                            }
+                        else:
+                            custom_dict["Description"] = (
+                                "Custom criteria outliers are values that violate user-defined range "
+                                "or regex rules on selected columns or native HDF5 datasets."
+                            )
+                            final_dict["Custom Criteria Outliers"] = custom_dict
+                    metric_time_log.info("Custom Criteria Outliers took %.2f seconds", time.time() - t0)
 
             except Exception as e:
                 metric_time_log.error("Data Quality error: %s", e, exc_info=True)

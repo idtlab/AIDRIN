@@ -109,6 +109,15 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
+   # Custom criteria outliers with simple valid-value rule shorthand
+   aidrin run outliers-custom /path/to/sample_dataset.csv \
+     --rule "score >= 0 && score <= 1"
+
+   # Custom criteria outliers with inline valid-value rules JSON for compound rules
+   aidrin run outliers-custom /path/to/sample_dataset.csv \
+     '[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]' \
+     --max-outliers 100
+
    # Impact on AI
    aidrin run correlations /path/to/sample_dataset.csv "age,income,credit_score"
    aidrin run feature-relevance /path/to/sample_dataset.csv "gender,education" "age,income,credit_score" approved
@@ -124,6 +133,13 @@ Examples:
    aidrin run t-closeness /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
    aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
+
+For custom criteria outliers, ``--rule`` and ``rules-json`` describe expected
+valid values. Values that do not satisfy those conditions are flagged as
+outliers. Repeat ``--rule`` to add multiple simple column rules. The shorthand
+supports same-target conditions joined by ``&&``. Use the JSON form for ``OR``,
+``NOT``, nested criteria, or HDF5 targets. Use ``--max-outliers 0`` or
+``--max-export-rows 0`` when you want unlimited preview or export rows.
 
 Options available on all ``run`` subcommands:
 
@@ -233,6 +249,9 @@ Available Metrics
    * - Data Quality
      - ``outliers``
      - —
+   * - Data Quality
+     - ``outliers-custom``
+     - ``rules-json``
    * - Impact on AI
      - ``correlations``
      - ``columns``
@@ -287,6 +306,17 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
 
    # Single metric
    result = run_metric("completeness", "/path/to/sample_dataset.csv")
+
+   # Custom criteria outliers
+   result = run_metric(
+       "outliers-custom",
+       "/path/to/sample_dataset.csv",
+       rules_json='[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]',
+       max_outliers=100,
+   )
+
+The custom outlier rules in CLI and Python calls define valid values; values
+that fail the rule are reported in the outlier preview/export rows.
 
    # Fast data quality bundle
    result = run_data_quality("/path/to/sample_dataset.csv")

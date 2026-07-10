@@ -83,6 +83,9 @@ class TestPublicAPIImports(unittest.TestCase):
     def test_calculate_outliers_importable(self):
         self._assert_callable("calculate_outliers")
 
+    def test_calculate_custom_outliers_importable(self):
+        self._assert_callable("calculate_custom_outliers")
+
     def test_calculate_class_distribution_importable(self):
         self._assert_callable("calculate_class_distribution")
 
@@ -145,6 +148,17 @@ class TestPublicDataQuality(unittest.TestCase):
         result = aidrin.calculate_outliers(self.fi)
         self.assertIn("Outlier scores", result)
         self.assertIn("Overall outlier score", result["Outlier scores"])
+
+    def test_calculate_custom_outliers_returns_rule_summaries(self):
+        import aidrin
+        result = aidrin.calculate_custom_outliers(self.fi, [{
+            "id": "age-range",
+            "target": "age",
+            "target_type": "column",
+            "criteria": {"type": "range", "min": 20, "max": 70},
+        }])
+        self.assertIn("Rule summaries", result)
+        self.assertIn("age-range", result["Rule summaries"])
 
 
 # ===========================================================================

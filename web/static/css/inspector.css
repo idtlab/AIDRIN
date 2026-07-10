@@ -31,6 +31,24 @@ html.dark .sidebar-metric-item.active {
   max-width: none;
 }
 
+/* Custom-outlier editor: unify control heights. The selects otherwise inherit
+   theme.css's taller global select padding (10px) while the inputs use their
+   Tailwind padding, leaving rows uneven. Match everything to the compact
+   px-3 py-2 (8px) control height. */
+#custom-outlier-editor select:not([multiple]),
+#custom-outlier-editor input[type="text"],
+#custom-outlier-editor input[type="number"] {
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border-radius: 8px;
+  max-width: none;
+}
+
+#custom-outlier-editor select:not([multiple]) {
+  padding-right: 32px; /* room for the chevron */
+}
+
 /* Tables: outer border + header separator */
 .relative.overflow-x-auto {
   border: 1px solid #e5e7eb;
