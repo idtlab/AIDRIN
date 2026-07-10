@@ -41,9 +41,13 @@ jobs:
 
     - name: Build sdist and wheel
       shell: bash -l {0}
+      # --no-isolation: build in the conda env with the pinned backend instead
+      # of an isolated venv. `python -m build`'s venv can't find conda's
+      # libexpat DLL on Windows (pyexpat ImportError), so build without it and
+      # pre-install the exact build-system.requires ourselves.
       run: |
-        python -m pip install build
-        python -m build
+        python -m pip install build setuptools==78.1.1 wheel
+        python -m build --no-isolation
 
     - name: Verify wheel installs
       shell: bash -l {0}
