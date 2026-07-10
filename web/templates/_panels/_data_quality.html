@@ -9,15 +9,99 @@
           <label class="material-checkbox">
             <input type="checkbox" name="completeness" id="toggleButton_completeness" onchange="toggleValue(this)" />
             <span class="checkmark"></span>
-            Check completeness
+            Check column-level completeness
             <span class="info-icon">i<span class="info-text">This option checks the proportion of NaN values in each feature and displays a bar chart highlighting features with only missing values.</span></span>
           </label>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="row level completeness" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check row-level completeness
+            <span class="info-icon">i<span class="info-text">This option reports the percentage of rows in which every selected required column is non-null.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Required columns:</label>
+              <div id="rowLevelCompletenessColumnsCheckbox" class="w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="feature coverage ratio" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check feature coverage ratio
+            <span class="info-icon">i<span class="info-text">This option reports the percentage of features whose non-null rate meets or exceeds the given threshold.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Threshold (default 0.9):</label>
+              <input class="textWrapper w-full" type="number" name="threshold for feature coverage ratio" min="0" max="1" step="0.05" value="0.9" style="max-width: none;" />
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="temporal completeness" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check temporal completeness
+            <span class="info-icon">i<span class="info-text">This option reports the percentage of expected time intervals present between the earliest and latest timestamps at the given frequency.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Timestamp column:</label>
+              <select name="timestamp column for temporal completeness" id="temporalCompletenessColumnDropdown" required class="w-full" style="max-width: none;"><option value="" disabled selected>Select a feature</option></select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Frequency:</label>
+              <select name="frequency for temporal completeness" class="w-full" style="max-width: none;">
+                <option value="ms">Millisecond (ms)</option>
+                <option value="s">Second (s)</option>
+                <option value="min">Minute (min)</option>
+                <option value="h">Hourly (h)</option>
+                <option value="D" selected>Daily (D)</option>
+                <option value="W">Weekly (W)</option>
+                <option value="ME">Monthly / month-end (ME)</option>
+                <option value="QE">Quarterly / quarter-end (QE)</option>
+                <option value="YE">Yearly / year-end (YE)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="null count trend" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check null count trend
+            <span class="info-icon">i<span class="info-text">This option reports the total null cells per batch (grouped by the selected batch column), highlighting batches with degraded data quality.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Batch column:</label>
+              <select name="batch column for null count trend" id="nullCountTrendBatchDropdown" required class="w-full" style="max-width: none;"><option value="" disabled selected>Select a feature</option></select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Target columns (optional — defaults to all others):</label>
+              <div id="nullCountTrendTargetColumnsCheckbox" class="w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
             <input type="checkbox" name="outliers" onchange="toggleValue(this)" />
             <span class="checkmark"></span>
             Check outliers
             <span class="info-icon">i<span class="info-text">This option checks for outliers in numerical features using the Inter Quartile Range (IQR) method and displays a bar chart highlighting features with outliers.</span></span>
           </label>
+        </div>
+
+        <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
             <input type="checkbox" name="duplicity" onchange="toggleValue(this)" />
             <span class="checkmark"></span>

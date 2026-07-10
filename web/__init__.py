@@ -33,6 +33,9 @@ def create_app():
     _configure_matplotlib()
     setup_logging()
     app = Flask(__name__)
+    # Preserve insertion order in JSON responses so result cards render in the
+    # order the routes build them (matching the panel), not alphabetically.
+    app.json.sort_keys = False
 
     # Optional OpenTelemetry instrumentation
     from web.telemetry import init_telemetry

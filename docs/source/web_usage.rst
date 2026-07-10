@@ -272,13 +272,38 @@ Below are the six dimensions, their associated metrics, the methods used, and th
 Data Quality
 ^^^^^^^^^^^^
 
-Evaluates the quality of the dataset through metrics that assess completeness, duplicates, and outliers.
+Evaluates the quality of the dataset through metrics that assess completeness, duplicates, and outliers,
+as well as row-level completeness, feature coverage, temporal completeness, and null-count trends.
 
-- **Completeness**:
+- **Column-Level Completeness**:
 
-  - **Method**: Calculates the proportion of non-missing values in the dataset. The overall completeness score is the average proportion of non-missing values across all columns.
+  - **Method**: Calculates the proportion of non-missing values in the dataset. The overall completeness score is the column-wise average of the per-column non-missing rates. (The underlying metric id / CLI command is still ``completeness``.)
   - **Parameters**: None (uses entire dataset).
   - **Result**: A chart with values ranging from 0 (all values missing) to 1 (no missing values) for each column in the dataset, and an overall completeness score.
+
+- **Row-Level Completeness**:
+
+  - **Method**: Computes the percentage of rows whose *required* columns are all non-null.
+  - **Parameters**: Required columns (the columns that must all be populated for a row to count as complete).
+  - **Result**: The percentage of complete rows, alongside the complete and total row counts.
+
+- **Feature Coverage Ratio**:
+
+  - **Method**: Computes the percentage of features whose non-null rate meets or exceeds a threshold.
+  - **Parameters**: Coverage threshold in [0, 1] (default 0.9).
+  - **Result**: A bar chart of feature coverage and the percentage of features meeting the threshold.
+
+- **Temporal Completeness**:
+
+  - **Method**: Computes the percentage of expected time intervals present between the earliest and latest timestamps at a chosen frequency.
+  - **Parameters**: Timestamp column and frequency (one of ``ms, s, min, h, D, W, ME, QE, YE``; default ``D``).
+  - **Result**: A timeline chart of present vs. missing intervals, with the percentage present and the expected/present counts.
+
+- **Null Count Trend**:
+
+  - **Method**: Counts total null cells per batch, grouped by a batch column, to spot quality regressions across batches.
+  - **Parameters**: Batch column, and optional target columns (defaults to all other columns).
+  - **Result**: A chart of null counts per batch.
 
 - **Duplicates**:
 

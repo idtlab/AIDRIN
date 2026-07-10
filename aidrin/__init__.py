@@ -77,6 +77,100 @@ def calculate_outliers(file_info):
     return outliers.apply(args=(file_info,)).get()
 
 
+def calculate_row_level_completeness(required_columns, file_info):
+    """Percentage of rows where every required column is non-null.
+
+    Parameters
+    ----------
+    required_columns : list of str
+        Rows missing any of these columns are counted as incomplete.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Row-Level Completeness (%)": float, "Complete rows": int,
+        "Total rows": int, "Description": str}`` or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.row_level_completeness import (
+        row_level_completeness,
+    )
+    return row_level_completeness.apply(args=(required_columns, file_info)).get()
+
+
+def calculate_feature_coverage_ratio(threshold, file_info):
+    """Percentage of features whose non-null rate meets *threshold*.
+
+    Parameters
+    ----------
+    threshold : float
+        Value in [0, 1]. A feature is 'covered' if its non-null rate >= threshold.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Feature Coverage Ratio (%)": float, ...,
+        "Feature Coverage Ratio Visualization": base64_str}`` or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.feature_coverage_ratio import (
+        feature_coverage_ratio,
+    )
+    return feature_coverage_ratio.apply(args=(threshold, file_info)).get()
+
+
+def calculate_temporal_completeness(timestamp_column, frequency, file_info):
+    """Percentage of expected time intervals present in the data.
+
+    Parameters
+    ----------
+    timestamp_column : str
+        Column holding datetime values.
+    frequency : str
+        Pandas frequency string, e.g. "D" daily, "h" hourly, "W" weekly.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Temporal Completeness (%)": float, ...,
+        "Temporal Completeness Visualization": base64_str}`` or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.temporal_completeness import (
+        temporal_completeness,
+    )
+    return temporal_completeness.apply(args=(timestamp_column, frequency, file_info)).get()
+
+
+def calculate_null_count_trend(batch_column, target_columns, file_info):
+    """Null counts grouped by a batch column, to spot quality regressions.
+
+    Parameters
+    ----------
+    batch_column : str
+        Column that groups rows into batches (e.g., ingest date, source ID).
+    target_columns : list of str
+        Columns to count nulls in. Leave empty to count across all other columns.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Null counts by batch": dict, ...,
+        "Null Count Trend Visualization": base64_str}`` or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.null_count_trend import null_count_trend
+    return null_count_trend.apply(args=(batch_column, target_columns, file_info)).get()
+
+
 # ---------------------------------------------------------------------------
 # Fairness / Bias
 # ---------------------------------------------------------------------------
@@ -340,6 +434,10 @@ __all__ = [
     "calculate_completeness",
     "calculate_duplicates",
     "calculate_outliers",
+    "calculate_row_level_completeness",
+    "calculate_feature_coverage_ratio",
+    "calculate_temporal_completeness",
+    "calculate_null_count_trend",
     # Fairness / Bias
     "calculate_class_distribution",
     "calculate_representation_rate",

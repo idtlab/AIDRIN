@@ -8,12 +8,16 @@ from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
+from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
     pearson_correlation,
     plot_features,
 )
+from aidrin.structured_data_metrics.null_count_trend import null_count_trend
 from aidrin.structured_data_metrics.outliers import outliers
+from aidrin.structured_data_metrics.row_level_completeness import row_level_completeness
+from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.privacy_measure import (
     compute_entropy_risk,
     compute_k_anonymity,
@@ -84,6 +88,48 @@ def run_duplicity(file_path: str, file_type: Optional[str], file_name: Optional[
 def run_outliers(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(outliers, file_info)
+
+
+def run_row_level_completeness(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    required_columns: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(row_level_completeness, required_columns, file_info)
+
+
+def run_feature_coverage_ratio(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    threshold: float,
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(feature_coverage_ratio, threshold, file_info)
+
+
+def run_temporal_completeness(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    timestamp_column: str,
+    frequency: str,
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(temporal_completeness, timestamp_column, frequency, file_info)
+
+
+def run_null_count_trend(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    batch_column: str,
+    target_columns: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(null_count_trend, batch_column, target_columns, file_info)
 
 
 def run_correlations(

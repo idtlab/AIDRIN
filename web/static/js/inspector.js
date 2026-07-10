@@ -322,9 +322,13 @@ function workspaceSubmit(targetUrl) {
 
     // Map metric names to display names
     const metricDisplayMap = {
-      completeness: "Completeness",
+      completeness: "Column-Level Completeness",
       outliers: "Outliers",
       duplicates: "Duplicity",
+      row_level_completeness: "Row-Level Completeness",
+      feature_coverage_ratio: "Feature Coverage Ratio",
+      temporal_completeness: "Temporal Completeness",
+      null_count_trend: "Null Count Trend",
       representation_rate: "Representation Rate",
       statistical_rates: "Statistical Rate",
       feature_relevance: "Feature Relevance",
@@ -343,7 +347,7 @@ function workspaceSubmit(targetUrl) {
       const selectedNames = [];
       if (gFormData.get("completeness") === "yes") {
         selected.push("completeness");
-        selectedNames.push("Completeness");
+        selectedNames.push("Column-Level Completeness");
       }
       if (gFormData.get("outliers") === "yes") {
         selected.push("outliers");
@@ -353,12 +357,46 @@ function workspaceSubmit(targetUrl) {
         selected.push("duplicates");
         selectedNames.push("Duplicity");
       }
+      if (gFormData.get("row level completeness") === "yes") {
+        selected.push("row_level_completeness");
+        selectedNames.push("Row-Level Completeness");
+        remoteParams.required_columns = Array.from(
+          gFormData.getAll("required columns for row level completeness"),
+        );
+      }
+      if (gFormData.get("feature coverage ratio") === "yes") {
+        selected.push("feature_coverage_ratio");
+        selectedNames.push("Feature Coverage Ratio");
+        const thr = parseFloat(
+          gFormData.get("threshold for feature coverage ratio"),
+        );
+        remoteParams.threshold = isNaN(thr) ? 0.9 : thr;
+      }
+      if (gFormData.get("temporal completeness") === "yes") {
+        selected.push("temporal_completeness");
+        selectedNames.push("Temporal Completeness");
+        remoteParams.timestamp_column = gFormData.get(
+          "timestamp column for temporal completeness",
+        );
+        remoteParams.frequency =
+          gFormData.get("frequency for temporal completeness") || "D";
+      }
+      if (gFormData.get("null count trend") === "yes") {
+        selected.push("null_count_trend");
+        selectedNames.push("Null Count Trend");
+        remoteParams.batch_column = gFormData.get(
+          "batch column for null count trend",
+        );
+        remoteParams.target_columns = Array.from(
+          gFormData.getAll("target columns for null count trend"),
+        );
+      }
       if (selected.length === 0) {
         if (typeof showToast === "function")
           showToast("Please select at least one metric", "error");
         return;
       }
-      remoteParams = { selected: selected };
+      remoteParams.selected = selected;
       remoteDisplayName = selectedNames.join(", ");
     } else if (targetUrl === "/feature-relevance") {
       remoteName = "feature_relevance";
@@ -618,6 +656,13 @@ function workspaceSubmit(targetUrl) {
  * Left column: visualization image. Right column: description + scores table.
  * Falls back to single column if no visualization.
  */
+// Display-only title overrides for result cards. The underlying result key
+// (e.g. "Completeness") stays stable for Globus/LLM-explain plumbing.
+const RESULT_TITLE_OVERRIDES = { Completeness: "Column-Level Completeness" };
+function prettyResultTitle(key) {
+  return RESULT_TITLE_OVERRIDES[key] || key;
+}
+
 function renderWorkspaceResults(data, options) {
   const skipLLM = options && options.skipLLM;
   const metrics = document.getElementById("metrics");
@@ -669,7 +714,7 @@ function renderWorkspaceResults(data, options) {
     html += `<div class="p-5 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">`;
 
     // Header
-    html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${type}</h3>`;
+    html += `<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${prettyResultTitle(type)}</h3>`;
 
     if (error) {
       html += `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error}</div>`;
@@ -1423,9 +1468,13 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
   // Human-readable metric names for the spinner card
   const metricDisplayNames = {
     data_quality: "Data Quality",
-    completeness: "Completeness",
+    completeness: "Column-Level Completeness",
     outliers: "Outliers",
     duplicates: "Duplicity",
+    row_level_completeness: "Row-Level Completeness",
+    feature_coverage_ratio: "Feature Coverage Ratio",
+    temporal_completeness: "Temporal Completeness",
+    null_count_trend: "Null Count Trend",
     correlations: "Correlation Analysis",
     feature_relevance: "Feature Relevance",
     representation_rate: "Representation Rate",
@@ -1438,7 +1487,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
     hipaa: "HIPAA Compliance",
     privacy_preservation: "Privacy Preservation",
     fairness: "Fairness",
-    Completeness: "Completeness",
+    Completeness: "Column-Level Completeness",
   };
   const displayName = metricDisplayNames[metricName] || metricName;
 
@@ -2426,6 +2475,20 @@ function populateWorkspaceDropdowns(data) {
     wrapper.appendChild(grid);
     el.appendChild(wrapper);
   }
+
+  // Data Quality (completeness-extras) column pickers
+  fillCheckboxContainer(
+    "rowLevelCompletenessColumnsCheckbox",
+    allFeatures,
+    "required columns for row level completeness",
+  );
+  fillDropdown("temporalCompletenessColumnDropdown", allFeatures);
+  fillDropdown("nullCountTrendBatchDropdown", allFeatures);
+  fillCheckboxContainer(
+    "nullCountTrendTargetColumnsCheckbox",
+    allFeatures,
+    "target columns for null count trend",
+  );
 
   // Fairness dropdowns
   fillDropdown("allFeaturesDropdownRepRate", allFeatures);
