@@ -114,7 +114,7 @@ def run_aidrin_metric(
         file_path: Absolute path to the dataset.
         metric: Metric name, e.g. completeness, k_anonymity, class_imbalance.
         file_type: File-type override.
-        columns: Comma-separated columns (required by: correlations, representation_rate).
+        columns: Comma-separated columns (required by: correlations, representation_rate, hipaa_compliance).
         target_column: Target/label column (required by: class_imbalance, feature_relevance).
         cat_columns: Comma-separated categorical columns (feature_relevance).
         num_columns: Comma-separated numerical columns (feature_relevance).

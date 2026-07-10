@@ -4,10 +4,10 @@
 
 - [Invocation & conventions](#invocation--conventions)
 - [Data quality](#data-quality): completeness, duplicity, outliers
-- [Impact on AI](#impact-on-ai): correlations, feature_relevance
-- [Fairness & bias](#fairness--bias): class_imbalance, statistical_rates, representation_rate
-- [Data governance](#data-governance): k_anonymity, l_diversity, t_closeness, entropy_risk, single_attribute_risk, multiple_attribute_risk
-- [Privacy](#privacy): differential_privacy (currently unavailable)
+- [Impact on AI](#impact-on-ai): correlations, feature-relevance
+- [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
+- [Data governance](#data-governance): k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk, hipaa-compliance
+- [Privacy](#privacy): differential-privacy (currently unavailable)
 - [Batch config format](#batch-config-format)
 
 ---
@@ -16,9 +16,6 @@
 
 - `aidrin run <metric> <file> <args...>` — args are POSITIONAL, in the order
   shown by `aidrin run <metric> -h`. NOT `--flags`.
-- Metric names use **dash form** under `aidrin run` (`class-imbalance`,
-  `feature-relevance`, `k-anonymity`, etc.). Underscore forms are NOT accepted by
-  `aidrin run`.
 - Column lists are comma-separated strings; quote them: `"col_a,col_b"`.
 - `--detail` defaults on for `run`/`batch` (full JSON). Visualizations are
   stripped by default.
@@ -101,7 +98,7 @@ aidrin run correlations examples/sample_data/csv/adult.csv "age,education.num"
 
 ---
 
-### feature_relevance
+### feature-relevance
 
 - **Syntax:** `aidrin run feature-relevance <file> [categorical-columns] [numerical-columns] <target-column>`
 - **Args (in order):**
@@ -125,7 +122,7 @@ aidrin run feature-relevance examples/sample_data/csv/adult.csv \
 
 ## Fairness & bias
 
-### class_imbalance
+### class-imbalance
 
 - **Syntax:** `aidrin run class-imbalance <file> <target-column>`
 - **Args (in order):**
@@ -144,7 +141,7 @@ aidrin run class-imbalance examples/sample_data/csv/adult.csv income
 
 ---
 
-### statistical_rates
+### statistical-rates
 
 - **Syntax:** `aidrin run statistical-rates <file> <y-true-column> <sensitive-attribute-column>`
 - **Args (in order):**
@@ -164,7 +161,7 @@ aidrin run statistical-rates examples/sample_data/csv/adult.csv income sex
 
 ---
 
-### representation_rate
+### representation-rate
 
 - **Syntax:** `aidrin run representation-rate <file> "<columns>"`
 - **Args (in order):**
@@ -184,7 +181,7 @@ aidrin run representation-rate examples/sample_data/csv/adult.csv "sex,race"
 
 ## Data governance
 
-### k_anonymity
+### k-anonymity
 
 - **Syntax:** `aidrin run k-anonymity <file> "<quasi-identifiers>"`
 - **Args (in order):**
@@ -202,7 +199,7 @@ aidrin run k-anonymity examples/sample_data/csv/adult.csv "age,sex,race"
 
 ---
 
-### l_diversity
+### l-diversity
 
 - **Syntax:** `aidrin run l-diversity <file> "<quasi-identifiers>" <sensitive-column>`
 - **Args (in order):**
@@ -221,7 +218,7 @@ aidrin run l-diversity examples/sample_data/csv/adult.csv "age,sex,race" income
 
 ---
 
-### t_closeness
+### t-closeness
 
 - **Syntax:** `aidrin run t-closeness <file> "<quasi-identifiers>" <sensitive-column>`
 - **Args (in order):**
@@ -240,7 +237,7 @@ aidrin run t-closeness examples/sample_data/csv/adult.csv "age,sex,race" income
 
 ---
 
-### entropy_risk
+### entropy-risk
 
 - **Syntax:** `aidrin run entropy-risk <file> "<quasi-identifiers>"`
 - **Args (in order):**
@@ -258,7 +255,7 @@ aidrin run entropy-risk examples/sample_data/csv/adult.csv "age,sex,race"
 
 ---
 
-### single_attribute_risk
+### single-attribute-risk
 
 - **Syntax:** `aidrin run single-attribute-risk <file> <id-column> "<eval-columns>"`
 - **Args (in order):**
@@ -279,7 +276,7 @@ aidrin run single-attribute-risk examples/sample_data/csv/adult.csv ID "age,occu
 
 ---
 
-### multiple_attribute_risk
+### multiple-attribute-risk
 
 - **Syntax:** `aidrin run multiple-attribute-risk <file> <id-column> "<eval-columns>"`
 - **Args (in order):**
@@ -301,9 +298,30 @@ aidrin run multiple-attribute-risk examples/sample_data/csv/adult.csv ID "age,oc
 
 ---
 
+### hipaa-compliance
+
+- **Syntax:** `aidrin run hipaa-compliance <file> "<columns>"`
+- **Args (in order):**
+  1. `columns` — comma-separated columns to scan for HIPAA-regulated PHI patterns
+- **Output keys:** one entry per column where at least one match was found (columns with no matches are omitted; no matches anywhere returns `{}`):
+  - `<column_name>.total_flags` — int; count of matched values in that column
+  - `<column_name>.potential_types_detected` — array; identifier types found, e.g. `US_SSN`, `EMAIL_ADDRESS`, `PHONE_OR_FAX`, `IP_ADDRESS`, `URL`, `VIN_NUMBER`, `MEDICAL_IDS`, `VALID_POSTAL_CODE`
+  - `<column_name>.examples` — array; up to 5 example matched values
+- **Direction:** any flags present = potential HIPAA-regulated PHI in that column; an empty `{}` result means none of the scanned columns matched. Postal codes are validated against a real geocode database (pgeocode, US by default) rather than a bare 5-digit regex, to cut down false positives.
+
+**Example:**
+
+```bash
+aidrin run hipaa-compliance examples/sample_data/csv/adult.csv "native.country,fnlwgt"
+```
+
+Note: this is regex/pattern-based PHI detection (SSN, email, phone, IP, URL, VIN, medical IDs, postal codes) — not a full HIPAA Safe Harbor 18-identifier audit. Treat findings as leads to review, not a compliance certification.
+
+---
+
 ## Privacy
 
-### differential_privacy
+### differential-privacy
 
 - **Syntax:** `aidrin run differential-privacy <file> "<columns>" <epsilon>`
 - **Args (in order):**
@@ -332,23 +350,23 @@ aidrin run differential-privacy examples/sample_data/csv/adult.csv "age,hours.pe
 column keys is applied to every metric listed in `metrics`. Use batch only for
 metrics that share identical args (e.g. the zero-arg quality baseline).
 
-Config keys use dash names (underscore forms are also accepted in batch config). Set `"save-images": false` to suppress the PNG writes that `aidrin run` produces by default:
+Config keys use dash names. Set `"save-images": false` to suppress the PNG writes that `aidrin run` produces by default:
 
 | Key                          | Used by metric(s)                              |
 |------------------------------|------------------------------------------------|
 | `file_path`                  | all                                            |
 | `metrics`                    | all (list of metric names)                     |
-| `target-column`              | class_imbalance, feature_relevance             |
-| `quasi-identifiers`          | k_anonymity, l_diversity, t_closeness, entropy_risk |
-| `sensitive-column`           | l_diversity, t_closeness                       |
-| `sensitive-attribute-column` | statistical_rates                              |
-| `y-true-column`              | statistical_rates                              |
-| `categorical-columns`        | feature_relevance                              |
-| `numerical-columns`          | feature_relevance                              |
-| `id-column`                  | single_attribute_risk, multiple_attribute_risk |
-| `eval-columns`               | single_attribute_risk, multiple_attribute_risk |
-| `columns`                    | correlations, representation_rate              |
-| `epsilon`                    | differential_privacy                           |
+| `target-column`              | class-imbalance, feature-relevance             |
+| `quasi-identifiers`          | k-anonymity, l-diversity, t-closeness, entropy-risk |
+| `sensitive-column`           | l-diversity, t-closeness                       |
+| `sensitive-attribute-column` | statistical-rates                              |
+| `y-true-column`              | statistical-rates                              |
+| `categorical-columns`        | feature-relevance                              |
+| `numerical-columns`          | feature-relevance                              |
+| `id-column`                  | single-attribute-risk, multiple-attribute-risk |
+| `eval-columns`               | single-attribute-risk, multiple-attribute-risk |
+| `columns`                    | correlations, representation-rate              |
+| `epsilon`                    | differential-privacy                           |
 | `save-images`                | any metric that produces visualizations        |
 
 **Example — zero-arg quality baseline (all three share no required column args):**
@@ -362,11 +380,11 @@ Config keys use dash names (underscore forms are also accepted in batch config).
 ```json
 {
   "file_path": "data.csv",
-  "metrics": ["k_anonymity", "l_diversity", "t_closeness", "entropy_risk"],
+  "metrics": ["k-anonymity", "l-diversity", "t-closeness", "entropy-risk"],
   "quasi-identifiers": "age,sex,race",
   "sensitive-column": "income"
 }
 ```
 
-Note: `entropy_risk` ignores `sensitive-column` (it takes only `quasi-identifiers`);
+Note: `entropy-risk` ignores `sensitive-column` (it takes only `quasi-identifiers`);
 the extra key is silently ignored by batch.

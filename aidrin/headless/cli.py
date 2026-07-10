@@ -118,6 +118,13 @@ def _summarize_metric(metric_name: str, result: dict) -> None:
             print(f"Outliers ({n} features): {_fmt(overall)}  (max: {_fmt(mx)}, >5%: {high}/{n})")
         else:
             print(f"Outliers: {_fmt(overall)}")
+    elif metric_name == "hipaa_compliance":
+        if not result:
+            print("No PHI detected.")
+        else:
+            for col, findings in result.items():
+                types_str = ", ".join(findings.get("potential_types_detected", []))
+                print(f"{col}: {findings.get('total_flags', 0)} flag(s)  [{types_str}]")
     else:
         # Generic: print top-level keys with scalar values, count dict/list values
         for k, v in result.items():
@@ -417,7 +424,7 @@ def main() -> None:
     if argv:
         metric_key = argv[0].replace("-", "_")
         if metric_key in METRIC_REGISTRY:
-            argv = ["run", metric_key] + argv[1:]
+            argv = ["run", metric_key.replace("_", "-")] + argv[1:]
     args = parser.parse_args(argv)
 
     try:
