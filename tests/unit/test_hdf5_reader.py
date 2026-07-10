@@ -136,60 +136,41 @@ class TestExplicitFillValues:
 
 
 # ---------------------------------------------------------------------------
-# Uncertain fill-value source: HDF5 default zero (WARNING expected)
+# HDF5 default zero: valid data, not replaced (issue #121)
 # ---------------------------------------------------------------------------
 
-class TestUncertainFillValues:
+class TestDefaultZeroPreserved:
 
-    def test_zero_default_fillvalue_emits_warning(self, tmp_path, logger, caplog):
-        """HDF5 default zero fillvalue (no attrs) triggers a WARNING before replacement."""
+    def test_zero_default_fillvalue_not_replaced(self, tmp_path, logger, caplog):
+        """HDF5 default zero (no attrs) is valid data — not converted to NaN."""
         data = np.array([0, 1, 2, 0, 4], dtype=np.int32)
-        # No explicit fillvalue → h5py defaults to 0 for int32
 
         with caplog.at_level(logging.WARNING):
-            _read_col(tmp_path, logger, data)
+            col = _read_col(tmp_path, logger, data)
 
-        assert any("default fill value" in r.message for r in caplog.records)
+        assert col.isna().sum() == 0
+        assert col.tolist() == [0, 1, 2, 0, 4]
+        assert not any("default fill value" in r.message for r in caplog.records)
 
-    def test_zero_default_fillvalue_still_replaced(self, tmp_path, logger):
-        """Zeros are replaced with NaN even when a WARNING is emitted."""
-        data = np.array([0, 1, 2, 0, 4], dtype=np.int32)
+    def test_float_zero_default_not_replaced(self, tmp_path, logger):
+        data = np.array([0.0, 1.0, 0.0], dtype=np.float64)
         col = _read_col(tmp_path, logger, data)
 
-        assert col.isna().sum() == 2
+        assert col.isna().sum() == 0
+        assert col.tolist() == [0.0, 1.0, 0.0]
 
-    def test_warning_includes_replacement_count(self, tmp_path, logger, caplog):
-        """The WARNING message reports how many values will be replaced."""
-        data = np.array([0.0, 1.0, 0.0], dtype=np.float64)
-
-        with caplog.at_level(logging.WARNING):
-            _read_col(tmp_path, logger, data)
-
-        warning_msgs = [r.message for r in caplog.records if "default fill value" in r.message]
-        assert len(warning_msgs) == 1
-        # Message should contain the count "2" and total "3"
-        assert "2" in warning_msgs[0]
-        assert "3" in warning_msgs[0]
-
-    def test_zero_fillvalue_with_fill_attr_warns_zero_keeps_valid(self, tmp_path, logger, caplog):
-        """
-        When _FillValue attr is -9999.0 and HDF5 native fillvalue defaults to 0.0,
-        zeros are still uncertain and emit a WARNING — they are NOT silently collapsed
-        into explicit alongside the -9999.0 sentinel.  This guards against the bug
-        where has_fill_attrs=True caused default zeros to be added to explicit,
-        silently replacing legitimate zero measurements.
-        """
+    def test_zero_with_explicit_fill_attr_only_replaces_sentinel(self, tmp_path, logger, caplog):
+        """Explicit _FillValue is replaced; default zero measurements are kept."""
         data = np.array([0.0, 1.0, -9999.0, 3.0], dtype=np.float64)
 
         with caplog.at_level(logging.WARNING):
             col = _read_col(tmp_path, logger, data, attrs={"_FillValue": -9999.0})
 
-        # The -9999.0 sentinel is replaced (explicit)
         assert math.isnan(float(col[col.index[2]]))
-        # 0.0 is replaced too (uncertain), but a WARNING was emitted
-        assert any("default fill value" in r.message for r in caplog.records)
-        # Valid measurements 1.0 and 3.0 survive
+        assert not any("default fill value" in r.message for r in caplog.records)
+        assert col.iloc[0] == 0.0
         non_nan = col.dropna().tolist()
+        assert 0.0 in non_nan
         assert 1.0 in non_nan
         assert 3.0 in non_nan
 
@@ -258,3 +239,265 @@ class TestCompletenessAccuracy:
 
         completeness = 1 - col.isnull().mean()
         assert abs(completeness - 0.6) < 1e-9
+
+
+class TestUndefinedNativeFillValue:
+
+    def test_int32_without_explicit_fillvalue_reads_successfully(self, tmp_path, logger):
+        """int32 datasets without _FillValue attrs must read without error."""
+        data = np.array([16, 12, 21, 21, 36], dtype=np.int32)
+        fpath = str(tmp_path / "undefined_fill.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("lengths", data=data)
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert len(df) == len(data)
+        assert df.iloc[:, 0].tolist() == data.tolist()
+
+
+class TestIncompatibleRootLayout:
+
+    def _write_root_datasets(self, path, shapes):
+        with h5py.File(path, "w") as f:
+            for i, length in enumerate(shapes):
+                f.create_dataset(f"D{i}.values", data=np.arange(length, dtype=np.int32))
+
+    def test_parse_lists_root_dataset_paths(self, tmp_path, logger):
+        fpath = str(tmp_path / "multi_root.h5")
+        self._write_root_datasets(fpath, [16, 47])
+
+        paths = hdf5Reader(fpath, logger).parse()
+        assert paths == ["D0.values", "D1.values"]
+
+    def test_read_refuses_incompatible_root_flatten(self, tmp_path, logger):
+        fpath = str(tmp_path / "multi_root.h5")
+        self._write_root_datasets(fpath, [16, 47])
+
+        reader = hdf5Reader(fpath, logger)
+        assert reader.inventory()["type"] == "multi_dataset"
+        assert reader.read() is None
+
+    def test_read_selected_dataset_path(self, tmp_path, logger, monkeypatch):
+        mock_session = type("Session", (), {"get": lambda self, key, default=None: ["D0.values"] if key == "selected_keys" else default})()
+        monkeypatch.setattr(
+            "aidrin.file_handling.readers.hdf5_reader.session",
+            mock_session,
+        )
+
+        fpath = str(tmp_path / "multi_root.h5")
+        self._write_root_datasets(fpath, [16, 47])
+        df = hdf5Reader(fpath, logger).read()
+
+        assert df is not None
+        assert len(df) == 16
+        assert "D0.values" in df.columns
+
+    def test_read_multiple_compatible_datasets(self, tmp_path, logger, monkeypatch):
+        fpath = str(tmp_path / "multi_cols.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.fill_starts", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.nreqs", data=np.arange(16, 32, dtype=np.int32))
+            f.create_dataset("D1.lengths", data=np.arange(47, dtype=np.int32))
+
+        keys = ["D1.fill_starts", "D1.nreqs"]
+        mock_session = type(
+            "Session",
+            (),
+            {"get": lambda self, key, default=None: keys if key == "selected_keys" else default},
+        )()
+        monkeypatch.setattr(
+            "aidrin.file_handling.readers.hdf5_reader.session",
+            mock_session,
+        )
+
+        df = hdf5Reader(fpath, logger).read()
+        assert df is not None
+        assert df.shape == (16, 2)
+        assert list(df.columns) == ["D1.fill_starts", "D1.nreqs"]
+
+    def test_read_multiple_incompatible_lengths_returns_none(self, tmp_path, logger, monkeypatch):
+        fpath = str(tmp_path / "multi_cols_bad.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.nreqs", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.lengths", data=np.arange(47, dtype=np.int32))
+
+        keys = ["D1.nreqs", "D1.lengths"]
+        mock_session = type(
+            "Session",
+            (),
+            {"get": lambda self, key, default=None: keys if key == "selected_keys" else default},
+        )()
+        monkeypatch.setattr(
+            "aidrin.file_handling.readers.hdf5_reader.session",
+            mock_session,
+        )
+
+        assert hdf5Reader(fpath, logger).read() is None
+
+    def test_inventory_includes_dot_prefix_groups(self, tmp_path, logger):
+        fpath = str(tmp_path / "grouped_root.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.fill_starts", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.nreqs", data=np.arange(16, 32, dtype=np.int32))
+            f.create_dataset("D2.fill_starts", data=np.arange(47, dtype=np.int32))
+            f.create_dataset("D2.nreqs", data=np.arange(47, 79, dtype=np.int32))
+
+        inv = hdf5Reader(fpath, logger).inventory()
+        assert inv["type"] == "multi_dataset"
+        groups = {group["id"]: group for group in inv["groups"]}
+        assert set(groups) == {"D1", "D2"}
+        assert groups["D1"]["dataset_paths"] == ["D1.fill_starts", "D1.nreqs"]
+        assert groups["D2"]["dataset_paths"] == ["D2.fill_starts", "D2.nreqs"]
+
+    def test_inventory_includes_hdf5_group_subtrees(self, tmp_path, logger):
+        fpath = str(tmp_path / "nested_groups.h5")
+        with h5py.File(fpath, "w") as f:
+            grp = f.create_group("runA")
+            grp.create_dataset("temp", data=np.arange(8, dtype=np.int32))
+            grp.create_dataset("pressure", data=np.arange(8, 16, dtype=np.int32))
+            f.create_dataset("solo", data=np.arange(3, dtype=np.int32))
+
+        inv = hdf5Reader(fpath, logger).inventory()
+        assert inv["type"] == "legacy"
+        groups = inv["groups"]
+        assert groups == []
+
+        reader = hdf5Reader(fpath, logger)
+        datasets = reader._list_datasets()
+        groups = reader._build_picker_groups(datasets)
+        assert len(groups) == 1
+        assert groups[0]["id"] == "runA"
+        assert set(groups[0]["dataset_paths"]) == {"runA/temp", "runA/pressure"}
+
+    def test_read_uses_explicit_selected_keys_without_session(self, tmp_path, logger):
+        fpath = str(tmp_path / "multi_cols_ok.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.fill_starts", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.nreqs", data=np.arange(16, 32, dtype=np.int32))
+            f.create_dataset("D1.lengths", data=np.arange(47, dtype=np.int32))
+
+        keys = ["D1.fill_starts", "D1.nreqs"]
+        df = hdf5Reader(fpath, logger, selected_keys=keys).read()
+        assert df is not None
+        assert df.shape == (16, 2)
+
+    def test_read_file_passes_selected_keys_for_celery(self, tmp_path, logger):
+        from aidrin.file_handling.file_parser import read_file
+
+        fpath = str(tmp_path / "multi_cols_ok.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("D1.fill_starts", data=np.arange(16, dtype=np.int32))
+            f.create_dataset("D1.nreqs", data=np.arange(16, 32, dtype=np.int32))
+            f.create_dataset("D1.lengths", data=np.arange(47, dtype=np.int32))
+
+        keys = ["D1.fill_starts", "D1.nreqs"]
+        df = read_file((fpath, "multi_cols_ok.h5", ".h5", keys))
+        assert df is not None
+        assert df.shape == (16, 2)
+
+    def test_adult_sample_still_reads(self, logger):
+        from pathlib import Path
+
+        sample = (
+            Path(__file__).resolve().parents[2]
+            / "web"
+            / "static"
+            / "datasets"
+            / "test_data"
+            / "h5"
+            / "adult.h5"
+        )
+        if not sample.is_file():
+            pytest.skip("adult.h5 sample not available")
+
+        df = hdf5Reader(str(sample), logger).read()
+        assert df is not None
+        assert not df.empty
+
+
+def _make_mock_rechdf5(path, nx=2, ny=2, npts=100):
+    """Minimal EQSIM/rechdf5-style station-grouped HDF5 (issue #121 repro)."""
+    dt = 0.019467
+    t = np.arange(npts) * dt
+
+    with h5py.File(path, "w") as h5:
+        h5["DELTA"] = [dt]
+        h5["DOWNSAMPLE"] = [16]
+        h5["ORIGINTIME"] = [0.0]
+
+        for row in range(1, ny + 1):
+            for col in range(1, nx + 1):
+                name = f"S_{row:02d}_{col:02d}"
+                g = h5.create_group(name)
+
+                g["ISNSEW"] = [0]
+                g["LOC"] = [0]
+                g["NPTS"] = [npts]
+                g["STLA,STLO,STDP"] = [37.5 + row * 0.01, -122.3 + col * 0.01, 0.0]
+                g["STX,STY,STZ"] = [col * 1000.0, row * 1000.0, 0.0]
+
+                wave = np.sin(2 * np.pi * 0.5 * t).astype("float32")
+                wave[::257] = 0.0
+
+                g["X"] = wave
+                g["Y"] = 0.8 * wave
+                g["Z"] = 0.4 * wave
+
+                g["XCMPAZ"] = [90.0]
+                g["XCMPINC"] = [0.0]
+                g["YCMPAZ"] = [0.0]
+                g["YCMPINC"] = [0.0]
+                g["ZCMPAZ"] = [0.0]
+                g["ZCMPINC"] = [90.0]
+
+
+class TestGroupedEqsimLayout:
+    """Station-grouped HDF5 (EQSIM/rechdf5) — issue #121."""
+
+    def test_inventory_classifies_as_multi_dataset(self, tmp_path, logger):
+        fpath = str(tmp_path / "rechdf5.h5")
+        _make_mock_rechdf5(fpath, nx=2, ny=2, npts=100)
+
+        inv = hdf5Reader(fpath, logger).inventory()
+        assert inv["type"] == "multi_dataset"
+        assert len(inv["groups"]) >= 2
+        group_ids = {g["id"] for g in inv["groups"]}
+        assert "S_01_01" in group_ids
+
+    def test_read_refuses_blind_flatten(self, tmp_path, logger):
+        fpath = str(tmp_path / "rechdf5.h5")
+        _make_mock_rechdf5(fpath, nx=2, ny=2, npts=100)
+
+        assert hdf5Reader(fpath, logger).read() is None
+
+    def test_read_selected_waveforms_preserves_zeros(self, tmp_path, logger):
+        fpath = str(tmp_path / "rechdf5.h5")
+        _make_mock_rechdf5(fpath, nx=2, ny=2, npts=100)
+
+        keys = ["S_01_01/X", "S_01_01/Y", "S_01_01/Z"]
+        df = hdf5Reader(fpath, logger, selected_keys=keys).read()
+
+        assert df is not None
+        assert df.shape == (100, 3)
+        assert list(df.columns) == ["X", "Y", "Z"]
+        assert (df["X"] == 0.0).any()
+        assert df["X"].isna().sum() == 0
+
+    def test_pandas_hdf5_stays_legacy_not_multi_dataset(self, logger):
+        from pathlib import Path
+
+        sample = (
+            Path(__file__).resolve().parents[2]
+            / "web"
+            / "static"
+            / "datasets"
+            / "test_data"
+            / "h5"
+            / "adult.h5"
+        )
+        if not sample.is_file():
+            pytest.skip("adult.h5 sample not available")
+
+        inv = hdf5Reader(str(sample), logger).inventory()
+        assert inv["type"] == "legacy"
