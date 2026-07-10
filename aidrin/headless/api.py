@@ -385,7 +385,7 @@ def run_metric(
     strip_visualizations: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    metric_key = metric_name.strip().lower()
+    metric_key = metric_name.strip().lower().replace("-", "_")
     metric = METRIC_REGISTRY.get(metric_key)
     if not metric:
         # Try resolving as a custom metric

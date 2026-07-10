@@ -424,7 +424,7 @@ def main() -> None:
     if argv:
         metric_key = argv[0].replace("-", "_")
         if metric_key in METRIC_REGISTRY:
-            argv = ["run", metric_key] + argv[1:]
+            argv = ["run", metric_key.replace("_", "-")] + argv[1:]
     args = parser.parse_args(argv)
 
     try:
