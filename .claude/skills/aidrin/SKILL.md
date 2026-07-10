@@ -1,6 +1,6 @@
 ---
 name: aidrin
-description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to check a dataset for bias, fairness, privacy, PII risk, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
+description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
 ---
 
 # Assessing dataset AI-readiness with AIDRIN
@@ -75,11 +75,12 @@ Dimension → metric mapping for focused requests:
 
 | Stated dimension | Metrics to run |
 |---|---|
-| Fairness / bias | class_imbalance, statistical_rates, representation_rate |
-| Privacy / PII / anonymity | k_anonymity, l_diversity, t_closeness, entropy_risk, single_attribute_risk, multiple_attribute_risk |
+| Fairness / bias | class-imbalance, statistical-rates, representation-rate |
+| Privacy / PII / anonymity | k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk |
+| HIPAA / PHI compliance | hipaa-compliance |
 | Data quality / completeness / duplicates / outliers | completeness, duplicity, outliers |
-| Feature relevance / AI impact | feature_relevance, correlations |
-| Class imbalance | class_imbalance |
+| Feature relevance / AI impact | feature-relevance, correlations |
+| Class imbalance | class-imbalance |
 | Full readiness (no specific dimension) | all applicable metrics per the intent table in Step 4 |
 
 Always add the zero-arg quality baseline (completeness, duplicity, outliers) even for
@@ -103,16 +104,13 @@ include the zero-arg quality baseline.
 
 | User intent | Metrics | Columns needed |
 |---|---|---|
-| Train supervised model | completeness, duplicity, outliers, feature_relevance, class_imbalance, correlations | target; categorical/numerical features; correlations & feature_relevance need columns |
-| Ensure fairness across groups | class_imbalance, statistical_rates, representation_rate | target + sensitive attribute(s) |
-| Publish / share externally | k_anonymity, l_diversity, t_closeness, entropy_risk, single_attribute_risk, multiple_attribute_risk | quasi-identifiers, sensitive column, id column + eval columns |
+| Train supervised model | completeness, duplicity, outliers, feature-relevance, class-imbalance, correlations | target; categorical/numerical features; correlations & feature-relevance need columns |
+| Ensure fairness across groups | class-imbalance, statistical-rates, representation-rate | target + sensitive attribute(s) |
+| Publish / share externally | k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk | quasi-identifiers, sensitive column, id column + eval columns |
 | General quality / exploration | completeness, duplicity, outliers, correlations | correlations needs columns |
-| Contains PII / sensitive data | governance + privacy set above | quasi-identifiers, sensitive column |
+| Contains PII / sensitive data | governance + privacy set above, hipaa-compliance | quasi-identifiers, sensitive column; hipaa-compliance needs columns to scan |
 
 Always-run baseline (zero-arg): completeness, duplicity, outliers.
-
-_Names above are readable labels. MCP uses underscore form (`class_imbalance`);
-CLI `aidrin run` uses dash form (`class-imbalance`). See [reference/metrics.md](reference/metrics.md)._
 
 ### 5. Confirm the plan (HARD gate)
 
@@ -131,14 +129,14 @@ casing / non-existent columns before running.
 
 **MCP path (preferred):**
 - Zero-arg baseline: one call — `run_data_quality_check(file_path="...")` runs completeness, duplicity, and outliers together.
-- Per metric: `run_aidrin_metric(file_path="...", metric="class_imbalance", target_column="income")`. Use **underscore form** for metric names. All column args are named kwargs — no positional ordering to worry about.
+- Per metric: `run_aidrin_metric(file_path="...", metric="class-imbalance", target_column="income")`. All column args are named kwargs — no positional ordering to worry about.
 - If a metric fails, its returned JSON contains an `Error`/`ErrorType` key. Record it as "Not run: <reason>" and continue with the rest.
 
 **CLI path (fallback):**
 - Default: one `aidrin run <metric> <file> <args...>` per metric. This isolates errors.
 - Batch the zero-arg baseline: `aidrin batch <config>` with `{"file_path": "...", "metrics": ["completeness","duplicity","outliers"]}`.
 - NOTE: `aidrin run` exits 0 even on failure — detect failures by checking the JSON output for an `Error`/`ErrorType` key, not the exit code.
-- Metric names under `aidrin run` are **dash form** (`class-imbalance`, `k-anonymity`). Underscore forms are rejected. Args are positional — see [reference/metrics.md](reference/metrics.md) for order.
+- Args are positional — see [reference/metrics.md](reference/metrics.md) for order.
 
 ### 8. Write the report
 
@@ -300,13 +298,11 @@ Returns combined JSON: `profile` + `queries` (one entry per question: retrieval,
 ## Gotchas
 
 **MCP:**
-- Metric names in `run_aidrin_metric` use **underscore form** (`class_imbalance`, `k_anonymity`). `list_metrics()` returns **dash form** names (`class-imbalance`, `k-anonymity`) — convert dashes to underscores before passing to `run_aidrin_metric`. Dash form raises `ValueError: Unknown metric`.
 - `run_data_quality_check` and `run_aidrin_metric` suppress image writes internally (`save_images=False`). No workaround needed.
 - Failures surface as `Error`/`ErrorType` keys in the returned JSON — not as raised exceptions.
 
 **CLI:**
 - `aidrin run` returns exit 0 even when a metric fails; detect failures via `Error`/`ErrorType` in the JSON output.
-- Metric names under `aidrin run` are **dash form** (`class-imbalance`, not `class_imbalance`). Underscore forms are rejected.
 - Per-metric args are **positional**, in the order shown by `aidrin run <metric> -h`. NOT `--flags`. Quote comma-separated column lists: `"zip,age"`.
 - `aidrin run` writes visualization PNGs to `/tmp/aidrin_images` by default. Suppress via `aidrin batch` with `"save-images": false`.
 - If `aidrin` is not on PATH, see [reference/installation.md](reference/installation.md).

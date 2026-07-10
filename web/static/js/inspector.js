@@ -632,7 +632,7 @@ function workspaceSubmit(targetUrl) {
       if (data.message && !data.trigger && Object.keys(data).length <= 2) {
         const m = document.getElementById("metrics");
         if (m)
-          m.innerHTML = `<div class="p-4 text-sm text-yellow-800 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 dark:text-yellow-300" role="alert">${data.message}</div>`;
+          m.innerHTML = `<div class="p-4 text-sm text-yellow-800 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 dark:text-yellow-300" role="alert">${escapeHtml(data.message)}</div>`;
         _setSubmitButtonsDisabled(false);
         _endServerProcessing();
         return;
@@ -2883,6 +2883,391 @@ function renderWorkspaceHistograms(histograms) {
 // ==================== Workspace Init ====================
 
 /**
+ * Show dataset picker for multi-dataset HDF5 files.
+ */
+function renderHdf5DatasetPicker(container, data) {
+  const datasets = data.datasets || [];
+  const groups = data.groups || [];
+  const checked = new Set(data.current_checked_keys || []);
+  const datasetByPath = new Map(datasets.map((ds) => [ds.path, ds]));
+  const groupedPaths = new Set(
+    groups.flatMap((group) => group.dataset_paths || []),
+  );
+  const ungrouped = datasets.filter((ds) => !groupedPaths.has(ds.path));
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function datasetLength(ds) {
+    return Array.isArray(ds?.shape) && ds.shape.length === 1
+      ? ds.shape[0]
+      : null;
+  }
+
+  function renderDatasetRow(ds) {
+    const shape = Array.isArray(ds.shape) ? ds.shape.join(" × ") : "";
+    const length = datasetLength(ds);
+    const escapedPath = escapeHtml(ds.path);
+    const isChecked = checked.has(ds.path) ? "checked" : "";
+    return `
+      <label class="flex items-start gap-3 w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer hdf5-dataset-option"
+        data-path="${escapedPath}" data-length="${length ?? ""}" data-ndim="${ds.ndim ?? ""}">
+        <input type="checkbox" class="mt-1 hdf5-dataset-checkbox" value="${escapedPath}" ${isChecked} />
+        <div class="min-w-0">
+          <div class="font-medium text-gray-900 dark:text-white">${escapedPath}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${escapeHtml(ds.dtype || "")}${shape ? ` · shape ${shape}` : ""}${ds.size != null ? ` · ${ds.size} values` : ""}</div>
+        </div>
+      </label>`;
+  }
+
+  function groupSummary(group) {
+    const members = (group.dataset_paths || [])
+      .map((path) => datasetByPath.get(path))
+      .filter(Boolean);
+    const lengths = new Set(
+      members.map((ds) => datasetLength(ds)).filter((len) => len != null),
+    );
+    const count = members.length;
+    if (lengths.size === 1) {
+      return `${count} datasets · length ${[...lengths][0]}`;
+    }
+    if (lengths.size > 1) {
+      return `${count} datasets · mixed lengths`;
+    }
+    return `${count} datasets`;
+  }
+
+  let html = `
+    <div class="flex items-start gap-2 p-3 mb-4 text-sm rounded-lg bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+      <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+      <span>${escapeHtml(data.message || "Select compatible datasets to analyze.")}</span>
+    </div>
+    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Select one dataset, multiple compatible 1D arrays, or use a group checkbox to select a whole subtree at once.</p>
+    <div class="space-y-3 max-h-96 overflow-y-auto mb-4">`;
+
+  groups.forEach((group) => {
+    const groupId = escapeHtml(group.id);
+    const memberPaths = (group.dataset_paths || [])
+      .map((path) => escapeHtml(path))
+      .join(",");
+    html += `
+      <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/20" data-hdf5-group="${groupId}">
+        <label class="flex items-center gap-3 px-3 py-2 border-b border-gray-200 dark:border-gray-600 cursor-pointer">
+          <input type="checkbox" class="hdf5-group-checkbox" data-group-id="${groupId}" data-group-paths="${memberPaths}" />
+          <div class="min-w-0 flex-1">
+            <div class="font-semibold text-sm text-gray-900 dark:text-white">${groupId}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">${groupSummary(group)}</div>
+          </div>
+        </label>
+        <div class="space-y-2 p-2">`;
+    (group.dataset_paths || []).forEach((path) => {
+      const ds = datasetByPath.get(path);
+      if (ds) html += renderDatasetRow(ds);
+    });
+    html += `</div></div>`;
+  });
+
+  if (ungrouped.length > 0) {
+    html += `<div class="space-y-2">`;
+    if (groups.length > 0) {
+      html += `<div class="px-1 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Other datasets</div>`;
+    }
+    ungrouped.forEach((ds) => {
+      html += renderDatasetRow(ds);
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>
+    <div class="flex items-center gap-3">
+      <button type="button" id="hdf5-load-selected" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+        Load selected
+      </button>
+      <span id="hdf5-selection-hint" class="text-xs text-gray-500 dark:text-gray-400"></span>
+    </div>
+    <p id="hdf5-selection-error" class="mt-2 text-sm text-red-600 dark:text-red-400 hidden"></p>`;
+  container.innerHTML = html;
+
+  const loadBtn = document.getElementById("hdf5-load-selected");
+  const hint = document.getElementById("hdf5-selection-hint");
+  const errorEl = document.getElementById("hdf5-selection-error");
+
+  function getSelectedCheckboxes() {
+    return Array.from(
+      container.querySelectorAll(".hdf5-dataset-checkbox:checked"),
+    );
+  }
+
+  function getSelectionAnchor() {
+    const selected = getSelectedCheckboxes();
+    if (selected.length === 0) {
+      return { length: null, ndim: null };
+    }
+    const label = selected[0].closest(".hdf5-dataset-option");
+    return {
+      length: label?.dataset.length || null,
+      ndim: label?.dataset.ndim || null,
+    };
+  }
+
+  function dominantLengthForPaths(paths) {
+    const counts = new Map();
+    paths.forEach((path) => {
+      const ds = datasetByPath.get(path);
+      const len = datasetLength(ds);
+      if (len != null) {
+        counts.set(len, (counts.get(len) || 0) + 1);
+      }
+    });
+    let bestLength = null;
+    let bestCount = 0;
+    counts.forEach((count, len) => {
+      if (count > bestCount) {
+        bestCount = count;
+        bestLength = len;
+      }
+    });
+    return bestLength == null ? null : String(bestLength);
+  }
+
+  function pathsCompatibleWithAnchor(paths, anchor) {
+    return paths.filter((path) => {
+      const ds = datasetByPath.get(path);
+      if (!ds) return false;
+      const len = datasetLength(ds);
+      const ndim = ds.ndim != null ? String(ds.ndim) : "";
+      if (anchor.length == null) return true;
+      return String(len) === anchor.length && ndim === anchor.ndim;
+    });
+  }
+
+  function syncGroupCheckboxes() {
+    container.querySelectorAll(".hdf5-group-checkbox").forEach((groupCb) => {
+      const paths = (groupCb.dataset.groupPaths || "")
+        .split(",")
+        .filter(Boolean);
+      const memberCbs = paths
+        .map((path) =>
+          container.querySelector(
+            `.hdf5-dataset-checkbox[value="${CSS.escape(path)}"]`,
+          ),
+        )
+        .filter(Boolean);
+      const enabledMembers = memberCbs.filter((cb) => !cb.disabled);
+      const checkedMembers = enabledMembers.filter((cb) => cb.checked);
+      groupCb.indeterminate =
+        checkedMembers.length > 0 &&
+        checkedMembers.length < enabledMembers.length;
+      groupCb.checked =
+        enabledMembers.length > 0 &&
+        checkedMembers.length === enabledMembers.length;
+      groupCb.disabled = enabledMembers.length === 0;
+    });
+  }
+
+  function syncHdf5PickerState() {
+    const selected = getSelectedCheckboxes();
+    const lengths = new Set(
+      selected
+        .map((cb) => cb.closest(".hdf5-dataset-option")?.dataset.length)
+        .filter(Boolean),
+    );
+    const ndims = new Set(
+      selected
+        .map((cb) => cb.closest(".hdf5-dataset-option")?.dataset.ndim)
+        .filter(Boolean),
+    );
+
+    errorEl.classList.add("hidden");
+    errorEl.textContent = "";
+
+    container.querySelectorAll(".hdf5-dataset-option").forEach((label) => {
+      const cb = label.querySelector(".hdf5-dataset-checkbox");
+      if (!cb || cb.checked) {
+        label.classList.remove("opacity-40");
+        cb.disabled = false;
+        return;
+      }
+      if (selected.length === 0) {
+        label.classList.remove("opacity-40");
+        cb.disabled = false;
+        return;
+      }
+      const compatibleLength =
+        lengths.size === 1 && label.dataset.length === [...lengths][0];
+      const compatibleNdim =
+        ndims.size === 1 && label.dataset.ndim === [...ndims][0];
+      const compatible = compatibleLength && compatibleNdim;
+      label.classList.toggle("opacity-40", !compatible);
+      cb.disabled = !compatible;
+    });
+
+    syncGroupCheckboxes();
+
+    loadBtn.disabled = selected.length === 0;
+    if (selected.length === 0) {
+      hint.textContent = "";
+    } else if (lengths.size === 1) {
+      hint.textContent = `${selected.length} selected · length ${[...lengths][0]}`;
+    } else {
+      hint.textContent = `${selected.length} selected · incompatible lengths`;
+      loadBtn.disabled = true;
+    }
+  }
+
+  container.querySelectorAll(".hdf5-dataset-checkbox").forEach((cb) => {
+    cb.addEventListener("change", syncHdf5PickerState);
+  });
+
+  container.querySelectorAll(".hdf5-group-checkbox").forEach((groupCb) => {
+    groupCb.addEventListener("change", () => {
+      const paths = (groupCb.dataset.groupPaths || "")
+        .split(",")
+        .filter(Boolean);
+      if (groupCb.checked) {
+        const anchor = getSelectionAnchor();
+        const targetLength =
+          anchor.length ??
+          dominantLengthForPaths(
+            paths.filter((path) => {
+              const cb = container.querySelector(
+                `.hdf5-dataset-checkbox[value="${CSS.escape(path)}"]`,
+              );
+              return cb && !cb.disabled;
+            }),
+          );
+        const targetNdim =
+          anchor.ndim ??
+          (() => {
+            const first = datasetByPath.get(paths[0]);
+            return first?.ndim != null ? String(first.ndim) : null;
+          })();
+        pathsCompatibleWithAnchor(paths, {
+          length: targetLength,
+          ndim: targetNdim,
+        }).forEach((path) => {
+          const cb = container.querySelector(
+            `.hdf5-dataset-checkbox[value="${CSS.escape(path)}"]`,
+          );
+          if (cb && !cb.disabled) cb.checked = true;
+        });
+      } else {
+        paths.forEach((path) => {
+          const cb = container.querySelector(
+            `.hdf5-dataset-checkbox[value="${CSS.escape(path)}"]`,
+          );
+          if (cb) cb.checked = false;
+        });
+      }
+      syncHdf5PickerState();
+    });
+  });
+
+  loadBtn.addEventListener("click", () => {
+    const paths = Array.from(
+      container.querySelectorAll(".hdf5-dataset-checkbox:checked"),
+    ).map((cb) => cb.value);
+    if (paths.length === 0) return;
+    selectHdf5Datasets(paths);
+  });
+
+  syncHdf5PickerState();
+}
+
+function selectHdf5Datasets(paths) {
+  const container = document.getElementById("workspace-summary");
+  if (container) {
+    container.innerHTML = `
+      <div role="status" class="inline-block">
+        <svg class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+      </div>
+      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading selected dataset(s)...</p>`;
+  }
+
+  fetch("/filter-file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keys: paths }),
+  })
+    .then((r) => r.json())
+    .then((resp) => {
+      if (resp.success) {
+        initWorkspace();
+      } else if (container) {
+        const p = document.createElement("p");
+        p.className = "text-sm text-red-600 dark:text-red-400";
+        p.textContent = resp.error || "Failed to select dataset(s).";
+        container.replaceChildren(p);
+      }
+    })
+    .catch((err) => {
+      if (container) {
+        const p = document.createElement("p");
+        p.className = "text-sm text-red-600 dark:text-red-400";
+        p.textContent = "Error: " + err.message;
+        container.replaceChildren(p);
+      }
+    });
+}
+
+function clearWorkspaceFeatureDropdowns() {
+  if (typeof populateWorkspaceDropdowns === "function") {
+    populateWorkspaceDropdowns({
+      all_features: [],
+      categorical_features: [],
+      numerical_features: [],
+      class_imbalance_features: [],
+    });
+  }
+}
+
+/**
+ * Return to the HDF5 dataset picker without re-uploading the file.
+ */
+function returnToHdf5DatasetPicker() {
+  const container = document.getElementById("workspace-summary");
+  const hist = document.getElementById("workspace-histograms");
+  if (hist) hist.innerHTML = "";
+  if (container) {
+    container.innerHTML = `
+      <div role="status" class="inline-block">
+        <svg class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+      </div>
+      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Returning to dataset selection...</p>`;
+  }
+  clearWorkspaceFeatureDropdowns();
+
+  fetch("/clear-dataset-selection", { method: "POST" })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.needs_dataset_selection && data.datasets?.length && container) {
+        renderHdf5DatasetPicker(container, data);
+        showPanel("data-overview", false);
+      } else if (container) {
+        const p = document.createElement("p");
+        p.className = "text-sm text-red-600 dark:text-red-400";
+        p.textContent =
+          data.message ||
+          data.error ||
+          "Failed to return to dataset selection.";
+        container.replaceChildren(p);
+      }
+    })
+    .catch((err) => {
+      if (container) {
+        const p = document.createElement("p");
+        p.className = "text-sm text-red-600 dark:text-red-400";
+        p.textContent = "Error: " + err.message;
+        container.replaceChildren(p);
+      }
+    });
+}
+
+/**
  * Initialize the workspace after file upload.
  * Fetches summary statistics and populates feature dropdowns.
  */
@@ -2909,7 +3294,31 @@ function initWorkspace() {
       if (!container) return;
 
       if (data.success) {
-        let html = `
+        let html = "";
+        if (data.hdf5_multi_dataset) {
+          const keys = (data.selected_dataset_keys || []).join(", ");
+          const keysDisplay =
+            keys.length > 80 ? `${keys.slice(0, 77)}...` : keys;
+          const escapedKeys = keys
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/"/g, "&quot;");
+          const escapedDisplay = keysDisplay
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;");
+          html += `
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              HDF5 datasets:
+              <span class="font-mono text-xs text-gray-800 dark:text-gray-200" title="${escapedKeys}">${escapedDisplay || "selected"}</span>
+            </p>
+            <button type="button" onclick="returnToHdf5DatasetPicker()" class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+              Change dataset selection
+            </button>
+          </div>`;
+        }
+        html += `
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
               <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.records_count.toLocaleString()}</div>
@@ -2989,18 +3398,25 @@ function initWorkspace() {
         if (data.histograms) {
           renderWorkspaceHistograms(data.histograms);
         }
+      } else if (data.needs_dataset_selection && data.datasets?.length) {
+        renderHdf5DatasetPicker(container, data);
       } else {
         container.innerHTML = `
           <div class="flex items-start gap-2 p-3 text-sm rounded-lg bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
             <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-            <span>${data.message}</span>
+            <span>${escapeHtml(data.message)}</span>
           </div>`;
       }
     })
     .catch((err) => {
       const container = document.getElementById("workspace-summary");
-      if (container)
-        container.innerHTML = `<p class="text-sm" style="color: red;">Error loading summary: ${err.message}</p>`;
+      if (container) {
+        const p = document.createElement("p");
+        p.className = "text-sm";
+        p.style.color = "red";
+        p.textContent = "Error loading summary: " + err.message;
+        container.replaceChildren(p);
+      }
     })
     .finally(initTaskDone);
 

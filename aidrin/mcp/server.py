@@ -124,7 +124,7 @@ def run_aidrin_metric(
         max_export_rows: Export row cap per custom outlier rule; 0 means unlimited.
         scan_limit: Optional maximum values to scan per custom outlier rule.
         stop_after_outliers: Stop scanning after the preview cap is reached.
-        columns: Comma-separated columns (required by: correlations, representation_rate).
+        columns: Comma-separated columns (required by: correlations, representation_rate, hipaa_compliance).
         target_column: Target/label column (required by: class_imbalance, feature_relevance).
         cat_columns: Comma-separated categorical columns (feature_relevance).
         num_columns: Comma-separated numerical columns (feature_relevance).

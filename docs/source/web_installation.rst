@@ -174,6 +174,18 @@ Once running, visit:
    starting the Flask server, e.g.
    ``AIDRIN_MAX_UPLOAD_MB=2048 flask --app 'web:create_app()' run``.
 
+.. note::
+
+   **Frame cache.** To avoid re-parsing the uploaded file for every metric, the
+   first read of a dataset is materialised to an on-disk Arrow/Feather artifact
+   (``<source>.aidrin.feather``) next to the upload; later metric tasks reload it
+   instead of re-parsing. Caching applies only to dtype-stable formats (CSV,
+   Parquet, Excel); JSON/NPZ/HDF5 are always parsed directly. The sidecars roughly
+   double an upload's on-disk footprint and are reaped together with stale uploads
+   by the scheduled cleanup. The cache is **on by default**; disable it by setting
+   ``AIDRIN_FRAME_CACHE=0``. On multi-worker deployments it is most effective when
+   the upload folder is on a volume shared by all workers.
+
 ----
 
 Option 2: Install from PyPI

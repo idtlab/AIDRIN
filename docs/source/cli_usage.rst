@@ -132,6 +132,7 @@ Examples:
    aidrin run l-diversity /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run t-closeness /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
+   aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
 
 For custom criteria outliers, ``--rule`` and ``rules-json`` describe expected
 valid values. Values that do not satisfy those conditions are flagged as
@@ -284,6 +285,9 @@ Available Metrics
    * - Data Governance
      - ``multiple-attribute-risk``
      - ``id-column``, ``eval-columns``
+   * - Data Governance
+     - ``hipaa-compliance``
+     - ``columns``
    * - Custom
      - ``custom``
      - ``<name-or-path>``, varies — see ``aidrin run custom -h``

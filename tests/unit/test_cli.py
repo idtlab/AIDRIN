@@ -316,6 +316,119 @@ class TestRunCommand(unittest.TestCase):
         _, _, code = _run_cli("completeness", self.csv)
         self.assertEqual(code, 0)
 
+    # --- hipaa-compliance wiring ------------------------------------------
+
+    def test_run_hipaa_compliance_exits_zero(self):
+        _, _, code = _run_cli("run", "hipaa-compliance", self.csv, "age,income,sex")
+        self.assertEqual(code, 0)
+
+    def test_run_hipaa_compliance_no_phi_returns_empty(self):
+        # age (2-digit) and sex (M/F) match no PHI pattern. NB: income is
+        # deliberately excluded — 5-digit incomes can match the postal-code
+        # candidate regex and validate as real ZIPs (a detector false positive).
+        stdout, _, _ = _run_cli("run", "hipaa-compliance", self.csv, "age,sex")
+        self.assertEqual(json.loads(stdout), {})
+
+    def test_run_hipaa_compliance_detects_phi(self):
+        csv = _write_csv(pd.DataFrame({
+            "contact": ["a@b.com", "c@d.org"],
+            "age": [30, 40],
+        }))
+        try:
+            stdout, _, code = _run_cli("run", "hipaa-compliance", csv, "contact")
+            self.assertEqual(code, 0)
+            data = json.loads(stdout)
+            self.assertIn("contact", data)
+            self.assertIn("EMAIL_ADDRESS", data["contact"]["potential_types_detected"])
+        finally:
+            _clean(csv)
+
+    def test_shortcut_multiword_metric(self):
+        """aidrin hipaa-compliance <file> ... routes to `run` (guards the
+        multi-word shortcut fix: the old code passed underscore form to the
+        dash-only `run` subparser and errored)."""
+        _, _, code = _run_cli("hipaa-compliance", self.csv, "age,income,sex")
+        self.assertEqual(code, 0)
+
+    def test_shortcut_underscore_form_resolves(self):
+        """Underscore shortcut form also resolves after dash normalization."""
+        _, _, code = _run_cli("hipaa_compliance", self.csv, "age,income,sex")
+        self.assertEqual(code, 0)
+
+
+# ===========================================================================
+# hipaa summary line (_summarize_metric)
+# ===========================================================================
+
+
+class TestSummarizeHipaa(unittest.TestCase):
+
+    def _capture(self, metric_name: str, result: dict) -> str:
+        from aidrin.headless.cli import _summarize_metric
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            _summarize_metric(metric_name, result)
+        return buf.getvalue()
+
+    def test_no_phi_message(self):
+        out = self._capture("hipaa_compliance", {})
+        self.assertIn("No PHI detected", out)
+
+    def test_findings_printed(self):
+        out = self._capture("hipaa_compliance", {
+            "contact": {
+                "total_flags": 2,
+                "potential_types_detected": ["EMAIL_ADDRESS"],
+                "examples": ["a@b.com"],
+            },
+        })
+        self.assertIn("contact", out)
+        self.assertIn("2 flag", out)
+        self.assertIn("EMAIL_ADDRESS", out)
+
+
+# ===========================================================================
+# run_metric metric-name resolution (dash / underscore)
+# ===========================================================================
+
+
+class TestRunMetricNameResolution(unittest.TestCase):
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+
+    def tearDown(self):
+        _clean(self.csv)
+
+    def test_hipaa_in_registry(self):
+        from aidrin.headless.api import METRIC_REGISTRY
+        self.assertIn("hipaa_compliance", METRIC_REGISTRY)
+
+    def test_dash_form_resolves(self):
+        from aidrin.headless.api import run_metric
+        result = run_metric(
+            "hipaa-compliance", self.csv, columns="age,income,sex", save_images=False
+        )
+        self.assertIsInstance(result, dict)
+
+    def test_underscore_form_resolves(self):
+        from aidrin.headless.api import run_metric
+        result = run_metric(
+            "hipaa_compliance", self.csv, columns="age,income,sex", save_images=False
+        )
+        self.assertIsInstance(result, dict)
+
+    def test_dash_and_underscore_equivalent(self):
+        from aidrin.headless.api import run_metric
+        dash = run_metric("hipaa-compliance", self.csv, columns="age", save_images=False)
+        under = run_metric("hipaa_compliance", self.csv, columns="age", save_images=False)
+        self.assertEqual(dash, under)
+
+    def test_missing_columns_raises(self):
+        from aidrin.headless.api import run_metric
+        with self.assertRaises(ValueError):
+            run_metric("hipaa-compliance", self.csv, save_images=False)
+
 
 # ===========================================================================
 # add-custom-module command
