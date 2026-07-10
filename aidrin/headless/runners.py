@@ -26,6 +26,7 @@ from aidrin.structured_data_metrics.representation_rate import (
     calculate_representation_rate,
     create_representation_rate_vis,
 )
+from aidrin.structured_data_metrics.hipaa_compliance import detect_hipaa_identifiers
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 
 # Signal metrics to skip chart generation in headless mode
@@ -277,6 +278,17 @@ def run_multiple_attribute_risk(
     file_info = _build_file_info(file_path, file_type, file_name)
     data = read_file(file_info)
     return generate_multiple_attribute_MM_risk_scores(data, id_column, eval_columns, NullTask())
+
+
+def run_hipaa_compliance(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    columns: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    df = read_file(file_info)
+    return detect_hipaa_identifiers(df, columns)
 
 
 def _dp_error_payload(error_message: str) -> Dict[str, Any]:
