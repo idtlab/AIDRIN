@@ -20,6 +20,27 @@ logger = logging.getLogger(__name__)
 # File loading
 # ---------------------------------------------------------------------------
 
+def build_file_info(file_path, file_name, file_type, selected_keys=None):
+    """Build a file_info tuple, embedding HDF5 dataset keys when needed.
+
+    Celery workers do not have Flask session context, so multi-dataset HDF5
+    files must carry ``selected_keys`` in the tuple for background tasks.
+    """
+    if file_type == ".h5":
+        if selected_keys is None:
+            try:
+                selected_keys = session.get("selected_keys") or []
+            except RuntimeError:
+                selected_keys = []
+        if isinstance(selected_keys, str):
+            selected_keys = [key.strip() for key in selected_keys.split(",") if key.strip()]
+        elif not isinstance(selected_keys, list):
+            selected_keys = []
+        if selected_keys:
+            return (file_path, file_name, file_type, list(selected_keys))
+    return (file_path, file_name, file_type)
+
+
 def load_dataframe(file_info):
     """Read a file into a DataFrame, normalizing failures.
 
@@ -176,6 +197,9 @@ def store_result(metric, final_dict):
         "data": formatted_final_dict,
         "timestamp": time.time(),
     }
+
+    if request.args.get("return_type") == "json":
+        return jsonify(formatted_final_dict)
 
     return redirect(
         url_for(metric, results_id=results_id, return_type=request.args.get("return_type"))
