@@ -115,7 +115,7 @@ def parse_file(file_info):
     List of top-level keys if available, None if unsupported, or error
     message string if parsing fails.
     """
-    file_path, file_name, file_type = file_info
+    file_path, file_name, file_type = file_info[:3]
     file_upload_time_log.info("Parsing File for keys...")
     try:
         if file_type in READER_MAP:
@@ -147,7 +147,7 @@ def filter_file(file_info, kept_keys):
     New filtered file path as str, None if the file type is not supported,
     or error message string if unsuccessful.
     """
-    file_path, _, file_type = file_info
+    file_path, _, file_type = file_info[:3]
     file_upload_time_log.info(f"Filtering file on Keys: {kept_keys}")
     if file_type in READER_MAP:
         filtered_data_path = READER_MAP[file_type](
@@ -191,7 +191,8 @@ def read_file(file_info, columns=None):
     """
     file_upload_time_log.info("File parsing initiated...")
 
-    file_path, file_name, file_type = file_info
+    file_path, file_name, file_type = file_info[:3]
+    selected_keys = file_info[3] if len(file_info) > 3 else None
     # path and name are passed from flask, if not in session = None
     if not file_path and file_name:
         file_upload_time_log.error("Missing file path or file name.")
@@ -225,7 +226,13 @@ def read_file(file_info, columns=None):
                 )
 
         # Slow path: parse the source once.
-        df = READER_MAP[file_type](file_path, file_upload_time_log).read()
+        reader_cls = READER_MAP[file_type]
+        if file_type == ".h5":
+            df = reader_cls(
+                file_path, file_upload_time_log, selected_keys=selected_keys
+            ).read()
+        else:
+            df = reader_cls(file_path, file_upload_time_log).read()
         file_upload_time_log.info("File successfully parsed!")
 
         # Best-effort cache for future calls. Failure is non-fatal: we still

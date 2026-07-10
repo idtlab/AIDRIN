@@ -1,0 +1,15 @@
+file_path: demos/loan_applications.csv
+file_type: .csv
+metrics:
+  - statistical_rates
+  - representation_rate
+  - class_imbalance
+
+columns:
+  - gender
+  - ethnicity
+  - education
+
+target_column: approved
+y_true_column: approved
+sensitive_attribute_column: ethnicity
