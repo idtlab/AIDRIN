@@ -22,6 +22,7 @@ from web.globus import (
     get_compute_client,
     submit_metric,
     check_task,
+    check_endpoint_compatibility,
 )
 
 logger = logging.getLogger(__name__)
@@ -141,6 +142,39 @@ def disconnect():
     session.pop("globus_file_type", None)
     session.pop("globus_active_tasks", None)
     return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# Endpoint compatibility
+# ---------------------------------------------------------------------------
+
+
+@globus_bp.route("/check-endpoint", methods=["POST"])
+def check_endpoint():
+    """Verify a Globus Compute endpoint is compatible before submitting work.
+
+    Call this when the user connects/selects an endpoint. Runs a tiny probe on
+    the endpoint and compares its ``aidrin``/Python versions against this
+    server. Returns 200 with a report when compatible, 409 when not.
+
+    Expects JSON body: ``{"endpoint_id": "uuid"}``.
+    """
+    if not session.get("globus_authenticated"):
+        return jsonify({"error": "Not authenticated with Globus"}), 401
+
+    data = request.get_json() or {}
+    endpoint_id = data.get("endpoint_id")
+    if not endpoint_id:
+        return jsonify({"error": "Missing required field: endpoint_id"}), 400
+
+    try:
+        tokens = session.get("globus_tokens", {})
+        client = get_compute_client(tokens)
+        report = check_endpoint_compatibility(client, endpoint_id)
+        return jsonify(report), (200 if report["compatible"] else 409)
+    except Exception as e:
+        logger.error("Globus check-endpoint error: %s", e, exc_info=True)
+        return jsonify({"error": "Failed to check endpoint compatibility"}), 500
 
 
 # ---------------------------------------------------------------------------

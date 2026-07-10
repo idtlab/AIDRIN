@@ -1,11 +1,18 @@
 """Tests for Globus Compute integration (mocked — no real endpoint needed)."""
 
 import os
+import sys
 import tempfile
 
 import pandas as pd
 
-from web.globus import is_globus_available, remote_metric_runner
+import aidrin
+from web.globus import (
+    is_globus_available,
+    remote_metric_runner,
+    remote_env_probe,
+    check_endpoint_compatibility,
+)
 
 
 # -------------------------------------------------
@@ -166,3 +173,134 @@ def test_remote_runner_data_quality_custom_outlier_error_is_metric_scoped():
     assert "Completeness" in result
     assert "Custom Criteria Outliers" in result
     assert "Error" in result["Custom Criteria Outliers"]
+
+
+# -------------------------------------------------
+# Runner lives in aidrin (so the remote worker can import it)
+# -------------------------------------------------
+
+
+def test_remote_runner_defined_in_aidrin():
+    """The runner must be defined in ``aidrin.compute.remote`` — Globus serialises
+    it by reference, and the endpoint has ``aidrin`` installed but not ``web``.
+    """
+    assert remote_metric_runner.__module__ == "aidrin.compute.remote"
+
+
+# -------------------------------------------------
+# Environment probe (unit test — runs locally)
+# -------------------------------------------------
+
+
+def test_remote_env_probe_reports_versions():
+    """Probe returns this environment's aidrin + Python versions."""
+    info = remote_env_probe()
+    assert info["aidrin_version"] == aidrin.__version__
+    assert info["python_version"] == ".".join(map(str, sys.version_info[:3]))
+
+
+# -------------------------------------------------
+# Endpoint compatibility check (mocked client)
+# -------------------------------------------------
+
+
+class _FakeClient:
+    """Minimal stand-in for globus_compute_sdk.Client used by the probe."""
+
+    def __init__(self, probe_result):
+        self._probe_result = probe_result
+
+    def register_function(self, fn):
+        return "fake-func-uuid"
+
+    def run(self, *args, **kwargs):
+        return "fake-task-uuid"
+
+    def get_result(self, task_id):
+        return self._probe_result
+
+
+def test_check_endpoint_compatibility_matching():
+    """Same aidrin + Python versions → compatible, no warnings."""
+    local_py = ".".join(map(str, sys.version_info[:3]))
+    client = _FakeClient({
+        "aidrin_version": aidrin.__version__,
+        "python_version": local_py,
+    })
+    report = check_endpoint_compatibility(client, "endpoint-uuid")
+    assert report["compatible"] is True
+    assert report["warnings"] == []
+    assert report["remote"]["aidrin"] == aidrin.__version__
+
+
+def test_check_endpoint_compatibility_aidrin_mismatch():
+    """Different aidrin major.minor → incompatible with a warning."""
+    local_py = ".".join(map(str, sys.version_info[:3]))
+    client = _FakeClient({
+        "aidrin_version": "1999.01.0",
+        "python_version": local_py,
+    })
+    report = check_endpoint_compatibility(client, "endpoint-uuid")
+    assert report["compatible"] is False
+    assert any("aidrin version mismatch" in w for w in report["warnings"])
+
+
+def test_check_endpoint_compatibility_python_mismatch_is_warning():
+    """Different Python minor → still compatible, but warns."""
+    client = _FakeClient({
+        "aidrin_version": aidrin.__version__,
+        "python_version": "2.7.18",
+    })
+    report = check_endpoint_compatibility(client, "endpoint-uuid")
+    assert report["compatible"] is True
+    assert any("Python version differs" in w for w in report["warnings"])
+
+
+# -------------------------------------------------
+# /globus/check-endpoint route
+# -------------------------------------------------
+
+
+def test_globus_check_endpoint_without_auth(client):
+    """Checking an endpoint without Globus auth should return 401."""
+    if not is_globus_available():
+        return
+
+    response = client.post("/globus/check-endpoint", json={"endpoint_id": "x"})
+    assert response.status_code == 401
+
+
+class _FailingProbeClient:
+    """Client whose endpoint cannot deserialise the probe (old aidrin)."""
+
+    def __init__(self, exc):
+        self._exc = exc
+
+    def register_function(self, fn):
+        return "fake-func-uuid"
+
+    def run(self, *args, **kwargs):
+        return "fake-task-uuid"
+
+    def get_result(self, task_id):
+        raise self._exc
+
+
+def test_check_endpoint_compatibility_old_endpoint_missing_probe():
+    """Endpoint too old to have aidrin.compute.remote → incompatible, clear message."""
+    client = _FailingProbeClient(
+        ModuleNotFoundError("No module named 'aidrin.compute'")
+    )
+    report = check_endpoint_compatibility(client, "endpoint-uuid")
+    assert report["compatible"] is False
+    assert any(aidrin.__version__ in w for w in report["warnings"])
+    assert report["remote"]["aidrin"] == "unknown"
+
+
+def test_check_endpoint_compatibility_infra_error_propagates():
+    """A non-probe error (e.g. timeout) is not masked as a version issue."""
+    import pytest
+
+    client = _FailingProbeClient(TimeoutError("endpoint offline"))
+    with pytest.raises(TimeoutError):
+        check_endpoint_compatibility(client, "endpoint-uuid")
