@@ -47,7 +47,10 @@ def calculate_custom_outliers(
 
         target = target_map.get((rule["target_type"], rule["target"]))
         if target is None:
-            message = f"Target not found: {rule['target']}"
+            message = (
+                f"Target not found: {rule['target']}. "
+                "Select an exact column or HDF5 dataset path from the Target list."
+            )
             summaries[key]["errors"] = [message]
             errors.append({"rule_id": rule["id"], "target": rule["target"], "error": message})
             continue
