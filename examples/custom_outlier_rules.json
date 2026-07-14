@@ -1,0 +1,16 @@
+[
+  {
+    "id": "valid-age",
+    "name": "Valid age",
+    "target": "age",
+    "target_type": "column",
+    "allow_missing": false,
+    "criteria": {
+      "type": "range",
+      "min": 0,
+      "max": 120,
+      "min_inclusive": true,
+      "max_inclusive": true
+    }
+  }
+]

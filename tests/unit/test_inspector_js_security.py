@@ -1,4 +1,9 @@
+import json
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -63,6 +68,49 @@ def test_custom_outlier_json_file_source_is_browser_only_and_async():
     assert "async function resolveCustomOutlierRules()" in source
     assert "await file.text()" in source
     assert "submitGlobusMetric" in source
+
+
+def _parse_rules_file_in_browser(text):
+    source = INSPECTOR_JS.read_text()
+    start = source.index("function parseCustomOutlierRulesJson(text)")
+    end = source.index("\n\nasync function resolveCustomOutlierRules()", start)
+    parser = source[start:end]
+    script = f"""{parser}
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {{ input += chunk; }});
+process.stdin.on("end", () => {{
+  try {{
+    parseCustomOutlierRulesJson(input);
+    process.stdout.write(JSON.stringify({{ ok: true }}));
+  }} catch (error) {{
+    process.stdout.write(JSON.stringify({{ ok: false, error: error.message }}));
+  }}
+}});
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        input=text,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the frontend formatter")
+def test_custom_outlier_json_file_parser_corpus():
+    cases = [
+        ('[{"id":"valid-age"}]', True, None),
+        ("{", False, "valid JSON"),
+        ("{}", False, "JSON array"),
+        ("[]", False, "at least one rule"),
+    ]
+    for text, expected_ok, expected_error in cases:
+        result = _parse_rules_file_in_browser(text)
+        assert result["ok"] is expected_ok
+        if expected_error:
+            assert expected_error in result["error"]
 
 
 def test_custom_outlier_preview_cap_placeholder_documents_default():

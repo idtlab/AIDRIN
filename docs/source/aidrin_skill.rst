@@ -66,6 +66,11 @@ Verify the command is on your PATH before continuing:
 
    which aidrin-mcp   # should print a path inside your active environment
 
+Custom criteria outlier rules can be supplied to ``run_custom_outlier_check``
+or ``run_aidrin_metric`` as inline ``rules_json`` or as ``rules_file``. A
+``rules_file`` path is read on the MCP server host and must point to a UTF-8
+JSON array in the same format as ``examples/custom_outlier_rules.json``.
+
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
