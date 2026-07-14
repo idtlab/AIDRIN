@@ -118,16 +118,37 @@
       </div>
       <div id="custom-outlier-editor" class="hidden mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
         <input type="hidden" name="custom_outlier_rules" id="custom-outlier-rules-json" value="[]" />
-        <div class="flex items-center justify-between gap-3 mb-3">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Custom criteria rules</h3>
-          <button type="button" id="custom-outlier-add-rule"
-                  class="px-3 py-1.5 text-xs font-medium text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/20">
-            Add rule
-          </button>
+        <div class="mb-3 flex flex-wrap gap-4 text-xs font-medium text-gray-700 dark:text-gray-300">
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" name="custom_outlier_rule_source" value="manual" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700" />
+            Manual rules
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" name="custom_outlier_rule_source" value="file" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700" />
+            JSON file
+          </label>
         </div>
-        <p class="mb-3 text-xs text-gray-600 dark:text-gray-300">Rules define expected valid values. Values that do not satisfy these conditions are flagged.</p>
-        <div id="custom-outlier-message" class="hidden mb-3 text-xs text-amber-700 dark:text-amber-300"></div>
-        <div id="custom-outlier-rule-list" class="space-y-3"></div>
+        <div id="custom-outlier-manual-source">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Custom criteria rules</h3>
+            <button type="button" id="custom-outlier-add-rule"
+                    class="px-3 py-1.5 text-xs font-medium text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/20">
+              Add rule
+            </button>
+          </div>
+          <p class="mb-3 text-xs text-gray-600 dark:text-gray-300">Rules define expected valid values. Values that do not satisfy these conditions are flagged.</p>
+          <div id="custom-outlier-message" class="hidden mb-3 text-xs text-amber-700 dark:text-amber-300"></div>
+          <div id="custom-outlier-rule-list" class="space-y-3"></div>
+        </div>
+        <div id="custom-outlier-file-source" class="hidden">
+          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Rules JSON file
+            <input type="file" id="custom-outlier-rules-file" accept="application/json,.json"
+                   class="mt-1 block w-full text-sm text-gray-900 dark:text-gray-300" />
+          </label>
+          <p class="mt-2 text-xs text-gray-600 dark:text-gray-300">Choose a JSON array in the same custom-rule format used by the CLI and MCP server. The file is read in your browser and is not uploaded or saved.</p>
+          <div id="custom-outlier-file-message" class="hidden mt-2 text-xs text-amber-700 dark:text-amber-300"></div>
+        </div>
         <div class="mt-3 grid gap-3 sm:grid-cols-3">
           <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
             Preview cap per rule

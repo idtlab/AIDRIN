@@ -189,5 +189,5 @@ supplied.
 - [x] Review and finalize the design, compatibility boundaries, and test plan.
 - [x] Add the shared file loader and source validation for the headless API.
 - [x] Add CLI and MCP `rules_file` interfaces with compatibility tests.
-- [ ] Add the asynchronous web JSON-file source flow for local and Globus runs.
+- [x] Add the asynchronous web JSON-file source flow for local and Globus runs.
 - [ ] Add documentation, examples, parser-consistency coverage, and full validation.

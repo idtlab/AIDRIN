@@ -286,7 +286,7 @@ function withSubmitGuard(button, taskFn) {
  * Wraps the existing submitForm() logic but POSTs to a parameterized URL.
  * @param {string} targetUrl - The metric endpoint URL (e.g., '/data-quality')
  */
-function workspaceSubmit(targetUrl) {
+async function workspaceSubmit(targetUrl) {
   // Clear previous results before submitting new ones
   const resultsSection = document.getElementById("results-section");
   if (resultsSection) resultsSection.style.display = "none";
@@ -395,8 +395,8 @@ function workspaceSubmit(targetUrl) {
         );
       }
       if (gFormData.get("custom_outliers") === "yes") {
-        const customOutlierRules = serializeCustomOutlierRules();
-        if (!validateCustomOutlierRuleSelection(customOutlierRules)) return;
+        const customOutlierRules = await resolveCustomOutlierRules();
+        if (!customOutlierRules) return;
         selected.push("custom_outliers");
         selectedNames.push("Custom Criteria Outliers");
         remoteParams.custom_outlier_rules = customOutlierRules;
@@ -581,11 +581,10 @@ function workspaceSubmit(targetUrl) {
   }
   if (targetUrl === "/data-quality") {
     const customOutliersSelected = formData.get("custom_outliers") === "yes";
-    const customOutlierRules = serializeCustomOutlierRules();
-    if (
-      customOutliersSelected &&
-      !validateCustomOutlierRuleSelection(customOutlierRules)
-    ) {
+    const customOutlierRules = customOutliersSelected
+      ? await resolveCustomOutlierRules()
+      : [];
+    if (customOutliersSelected && !customOutlierRules) {
       return;
     }
     processedFormData.set(
@@ -1534,6 +1533,12 @@ function initCustomOutlierEditor() {
     addButton.addEventListener("click", () => addCustomOutlierRuleRow());
   }
   const checkbox = document.getElementById("toggleButton_custom_outliers");
+  document
+    .querySelectorAll('input[name="custom_outlier_rule_source"]')
+    .forEach((input) => {
+      input.addEventListener("change", updateCustomOutlierRuleSource);
+    });
+  updateCustomOutlierRuleSource();
   if (document.getElementById("custom-outlier-editor") && checkbox?.checked) {
     toggleCustomOutlierEditor(checkbox);
   }
@@ -1543,7 +1548,32 @@ function toggleCustomOutlierEditor(checkbox) {
   const editor = document.getElementById("custom-outlier-editor");
   if (!editor) return;
   editor.classList.toggle("hidden", !checkbox.checked);
-  if (checkbox.checked) {
+  if (checkbox.checked && customOutlierRuleSource() === "manual") {
+    loadCustomOutlierTargets().then(() => {
+      const list = document.getElementById("custom-outlier-rule-list");
+      if (list && list.children.length === 0) addCustomOutlierRuleRow();
+    });
+  }
+}
+
+function customOutlierRuleSource() {
+  return (
+    document.querySelector('input[name="custom_outlier_rule_source"]:checked')
+      ?.value || "manual"
+  );
+}
+
+function updateCustomOutlierRuleSource() {
+  const isFileSource = customOutlierRuleSource() === "file";
+  document
+    .getElementById("custom-outlier-manual-source")
+    ?.classList.toggle("hidden", isFileSource);
+  document
+    .getElementById("custom-outlier-file-source")
+    ?.classList.toggle("hidden", !isFileSource);
+
+  const checkbox = document.getElementById("toggleButton_custom_outliers");
+  if (checkbox?.checked && !isFileSource) {
     loadCustomOutlierTargets().then(() => {
       const list = document.getElementById("custom-outlier-rule-list");
       if (list && list.children.length === 0) addCustomOutlierRuleRow();
@@ -1820,6 +1850,57 @@ function serializeCustomOutlierRules() {
   const hidden = document.getElementById("custom-outlier-rules-json");
   if (hidden) hidden.value = JSON.stringify(rules);
   return rules;
+}
+
+function showCustomOutlierFileError(message) {
+  const element = document.getElementById("custom-outlier-file-message");
+  if (!element) return;
+  element.textContent = message;
+  element.classList.remove("hidden");
+}
+
+function clearCustomOutlierFileError() {
+  const element = document.getElementById("custom-outlier-file-message");
+  if (element) element.classList.add("hidden");
+}
+
+function parseCustomOutlierRulesJson(text) {
+  let rules;
+  try {
+    rules = JSON.parse(text);
+  } catch (error) {
+    throw new Error("The rules file must contain valid JSON.");
+  }
+  if (!Array.isArray(rules)) {
+    throw new Error("The rules file must contain a JSON array.");
+  }
+  if (rules.length === 0) {
+    throw new Error("The rules file must contain at least one rule.");
+  }
+  return rules;
+}
+
+async function resolveCustomOutlierRules() {
+  if (customOutlierRuleSource() === "manual") {
+    const rules = serializeCustomOutlierRules();
+    return validateCustomOutlierRuleSelection(rules) ? rules : null;
+  }
+
+  const fileInput = document.getElementById("custom-outlier-rules-file");
+  const file = fileInput?.files?.[0];
+  if (!file) {
+    showCustomOutlierFileError("Choose a JSON rules file before submitting.");
+    return null;
+  }
+
+  try {
+    const rules = parseCustomOutlierRulesJson(await file.text());
+    clearCustomOutlierFileError();
+    return rules;
+  } catch (error) {
+    showCustomOutlierFileError(error.message);
+    return null;
+  }
 }
 
 function updateCustomOutlierConditionSections(condition) {

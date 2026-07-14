@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("mcp")
 
-from aidrin.mcp.server import run_aidrin_metric, run_custom_outlier_check
+from aidrin.mcp.server import run_aidrin_metric, run_custom_outlier_check  # noqa: E402
 
 
 def _write_csv() -> str:

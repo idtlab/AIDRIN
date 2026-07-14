@@ -42,12 +42,27 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert 'return { op: "not", condition: { op: "or", conditions } }' in source
     assert "criteria_type:" not in source
     assert "function validateCustomOutlierRuleSelection(rules)" in source
-    assert "!validateCustomOutlierRuleSelection(customOutlierRules)" in source
+    assert "async function workspaceSubmit(targetUrl)" in source
+    assert "await resolveCustomOutlierRules()" in source
+    assert "if (!customOutlierRules) return;" in source
     assert "function validateCustomOutlierCriteria(criteria, ruleName)" in source
     assert "range condition requires min or max" in source
     assert "requires a condition for NOT" in source
     assert "customOutlierLimitValue(formData.get(\"max_outliers\"), 100)" in source
     assert "customOutlierLimitValue(\n          gFormData.get(\"max_outliers\")," in source
+
+
+def test_custom_outlier_json_file_source_is_browser_only_and_async():
+    panel = DATA_QUALITY_PANEL.read_text()
+    source = INSPECTOR_JS.read_text()
+    assert 'name="custom_outlier_rule_source" value="manual" checked' in panel
+    assert 'name="custom_outlier_rule_source" value="file"' in panel
+    assert 'id="custom-outlier-rules-file" accept="application/json,.json"' in panel
+    assert "not uploaded or saved" in panel
+    assert "function parseCustomOutlierRulesJson(text)" in source
+    assert "async function resolveCustomOutlierRules()" in source
+    assert "await file.text()" in source
+    assert "submitGlobusMetric" in source
 
 
 def test_custom_outlier_preview_cap_placeholder_documents_default():
