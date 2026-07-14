@@ -196,14 +196,13 @@ def _hdf5_missing_mask(dataset, values, display_name):
         return missing_mask
 
     reader = hdf5Reader("", logger)
-    explicit_fills, uncertain_fills = reader._collect_fill_values(dataset)
-    all_fills = explicit_fills | uncertain_fills
-    if not all_fills:
+    explicit_fills, _uncertain_fills = reader._collect_fill_values(dataset)
+    if not explicit_fills:
         return missing_mask
 
     matched = set()
     fill_match_count = 0
-    for fill_value in all_fills:
+    for fill_value in explicit_fills:
         try:
             fill_mask = values == fill_value
         except TypeError:
@@ -216,27 +215,13 @@ def _hdf5_missing_mask(dataset, values, display_name):
     if not matched:
         return missing_mask
 
-    uncertain_matched = matched & uncertain_fills
-    if uncertain_matched:
-        logger.warning(
-            "Dataset '%s': %d/%d value(s) match the HDF5 default fill value %s "
-            "and will be marked as missing. If zero is a valid measurement here "
-            "(e.g. counts, indices), set a '_FillValue' attribute in the file to "
-            "an unambiguous sentinel, or pass fill_values=[] at construction time "
-            "to suppress native fill value missing handling.",
-            display_name,
-            fill_match_count,
-            values.size,
-            uncertain_matched,
-        )
-    else:
-        logger.info(
-            "Dataset '%s': marked %d/%d value(s) matching explicit fill sentinel(s) %s as missing.",
-            display_name,
-            fill_match_count,
-            values.size,
-            matched,
-        )
+    logger.info(
+        "Dataset '%s': marked %d/%d value(s) matching explicit fill sentinel(s) %s as missing.",
+        display_name,
+        fill_match_count,
+        values.size,
+        matched,
+    )
     return missing_mask
 
 

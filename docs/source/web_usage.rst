@@ -84,10 +84,10 @@ Evaluates dataset completeness by checking for missing values.
       scalar or an array of multiple sentinels.
    4. **HDF5 native fill value** – the value stored in the dataset's own
       metadata (``dataset.fillvalue``).  When this equals the dtype default
-      (``0`` / ``0.0``) and no fill-value attributes are present, a warning
-      is logged before replacement because zero is a legitimate measurement in
-      many scientific datasets (e.g. counts, indices).  Set a ``_FillValue``
-      attribute in the file to an unambiguous sentinel to suppress this warning.
+      (``0`` / ``0.0``) and no fill-value attributes are present, it is treated
+      as valid data because zero is a legitimate measurement in many scientific
+      datasets (e.g. counts, indices). Set a ``_FillValue`` attribute to an
+      unambiguous sentinel when zero represents missing data.
 
 calculate_correlations
 ^^^^^^^^^^^^^^^^^^^^^^

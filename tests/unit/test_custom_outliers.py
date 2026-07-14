@@ -543,13 +543,14 @@ def test_hdf5_aggregate_counts_missing_outlier_once(tmp_path):
     assert row["outlier"] == 1
 
 
-def test_hdf5_default_zero_policy_counts_missing_and_warns(hdf5_file_info, caplog):
-    with caplog.at_level(logging.WARNING):
-        result = calculate_custom_outliers(hdf5_file_info, [
-            _range_rule("default-zero-range", "/default_zero", target_type="hdf5_dataset", min_value=-1, max_value=2)
-        ])
-    assert result["Rule summaries"]["default-zero-range"]["missing"] == 2
-    assert any("default fill value" in record.message for record in caplog.records)
+def test_hdf5_default_zero_values_are_not_missing(hdf5_file_info):
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule("default-zero-range", "/default_zero", target_type="hdf5_dataset", min_value=1, max_value=2)
+    ])
+    summary = result["Rule summaries"]["default-zero-range"]
+    assert summary["missing"] == 0
+    assert summary["outlier"] == 2
+    assert [item["reason"] for item in result["Outlier preview"]["default-zero-range"]] == ["below_min", "below_min"]
 
 
 def test_hdf5_fill_log_counts_only_sentinel_matches(tmp_path, caplog):
