@@ -1695,25 +1695,29 @@ function addCustomOutlierRuleRow() {
   customOutlierRuleCounter += 1;
   const row = document.createElement("div");
   row.className =
-    "custom-outlier-rule rounded-lg border border-gray-200 dark:border-gray-700 p-3";
+    "custom-outlier-rule rounded-lg border border-gray-200 dark:border-gray-700 p-2";
   row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
   row.innerHTML = `
-    <div class="grid gap-3 md:grid-cols-2">
+    <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
         <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
-               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
       </label>
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Target
         <select data-field="target"
-                class="custom-outlier-target mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+                class="custom-outlier-target mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
       </label>
-      <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+      <label class="flex items-center gap-2 pt-5 whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300">
         <input type="checkbox" data-field="allow_missing" class="rounded border-gray-300" />
         Allow missing values
       </label>
+      <button type="button" data-action="remove"
+              class="self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+        Remove
+      </button>
     </div>
-    <div data-section="criteria-tree" class="mt-3 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+    <div data-section="criteria-tree" class="mt-2 rounded-lg bg-gray-50 p-2 dark:bg-gray-900/40">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Valid when
           <select data-field="criteria_op"
                   class="ml-2 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
@@ -1727,15 +1731,10 @@ function addCustomOutlierRuleRow() {
           Add condition
         </button>
       </div>
-      <p class="mb-2 text-xs text-gray-600 dark:text-gray-300">Values that do not satisfy these conditions are flagged.</p>
+      <p class="mb-1 text-xs text-gray-600 dark:text-gray-300">Values that do not satisfy these conditions are flagged.</p>
       <div data-section="criteria-conditions" class="space-y-2"></div>
     </div>
-    <div class="flex justify-end mt-3">
-      <button type="button" data-action="remove"
-              class="px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
-        Remove
-      </button>
-    </div>`;
+    `;
   list.appendChild(row);
 
   row.querySelector('[data-action="remove"]').addEventListener("click", () => {
@@ -1761,12 +1760,12 @@ function addCustomOutlierConditionRow(ruleRow) {
   if (!list) return;
   const condition = document.createElement("div");
   condition.className =
-    "custom-outlier-condition rounded-md bg-white p-2 shadow-sm dark:bg-gray-800";
+    "custom-outlier-condition rounded-md bg-white p-1.5 shadow-sm dark:bg-gray-800";
   condition.innerHTML = `
     <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.7fr)_1fr_auto]">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Type
         <select data-field="condition_type"
-                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
           <option value="range">Range</option>
           <option value="regex">Regex</option>
         </select>
@@ -1774,17 +1773,17 @@ function addCustomOutlierConditionRow(ruleRow) {
       <div data-section="condition-range" class="grid gap-2 sm:grid-cols-4">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
           <input type="number" step="any" data-field="condition_min"
-                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
         </label>
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Max
           <input type="number" step="any" data-field="condition_max"
-                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
         </label>
-        <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+        <label class="flex items-center gap-2 pt-4 text-xs font-medium text-gray-700 dark:text-gray-300">
           <input type="checkbox" data-field="condition_min_inclusive" checked class="rounded border-gray-300" />
           Include min
         </label>
-        <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+        <label class="flex items-center gap-2 pt-4 text-xs font-medium text-gray-700 dark:text-gray-300">
           <input type="checkbox" data-field="condition_max_inclusive" checked class="rounded border-gray-300" />
           Include max
         </label>
@@ -1792,7 +1791,7 @@ function addCustomOutlierConditionRow(ruleRow) {
       <div data-section="condition-regex" class="hidden">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Pattern
           <input type="text" data-field="condition_pattern" value=".*"
-                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
         </label>
       </div>
       <button type="button" data-action="remove-condition"
