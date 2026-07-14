@@ -70,6 +70,15 @@ def test_custom_outlier_json_file_source_is_browser_only_and_async():
     assert "submitGlobusMetric" in source
 
 
+def test_custom_outlier_manual_rules_can_be_saved_as_json():
+    panel = DATA_QUALITY_PANEL.read_text()
+    source = INSPECTOR_JS.read_text()
+    assert 'id="custom-outlier-save-rules"' in panel
+    assert "function downloadCustomOutlierRules()" in source
+    assert "JSON.stringify(rules, null, 2)" in source
+    assert 'link.download = "custom-outlier-rules.json"' in source
+
+
 def _parse_rules_file_in_browser(text):
     source = INSPECTOR_JS.read_text()
     start = source.index("function parseCustomOutlierRulesJson(text)")

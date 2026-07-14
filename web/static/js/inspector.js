@@ -1532,6 +1532,10 @@ function initCustomOutlierEditor() {
   if (addButton) {
     addButton.addEventListener("click", () => addCustomOutlierRuleRow());
   }
+  const saveButton = document.getElementById("custom-outlier-save-rules");
+  if (saveButton) {
+    saveButton.addEventListener("click", downloadCustomOutlierRules);
+  }
   const checkbox = document.getElementById("toggleButton_custom_outliers");
   document
     .querySelectorAll('input[name="custom_outlier_rule_source"]')
@@ -1850,6 +1854,22 @@ function serializeCustomOutlierRules() {
   const hidden = document.getElementById("custom-outlier-rules-json");
   if (hidden) hidden.value = JSON.stringify(rules);
   return rules;
+}
+
+function downloadCustomOutlierRules() {
+  const rules = serializeCustomOutlierRules();
+  if (!validateCustomOutlierRuleSelection(rules)) return;
+
+  const blob = new Blob([JSON.stringify(rules, null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "custom-outlier-rules.json";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
 }
 
 function showCustomOutlierFileError(message) {
