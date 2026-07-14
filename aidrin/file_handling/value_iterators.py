@@ -17,7 +17,7 @@ HDF5_BLOCK_ELEMENT_LIMIT = 1_000_000
 
 def iter_targets(file_info):
     """Return selectable value targets for tabular files and native HDF5 files."""
-    file_path, _file_name, file_type = file_info
+    file_path, _file_name, file_type = file_info[:3]
     if file_type == ".h5":
         return _iter_hdf5_targets(file_path)
     return _iter_column_targets(file_info)

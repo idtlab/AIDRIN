@@ -117,6 +117,12 @@ def test_iter_value_blocks_hdf5_uses_native_locations(hdf5_file_info):
     }
 
 
+def test_iter_targets_accepts_hdf5_selected_keys_file_info(hdf5_file_info):
+    extended_file_info = (*hdf5_file_info, ["/S_01_01/X"])
+    targets = iter_targets(extended_file_info)
+    assert any(target["name"] == "/S_01_01/X" for target in targets)
+
+
 def test_iter_value_blocks_hdf5_streams_regular_slices(tmp_path, monkeypatch):
     monkeypatch.setattr(value_iterators, "HDF5_BLOCK_ELEMENT_LIMIT", 4)
     path = tmp_path / "streamed.h5"
