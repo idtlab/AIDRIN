@@ -1712,7 +1712,7 @@ function addCustomOutlierRuleRow() {
         Allow missing values
       </label>
     </div>
-    <div data-section="criteria-tree" class="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+    <div data-section="criteria-tree" class="mt-3 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Valid when
           <select data-field="criteria_op"
@@ -1761,7 +1761,7 @@ function addCustomOutlierConditionRow(ruleRow) {
   if (!list) return;
   const condition = document.createElement("div");
   condition.className =
-    "custom-outlier-condition rounded-lg border border-gray-200 dark:border-gray-700 p-2";
+    "custom-outlier-condition rounded-md bg-white p-2 shadow-sm dark:bg-gray-800";
   condition.innerHTML = `
     <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.7fr)_1fr_auto]">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Type
