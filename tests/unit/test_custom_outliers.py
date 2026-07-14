@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -29,6 +30,30 @@ def _write_csv(df):
     df.to_csv(tmp.name, index=False)
     tmp.close()
     return (tmp.name, os.path.basename(tmp.name), ".csv")
+
+
+def _write_dataframe(df, suffix, file_type):
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    tmp.close()
+    if file_type == ".parquet":
+        df.to_parquet(tmp.name)
+    else:
+        df.to_excel(tmp.name, index=False)
+    return (tmp.name, os.path.basename(tmp.name), file_type)
+
+
+def _write_json_rows(rows):
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+    json.dump(rows, tmp)
+    tmp.close()
+    return (tmp.name, os.path.basename(tmp.name), ".json")
+
+
+def _write_npz(values):
+    tmp = tempfile.NamedTemporaryFile(suffix=".npz", delete=False)
+    tmp.close()
+    np.savez(tmp.name, values=np.array(values, dtype=object))
+    return (tmp.name, os.path.basename(tmp.name), ".npz")
 
 
 def _clean(path):
@@ -97,6 +122,46 @@ def test_iter_value_blocks_csv_locations_include_source_line():
     finally:
         _clean(fi[0])
     assert block["locate"]((0,)) == {"row_index": 0, "display": "row 0", "source_line": 2}
+
+
+@pytest.mark.parametrize(
+    ("suffix", "file_type"),
+    [(".xlsx", ".xls, .xlsb, .xlsx, .xlsm"), (".parquet", ".parquet")],
+)
+def test_custom_outliers_normalize_non_string_tabular_columns(suffix, file_type, monkeypatch):
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "0")
+    fi = _write_dataframe(pd.DataFrame({1: [0, 1, 3]}), suffix, file_type)
+    try:
+        targets = iter_targets(fi)
+        assert [target["name"] for target in targets] == ["1"]
+        result = calculate_custom_outliers(fi, [_range_rule("numeric-header", "1", min_value=0, max_value=2)])
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["numeric-header"]
+    assert "errors" not in summary
+    assert summary["outlier"] == 1
+
+
+@pytest.mark.parametrize(
+    ("writer", "values"),
+    [(_write_json_rows, [{"values": [1, 2]}, {"values": [3]}]), (_write_npz, [[1, 2], [3]])],
+)
+def test_custom_outliers_handle_container_values_without_rule_errors(writer, values):
+    fi = writer(values)
+    try:
+        regex_result = calculate_custom_outliers(fi, [_regex_rule("containers-regex", "values", r".*")])
+        range_result = calculate_custom_outliers(fi, [_range_rule("containers-range", "values", min_value=0, max_value=5)])
+    finally:
+        _clean(fi[0])
+
+    regex_summary = regex_result["Rule summaries"]["containers-regex"]
+    range_summary = range_result["Rule summaries"]["containers-range"]
+    assert "errors" not in regex_summary
+    assert regex_summary["valid"] == 2
+    assert "errors" not in range_summary
+    assert range_summary["outlier"] == 2
+    assert [row["reason"] for row in range_result["Outlier preview"]["containers-range"]] == ["non_numeric", "non_numeric"]
 
 
 def test_iter_targets_lists_native_hdf5_paths(hdf5_file_info):

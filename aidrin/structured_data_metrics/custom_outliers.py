@@ -405,7 +405,12 @@ def _build_missing_checker(block):
     if "missing_mask" in block:
         mask_at = mask_lookup(block["missing_mask"])
         return lambda idx, _value: mask_at(idx)
-    return lambda _idx, value: bool(pd.isna(value))
+    return lambda _idx, value: _is_scalar_missing(value)
+
+
+def _is_scalar_missing(value):
+    missing = pd.isna(value)
+    return bool(missing) if np.isscalar(missing) else False
 
 
 def _invalid_result(rule, value):
@@ -436,10 +441,9 @@ def _criteria_invalid_result(criteria, value):
         return None, None
 
     if criteria["type"] == "range":
-        numeric = pd.to_numeric(value, errors="coerce")
-        if pd.isna(numeric):
+        number = _coerce_numeric_scalar(value)
+        if number is None:
             return "non_numeric", "NaN"
-        number = float(numeric)
         if "min" in criteria:
             if criteria["min_inclusive"]:
                 if number < criteria["min"]:
@@ -458,6 +462,16 @@ def _criteria_invalid_result(criteria, value):
     if criteria["_compiled_pattern"].fullmatch(text):
         return None, None
     return "regex_mismatch", f"!= /{criteria.get('pattern', '')}/"
+
+
+def _coerce_numeric_scalar(value):
+    try:
+        numeric = pd.to_numeric(value, errors="coerce")
+    except (TypeError, ValueError):
+        return None
+    if not np.isscalar(numeric) or pd.isna(numeric):
+        return None
+    return float(numeric)
 
 
 def _canonical_string(value):
@@ -616,7 +630,11 @@ def _json_scalar(value):
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     if isinstance(value, np.generic):
-        return value.item()
-    if pd.isna(value):
+        value = value.item()
+    if isinstance(value, np.ndarray):
+        return [_json_scalar(item) for item in value.tolist()]
+    if isinstance(value, (list, tuple)):
+        return [_json_scalar(item) for item in value]
+    if _is_scalar_missing(value):
         return None
     return value

@@ -42,6 +42,7 @@ def _iter_column_targets(file_info):
     df = read_file(file_info)
     if not hasattr(df, "columns"):
         return []
+    _normalize_tabular_columns(df)
 
     targets = []
     for col in df.columns:
@@ -61,6 +62,7 @@ def _iter_column_value_blocks(file_info, target):
     df = read_file(file_info)
     if not hasattr(df, "columns"):
         raise ValueError("Unable to read tabular file")
+    _normalize_tabular_columns(df)
 
     name = target["name"]
     if name not in df.columns:
@@ -82,6 +84,11 @@ def _iter_column_value_blocks(file_info, target):
         "offset": None,
         "locate": locate,
     }
+
+
+def _normalize_tabular_columns(df):
+    """Use the same string column names exposed by metric outputs and the UI."""
+    df.columns = [str(col) for col in df.columns]
 
 
 def _iter_hdf5_targets(file_path):
