@@ -135,14 +135,16 @@
                     class="px-3 py-1.5 text-xs font-medium text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/20">
               Add rule
             </button>
-            <button type="button" id="custom-outlier-save-rules"
-                    class="px-3 py-1.5 text-xs font-medium text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
-              Save to JSON
-            </button>
           </div>
           <p class="mb-3 text-xs text-gray-600 dark:text-gray-300">Rules define expected valid values. Values that do not satisfy these conditions are flagged.</p>
           <div id="custom-outlier-message" class="hidden mb-3 text-xs text-amber-700 dark:text-amber-300"></div>
           <div id="custom-outlier-rule-list" class="space-y-3"></div>
+          <div class="mt-3 flex justify-end">
+            <button type="button" id="custom-outlier-save-rules"
+                    class="px-4 py-2 text-sm font-medium text-emerald-700 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 focus:ring-4 focus:ring-emerald-200 dark:text-emerald-300 dark:border-emerald-700 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 dark:focus:ring-emerald-800">
+              Save rules to JSON
+            </button>
+          </div>
         </div>
         <div id="custom-outlier-file-source" class="hidden">
           <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
