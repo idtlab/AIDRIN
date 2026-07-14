@@ -1,10 +1,12 @@
 import base64
+import json
 import math
 import os
 import re
 import sys
 import time
 import importlib.util
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from typing import Any, Dict, List, Optional
@@ -163,6 +165,48 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "required_args": ["columns"],
     },
 }
+
+
+def _has_custom_outlier_rule_source(value: Any) -> bool:
+    """Return whether a custom-outlier rule source was meaningfully supplied."""
+    return value is not None and value != "" and value != []
+
+
+def _load_custom_outlier_rules_file(rules_file: str) -> List[Any]:
+    """Read a UTF-8 JSON custom-outlier rules array from a local file."""
+    path = Path(rules_file).expanduser()
+    try:
+        raw_rules = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"Unable to read custom-outlier rules file: {path}") from exc
+
+    try:
+        rules = json.loads(raw_rules)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in custom-outlier rules file: {path}") from exc
+
+    if not isinstance(rules, list):
+        raise ValueError(f"Custom-outlier rules file must contain a JSON array: {path}")
+    return rules
+
+
+def _resolve_custom_outlier_rules(kwargs: Dict[str, Any]) -> Any:
+    """Resolve exactly one supplied custom-outlier rules source."""
+    sources = {
+        "rules": kwargs.get("rules"),
+        "rules_json": kwargs.get("rules_json"),
+        "rules_file": kwargs.get("rules_file"),
+    }
+    supplied = [
+        (name, value) for name, value in sources.items() if _has_custom_outlier_rule_source(value)
+    ]
+    if len(supplied) != 1:
+        raise ValueError("Provide exactly one custom-outlier rule source: rules, rules_json, or rules_file")
+
+    source_name, source_value = supplied[0]
+    if source_name == "rules_file":
+        return _load_custom_outlier_rules_file(source_value)
+    return source_value
 
 
 def _sanitize(obj: Any) -> Any:
@@ -501,9 +545,7 @@ def run_metric(
         return _finalize(result)
 
     if metric_key == "outliers_custom":
-        rules = kwargs.get("rules") or kwargs.get("rules_json")
-        if not rules:
-            raise ValueError("rules_json is required for outliers_custom")
+        rules = _resolve_custom_outlier_rules(kwargs)
         result = metric["runner"](
             file_path,
             file_type,
