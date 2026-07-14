@@ -340,6 +340,17 @@ def _dp_error_payload(error_message: str) -> Dict[str, Any]:
             "Variance of feature (after noise)": "N/A",
             "Noisy file saved": "Failed - No data to process",
         }
+    if "No columns selected" in error_message:
+        return {
+            "Error": "No numerical features selected for differential privacy.",
+            "DP Statistics Visualization": "",
+            "Graph interpretation": "No visualization available due to invalid parameters.",
+            "Mean of feature (before noise)": "N/A",
+            "Variance of feature (before noise)": "N/A",
+            "Mean of feature (after noise)": "N/A",
+            "Variance of feature (after noise)": "N/A",
+            "Noisy file saved": "Failed - Invalid parameters",
+        }
     return {
         "Error": f"Processing error: {error_message}",
         "DP Statistics Visualization": "",
