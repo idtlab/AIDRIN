@@ -1540,7 +1540,10 @@ function initCustomOutlierEditor() {
   document
     .querySelectorAll('input[name="custom_outlier_rule_source"]')
     .forEach((input) => {
-      input.addEventListener("change", updateCustomOutlierRuleSource);
+      input.addEventListener("change", () => {
+        clearCustomOutlierResults();
+        updateCustomOutlierRuleSource();
+      });
     });
   updateCustomOutlierRuleSource();
   if (document.getElementById("custom-outlier-editor") && checkbox?.checked) {
@@ -1583,6 +1586,16 @@ function updateCustomOutlierRuleSource() {
       if (list && list.children.length === 0) addCustomOutlierRuleRow();
     });
   }
+}
+
+function clearCustomOutlierResults() {
+  const resultsSection = document.getElementById("results-section");
+  if (resultsSection) resultsSection.style.display = "none";
+  const metricsDiv = document.getElementById("metrics");
+  if (metricsDiv) metricsDiv.innerHTML = "";
+  const buttonsContainer = document.getElementById("buttonsContainer");
+  if (buttonsContainer) buttonsContainer.style.display = "none";
+  lastMetricResult = null;
 }
 
 function loadCustomOutlierTargets() {

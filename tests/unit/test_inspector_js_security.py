@@ -70,6 +70,14 @@ def test_custom_outlier_json_file_source_is_browser_only_and_async():
     assert "submitGlobusMetric" in source
 
 
+def test_switching_custom_outlier_rule_sources_clears_stale_results():
+    source = INSPECTOR_JS.read_text()
+    assert "function clearCustomOutlierResults()" in source
+    assert "clearCustomOutlierResults();\n        updateCustomOutlierRuleSource();" in source
+    assert 'document.getElementById("results-section")' in source
+    assert "lastMetricResult = null;" in source
+
+
 def test_custom_outlier_manual_rules_can_be_saved_as_json():
     panel = DATA_QUALITY_PANEL.read_text()
     source = INSPECTOR_JS.read_text()
