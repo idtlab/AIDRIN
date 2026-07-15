@@ -3,6 +3,7 @@
 import io
 import base64
 import logging
+import os
 import time
 import uuid
 
@@ -17,6 +18,38 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Path confinement
+# ---------------------------------------------------------------------------
+
+def confine_to_upload_folder(file_path):
+    """Return ``file_path`` resolved, iff it lives inside ``UPLOAD_FOLDER``.
+
+    Dataset paths supplied over the web (via the Flask session) flow into
+    ``file_parser``'s ``os.stat``/``os.path.exists``/``tempfile``/``os.replace``
+    calls. This is the path-traversal barrier (CWE-22) for those values: the
+    path is canonicalised with ``os.path.realpath`` and rejected unless it stays
+    within the configured upload directory, so a forged/tampered session cookie
+    cannot steer file operations at arbitrary locations on disk.
+
+    Returns the canonical path on success, or ``""`` for a missing or
+    out-of-bounds path (callers treat an empty path as "no file").
+    """
+    if not file_path:
+        return ""
+    base = os.path.realpath(current_app.config["UPLOAD_FOLDER"])
+    resolved = os.path.realpath(file_path)
+    try:
+        contained = resolved == base or os.path.commonpath([resolved, base]) == base
+    except ValueError:
+        # Different drives / mixed path kinds — not inside the upload folder.
+        contained = False
+    if not contained:
+        logger.warning("Rejected dataset path outside upload folder: %s", file_path)
+        return ""
+    return resolved
+
+
+# ---------------------------------------------------------------------------
 # File loading
 # ---------------------------------------------------------------------------
 
@@ -25,7 +58,11 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
 
     Celery workers do not have Flask session context, so multi-dataset HDF5
     files must carry ``selected_keys`` in the tuple for background tasks.
+
+    The path is confined to the upload folder here so every ``read_file`` fed
+    from a session value passes through the path-traversal barrier.
     """
+    file_path = confine_to_upload_folder(file_path)
     if file_type == ".h5":
         if selected_keys is None:
             try:
