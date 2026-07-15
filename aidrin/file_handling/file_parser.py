@@ -71,6 +71,29 @@ def _frame_cache_path(file_path):
     return f"{file_path}.{st.st_size}-{st.st_mtime_ns}{_FRAME_CACHE_SUFFIX}"
 
 
+def clear_frame_cache(file_path):
+    """Best-effort removal of the on-disk Feather cache sidecar for ``file_path``.
+
+    The web app reaps its cache sidecars via the ``UPLOAD_FOLDER`` prune task
+    (see ``worker.tasks.prune_upload_folder``), but CLI invocations read files
+    from arbitrary, unmanaged locations on disk with nothing to sweep them
+    later. Callers that own a single, short-lived invocation (e.g. the CLI's
+    ``main()``) should call this once after the run so the sidecar doesn't
+    linger next to the source file. Safe to call even when no cache was
+    written (unsupported type, disabled cache, or write failure).
+    """
+    if not file_path or not os.path.exists(file_path):
+        return
+    try:
+        cache_path = _frame_cache_path(file_path)
+    except OSError:
+        return
+    try:
+        os.remove(cache_path)
+    except OSError:
+        pass
+
+
 def _write_frame_cache(cache_path, df):
     """Best-effort atomic Feather write of ``df`` to ``cache_path``.
 
