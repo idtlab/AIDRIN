@@ -109,6 +109,12 @@ def run_aidrin_metric(
     sensitive_attribute_column: str | None = None,
     epsilon: float | None = None,
     distance_metric: str | None = None,
+    required_columns: str | None = None,
+    threshold: float | None = None,
+    frequency: str | None = None,
+    timestamp_column: str | None = None,
+    batch_column: str | None = None,
+    target_columns: str | None = None,
 ) -> str:
     """
     Run a single AIDRIN built-in metric against a dataset.
@@ -136,6 +142,14 @@ def run_aidrin_metric(
         sensitive_attribute_column: Sensitive attribute column (statistical_rates).
         epsilon: Epsilon value for differential_privacy.
         distance_metric: Distance metric override (class_imbalance).
+        required_columns: Comma-separated required columns (row_level_completeness).
+        threshold: Coverage threshold in [0, 1] (feature_coverage_ratio, default 0.9).
+        frequency: Interval frequency for temporal_completeness (default "D").
+            One of: min (minute), h (hourly), D (daily), W (weekly),
+            ME (month-end), QE (quarter-end), YE (year-end).
+        timestamp_column: Datetime column (temporal_completeness).
+        batch_column: Batch/partition column (null_count_trend).
+        target_columns: Comma-separated columns to count nulls in (null_count_trend, optional).
     """
     kwargs: dict[str, Any] = {
         k: v
@@ -157,6 +171,12 @@ def run_aidrin_metric(
             ("sensitive_attribute_column", sensitive_attribute_column),
             ("epsilon", epsilon),
             ("distance_metric", distance_metric),
+            ("required_columns", required_columns),
+            ("threshold", threshold),
+            ("frequency", frequency),
+            ("timestamp_column", timestamp_column),
+            ("batch_column", batch_column),
+            ("target_columns", target_columns),
         ]
         if v is not None
     }

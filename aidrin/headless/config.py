@@ -32,6 +32,12 @@ class HeadlessConfig:
     num_columns: Optional[List[str]] = field(default_factory=list)
     y_true_column: Optional[str] = None
     sensitive_attribute_column: Optional[str] = None
+    required_columns: Optional[List[str]] = field(default_factory=list)
+    threshold: Optional[float] = None
+    frequency: Optional[str] = None
+    timestamp_column: Optional[str] = None
+    batch_column: Optional[str] = None
+    target_columns: Optional[List[str]] = field(default_factory=list)
     save_images: Optional[bool] = None
     image_dir: Optional[str] = None
 
@@ -51,6 +57,10 @@ class HeadlessConfig:
             "eval-columns": "eval_columns",
             "id-column": "id_column",
             "distance-metric": "distance_metric",
+            "required-columns": "required_columns",
+            "timestamp-column": "timestamp_column",
+            "batch-column": "batch_column",
+            "target-columns": "target_columns",
             "file-path": "file_path",
             "file-type": "file_type",
             "file-name": "file_name",
@@ -75,6 +85,8 @@ class HeadlessConfig:
             "eval_columns",
             "cat_columns",
             "num_columns",
+            "required_columns",
+            "target_columns",
         ):
             if key in normalized:
                 normalized[key] = _normalize_list(normalized[key])

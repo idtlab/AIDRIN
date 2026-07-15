@@ -254,6 +254,12 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "num_columns": _parse_list(getattr(args, "num_columns", None)),
         "y_true_column": getattr(args, "y_true_column", None),
         "sensitive_attribute_column": getattr(args, "sensitive_attribute_column", None),
+        "required_columns": _parse_list(getattr(args, "required_columns", None)),
+        "threshold": getattr(args, "threshold", None),
+        "frequency": getattr(args, "frequency", None),
+        "timestamp_column": getattr(args, "timestamp_column", None),
+        "batch_column": getattr(args, "batch_column", None),
+        "target_columns": _parse_list(getattr(args, "target_columns", None)),
         "rules": parsed_rules,
         "rules_json": rules_json,
         "max_outliers": getattr(args, "max_outliers", 100),
@@ -331,6 +337,26 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
             )
         elif arg == "sensitive-attribute-column":
             parser.add_argument("sensitive_attribute_column", help="Sensitive attribute column", metavar="sensitive-attribute-column")
+        elif arg == "required-columns":
+            parser.add_argument("--required-columns", dest="required_columns", default=None,
+                                help="Comma-separated required columns (rows missing any are incomplete)")
+        elif arg == "threshold":
+            parser.add_argument("--threshold", dest="threshold", type=float, default=None,
+                                help="Coverage threshold in [0, 1] (default 0.9)")
+        elif arg == "frequency":
+            parser.add_argument("--frequency", dest="frequency", default=None,
+                                choices=["ms", "s", "min", "h", "D", "W", "ME", "QE", "YE"],
+                                help='Interval frequency (default "D"): '
+                                     'ms, s, min, h, D, W, ME, QE, YE')
+        elif arg == "timestamp-column":
+            parser.add_argument("--timestamp-column", dest="timestamp_column", default=None,
+                                help="Datetime column name")
+        elif arg == "batch-column":
+            parser.add_argument("--batch-column", dest="batch_column", default=None,
+                                help="Column that groups rows into batches")
+        elif arg == "target-columns":
+            parser.add_argument("--target-columns", dest="target_columns", default=None,
+                                help="Comma-separated columns to count nulls in (optional)")
 
 
 def _agentic_build_index(args: argparse.Namespace) -> None:
