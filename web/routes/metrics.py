@@ -21,7 +21,7 @@ from aidrin.structured_data_metrics.class_imbalance import (
     class_distribution_plot,
 )
 from aidrin.structured_data_metrics.completeness import completeness
-from aidrin.structured_data_metrics.custom_outliers import custom_outliers
+from aidrin.structured_data_metrics.custom_outliers import calculate_custom_outliers
 from aidrin.structured_data_metrics.conditional_demo_disp import (
     conditional_demographic_disparity,
 )
@@ -248,7 +248,14 @@ def data_quality():
                         max_export_rows = request.form.get("max_export_rows", 10000)
                         try:
                             with tracer.start_as_current_span("metric.custom_outliers"):
-                                custom_dict = custom_outliers(
+                                # Call the plain function, not the @shared_task
+                                # wrapper: invoking the bound task synchronously
+                                # confuses CodeQL's argument mapping (it aligns
+                                # ``rules`` with the ``file_info`` parameter
+                                # because it can't see Celery's injected
+                                # ``self``), yielding false-positive
+                                # py/path-injection alerts in file_parser.
+                                custom_dict = calculate_custom_outliers(
                                     file_info,
                                     rules,
                                     max_outliers,
