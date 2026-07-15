@@ -54,6 +54,7 @@ from aidrin.structured_data_metrics.representation_rate import (
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 from web.routes.utils import (
     build_file_info,
+    confine_to_upload_folder,
     ensure_json_serializable,
     format_dict_values,
     generate_metric_cache_key,
@@ -74,7 +75,7 @@ METRIC_CELERY_TIMEOUT = 120
 
 @metrics_bp.route("/custom-outlier-targets", methods=["GET", "POST"])
 def custom_outlier_targets():
-    file_path = session.get("uploaded_file_path")
+    file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
     if not file_path:
