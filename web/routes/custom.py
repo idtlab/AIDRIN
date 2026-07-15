@@ -19,7 +19,12 @@ from flask import (
     url_for,
 )
 from aidrin.file_handling.file_parser import read_file
-from web.routes.utils import ensure_json_serializable, store_result, get_result_or_default
+from web.routes.utils import (
+    confine_to_upload_folder,
+    ensure_json_serializable,
+    store_result,
+    get_result_or_default,
+)
 
 custom_bp = Blueprint("custom", __name__)
 
@@ -68,7 +73,7 @@ class CustomDR(BaseDRAgent):
 @custom_bp.route("/custom-metrics", methods=["GET", "POST"])
 def custom_metrics():
     final_dict = {}
-    data_file_path = session.get("uploaded_file_path")
+    data_file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
     data_file_name = session.get("uploaded_file_name")
     data_file_type = session.get("uploaded_file_type")
     file_info = (data_file_path, data_file_name, data_file_type)
