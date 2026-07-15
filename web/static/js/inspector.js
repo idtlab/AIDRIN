@@ -1912,6 +1912,55 @@ function parseCustomOutlierRulesJson(text) {
   return rules;
 }
 
+function validateCustomOutlierRulesFile(rules) {
+  const seenIds = new Set();
+  const seenKeys = new Map();
+  for (const [index, rule] of rules.entries()) {
+    if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+      return `Rule ${index + 1} must be an object.`;
+    }
+    const ruleId = String(rule.id ?? "").trim();
+    if (!ruleId) return `Rule ${index + 1} requires a non-empty id.`;
+    if (seenIds.has(ruleId))
+      return `Duplicate custom outlier rule id: ${ruleId}.`;
+    seenIds.add(ruleId);
+
+    const ruleKey = ruleId
+      .replace(/[^A-Za-z0-9_.-]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    if (seenKeys.has(ruleKey)) {
+      return `Custom outlier rule ids resolve to the same output key: ${seenKeys.get(ruleKey)} and ${ruleId}.`;
+    }
+    seenKeys.set(ruleKey, ruleId);
+
+    const ruleName = rule.name || ruleId;
+    if (!String(rule.target ?? "").trim())
+      return `${ruleName} requires a target.`;
+    if (
+      !["column", "hdf5_dataset"].includes(
+        String(rule.target_type ?? "").trim(),
+      )
+    ) {
+      return `${ruleName} has an unsupported target type.`;
+    }
+    if (
+      [
+        "criteria_type",
+        "min",
+        "max",
+        "pattern",
+        "min_inclusive",
+        "max_inclusive",
+      ].some((field) => field in rule)
+    ) {
+      return `${ruleName} must use criteria tree syntax.`;
+    }
+    const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
+    if (error) return error;
+  }
+  return null;
+}
+
 async function resolveCustomOutlierRules() {
   if (customOutlierRuleSource() === "manual") {
     const rules = serializeCustomOutlierRules();
@@ -1927,6 +1976,8 @@ async function resolveCustomOutlierRules() {
 
   try {
     const rules = parseCustomOutlierRulesJson(await file.text());
+    const error = validateCustomOutlierRulesFile(rules);
+    if (error) throw new Error(error);
     clearCustomOutlierFileError();
     return rules;
   } catch (error) {
@@ -2012,7 +2063,10 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
   if (!criteria || typeof criteria !== "object") {
     return `${ruleName} requires criteria.`;
   }
-  if (criteria.op === "and" || criteria.op === "or") {
+  const op = String(criteria.op || "")
+    .trim()
+    .toLowerCase();
+  if (op === "and" || op === "or") {
     if (
       !Array.isArray(criteria.conditions) ||
       criteria.conditions.length === 0
@@ -2025,21 +2079,29 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
     }
     return null;
   }
-  if (criteria.op === "not") {
+  if (op === "not") {
     if (!criteria.condition) {
       return `${ruleName} requires a condition for NOT.`;
     }
     return validateCustomOutlierCriteria(criteria.condition, ruleName);
   }
+  if (op) return `${ruleName} has an unsupported operator: ${op}.`;
   if (criteria.type === "range") {
-    const hasMin = criteria.min !== undefined && criteria.min !== "";
-    const hasMax = criteria.max !== undefined && criteria.max !== "";
+    const hasMin =
+      criteria.min !== undefined &&
+      criteria.min !== null &&
+      criteria.min !== "";
+    const hasMax =
+      criteria.max !== undefined &&
+      criteria.max !== null &&
+      criteria.max !== "";
     if (!hasMin && !hasMax) {
       return `${ruleName} range condition requires min or max.`;
     }
     for (const field of ["min", "max"]) {
       if (
         criteria[field] !== undefined &&
+        criteria[field] !== null &&
         criteria[field] !== "" &&
         !Number.isFinite(Number(criteria[field]))
       ) {

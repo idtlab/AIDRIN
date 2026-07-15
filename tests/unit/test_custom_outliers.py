@@ -437,6 +437,27 @@ def test_invalid_regex_raises_validation_error():
         _clean(fi[0])
 
 
+@pytest.mark.parametrize(
+    ("criteria", "message"),
+    [
+        ({"op": "xor", "conditions": []}, "unsupported operator"),
+        ({"type": "contains"}, "unsupported condition type"),
+    ],
+)
+def test_unsupported_criteria_are_rejected(criteria, message):
+    fi = _write_csv(pd.DataFrame({"value": [1]}))
+    try:
+        with pytest.raises(ValueError, match=message):
+            calculate_custom_outliers(fi, [{
+                "id": "unsupported",
+                "target": "value",
+                "target_type": "column",
+                "criteria": criteria,
+            }])
+    finally:
+        _clean(fi[0])
+
+
 def test_missing_target_is_reported_as_rule_error():
     fi = _write_csv(pd.DataFrame({"a": [1]}))
     try:

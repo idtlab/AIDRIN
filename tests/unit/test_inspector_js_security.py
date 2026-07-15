@@ -91,15 +91,20 @@ def _parse_rules_file_in_browser(text):
     source = INSPECTOR_JS.read_text()
     start = source.index("function parseCustomOutlierRulesJson(text)")
     end = source.index("\n\nasync function resolveCustomOutlierRules()", start)
-    parser = source[start:end]
-    script = f"""{parser}
+    parser_and_validator = source[start:end]
+    criteria_start = source.index("function validateCustomOutlierCriteria(criteria, ruleName)")
+    criteria_end = source.index("\n\nfunction showCustomOutlierValidationError", criteria_start)
+    criteria_validator = source[criteria_start:criteria_end]
+    script = f"""{parser_and_validator}
+{criteria_validator}
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {{ input += chunk; }});
 process.stdin.on("end", () => {{
   try {{
-    parseCustomOutlierRulesJson(input);
-    process.stdout.write(JSON.stringify({{ ok: true }}));
+    const rules = parseCustomOutlierRulesJson(input);
+    const error = validateCustomOutlierRulesFile(rules);
+    process.stdout.write(JSON.stringify(error ? {{ ok: false, error }} : {{ ok: true }}));
   }} catch (error) {{
     process.stdout.write(JSON.stringify({{ ok: false, error: error.message }}));
   }}
@@ -118,10 +123,14 @@ process.stdin.on("end", () => {{
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the frontend formatter")
 def test_custom_outlier_json_file_parser_corpus():
     cases = [
-        ('[{"id":"valid-age"}]', True, None),
+        ('[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":18}}]', True, None),
         ("{", False, "valid JSON"),
         ("{}", False, "JSON array"),
         ("[]", False, "at least one rule"),
+        ('[{"id":"unknown-op","target":"age","target_type":"column","criteria":{"op":"xor","conditions":[]}}]', False, "unsupported operator"),
+        ('[{"id":"unknown-type","target":"age","target_type":"column","criteria":{"type":"contains"}}]', False, "unsupported condition type"),
+        ('[{"id":"missing-target","target_type":"column","criteria":{"type":"regex","pattern":".*"}}]', False, "requires a target"),
+        ('[{"id":"bad-bound","target":"age","target_type":"column","criteria":{"type":"range","min":"NaN"}}]', False, "finite number"),
     ]
     for text, expected_ok, expected_error in cases:
         result = _parse_rules_file_in_browser(text)
