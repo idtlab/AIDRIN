@@ -9,7 +9,7 @@ from web import create_app
 
 
 @pytest.fixture
-def app():
+def app(tmp_path):
     """Create a new Flask app instance for testing."""
     app = create_app()
     app.config.update(TESTING=True)
@@ -17,6 +17,21 @@ def app():
     # Run Celery tasks eagerly (synchronously) so no Redis is required
     app.config["CELERY"]["task_always_eager"] = True
     app.config["CELERY"]["task_eager_propagates"] = True
+
+    # Routes read these paths from current_app.config at request time, so
+    # redirecting them here keeps tests from writing real files into the
+    # live project folders (aidrin/custom_metrics/, data/uploads/).
+    upload_folder = tmp_path / "uploads"
+    upload_folder.mkdir()
+    app.config["UPLOAD_FOLDER"] = str(upload_folder)
+
+    custom_metrics_folder = tmp_path / "custom_metrics"
+    custom_metrics_folder.mkdir()
+    app.config["CUSTOM_METRICS_FOLDER"] = str(custom_metrics_folder)
+
+    remedy_folder = custom_metrics_folder / "remedy_data"
+    remedy_folder.mkdir()
+    app.config["REMEDY_FOLDER"] = str(remedy_folder)
 
     return app
 
