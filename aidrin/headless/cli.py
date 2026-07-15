@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import List, Optional
 import os
 
+from aidrin.file_handling.file_parser import clear_frame_cache
+
 from .api import (
     METRIC_REGISTRY,
     list_available_metrics,
@@ -552,6 +554,13 @@ def main() -> None:
             argv = ["run", metric_key.replace("_", "-")] + argv[1:]
     args = parser.parse_args(argv)
 
+    # Cache sidecar cleanup: unlike the web app (whose uploads live in a
+    # managed, periodically-reaped folder), the CLI reads files from
+    # arbitrary locations on disk, so nothing else will clean up the
+    # ``.aidrin.feather`` cache written by read_file(). Track the dataset
+    # path(s) touched by this invocation and sweep them in `finally` below.
+    cleanup_path = getattr(args, "file_path", None)
+
     try:
         if args.command == "add-custom-module":
             target_dir = args.custom_dir or os.getcwd()
@@ -634,6 +643,7 @@ def main() -> None:
 
         if args.command == "batch":
             config = HeadlessConfig.from_file(args.config_path)
+            cleanup_path = config.file_path
             result = run_batch_metrics(
                 config,
                 verbose=args.verbose,
@@ -676,6 +686,9 @@ def main() -> None:
     except Exception as exc:
         sys.stderr.write(f"Error: {exc}\n")
         sys.exit(1)
+    finally:
+        if cleanup_path:
+            clear_frame_cache(cleanup_path)
 
 
 if __name__ == "__main__":
