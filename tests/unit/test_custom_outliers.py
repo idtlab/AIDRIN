@@ -56,6 +56,22 @@ def _write_npz(values):
     return (tmp.name, os.path.basename(tmp.name), ".npz")
 
 
+def _write_column_fixture(file_type):
+    data = {"alpha": [0, 1], "beta": [0, 3]}
+    if file_type == ".csv":
+        return _write_csv(pd.DataFrame(data))
+    if file_type == ".xls, .xlsb, .xlsx, .xlsm":
+        return _write_dataframe(pd.DataFrame(data), ".xlsx", file_type)
+    if file_type == ".parquet":
+        return _write_dataframe(pd.DataFrame(data), ".parquet", file_type)
+    if file_type == ".json":
+        return _write_json_rows([dict(zip(data, values)) for values in zip(*data.values())])
+    tmp = tempfile.NamedTemporaryFile(suffix=".npz", delete=False)
+    tmp.close()
+    np.savez(tmp.name, **{name: np.array(values) for name, values in data.items()})
+    return (tmp.name, os.path.basename(tmp.name), ".npz")
+
+
 def _clean(path):
     try:
         os.unlink(path)
@@ -590,6 +606,82 @@ def test_hdf5_range_rule_counts_fill_values_as_missing(hdf5_file_info):
     assert summary["outlier"] == 2
     reasons = [item["reason"] for item in result["Outlier preview"]["waveform-x-range"]]
     assert reasons == ["missing", "above_max"]
+
+
+def test_regex_target_match_expands_to_each_hdf5_dataset(hdf5_file_info):
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule(
+            "waveform-range",
+            r"^/S_01_01/[XY]$",
+            target_type="hdf5_dataset",
+            min_value=0,
+            max_value=2,
+            target_match="regex",
+        )
+    ])
+
+    summaries = result["Rule summaries"]
+    assert len(summaries) == 2
+    by_target = {summary["target"]: summary for summary in summaries.values()}
+    assert set(by_target) == {"/S_01_01/X", "/S_01_01/Y"}
+    assert by_target["/S_01_01/X"]["missing"] == 1
+    assert by_target["/S_01_01/X"]["outlier"] == 2
+    assert by_target["/S_01_01/Y"]["outlier"] == 1
+    assert all(summary["target_match"] == "regex" for summary in summaries.values())
+    assert all(summary["target_pattern"] == r"^/S_01_01/[XY]$" for summary in summaries.values())
+
+
+def test_regex_target_match_reports_zero_matches(hdf5_file_info):
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule(
+            "missing-waveform",
+            r"^/S_99_99/X$",
+            target_type="hdf5_dataset",
+            min_value=0,
+            target_match="regex",
+        )
+    ])
+
+    error = result["Errors"][0]["error"]
+    assert error == "No targets matched regex: ^/S_99_99/X$. Check the pattern and target type against the Target list."
+
+
+@pytest.mark.parametrize("file_type", [".csv", ".xls, .xlsb, .xlsx, .xlsm", ".parquet", ".json", ".npz"])
+def test_regex_target_match_expands_across_tabular_file_types(file_type, monkeypatch):
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "0")
+    fi = _write_column_fixture(file_type)
+    try:
+        result = calculate_custom_outliers(fi, [
+            _range_rule("tabular-range", r"^(alpha|beta)$", min_value=0, max_value=1, target_match="regex")
+        ])
+    finally:
+        _clean(fi[0])
+
+    summaries = result["Rule summaries"]
+    by_target = {summary["target"]: summary for summary in summaries.values()}
+    assert set(by_target) == {"alpha", "beta"}
+    assert by_target["alpha"]["outlier"] == 0
+    assert by_target["beta"]["outlier"] == 1
+
+
+@pytest.mark.parametrize(
+    ("target_match", "target", "message"),
+    [("glob", "value", "unsupported target_match"), ("regex", "[", "invalid target regex")],
+)
+def test_invalid_target_match_is_rejected(target_match, target, message):
+    fi = _write_csv(pd.DataFrame({"value": [1]}))
+    try:
+        with pytest.raises(ValueError, match=message):
+            calculate_custom_outliers(fi, [
+                _range_rule(
+                    "invalid-target-match",
+                    target,
+                    min_value=0,
+                    target_match=target_match,
+                )
+            ])
+    finally:
+        _clean(fi[0])
 
 
 def test_hdf5_multidimensional_locations(hdf5_file_info):
