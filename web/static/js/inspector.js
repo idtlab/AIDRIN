@@ -1711,29 +1711,35 @@ function addCustomOutlierRuleRow() {
     "custom-outlier-rule rounded-lg border border-gray-200 dark:border-gray-700 p-2";
   row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
   row.innerHTML = `
-    <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+    <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto_auto]">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
         <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
       </label>
-      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
-        <span class="flex items-center justify-between gap-2">Target
+      <div class="text-xs font-medium text-gray-700 dark:text-gray-300">
+        <span>Target</span>
+        <div class="mt-1 flex items-center gap-2">
           <select data-field="target_match" aria-label="Target match mode"
-                  class="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-            <option value="exact">Exact target</option>
-            <option value="regex">Target regex</option>
+                  class="w-36 shrink-0 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+            <option value="exact">Exact name</option>
+            <option value="regex">Regular expression</option>
           </select>
-        </span>
-        <select data-field="target"
-                class="custom-outlier-target mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
-        <input type="text" data-field="target_regex" placeholder="^/S_[0-9]+_[0-9]+/X$"
-               class="hidden mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
-        <select data-field="target_type" aria-label="Regex target type"
-                class="hidden mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-          <option value="column">Column</option>
-          <option value="hdf5_dataset">HDF5 dataset</option>
-        </select>
-      </label>
+          <div data-section="target-exact" class="min-w-0 flex-1">
+            <select data-field="target" aria-label="Exact target"
+                  class="custom-outlier-target w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+          </div>
+          <div data-section="target-regex" class="hidden min-w-0 flex-1">
+            <input type="text" data-field="target_regex" placeholder="Target pattern, e.g. ^/S_[0-9]+_[0-9]+/X$" aria-label="Target pattern (regular expression)"
+                   title="Matches complete target names in this file."
+                   class="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+          </div>
+          <label data-section="target-type" class="hidden w-36 shrink-0">
+            <span class="sr-only">Match targets of type</span>
+            <select data-field="target_type" aria-label="Match targets of type"
+                    class="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+          </label>
+        </div>
+      </div>
       <label class="flex items-center gap-2 pt-5 whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300">
         <input type="checkbox" data-field="allow_missing" class="rounded border-gray-300" />
         Allow missing values
@@ -1859,20 +1865,46 @@ function updateCustomOutlierTargetOptions(scope) {
     });
     if (selected) select.value = selected;
   });
+  root.querySelectorAll('[data-field="target_type"]').forEach((select) => {
+    const selected = select.value;
+    const targetTypes = [
+      ...new Set(customOutlierTargets.map((target) => target.target_type)),
+    ];
+    select.innerHTML = "";
+    targetTypes.forEach((targetType) => {
+      const option = document.createElement("option");
+      option.value = targetType;
+      option.textContent =
+        targetType === "hdf5_dataset" ? "HDF5 datasets" : "Columns";
+      select.appendChild(option);
+    });
+    if (selected && targetTypes.includes(selected)) select.value = selected;
+  });
 }
 
 function updateCustomOutlierTargetMatch(row) {
   const isRegex =
     row.querySelector('[data-field="target_match"]')?.value === "regex";
   row
-    .querySelector('[data-field="target"]')
+    .querySelector('[data-section="target-exact"]')
     ?.classList.toggle("hidden", isRegex);
   row
-    .querySelector('[data-field="target_regex"]')
+    .querySelector('[data-section="target-regex"]')
     ?.classList.toggle("hidden", !isRegex);
+  const targetTypes = [
+    ...new Set(customOutlierTargets.map((target) => target.target_type)),
+  ];
   row
-    .querySelector('[data-field="target_type"]')
-    ?.classList.toggle("hidden", !isRegex);
+    .querySelector('[data-section="target-type"]')
+    ?.classList.toggle("hidden", !isRegex || targetTypes.length <= 1);
+}
+
+function customOutlierRegexTargetType(row) {
+  const targetTypes = [
+    ...new Set(customOutlierTargets.map((target) => target.target_type)),
+  ];
+  if (targetTypes.length === 1) return targetTypes[0];
+  return row.querySelector('[data-field="target_type"]')?.value || "column";
 }
 
 function serializeCustomOutlierRules() {
@@ -1894,7 +1926,7 @@ function serializeCustomOutlierRules() {
       target,
       target_type:
         targetMatch === "regex"
-          ? row.querySelector('[data-field="target_type"]')?.value || "column"
+          ? customOutlierRegexTargetType(row)
           : targetSelect?.selectedOptions[0]?.dataset.targetType || "column",
       allow_missing: Boolean(
         row.querySelector('[data-field="allow_missing"]')?.checked,
