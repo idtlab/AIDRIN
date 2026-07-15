@@ -17,17 +17,21 @@ from .runners import (
     run_differential_privacy,
     run_duplicity,
     run_entropy_risk,
+    run_feature_coverage_ratio,
     run_feature_relevance,
     run_hipaa_compliance,
     run_k_anonymity,
     run_l_diversity,
     run_multiple_attribute_risk,
+    run_null_count_trend,
     run_outliers,
     run_outliers_custom,
     run_representation_rate,
+    run_row_level_completeness,
     run_single_attribute_risk,
     run_statistical_rates,
     run_t_closeness,
+    run_temporal_completeness,
 )
 
 
@@ -49,6 +53,30 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Outlier proportions for numerical columns.",
         "runner": run_outliers,
         "required_args": [],
+    },
+    "row_level_completeness": {
+        "category": "data-quality",
+        "description": "Percentage of rows where every required column is non-null.",
+        "runner": run_row_level_completeness,
+        "required_args": ["required-columns"],
+    },
+    "feature_coverage_ratio": {
+        "category": "data-quality",
+        "description": "Percentage of features whose non-null rate meets a threshold.",
+        "runner": run_feature_coverage_ratio,
+        "required_args": ["threshold"],
+    },
+    "temporal_completeness": {
+        "category": "data-quality",
+        "description": "Percentage of expected time intervals present in the data.",
+        "runner": run_temporal_completeness,
+        "required_args": ["timestamp-column", "frequency"],
+    },
+    "null_count_trend": {
+        "category": "data-quality",
+        "description": "Null counts grouped by a batch column, to spot quality regressions.",
+        "runner": run_null_count_trend,
+        "required_args": ["batch-column", "target-columns"],
     },
     "outliers_custom": {
         "category": "data-quality",
@@ -431,6 +459,40 @@ def run_metric(
         _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
         return _sanitize(result)
 
+    if metric_key == "row_level_completeness":
+        required_columns = _normalize_list(kwargs.get("required_columns"))
+        if not required_columns:
+            raise ValueError("required_columns is required for row_level_completeness")
+        result = metric["runner"](file_path, file_type, file_name, required_columns)
+        return _finalize(result)
+
+    if metric_key == "feature_coverage_ratio":
+        threshold = kwargs.get("threshold")
+        if threshold is None:
+            threshold = 0.9
+        result = metric["runner"](file_path, file_type, file_name, float(threshold))
+        return _finalize(result)
+
+    if metric_key == "temporal_completeness":
+        timestamp_column = kwargs.get("timestamp_column")
+        if not timestamp_column:
+            raise ValueError("timestamp_column is required for temporal_completeness")
+        frequency = kwargs.get("frequency") or "D"
+        result = metric["runner"](
+            file_path, file_type, file_name, timestamp_column, frequency
+        )
+        return _finalize(result)
+
+    if metric_key == "null_count_trend":
+        batch_column = kwargs.get("batch_column")
+        if not batch_column:
+            raise ValueError("batch_column is required for null_count_trend")
+        target_columns = _normalize_list(kwargs.get("target_columns")) or []
+        result = metric["runner"](
+            file_path, file_type, file_name, batch_column, target_columns
+        )
+        return _finalize(result)
+
     if metric_key == "correlations":
         columns = _normalize_list(kwargs.get("columns"))
         if not columns:
@@ -578,6 +640,12 @@ def run_batch_metrics(
         "num_columns": config_obj.num_columns,
         "y_true_column": config_obj.y_true_column,
         "sensitive_attribute_column": config_obj.sensitive_attribute_column,
+        "required_columns": config_obj.required_columns,
+        "threshold": config_obj.threshold,
+        "frequency": config_obj.frequency,
+        "timestamp_column": config_obj.timestamp_column,
+        "batch_column": config_obj.batch_column,
+        "target_columns": config_obj.target_columns,
         "save_images": bool(config_obj.save_images) if config_obj.save_images is not None else True,
         "image_dir": config_obj.image_dir,
         "verbose": verbose,

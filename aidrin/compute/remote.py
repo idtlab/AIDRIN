@@ -40,6 +40,22 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
                 "0 indicating low completeness."
             )
             result["Completeness"] = r
+        if "row_level_completeness" in selected:
+            result["Row-Level Completeness"] = aidrin.calculate_row_level_completeness(
+                params.get("required_columns", []), file_info
+            )
+        if "feature_coverage_ratio" in selected:
+            result["Feature Coverage Ratio"] = aidrin.calculate_feature_coverage_ratio(
+                params.get("threshold", 0.9), file_info
+            )
+        if "temporal_completeness" in selected:
+            result["Temporal Completeness"] = aidrin.calculate_temporal_completeness(
+                params.get("timestamp_column", ""), params.get("frequency", "D"), file_info
+            )
+        if "null_count_trend" in selected:
+            result["Null Count Trend"] = aidrin.calculate_null_count_trend(
+                params.get("batch_column", ""), params.get("target_columns", []), file_info
+            )
         if "outliers" in selected:
             r = aidrin.calculate_outliers(file_info)
             r["Description"] = (
@@ -231,6 +247,18 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         "completeness": lambda: aidrin.calculate_completeness(file_info),
         "outliers": lambda: aidrin.calculate_outliers(file_info),
         "duplicates": lambda: aidrin.calculate_duplicates(file_info),
+        "row_level_completeness": lambda: aidrin.calculate_row_level_completeness(
+            params.get("required_columns", []), file_info
+        ),
+        "feature_coverage_ratio": lambda: aidrin.calculate_feature_coverage_ratio(
+            params.get("threshold", 0.9), file_info
+        ),
+        "temporal_completeness": lambda: aidrin.calculate_temporal_completeness(
+            params.get("timestamp_column", ""), params.get("frequency", "D"), file_info
+        ),
+        "null_count_trend": lambda: aidrin.calculate_null_count_trend(
+            params.get("batch_column", ""), params.get("target_columns", []), file_info
+        ),
         "correlations": lambda: aidrin.calculate_correlations(
             params.get("columns", []), file_info
         ),

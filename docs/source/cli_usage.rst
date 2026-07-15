@@ -109,6 +109,13 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
+   # Data quality (completeness family — arguments are passed as named --flags)
+   aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
+   aidrin run feature-coverage-ratio /path/to/sample_dataset.csv --threshold 0.9
+   aidrin run null-count-trend /path/to/sample_dataset.csv --batch-column zipcode
+   # temporal-completeness needs a datetime column; --frequency is one of: ms, s, min, h, D, W, ME, QE, YE (default D)
+   aidrin run temporal-completeness /path/to/timeseries.csv --timestamp-column timestamp --frequency D
+
    # Custom criteria outliers with simple valid-value rule shorthand
    aidrin run outliers-custom /path/to/sample_dataset.csv \
      --rule "score >= 0 && score <= 1"
@@ -249,6 +256,18 @@ Available Metrics
    * - Data Quality
      - ``outliers``
      - —
+   * - Data Quality
+     - ``row-level-completeness``
+     - ``--required-columns``
+   * - Data Quality
+     - ``feature-coverage-ratio``
+     - ``--threshold`` (default ``0.9``)
+   * - Data Quality
+     - ``temporal-completeness``
+     - ``--timestamp-column``, ``--frequency`` (one of ``ms, s, min, h, D, W, ME, QE, YE``; default ``D``)
+   * - Data Quality
+     - ``null-count-trend``
+     - ``--batch-column``, ``--target-columns`` (optional)
    * - Data Quality
      - ``outliers-custom``
      - ``rules-json``
