@@ -56,7 +56,9 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert 'data-section="target-exact"' in source
     assert 'data-section="target-regex"' in source
     assert 'aria-label="Target pattern (regular expression)"' in source
-    assert 'md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto_auto]' in source
+    assert 'md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]' in source
+    assert 'class="absolute right-2 top-2' in source
+    assert 'aria-label="Remove rule"' in source
     assert "function customOutlierRegexTargetType(row)" in source
     assert "targetTypes.length <= 1" in source
     assert "range condition requires min or max" in source

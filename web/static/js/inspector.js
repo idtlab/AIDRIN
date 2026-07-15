@@ -1708,10 +1708,10 @@ function addCustomOutlierRuleRow() {
   customOutlierRuleCounter += 1;
   const row = document.createElement("div");
   row.className =
-    "custom-outlier-rule rounded-lg border border-gray-200 dark:border-gray-700 p-2";
+    "custom-outlier-rule relative rounded-lg border border-gray-200 dark:border-gray-700 p-2";
   row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
   row.innerHTML = `
-    <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto_auto]">
+    <div class="grid gap-2 pr-7 md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
         <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
@@ -1744,11 +1744,11 @@ function addCustomOutlierRuleRow() {
         <input type="checkbox" data-field="allow_missing" class="rounded border-gray-300" />
         Allow missing values
       </label>
-      <button type="button" data-action="remove"
-              class="self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
-        Remove
-      </button>
     </div>
+    <button type="button" data-action="remove" aria-label="Remove rule" title="Remove rule"
+            class="absolute right-2 top-2 px-2 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+      Remove
+    </button>
     <div data-section="criteria-tree" class="mt-2 rounded-lg bg-gray-50 p-2 dark:bg-gray-900/40">
       <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Valid when
