@@ -42,30 +42,17 @@ def compare_rep_rates(self: Task, rep_dict, rrr_dict):
             real_values.append(value2)
             dataset_values.append(value1)
 
-        # Calculate the total for each category
-        totals = [v1 + v2 for v1, v2 in zip(real_values, dataset_values)]
-
-        # Calculate the percentages for each stack
-        percentages1 = [(v1 / total) * 100 for v1, total in zip(real_values, totals)]
-        percentages2 = [(v2 / total) * 100 for v2, total in zip(dataset_values, totals)]
-
         fig, ax = plt.subplots(figsize=(8, 8))
         plt.subplots_adjust(left=0.2)
 
         # Create an array for the y-axis positions
         y = np.arange(len(categories))
 
-        # Plot the first stacked bars and annotate with percentages
-        bars1 = ax.barh(y, real_values, label="Real World", color="blue")
-        for i, bar, percentage in zip(y, bars1, percentages1):
-            bar.get_width()
+        # Plot the first stacked bars
+        ax.barh(y, real_values, label="Real World", color="blue")
 
-        # Plot the second stacked bars on top of the first ones and annotate with percentages
-        bars2 = ax.barh(
-            y, dataset_values, label="Dataset", color="red", left=real_values
-        )
-        for i, bar, percentage in zip(y, bars2, percentages2):
-            bar.get_width()
+        # Plot the second stacked bars on top of the first ones
+        ax.barh(y, dataset_values, label="Dataset", color="red", left=real_values)
 
         # Customize the y-axis labels
         ax.set_yticks(y)
