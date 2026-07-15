@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 import uuid
 
 import pandas as pd
@@ -22,7 +23,9 @@ from web.routes.utils import (
     clear_all_user_cache,
     confine_to_upload_folder,
     ensure_json_serializable,
+    generate_metric_cache_key,
     get_current_user_id,
+    is_metric_cache_valid,
     load_dataframe,
     summary_histograms,
 )
@@ -433,27 +436,41 @@ def summary_statistics():
         if not file_type:
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
+        selected = []
+        if file_type == ".h5":
+            selected = session.get("selected_keys") or []
+            if isinstance(selected, str):
+                selected = [key.strip() for key in selected.split(",") if key.strip()]
+
+        cache_key = generate_metric_cache_key(file_name, "summarystats", selected_keys=selected)
+        cached_entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
+        if cached_entry and is_metric_cache_valid(cached_entry):
+            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                "data": cached_entry["data"],
+                "timestamp": time.time(),
+                "expires_at": time.time() + (30 * 60),
+            }
+            return jsonify(cached_entry["data"])
+        if cached_entry:
+            current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+
         if file_type == ".h5":
             inv = hdf5Reader(file_path, file_upload_time_log).inventory()
-            if inv["type"] == "multi_dataset":
-                selected = session.get("selected_keys") or []
-                if isinstance(selected, str):
-                    selected = [key.strip() for key in selected.split(",") if key.strip()]
-                if not selected:
-                    return jsonify(
-                        ensure_json_serializable({
-                            "success": False,
-                            "needs_dataset_selection": True,
-                            "datasets": inv["datasets"],
-                            "groups": inv.get("groups", []),
-                            "current_checked_keys": selected,
-                            "message": (
-                                "This HDF5 file contains multiple datasets with "
-                                "different shapes. Select one or more compatible "
-                                "datasets (same length) to analyze."
-                            ),
-                        })
-                    ), 200
+            if inv["type"] == "multi_dataset" and not selected:
+                return jsonify(
+                    ensure_json_serializable({
+                        "success": False,
+                        "needs_dataset_selection": True,
+                        "datasets": inv["datasets"],
+                        "groups": inv.get("groups", []),
+                        "current_checked_keys": selected,
+                        "message": (
+                            "This HDF5 file contains multiple datasets with "
+                            "different shapes. Select one or more compatible "
+                            "datasets (same length) to analyze."
+                        ),
+                    })
+                ), 200
 
         file_info = (file_path, file_name, file_type)
         df, load_error = load_dataframe(file_info)
@@ -493,15 +510,8 @@ def summary_statistics():
                     new_key = old_key.replace("%", "th percentile")
                     v[new_key] = v.pop(old_key)
 
-        hdf5_multi_dataset = False
-        selected_dataset_keys = []
-        if file_type == ".h5":
-            selected = session.get("selected_keys") or []
-            if isinstance(selected, str):
-                selected = [key.strip() for key in selected.split(",") if key.strip()]
-            if selected:
-                hdf5_multi_dataset = True
-                selected_dataset_keys = selected
+        hdf5_multi_dataset = bool(selected)
+        selected_dataset_keys = selected
 
         categorical_summary = {}
         for col in categorical_columns:
@@ -530,6 +540,11 @@ def summary_statistics():
             "hdf5_multi_dataset": hdf5_multi_dataset,
             "selected_dataset_keys": selected_dataset_keys,
         })
+        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+            "data": response_data,
+            "timestamp": time.time(),
+            "expires_at": time.time() + (30 * 60),
+        }
         return jsonify(response_data)
     except Exception as e:
         file_upload_time_log.error("Error computing summary statistics: %s", e, exc_info=True)

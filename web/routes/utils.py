@@ -180,6 +180,10 @@ def generate_metric_cache_key(file_name, metric_type, **params):
         dist_metric = params.get("dist_metric", "EU")
         cache_parts.append(f"classimbalance:classes:{classes}:dist_metric:{dist_metric}")
 
+    elif metric_type == "summarystats":
+        selected_keys = params.get("selected_keys", [])
+        cache_parts.append(f"summarystats:keys:{', '.join(sorted(selected_keys))}")
+
     return "|".join(cache_parts)
 
 
