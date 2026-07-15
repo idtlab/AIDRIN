@@ -1,9 +1,5 @@
 """Shared fixtures for integration tests."""
 
-import io
-import os
-import tempfile
-
 import pytest
 from web import create_app
 
