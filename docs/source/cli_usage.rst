@@ -151,7 +151,10 @@ flagged as outliers. A rules file is a UTF-8 JSON array using the same rule
 objects accepted inline; see ``examples/custom_outlier_rules.json``. Supply
 exactly one rule source. Repeat ``--rule`` to add multiple simple column rules.
 The shorthand supports same-target conditions joined by ``&&``. Use inline JSON
-or a rules file for ``OR``, ``NOT``, nested criteria, or HDF5 targets. Use
+or a rules file for ``OR``, ``NOT``, nested criteria, HDF5 targets, or regex
+target matching. Set ``"target_match": "regex"`` to apply one rule to every
+target whose complete name matches ``target``; each resolved target has its own
+summary and preview rows. Use
 ``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
 or export rows.
 

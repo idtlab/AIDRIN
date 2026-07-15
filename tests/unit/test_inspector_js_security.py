@@ -51,6 +51,8 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert "await resolveCustomOutlierRules()" in source
     assert "if (!customOutlierRules) return;" in source
     assert "function validateCustomOutlierCriteria(criteria, ruleName)" in source
+    assert 'targetMatch === "regex"' in source
+    assert 'rule.target_match = "regex"' in source
     assert "range condition requires min or max" in source
     assert "requires a condition for NOT" in source
     assert "customOutlierLimitValue(formData.get(\"max_outliers\"), 100)" in source
@@ -131,6 +133,12 @@ def test_custom_outlier_json_file_parser_corpus():
         ('[{"id":"unknown-type","target":"age","target_type":"column","criteria":{"type":"contains"}}]', False, "unsupported condition type"),
         ('[{"id":"missing-target","target_type":"column","criteria":{"type":"regex","pattern":".*"}}]', False, "requires a target"),
         ('[{"id":"bad-bound","target":"age","target_type":"column","criteria":{"type":"range","min":"NaN"}}]', False, "finite number"),
+        ('[{"id":"regex-target","target":"^age$","target_match":"regex","target_type":"column","criteria":{"type":"range","min":18}}]', True, None),
+        (
+            '[{"id":"bad-target-match","target":"age","target_match":"glob","target_type":"column","criteria":{"type":"range","min":18}}]',
+            False,
+            "unsupported target match mode",
+        ),
     ]
     for text, expected_ok, expected_error in cases:
         result = _parse_rules_file_in_browser(text)

@@ -1716,9 +1716,23 @@ function addCustomOutlierRuleRow() {
         <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
       </label>
-      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Target
+      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
+        <span class="flex items-center justify-between gap-2">Target
+          <select data-field="target_match" aria-label="Target match mode"
+                  class="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+            <option value="exact">Exact target</option>
+            <option value="regex">Target regex</option>
+          </select>
+        </span>
         <select data-field="target"
                 class="custom-outlier-target mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+        <input type="text" data-field="target_regex" placeholder="^/S_[0-9]+_[0-9]+/X$"
+               class="hidden mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+        <select data-field="target_type" aria-label="Regex target type"
+                class="hidden mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+          <option value="column">Column</option>
+          <option value="hdf5_dataset">HDF5 dataset</option>
+        </select>
       </label>
       <label class="flex items-center gap-2 pt-5 whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300">
         <input type="checkbox" data-field="allow_missing" class="rounded border-gray-300" />
@@ -1760,11 +1774,15 @@ function addCustomOutlierRuleRow() {
       addCustomOutlierConditionRow(row);
       serializeCustomOutlierRules();
     });
+  row
+    .querySelector('[data-field="target_match"]')
+    .addEventListener("change", () => updateCustomOutlierTargetMatch(row));
   row.addEventListener("input", serializeCustomOutlierRules);
   row.addEventListener("change", serializeCustomOutlierRules);
 
   addCustomOutlierConditionRow(row);
   updateCustomOutlierTargetOptions(row);
+  updateCustomOutlierTargetMatch(row);
   serializeCustomOutlierRules();
 }
 
@@ -1843,24 +1861,47 @@ function updateCustomOutlierTargetOptions(scope) {
   });
 }
 
+function updateCustomOutlierTargetMatch(row) {
+  const isRegex =
+    row.querySelector('[data-field="target_match"]')?.value === "regex";
+  row
+    .querySelector('[data-field="target"]')
+    ?.classList.toggle("hidden", isRegex);
+  row
+    .querySelector('[data-field="target_regex"]')
+    ?.classList.toggle("hidden", !isRegex);
+  row
+    .querySelector('[data-field="target_type"]')
+    ?.classList.toggle("hidden", !isRegex);
+}
+
 function serializeCustomOutlierRules() {
   const rows = document.querySelectorAll(".custom-outlier-rule");
   const rules = [];
   rows.forEach((row, index) => {
     const targetSelect = row.querySelector('[data-field="target"]');
-    if (!targetSelect || !targetSelect.value) return;
+    const targetMatch =
+      row.querySelector('[data-field="target_match"]')?.value || "exact";
+    const target =
+      targetMatch === "regex"
+        ? row.querySelector('[data-field="target_regex"]')?.value.trim()
+        : targetSelect?.value;
+    if (!target) return;
     const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
     const rule = {
       id,
       name: row.querySelector('[data-field="name"]')?.value || id,
-      target: targetSelect.value,
+      target,
       target_type:
-        targetSelect.selectedOptions[0]?.dataset.targetType || "column",
+        targetMatch === "regex"
+          ? row.querySelector('[data-field="target_type"]')?.value || "column"
+          : targetSelect?.selectedOptions[0]?.dataset.targetType || "column",
       allow_missing: Boolean(
         row.querySelector('[data-field="allow_missing"]')?.checked,
       ),
       criteria: serializeCustomOutlierCriteria(row),
     };
+    if (targetMatch === "regex") rule.target_match = "regex";
     rules.push(rule);
   });
   const hidden = document.getElementById("custom-outlier-rules-json");
@@ -1936,6 +1977,12 @@ function validateCustomOutlierRulesFile(rules) {
     const ruleName = rule.name || ruleId;
     if (!String(rule.target ?? "").trim())
       return `${ruleName} requires a target.`;
+    const targetMatch = String(rule.target_match ?? "exact")
+      .trim()
+      .toLowerCase();
+    if (!["exact", "regex"].includes(targetMatch)) {
+      return `${ruleName} has an unsupported target match mode.`;
+    }
     if (
       !["column", "hdf5_dataset"].includes(
         String(rule.target_type ?? "").trim(),

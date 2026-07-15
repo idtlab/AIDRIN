@@ -208,7 +208,9 @@ def run_custom_outlier_check(
     """
     Run Custom Criteria Outliers against selected dataset targets.
     Rules are a JSON array using the same criteria-tree syntax as the web UI:
-    each rule has id, target, target_type, criteria, and optional name/allow_missing.
+    each rule has id, target, target_type, criteria, and optional name,
+    allow_missing, and target_match. Set target_match to regex to apply a rule
+    to every target whose complete name matches target.
     Criteria define expected valid values and support numeric ranges, regex
     patterns, and nested and/or/not operators. Values that do not satisfy the
     rule are flagged as outliers.
