@@ -20,6 +20,7 @@ from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
     clear_all_user_cache,
+    confine_to_upload_folder,
     ensure_json_serializable,
     get_current_user_id,
     load_dataframe,
@@ -52,6 +53,13 @@ def inspector():
             display_name = file.filename
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
             file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
+            # Defense in depth: confirm the destination stays inside the upload
+            # folder before writing, so a bypass of secure_filename can never
+            # steer the write to an arbitrary location.
+            file_path = confine_to_upload_folder(file_path)
+            if not file_path:
+                file_upload_time_log.error("Rejected unsafe upload path: %s", filename)
+                return redirect(url_for("core.inspector"))
             file.save(file_path)
 
             session["uploaded_file_name"] = display_name
@@ -246,7 +254,7 @@ def filter_file():
         else:
             keys_list = [str(keys)]
 
-        file_path = session.get("uploaded_file_path")
+        file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_type = session.get("uploaded_file_type")
         if file_path and file_type == ".h5" and len(keys_list) > 1:
             inv = hdf5Reader(file_path, file_upload_time_log).inventory()
@@ -416,7 +424,7 @@ def summary_statistics():
             return jsonify({"success": False, "message": "An internal error occurred"})
 
     try:
-        file_path = session.get("uploaded_file_path")
+        file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_name = session.get("uploaded_file_name")
         file_type = session.get("uploaded_file_type")
 
@@ -531,7 +539,7 @@ def summary_statistics():
 @core_bp.route("/feature-set", methods=["POST"])
 def extract_features():
     try:
-        file_path = session.get("uploaded_file_path")
+        file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_name = session.get("uploaded_file_name")
         file_type = session.get("uploaded_file_type")
 
