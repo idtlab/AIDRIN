@@ -19,11 +19,13 @@ from .runners import (
     run_entropy_risk,
     run_feature_coverage_ratio,
     run_feature_relevance,
+    run_hipaa_compliance,
     run_k_anonymity,
     run_l_diversity,
     run_multiple_attribute_risk,
     run_null_count_trend,
     run_outliers,
+    run_outliers_custom,
     run_representation_rate,
     run_row_level_completeness,
     run_single_attribute_risk,
@@ -75,6 +77,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Null counts grouped by a batch column, to spot quality regressions.",
         "runner": run_null_count_trend,
         "required_args": ["batch-column", "target-columns"],
+    },
+    "outliers_custom": {
+        "category": "data-quality",
+        "description": "Flags values that fail user-provided valid-value range, regex, and compound rules.",
+        "runner": run_outliers_custom,
+        "required_args": ["rules-json"],
     },
     "correlations": {
         "category": "impact-of-data-on-AI",
@@ -147,6 +155,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Differentially private noise statistics for selected columns.",
         "runner": run_differential_privacy,
         "required_args": ["columns", "epsilon"],
+    },
+    "hipaa_compliance": {
+        "category": "data-governance",
+        "description": "Scan columns for HIPAA-regulated PHI (SSN, email, phone, IP, URLs, medical IDs, postal codes).",
+        "runner": run_hipaa_compliance,
+        "required_args": ["columns"],
     },
 }
 
@@ -245,11 +259,12 @@ def list_available_metrics(category: Optional[str] = None) -> List[Dict[str, Any
 
 
 def get_metric_info(name: str) -> Dict[str, Any]:
-    metric = METRIC_REGISTRY.get(name)
+    metric_key = name.strip().lower().replace("-", "_")
+    metric = METRIC_REGISTRY.get(metric_key)
     if not metric:
         raise ValueError(f"Unknown metric: {name}")
     return {
-        "name": name,
+        "name": metric_key.replace("_", "-"),
         "category": metric["category"],
         "description": metric["description"],
         "required_args": list(metric.get("required_args", [])),
@@ -406,7 +421,7 @@ def run_metric(
     strip_visualizations: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    metric_key = metric_name.strip().lower()
+    metric_key = metric_name.strip().lower().replace("-", "_")
     metric = METRIC_REGISTRY.get(metric_key)
     if not metric:
         # Try resolving as a custom metric
@@ -483,6 +498,22 @@ def run_metric(
         if not columns:
             raise ValueError("columns is required for correlations")
         result = metric["runner"](file_path, file_type, file_name, columns)
+        return _finalize(result)
+
+    if metric_key == "outliers_custom":
+        rules = kwargs.get("rules") or kwargs.get("rules_json")
+        if not rules:
+            raise ValueError("rules_json is required for outliers_custom")
+        result = metric["runner"](
+            file_path,
+            file_type,
+            file_name,
+            rules,
+            kwargs.get("max_outliers", 100),
+            kwargs.get("scan_limit"),
+            bool(kwargs.get("stop_after_outliers", False)),
+            kwargs.get("max_export_rows", 10000),
+        )
         return _finalize(result)
 
     if metric_key == "feature_relevance":
@@ -566,6 +597,13 @@ def run_metric(
         if not columns or epsilon is None:
             raise ValueError("columns and epsilon are required for differential_privacy")
         result = metric["runner"](file_path, file_type, file_name, columns, epsilon)
+        return _finalize(result)
+
+    if metric_key == "hipaa_compliance":
+        columns = _normalize_list(kwargs.get("columns"))
+        if not columns:
+            raise ValueError("columns is required for hipaa_compliance")
+        result = metric["runner"](file_path, file_type, file_name, columns)
         return _finalize(result)
 
     raise ValueError(f"Unsupported metric: {metric_name}")

@@ -159,6 +159,44 @@ Identifies outliers in numerical columns using the Interquartile Range (IQR) met
 
 **Returns**: A dictionary with outlier scores for each numerical column and an overall score. A bar chart visualization of outlier scores is also provided.
 
+calculate_custom_outliers
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Identifies values that fail user-defined valid-value criteria for a selected target. Each rule describes expected valid values; values that do not satisfy the rule are flagged as outliers. Rules can check numeric ranges, regular expression matches, missing values, or nested criteria combined with ``and``, ``or``, and ``not``. This is useful when domain-specific validity rules are more appropriate than the default IQR outlier method.
+
+**Usage**:
+
+.. code-block:: python
+
+   from aidrin import calculate_custom_outliers
+
+   file_info = ("/path/to/data.csv", "data.csv", ".csv")
+   rules = [
+       {
+           "id": "valid-temperature",
+           "name": "Valid temperature range",
+           "target": "temperature",
+           "target_type": "column",
+           "criteria": {
+               "op": "and",
+               "conditions": [
+                   {"type": "range", "min": -50, "max": 60},
+                   {"type": "regex", "pattern": r"^-?\d+(\.\d+)?$"},
+               ],
+           },
+           "allow_missing": False,
+       }
+   ]
+   result = calculate_custom_outliers(
+       file_info=file_info,
+       rules=rules,
+       max_outliers=100,
+       scan_limit=None,
+       stop_after_outliers=False,
+   )
+
+**Returns**: A dictionary with per-rule summaries, a compact outlier preview, CSV export rows, and per-rule errors when a target cannot be evaluated. HDF5 datasets are scanned in blocks so large native datasets do not need to be loaded fully into memory.
+
 calculate_statistical_rates
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -317,6 +355,12 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
   - **Method**: Uses the Interquartile Range (IQR) method, calculating Q1 (first quartile), Q3 (third quartile), and IQR (Q3 - Q1). Outliers are values below `Q1 - 1.5 * IQR` or above `Q3 + 1.5 * IQR`. The outlier score is the proportion of outliers per numerical column, with an overall score averaged across columns.
   - **Parameters**: None (applies to all numerical columns).
   - **Result**: Bar chart of outlier scores per numerical column and an overall outlier score.
+
+- **Custom Criteria Outliers**:
+
+  - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
+  - **Parameters**: Target, criteria rules, maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached.
+  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable.
 
 Impact of Data on AI
 ^^^^^^^^^^^^^^^^^^^^
@@ -491,6 +535,8 @@ Notes
   automatically converted to ``NaN`` so that all metrics — completeness, outliers,
   feature relevance, and privacy — operate on accurately marked missing data.  See
   the ``calculate_completeness`` note above for the full sentinel-resolution order.
+  Custom Criteria Outliers can evaluate tabular columns, JSON/NetCDF-style column
+  targets discovered by the inspector, and native HDF5 datasets.
 - **Visualizations**: Generated downloadable plots (e.g., histograms, bar charts, heatmaps) are displayed in the web interface.
 - **JSON Reports**: Each dimension's analysis generates a downloadable JSON report containing all metrics, statistics, and visualization data (where applicable).
 

@@ -2,6 +2,8 @@
 
 import json
 
+import web.routes.metrics as metrics_routes
+
 
 # -------------------------------------------------
 # Summary statistics endpoint
@@ -104,6 +106,76 @@ def test_data_quality_no_selection(uploaded_client):
         follow_redirects=True,
     )
     assert response.status_code == 200
+
+
+def test_custom_outlier_targets_with_file(uploaded_client):
+    """Target discovery should return selectable column targets without overloading /feature-set."""
+    response = uploaded_client.post("/custom-outlier-targets")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["success"] is True
+    targets = data["targets"]
+    assert any(t["name"] == "age" and t["target_type"] == "column" for t in targets)
+
+
+def test_custom_outlier_targets_returns_generic_failure(uploaded_client, monkeypatch):
+    def fail_iter_targets(_file_info):
+        raise RuntimeError("/secret/internal/path")
+
+    monkeypatch.setattr(metrics_routes, "iter_targets", fail_iter_targets)
+
+    response = uploaded_client.post("/custom-outlier-targets")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data == {"success": False, "message": "Custom outlier target discovery failed."}
+
+
+def test_data_quality_custom_outliers(uploaded_client):
+    """Submit custom outlier rules through Data Quality."""
+    rules = [{
+        "id": "age-range",
+        "name": "Age range",
+        "target": "age",
+        "target_type": "column",
+        "criteria": {"type": "range", "min": 26, "max": 38},
+    }]
+    response = uploaded_client.post(
+        "/data-quality?return_type=json",
+        data={
+            "custom_outliers": "yes",
+            "custom_outlier_rules": json.dumps(rules),
+            "max_outliers": "2",
+            "max_export_rows": "10",
+            "scan_limit": "",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "Custom Criteria Outliers" in data
+    result = data["Custom Criteria Outliers"]
+    assert result["Rule summaries"]["age-range"]["outlier"] == 2
+    assert len(result["Outlier preview"]["age-range"]) == 2
+    assert len(result["Outlier export"]["age-range"]) == 2
+
+
+def test_data_quality_custom_outlier_error_is_metric_scoped(uploaded_client):
+    response = uploaded_client.post(
+        "/data-quality?return_type=json",
+        data={
+            "completeness": "yes",
+            "custom_outliers": "yes",
+            "custom_outlier_rules": "[]",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "Completeness" in data
+    assert "error" not in data
+    assert "Custom Criteria Outliers" in data
+    assert "Error" in data["Custom Criteria Outliers"]
 
 
 # -------------------------------------------------

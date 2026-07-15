@@ -171,6 +171,52 @@ def calculate_null_count_trend(batch_column, target_columns, file_info):
     return null_count_trend.apply(args=(batch_column, target_columns, file_info)).get()
 
 
+def calculate_custom_outliers(
+    file_info,
+    rules,
+    max_outliers=100,
+    scan_limit=None,
+    stop_after_outliers=False,
+    max_export_rows=10000,
+):
+    """Detect values that fail user-defined valid-value criteria.
+
+    Each rule describes expected valid values for a target; values that do not
+    satisfy the rule are flagged as outliers.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``.
+    rules : list of dict
+        Custom criteria rules with required stable ``id`` values.
+    max_outliers : int, optional
+        Maximum detailed preview records to keep per rule.
+    scan_limit : int, optional
+        Maximum values to scan per rule. Defaults to a full scan.
+    stop_after_outliers : bool, optional
+        Stop scanning a rule after ``max_outliers`` violations are found.
+    max_export_rows : int, optional
+        Maximum downloadable/export rows to keep per rule.
+
+    Returns
+    -------
+    dict
+        ``{"Rule summaries": ..., "Outlier preview": ..., "Outlier export": ...}``,
+        plus ``Errors`` for per-rule target/dtype problems.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.custom_outliers import custom_outliers
+    return custom_outliers.apply(args=(
+        file_info,
+        rules,
+        max_outliers,
+        scan_limit,
+        stop_after_outliers,
+        max_export_rows,
+    )).get()
+
+
 # ---------------------------------------------------------------------------
 # Fairness / Bias
 # ---------------------------------------------------------------------------

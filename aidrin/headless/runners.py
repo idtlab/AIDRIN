@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -7,6 +8,7 @@ from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
+from aidrin.structured_data_metrics.custom_outliers import custom_outliers
 from aidrin.structured_data_metrics.duplicity import duplicity
 from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
 from aidrin.structured_data_metrics.feature_relevance import (
@@ -30,6 +32,7 @@ from aidrin.structured_data_metrics.representation_rate import (
     calculate_representation_rate,
     create_representation_rate_vis,
 )
+from aidrin.structured_data_metrics.hipaa_compliance import detect_hipaa_identifiers
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 
 # Signal metrics to skip chart generation in headless mode
@@ -130,6 +133,30 @@ def run_null_count_trend(
 ) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(null_count_trend, batch_column, target_columns, file_info)
+
+
+def run_outliers_custom(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    rules: Any,
+    max_outliers: int = 100,
+    scan_limit: Optional[int] = None,
+    stop_after_outliers: bool = False,
+    max_export_rows: int = 10000,
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    if isinstance(rules, str):
+        rules = json.loads(rules)
+    return _call_task(
+        custom_outliers,
+        file_info,
+        rules,
+        max_outliers,
+        scan_limit,
+        stop_after_outliers,
+        max_export_rows,
+    )
 
 
 def run_correlations(
@@ -323,6 +350,17 @@ def run_multiple_attribute_risk(
     file_info = _build_file_info(file_path, file_type, file_name)
     data = read_file(file_info)
     return generate_multiple_attribute_MM_risk_scores(data, id_column, eval_columns, NullTask())
+
+
+def run_hipaa_compliance(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    columns: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    df = read_file(file_info)
+    return detect_hipaa_identifiers(df, columns)
 
 
 def _dp_error_payload(error_message: str) -> Dict[str, Any]:
