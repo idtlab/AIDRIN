@@ -8,6 +8,7 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
 from aidrin.file_handling.readers.parquet_reader import parquetReader
+from aidrin.file_handling.readers.zarr_reader import zarrReader
 
 # Notes:
 # To add support for new file types:
@@ -15,6 +16,8 @@ from aidrin.file_handling.readers.parquet_reader import parquetReader
 #       (and optionally .parse(), .filter()) to 'file_readers'.
 # - Register the class in READER_MAP.
 # - Add a display name and extension to SUPPORTED_FILE_TYPES for the front end.
+# - Formats that are CLI/library/Globus-only (e.g. Zarr directories) go in
+#   GLOBUS_FILE_TYPES but not SUPPORTED_FILE_TYPES (local upload dropdown).
 
 # Reader Map. Used to create file type specific parsing
 READER_MAP = {
@@ -24,10 +27,11 @@ READER_MAP = {
     ".json": jsonReader,
     ".h5": hdf5Reader,
     ".parquet": parquetReader,
+    ".zarr": zarrReader,
     # Add additional file types here
 }
 
-# Supported file types. Read on front end to create select features.
+# Supported file types. Read on front end to create local upload select features.
 SUPPORTED_FILE_TYPES = [
     (".csv", "CSV"),
     (".xls, .xlsb, .xlsx, .xlsm", "Excel"),
@@ -38,6 +42,15 @@ SUPPORTED_FILE_TYPES = [
     # Add additional file types here using the format:
     # (file_type,file_type_name)
 ]
+
+# Globus (and other path-based surfaces) may include directory-shaped formats
+# that are not offered in the local browser upload dropdown.
+GLOBUS_FILE_TYPES = SUPPORTED_FILE_TYPES + [
+    (".zarr", "Zarr"),
+]
+
+# File types that accept selected_keys for multi-array / multi-dataset selection.
+_SELECTION_FILE_TYPES = {".h5", ".zarr"}
 
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
@@ -227,7 +240,7 @@ def read_file(file_info, columns=None):
 
         # Slow path: parse the source once.
         reader_cls = READER_MAP[file_type]
-        if file_type == ".h5":
+        if file_type in _SELECTION_FILE_TYPES:
             df = reader_cls(
                 file_path, file_upload_time_log, selected_keys=selected_keys
             ).read()
