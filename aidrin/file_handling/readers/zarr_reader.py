@@ -28,8 +28,8 @@ def _require_zarr():
         import zarr
     except ImportError as exc:
         raise ImportError(
-            "Zarr support requires the 'zarr' package. "
-            "Install with: pip install 'aidrin[zarr]' or pip install zarr"
+            "Zarr support requires the 'zarr' package on Python >=3.11. "
+            "Install with: pip install 'aidrin[zarr]' or pip install 'zarr>=3.0.8,<3.2'"
         ) from exc
     return zarr
 
