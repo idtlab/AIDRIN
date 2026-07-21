@@ -59,6 +59,7 @@ from web.routes.utils import (
     ensure_json_serializable,
     format_dict_values,
     generate_metric_cache_key,
+    get_current_user_id,
     get_result_or_default,
     is_metric_cache_valid,
     store_result,
@@ -2176,6 +2177,81 @@ _READINESS_SECTION_RESPONSE_KEYS = {
     "data-governance": "data_governance",
 }
 
+_READINESS_CACHE_TTL_SECONDS = 30 * 60
+
+
+def _readiness_section_cache_key(file_name, section, *, viz=False):
+    """User/file-scoped cache key (same colon pattern as ``/cached-result``)."""
+    user_id = get_current_user_id()
+    if viz:
+        return f"user:{user_id}:file:{file_name}:readiness_report:{section}:visualizations"
+    return f"user:{user_id}:file:{file_name}:readiness_report:{section}"
+
+
+def _get_cached_readiness_payload(file_name, section, *, viz=False):
+    """Return cached section or visualization payload, or *(None, None)*."""
+    key = _readiness_section_cache_key(file_name, section, viz=viz)
+    entry = current_app.TEMP_RESULTS_CACHE.get(key)
+    if entry and is_metric_cache_valid(entry):
+        return entry.get("data"), entry.get("build_time_seconds")
+    if entry:
+        current_app.TEMP_RESULTS_CACHE.pop(key, None)
+    return None, None
+
+
+def _cache_readiness_payload(file_name, section, data, build_time_seconds, *, viz=False):
+    """Store a successful readiness section or visualization payload."""
+    if data is None:
+        return
+    if not viz and isinstance(data, dict) and data.get("error"):
+        return
+    key = _readiness_section_cache_key(file_name, section, viz=viz)
+    current_app.TEMP_RESULTS_CACHE[key] = {
+        "data": ensure_json_serializable(data),
+        "timestamp": time.time(),
+        "expires_at": time.time() + _READINESS_CACHE_TTL_SECONDS,
+        "build_time_seconds": build_time_seconds,
+    }
+
+
+def _get_or_build_readiness_section(section, file_info, include_visualizations=False):
+    """Return section data from cache or build, store on miss."""
+    file_name = file_info[1]
+    cached, build_time = _get_cached_readiness_payload(file_name, section)
+    if cached is not None:
+        metric_time_log.info("Readiness report section %s cache hit", section)
+        return cached, build_time, True
+
+    start_time = time.time()
+    data = _build_readiness_section(
+        section, file_info, include_visualizations=include_visualizations
+    )
+    build_time_seconds = round(time.time() - start_time, 2)
+    _cache_readiness_payload(file_name, section, data, build_time_seconds)
+    return data, build_time_seconds, False
+
+
+def _get_or_build_readiness_visualizations(section, file_info):
+    """Return visualization payload from cache or build, store on miss."""
+    file_name = file_info[1]
+    cached, build_time = _get_cached_readiness_payload(
+        file_name, section, viz=True
+    )
+    if cached is not None:
+        metric_time_log.info(
+            "Readiness report section %s visualizations cache hit", section
+        )
+        return cached, build_time, True
+
+    builder = _READINESS_VIZ_BUILDERS.get(section)
+    start_time = time.time()
+    visualizations = builder(file_info) if builder else {}
+    build_time_seconds = round(time.time() - start_time, 2)
+    _cache_readiness_payload(
+        file_name, section, visualizations, build_time_seconds, viz=True
+    )
+    return visualizations, build_time_seconds, False
+
 
 def _readiness_file_info():
     """Return ``(file_path, file_name, file_type)`` from session, or *None*."""
@@ -2213,9 +2289,10 @@ def readiness_report_visualizations(section):
     if file_info is None:
         return jsonify({"success": False, "message": "No file uploaded"}), 200
 
-    start_time = time.time()
     try:
-        visualizations = _READINESS_VIZ_BUILDERS[section](file_info)
+        visualizations, build_time_seconds, from_cache = (
+            _get_or_build_readiness_visualizations(section, file_info)
+        )
     except Exception as e:
         metric_time_log.error(
             "Readiness report visualizations — %s error: %s", section, e, exc_info=True
@@ -2225,17 +2302,18 @@ def readiness_report_visualizations(section):
             "message": f"{type(e).__name__}: {e}",
         }), 200
 
-    build_time_seconds = round(time.time() - start_time, 2)
-    metric_time_log.info(
-        "Readiness report section %s visualizations built in %.2f seconds",
-        section,
-        build_time_seconds,
-    )
+    if not from_cache:
+        metric_time_log.info(
+            "Readiness report section %s visualizations built in %.2f seconds",
+            section,
+            build_time_seconds,
+        )
     return jsonify(ensure_json_serializable({
         "success": True,
         "section": section,
         "visualizations": visualizations,
         "build_time_seconds": build_time_seconds,
+        "cached": from_cache,
     }))
 
 
@@ -2249,19 +2327,21 @@ def readiness_report_section(section):
     if file_info is None:
         return jsonify({"success": False, "message": "No file uploaded"}), 200
 
-    start_time = time.time()
-    data = _build_readiness_section(section, file_info)
-    build_time_seconds = round(time.time() - start_time, 2)
-    metric_time_log.info(
-        "Readiness report section %s built in %.2f seconds",
-        section,
-        build_time_seconds,
+    data, build_time_seconds, from_cache = _get_or_build_readiness_section(
+        section, file_info
     )
+    if not from_cache:
+        metric_time_log.info(
+            "Readiness report section %s built in %.2f seconds",
+            section,
+            build_time_seconds,
+        )
     return jsonify(ensure_json_serializable({
         "success": True,
         "section": section,
         "data": data,
         "build_time_seconds": build_time_seconds,
+        "cached": from_cache,
     }))
 
 
@@ -2274,18 +2354,20 @@ def readiness_report():
 
     start_time = time.time()
     try:
-        response = {"success": True}
+        response = {"success": True, "sections_cached": {}}
         for slug in _READINESS_SECTION_BUILDERS:
-            section_start = time.time()
-            section_data = _build_readiness_section(slug, file_info)
-            section_elapsed = round(time.time() - section_start, 2)
+            section_data, section_elapsed, from_cache = (
+                _get_or_build_readiness_section(slug, file_info)
+            )
             if isinstance(section_data, dict):
                 section_data = {**section_data, "build_time_seconds": section_elapsed}
-            metric_time_log.info(
-                "Readiness report section %s built in %.2f seconds",
-                slug,
-                section_elapsed,
-            )
+            if not from_cache:
+                metric_time_log.info(
+                    "Readiness report section %s built in %.2f seconds",
+                    slug,
+                    section_elapsed,
+                )
+            response["sections_cached"][slug] = from_cache
             response[_READINESS_SECTION_RESPONSE_KEYS[slug]] = section_data
 
         metric_time_log.info("Readiness report built in %.2f seconds", time.time() - start_time)
