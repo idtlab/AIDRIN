@@ -1,0 +1,25 @@
+<!-- Constant Feature Count metric panel (Data Structure pillar) -->
+<div id="panel-constant-features" class="metric-panel hidden">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Data Structure</h2>
+    <form id="form-constant-features" method="post" enctype="multipart/form-data">
+      <input type="file" id="file" name="file" style="display: none;" />
+      <div class="checkboxContainer">
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="constant feature count" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check constant feature count
+            <span class="info-icon">i<span class="info-text">This option reports the number of columns that have a single distinct value, and lists those columns.</span></span>
+          </label>
+        </div>
+      </div>
+      <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <button type="button" onclick="withSubmitGuard(this, () => workspaceSubmit('/constant-features'));"
+                class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+          Submit
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

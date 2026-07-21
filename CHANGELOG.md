@@ -48,3 +48,14 @@ All notable changes to AIDRIN are documented here. This project loosely follows
     (`s`/`ms`/… no longer hang on long spans).
   - `null_count_trend` — null counts grouped by a batch column, to spot quality
     regressions (params: `batch_column`, optional `target_columns`).
+  - `duplicity_by_features` — duplicate rows computed using only selected
+    feature columns, with counts, percentage, and the largest duplicate groups
+    (param: `duplicate_columns`).
+
+- **New "Data Structure and Organization" pillar** (CLI, Python library, batch,
+  MCP, Globus, and web UI) with its first metric:
+  - `constant_feature_count` — count of columns with a single distinct
+    value, along with each constant column's value (no params). Null is
+    treated as a value like any other, so an all-null column counts as
+    constant. Available in the web UI under
+    the "Data Structure" sidebar tab.

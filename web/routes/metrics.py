@@ -28,6 +28,8 @@ from aidrin.structured_data_metrics.conditional_demo_disp import (
 from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
 from aidrin.structured_data_metrics.null_count_trend import null_count_trend
 from aidrin.structured_data_metrics.row_level_completeness import row_level_completeness
+from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
+from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
@@ -106,7 +108,8 @@ def data_quality():
             m for m in (
                 "completeness", "row level completeness", "feature coverage ratio",
                 "temporal completeness", "null count trend",
-                "outliers", "duplicity", "custom_outliers",
+                "outliers", "duplicity", "duplicate detection by features",
+                "custom_outliers",
             ) if request.form.get(m) == "yes"
         ]
         metric_time_log.info("Data Quality request started: %s", selected)
@@ -234,6 +237,26 @@ def data_quality():
                     )
                     final_dict["Duplicity"] = dup_dict
                     metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
+
+                if "duplicate detection by features" in selected:
+                    dup_features = [
+                        c.strip()
+                        for c in request.form.getlist("features for duplicate detection")
+                        if c.strip()
+                    ]
+                    if not dup_features:
+                        final_dict["Duplicates by Selected Features"] = {
+                            "Error": "No features selected for duplicate detection."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.duplicity_by_features"):
+                            final_dict["Duplicates by Selected Features"] = duplicity_by_features(
+                                dup_features, file_info
+                            )
+                        metric_time_log.info(
+                            "Duplicates by Selected Features took %.2f seconds", time.time() - t0
+                        )
 
                 if "custom_outliers" in selected:
                     t0 = time.time()
@@ -973,6 +996,48 @@ def fair_assessment():
     except Exception as e:
         metric_time_log.error("FAIR Assessment error: %s", e, exc_info=True)
         return jsonify({"error": "An internal error occurred"}), 400
+
+
+# ---------------------------------------------------------------------------
+# Data Structure
+# ---------------------------------------------------------------------------
+
+@metrics_bp.route("/constant-features", methods=["GET", "POST"])
+def constant_features():
+    final_dict = {}
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = build_file_info(file_path, file_name, file_type)
+
+    if request.method == "POST":
+        start_time = time.time()
+        try:
+            if request.form.get("constant feature count") == "yes":
+                t0 = time.time()
+                with trace_metric(
+                    "constant_feature_count", "data_structure",
+                    file_name=file_name, file_type=file_type,
+                ):
+                    cfc_dict = constant_feature_count(file_info)
+                cfc_dict["Description"] = (
+                    "Columns with a single distinct value carry no information "
+                    "for modeling and are candidates for removal."
+                )
+                final_dict["Constant Feature Count"] = cfc_dict
+                metric_time_log.info(
+                    "Constant Feature Count took %.2f seconds", time.time() - t0
+                )
+        except Exception as e:
+            metric_time_log.error("Constant Features error: %s", e, exc_info=True)
+            return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
+
+        metric_time_log.info(
+            "Constant Features completed in %.2f seconds", time.time() - start_time
+        )
+        return store_result("metrics.constant_features", final_dict)
+
+    return get_result_or_default("metrics.constant_features", file_path, file_name)
 
 
 # ---------------------------------------------------------------------------

@@ -44,6 +44,10 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Row-Level Completeness"] = aidrin.calculate_row_level_completeness(
                 params.get("required_columns", []), file_info
             )
+        if "duplicity_by_features" in selected:
+            result["Duplicates by Selected Features"] = aidrin.calculate_duplicity_by_features(
+                params.get("duplicate_features", []), file_info
+            )
         if "feature_coverage_ratio" in selected:
             result["Feature Coverage Ratio"] = aidrin.calculate_feature_coverage_ratio(
                 params.get("threshold", 0.9), file_info
@@ -247,8 +251,12 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         "completeness": lambda: aidrin.calculate_completeness(file_info),
         "outliers": lambda: aidrin.calculate_outliers(file_info),
         "duplicates": lambda: aidrin.calculate_duplicates(file_info),
+        "constant_feature_count": lambda: aidrin.calculate_constant_feature_count(file_info),
         "row_level_completeness": lambda: aidrin.calculate_row_level_completeness(
             params.get("required_columns", []), file_info
+        ),
+        "duplicity_by_features": lambda: aidrin.calculate_duplicity_by_features(
+            params.get("duplicate_features", []), file_info
         ),
         "feature_coverage_ratio": lambda: aidrin.calculate_feature_coverage_ratio(
             params.get("threshold", 0.9), file_info

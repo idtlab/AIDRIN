@@ -111,6 +111,7 @@ Examples:
 
    # Data quality (completeness family — arguments are passed as named --flags)
    aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
+   aidrin run duplicity-by-features /path/to/sample_dataset.csv --duplicate-columns "income,credit_score"
    aidrin run feature-coverage-ratio /path/to/sample_dataset.csv --threshold 0.9
    aidrin run null-count-trend /path/to/sample_dataset.csv --batch-column zipcode
    # temporal-completeness needs a datetime column; --frequency is one of: ms, s, min, h, D, W, ME, QE, YE (default D)
@@ -140,6 +141,9 @@ Examples:
    aidrin run t-closeness /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
    aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
+
+   # Data structure and organization (no extra args needed)
+   aidrin run constant-feature-count /path/to/sample_dataset.csv
 
 For custom criteria outliers, ``--rule`` and ``rules-json`` describe expected
 valid values. Values that do not satisfy those conditions are flagged as
@@ -260,6 +264,9 @@ Available Metrics
      - ``row-level-completeness``
      - ``--required-columns``
    * - Data Quality
+     - ``duplicity-by-features``
+     - ``--duplicate-columns``
+   * - Data Quality
      - ``feature-coverage-ratio``
      - ``--threshold`` (default ``0.9``)
    * - Data Quality
@@ -307,6 +314,9 @@ Available Metrics
    * - Data Governance
      - ``hipaa-compliance``
      - ``columns``
+   * - Data Structure and Organization
+     - ``constant-feature-count``
+     - —
    * - Custom
      - ``custom``
      - ``<name-or-path>``, varies — see ``aidrin run custom -h``

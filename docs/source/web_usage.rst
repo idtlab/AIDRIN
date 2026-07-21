@@ -349,6 +349,12 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
   - **Parameters**: None (uses entire dataset).
   - **Result**: A duplicity score (0 for no duplicates).
 
+- **Duplicates by Selected Features**:
+
+  - **Method**: Identifies duplicate rows by comparing only the selected feature columns, rather than the whole row.
+  - **Parameters**: Features to compare.
+  - **Result**: Duplicate row count and percentage, plus the top 10 largest duplicate groups with their feature values and row counts.
+
 
 - **Outliers**:
 
@@ -518,7 +524,13 @@ The system returns:
 Data Structure and Organization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Currently, no specific metrics are implemented for this dimension. Future updates may include metrics for assessing dataset schema, format consistency, or organization.
+- **Constant Feature Count**:
+
+  - **Method**: Counts columns that have a single distinct value. Null is treated as a value like any other: a column that is entirely null counts as constant, and a column with one real value plus some nulls does not (it has two distinct values — the value and null).
+  - **Parameters**: None (uses entire dataset).
+  - **Result**: The count of constant columns, the total column count, and the constant columns with their single value (``null`` for an all-null column).
+
+Future updates may include additional metrics for assessing dataset schema and format consistency.
 
 Notes
 ~~~~~

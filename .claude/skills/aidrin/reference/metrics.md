@@ -3,10 +3,11 @@
 ## Contents
 
 - [Invocation & conventions](#invocation--conventions)
-- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, feature-coverage-ratio, temporal-completeness, null-count-trend
+- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, duplicity-by-features, feature-coverage-ratio, temporal-completeness, null-count-trend
 - [Impact on AI](#impact-on-ai): correlations, feature-relevance
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
 - [Data governance](#data-governance): k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk, hipaa-compliance
+- [Data structure and organization](#data-structure-and-organization): constant-feature-count
 - [Privacy](#privacy): differential-privacy (currently unavailable)
 - [Batch config format](#batch-config-format)
 
@@ -104,6 +105,27 @@ aidrin run outliers examples/sample_data/csv/adult.csv
 
 ```bash
 aidrin run row-level-completeness examples/sample_data/csv/adult.csv --required-columns "age,workclass"
+```
+
+---
+
+### duplicity-by-features
+
+- **Syntax:** `aidrin run duplicity-by-features <file> --duplicate-columns "<cols>"`
+- **Args:**
+  - `--duplicate-columns` (required) — comma-separated columns to compare when detecting duplicate rows
+- **Output keys:**
+  - `Duplicate count` — integer count of duplicate rows (rows after the first occurrence of each value combination)
+  - `Duplicate percentage` — scalar percentage (0–100) of rows that are duplicates
+  - `Total rows` — integer total row count
+  - `Duplicate groups` — list of `{"Feature values": {...}, "Row count": int}`, the top 10 largest duplicate groups, sorted descending by size
+  - `Description` — string
+- **Direction:** lower duplicate percentage = fewer redundant rows = better.
+
+**Example:**
+
+```bash
+aidrin run duplicity-by-features examples/sample_data/csv/adult.csv --duplicate-columns "age,workclass"
 ```
 
 ---
@@ -415,6 +437,26 @@ aidrin run hipaa-compliance examples/sample_data/csv/adult.csv "native.country,f
 ```
 
 Note: this is regex/pattern-based PHI detection (SSN, email, phone, IP, URL, VIN, medical IDs, postal codes) — not a full HIPAA Safe Harbor 18-identifier audit. Treat findings as leads to review, not a compliance certification.
+
+---
+
+## Data structure and organization
+
+### constant-feature-count
+
+- **Syntax:** `aidrin run constant-feature-count <file>`
+- **Args:** none (file only)
+- **Output keys:**
+  - `Constant feature count` — integer count of columns with exactly one distinct value (null counts as a value: an all-null column is constant; a column with one real value plus nulls is not, since that's two distinct values)
+  - `Total features` — integer total column count
+  - `Constant features` — object mapping each constant column name to its single value (`null` for an all-null column)
+- **Direction:** any constant features present = columns carrying no information for modeling and candidates for removal.
+
+**Example:**
+
+```bash
+aidrin run constant-feature-count examples/sample_data/csv/adult.csv
+```
 
 ---
 
