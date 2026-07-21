@@ -18,6 +18,9 @@ from .runners import (
     run_differential_privacy,
     run_duplicity,
     run_duplicity_by_features,
+    run_kurtosis,
+    run_max_pairwise_correlation,
+    run_skewness,
     run_entropy_risk,
     run_feature_coverage_ratio,
     run_feature_relevance,
@@ -57,9 +60,27 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "required_args": [],
     },
     "constant_feature_count": {
-        "category": "data-structure-and-organization",
+        "category": "data-structure",
         "description": "Count and list of columns with a single distinct non-null value.",
         "runner": run_constant_feature_count,
+        "required_args": [],
+    },
+    "max_pairwise_correlation": {
+        "category": "data-structure",
+        "description": "Strongest absolute pairwise correlation between features.",
+        "runner": run_max_pairwise_correlation,
+        "required_args": [],
+    },
+    "skewness": {
+        "category": "data-structure",
+        "description": "Per-feature skewness (distribution asymmetry).",
+        "runner": run_skewness,
+        "required_args": [],
+    },
+    "kurtosis": {
+        "category": "data-structure",
+        "description": "Per-feature excess kurtosis (tail heaviness).",
+        "runner": run_kurtosis,
         "required_args": [],
     },
     "row_level_completeness": {
@@ -455,7 +476,10 @@ def run_metric(
     _log_progress(f"Running {metric_key}...", verbose)
     start_time = time.time()
 
-    if metric_key in {"completeness", "duplicity", "outliers", "constant_feature_count"}:
+    if metric_key in {
+        "completeness", "duplicity", "outliers", "constant_feature_count",
+        "max_pairwise_correlation", "skewness", "kurtosis",
+    }:
         result = metric["runner"](file_path, file_type, file_name)
         result = _maybe_save_images(metric_key, result, save_images, image_dir)
         if strip_visualizations:

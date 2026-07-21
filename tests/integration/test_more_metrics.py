@@ -186,7 +186,7 @@ def test_correlation_no_selection(uploaded_client):
 def test_constant_feature_count_no_constant_columns(uploaded_client):
     """The default sample dataset (age/income/education/gender) has no constant columns."""
     response = uploaded_client.post(
-        "/constant-features?return_type=json",
+        "/data-structure?return_type=json",
         data={"constant feature count": "yes"},
         follow_redirects=True,
     )
@@ -215,7 +215,7 @@ def test_constant_feature_count_detects_constant_column(client, tmp_path):
     assert upload_response.status_code == 302
 
     response = client.post(
-        "/constant-features?return_type=json",
+        "/data-structure?return_type=json",
         data={"constant feature count": "yes"},
         follow_redirects=True,
     )
@@ -229,7 +229,7 @@ def test_constant_feature_count_detects_constant_column(client, tmp_path):
 def test_constant_feature_count_no_selection(uploaded_client):
     """Submitting with nothing checked returns an empty result, not an error."""
     response = uploaded_client.post(
-        "/constant-features?return_type=json",
+        "/data-structure?return_type=json",
         data={},
         follow_redirects=True,
     )

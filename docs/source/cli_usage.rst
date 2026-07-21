@@ -109,6 +109,12 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
+   # Data structure (no arguments needed)
+   aidrin run constant-feature-count /path/to/sample_dataset.csv
+   aidrin run max-pairwise-correlation /path/to/sample_dataset.csv
+   aidrin run skewness /path/to/sample_dataset.csv
+   aidrin run kurtosis /path/to/sample_dataset.csv
+
    # Data quality (completeness family — arguments are passed as named --flags)
    aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
    aidrin run duplicity-by-features /path/to/sample_dataset.csv --duplicate-columns "income,credit_score"
@@ -141,9 +147,6 @@ Examples:
    aidrin run t-closeness /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
    aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
-
-   # Data structure and organization (no extra args needed)
-   aidrin run constant-feature-count /path/to/sample_dataset.csv
 
 For custom criteria outliers, ``--rule`` and ``rules-json`` describe expected
 valid values. Values that do not satisfy those conditions are flagged as
@@ -278,6 +281,18 @@ Available Metrics
    * - Data Quality
      - ``outliers-custom``
      - ``rules-json``
+   * - Data Structure
+     - ``constant-feature-count``
+     - —
+   * - Data Structure
+     - ``max-pairwise-correlation``
+     - —
+   * - Data Structure
+     - ``skewness``
+     - —
+   * - Data Structure
+     - ``kurtosis``
+     - —
    * - Impact on AI
      - ``correlations``
      - ``columns``
@@ -314,9 +329,6 @@ Available Metrics
    * - Data Governance
      - ``hipaa-compliance``
      - ``columns``
-   * - Data Structure and Organization
-     - ``constant-feature-count``
-     - —
    * - Custom
      - ``custom``
      - ``<name-or-path>``, varies — see ``aidrin run custom -h``

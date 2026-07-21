@@ -52,10 +52,19 @@ All notable changes to AIDRIN are documented here. This project loosely follows
     feature columns, with counts, percentage, and the largest duplicate groups
     (param: `duplicate_columns`).
 
-- **New "Data Structure and Organization" pillar** (CLI, Python library, batch,
-  MCP, Globus, and web UI) with its first metric:
+- **New "Data Structure" pillar** (CLI, Python library, batch, MCP, Globus, and
+  web UI), under a new `data-structure` category with a matching web panel:
   - `constant_feature_count` — count of columns with a single distinct
     value, along with each constant column's value (no params). Null is
     treated as a value like any other, so an all-null column counts as
-    constant. Available in the web UI under
-    the "Data Structure" sidebar tab.
+    constant.
+  - `max_pairwise_correlation` — strongest absolute pairwise (Pearson)
+    correlation between features, flagging redundant/collinear columns; returns
+    the max, the most-correlated pair, the top pairs, and a heatmap.
+  - `skewness` — per-feature skewness (distribution asymmetry) with a bar chart.
+  - `kurtosis` — per-feature excess kurtosis (Fisher's definition; tail
+    heaviness) with a bar chart.
+
+  All four are available in the web UI under the "Data Structure" sidebar tab.
+  `max_pairwise_correlation`, `skewness`, and `kurtosis` operate on the
+  numeric, non-constant columns.

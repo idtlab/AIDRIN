@@ -1,4 +1,4 @@
-"""Unit tests for the constant_feature_count data-quality metric."""
+"""Unit tests for the constant_feature_count data-structure metric."""
 
 import os
 import sys

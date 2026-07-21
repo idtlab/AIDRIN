@@ -270,7 +270,7 @@ Calculates entropy risk for quasi-identifier columns. It measures the uncertaint
 Local and Web Application Usage
 --------------------------------
 
-AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Web Application Installation <./web_installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure and Organization**. Each dimension includes specific metrics to assess dataset readiness.
+AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Web Application Installation <./web_installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure**. Each dimension includes specific metrics to assess dataset readiness.
 
 Web Application Workflow
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -521,8 +521,12 @@ The system returns:
    AIDRIN focuses on the completeness and structure of your metadata.
    It does **not** validate the factual accuracy of the content.
 
-Data Structure and Organization
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Data Structure
+^^^^^^^^^^^^^^
+
+Assesses structural and distributional properties of the feature set. All four
+metrics require no parameters; the latter three operate on the numeric,
+non-constant columns.
 
 - **Constant Feature Count**:
 
@@ -530,7 +534,28 @@ Data Structure and Organization
   - **Parameters**: None (uses entire dataset).
   - **Result**: The count of constant columns, the total column count, and the constant columns with their single value (``null`` for an all-null column).
 
-Future updates may include additional metrics for assessing dataset schema and format consistency.
+- **Max Pairwise Correlation**:
+
+  - **Method**: Computes the absolute Pearson correlation matrix over numeric
+    features and reports the single strongest pair. Values near 1.0 indicate
+    redundant (near-collinear) features.
+  - **Parameters**: None.
+  - **Result**: The maximum correlation, the most-correlated pair, the top pairs,
+    and an absolute-correlation heatmap.
+
+- **Skewness**:
+
+  - **Method**: Per-feature skewness (distribution asymmetry). Values far from 0
+    indicate long-tailed, asymmetric distributions.
+  - **Parameters**: None.
+  - **Result**: Per-column skewness, the most-skewed feature, and a bar chart.
+
+- **Kurtosis**:
+
+  - **Method**: Per-feature excess kurtosis (Fisher's definition; normal = 0).
+    Positive values mean heavier tails / more outliers than a normal distribution.
+  - **Parameters**: None.
+  - **Result**: Per-column excess kurtosis, the most-extreme feature, and a bar chart.
 
 Notes
 ~~~~~

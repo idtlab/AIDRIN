@@ -67,8 +67,8 @@ def list_metrics(category: str | None = None) -> str:
     List all available AIDRIN metrics grouped by category.
 
     Args:
-        category: Optional filter. One of: data-quality, impact-of-data-on-AI,
-                  fairness-and-bias, data-governance, data-structure-and-organization,
+        category: Optional filter. One of: data-quality, data-structure,
+                  impact-of-data-on-AI, fairness-and-bias, data-governance,
                   custom_metrics. Omit for all.
     """
     return _dumps(list_available_metrics(category=category))
