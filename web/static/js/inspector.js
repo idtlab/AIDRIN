@@ -1873,9 +1873,12 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
   return fetch("/fair-assessment", { method: "POST", body: formData })
     .then((response) => response.json())
     .then((data) => {
-      const ok = renderFairAssessmentResult(data, resultContainer);
+      const resultData = { ...data };
+      delete resultData.cached;
+      delete resultData.build_time_seconds;
+      const ok = renderFairAssessmentResult(resultData, resultContainer);
       if (ok) {
-        callbacks?.onSuccess?.(data);
+        callbacks?.onSuccess?.(resultData, data);
       } else {
         callbacks?.onError?.(data);
       }
@@ -1915,6 +1918,53 @@ function submitReadinessFairAssessment() {
       },
     },
   );
+}
+
+function _restoreReadinessFairFromCache(fairPayload) {
+  const data = fairPayload?.data;
+  if (!data || data.error) return false;
+
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  if (!resultsEl) return false;
+
+  _readinessFairCompliance = { status: "ok", data };
+  uploadEl?.classList.add("hidden");
+  resultsEl.classList.remove("hidden");
+  renderFairAssessmentResult(data, resultsEl);
+
+  const metadataType = fairPayload.metadata_type;
+  if (metadataType) {
+    const select = document.getElementById("readiness-fair-metadata-type");
+    if (select) select.value = metadataType;
+  }
+  const metadataFilename = fairPayload.metadata_filename;
+  if (metadataFilename) {
+    const label = document.getElementById("readinessFairFileLabel");
+    const icon = document.getElementById("readinessFairUploadIcon");
+    if (label) label.textContent = metadataFilename;
+    if (icon) {
+      icon.classList.remove("text-gray-400");
+      icon.classList.add("text-green-500");
+    }
+  }
+  return true;
+}
+
+/** Restore optional FAIR compliance from server cache (separate lightweight fetch). */
+function _tryRestoreCachedReadinessFair() {
+  return fetch("/cached-result/readiness_report_fair")
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.cached || !resp.fair_compliance || activePanel !== "readiness-report") {
+        return false;
+      }
+      return _restoreReadinessFairFromCache(resp.fair_compliance);
+    })
+    .catch((err) => {
+      debugLog("Readiness FAIR cache restore error:", err);
+      return false;
+    });
 }
 
 function _resetReadinessFairSection() {
@@ -2638,6 +2688,9 @@ function _restoreCachedReadinessReport() {
         }
       });
       _updateReadinessExportButton();
+      if (resp.fair_compliance) {
+        _restoreReadinessFairFromCache(resp.fair_compliance);
+      }
       return allOk;
     })
     .catch((err) => {
@@ -2652,6 +2705,7 @@ function _restoreCachedReadinessReport() {
  */
 function loadReadinessReport() {
   _initReadinessReportShell();
+  _tryRestoreCachedReadinessFair();
 
   const overviewEntry = _getReadinessSectionRenderers().find(
     ({ section }) => section === "dataset-overview",

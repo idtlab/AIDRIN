@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import math
@@ -2235,6 +2236,7 @@ def get_cached_readiness_report(file_name):
     """Return all cached readiness sections for ``/cached-result/readiness_report``.
 
     Returns a JSON-serializable dict when every section is cached, else *None*.
+    Optionally includes ``fair_compliance`` when a readiness FAIR result is cached.
     """
     sections = {}
     sections_cached = {}
@@ -2244,11 +2246,94 @@ def get_cached_readiness_report(file_name):
             return None
         sections[slug] = {**cached, "build_time_seconds": build_time}
         sections_cached[slug] = True
-    return {
+    payload = {
         "cached": True,
         "sections": sections,
         "sections_cached": sections_cached,
     }
+    fair_compliance = _get_cached_readiness_fair_compliance(file_name)
+    if fair_compliance is not None:
+        payload["fair_compliance"] = fair_compliance
+    return payload
+
+
+def _readiness_fair_cache_key(file_name):
+    """Cache key for optional readiness-report FAIR compliance."""
+    user_id = get_current_user_id()
+    return f"user:{user_id}:file:{file_name}:readiness_report:fair"
+
+
+def _fair_metadata_fingerprint(json_bytes, metadata_type):
+    """Stable fingerprint for readiness FAIR cache invalidation."""
+    digest = hashlib.sha256()
+    digest.update(json_bytes)
+    digest.update(b"|")
+    digest.update(metadata_type.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _get_cached_readiness_fair_compliance(file_name):
+    """Return cached readiness FAIR payload metadata, or *None*."""
+    key = _readiness_fair_cache_key(file_name)
+    entry = current_app.TEMP_RESULTS_CACHE.get(key)
+    if entry and is_metric_cache_valid(entry):
+        data = entry.get("data")
+        if data is None or (isinstance(data, dict) and data.get("error")):
+            return None
+        return {
+            "data": data,
+            "metadata_type": entry.get("metadata_type"),
+            "metadata_filename": entry.get("metadata_filename"),
+            "metadata_fingerprint": entry.get("metadata_fingerprint"),
+            "build_time_seconds": entry.get("build_time_seconds"),
+            "cached": True,
+        }
+    if entry:
+        current_app.TEMP_RESULTS_CACHE.pop(key, None)
+    return None
+
+
+def get_cached_readiness_fair_report(file_name):
+    """Return readiness FAIR cache for ``/cached-result/readiness_report_fair``."""
+    fair_compliance = _get_cached_readiness_fair_compliance(file_name)
+    if fair_compliance is None:
+        return None
+    return {"cached": True, "fair_compliance": fair_compliance}
+
+
+def _cache_readiness_fair_compliance(
+    file_name,
+    data,
+    *,
+    metadata_type,
+    metadata_filename,
+    metadata_fingerprint,
+    build_time_seconds,
+):
+    """Store a successful readiness-report FAIR assessment."""
+    if data is None or (isinstance(data, dict) and data.get("error")):
+        return
+    key = _readiness_fair_cache_key(file_name)
+    current_app.TEMP_RESULTS_CACHE[key] = {
+        "data": ensure_json_serializable(data),
+        "timestamp": time.time(),
+        "expires_at": time.time() + _READINESS_CACHE_TTL_SECONDS,
+        "build_time_seconds": build_time_seconds,
+        "metadata_type": metadata_type,
+        "metadata_filename": metadata_filename,
+        "metadata_fingerprint": metadata_fingerprint,
+    }
+
+
+def _run_fair_assessment(data_dict, metadata_type):
+    """Run FAIR assessment for DCAT or Datacite metadata."""
+    if metadata_type == "DCAT":
+        extracted_json = extract_keys_and_values(data_dict)
+        fair_dict = categorize_metadata(extracted_json, data_dict)
+        return format_dict_values(fair_dict)
+    if metadata_type == "Datacite":
+        return categorize_keys_fair(data_dict)
+    raise ValueError("Unknown metadata type")
 
 
 def _get_or_build_readiness_visualizations(section, file_info):
@@ -3032,24 +3117,48 @@ def fair_assessment():
                 return jsonify({"error": "Invalid file format. Please upload a JSON file."}), 400
 
             json_data = file.read()
-            data_dict = json.loads(json_data.decode("utf-8"))
-
             metadata_type = request.form.get("metadata type", "")
+            readiness_context = request.form.get("readiness_context") == "1"
+            dataset_file_name = (
+                session.get("uploaded_file_name")
+                or session.get("globus_file_name")
+                or ""
+            )
+            metadata_fingerprint = _fair_metadata_fingerprint(json_data, metadata_type)
 
-            if metadata_type == "DCAT":
-                try:
-                    extracted_json = extract_keys_and_values(data_dict)
-                    fair_dict = categorize_metadata(extracted_json, data_dict)
-                    result = format_dict_values(fair_dict)
-                except json.JSONDecodeError as e:
-                    return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
-            elif metadata_type == "Datacite":
-                try:
-                    result = categorize_keys_fair(data_dict)
-                except json.JSONDecodeError as e:
-                    return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
-            else:
+            if readiness_context and dataset_file_name:
+                cached_fair = _get_cached_readiness_fair_compliance(dataset_file_name)
+                if (
+                    cached_fair is not None
+                    and cached_fair.get("metadata_fingerprint") == metadata_fingerprint
+                ):
+                    metric_time_log.info(
+                        "Readiness report FAIR compliance cache hit for %s",
+                        dataset_file_name,
+                    )
+                    return jsonify(
+                        ensure_json_serializable(
+                            {
+                                **cached_fair["data"],
+                                "cached": True,
+                                "build_time_seconds": cached_fair.get(
+                                    "build_time_seconds"
+                                ),
+                            }
+                        )
+                    )
+
+            try:
+                data_dict = json.loads(json_data.decode("utf-8"))
+            except json.JSONDecodeError as e:
+                return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
+
+            try:
+                result = _run_fair_assessment(data_dict, metadata_type)
+            except ValueError:
                 return jsonify({"error": "Unknown metadata type"}), 400
+            except json.JSONDecodeError as e:
+                return jsonify({"error": f"Error parsing JSON: {str(e)}"}), 400
 
             duration = time.time() - start_time
             metric_time_log.info("FAIR Assessment completed in %.2f seconds", duration)
@@ -3058,7 +3167,16 @@ def fair_assessment():
                 span.set_attribute("metadata.type", metadata_type)
 
             result = ensure_json_serializable(result)
-            return jsonify(result)
+            if readiness_context and dataset_file_name:
+                _cache_readiness_fair_compliance(
+                    dataset_file_name,
+                    result,
+                    metadata_type=metadata_type,
+                    metadata_filename=file.filename,
+                    metadata_fingerprint=metadata_fingerprint,
+                    build_time_seconds=round(duration, 2),
+                )
+            return jsonify({**result, "cached": False, "build_time_seconds": round(duration, 2)})
 
         else:
             results_id = request.args.get("results_id")
