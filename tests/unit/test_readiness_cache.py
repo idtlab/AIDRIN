@@ -10,6 +10,7 @@ from web.routes.metrics import (
     _cache_readiness_payload,
     _get_cached_readiness_payload,
     _readiness_section_cache_key,
+    get_cached_readiness_report,
 )
 
 
@@ -94,6 +95,51 @@ class TestReadinessSectionCacheStore(unittest.TestCase):
 
         cached, _ = _get_cached_readiness_payload("data.csv", "data-quality")
         self.assertIsNone(cached)
+
+
+class TestReadinessAggregatedCache(unittest.TestCase):
+    def setUp(self):
+        self.app = Flask(__name__)
+        self.app.TEMP_RESULTS_CACHE = {}
+        self.app_context = self.app.app_context()
+        self.app_context.push()
+
+    def tearDown(self):
+        self.app_context.pop()
+
+    @patch("web.routes.metrics.get_current_user_id", return_value="user-1")
+    @patch("web.routes.metrics.current_app")
+    def test_get_cached_readiness_report_returns_all_sections(
+        self, mock_current_app, _mock_user
+    ):
+        mock_current_app.TEMP_RESULTS_CACHE = self.app.TEMP_RESULTS_CACHE
+        sections = {
+            "dataset-overview": {"rows": 10},
+            "data-quality": {"grade": 0.9},
+            "impact-on-ai": {"grade": 0.8},
+            "fairness-bias": {"grade": 0.7},
+            "data-governance": {"grade": 0.6},
+        }
+        for slug, payload in sections.items():
+            _cache_readiness_payload("data.csv", slug, payload, 1.0)
+
+        result = get_cached_readiness_report("data.csv")
+        self.assertIsNotNone(result)
+        self.assertTrue(result["cached"])
+        self.assertEqual(set(result["sections"].keys()), set(sections.keys()))
+        self.assertEqual(result["sections"]["data-quality"]["grade"], 0.9)
+        self.assertEqual(result["sections"]["data-quality"]["build_time_seconds"], 1.0)
+        self.assertTrue(all(result["sections_cached"].values()))
+
+    @patch("web.routes.metrics.get_current_user_id", return_value="user-1")
+    @patch("web.routes.metrics.current_app")
+    def test_get_cached_readiness_report_requires_every_section(
+        self, mock_current_app, _mock_user
+    ):
+        mock_current_app.TEMP_RESULTS_CACHE = self.app.TEMP_RESULTS_CACHE
+        _cache_readiness_payload("data.csv", "data-quality", {"grade": 0.9}, 1.0)
+
+        self.assertIsNone(get_cached_readiness_report("data.csv"))
 
 
 if __name__ == "__main__":

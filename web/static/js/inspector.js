@@ -88,11 +88,14 @@ function showPanel(panelId, pushHistory) {
     initCodeMirror();
   }
 
-  // Lazy load the data overview + data quality into the Readiness Report
-  // panel on first open
+  // Lazy load the readiness report on first open; restore from server cache when available
   if (panelId === "readiness-report" && !_readinessReportLoaded) {
     _readinessReportLoaded = true;
-    loadReadinessReport();
+    _restoreCachedReadinessReport().then((restored) => {
+      if (!restored && activePanel === "readiness-report") {
+        loadReadinessReport();
+      }
+    });
   }
 
   // Close mobile sidebar after selection
@@ -2507,61 +2510,13 @@ function _wireReadinessDetailsViz(detailsEl, section) {
  * @param {Function} renderFn - (container, data) => void
  * @returns {Promise<void>}
  */
-function _fetchReadinessSection(section, container, renderFn) {
-  if (!container) {
-    _readinessSectionStatus[section] = "error";
-    _updateReadinessExportButton();
-    return Promise.resolve();
-  }
-  return fetch(`/readiness-report/${section}`)
-    .then((r) => r.json())
-    .then((resp) => {
-      if (!resp.success) {
-        _readinessSectionStatus[section] = "error";
-        _readinessSectionError(
-          container,
-          `Could not load ${section.replace(/-/g, " ")}: ${resp.message || "unknown error"}`,
-        );
-        return;
-      }
-      const data = resp.data || {};
-      if (data.error) {
-        _readinessSectionStatus[section] = "error";
-        _readinessSectionError(container, data.error);
-        return;
-      }
-      _readinessSectionStatus[section] = "ok";
-      renderFn(container, data);
-      _appendReadinessBuildTimeFooter(
-        container,
-        resp.build_time_seconds ?? data.build_time_seconds,
-      );
-    })
-    .catch((err) => {
-      _readinessSectionStatus[section] = "error";
-      _readinessSectionError(container, `Error loading section: ${err.message}`);
-    })
-    .finally(() => {
-      _updateReadinessExportButton();
-    });
-}
-
-/**
- * Load the readiness report with hybrid progressive rendering:
- * dataset overview first, then remaining sections in parallel.
- */
-function loadReadinessReport() {
-  _wireReadinessExportButton();
-  _resetReadinessFairSection();
-  initReadinessFairSection();
-  _READINESS_REPORT_SECTIONS.forEach((section) => {
-    _readinessSectionStatus[section] = "pending";
-  });
-  _updateReadinessExportButton();
-
-  const overviewContainer = document.getElementById("readiness-summary");
-
-  const parallelSections = [
+function _getReadinessSectionRenderers() {
+  return [
+    {
+      section: "dataset-overview",
+      container: document.getElementById("readiness-summary"),
+      render: renderReadinessDatasetOverview,
+    },
     {
       section: "data-quality",
       container: document.getElementById("readiness-data-quality"),
@@ -2583,6 +2538,127 @@ function loadReadinessReport() {
       render: renderReadinessGovernance,
     },
   ];
+}
+
+function _initReadinessReportShell() {
+  _wireReadinessExportButton();
+  _resetReadinessFairSection();
+  initReadinessFairSection();
+  _READINESS_REPORT_SECTIONS.forEach((section) => {
+    _readinessSectionStatus[section] = "pending";
+  });
+  _updateReadinessExportButton();
+}
+
+function _applyReadinessSection(container, section, data, renderFn, buildTimeSeconds) {
+  if (!container) {
+    _readinessSectionStatus[section] = "error";
+    return false;
+  }
+  if (data.error) {
+    _readinessSectionStatus[section] = "error";
+    _readinessSectionError(container, data.error);
+    return false;
+  }
+  _readinessSectionStatus[section] = "ok";
+  container.classList.remove("text-center", "py-8");
+  renderFn(container, data);
+  _appendReadinessBuildTimeFooter(
+    container,
+    buildTimeSeconds ?? data.build_time_seconds,
+  );
+  return true;
+}
+
+function _fetchReadinessSection(section, container, renderFn) {
+  if (!container) {
+    _readinessSectionStatus[section] = "error";
+    _updateReadinessExportButton();
+    return Promise.resolve();
+  }
+  return fetch(`/readiness-report/${section}`)
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.success) {
+        _readinessSectionStatus[section] = "error";
+        _readinessSectionError(
+          container,
+          `Could not load ${section.replace(/-/g, " ")}: ${resp.message || "unknown error"}`,
+        );
+        return;
+      }
+      const data = resp.data || {};
+      _applyReadinessSection(
+        container,
+        section,
+        data,
+        renderFn,
+        resp.build_time_seconds,
+      );
+    })
+    .catch((err) => {
+      _readinessSectionStatus[section] = "error";
+      _readinessSectionError(container, `Error loading section: ${err.message}`);
+    })
+    .finally(() => {
+      _updateReadinessExportButton();
+    });
+}
+
+/**
+ * Restore the readiness report from the aggregated server cache (one request).
+ * @returns {Promise<boolean>} true when all sections were restored from cache
+ */
+function _restoreCachedReadinessReport() {
+  return fetch("/cached-result/readiness_report")
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.cached || !resp.sections || activePanel !== "readiness-report") {
+        return false;
+      }
+      _initReadinessReportShell();
+      let allOk = true;
+      _getReadinessSectionRenderers().forEach(({ section, container, render }) => {
+        const data = resp.sections[section];
+        if (!data) {
+          _readinessSectionStatus[section] = "error";
+          allOk = false;
+          return;
+        }
+        if (
+          !_applyReadinessSection(
+            container,
+            section,
+            data,
+            render,
+            data.build_time_seconds,
+          )
+        ) {
+          allOk = false;
+        }
+      });
+      _updateReadinessExportButton();
+      return allOk;
+    })
+    .catch((err) => {
+      debugLog("Readiness cache restore error:", err);
+      return false;
+    });
+}
+
+/**
+ * Load the readiness report with hybrid progressive rendering:
+ * dataset overview first, then remaining sections in parallel.
+ */
+function loadReadinessReport() {
+  _initReadinessReportShell();
+
+  const overviewEntry = _getReadinessSectionRenderers().find(
+    ({ section }) => section === "dataset-overview",
+  );
+  const parallelSections = _getReadinessSectionRenderers().filter(
+    ({ section }) => section !== "dataset-overview",
+  );
 
   const loadParallelSections = () => {
     Promise.all(
@@ -2592,16 +2668,16 @@ function loadReadinessReport() {
     );
   };
 
-  if (!overviewContainer) {
+  if (!overviewEntry?.container) {
     loadParallelSections();
     return;
   }
 
   // Hybrid: overview first, then parallel for the rest (spinners stay until each resolves).
   _fetchReadinessSection(
-    "dataset-overview",
-    overviewContainer,
-    renderReadinessDatasetOverview,
+    overviewEntry.section,
+    overviewEntry.container,
+    overviewEntry.render,
   ).finally(loadParallelSections);
 }
 

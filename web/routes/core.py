@@ -300,6 +300,14 @@ def cached_result(metric_name):
     if not file_name:
         return jsonify({"cached": False})
 
+    if metric_name == "readiness_report":
+        from web.routes.metrics import get_cached_readiness_report
+
+        cached_report = get_cached_readiness_report(file_name)
+        if cached_report:
+            return jsonify(ensure_json_serializable(cached_report))
+        return jsonify({"cached": False})
+
     cache_key = f"user:{user_id}:file:{file_name}:{metric_name}"
     entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
     if entry and entry.get("data"):

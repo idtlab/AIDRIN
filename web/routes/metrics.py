@@ -2231,6 +2231,26 @@ def _get_or_build_readiness_section(section, file_info, include_visualizations=F
     return data, build_time_seconds, False
 
 
+def get_cached_readiness_report(file_name):
+    """Return all cached readiness sections for ``/cached-result/readiness_report``.
+
+    Returns a JSON-serializable dict when every section is cached, else *None*.
+    """
+    sections = {}
+    sections_cached = {}
+    for slug in _READINESS_SECTION_BUILDERS:
+        cached, build_time = _get_cached_readiness_payload(file_name, slug)
+        if cached is None:
+            return None
+        sections[slug] = {**cached, "build_time_seconds": build_time}
+        sections_cached[slug] = True
+    return {
+        "cached": True,
+        "sections": sections,
+        "sections_cached": sections_cached,
+    }
+
+
 def _get_or_build_readiness_visualizations(section, file_info):
     """Return visualization payload from cache or build, store on miss."""
     file_name = file_info[1]
