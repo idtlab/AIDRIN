@@ -1,6 +1,6 @@
 ---
 name: aidrin
-description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
+description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
 ---
 
 # Assessing dataset AI-readiness with AIDRIN
@@ -79,6 +79,7 @@ Dimension → metric mapping for focused requests:
 | Privacy / PII / anonymity | k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk |
 | HIPAA / PHI compliance | hipaa-compliance |
 | Data quality / completeness / duplicates / outliers | completeness, duplicity, outliers |
+| Data structure / distribution shape / collinearity / redundant features | max-pairwise-correlation, skewness, kurtosis |
 | Feature relevance / AI impact | feature-relevance, correlations |
 | Class imbalance | class-imbalance |
 | Full readiness (no specific dimension) | all applicable metrics per the intent table in Step 4 |
