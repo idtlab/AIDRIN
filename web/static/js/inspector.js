@@ -305,11 +305,7 @@ function workspaceSubmit(targetUrl) {
     // Map route URLs to remote_metric_runner metric names
     const urlToMetrics = {
       "/data-quality": ["completeness", "outliers", "duplicates"],
-      "/data-structure": [
-        "max_pairwise_correlation",
-        "skewness",
-        "kurtosis",
-      ],
+      "/data-structure": ["max_pairwise_correlation", "skewness", "kurtosis"],
       "/fairness": ["representation_rate", "statistical_rates"],
       "/feature-relevance": ["feature_relevance"],
       "/correlation-analysis": ["correlations"],
