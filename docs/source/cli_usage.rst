@@ -109,6 +109,11 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
+   # Data structure (no arguments — operate on all numeric, non-constant features)
+   aidrin run max-pairwise-correlation /path/to/sample_dataset.csv
+   aidrin run skewness /path/to/sample_dataset.csv
+   aidrin run kurtosis /path/to/sample_dataset.csv
+
    # Data quality (completeness family — arguments are passed as named --flags)
    aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
    aidrin run feature-coverage-ratio /path/to/sample_dataset.csv --threshold 0.9
@@ -271,6 +276,15 @@ Available Metrics
    * - Data Quality
      - ``outliers-custom``
      - ``rules-json``
+   * - Data Structure
+     - ``max-pairwise-correlation``
+     - —
+   * - Data Structure
+     - ``skewness``
+     - —
+   * - Data Structure
+     - ``kurtosis``
+     - —
    * - Impact on AI
      - ``correlations``
      - ``columns``
