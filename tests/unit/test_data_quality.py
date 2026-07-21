@@ -109,8 +109,8 @@ class TestCompleteness(unittest.TestCase):
         self.assertAlmostEqual(scores["age"], 0.5)
         # 1 out of 4 missing in 'income' → 0.75
         self.assertAlmostEqual(scores["income"], 0.75)
-        # overall: rows with any missing / total = 3/4 missing → 0.25 complete
-        self.assertAlmostEqual(result["Overall Completeness"], 0.25)
+        # overall = mean of per-column scores = mean(0.5, 0.75) = 0.625
+        self.assertAlmostEqual(result["Overall Completeness"], 0.625)
 
     def test_visualization_is_base64(self):
         fi = _write_csv(self.df_full)

@@ -16,9 +16,9 @@ def completeness(self: Task, file_info):
     """Compute per-column and overall completeness (non-missing rate) for a dataset.
 
     Reads the file, calculates the proportion of non-null values for every
-    column, and also computes an overall completeness score — the fraction of
-    rows that have *no* missing values in *any* column.  A bar-chart
-    visualisation is included in the result.
+    column, and also computes an overall completeness score — the mean of the
+    per-column non-missing rates.  A bar-chart visualisation is included in the
+    result.
 
     Parameters
     ----------
@@ -55,8 +55,14 @@ def completeness(self: Task, file_info):
         # Ensure all column names are strings to avoid numpy array issues
         completeness_scores = {str(k): v for k, v in completeness_scores.items()}
 
-        # Calculate overall completeness metric for the dataset
-        overall_completeness = 1 - file.isnull().any(axis=1).mean()
+        # Overall completeness = mean per-column non-missing rate (i.e. the
+        # average of the per-column scores above). This degrades gracefully as
+        # columns are added and matches what the per-column scores describe.
+        # NOTE: this is a semantic change from the historical "Overall
+        # Completeness", which was row-wise (fraction of rows with no missing
+        # value in any column) and collapsed toward 0 on wide datasets. See
+        # CHANGELOG.md.
+        overall_completeness = 1 - file.isnull().mean().mean()
 
         result_dict = {}
 

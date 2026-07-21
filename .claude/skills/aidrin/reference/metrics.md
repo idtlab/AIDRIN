@@ -3,7 +3,7 @@
 ## Contents
 
 - [Invocation & conventions](#invocation--conventions)
-- [Data quality](#data-quality): completeness, duplicity, outliers
+- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, feature-coverage-ratio, temporal-completeness, null-count-trend
 - [Impact on AI](#impact-on-ai): correlations, feature-relevance
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
 - [Data governance](#data-governance): k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk, hipaa-compliance
@@ -16,6 +16,13 @@
 
 - `aidrin run <metric> <file> <args...>` — args are POSITIONAL, in the order
   shown by `aidrin run <metric> -h`. NOT `--flags`.
+- Metric names use **dash form** under `aidrin run` (`class-imbalance`,
+  `feature-relevance`, `k-anonymity`, etc.). Underscore forms are NOT accepted by
+  `aidrin run`.
+- Exception: the completeness-family metrics (`row-level-completeness`,
+  `feature-coverage-ratio`, `temporal-completeness`, `null-count-trend`) take
+  their arguments as NAMED `--flags` (e.g. `--required-columns`, `--frequency`),
+  not positionally.
 - Column lists are comma-separated strings; quote them: `"col_a,col_b"`.
 - `--detail` defaults on for `run`/`batch` (full JSON). Visualizations are
   stripped by default.
@@ -34,8 +41,12 @@
 - **Args:** none (file only)
 - **Output keys:**
   - `Completeness scores` — object mapping each column name to its completeness ratio (0–1)
-  - `Overall Completeness` — scalar, mean completeness across all columns
+  - `Overall Completeness` — scalar, **column-wise**: the mean of the per-column
+    non-missing rates (`1 - df.isnull().mean().mean()`). (Previously this was a
+    row-wise score — the fraction of rows with no missing cell; see `CHANGELOG.md`.)
 - **Direction:** higher overall completeness = fewer missing values = better.
+- **Web display name:** in the web Data Quality panel this metric is labeled
+  **"Column-Level Completeness"** (the metric id / CLI command is still `completeness`).
 
 **Example:**
 
@@ -73,6 +84,94 @@ aidrin run duplicity examples/sample_data/csv/adult.csv
 
 ```bash
 aidrin run outliers examples/sample_data/csv/adult.csv
+```
+
+---
+
+### row-level-completeness
+
+- **Syntax:** `aidrin run row-level-completeness <file> --required-columns "<cols>"`
+- **Args:**
+  - `--required-columns` (required) — comma-separated columns that must ALL be non-null for a row to count as complete
+- **Output keys:**
+  - `Row-Level Completeness (%)` — scalar percentage (0–100) of rows whose required columns are all non-null
+  - `Complete rows` — integer count of fully-complete rows
+  - `Total rows` — integer total row count
+  - `Description` — string
+- **Direction:** higher = more rows have every required field populated = better.
+
+**Example:**
+
+```bash
+aidrin run row-level-completeness examples/sample_data/csv/adult.csv --required-columns "age,workclass"
+```
+
+---
+
+### feature-coverage-ratio
+
+- **Syntax:** `aidrin run feature-coverage-ratio <file> --threshold <0–1>`
+- **Args:**
+  - `--threshold` (float 0–1, default `0.9`) — a feature is "covered" when its non-null rate ≥ threshold
+- **Output keys:**
+  - `Feature Coverage Ratio (%)` — scalar percentage of features whose non-null rate meets/exceeds the threshold
+  - `Threshold` — the threshold used
+  - `Covered features` — integer count of covered features
+  - `Total features` — integer column count
+  - `Feature Coverage Ratio Visualization` — base64-encoded PNG bar chart
+  - `Description` — string
+- **Direction:** higher = more features clear the coverage bar = better.
+
+**Example:**
+
+```bash
+aidrin run feature-coverage-ratio examples/sample_data/csv/adult.csv --threshold 0.9
+```
+
+---
+
+### temporal-completeness
+
+- **Syntax:** `aidrin run temporal-completeness <file> --timestamp-column <col> --frequency <freq>`
+- **Args:**
+  - `--timestamp-column` (required) — the datetime column to evaluate
+  - `--frequency` — expected interval frequency, one of `ms, s, min, h, D, W, ME, QE, YE` (default `D`)
+- **Output keys:**
+  - `Temporal Completeness (%)` — scalar percentage of expected intervals present between the earliest and latest timestamps
+  - `Frequency` — the frequency used
+  - `Expected intervals` — integer count of intervals expected across the range
+  - `Present intervals` — integer count of intervals actually present
+  - `Range start` / `Range end` — earliest / latest timestamp
+  - `Temporal Completeness Visualization` — base64-encoded PNG timeline chart
+  - `Description` — string
+- **Direction:** higher = fewer gaps in the time series = better.
+
+**Example:**
+
+```bash
+aidrin run temporal-completeness path/to/timeseries.csv --timestamp-column time --frequency D
+```
+
+---
+
+### null-count-trend
+
+- **Syntax:** `aidrin run null-count-trend <file> --batch-column <col> [--target-columns "<cols>"]`
+- **Args:**
+  - `--batch-column` (required) — column that groups rows into batches
+  - `--target-columns` (optional) — comma-separated columns to count nulls in; defaults to all other columns
+- **Output keys:**
+  - `Null counts by batch` — object mapping each batch value to its total null-cell count across the target columns
+  - `Batch column` — the batch column used
+  - `Target columns` — the columns whose nulls were counted
+  - `Null Count Trend Visualization` — base64-encoded PNG chart
+  - `Description` — string
+- **Direction:** batches with spiking null counts flag quality regressions; flat/low counts = stable quality.
+
+**Example:**
+
+```bash
+aidrin run null-count-trend path/to/batches.csv --batch-column machine_id --target-columns "temperature,pressure"
 ```
 
 ---
@@ -367,6 +466,12 @@ Config keys use dash names. Set `"save-images": false` to suppress the PNG write
 | `eval-columns`               | single-attribute-risk, multiple-attribute-risk |
 | `columns`                    | correlations, representation-rate              |
 | `epsilon`                    | differential-privacy                           |
+| `required-columns`           | row-level-completeness                         |
+| `threshold`                  | feature-coverage-ratio                         |
+| `timestamp-column`           | temporal-completeness                          |
+| `frequency`                  | temporal-completeness                          |
+| `batch-column`               | null-count-trend                               |
+| `target-columns`             | null-count-trend                               |
 | `save-images`                | any metric that produces visualizations        |
 
 **Example — zero-arg quality baseline (all three share no required column args):**

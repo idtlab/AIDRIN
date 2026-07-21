@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import List, Optional
 import os
 
+from aidrin.file_handling.file_parser import clear_frame_cache
+
 from .api import (
     METRIC_REGISTRY,
     list_available_metrics,
@@ -254,6 +256,12 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "num_columns": _parse_list(getattr(args, "num_columns", None)),
         "y_true_column": getattr(args, "y_true_column", None),
         "sensitive_attribute_column": getattr(args, "sensitive_attribute_column", None),
+        "required_columns": _parse_list(getattr(args, "required_columns", None)),
+        "threshold": getattr(args, "threshold", None),
+        "frequency": getattr(args, "frequency", None),
+        "timestamp_column": getattr(args, "timestamp_column", None),
+        "batch_column": getattr(args, "batch_column", None),
+        "target_columns": _parse_list(getattr(args, "target_columns", None)),
         "rules": parsed_rules,
         "rules_json": rules_json,
         "max_outliers": getattr(args, "max_outliers", 100),
@@ -331,6 +339,26 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
             )
         elif arg == "sensitive-attribute-column":
             parser.add_argument("sensitive_attribute_column", help="Sensitive attribute column", metavar="sensitive-attribute-column")
+        elif arg == "required-columns":
+            parser.add_argument("--required-columns", dest="required_columns", default=None,
+                                help="Comma-separated required columns (rows missing any are incomplete)")
+        elif arg == "threshold":
+            parser.add_argument("--threshold", dest="threshold", type=float, default=None,
+                                help="Coverage threshold in [0, 1] (default 0.9)")
+        elif arg == "frequency":
+            parser.add_argument("--frequency", dest="frequency", default=None,
+                                choices=["ms", "s", "min", "h", "D", "W", "ME", "QE", "YE"],
+                                help='Interval frequency (default "D"): '
+                                     'ms, s, min, h, D, W, ME, QE, YE')
+        elif arg == "timestamp-column":
+            parser.add_argument("--timestamp-column", dest="timestamp_column", default=None,
+                                help="Datetime column name")
+        elif arg == "batch-column":
+            parser.add_argument("--batch-column", dest="batch_column", default=None,
+                                help="Column that groups rows into batches")
+        elif arg == "target-columns":
+            parser.add_argument("--target-columns", dest="target_columns", default=None,
+                                help="Comma-separated columns to count nulls in (optional)")
 
 
 def _agentic_build_index(args: argparse.Namespace) -> None:
@@ -526,6 +554,13 @@ def main() -> None:
             argv = ["run", metric_key.replace("_", "-")] + argv[1:]
     args = parser.parse_args(argv)
 
+    # Cache sidecar cleanup: unlike the web app (whose uploads live in a
+    # managed, periodically-reaped folder), the CLI reads files from
+    # arbitrary locations on disk, so nothing else will clean up the
+    # ``.aidrin.feather`` cache written by read_file(). Track the dataset
+    # path(s) touched by this invocation and sweep them in `finally` below.
+    cleanup_path = getattr(args, "file_path", None)
+
     try:
         if args.command == "add-custom-module":
             target_dir = args.custom_dir or os.getcwd()
@@ -608,6 +643,7 @@ def main() -> None:
 
         if args.command == "batch":
             config = HeadlessConfig.from_file(args.config_path)
+            cleanup_path = config.file_path
             result = run_batch_metrics(
                 config,
                 verbose=args.verbose,
@@ -650,6 +686,9 @@ def main() -> None:
     except Exception as exc:
         sys.stderr.write(f"Error: {exc}\n")
         sys.exit(1)
+    finally:
+        if cleanup_path:
+            clear_frame_cache(cleanup_path)
 
 
 if __name__ == "__main__":

@@ -21,10 +21,14 @@ from aidrin.structured_data_metrics.class_imbalance import (
     class_distribution_plot,
 )
 from aidrin.structured_data_metrics.completeness import completeness
-from aidrin.structured_data_metrics.custom_outliers import custom_outliers
+from aidrin.structured_data_metrics.custom_outliers import calculate_custom_outliers
 from aidrin.structured_data_metrics.conditional_demo_disp import (
     conditional_demographic_disparity,
 )
+from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
+from aidrin.structured_data_metrics.null_count_trend import null_count_trend
+from aidrin.structured_data_metrics.row_level_completeness import row_level_completeness
+from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
@@ -54,6 +58,7 @@ from aidrin.structured_data_metrics.representation_rate import (
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 from web.routes.utils import (
     build_file_info,
+    confine_to_upload_folder,
     ensure_json_serializable,
     format_dict_values,
     generate_metric_cache_key,
@@ -74,7 +79,7 @@ METRIC_CELERY_TIMEOUT = 120
 
 @metrics_bp.route("/custom-outlier-targets", methods=["GET", "POST"])
 def custom_outlier_targets():
-    file_path = session.get("uploaded_file_path")
+    file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
     if not file_path:
@@ -97,7 +102,13 @@ def data_quality():
 
     if request.method == "POST":
         start_time = time.time()
-        selected = [m for m in ("completeness", "outliers", "duplicity", "custom_outliers") if request.form.get(m) == "yes"]
+        selected = [
+            m for m in (
+                "completeness", "row level completeness", "feature coverage ratio",
+                "temporal completeness", "null count trend",
+                "outliers", "duplicity", "custom_outliers",
+            ) if request.form.get(m) == "yes"
+        ]
         metric_time_log.info("Data Quality request started: %s", selected)
 
         tracer = get_tracer()
@@ -120,6 +131,86 @@ def data_quality():
                     )
                     final_dict["Completeness"] = compl_dict
                     metric_time_log.info("Completeness took %.2f seconds", time.time() - t0)
+
+                if "row level completeness" in selected:
+                    required_columns = [
+                        c.strip()
+                        for c in request.form.getlist("required columns for row level completeness")
+                        if c.strip()
+                    ]
+                    if not required_columns:
+                        final_dict["Row-Level Completeness"] = {
+                            "Error": "No required columns selected for row-level completeness."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.row_level_completeness"):
+                            final_dict["Row-Level Completeness"] = row_level_completeness(
+                                required_columns, file_info
+                            )
+                        metric_time_log.info(
+                            "Row-Level Completeness took %.2f seconds", time.time() - t0
+                        )
+
+                if "feature coverage ratio" in selected:
+                    threshold_raw = request.form.get("threshold for feature coverage ratio")
+                    threshold = 0.9
+                    if threshold_raw and threshold_raw.strip():
+                        try:
+                            threshold = float(threshold_raw)
+                        except ValueError:
+                            threshold = None
+                    if threshold is None:
+                        final_dict["Feature Coverage Ratio"] = {
+                            "Error": "Invalid threshold value. Threshold must be a number in [0, 1]."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.feature_coverage_ratio"):
+                            final_dict["Feature Coverage Ratio"] = feature_coverage_ratio(
+                                threshold, file_info
+                            )
+                        metric_time_log.info(
+                            "Feature Coverage Ratio took %.2f seconds", time.time() - t0
+                        )
+
+                if "temporal completeness" in selected:
+                    timestamp_column = request.form.get("timestamp column for temporal completeness")
+                    frequency = request.form.get("frequency for temporal completeness") or "D"
+                    if not timestamp_column:
+                        final_dict["Temporal Completeness"] = {
+                            "Error": "No timestamp column selected for temporal completeness."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.temporal_completeness"):
+                            final_dict["Temporal Completeness"] = temporal_completeness(
+                                timestamp_column, frequency, file_info
+                            )
+                        metric_time_log.info(
+                            "Temporal Completeness took %.2f seconds", time.time() - t0
+                        )
+
+                if "null count trend" in selected:
+                    batch_column = request.form.get("batch column for null count trend")
+                    target_columns = [
+                        c.strip()
+                        for c in request.form.getlist("target columns for null count trend")
+                        if c.strip()
+                    ]
+                    if not batch_column:
+                        final_dict["Null Count Trend"] = {
+                            "Error": "No batch column selected for null count trend."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.null_count_trend"):
+                            final_dict["Null Count Trend"] = null_count_trend(
+                                batch_column, target_columns, file_info
+                            )
+                        metric_time_log.info(
+                            "Null Count Trend took %.2f seconds", time.time() - t0
+                        )
 
                 if "outliers" in selected:
                     t0 = time.time()
@@ -157,7 +248,14 @@ def data_quality():
                         max_export_rows = request.form.get("max_export_rows", 10000)
                         try:
                             with tracer.start_as_current_span("metric.custom_outliers"):
-                                custom_dict = custom_outliers(
+                                # Call the plain function, not the @shared_task
+                                # wrapper: invoking the bound task synchronously
+                                # confuses CodeQL's argument mapping (it aligns
+                                # ``rules`` with the ``file_info`` parameter
+                                # because it can't see Celery's injected
+                                # ``self``), yielding false-positive
+                                # py/path-injection alerts in file_parser.
+                                custom_dict = calculate_custom_outliers(
                                     file_info,
                                     rules,
                                     max_outliers,

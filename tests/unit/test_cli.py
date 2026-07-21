@@ -458,6 +458,44 @@ class TestAddCustomModuleCommand(unittest.TestCase):
 
 
 # ===========================================================================
+# Frame cache cleanup
+# ===========================================================================
+
+
+def _frame_cache_siblings(path: str) -> list[str]:
+    directory = os.path.dirname(path) or "."
+    prefix = os.path.basename(path)
+    return [f for f in os.listdir(directory) if f.startswith(prefix) and f.endswith(".aidrin.feather")]
+
+
+class TestFrameCacheCleanup(unittest.TestCase):
+    """The CLI reads files from arbitrary disk locations with no periodic
+    reaper (unlike the web app's managed upload folder), so it must remove
+    its own ``.aidrin.feather`` cache sidecar after each invocation."""
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+
+    def tearDown(self):
+        for name in _frame_cache_siblings(self.csv):
+            _clean(os.path.join(os.path.dirname(self.csv) or ".", name))
+        _clean(self.csv)
+
+    def test_no_cache_sidecar_left_after_run_command(self):
+        _run_cli("run", "completeness", self.csv)
+        self.assertEqual(_frame_cache_siblings(self.csv), [])
+
+    def test_no_cache_sidecar_left_after_data_quality_command(self):
+        _run_cli("data-quality", self.csv)
+        self.assertEqual(_frame_cache_siblings(self.csv), [])
+
+    def test_no_cache_sidecar_left_after_failed_run(self):
+        # Nonexistent target column still exercises read_file() before failing.
+        _run_cli("run", "class-imbalance", self.csv, "not_a_real_column")
+        self.assertEqual(_frame_cache_siblings(self.csv), [])
+
+
+# ===========================================================================
 # Error handling
 # ===========================================================================
 

@@ -1,7 +1,8 @@
 # AIDRIN image for NERSC Spin: web + worker + beat under supervisord; Redis is separate.
 # Build from repo root: docker build -f docker/NERSC/Dockerfile -t aidrin:latest .
 # Runs Celery beat, so deploy with exactly ONE replica.
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+FROM python:3.13.11-slim-bookworm AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.9.27 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -17,7 +18,7 @@ COPY . .
 RUN uv sync --frozen --no-dev $AIDRIN_EXTRAS
 RUN uv pip install gunicorn==23.0.0 supervisor==4.2.5
 
-FROM python:3.12-slim-bookworm
+FROM python:3.13.11-slim-bookworm
 
 # libgomp1: OpenMP runtime for scikit-learn/scipy/shap.
 RUN apt-get update \

@@ -24,6 +24,9 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info):
     if epsilon <= 0:
         raise Exception("Epsilon must be greater than 0")
 
+    if not add_noise_columns:
+        raise Exception("No columns selected for noise addition")
+
     if isinstance(file_info, str):
         df = pd.read_json(file_info)
     else:
