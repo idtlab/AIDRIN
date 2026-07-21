@@ -1998,9 +1998,9 @@ function validateCustomOutlierRulesFile(rules) {
       return `Duplicate custom outlier rule id: ${ruleId}.`;
     seenIds.add(ruleId);
 
-    const ruleKey = ruleId
-      .replace(/[^A-Za-z0-9_.-]+/g, "_")
-      .replace(/^_+|_+$/g, "");
+    const ruleKey =
+      ruleId.replace(/[^A-Za-z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "") ||
+      "rule";
     if (seenKeys.has(ruleKey)) {
       return `Custom outlier rule ids resolve to the same output key: ${seenKeys.get(ruleKey)} and ${ruleId}.`;
     }

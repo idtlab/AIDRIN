@@ -13,10 +13,11 @@ from aidrin.mcp.server import run_aidrin_metric, run_custom_outlier_check  # noq
 
 
 def _write_csv() -> str:
-    file = tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w")
-    pd.DataFrame({"age": [18, 30, 70]}).to_csv(file.name, index=False)
+    file = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+    path = file.name
     file.close()
-    return file.name
+    pd.DataFrame({"age": [18, 30, 70]}).to_csv(path, index=False)
+    return path
 
 
 def _write_rules() -> str:

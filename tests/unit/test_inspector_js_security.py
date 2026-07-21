@@ -147,6 +147,14 @@ def test_custom_outlier_json_file_parser_corpus():
             False,
             "unsupported target match mode",
         ),
+        (
+            (
+                '[{"id":"!!!","target":"age","target_type":"column","criteria":{"type":"range","min":18}},'
+                '{"id":"rule","target":"age","target_type":"column","criteria":{"type":"range","min":18}}]'
+            ),
+            False,
+            "resolve to the same output key",
+        ),
     ]
     for text, expected_ok, expected_error in cases:
         result = _parse_rules_file_in_browser(text)
