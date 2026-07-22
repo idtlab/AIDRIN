@@ -518,7 +518,31 @@ The system returns:
 Data Structure and Organization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Currently, no specific metrics are implemented for this dimension. Future updates may include metrics for assessing dataset schema, format consistency, or organization.
+Assesses structural and distributional properties of the feature set. All three
+metrics operate on the numeric, non-constant columns and require no parameters.
+
+- **Max Pairwise Correlation**:
+
+  - **Method**: Computes the absolute Pearson correlation matrix over numeric
+    features and reports the single strongest pair. Values near 1.0 indicate
+    redundant (near-collinear) features.
+  - **Parameters**: None.
+  - **Result**: The maximum correlation, the most-correlated pair, the top pairs,
+    and an absolute-correlation heatmap.
+
+- **Skewness**:
+
+  - **Method**: Per-feature skewness (distribution asymmetry). Values far from 0
+    indicate long-tailed, asymmetric distributions.
+  - **Parameters**: None.
+  - **Result**: Per-column skewness, the most-skewed feature, and a bar chart.
+
+- **Kurtosis**:
+
+  - **Method**: Per-feature excess kurtosis (Fisher's definition; normal = 0).
+    Positive values mean heavier tails / more outliers than a normal distribution.
+  - **Parameters**: None.
+  - **Result**: Per-column excess kurtosis, the most-extreme feature, and a bar chart.
 
 Notes
 ~~~~~

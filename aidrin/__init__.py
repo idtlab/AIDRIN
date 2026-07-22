@@ -474,6 +474,62 @@ def compute_entropy_risk(quasi_identifiers, file_info):
     return _fn(quasi_identifiers, file_info)
 
 
+def calculate_max_pairwise_correlation(file_info):
+    """Strongest absolute pairwise correlation between numeric features.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        Max correlation, most-correlated pair, top pairs + heatmap, or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.max_pairwise_correlation import (
+        max_pairwise_correlation,
+    )
+    return max_pairwise_correlation.apply(args=(file_info,)).get()
+
+
+def calculate_skewness(file_info):
+    """Per-feature skewness (distribution asymmetry) for numeric columns.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        Per-column skewness, most-skewed feature + bar chart, or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.skewness import skewness
+    return skewness.apply(args=(file_info,)).get()
+
+
+def calculate_kurtosis(file_info):
+    """Per-feature excess kurtosis (tail heaviness) for numeric columns.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        Per-column excess kurtosis, most-extreme feature + bar chart, or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.kurtosis import kurtosis
+    return kurtosis.apply(args=(file_info,)).get()
+
+
 __all__ = [
     "__version__",
     # Data Quality
@@ -491,6 +547,10 @@ __all__ = [
     # Impact on AI
     "calculate_correlations",
     "calculate_feature_relevance",
+    # Data Structure
+    "calculate_max_pairwise_correlation",
+    "calculate_skewness",
+    "calculate_kurtosis",
     # Privacy / Data Governance
     "compute_k_anonymity",
     "compute_l_diversity",
