@@ -5,7 +5,7 @@ from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
-from aidrin.structured_data_metrics.duplicity import _make_hashable
+from aidrin.file_handling.hashable_utils import hashable_frame
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +48,7 @@ def duplicity_by_features(self: Task, features, file_info, top_n=10):
         if len(df) == 0:
             return {"Error": "Dataset is empty"}
 
-        hashable_df = df[features].copy()
-        for col in hashable_df.columns:
-            if hashable_df[col].dtype == object:
-                non_null = hashable_df[col].dropna()
-                first_val = non_null.iloc[0] if not non_null.empty else None
-                if isinstance(first_val, (list, dict)):
-                    hashable_df[col] = hashable_df[col].apply(_make_hashable)
+        hashable_df = hashable_frame(df[features])
 
         duplicate_mask = hashable_df.duplicated(keep="first")
         duplicate_count = int(duplicate_mask.sum())
