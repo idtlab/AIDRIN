@@ -713,6 +713,8 @@ def build_pdf_context(
     file_name: str,
     sections: dict[str, dict],
     fair_data: dict | None = None,
+    include_details: bool = False,
+    visualizations: dict[str, dict] | None = None,
 ) -> dict[str, Any]:
     """Assemble Jinja context for the readiness report PDF."""
     overview = _prepare_overview(sections.get("dataset-overview") or {})
@@ -728,16 +730,23 @@ def build_pdf_context(
         "governance": governance,
     }
     glossary = _collect_glossary_keys(prepared, fair_data)
+    section_details: dict[str, dict[str, Any] | None] = {}
+    if include_details:
+        from web.readiness.pdf_details import build_pdf_section_details
+
+        section_details = build_pdf_section_details(sections, visualizations or {})
     return {
         "file_name": file_name,
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "app_version": __version__,
+        "include_details": include_details,
         "overview": overview,
         "data_quality": data_quality,
         "impact": impact,
         "fairness": fairness,
         "governance": governance,
         "fair_compliance": fair_compliance,
+        "section_details": section_details,
         "glossary": glossary,
         "fmt_pct": fmt_pct,
         "fmt_num": fmt_num,
@@ -745,11 +754,12 @@ def build_pdf_context(
     }
 
 
-def pdf_filename(file_name: str) -> str:
+def pdf_filename(file_name: str, *, full: bool = False) -> str:
     stem = re.sub(r"\.[^.]+$", "", file_name or "dataset")
     stem = re.sub(r"[^\w.-]+", "_", stem) or "dataset"
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return f"readiness-report-{stem}-{date}.pdf"
+    prefix = "readiness-report-full" if full else "readiness-report"
+    return f"{prefix}-{stem}-{date}.pdf"
 
 
 def render_readiness_report_pdf(app, context: dict[str, Any]) -> bytes:

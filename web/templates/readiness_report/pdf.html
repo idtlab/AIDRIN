@@ -7,11 +7,16 @@
 <body>
 
   <div class="intro">
-    <h1>AI Data Readiness Report</h1>
+    <h1>{% if include_details %}AI Data Readiness Report (Full){% else %}AI Data Readiness Report{% endif %}</h1>
     <p><strong>Dataset:</strong> {{ file_name }}</p>
     <p class="muted">Generated {{ generated_at }} · AIDRIN {{ app_version }}</p>
     <p style="margin-top: 8pt;">
+      {% if include_details %}
+      Full readiness report including scorecard summaries and detailed charts &amp; tables
+      (the same content as each section’s “Show details” panel in the interactive report).
+      {% else %}
       Automated scorecard for the uploaded dataset. Five pillars are computed without user column selection.
+      {% endif %}
       Overall grades use the mean of available KPI values on a 0–1 scale.
       <strong>Good</strong> ≥ 90%, <strong>Warning</strong> ≥ 70%, <strong>Poor</strong> &lt; 70%.
       Higher KPI values indicate better readiness unless noted otherwise.
@@ -90,6 +95,10 @@
     </table>
     {% set section_name = 'overview' %}
     {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.overview %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
   </div>
 
   {# --- Data Quality --- #}
@@ -125,6 +134,10 @@
     {% include "readiness_report/_pdf_needs_attention.html" %}
     {% set section_name = 'data_quality' %}
     {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.data_quality %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
   </div>
 
   {# --- Impact on AI --- #}
@@ -168,6 +181,10 @@
     {% include "readiness_report/_pdf_needs_attention.html" %}
     {% set section_name = 'impact' %}
     {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.impact %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
   </div>
 
   {# --- Fairness & Bias --- #}
@@ -222,6 +239,10 @@
     {% include "readiness_report/_pdf_needs_attention.html" %}
     {% set section_name = 'fairness' %}
     {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.fairness %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
   </div>
 
   {# --- Data Governance --- #}
@@ -282,6 +303,10 @@
     {% include "readiness_report/_pdf_needs_attention.html" %}
     {% set section_name = 'governance' %}
     {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.governance %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
   </div>
 
   {% if fair_compliance %}

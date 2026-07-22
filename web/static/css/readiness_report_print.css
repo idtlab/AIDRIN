@@ -600,6 +600,100 @@ table.data td.num {
   padding: 4pt 5pt 4pt 4pt;
 }
 
+.details-section {
+  margin-top: 10pt;
+  padding-top: 8pt;
+  border-top: 1px solid #d1d5db;
+}
+
+.details-heading {
+  font-size: 10pt;
+  margin: 0 0 8pt 0;
+  color: #1d4ed8;
+}
+
+.details-subheading {
+  font-size: 7.5pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #4b5563;
+  margin: 8pt 0 4pt 0;
+}
+
+.details-note {
+  margin-bottom: 6pt;
+}
+
+.details-table {
+  margin-bottom: 8pt;
+}
+
+.details-list {
+  margin: 0 0 8pt 0;
+  padding-left: 14pt;
+  font-size: 8.5pt;
+}
+
+.details-list li {
+  margin-bottom: 3pt;
+}
+
+.chart-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6pt;
+  margin-bottom: 8pt;
+}
+
+.chart-figure {
+  margin: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.chart-figure-small {
+  flex: 0 0 calc((100% - 12pt) / 3);
+  max-width: calc((100% - 12pt) / 3);
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+  border-radius: 4pt;
+  padding: 4pt;
+  background: #fafafa;
+}
+
+.chart-figure-small figcaption {
+  font-size: 7pt;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 3pt;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-figure-small img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-figure-wide {
+  margin-bottom: 8pt;
+  border: 1px solid #e5e7eb;
+  border-radius: 4pt;
+  padding: 6pt;
+  background: #fafafa;
+}
+
+.chart-figure-wide img {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
 .page-break {
   page-break-before: always;
 }

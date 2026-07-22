@@ -2486,7 +2486,7 @@ def readiness_report():
 
 @metrics_bp.route("/readiness-report/pdf", methods=["GET"])
 def readiness_report_pdf():
-    """Build readiness sections (cache on miss) and return a scorecard PDF."""
+    """Build readiness sections (cache on miss) and return a scorecard or full PDF."""
     file_info = _readiness_file_info()
     if file_info is None:
         return jsonify({"success": False, "message": "No file uploaded"}), 400
@@ -2497,8 +2497,11 @@ def readiness_report_pdf():
         render_readiness_report_pdf,
     )
 
+    mode = request.args.get("mode", "scorecard")
+    include_details = mode == "full"
     file_name = file_info[1]
     sections = {}
+    visualizations: dict[str, dict] = {}
     start_time = time.time()
     try:
         for slug in _READINESS_SECTION_BUILDERS:
@@ -2511,6 +2514,17 @@ def readiness_report_pdf():
                     "message": f"Could not build {slug}: {data['error']}",
                 }), 500
             sections[slug] = data
+            if include_details:
+                viz_data, viz_elapsed, viz_cached = _get_or_build_readiness_visualizations(
+                    slug, file_info
+                )
+                visualizations[slug] = viz_data or {}
+                if not viz_cached:
+                    metric_time_log.info(
+                        "Readiness report PDF — %s visualizations built in %.2f seconds",
+                        slug,
+                        viz_elapsed,
+                    )
             if not from_cache:
                 metric_time_log.info(
                     "Readiness report PDF — section %s built in %.2f seconds",
@@ -2524,17 +2538,20 @@ def readiness_report_pdf():
             file_name=file_name,
             sections=sections,
             fair_data=fair_data,
+            include_details=include_details,
+            visualizations=visualizations,
         )
         pdf_bytes = render_readiness_report_pdf(current_app, context)
         metric_time_log.info(
-            "Readiness report PDF generated in %.2f seconds",
+            "Readiness report PDF (%s) generated in %.2f seconds",
+            mode,
             time.time() - start_time,
         )
         return send_file(
             io.BytesIO(pdf_bytes),
             mimetype="application/pdf",
             as_attachment=True,
-            download_name=pdf_filename(file_name),
+            download_name=pdf_filename(file_name, full=include_details),
         )
     except RuntimeError as e:
         metric_time_log.error("Readiness report PDF error: %s", e, exc_info=True)

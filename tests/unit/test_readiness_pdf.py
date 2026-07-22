@@ -194,6 +194,8 @@ class TestReadinessPdfContext(unittest.TestCase):
         name = pdf_filename("my data (1).csv")
         self.assertTrue(name.startswith("readiness-report-my_data__1_"))
         self.assertTrue(name.endswith(".pdf"))
+        full_name = pdf_filename("my data (1).csv", full=True)
+        self.assertTrue(full_name.startswith("readiness-report-full-my_data__1_"))
 
 
 class TestReadinessPdfRender(unittest.TestCase):

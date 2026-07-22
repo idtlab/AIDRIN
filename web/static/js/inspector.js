@@ -2743,21 +2743,32 @@ function _readinessAllSectionsReady() {
 
 function _updateReadinessExportButton() {
   const bar = document.getElementById("readiness-export-bar");
-  const btn = document.getElementById("readiness-export-pdf-btn");
-  if (!bar || !btn) return;
+  const scorecardBtn = document.getElementById("readiness-export-scorecard-pdf-btn");
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  if (!bar) return;
   bar.classList.remove("hidden");
-  if (!btn.hasAttribute("aria-busy")) {
-    btn.disabled = false;
-  }
+  [scorecardBtn, fullBtn].forEach((btn) => {
+    if (btn && !btn.hasAttribute("aria-busy")) {
+      btn.disabled = false;
+    }
+  });
 }
 
 function _wireReadinessExportButton() {
-  const btn = document.getElementById("readiness-export-pdf-btn");
-  if (!btn || btn.dataset.wired === "1") return;
-  btn.dataset.wired = "1";
-  btn.addEventListener("click", () => {
-    _exportReadinessReportPdf();
-  });
+  const scorecardBtn = document.getElementById("readiness-export-scorecard-pdf-btn");
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  if (scorecardBtn && scorecardBtn.dataset.wired !== "1") {
+    scorecardBtn.dataset.wired = "1";
+    scorecardBtn.addEventListener("click", () => {
+      exportReadinessReportPdf("scorecard");
+    });
+  }
+  if (fullBtn && fullBtn.dataset.wired !== "1") {
+    fullBtn.dataset.wired = "1";
+    fullBtn.addEventListener("click", () => {
+      exportReadinessReportPdf("full");
+    });
+  }
 }
 
 function _readinessPdfFilename() {
@@ -2780,19 +2791,24 @@ function _filenameFromContentDisposition(header) {
 }
 
 /** Download readiness report PDF from the server (sync build-on-miss). */
-function exportReadinessReportPdf() {
-  const btn = document.getElementById("readiness-export-pdf-btn");
-  const topBtn = document.getElementById("topbar-readiness-pdf-btn");
-  const labelEl = document.getElementById("readiness-export-pdf-label");
-  const buttons = [btn, topBtn].filter(Boolean);
+function exportReadinessReportPdf(mode = "scorecard") {
+  const isFull = mode === "full";
+  const scorecardBtn = document.getElementById("readiness-export-scorecard-pdf-btn");
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  const scorecardLabel = document.getElementById("readiness-export-scorecard-pdf-label");
+  const fullLabel = document.getElementById("readiness-export-full-pdf-label");
+  const buttons = [scorecardBtn, fullBtn].filter(Boolean);
 
   buttons.forEach((el) => {
     el.disabled = true;
     el.setAttribute("aria-busy", "true");
   });
-  if (labelEl) labelEl.textContent = "Preparing PDF…";
+  if (isFull && fullLabel) fullLabel.textContent = "Preparing full PDF…";
+  if (!isFull && scorecardLabel) scorecardLabel.textContent = "Preparing PDF…";
 
-  return fetch("/readiness-report/pdf")
+  const url = isFull ? "/readiness-report/pdf?mode=full" : "/readiness-report/pdf";
+
+  return fetch(url)
     .then(async (response) => {
       if (!response.ok) {
         let message = `PDF export failed (${response.status})`;
@@ -2826,12 +2842,13 @@ function exportReadinessReportPdf() {
         el.disabled = false;
         el.removeAttribute("aria-busy");
       });
-      if (labelEl) labelEl.textContent = "Download PDF report";
+      if (scorecardLabel) scorecardLabel.textContent = "Scorecard PDF";
+      if (fullLabel) fullLabel.textContent = "Full report PDF";
     });
 }
 
 function _exportReadinessReportPdf() {
-  return exportReadinessReportPdf();
+  return exportReadinessReportPdf("scorecard");
 }
 
 /** Escape text for safe inclusion in readiness info tooltips. */
