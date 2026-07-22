@@ -2745,7 +2745,7 @@ function _updateReadinessExportButton() {
   const bar = document.getElementById("readiness-export-bar");
   const btn = document.getElementById("readiness-export-pdf-btn");
   if (!bar || !btn) return;
-  bar.classList.toggle("hidden", !_readinessAllSectionsReady());
+  bar.classList.remove("hidden");
   if (!btn.hasAttribute("aria-busy")) {
     btn.disabled = false;
   }
@@ -2760,151 +2760,78 @@ function _wireReadinessExportButton() {
   });
 }
 
-function _loadHtml2PdfLib() {
-  if (window.html2pdf) return Promise.resolve(window.html2pdf);
-  return new Promise((resolve, reject) => {
-    const existing = document.getElementById("html2pdf-script");
-    if (existing) {
-      existing.addEventListener("load", () => resolve(window.html2pdf));
-      existing.addEventListener("error", () => reject(new Error("Could not load PDF library")));
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "html2pdf-script";
-    script.src =
-      "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-    script.async = true;
-    script.onload = () => resolve(window.html2pdf);
-    script.onerror = () => reject(new Error("Could not load PDF library"));
-    document.head.appendChild(script);
-  });
-}
-
-function _stripReadinessPdfUnsafeClasses(root) {
-  const isUnsafe = (cls) =>
-    cls.startsWith("dark:") || cls.includes("/") || cls === "animate-spin";
-  const strip = (el) => {
-    [...el.classList].filter(isUnsafe).forEach((c) => el.classList.remove(c));
-  };
-  strip(root);
-  root.querySelectorAll("*").forEach(strip);
-}
-
-function _pruneReadinessNodeForPdf(node) {
-  node.querySelectorAll("details").forEach((el) => el.remove());
-  node.querySelectorAll(".readiness-viz-slot").forEach((el) => el.remove());
-  node.querySelectorAll(".info-icon").forEach((el) => el.remove());
-  node.querySelectorAll(".readiness-build-time").forEach((el) => el.remove());
-  node.querySelectorAll("#readiness-fair-upload").forEach((el) => el.remove());
-  node
-    .querySelectorAll("#readiness-categorical-charts, #readiness-histograms-inner")
-    .forEach((el) => el.remove());
-  return node;
-}
-
-function _normalizeReadinessPdfRoot(root) {
-  root.classList.add("readiness-pdf-export");
-  _stripReadinessPdfUnsafeClasses(root);
-  root.style.cssText =
-    "background:#ffffff;color:#111827;padding:0;opacity:1;animation:none;";
-  root.querySelectorAll(".bg-white, .bg-gray-50").forEach((el) => {
-    el.style.backgroundColor = el.classList.contains("bg-gray-50") ? "#f9fafb" : "#ffffff";
-    el.style.color = "#111827";
-  });
-  root
-    .querySelectorAll(
-      ".bg-blue-50, .bg-amber-50, .bg-green-50, .bg-red-50, .bg-green-100, .bg-amber-100, .bg-red-100",
-    )
-    .forEach((el) => {
-      if (el.classList.contains("bg-blue-50")) el.style.backgroundColor = "#eff6ff";
-      else if (el.classList.contains("bg-amber-50")) el.style.backgroundColor = "#fffbeb";
-      else if (el.classList.contains("bg-green-50")) el.style.backgroundColor = "#f0fdf4";
-      else if (el.classList.contains("bg-red-50")) el.style.backgroundColor = "#fef2f2";
-      else if (el.classList.contains("bg-green-100")) el.style.backgroundColor = "#dcfce7";
-      else if (el.classList.contains("bg-amber-100")) el.style.backgroundColor = "#fef3c7";
-      else if (el.classList.contains("bg-red-100")) el.style.backgroundColor = "#fee2e2";
-    });
-  return root;
-}
-
-/** Clone only scorecard sections for PDF (avoids copying huge collapsed detail trees). */
-function _buildSlimReadinessPanelForPdf(panel) {
-  const includeFair = _readinessFairCompliance?.status === "ok";
-  const root = document.createElement("div");
-  panel.querySelectorAll(":scope > div.rounded-lg.shadow-sm").forEach((card) => {
-    if (card.dataset.readinessPdf === "conditional" && !includeFair) return;
-    const clone = _pruneReadinessNodeForPdf(card.cloneNode(true));
-    clone.querySelector("#readiness-fair-upload")?.remove();
-    const fairResults = clone.querySelector("#readiness-fair-results");
-    if (fairResults) fairResults.classList.remove("hidden");
-    root.appendChild(clone);
-  });
-  return _normalizeReadinessPdfRoot(root);
-}
-
 function _readinessPdfFilename() {
   const panel = document.getElementById("panel-readiness-report");
-  const raw = panel?.dataset?.datasetName || "dataset";
+  const raw = panel?.dataset?.datasetName || window.AIDRIN_DATASET_NAME || "dataset";
   const stem = String(raw).replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_");
   const date = new Date().toISOString().slice(0, 10);
   return `readiness-report-${stem || "dataset"}-${date}.pdf`;
 }
 
-async function _exportReadinessReportPdf() {
-  const panel = document.getElementById("panel-readiness-report");
-  const btn = document.getElementById("readiness-export-pdf-btn");
-  const labelEl = document.getElementById("readiness-export-pdf-label");
-  if (!panel || !_readinessAllSectionsReady()) return;
-
-  if (btn) {
-    btn.disabled = true;
-    btn.setAttribute("aria-busy", "true");
+function _filenameFromContentDisposition(header) {
+  if (!header) return null;
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1].replace(/"/g, ""));
+  } catch (_e) {
+    return match[1].replace(/"/g, "");
   }
+}
+
+/** Download readiness report PDF from the server (sync build-on-miss). */
+function exportReadinessReportPdf() {
+  const btn = document.getElementById("readiness-export-pdf-btn");
+  const topBtn = document.getElementById("topbar-readiness-pdf-btn");
+  const labelEl = document.getElementById("readiness-export-pdf-label");
+  const buttons = [btn, topBtn].filter(Boolean);
+
+  buttons.forEach((el) => {
+    el.disabled = true;
+    el.setAttribute("aria-busy", "true");
+  });
   if (labelEl) labelEl.textContent = "Preparing PDF…";
 
-  let host = null;
-  try {
-    const html2pdf = await _loadHtml2PdfLib();
-    const clone = _buildSlimReadinessPanelForPdf(panel);
-    host = document.createElement("div");
-    host.style.cssText =
-      "position:fixed;left:-10000px;top:0;width:900px;background:#fff;padding:0;margin:0;";
-    host.appendChild(clone);
-    document.body.appendChild(host);
+  return fetch("/readiness-report/pdf")
+    .then(async (response) => {
+      if (!response.ok) {
+        let message = `PDF export failed (${response.status})`;
+        try {
+          const data = await response.json();
+          if (data?.message) message = data.message;
+        } catch (_e) {
+          /* ignore */
+        }
+        throw new Error(message);
+      }
+      const filename =
+        _filenameFromContentDisposition(response.headers.get("Content-Disposition")) ||
+        _readinessPdfFilename();
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    })
+    .catch((err) => {
+      console.error("Readiness PDF export failed:", err);
+      alert(err.message || "Could not generate PDF.");
+    })
+    .finally(() => {
+      buttons.forEach((el) => {
+        el.disabled = false;
+        el.removeAttribute("aria-busy");
+      });
+      if (labelEl) labelEl.textContent = "Download PDF report";
+    });
+}
 
-    await new Promise((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(resolve)),
-    );
-
-    await html2pdf()
-      .set({
-        margin: [8, 8, 8, 8],
-        filename: _readinessPdfFilename(),
-        image: { type: "jpeg", quality: 0.95 },
-        html2canvas: {
-          scale: 1,
-          useCORS: true,
-          logging: false,
-          backgroundColor: "#ffffff",
-          scrollX: 0,
-          scrollY: 0,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
-      })
-      .from(clone)
-      .save();
-  } catch (err) {
-    console.error("Readiness PDF export failed:", err);
-    alert(err.message || "Could not generate PDF.");
-  } finally {
-    if (host && host.parentNode) host.parentNode.removeChild(host);
-    if (btn) {
-      btn.disabled = false;
-      btn.removeAttribute("aria-busy");
-    }
-    if (labelEl) labelEl.textContent = "Download PDF report";
-  }
+function _exportReadinessReportPdf() {
+  return exportReadinessReportPdf();
 }
 
 /** Escape text for safe inclusion in readiness info tooltips. */

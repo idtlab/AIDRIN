@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import logging
 import math
@@ -14,6 +15,7 @@ from flask import (
     jsonify,
     redirect,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -2480,6 +2482,66 @@ def readiness_report():
     except Exception as e:
         metric_time_log.error("Readiness report error: %s", e, exc_info=True)
         return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 200
+
+
+@metrics_bp.route("/readiness-report/pdf", methods=["GET"])
+def readiness_report_pdf():
+    """Build readiness sections (cache on miss) and return a scorecard PDF."""
+    file_info = _readiness_file_info()
+    if file_info is None:
+        return jsonify({"success": False, "message": "No file uploaded"}), 400
+
+    from web.readiness.pdf import (
+        build_pdf_context,
+        pdf_filename,
+        render_readiness_report_pdf,
+    )
+
+    file_name = file_info[1]
+    sections = {}
+    start_time = time.time()
+    try:
+        for slug in _READINESS_SECTION_BUILDERS:
+            data, section_elapsed, from_cache = _get_or_build_readiness_section(
+                slug, file_info
+            )
+            if isinstance(data, dict) and data.get("error"):
+                return jsonify({
+                    "success": False,
+                    "message": f"Could not build {slug}: {data['error']}",
+                }), 500
+            sections[slug] = data
+            if not from_cache:
+                metric_time_log.info(
+                    "Readiness report PDF — section %s built in %.2f seconds",
+                    slug,
+                    section_elapsed,
+                )
+
+        fair_entry = _get_cached_readiness_fair_compliance(file_name)
+        fair_data = fair_entry.get("data") if fair_entry else None
+        context = build_pdf_context(
+            file_name=file_name,
+            sections=sections,
+            fair_data=fair_data,
+        )
+        pdf_bytes = render_readiness_report_pdf(current_app, context)
+        metric_time_log.info(
+            "Readiness report PDF generated in %.2f seconds",
+            time.time() - start_time,
+        )
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=pdf_filename(file_name),
+        )
+    except RuntimeError as e:
+        metric_time_log.error("Readiness report PDF error: %s", e, exc_info=True)
+        return jsonify({"success": False, "message": str(e)}), 500
+    except Exception as e:
+        metric_time_log.error("Readiness report PDF error: %s", e, exc_info=True)
+        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 500
 
 
 # ---------------------------------------------------------------------------

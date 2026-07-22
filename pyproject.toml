@@ -31,6 +31,7 @@ dependencies = [
     "openpyxl>=3.1.5",
     "pgeocode>=0.5.0",
     "pyarrow>=15.0.0",
+    "weasyprint>=62.0",
 ]
 
 [project.optional-dependencies]
