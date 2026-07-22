@@ -3,8 +3,8 @@
 ## Contents
 
 - [Invocation & conventions](#invocation--conventions)
-- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, feature-coverage-ratio, temporal-completeness, null-count-trend
-- [Data structure](#data-structure): max-pairwise-correlation, skewness, kurtosis
+- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, duplicity-by-features, feature-coverage-ratio, temporal-completeness, null-count-trend
+- [Data structure](#data-structure): constant-feature-count, max-pairwise-correlation, skewness, kurtosis
 - [Impact on AI](#impact-on-ai): correlations, feature-relevance
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
 - [Data governance](#data-governance): k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk, hipaa-compliance
@@ -109,6 +109,27 @@ aidrin run row-level-completeness examples/sample_data/csv/adult.csv --required-
 
 ---
 
+### duplicity-by-features
+
+- **Syntax:** `aidrin run duplicity-by-features <file> --duplicate-columns "<cols>"`
+- **Args:**
+  - `--duplicate-columns` (required) — comma-separated columns to compare when detecting duplicate rows
+- **Output keys:**
+  - `Duplicate count` — integer count of duplicate rows (rows after the first occurrence of each value combination)
+  - `Duplicate percentage` — scalar percentage (0–100) of rows that are duplicates
+  - `Total rows` — integer total row count
+  - `Duplicate groups` — list of `{"Feature values": {...}, "Row count": int}`, the top 10 largest duplicate groups, sorted descending by size
+  - `Description` — string
+- **Direction:** lower duplicate percentage = fewer redundant rows = better.
+
+**Example:**
+
+```bash
+aidrin run duplicity-by-features examples/sample_data/csv/adult.csv --duplicate-columns "age,workclass"
+```
+
+---
+
 ### feature-coverage-ratio
 
 - **Syntax:** `aidrin run feature-coverage-ratio <file> --threshold <0–1>`
@@ -179,8 +200,27 @@ aidrin run null-count-trend path/to/batches.csv --batch-column machine_id --targ
 
 ## Data structure
 
-These three take **no arguments** (like the zero-arg quality baseline) and operate
-on the numeric, non-constant columns.
+These four take **no arguments** (like the zero-arg quality baseline).
+`max-pairwise-correlation`, `skewness`, and `kurtosis` operate on the numeric,
+non-constant columns.
+
+### constant-feature-count
+
+- **Syntax:** `aidrin run constant-feature-count <file>`
+- **Args:** none (file only)
+- **Output keys:**
+  - `Constant feature count` — integer count of columns with exactly one distinct value (null counts as a value: an all-null column is constant; a column with one real value plus nulls is not, since that's two distinct values)
+  - `Total features` — integer total column count
+  - `Constant features` — object mapping each constant column name to its single value (`null` for an all-null column)
+- **Direction:** any constant features present = columns carrying no information for modeling and candidates for removal.
+
+**Example:**
+
+```bash
+aidrin run constant-feature-count examples/sample_data/csv/adult.csv
+```
+
+---
 
 ### max-pairwise-correlation
 

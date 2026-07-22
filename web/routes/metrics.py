@@ -28,6 +28,8 @@ from aidrin.structured_data_metrics.conditional_demo_disp import (
 from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
 from aidrin.structured_data_metrics.null_count_trend import null_count_trend
 from aidrin.structured_data_metrics.row_level_completeness import row_level_completeness
+from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
+from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
@@ -111,7 +113,8 @@ def data_quality():
             m for m in (
                 "completeness", "row level completeness", "feature coverage ratio",
                 "temporal completeness", "null count trend",
-                "outliers", "duplicity", "custom_outliers",
+                "outliers", "duplicity", "duplicate detection by features",
+                "custom_outliers",
             ) if request.form.get(m) == "yes"
         ]
         metric_time_log.info("Data Quality request started: %s", selected)
@@ -240,6 +243,26 @@ def data_quality():
                     final_dict["Duplicity"] = dup_dict
                     metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
 
+                if "duplicate detection by features" in selected:
+                    dup_features = [
+                        c.strip()
+                        for c in request.form.getlist("features for duplicate detection")
+                        if c.strip()
+                    ]
+                    if not dup_features:
+                        final_dict["Duplicates by Selected Features"] = {
+                            "Error": "No features selected for duplicate detection."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.duplicity_by_features"):
+                            final_dict["Duplicates by Selected Features"] = duplicity_by_features(
+                                dup_features, file_info
+                            )
+                        metric_time_log.info(
+                            "Duplicates by Selected Features took %.2f seconds", time.time() - t0
+                        )
+
                 if "custom_outliers" in selected:
                     t0 = time.time()
                     try:
@@ -313,7 +336,7 @@ def data_structure():
         start_time = time.time()
         selected = [
             m for m in (
-                "max pairwise correlation", "skewness", "kurtosis",
+                "constant feature count", "max pairwise correlation", "skewness", "kurtosis",
             ) if request.form.get(m) == "yes"
         ]
         metric_time_log.info("Data Structure request started: %s", selected)
@@ -326,6 +349,19 @@ def data_structure():
             span.set_attribute("file.type", file_type or "")
 
             try:
+                if "constant feature count" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.constant_feature_count"):
+                        cfc_dict = constant_feature_count(file_info)
+                    cfc_dict["Description"] = (
+                        "Columns with a single distinct value carry no information "
+                        "for modeling and are candidates for removal."
+                    )
+                    final_dict["Constant Feature Count"] = cfc_dict
+                    metric_time_log.info(
+                        "Constant Feature Count took %.2f seconds", time.time() - t0
+                    )
+
                 if "max pairwise correlation" in selected:
                     t0 = time.time()
                     with tracer.start_as_current_span("metric.max_pairwise_correlation"):

@@ -51,7 +51,7 @@ Copy this checklist and work through it in order:
 ### 1. Preflight
 
 **MCP:** Call `list_metrics()`. Pass `category=` to filter by group (data-quality,
-impact-of-data-on-AI, fairness-and-bias, data-governance).
+data-structure, impact-of-data-on-AI, fairness-and-bias, data-governance).
 
 **CLI:** Run `aidrin list`. If it fails, see [reference/installation.md](reference/installation.md).
 
@@ -82,6 +82,7 @@ Dimension → metric mapping for focused requests:
 | Data structure / distribution shape / collinearity / redundant features | max-pairwise-correlation, skewness, kurtosis |
 | Feature relevance / AI impact | feature-relevance, correlations |
 | Class imbalance | class-imbalance |
+| Data structure / organization | constant-feature-count |
 | Full readiness (no specific dimension) | all applicable metrics per the intent table in Step 4 |
 
 Always add the zero-arg quality baseline (completeness, duplicity, outliers) even for
@@ -108,7 +109,7 @@ include the zero-arg quality baseline.
 | Train supervised model | completeness, duplicity, outliers, feature-relevance, class-imbalance, correlations | target; categorical/numerical features; correlations & feature-relevance need columns |
 | Ensure fairness across groups | class-imbalance, statistical-rates, representation-rate | target + sensitive attribute(s) |
 | Publish / share externally | k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk | quasi-identifiers, sensitive column, id column + eval columns |
-| General quality / exploration | completeness, duplicity, outliers, correlations | correlations needs columns |
+| General quality / exploration | completeness, duplicity, outliers, constant-feature-count, correlations | correlations needs columns |
 | Contains PII / sensitive data | governance + privacy set above, hipaa-compliance | quasi-identifiers, sensitive column; hipaa-compliance needs columns to scan |
 
 Always-run baseline (zero-arg): completeness, duplicity, outliers.

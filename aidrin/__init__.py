@@ -100,6 +100,30 @@ def calculate_row_level_completeness(required_columns, file_info):
     return row_level_completeness.apply(args=(required_columns, file_info)).get()
 
 
+def calculate_duplicity_by_features(features, file_info):
+    """Measure duplicate rows using only the selected feature columns.
+
+    Parameters
+    ----------
+    features : list of str
+        Columns to compare when detecting duplicate rows.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Duplicate count": int, "Duplicate percentage": float,
+        "Total rows": int, "Duplicate groups": list, "Description": str}``
+        or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.duplicity_by_features import (
+        duplicity_by_features,
+    )
+    return duplicity_by_features.apply(args=(features, file_info)).get()
+
+
 def calculate_feature_coverage_ratio(threshold, file_info):
     """Percentage of features whose non-null rate meets *threshold*.
 
@@ -474,6 +498,31 @@ def compute_entropy_risk(quasi_identifiers, file_info):
     return _fn(quasi_identifiers, file_info)
 
 
+# ---------------------------------------------------------------------------
+# Data Structure and Organization
+# ---------------------------------------------------------------------------
+
+def calculate_constant_feature_count(file_info):
+    """Count columns that have a single distinct value (null counts as a value).
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Constant feature count": int, "Total features": int,
+        "Constant features": {column: value}}``
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.constant_feature_count import (
+        constant_feature_count,
+    )
+    return constant_feature_count.apply(args=(file_info,)).get()
+
+
 def calculate_max_pairwise_correlation(file_info):
     """Strongest absolute pairwise correlation between numeric features.
 
@@ -537,6 +586,7 @@ __all__ = [
     "calculate_duplicates",
     "calculate_outliers",
     "calculate_row_level_completeness",
+    "calculate_duplicity_by_features",
     "calculate_feature_coverage_ratio",
     "calculate_temporal_completeness",
     "calculate_null_count_trend",
@@ -547,13 +597,14 @@ __all__ = [
     # Impact on AI
     "calculate_correlations",
     "calculate_feature_relevance",
-    # Data Structure
-    "calculate_max_pairwise_correlation",
-    "calculate_skewness",
-    "calculate_kurtosis",
     # Privacy / Data Governance
     "compute_k_anonymity",
     "compute_l_diversity",
     "compute_t_closeness",
     "compute_entropy_risk",
+    # Data Structure and Organization
+    "calculate_constant_feature_count",
+    "calculate_max_pairwise_correlation",
+    "calculate_skewness",
+    "calculate_kurtosis",
 ]

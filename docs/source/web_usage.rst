@@ -270,7 +270,7 @@ Calculates entropy risk for quasi-identifier columns. It measures the uncertaint
 Local and Web Application Usage
 --------------------------------
 
-AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Web Application Installation <./web_installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure and Organization**. Each dimension includes specific metrics to assess dataset readiness.
+AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Web Application Installation <./web_installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure**. Each dimension includes specific metrics to assess dataset readiness.
 
 Web Application Workflow
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -348,6 +348,12 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
   - **Method**: Identifies duplicate rows by comparing all column values. The duplicity score is the proportion of duplicate rows in the dataset.
   - **Parameters**: None (uses entire dataset).
   - **Result**: A duplicity score (0 for no duplicates).
+
+- **Duplicates by Selected Features**:
+
+  - **Method**: Identifies duplicate rows by comparing only the selected feature columns, rather than the whole row.
+  - **Parameters**: Features to compare.
+  - **Result**: Duplicate row count and percentage, plus the top 10 largest duplicate groups with their feature values and row counts.
 
 
 - **Outliers**:
@@ -515,11 +521,18 @@ The system returns:
    AIDRIN focuses on the completeness and structure of your metadata.
    It does **not** validate the factual accuracy of the content.
 
-Data Structure and Organization
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Data Structure
+^^^^^^^^^^^^^^
 
-Assesses structural and distributional properties of the feature set. All three
-metrics operate on the numeric, non-constant columns and require no parameters.
+Assesses structural and distributional properties of the feature set. All four
+metrics require no parameters; the latter three operate on the numeric,
+non-constant columns.
+
+- **Constant Feature Count**:
+
+  - **Method**: Counts columns that have a single distinct value. Null is treated as a value like any other: a column that is entirely null counts as constant, and a column with one real value plus some nulls does not (it has two distinct values — the value and null).
+  - **Parameters**: None (uses entire dataset).
+  - **Result**: The count of constant columns, the total column count, and the constant columns with their single value (``null`` for an all-null column).
 
 - **Max Pairwise Correlation**:
 
