@@ -10,6 +10,11 @@ from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.custom_outliers import custom_outliers
 from aidrin.structured_data_metrics.duplicity import duplicity
+from aidrin.structured_data_metrics.kurtosis import kurtosis
+from aidrin.structured_data_metrics.max_pairwise_correlation import (
+    max_pairwise_correlation,
+)
+from aidrin.structured_data_metrics.skewness import skewness
 from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
@@ -86,6 +91,21 @@ def run_completeness(file_path: str, file_type: Optional[str], file_name: Option
 def run_duplicity(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(duplicity, file_info)
+
+
+def run_max_pairwise_correlation(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(max_pairwise_correlation, file_info)
+
+
+def run_skewness(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(skewness, file_info)
+
+
+def run_kurtosis(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(kurtosis, file_info)
 
 
 def run_outliers(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:

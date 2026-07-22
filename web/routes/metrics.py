@@ -31,6 +31,11 @@ from aidrin.structured_data_metrics.row_level_completeness import row_level_comp
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
+from aidrin.structured_data_metrics.kurtosis import kurtosis
+from aidrin.structured_data_metrics.max_pairwise_correlation import (
+    max_pairwise_correlation,
+)
+from aidrin.structured_data_metrics.skewness import skewness
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
     categorize_metadata,
@@ -290,6 +295,69 @@ def data_quality():
             return store_result("metrics.data_quality", final_dict)
 
     return get_result_or_default("metrics.data_quality", file_path, file_name)
+
+
+# ---------------------------------------------------------------------------
+# Data Structure
+# ---------------------------------------------------------------------------
+
+@metrics_bp.route("/data-structure", methods=["GET", "POST"])
+def data_structure():
+    final_dict = {}
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = build_file_info(file_path, file_name, file_type)
+
+    if request.method == "POST":
+        start_time = time.time()
+        selected = [
+            m for m in (
+                "max pairwise correlation", "skewness", "kurtosis",
+            ) if request.form.get(m) == "yes"
+        ]
+        metric_time_log.info("Data Structure request started: %s", selected)
+
+        tracer = get_tracer()
+        with tracer.start_as_current_span("metric.data_structure") as span:
+            span.set_attribute("metric.pillar", "data_structure")
+            span.set_attribute("metric.selected", ",".join(selected))
+            span.set_attribute("file.name", file_name or "")
+            span.set_attribute("file.type", file_type or "")
+
+            try:
+                if "max pairwise correlation" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.max_pairwise_correlation"):
+                        final_dict["Max Pairwise Correlation"] = max_pairwise_correlation(
+                            file_info
+                        )
+                    metric_time_log.info(
+                        "Max Pairwise Correlation took %.2f seconds", time.time() - t0
+                    )
+
+                if "skewness" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.skewness"):
+                        final_dict["Skewness"] = skewness(file_info)
+                    metric_time_log.info("Skewness took %.2f seconds", time.time() - t0)
+
+                if "kurtosis" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.kurtosis"):
+                        final_dict["Kurtosis"] = kurtosis(file_info)
+                    metric_time_log.info("Kurtosis took %.2f seconds", time.time() - t0)
+
+            except Exception as e:
+                metric_time_log.error("Data Structure error: %s", e, exc_info=True)
+                return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
+
+            duration_ms = (time.time() - start_time) * 1000
+            span.set_attribute("metric.duration_ms", duration_ms)
+            metric_time_log.info("Data Structure completed in %.2f seconds", time.time() - start_time)
+            return store_result("metrics.data_structure", final_dict)
+
+    return get_result_or_default("metrics.data_structure", file_path, file_name)
 
 
 # ---------------------------------------------------------------------------

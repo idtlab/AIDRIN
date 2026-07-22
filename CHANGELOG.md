@@ -48,3 +48,13 @@ All notable changes to AIDRIN are documented here. This project loosely follows
     (`s`/`ms`/… no longer hang on long spans).
   - `null_count_trend` — null counts grouped by a batch column, to spot quality
     regressions (params: `batch_column`, optional `target_columns`).
+
+- **New data-structure metrics** (CLI, Python library, batch, MCP, Globus, and
+  web UI), under a new `data-structure` category with a matching web panel. All
+  three take no parameters and operate on the numeric, non-constant columns:
+  - `max_pairwise_correlation` — strongest absolute pairwise (Pearson)
+    correlation between features, flagging redundant/collinear columns; returns
+    the max, the most-correlated pair, the top pairs, and a heatmap.
+  - `skewness` — per-feature skewness (distribution asymmetry) with a bar chart.
+  - `kurtosis` — per-feature excess kurtosis (Fisher's definition; tail
+    heaviness) with a bar chart.

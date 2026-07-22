@@ -4,6 +4,7 @@
 
 - [Invocation & conventions](#invocation--conventions)
 - [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, feature-coverage-ratio, temporal-completeness, null-count-trend
+- [Data structure](#data-structure): max-pairwise-correlation, skewness, kurtosis
 - [Impact on AI](#impact-on-ai): correlations, feature-relevance
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
 - [Data governance](#data-governance): k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk, hipaa-compliance
@@ -172,6 +173,74 @@ aidrin run temporal-completeness path/to/timeseries.csv --timestamp-column time 
 
 ```bash
 aidrin run null-count-trend path/to/batches.csv --batch-column machine_id --target-columns "temperature,pressure"
+```
+
+---
+
+## Data structure
+
+These three take **no arguments** (like the zero-arg quality baseline) and operate
+on the numeric, non-constant columns.
+
+### max-pairwise-correlation
+
+- **Syntax:** `aidrin run max-pairwise-correlation <file>`
+- **Args (in order):** none
+- **Output keys:**
+  - `Max Pairwise Correlation` — scalar, strongest absolute Pearson correlation between any two numeric features (0–1)
+  - `Most Correlated Pair` — string `"colA ~ colB"`
+  - `Top Correlated Pairs` — list of `{"pair", "correlation"}` objects, ranked
+  - `Numeric Features Considered` — integer count of numeric non-constant columns used
+  - `Max Pairwise Correlation Visualization` — base64 heatmap (stripped by default)
+  - `Description` — string
+- **Direction:** near 1.0 = redundant/collinear features (consider dropping one); near 0 = independent.
+
+**Example:**
+
+```bash
+aidrin run max-pairwise-correlation examples/sample_data/csv/adult.csv
+```
+
+---
+
+### skewness
+
+- **Syntax:** `aidrin run skewness <file>`
+- **Args (in order):** none
+- **Output keys:**
+  - `Skewness` — object mapping each numeric feature to its skewness
+  - `Most Skewed Feature` — string
+  - `Max Absolute Skewness` — scalar
+  - `Numeric Features Considered` — integer
+  - `Skewness Visualization` — base64 bar chart (stripped by default)
+  - `Description` — string
+- **Direction:** |value| far from 0 = asymmetric/long-tailed distribution; ~0 = symmetric.
+
+**Example:**
+
+```bash
+aidrin run skewness examples/sample_data/csv/adult.csv
+```
+
+---
+
+### kurtosis
+
+- **Syntax:** `aidrin run kurtosis <file>`
+- **Args (in order):** none
+- **Output keys:**
+  - `Kurtosis` — object mapping each numeric feature to its excess kurtosis (Fisher; normal = 0)
+  - `Most Extreme Kurtosis Feature` — string
+  - `Max Absolute Excess Kurtosis` — scalar
+  - `Numeric Features Considered` — integer
+  - `Kurtosis Visualization` — base64 bar chart (stripped by default)
+  - `Description` — string
+- **Direction:** positive = heavier tails / more outliers than normal; negative = lighter tails.
+
+**Example:**
+
+```bash
+aidrin run kurtosis examples/sample_data/csv/adult.csv
 ```
 
 ---

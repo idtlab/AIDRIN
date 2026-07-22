@@ -101,6 +101,22 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Custom Criteria Outliers"] = r
         return result
 
+    def _data_structure():
+        """Run selected data-structure sub-metrics and bundle results."""
+        result = {}
+        selected = params.get(
+            "selected", ["max_pairwise_correlation", "skewness", "kurtosis"]
+        )
+        if "max_pairwise_correlation" in selected:
+            result["Max Pairwise Correlation"] = (
+                aidrin.calculate_max_pairwise_correlation(file_info)
+            )
+        if "skewness" in selected:
+            result["Skewness"] = aidrin.calculate_skewness(file_info)
+        if "kurtosis" in selected:
+            result["Kurtosis"] = aidrin.calculate_kurtosis(file_info)
+        return result
+
     def _custom_outlier_targets():
         """Discover selectable custom-outlier targets on the remote file."""
         from aidrin.file_handling.value_iterators import iter_targets
@@ -243,10 +259,16 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     dispatch = {
         "summary_statistics": _summary_statistics,
         "data_quality": _data_quality,
+        "data_structure": _data_structure,
         "custom_outlier_targets": _custom_outlier_targets,
         "completeness": lambda: aidrin.calculate_completeness(file_info),
         "outliers": lambda: aidrin.calculate_outliers(file_info),
         "duplicates": lambda: aidrin.calculate_duplicates(file_info),
+        "max_pairwise_correlation": lambda: aidrin.calculate_max_pairwise_correlation(
+            file_info
+        ),
+        "skewness": lambda: aidrin.calculate_skewness(file_info),
+        "kurtosis": lambda: aidrin.calculate_kurtosis(file_info),
         "row_level_completeness": lambda: aidrin.calculate_row_level_completeness(
             params.get("required_columns", []), file_info
         ),
