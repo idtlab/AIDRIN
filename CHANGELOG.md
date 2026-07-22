@@ -58,3 +58,20 @@ All notable changes to AIDRIN are documented here. This project loosely follows
   - `skewness` — per-feature skewness (distribution asymmetry) with a bar chart.
   - `kurtosis` — per-feature excess kurtosis (Fisher's definition; tail
     heaviness) with a bar chart.
+
+### Fixed
+
+- **Datasets with array-valued columns no longer break the summary or
+  duplicity.** Object columns holding arrays/lists/dicts — routine in parquet,
+  HDF5 and JSON (e.g. a per-node measurement array) — are unhashable, and
+  `nunique()` / `value_counts()` / `duplicated()` all hash. This raised
+  `TypeError: unhashable type: 'numpy.ndarray'`, which surfaced as a failed web
+  summary ("An internal error occurred") and made the `duplicity` metric — and
+  therefore the whole `aidrin data-quality` bundle — unusable on such files.
+
+  Normalization now lives in a shared helper,
+  `aidrin/file_handling/hashable_utils.py` (`make_hashable`, `hashable_series`,
+  `hashable_frame`, `safe_nunique`), used by both the duplicity metric and the
+  web summary route. Values are converted to nested tuples, which preserves
+  equality so distinct-counting and duplicate detection stay correct.
+  `duplicity._make_hashable` remains as an alias for backwards compatibility.
