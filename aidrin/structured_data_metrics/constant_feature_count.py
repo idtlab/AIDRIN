@@ -6,12 +6,20 @@ from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.hashable_utils import make_hashable, safe_nunique
 
 logger = logging.getLogger(__name__)
 
 
 def _json_safe(value):
-    """Normalize a single cell value for JSON output (NaN/NaT -> None, numpy -> native)."""
+    """Normalize a single cell value for JSON output (NaN/NaT -> None, numpy -> native).
+
+    Array/list/dict/set values must be checked before ``pd.isna(value)``: called on
+    an array, ``pd.isna`` returns an elementwise array, and ``if`` on that raises
+    ``ValueError: truth value of an array is ambiguous``.
+    """
+    if isinstance(value, (np.ndarray, list, tuple, dict, set, frozenset)):
+        return make_hashable(value)
     if pd.isna(value):
         return None
     if isinstance(value, np.integer):
@@ -53,7 +61,7 @@ def constant_feature_count(self: Task, file_info):
         constant_features = {
             col: _json_safe(df[col].iloc[0])
             for col in df.columns
-            if df[col].nunique(dropna=False) == 1
+            if safe_nunique(df[col], dropna=False) == 1
         }
 
         logger.info(

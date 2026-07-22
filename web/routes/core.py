@@ -585,7 +585,7 @@ def extract_features():
         all_features = numerical_columns + categorical_columns
 
         class_imbalance_features = [
-            col for col in all_features if df[col].nunique() <= 30
+            col for col in all_features if safe_nunique(df[col]) <= 30
         ]
 
         response_data = {
