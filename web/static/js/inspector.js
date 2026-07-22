@@ -2628,6 +2628,9 @@ function formatValue(v) {
   if (typeof v === "boolean") return v ? "Yes" : "No";
   if (typeof v === "number")
     return Number.isInteger(v) ? v.toString() : v.toFixed(4);
+  if (Array.isArray(v)) return v.length ? v.map(formatValue).join(", ") : "—";
+  if (typeof v === "object")
+    return Object.keys(v).length ? JSON.stringify(v) : "—";
   return String(v);
 }
 function escapeHtml(str) {
