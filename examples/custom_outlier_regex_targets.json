@@ -1,0 +1,15 @@
+[
+  {
+    "id": "valid-station-x-range",
+    "name": "Valid station X range",
+    "target": "^/S_[0-9]+_[0-9]+/X$",
+    "target_match": "regex",
+    "target_type": "hdf5_dataset",
+    "allow_missing": false,
+    "criteria": {
+      "type": "range",
+      "min": -0.5,
+      "max": 0.5
+    }
+  }
+]

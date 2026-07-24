@@ -282,7 +282,6 @@ input[type="checkbox"].w-3\.5:focus {
   margin-left: 6px;
   position: relative;
   pointer-events: auto;
-  z-index: 1;
 }
 
 .info-text {

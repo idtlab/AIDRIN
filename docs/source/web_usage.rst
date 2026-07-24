@@ -84,10 +84,10 @@ Evaluates dataset completeness by checking for missing values.
       scalar or an array of multiple sentinels.
    4. **HDF5 native fill value** – the value stored in the dataset's own
       metadata (``dataset.fillvalue``).  When this equals the dtype default
-      (``0`` / ``0.0``) and no fill-value attributes are present, a warning
-      is logged before replacement because zero is a legitimate measurement in
-      many scientific datasets (e.g. counts, indices).  Set a ``_FillValue``
-      attribute in the file to an unambiguous sentinel to suppress this warning.
+      (``0`` / ``0.0``) and no fill-value attributes are present, it is treated
+      as valid data because zero is a legitimate measurement in many scientific
+      datasets (e.g. counts, indices). Set a ``_FillValue`` attribute to an
+      unambiguous sentinel when zero represents missing data.
 
 calculate_correlations
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -365,8 +365,8 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
 - **Custom Criteria Outliers**:
 
   - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
-  - **Parameters**: Target, criteria rules, maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached.
-  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable.
+  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. In the manual editor, choose **Regular expression** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
+  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target.
 
 Impact of Data on AI
 ^^^^^^^^^^^^^^^^^^^^

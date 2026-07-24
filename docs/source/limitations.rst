@@ -24,9 +24,10 @@ What We Can Do
 - Work with **structured tabular datasets** (CSV, Excel, JSON, NumPy ``.npz``,
   HDF5 ``.h5``, and Parquet ``.parquet``) for data readiness checks.  For HDF5
   files, format-native missing
-  data sentinels (``_FillValue``, ``missing_value``, and the dataset's HDF5 fill
-  value) are automatically normalised to ``NaN`` before any metric is computed,
-  ensuring accurate completeness, outlier, and privacy scores.
+  data sentinels (``_FillValue``, ``missing_value``, and non-default dataset
+  fill values) are automatically normalised to ``NaN`` before any metric is
+  computed, ensuring accurate completeness, outlier, and privacy scores. A
+  default zero without an explicit fill-value attribute is treated as data.
 
 What We Cannot Do
 ~~~~~~~~~~~~~~~~~

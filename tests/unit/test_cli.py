@@ -49,6 +49,13 @@ def _clean(path: str) -> None:
         pass
 
 
+def _write_json(value) -> str:
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+    json.dump(value, tmp)
+    tmp.close()
+    return tmp.name
+
+
 def _sample_df(n: int = 60) -> pd.DataFrame:
     rng = np.random.default_rng(42)
     return pd.DataFrame(
@@ -307,6 +314,43 @@ class TestRunCommand(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("same target", stderr)
 
+    def test_run_outliers_custom_accepts_rules_file(self):
+        rules_path = _write_json([{
+            "id": "age-range",
+            "target": "age",
+            "target_type": "column",
+            "criteria": {"type": "range", "min": 20, "max": 60},
+        }])
+        try:
+            stdout, _, code = _run_cli(
+                "run",
+                "outliers-custom",
+                self.csv,
+                "--rules-file",
+                rules_path,
+            )
+        finally:
+            _clean(rules_path)
+        self.assertEqual(code, 0)
+        self.assertIn("age-range", json.loads(stdout)["Rule summaries"])
+
+    def test_run_outliers_custom_rejects_rules_file_with_rule(self):
+        rules_path = _write_json([])
+        try:
+            _, stderr, code = _run_cli(
+                "run",
+                "outliers-custom",
+                self.csv,
+                "--rules-file",
+                rules_path,
+                "--rule",
+                "age >= 20",
+            )
+        finally:
+            _clean(rules_path)
+        self.assertNotEqual(code, 0)
+        self.assertIn("exactly one custom-outlier rule source", stderr)
+
     def test_run_correlations_exits_zero(self):
         _, _, code = _run_cli("run", "correlations", self.csv, "age,income,sex")
         self.assertEqual(code, 0)
@@ -428,6 +472,80 @@ class TestRunMetricNameResolution(unittest.TestCase):
         from aidrin.headless.api import run_metric
         with self.assertRaises(ValueError):
             run_metric("hipaa-compliance", self.csv, save_images=False)
+
+
+class TestCustomOutlierRulesFile(unittest.TestCase):
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+        self.rules = [{
+            "id": "age-range",
+            "target": "age",
+            "target_type": "column",
+            "criteria": {"type": "range", "min": 20, "max": 60},
+        }]
+
+    def tearDown(self):
+        _clean(self.csv)
+
+    def test_run_metric_accepts_rules_file(self):
+        from aidrin.headless.api import run_metric
+
+        rules_path = _write_json(self.rules)
+        try:
+            result = run_metric("outliers-custom", self.csv, rules_file=rules_path, save_images=False)
+        finally:
+            _clean(rules_path)
+        self.assertIn("age-range", result["Rule summaries"])
+
+    def test_rules_file_errors_are_specific(self):
+        from aidrin.headless.api import run_metric
+
+        with self.assertRaisesRegex(ValueError, "Unable to read custom-outlier rules file"):
+            run_metric("outliers-custom", self.csv, rules_file="/not/a/rules-file.json", save_images=False)
+
+        malformed_path = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+        malformed_path.write("{")
+        malformed_path.close()
+        try:
+            with self.assertRaisesRegex(ValueError, "Invalid JSON in custom-outlier rules file"):
+                run_metric("outliers-custom", self.csv, rules_file=malformed_path.name, save_images=False)
+        finally:
+            _clean(malformed_path.name)
+
+        object_path = _write_json({"rules": self.rules})
+        try:
+            with self.assertRaisesRegex(ValueError, "must contain a JSON array"):
+                run_metric("outliers-custom", self.csv, rules_file=object_path, save_images=False)
+        finally:
+            _clean(object_path)
+
+    def test_empty_rules_file_reaches_existing_validator(self):
+        from aidrin.headless.api import run_metric
+
+        rules_path = _write_json([])
+        try:
+            with self.assertRaisesRegex(ValueError, "non-empty list"):
+                run_metric("outliers-custom", self.csv, rules_file=rules_path, save_images=False)
+        finally:
+            _clean(rules_path)
+
+    def test_rule_sources_must_not_be_mixed(self):
+        from aidrin.headless.api import run_metric
+
+        rules_path = _write_json(self.rules)
+        inline_rules = json.dumps(self.rules)
+        try:
+            with self.assertRaisesRegex(ValueError, "Provide exactly one custom-outlier rule source"):
+                run_metric(
+                    "outliers-custom",
+                    self.csv,
+                    rules_json=inline_rules,
+                    rules_file=rules_path,
+                    save_images=False,
+                )
+        finally:
+            _clean(rules_path)
 
 
 # ===========================================================================
