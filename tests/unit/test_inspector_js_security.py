@@ -1,4 +1,9 @@
+import json
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -42,12 +47,120 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert 'return { op: "not", condition: { op: "or", conditions } }' in source
     assert "criteria_type:" not in source
     assert "function validateCustomOutlierRuleSelection(rules)" in source
-    assert "!validateCustomOutlierRuleSelection(customOutlierRules)" in source
+    assert "async function workspaceSubmit(targetUrl)" in source
+    assert "await resolveCustomOutlierRules()" in source
+    assert "if (!customOutlierRules) return;" in source
     assert "function validateCustomOutlierCriteria(criteria, ruleName)" in source
+    assert 'targetMatch === "regex"' in source
+    assert 'rule.target_match = "regex"' in source
+    assert 'data-section="target-exact"' in source
+    assert 'data-section="target-regex"' in source
+    assert 'aria-label="Target pattern (regular expression)"' in source
+    assert 'md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]' in source
+    assert 'class="absolute right-2 top-2' in source
+    assert 'aria-label="Remove rule"' in source
+    assert "function customOutlierRegexTargetType(row)" in source
+    assert "targetTypes.length <= 1" in source
     assert "range condition requires min or max" in source
     assert "requires a condition for NOT" in source
     assert "customOutlierLimitValue(formData.get(\"max_outliers\"), 100)" in source
     assert "customOutlierLimitValue(\n          gFormData.get(\"max_outliers\")," in source
+
+
+def test_custom_outlier_json_file_source_is_browser_only_and_async():
+    panel = DATA_QUALITY_PANEL.read_text()
+    source = INSPECTOR_JS.read_text()
+    assert 'name="custom_outlier_rule_source" value="manual" checked' in panel
+    assert 'name="custom_outlier_rule_source" value="file"' in panel
+    assert 'id="custom-outlier-rules-file" accept="application/json,.json"' in panel
+    assert "not uploaded or saved" in panel
+    assert "function parseCustomOutlierRulesJson(text)" in source
+    assert "async function resolveCustomOutlierRules()" in source
+    assert "await file.text()" in source
+    assert "submitGlobusMetric" in source
+
+
+def test_switching_custom_outlier_rule_sources_clears_stale_results():
+    source = INSPECTOR_JS.read_text()
+    assert "function clearCustomOutlierResults()" in source
+    assert "clearCustomOutlierResults();\n        updateCustomOutlierRuleSource();" in source
+    assert 'document.getElementById("results-section")' in source
+    assert "lastMetricResult = null;" in source
+
+
+def test_custom_outlier_manual_rules_can_be_saved_as_json():
+    panel = DATA_QUALITY_PANEL.read_text()
+    source = INSPECTOR_JS.read_text()
+    assert 'id="custom-outlier-save-rules"' in panel
+    assert "function downloadCustomOutlierRules()" in source
+    assert "JSON.stringify(rules, null, 2)" in source
+    assert 'link.download = "custom-outlier-rules.json"' in source
+
+
+def _parse_rules_file_in_browser(text):
+    source = INSPECTOR_JS.read_text()
+    start = source.index("function parseCustomOutlierRulesJson(text)")
+    end = source.index("\n\nasync function resolveCustomOutlierRules()", start)
+    parser_and_validator = source[start:end]
+    criteria_start = source.index("function validateCustomOutlierCriteria(criteria, ruleName)")
+    criteria_end = source.index("\n\nfunction showCustomOutlierValidationError", criteria_start)
+    criteria_validator = source[criteria_start:criteria_end]
+    script = f"""{parser_and_validator}
+{criteria_validator}
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {{ input += chunk; }});
+process.stdin.on("end", () => {{
+  try {{
+    const rules = parseCustomOutlierRulesJson(input);
+    const error = validateCustomOutlierRulesFile(rules);
+    process.stdout.write(JSON.stringify(error ? {{ ok: false, error }} : {{ ok: true }}));
+  }} catch (error) {{
+    process.stdout.write(JSON.stringify({{ ok: false, error: error.message }}));
+  }}
+}});
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        input=text,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the frontend formatter")
+def test_custom_outlier_json_file_parser_corpus():
+    cases = [
+        ('[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":18}}]', True, None),
+        ("{", False, "valid JSON"),
+        ("{}", False, "JSON array"),
+        ("[]", False, "at least one rule"),
+        ('[{"id":"unknown-op","target":"age","target_type":"column","criteria":{"op":"xor","conditions":[]}}]', False, "unsupported operator"),
+        ('[{"id":"unknown-type","target":"age","target_type":"column","criteria":{"type":"contains"}}]', False, "unsupported condition type"),
+        ('[{"id":"missing-target","target_type":"column","criteria":{"type":"regex","pattern":".*"}}]', False, "requires a target"),
+        ('[{"id":"bad-bound","target":"age","target_type":"column","criteria":{"type":"range","min":"NaN"}}]', False, "finite number"),
+        ('[{"id":"regex-target","target":"^age$","target_match":"regex","target_type":"column","criteria":{"type":"range","min":18}}]', True, None),
+        (
+            '[{"id":"bad-target-match","target":"age","target_match":"glob","target_type":"column","criteria":{"type":"range","min":18}}]',
+            False,
+            "unsupported target match mode",
+        ),
+        (
+            (
+                '[{"id":"!!!","target":"age","target_type":"column","criteria":{"type":"range","min":18}},'
+                '{"id":"rule","target":"age","target_type":"column","criteria":{"type":"range","min":18}}]'
+            ),
+            False,
+            "resolve to the same output key",
+        ),
+    ]
+    for text, expected_ok, expected_error in cases:
+        result = _parse_rules_file_in_browser(text)
+        assert result["ok"] is expected_ok
+        if expected_error:
+            assert expected_error in result["error"]
 
 
 def test_custom_outlier_preview_cap_placeholder_documents_default():

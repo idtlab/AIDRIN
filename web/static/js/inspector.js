@@ -287,7 +287,7 @@ function withSubmitGuard(button, taskFn) {
  * Wraps the existing submitForm() logic but POSTs to a parameterized URL.
  * @param {string} targetUrl - The metric endpoint URL (e.g., '/data-quality')
  */
-function workspaceSubmit(targetUrl) {
+async function workspaceSubmit(targetUrl) {
   // Clear previous results before submitting new ones
   const resultsSection = document.getElementById("results-section");
   if (resultsSection) resultsSection.style.display = "none";
@@ -411,8 +411,8 @@ function workspaceSubmit(targetUrl) {
         );
       }
       if (gFormData.get("custom_outliers") === "yes") {
-        const customOutlierRules = serializeCustomOutlierRules();
-        if (!validateCustomOutlierRuleSelection(customOutlierRules)) return;
+        const customOutlierRules = await resolveCustomOutlierRules();
+        if (!customOutlierRules) return;
         selected.push("custom_outliers");
         selectedNames.push("Custom Criteria Outliers");
         remoteParams.custom_outlier_rules = customOutlierRules;
@@ -624,11 +624,10 @@ function workspaceSubmit(targetUrl) {
   }
   if (targetUrl === "/data-quality") {
     const customOutliersSelected = formData.get("custom_outliers") === "yes";
-    const customOutlierRules = serializeCustomOutlierRules();
-    if (
-      customOutliersSelected &&
-      !validateCustomOutlierRuleSelection(customOutlierRules)
-    ) {
+    const customOutlierRules = customOutliersSelected
+      ? await resolveCustomOutlierRules()
+      : [];
+    if (customOutliersSelected && !customOutlierRules) {
       return;
     }
     processedFormData.set(
@@ -1576,7 +1575,20 @@ function initCustomOutlierEditor() {
   if (addButton) {
     addButton.addEventListener("click", () => addCustomOutlierRuleRow());
   }
+  const saveButton = document.getElementById("custom-outlier-save-rules");
+  if (saveButton) {
+    saveButton.addEventListener("click", downloadCustomOutlierRules);
+  }
   const checkbox = document.getElementById("toggleButton_custom_outliers");
+  document
+    .querySelectorAll('input[name="custom_outlier_rule_source"]')
+    .forEach((input) => {
+      input.addEventListener("change", () => {
+        clearCustomOutlierResults();
+        updateCustomOutlierRuleSource();
+      });
+    });
+  updateCustomOutlierRuleSource();
   if (document.getElementById("custom-outlier-editor") && checkbox?.checked) {
     toggleCustomOutlierEditor(checkbox);
   }
@@ -1586,12 +1598,47 @@ function toggleCustomOutlierEditor(checkbox) {
   const editor = document.getElementById("custom-outlier-editor");
   if (!editor) return;
   editor.classList.toggle("hidden", !checkbox.checked);
-  if (checkbox.checked) {
+  if (checkbox.checked && customOutlierRuleSource() === "manual") {
     loadCustomOutlierTargets().then(() => {
       const list = document.getElementById("custom-outlier-rule-list");
       if (list && list.children.length === 0) addCustomOutlierRuleRow();
     });
   }
+}
+
+function customOutlierRuleSource() {
+  return (
+    document.querySelector('input[name="custom_outlier_rule_source"]:checked')
+      ?.value || "manual"
+  );
+}
+
+function updateCustomOutlierRuleSource() {
+  const isFileSource = customOutlierRuleSource() === "file";
+  document
+    .getElementById("custom-outlier-manual-source")
+    ?.classList.toggle("hidden", isFileSource);
+  document
+    .getElementById("custom-outlier-file-source")
+    ?.classList.toggle("hidden", !isFileSource);
+
+  const checkbox = document.getElementById("toggleButton_custom_outliers");
+  if (checkbox?.checked && !isFileSource) {
+    loadCustomOutlierTargets().then(() => {
+      const list = document.getElementById("custom-outlier-rule-list");
+      if (list && list.children.length === 0) addCustomOutlierRuleRow();
+    });
+  }
+}
+
+function clearCustomOutlierResults() {
+  const resultsSection = document.getElementById("results-section");
+  if (resultsSection) resultsSection.style.display = "none";
+  const metricsDiv = document.getElementById("metrics");
+  if (metricsDiv) metricsDiv.innerHTML = "";
+  const buttonsContainer = document.getElementById("buttonsContainer");
+  if (buttonsContainer) buttonsContainer.style.display = "none";
+  lastMetricResult = null;
 }
 
 function loadCustomOutlierTargets() {
@@ -1704,25 +1751,49 @@ function addCustomOutlierRuleRow() {
   customOutlierRuleCounter += 1;
   const row = document.createElement("div");
   row.className =
-    "custom-outlier-rule rounded-lg border border-gray-200 dark:border-gray-700 p-3";
+    "custom-outlier-rule relative rounded-lg border border-gray-200 dark:border-gray-700 p-2";
   row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
   row.innerHTML = `
-    <div class="grid gap-3 md:grid-cols-2">
+    <div class="grid gap-2 pr-7 md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
         <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
-               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
       </label>
-      <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Target
-        <select data-field="target"
-                class="custom-outlier-target mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
-      </label>
-      <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+      <div class="text-xs font-medium text-gray-700 dark:text-gray-300">
+        <span>Target</span>
+        <div class="mt-1 flex items-center gap-2">
+          <select data-field="target_match" aria-label="Target match mode"
+                  class="w-36 shrink-0 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+            <option value="exact">Exact name</option>
+            <option value="regex">Regular expression</option>
+          </select>
+          <div data-section="target-exact" class="min-w-0 flex-1">
+            <select data-field="target" aria-label="Exact target"
+                  class="custom-outlier-target w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+          </div>
+          <div data-section="target-regex" class="hidden min-w-0 flex-1">
+            <input type="text" data-field="target_regex" placeholder="Target pattern, e.g. ^/S_[0-9]+_[0-9]+/X$" aria-label="Target pattern (regular expression)"
+                   title="Matches complete target names in this file."
+                   class="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+          </div>
+          <label data-section="target-type" class="hidden w-36 shrink-0">
+            <span class="sr-only">Match targets of type</span>
+            <select data-field="target_type" aria-label="Match targets of type"
+                    class="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+          </label>
+        </div>
+      </div>
+      <label class="flex items-center gap-2 pt-5 whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300">
         <input type="checkbox" data-field="allow_missing" class="rounded border-gray-300" />
         Allow missing values
       </label>
     </div>
-    <div data-section="criteria-tree" class="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+    <button type="button" data-action="remove" aria-label="Remove rule" title="Remove rule"
+            class="absolute right-2 top-2 px-2 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+      Remove
+    </button>
+    <div data-section="criteria-tree" class="mt-2 rounded-lg bg-gray-50 p-2 dark:bg-gray-900/40">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Valid when
           <select data-field="criteria_op"
                   class="ml-2 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
@@ -1736,15 +1807,10 @@ function addCustomOutlierRuleRow() {
           Add condition
         </button>
       </div>
-      <p class="mb-2 text-xs text-gray-600 dark:text-gray-300">Values that do not satisfy these conditions are flagged.</p>
+      <p class="mb-1 text-xs text-gray-600 dark:text-gray-300">Values that do not satisfy these conditions are flagged.</p>
       <div data-section="criteria-conditions" class="space-y-2"></div>
     </div>
-    <div class="flex justify-end mt-3">
-      <button type="button" data-action="remove"
-              class="px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
-        Remove
-      </button>
-    </div>`;
+    `;
   list.appendChild(row);
 
   row.querySelector('[data-action="remove"]').addEventListener("click", () => {
@@ -1757,11 +1823,15 @@ function addCustomOutlierRuleRow() {
       addCustomOutlierConditionRow(row);
       serializeCustomOutlierRules();
     });
+  row
+    .querySelector('[data-field="target_match"]')
+    .addEventListener("change", () => updateCustomOutlierTargetMatch(row));
   row.addEventListener("input", serializeCustomOutlierRules);
   row.addEventListener("change", serializeCustomOutlierRules);
 
   addCustomOutlierConditionRow(row);
   updateCustomOutlierTargetOptions(row);
+  updateCustomOutlierTargetMatch(row);
   serializeCustomOutlierRules();
 }
 
@@ -1770,12 +1840,12 @@ function addCustomOutlierConditionRow(ruleRow) {
   if (!list) return;
   const condition = document.createElement("div");
   condition.className =
-    "custom-outlier-condition rounded-lg border border-gray-200 dark:border-gray-700 p-2";
+    "custom-outlier-condition rounded-md bg-white p-1.5 shadow-sm dark:bg-gray-800";
   condition.innerHTML = `
     <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.7fr)_1fr_auto]">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Type
         <select data-field="condition_type"
-                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
           <option value="range">Range</option>
           <option value="regex">Regex</option>
         </select>
@@ -1783,17 +1853,17 @@ function addCustomOutlierConditionRow(ruleRow) {
       <div data-section="condition-range" class="grid gap-2 sm:grid-cols-4">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
           <input type="number" step="any" data-field="condition_min"
-                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
         </label>
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Max
           <input type="number" step="any" data-field="condition_max"
-                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
         </label>
-        <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+        <label class="flex items-center gap-2 pt-4 text-xs font-medium text-gray-700 dark:text-gray-300">
           <input type="checkbox" data-field="condition_min_inclusive" checked class="rounded border-gray-300" />
           Include min
         </label>
-        <label class="flex items-center gap-2 pt-5 text-xs font-medium text-gray-700 dark:text-gray-300">
+        <label class="flex items-center gap-2 pt-4 text-xs font-medium text-gray-700 dark:text-gray-300">
           <input type="checkbox" data-field="condition_max_inclusive" checked class="rounded border-gray-300" />
           Include max
         </label>
@@ -1801,7 +1871,7 @@ function addCustomOutlierConditionRow(ruleRow) {
       <div data-section="condition-regex" class="hidden">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Pattern
           <input type="text" data-field="condition_pattern" value=".*"
-                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
         </label>
       </div>
       <button type="button" data-action="remove-condition"
@@ -1838,6 +1908,46 @@ function updateCustomOutlierTargetOptions(scope) {
     });
     if (selected) select.value = selected;
   });
+  root.querySelectorAll('[data-field="target_type"]').forEach((select) => {
+    const selected = select.value;
+    const targetTypes = [
+      ...new Set(customOutlierTargets.map((target) => target.target_type)),
+    ];
+    select.innerHTML = "";
+    targetTypes.forEach((targetType) => {
+      const option = document.createElement("option");
+      option.value = targetType;
+      option.textContent =
+        targetType === "hdf5_dataset" ? "HDF5 datasets" : "Columns";
+      select.appendChild(option);
+    });
+    if (selected && targetTypes.includes(selected)) select.value = selected;
+  });
+}
+
+function updateCustomOutlierTargetMatch(row) {
+  const isRegex =
+    row.querySelector('[data-field="target_match"]')?.value === "regex";
+  row
+    .querySelector('[data-section="target-exact"]')
+    ?.classList.toggle("hidden", isRegex);
+  row
+    .querySelector('[data-section="target-regex"]')
+    ?.classList.toggle("hidden", !isRegex);
+  const targetTypes = [
+    ...new Set(customOutlierTargets.map((target) => target.target_type)),
+  ];
+  row
+    .querySelector('[data-section="target-type"]')
+    ?.classList.toggle("hidden", !isRegex || targetTypes.length <= 1);
+}
+
+function customOutlierRegexTargetType(row) {
+  const targetTypes = [
+    ...new Set(customOutlierTargets.map((target) => target.target_type)),
+  ];
+  if (targetTypes.length === 1) return targetTypes[0];
+  return row.querySelector('[data-field="target_type"]')?.value || "column";
 }
 
 function serializeCustomOutlierRules() {
@@ -1845,24 +1955,157 @@ function serializeCustomOutlierRules() {
   const rules = [];
   rows.forEach((row, index) => {
     const targetSelect = row.querySelector('[data-field="target"]');
-    if (!targetSelect || !targetSelect.value) return;
+    const targetMatch =
+      row.querySelector('[data-field="target_match"]')?.value || "exact";
+    const target =
+      targetMatch === "regex"
+        ? row.querySelector('[data-field="target_regex"]')?.value.trim()
+        : targetSelect?.value;
+    if (!target) return;
     const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
     const rule = {
       id,
       name: row.querySelector('[data-field="name"]')?.value || id,
-      target: targetSelect.value,
+      target,
       target_type:
-        targetSelect.selectedOptions[0]?.dataset.targetType || "column",
+        targetMatch === "regex"
+          ? customOutlierRegexTargetType(row)
+          : targetSelect?.selectedOptions[0]?.dataset.targetType || "column",
       allow_missing: Boolean(
         row.querySelector('[data-field="allow_missing"]')?.checked,
       ),
       criteria: serializeCustomOutlierCriteria(row),
     };
+    if (targetMatch === "regex") rule.target_match = "regex";
     rules.push(rule);
   });
   const hidden = document.getElementById("custom-outlier-rules-json");
   if (hidden) hidden.value = JSON.stringify(rules);
   return rules;
+}
+
+function downloadCustomOutlierRules() {
+  const rules = serializeCustomOutlierRules();
+  if (!validateCustomOutlierRuleSelection(rules)) return;
+
+  const blob = new Blob([JSON.stringify(rules, null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "custom-outlier-rules.json";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}
+
+function showCustomOutlierFileError(message) {
+  const element = document.getElementById("custom-outlier-file-message");
+  if (!element) return;
+  element.textContent = message;
+  element.classList.remove("hidden");
+}
+
+function clearCustomOutlierFileError() {
+  const element = document.getElementById("custom-outlier-file-message");
+  if (element) element.classList.add("hidden");
+}
+
+function parseCustomOutlierRulesJson(text) {
+  let rules;
+  try {
+    rules = JSON.parse(text);
+  } catch (error) {
+    throw new Error("The rules file must contain valid JSON.");
+  }
+  if (!Array.isArray(rules)) {
+    throw new Error("The rules file must contain a JSON array.");
+  }
+  if (rules.length === 0) {
+    throw new Error("The rules file must contain at least one rule.");
+  }
+  return rules;
+}
+
+function validateCustomOutlierRulesFile(rules) {
+  const seenIds = new Set();
+  const seenKeys = new Map();
+  for (const [index, rule] of rules.entries()) {
+    if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+      return `Rule ${index + 1} must be an object.`;
+    }
+    const ruleId = String(rule.id ?? "").trim();
+    if (!ruleId) return `Rule ${index + 1} requires a non-empty id.`;
+    if (seenIds.has(ruleId))
+      return `Duplicate custom outlier rule id: ${ruleId}.`;
+    seenIds.add(ruleId);
+
+    const ruleKey =
+      ruleId.replace(/[^A-Za-z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "") ||
+      "rule";
+    if (seenKeys.has(ruleKey)) {
+      return `Custom outlier rule ids resolve to the same output key: ${seenKeys.get(ruleKey)} and ${ruleId}.`;
+    }
+    seenKeys.set(ruleKey, ruleId);
+
+    const ruleName = rule.name || ruleId;
+    if (!String(rule.target ?? "").trim())
+      return `${ruleName} requires a target.`;
+    const targetMatch = String(rule.target_match ?? "exact")
+      .trim()
+      .toLowerCase();
+    if (!["exact", "regex"].includes(targetMatch)) {
+      return `${ruleName} has an unsupported target match mode.`;
+    }
+    if (
+      !["column", "hdf5_dataset"].includes(
+        String(rule.target_type ?? "").trim(),
+      )
+    ) {
+      return `${ruleName} has an unsupported target type.`;
+    }
+    if (
+      [
+        "criteria_type",
+        "min",
+        "max",
+        "pattern",
+        "min_inclusive",
+        "max_inclusive",
+      ].some((field) => field in rule)
+    ) {
+      return `${ruleName} must use criteria tree syntax.`;
+    }
+    const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
+    if (error) return error;
+  }
+  return null;
+}
+
+async function resolveCustomOutlierRules() {
+  if (customOutlierRuleSource() === "manual") {
+    const rules = serializeCustomOutlierRules();
+    return validateCustomOutlierRuleSelection(rules) ? rules : null;
+  }
+
+  const fileInput = document.getElementById("custom-outlier-rules-file");
+  const file = fileInput?.files?.[0];
+  if (!file) {
+    showCustomOutlierFileError("Choose a JSON rules file before submitting.");
+    return null;
+  }
+
+  try {
+    const rules = parseCustomOutlierRulesJson(await file.text());
+    const error = validateCustomOutlierRulesFile(rules);
+    if (error) throw new Error(error);
+    clearCustomOutlierFileError();
+    return rules;
+  } catch (error) {
+    showCustomOutlierFileError(error.message);
+    return null;
+  }
 }
 
 function updateCustomOutlierConditionSections(condition) {
@@ -1942,7 +2185,10 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
   if (!criteria || typeof criteria !== "object") {
     return `${ruleName} requires criteria.`;
   }
-  if (criteria.op === "and" || criteria.op === "or") {
+  const op = String(criteria.op || "")
+    .trim()
+    .toLowerCase();
+  if (op === "and" || op === "or") {
     if (
       !Array.isArray(criteria.conditions) ||
       criteria.conditions.length === 0
@@ -1955,21 +2201,29 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
     }
     return null;
   }
-  if (criteria.op === "not") {
+  if (op === "not") {
     if (!criteria.condition) {
       return `${ruleName} requires a condition for NOT.`;
     }
     return validateCustomOutlierCriteria(criteria.condition, ruleName);
   }
+  if (op) return `${ruleName} has an unsupported operator: ${op}.`;
   if (criteria.type === "range") {
-    const hasMin = criteria.min !== undefined && criteria.min !== "";
-    const hasMax = criteria.max !== undefined && criteria.max !== "";
+    const hasMin =
+      criteria.min !== undefined &&
+      criteria.min !== null &&
+      criteria.min !== "";
+    const hasMax =
+      criteria.max !== undefined &&
+      criteria.max !== null &&
+      criteria.max !== "";
     if (!hasMin && !hasMax) {
       return `${ruleName} range condition requires min or max.`;
     }
     for (const field of ["min", "max"]) {
       if (
         criteria[field] !== undefined &&
+        criteria[field] !== null &&
         criteria[field] !== "" &&
         !Number.isFinite(Number(criteria[field]))
       ) {

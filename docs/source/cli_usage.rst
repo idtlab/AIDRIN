@@ -132,6 +132,10 @@ Examples:
      '[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]' \
      --max-outliers 100
 
+   # Custom criteria outliers with a reusable JSON rules file
+   aidrin run outliers-custom /path/to/sample_dataset.csv \
+     --rules-file examples/custom_outlier_rules.json
+
    # Impact on AI
    aidrin run correlations /path/to/sample_dataset.csv "age,income,credit_score"
    aidrin run feature-relevance /path/to/sample_dataset.csv "gender,education" "age,income,credit_score" approved
@@ -148,12 +152,18 @@ Examples:
    aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
    aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
 
-For custom criteria outliers, ``--rule`` and ``rules-json`` describe expected
-valid values. Values that do not satisfy those conditions are flagged as
-outliers. Repeat ``--rule`` to add multiple simple column rules. The shorthand
-supports same-target conditions joined by ``&&``. Use the JSON form for ``OR``,
-``NOT``, nested criteria, or HDF5 targets. Use ``--max-outliers 0`` or
-``--max-export-rows 0`` when you want unlimited preview or export rows.
+For custom criteria outliers, ``--rule``, ``rules-json``, and ``--rules-file``
+describe expected valid values. Values that do not satisfy those conditions are
+flagged as outliers. A rules file is a UTF-8 JSON array using the same rule
+objects accepted inline; see ``examples/custom_outlier_rules.json``. Supply
+exactly one rule source. Repeat ``--rule`` to add multiple simple column rules.
+The shorthand supports same-target conditions joined by ``&&``. Use inline JSON
+or a rules file for ``OR``, ``NOT``, nested criteria, HDF5 targets, or regex
+target matching. Set ``"target_match": "regex"`` to apply one rule to every
+target whose complete name matches ``target``; each resolved target has its own
+summary and preview rows. Use
+``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
+or export rows.
 
 Options available on all ``run`` subcommands:
 

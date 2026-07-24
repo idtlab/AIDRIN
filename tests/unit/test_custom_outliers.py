@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -29,6 +30,46 @@ def _write_csv(df):
     df.to_csv(tmp.name, index=False)
     tmp.close()
     return (tmp.name, os.path.basename(tmp.name), ".csv")
+
+
+def _write_dataframe(df, suffix, file_type):
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    tmp.close()
+    if file_type == ".parquet":
+        df.to_parquet(tmp.name)
+    else:
+        df.to_excel(tmp.name, index=False)
+    return (tmp.name, os.path.basename(tmp.name), file_type)
+
+
+def _write_json_rows(rows):
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+    json.dump(rows, tmp)
+    tmp.close()
+    return (tmp.name, os.path.basename(tmp.name), ".json")
+
+
+def _write_npz(values):
+    tmp = tempfile.NamedTemporaryFile(suffix=".npz", delete=False)
+    tmp.close()
+    np.savez(tmp.name, values=np.array(values, dtype=object))
+    return (tmp.name, os.path.basename(tmp.name), ".npz")
+
+
+def _write_column_fixture(file_type):
+    data = {"alpha": [0, 1], "beta": [0, 3]}
+    if file_type == ".csv":
+        return _write_csv(pd.DataFrame(data))
+    if file_type == ".xls, .xlsb, .xlsx, .xlsm":
+        return _write_dataframe(pd.DataFrame(data), ".xlsx", file_type)
+    if file_type == ".parquet":
+        return _write_dataframe(pd.DataFrame(data), ".parquet", file_type)
+    if file_type == ".json":
+        return _write_json_rows([dict(zip(data, values)) for values in zip(*data.values())])
+    tmp = tempfile.NamedTemporaryFile(suffix=".npz", delete=False)
+    tmp.close()
+    np.savez(tmp.name, **{name: np.array(values) for name, values in data.items()})
+    return (tmp.name, os.path.basename(tmp.name), ".npz")
 
 
 def _clean(path):
@@ -99,6 +140,46 @@ def test_iter_value_blocks_csv_locations_include_source_line():
     assert block["locate"]((0,)) == {"row_index": 0, "display": "row 0", "source_line": 2}
 
 
+@pytest.mark.parametrize(
+    ("suffix", "file_type"),
+    [(".xlsx", ".xls, .xlsb, .xlsx, .xlsm"), (".parquet", ".parquet")],
+)
+def test_custom_outliers_normalize_non_string_tabular_columns(suffix, file_type, monkeypatch):
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "0")
+    fi = _write_dataframe(pd.DataFrame({1: [0, 1, 3]}), suffix, file_type)
+    try:
+        targets = iter_targets(fi)
+        assert [target["name"] for target in targets] == ["1"]
+        result = calculate_custom_outliers(fi, [_range_rule("numeric-header", "1", min_value=0, max_value=2)])
+    finally:
+        _clean(fi[0])
+
+    summary = result["Rule summaries"]["numeric-header"]
+    assert "errors" not in summary
+    assert summary["outlier"] == 1
+
+
+@pytest.mark.parametrize(
+    ("writer", "values"),
+    [(_write_json_rows, [{"values": [1, 2]}, {"values": [3]}]), (_write_npz, [[1, 2], [3]])],
+)
+def test_custom_outliers_handle_container_values_without_rule_errors(writer, values):
+    fi = writer(values)
+    try:
+        regex_result = calculate_custom_outliers(fi, [_regex_rule("containers-regex", "values", r".*")])
+        range_result = calculate_custom_outliers(fi, [_range_rule("containers-range", "values", min_value=0, max_value=5)])
+    finally:
+        _clean(fi[0])
+
+    regex_summary = regex_result["Rule summaries"]["containers-regex"]
+    range_summary = range_result["Rule summaries"]["containers-range"]
+    assert "errors" not in regex_summary
+    assert regex_summary["valid"] == 2
+    assert "errors" not in range_summary
+    assert range_summary["outlier"] == 2
+    assert [row["reason"] for row in range_result["Outlier preview"]["containers-range"]] == ["non_numeric", "non_numeric"]
+
+
 def test_iter_targets_lists_native_hdf5_paths(hdf5_file_info):
     targets = iter_targets(hdf5_file_info)
     names = {target["name"] for target in targets}
@@ -115,6 +196,12 @@ def test_iter_value_blocks_hdf5_uses_native_locations(hdf5_file_info):
         "index": [1, 1],
         "display": "/group/data[1,1]",
     }
+
+
+def test_iter_targets_accepts_hdf5_selected_keys_file_info(hdf5_file_info):
+    extended_file_info = (*hdf5_file_info, ["/S_01_01/X"])
+    targets = iter_targets(extended_file_info)
+    assert any(target["name"] == "/S_01_01/X" for target in targets)
 
 
 def test_iter_value_blocks_hdf5_streams_regular_slices(tmp_path, monkeypatch):
@@ -366,6 +453,27 @@ def test_invalid_regex_raises_validation_error():
         _clean(fi[0])
 
 
+@pytest.mark.parametrize(
+    ("criteria", "message"),
+    [
+        ({"op": "xor", "conditions": []}, "unsupported operator"),
+        ({"type": "contains"}, "unsupported condition type"),
+    ],
+)
+def test_unsupported_criteria_are_rejected(criteria, message):
+    fi = _write_csv(pd.DataFrame({"value": [1]}))
+    try:
+        with pytest.raises(ValueError, match=message):
+            calculate_custom_outliers(fi, [{
+                "id": "unsupported",
+                "target": "value",
+                "target_type": "column",
+                "criteria": criteria,
+            }])
+    finally:
+        _clean(fi[0])
+
+
 def test_missing_target_is_reported_as_rule_error():
     fi = _write_csv(pd.DataFrame({"a": [1]}))
     try:
@@ -500,6 +608,82 @@ def test_hdf5_range_rule_counts_fill_values_as_missing(hdf5_file_info):
     assert reasons == ["missing", "above_max"]
 
 
+def test_regex_target_match_expands_to_each_hdf5_dataset(hdf5_file_info):
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule(
+            "waveform-range",
+            r"^/S_01_01/[XY]$",
+            target_type="hdf5_dataset",
+            min_value=0,
+            max_value=2,
+            target_match="regex",
+        )
+    ])
+
+    summaries = result["Rule summaries"]
+    assert len(summaries) == 2
+    by_target = {summary["target"]: summary for summary in summaries.values()}
+    assert set(by_target) == {"/S_01_01/X", "/S_01_01/Y"}
+    assert by_target["/S_01_01/X"]["missing"] == 1
+    assert by_target["/S_01_01/X"]["outlier"] == 2
+    assert by_target["/S_01_01/Y"]["outlier"] == 1
+    assert all(summary["target_match"] == "regex" for summary in summaries.values())
+    assert all(summary["target_pattern"] == r"^/S_01_01/[XY]$" for summary in summaries.values())
+
+
+def test_regex_target_match_reports_zero_matches(hdf5_file_info):
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule(
+            "missing-waveform",
+            r"^/S_99_99/X$",
+            target_type="hdf5_dataset",
+            min_value=0,
+            target_match="regex",
+        )
+    ])
+
+    error = result["Errors"][0]["error"]
+    assert error == "No targets matched regex: ^/S_99_99/X$. Check the pattern and target type against the Target list."
+
+
+@pytest.mark.parametrize("file_type", [".csv", ".xls, .xlsb, .xlsx, .xlsm", ".parquet", ".json", ".npz"])
+def test_regex_target_match_expands_across_tabular_file_types(file_type, monkeypatch):
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "0")
+    fi = _write_column_fixture(file_type)
+    try:
+        result = calculate_custom_outliers(fi, [
+            _range_rule("tabular-range", r"^(alpha|beta)$", min_value=0, max_value=1, target_match="regex")
+        ])
+    finally:
+        _clean(fi[0])
+
+    summaries = result["Rule summaries"]
+    by_target = {summary["target"]: summary for summary in summaries.values()}
+    assert set(by_target) == {"alpha", "beta"}
+    assert by_target["alpha"]["outlier"] == 0
+    assert by_target["beta"]["outlier"] == 1
+
+
+@pytest.mark.parametrize(
+    ("target_match", "target", "message"),
+    [("glob", "value", "unsupported target_match"), ("regex", "[", "invalid target regex")],
+)
+def test_invalid_target_match_is_rejected(target_match, target, message):
+    fi = _write_csv(pd.DataFrame({"value": [1]}))
+    try:
+        with pytest.raises(ValueError, match=message):
+            calculate_custom_outliers(fi, [
+                _range_rule(
+                    "invalid-target-match",
+                    target,
+                    min_value=0,
+                    target_match=target_match,
+                )
+            ])
+    finally:
+        _clean(fi[0])
+
+
 def test_hdf5_multidimensional_locations(hdf5_file_info):
     result = calculate_custom_outliers(hdf5_file_info, [
         _range_rule("multi-range", "/group/data", target_type="hdf5_dataset", max_value=10)
@@ -537,13 +721,14 @@ def test_hdf5_aggregate_counts_missing_outlier_once(tmp_path):
     assert row["outlier"] == 1
 
 
-def test_hdf5_default_zero_policy_counts_missing_and_warns(hdf5_file_info, caplog):
-    with caplog.at_level(logging.WARNING):
-        result = calculate_custom_outliers(hdf5_file_info, [
-            _range_rule("default-zero-range", "/default_zero", target_type="hdf5_dataset", min_value=-1, max_value=2)
-        ])
-    assert result["Rule summaries"]["default-zero-range"]["missing"] == 2
-    assert any("default fill value" in record.message for record in caplog.records)
+def test_hdf5_default_zero_values_are_not_missing(hdf5_file_info):
+    result = calculate_custom_outliers(hdf5_file_info, [
+        _range_rule("default-zero-range", "/default_zero", target_type="hdf5_dataset", min_value=1, max_value=2)
+    ])
+    summary = result["Rule summaries"]["default-zero-range"]
+    assert summary["missing"] == 0
+    assert summary["outlier"] == 2
+    assert [item["reason"] for item in result["Outlier preview"]["default-zero-range"]] == ["below_min", "below_min"]
 
 
 def test_hdf5_fill_log_counts_only_sentinel_matches(tmp_path, caplog):
