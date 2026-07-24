@@ -67,8 +67,9 @@ def list_metrics(category: str | None = None) -> str:
     List all available AIDRIN metrics grouped by category.
 
     Args:
-        category: Optional filter. One of: data-quality, impact-of-data-on-AI,
-                  fairness-and-bias, data-governance, custom_metrics. Omit for all.
+        category: Optional filter. One of: data-quality, data-structure,
+                  impact-of-data-on-AI, fairness-and-bias, data-governance,
+                  custom_metrics. Omit for all.
     """
     return _dumps(list_available_metrics(category=category))
 
@@ -110,6 +111,7 @@ def run_aidrin_metric(
     epsilon: float | None = None,
     distance_metric: str | None = None,
     required_columns: str | None = None,
+    duplicate_columns: str | None = None,
     threshold: float | None = None,
     frequency: str | None = None,
     timestamp_column: str | None = None,
@@ -143,6 +145,7 @@ def run_aidrin_metric(
         epsilon: Epsilon value for differential_privacy.
         distance_metric: Distance metric override (class_imbalance).
         required_columns: Comma-separated required columns (row_level_completeness).
+        duplicate_columns: Comma-separated columns to compare for duplicates (duplicity_by_features).
         threshold: Coverage threshold in [0, 1] (feature_coverage_ratio, default 0.9).
         frequency: Interval frequency for temporal_completeness (default "D").
             One of: min (minute), h (hourly), D (daily), W (weekly),
@@ -172,6 +175,7 @@ def run_aidrin_metric(
             ("epsilon", epsilon),
             ("distance_metric", distance_metric),
             ("required_columns", required_columns),
+            ("duplicate_columns", duplicate_columns),
             ("threshold", threshold),
             ("frequency", frequency),
             ("timestamp_column", timestamp_column),

@@ -108,6 +108,24 @@
             Check duplicity
             <span class="info-icon">i<span class="info-text">This option checks for duplicate rows in the dataset and display the proportion of overall duplicates in the dataset.</span></span>
           </label>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="duplicate detection by features" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check duplicates by selected features
+            <span class="info-icon">i<span class="info-text">This option reports duplicate rows computed using only the selected feature columns, including the top 10 largest duplicate groups.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Features:</label>
+              <div id="duplicateFeaturesCheckbox" class="w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
             <input type="checkbox" name="custom_outliers" id="toggleButton_custom_outliers" onchange="toggleValue(this); toggleCustomOutlierEditor(this)" />
             <span class="checkmark"></span>
