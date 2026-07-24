@@ -109,8 +109,15 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
+   # Data structure (no arguments needed)
+   aidrin run constant-feature-count /path/to/sample_dataset.csv
+   aidrin run max-pairwise-correlation /path/to/sample_dataset.csv
+   aidrin run skewness /path/to/sample_dataset.csv
+   aidrin run kurtosis /path/to/sample_dataset.csv
+
    # Data quality (completeness family — arguments are passed as named --flags)
    aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
+   aidrin run duplicity-by-features /path/to/sample_dataset.csv --duplicate-columns "income,credit_score"
    aidrin run feature-coverage-ratio /path/to/sample_dataset.csv --threshold 0.9
    aidrin run null-count-trend /path/to/sample_dataset.csv --batch-column zipcode
    # temporal-completeness needs a datetime column; --frequency is one of: ms, s, min, h, D, W, ME, QE, YE (default D)
@@ -270,6 +277,9 @@ Available Metrics
      - ``row-level-completeness``
      - ``--required-columns``
    * - Data Quality
+     - ``duplicity-by-features``
+     - ``--duplicate-columns``
+   * - Data Quality
      - ``feature-coverage-ratio``
      - ``--threshold`` (default ``0.9``)
    * - Data Quality
@@ -281,6 +291,18 @@ Available Metrics
    * - Data Quality
      - ``outliers-custom``
      - ``rules-json``
+   * - Data Structure
+     - ``constant-feature-count``
+     - —
+   * - Data Structure
+     - ``max-pairwise-correlation``
+     - —
+   * - Data Structure
+     - ``skewness``
+     - —
+   * - Data Structure
+     - ``kurtosis``
+     - —
    * - Impact on AI
      - ``correlations``
      - ``columns``

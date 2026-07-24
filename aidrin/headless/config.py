@@ -33,6 +33,7 @@ class HeadlessConfig:
     y_true_column: Optional[str] = None
     sensitive_attribute_column: Optional[str] = None
     required_columns: Optional[List[str]] = field(default_factory=list)
+    duplicate_columns: Optional[List[str]] = field(default_factory=list)
     threshold: Optional[float] = None
     frequency: Optional[str] = None
     timestamp_column: Optional[str] = None
@@ -58,6 +59,7 @@ class HeadlessConfig:
             "id-column": "id_column",
             "distance-metric": "distance_metric",
             "required-columns": "required_columns",
+            "duplicate-columns": "duplicate_columns",
             "timestamp-column": "timestamp_column",
             "batch-column": "batch_column",
             "target-columns": "target_columns",
@@ -86,6 +88,7 @@ class HeadlessConfig:
             "cat_columns",
             "num_columns",
             "required_columns",
+            "duplicate_columns",
             "target_columns",
         ):
             if key in normalized:

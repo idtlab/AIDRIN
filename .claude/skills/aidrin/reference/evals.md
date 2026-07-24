@@ -92,6 +92,28 @@ exit=0
 
 ---
 
+## Scenario 5: Data-structure metrics (zero-arg) — max-pairwise-correlation, skewness, kurtosis
+
+**Commands:**
+```bash
+aidrin run max-pairwise-correlation examples/sample_data/csv/adult.csv
+aidrin run skewness examples/sample_data/csv/adult.csv
+aidrin run kurtosis examples/sample_data/csv/adult.csv
+```
+
+**Outcome:** All three exited 0 and returned valid JSON; output keys match the
+reference entries in metrics.md.
+- `max-pairwise-correlation`: 0.3595 (`ID ~ capital.loss`), 7 numeric features considered.
+- `skewness`: most skewed `capital.gain` (11.95).
+- `kurtosis`: most extreme `capital.gain` (excess 154.80).
+
+Constant/non-numeric columns are excluded automatically; no column arguments needed.
+
+**PASS** — the zero-arg data-structure metrics work end-to-end and their reported
+keys match what the skill documents.
+
+---
+
 ## Summary
 
 | Scenario | Result |
@@ -100,5 +122,6 @@ exit=0
 | 2. Non-CSV schema read + metric run (JSON) | PASS |
 | 3. Absent metric (`data_drift`) → scaffold + run end-to-end | PASS |
 | 4. Error isolation — bad column, exit code behavior | PASS (with caveat: always exits 0) |
+| 5. Data-structure metrics (max-pairwise-correlation, skewness, kurtosis) | PASS |
 
 All core building blocks work. One behavioral note: `aidrin run` always exits 0 regardless of validation errors; errors are indicated only in the JSON body (`"ErrorType": "Validation Error"`). The skill's per-metric isolation pattern handles this correctly in practice, but skill authors should inspect JSON output rather than relying on exit codes.

@@ -74,6 +74,7 @@ function showPanel(panelId, pushHistory) {
 // Panel ID → backend cache metric name mapping
 const _panelCacheMap = {
   "data-quality": "data_quality",
+  "data-structure": "data_structure",
   fairness: "fairness",
   "correlation-analysis": "correlation_analysis",
   "feature-relevance": "feature_relevance",
@@ -304,6 +305,12 @@ async function workspaceSubmit(targetUrl) {
     // Map route URLs to remote_metric_runner metric names
     const urlToMetrics = {
       "/data-quality": ["completeness", "outliers", "duplicates"],
+      "/data-structure": [
+        "constant_feature_count",
+        "max_pairwise_correlation",
+        "skewness",
+        "kurtosis",
+      ],
       "/fairness": ["representation_rate", "statistical_rates"],
       "/feature-relevance": ["feature_relevance"],
       "/correlation-analysis": ["correlations"],
@@ -329,6 +336,7 @@ async function workspaceSubmit(targetUrl) {
       outliers: "Outliers",
       duplicates: "Duplicity",
       row_level_completeness: "Row-Level Completeness",
+      duplicity_by_features: "Duplicates by Selected Features",
       feature_coverage_ratio: "Feature Coverage Ratio",
       temporal_completeness: "Temporal Completeness",
       null_count_trend: "Null Count Trend",
@@ -342,6 +350,7 @@ async function workspaceSubmit(targetUrl) {
       t_closeness: "t-Closeness",
       entropy_risk: "Entropy Risk",
       hipaa: "HIPAA Compliance",
+      constant_feature_count: "Constant Feature Count",
     };
 
     if (targetUrl === "/data-quality") {
@@ -359,6 +368,13 @@ async function workspaceSubmit(targetUrl) {
       if (gFormData.get("duplicity") === "yes") {
         selected.push("duplicates");
         selectedNames.push("Duplicity");
+      }
+      if (gFormData.get("duplicate detection by features") === "yes") {
+        selected.push("duplicity_by_features");
+        selectedNames.push("Duplicates by Selected Features");
+        remoteParams.duplicate_features = Array.from(
+          gFormData.getAll("features for duplicate detection"),
+        );
       }
       if (gFormData.get("row level completeness") === "yes") {
         selected.push("row_level_completeness");
@@ -414,6 +430,33 @@ async function workspaceSubmit(targetUrl) {
         }
         remoteParams.stop_after_outliers =
           gFormData.get("stop_after_outliers") === "yes";
+      }
+      if (selected.length === 0) {
+        if (typeof showToast === "function")
+          showToast("Please select at least one metric", "error");
+        return;
+      }
+      remoteParams.selected = selected;
+      remoteDisplayName = selectedNames.join(", ");
+    } else if (targetUrl === "/data-structure") {
+      remoteName = "data_structure";
+      const selected = [];
+      const selectedNames = [];
+      if (gFormData.get("constant feature count") === "yes") {
+        selected.push("constant_feature_count");
+        selectedNames.push("Constant Feature Count");
+      }
+      if (gFormData.get("max pairwise correlation") === "yes") {
+        selected.push("max_pairwise_correlation");
+        selectedNames.push("Max Pairwise Correlation");
+      }
+      if (gFormData.get("skewness") === "yes") {
+        selected.push("skewness");
+        selectedNames.push("Skewness");
+      }
+      if (gFormData.get("kurtosis") === "yes") {
+        selected.push("kurtosis");
+        selectedNames.push("Kurtosis");
       }
       if (selected.length === 0) {
         if (typeof showToast === "function")
@@ -2274,10 +2317,12 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
   // Human-readable metric names for the spinner card
   const metricDisplayNames = {
     data_quality: "Data Quality",
+    data_structure: "Data Structure",
     completeness: "Column-Level Completeness",
     outliers: "Outliers",
     duplicates: "Duplicity",
     row_level_completeness: "Row-Level Completeness",
+    duplicity_by_features: "Duplicates by Selected Features",
     feature_coverage_ratio: "Feature Coverage Ratio",
     temporal_completeness: "Temporal Completeness",
     null_count_trend: "Null Count Trend",
@@ -2294,6 +2339,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
     privacy_preservation: "Privacy Preservation",
     fairness: "Fairness",
     Completeness: "Column-Level Completeness",
+    constant_feature_count: "Constant Feature Count",
   };
   const displayName = metricDisplayNames[metricName] || metricName;
 
@@ -2836,6 +2882,9 @@ function formatValue(v) {
   if (typeof v === "boolean") return v ? "Yes" : "No";
   if (typeof v === "number")
     return Number.isInteger(v) ? v.toString() : v.toFixed(4);
+  if (Array.isArray(v)) return v.length ? v.map(formatValue).join(", ") : "—";
+  if (typeof v === "object")
+    return Object.keys(v).length ? JSON.stringify(v) : "—";
   return String(v);
 }
 function escapeHtml(str) {
@@ -3880,6 +3929,11 @@ function populateWorkspaceDropdowns(data) {
     "rowLevelCompletenessColumnsCheckbox",
     allFeatures,
     "required columns for row level completeness",
+  );
+  fillCheckboxContainer(
+    "duplicateFeaturesCheckbox",
+    allFeatures,
+    "features for duplicate detection",
   );
   fillDropdown("temporalCompletenessColumnDropdown", allFeatures);
   fillDropdown("nullCountTrendBatchDropdown", allFeatures);

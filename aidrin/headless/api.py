@@ -15,9 +15,14 @@ from .config import HeadlessConfig
 from .runners import (
     run_class_imbalance,
     run_completeness,
+    run_constant_feature_count,
     run_correlations,
     run_differential_privacy,
     run_duplicity,
+    run_duplicity_by_features,
+    run_kurtosis,
+    run_max_pairwise_correlation,
+    run_skewness,
     run_entropy_risk,
     run_feature_coverage_ratio,
     run_feature_relevance,
@@ -56,11 +61,41 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "runner": run_outliers,
         "required_args": [],
     },
+    "constant_feature_count": {
+        "category": "data-structure",
+        "description": "Count and list of columns with a single distinct non-null value.",
+        "runner": run_constant_feature_count,
+        "required_args": [],
+    },
+    "max_pairwise_correlation": {
+        "category": "data-structure",
+        "description": "Strongest absolute pairwise correlation between features.",
+        "runner": run_max_pairwise_correlation,
+        "required_args": [],
+    },
+    "skewness": {
+        "category": "data-structure",
+        "description": "Per-feature skewness (distribution asymmetry).",
+        "runner": run_skewness,
+        "required_args": [],
+    },
+    "kurtosis": {
+        "category": "data-structure",
+        "description": "Per-feature excess kurtosis (tail heaviness).",
+        "runner": run_kurtosis,
+        "required_args": [],
+    },
     "row_level_completeness": {
         "category": "data-quality",
         "description": "Percentage of rows where every required column is non-null.",
         "runner": run_row_level_completeness,
         "required_args": ["required-columns"],
+    },
+    "duplicity_by_features": {
+        "category": "data-quality",
+        "description": "Duplicate rows computed using only the selected feature columns.",
+        "runner": run_duplicity_by_features,
+        "required_args": ["duplicate-columns"],
     },
     "feature_coverage_ratio": {
         "category": "data-quality",
@@ -485,7 +520,10 @@ def run_metric(
     _log_progress(f"Running {metric_key}...", verbose)
     start_time = time.time()
 
-    if metric_key in {"completeness", "duplicity", "outliers"}:
+    if metric_key in {
+        "completeness", "duplicity", "outliers", "constant_feature_count",
+        "max_pairwise_correlation", "skewness", "kurtosis",
+    }:
         result = metric["runner"](file_path, file_type, file_name)
         result = _maybe_save_images(metric_key, result, save_images, image_dir)
         if strip_visualizations:
@@ -508,6 +546,13 @@ def run_metric(
         if not required_columns:
             raise ValueError("required_columns is required for row_level_completeness")
         result = metric["runner"](file_path, file_type, file_name, required_columns)
+        return _finalize(result)
+
+    if metric_key == "duplicity_by_features":
+        duplicate_columns = _normalize_list(kwargs.get("duplicate_columns"))
+        if not duplicate_columns:
+            raise ValueError("duplicate_columns is required for duplicity_by_features")
+        result = metric["runner"](file_path, file_type, file_name, duplicate_columns)
         return _finalize(result)
 
     if metric_key == "feature_coverage_ratio":
@@ -683,6 +728,7 @@ def run_batch_metrics(
         "y_true_column": config_obj.y_true_column,
         "sensitive_attribute_column": config_obj.sensitive_attribute_column,
         "required_columns": config_obj.required_columns,
+        "duplicate_columns": config_obj.duplicate_columns,
         "threshold": config_obj.threshold,
         "frequency": config_obj.frequency,
         "timestamp_column": config_obj.timestamp_column,
