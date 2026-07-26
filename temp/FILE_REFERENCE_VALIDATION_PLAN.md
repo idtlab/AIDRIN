@@ -7,9 +7,18 @@
 - [x] Milestone 2: Integrate the headless API, CLI, and batch configuration with focused tests.
 - [x] Milestone 3: Integrate generic and dedicated MCP tools plus the bundled AIDRIN skill documentation and tests.
 - [x] Milestone 4: Integrate the local web Data Quality panel, allowed-root configuration, rendering, and integration tests.
-- [ ] Milestone 5: Complete user documentation, refresh the code index, and pass the full test, lint, formatting, docs, and wheel-build gates.
+- [x] Milestone 5: Complete user documentation, refresh the code index, and pass the full test, lint, formatting, docs, and wheel-build gates.
 
 Each milestone is committed separately. Existing unrelated `.gitignore` and `temp/` contents are excluded from feature commits.
+
+Final validation completed on 2026-07-26:
+
+- Full suite: 605 passed, 2 skipped.
+- Repository flake8 and frontend Prettier checks passed.
+- The normal clean Sphinx HTML build passed. Its two existing duplicate `aidrin.io` target warnings remain; strict `-W` therefore still fails on that unrelated baseline issue.
+- Source distribution and wheel builds passed and include the new metric module.
+- Real CLI and dedicated MCP smoke tests both validated the same temporary manifest with `all_references_valid: true`.
+- The `ccc` index was refreshed successfully and returns the new CLI, MCP, web, documentation, and plan entries.
 
 ## Summary and scope
 

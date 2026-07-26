@@ -73,6 +73,14 @@ JSON array in the same format as ``examples/custom_outlier_rules.json``.
 Set ``"target_match": "regex"`` on a rule to apply it to every target whose
 complete column name or HDF5 dataset path matches ``target``.
 
+File manifests can be checked with the dedicated ``verify_file_references`` tool,
+or with ``run_aidrin_metric`` using metric ``file-reference-validation`` and the
+``path_targets`` argument. Relative paths default to the manifest's directory;
+pass ``base_dir`` when they use another root. ``max_results`` caps invalid and
+metadata details, while ``scan_limit`` optionally caps all inspected occurrences.
+Both the manifest and its referenced files are read from the MCP server host, not
+the Claude client machine.
+
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -132,6 +140,11 @@ Point Claude at a dataset and describe your intent:
 .. code-block:: text
 
    Run a full data quality check on /path/to/data.csv and write a report.
+
+.. code-block:: text
+
+   Verify the file paths in the path and image_path columns of
+   /path/to/manifest.csv, resolving relative paths from /data/project.
 
 Claude follows a structured workflow:
 

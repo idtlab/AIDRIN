@@ -368,6 +368,28 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
   - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. In the manual editor, choose **Regular expression** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
   - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target.
 
+- **Referenced Files** (local deployments only):
+
+  - **Method**: Resolves paths stored in selected string-valued columns or HDF5 datasets and checks whether they identify regular files on the AIDRIN web server. Valid files include size, owner when available, creation time when the operating system exposes one, and modification time.
+  - **Parameters**: Exact path-bearing targets, an administrator-configured filesystem root, an optional relative base subdirectory, and a detail-record cap. Suggested target names appear first but are never selected automatically.
+  - **Result**: Complete or partial scan counts, per-target summaries, invalid-reference locations and reasons, and deduplicated file metadata. A warning appears when the administrator scan cap prevents a complete scan.
+
+  This control is disabled until an administrator configures at least one root.
+  Set ``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` to a JSON array of absolute,
+  existing directories and optionally set a positive web scan cap (default
+  ``10000``):
+
+  .. code-block:: bash
+
+     export AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS='["/data/project","/data/shared"]'
+     export AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT=10000
+
+  The selected base directory must remain inside its configured root, and every
+  referenced file must remain inside one of the configured roots after resolving
+  symbolic links. Paths are checked on the web server, not on the browser's
+  computer. Globus datasets cannot use this local filesystem check; use CLI or
+  MCP on the host that can access the referenced files instead.
+
 Impact of Data on AI
 ^^^^^^^^^^^^^^^^^^^^
 
