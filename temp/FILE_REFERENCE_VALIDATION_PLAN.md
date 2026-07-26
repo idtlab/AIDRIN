@@ -6,7 +6,7 @@
 - [x] Milestone 1: Implement the core metric, filesystem security semantics, metadata, and format-focused unit tests.
 - [x] Milestone 2: Integrate the headless API, CLI, and batch configuration with focused tests.
 - [x] Milestone 3: Integrate generic and dedicated MCP tools plus the bundled AIDRIN skill documentation and tests.
-- [ ] Milestone 4: Integrate the local web Data Quality panel, allowed-root configuration, rendering, and integration tests.
+- [x] Milestone 4: Integrate the local web Data Quality panel, allowed-root configuration, rendering, and integration tests.
 - [ ] Milestone 5: Complete user documentation, refresh the code index, and pass the full test, lint, formatting, docs, and wheel-build gates.
 
 Each milestone is committed separately. Existing unrelated `.gitignore` and `temp/` contents are excluded from feature commits.

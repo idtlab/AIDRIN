@@ -34,6 +34,28 @@ def test_custom_outlier_targets_load_only_when_enabled():
     assert "toggleCustomOutlierEditor(checkbox)" in source
 
 
+def test_file_reference_ui_keeps_custom_outlier_loading_independent():
+    source = INSPECTOR_JS.read_text()
+    panel = DATA_QUALITY_PANEL.read_text()
+    assert "function loadFileReferenceOptions()" in source
+    assert "loadFileReferenceOptions();" in source
+    assert "window.AIDRIN_GLOBUS_MODE" in source
+    assert 'id="toggleButton_file_reference_validation"' in panel
+    assert 'name="file_reference_targets"' in panel
+    assert 'name="file_reference_root_id"' in panel
+    assert 'name="file_reference_base_subdirectory"' in panel
+    assert 'name="file_reference_max_results"' in panel
+
+
+def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
+    source = INSPECTOR_JS.read_text()
+    assert "function renderFileReferenceInvalidTable(rows)" in source
+    assert "function renderFileReferenceMetadataTable(rows)" in source
+    assert "escapeHtml(formatValue(value))" in source
+    assert "Partial scan:" in source
+    assert "!results.Summary.scan_complete" in source
+
+
 def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     source = INSPECTOR_JS.read_text()
     assert "function serializeCustomOutlierRules()" in source

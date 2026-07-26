@@ -13,6 +13,102 @@ let lastMetricResult = null; // Store last result for JSON download
 let customOutlierTargets = [];
 let customOutlierRuleCounter = 0;
 
+function isFileReferenceTarget(target) {
+  const dtype = String(target?.dtype || "").toLowerCase();
+  if (target?.target_type === "hdf5_dataset") {
+    return (
+      dtype.includes("string") ||
+      dtype.includes("object") ||
+      dtype.includes("bytes") ||
+      /(^|[|<>])[su]\d*/i.test(dtype)
+    );
+  }
+  return ["object", "string", "str", "category", "bytes"].some((name) =>
+    dtype.includes(name),
+  );
+}
+
+function loadFileReferenceOptions() {
+  const checkbox = document.getElementById(
+    "toggleButton_file_reference_validation",
+  );
+  const message = document.getElementById("file-reference-message");
+  if (!checkbox || window.AIDRIN_GLOBUS_MODE) return Promise.resolve();
+
+  return fetch("/custom-outlier-targets", { method: "POST" })
+    .then((response) => response.json())
+    .then((data) => {
+      const config = data.file_reference || {};
+      if (!data.success || !config.enabled) {
+        if (message) {
+          message.textContent =
+            config.message ||
+            data.message ||
+            "File-reference validation is unavailable.";
+        }
+        return;
+      }
+
+      const targets = (data.targets || []).filter(isFileReferenceTarget);
+      const suggestedName = /(path|file|filename|filepath|location)/i;
+      targets.sort((left, right) => {
+        const leftSuggested = suggestedName.test(left.name) ? 0 : 1;
+        const rightSuggested = suggestedName.test(right.name) ? 0 : 1;
+        return leftSuggested - rightSuggested;
+      });
+
+      const targetSelect = document.getElementById("file-reference-targets");
+      if (targetSelect) {
+        targetSelect.replaceChildren();
+        targets.forEach((target) => {
+          const option = document.createElement("option");
+          option.value = target.name;
+          const suggested = suggestedName.test(target.name)
+            ? "Suggested: "
+            : "";
+          option.textContent =
+            suggested + (target.display_label || target.name);
+          targetSelect.appendChild(option);
+        });
+      }
+
+      const rootSelect = document.getElementById("file-reference-root");
+      if (rootSelect) {
+        rootSelect.replaceChildren();
+        if ((config.roots || []).length !== 1) {
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "Select a configured root";
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          rootSelect.appendChild(placeholder);
+        }
+        (config.roots || []).forEach((root) => {
+          const option = document.createElement("option");
+          option.value = root.id;
+          option.textContent = root.label;
+          rootSelect.appendChild(option);
+        });
+      }
+
+      if (!targets.length) {
+        if (message)
+          message.textContent =
+            "No string-valued targets are available in this dataset.";
+        return;
+      }
+      checkbox.disabled = false;
+      if (message) {
+        message.textContent = `Paths are checked on this AIDRIN server. Web scans are capped at ${Number(config.scan_limit).toLocaleString()} values; use CLI or MCP for larger complete scans.`;
+      }
+    })
+    .catch((error) => {
+      if (message)
+        message.textContent =
+          "Unable to load file-reference options: " + error.message;
+    });
+}
+
 /**
  * Show a metric panel by ID, hiding all others.
  * @param {string} panelId - The panel name (e.g., 'data-quality', 'fairness')
@@ -810,6 +906,13 @@ function renderWorkspaceResults(data, options) {
       if (description) {
         html += `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">${escapeHtml(description)}</p>`;
       }
+      if (
+        type === "File Reference Validation" &&
+        results.Summary &&
+        !results.Summary.scan_complete
+      ) {
+        html += `<div class="p-4 mb-4 text-sm text-amber-800 rounded-lg bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300" role="alert"><strong>Partial scan:</strong> ${escapeHtml(formatValue(results.Summary.unscanned_values))} reference values were not checked because the server scan cap was reached. Use CLI or MCP for a complete larger scan.</div>`;
+      }
 
       // Graph interpretation — rendered as a distinct callout below the plot/scores
       const interpretation = results["Graph interpretation"];
@@ -911,6 +1014,88 @@ function renderWorkspaceResults(data, options) {
   if (buttonsContainer) buttonsContainer.style.display = "flex";
 }
 
+function renderFileReferenceInvalidTable(rows) {
+  let html = `<div class="mb-4">`;
+  html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">Invalid references (${rows.length})</h4>`;
+  if (!rows.length) {
+    return (
+      html +
+      `<p class="text-sm text-gray-600 dark:text-gray-300">None in the returned details.</p></div>`
+    );
+  }
+  html += `<div class="relative overflow-x-auto rounded-lg shadow-sm"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  ["Target", "Location", "Value", "Reason", "Resolved path"].forEach(
+    (heading) => {
+      html += `<th scope="col" class="px-3 py-2.5">${escapeHtml(heading)}</th>`;
+    },
+  );
+  html += `</tr></thead><tbody>`;
+  rows.forEach((row, index) => {
+    const stripe =
+      index % 2
+        ? "bg-gray-50 dark:bg-gray-700/50"
+        : "bg-white dark:bg-gray-800";
+    const values = [
+      row.target,
+      row.location?.display,
+      row.value,
+      row.reason,
+      row.resolved_path,
+    ];
+    html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+    values.forEach((value) => {
+      html += `<td class="px-3 py-2 align-top break-all">${escapeHtml(formatValue(value))}</td>`;
+    });
+    html += `</tr>`;
+  });
+  return html + `</tbody></table></div></div>`;
+}
+
+function renderFileReferenceMetadataTable(rows) {
+  let html = `<div class="mb-4">`;
+  html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">File metadata (${rows.length})</h4>`;
+  if (!rows.length) {
+    return (
+      html +
+      `<p class="text-sm text-gray-600 dark:text-gray-300">No valid files in the returned details.</p></div>`
+    );
+  }
+  html += `<div class="relative overflow-x-auto rounded-lg shadow-sm"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  [
+    "Resolved path",
+    "Size (bytes)",
+    "Owner",
+    "Created",
+    "Modified",
+    "Occurrences",
+  ].forEach((heading) => {
+    html += `<th scope="col" class="px-3 py-2.5">${escapeHtml(heading)}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+  rows.forEach((row, index) => {
+    const stripe =
+      index % 2
+        ? "bg-gray-50 dark:bg-gray-700/50"
+        : "bg-white dark:bg-gray-800";
+    const values = [
+      row.resolved_path,
+      row.size_bytes,
+      row.owner_name,
+      row.created_at || "Unavailable",
+      row.modified_at,
+      row.occurrences,
+    ];
+    html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+    values.forEach((value) => {
+      html += `<td class="px-3 py-2 align-top break-all">${escapeHtml(formatValue(value))}</td>`;
+    });
+    html += `</tr>`;
+  });
+  return html + `</tbody></table></div></div>`;
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
@@ -985,7 +1170,11 @@ function renderScoresSection(scores, depth) {
       }
     }
     // Array
-    else if (Array.isArray(value)) {
+    else if (key === "Invalid references" && Array.isArray(value)) {
+      html += renderFileReferenceInvalidTable(value);
+    } else if (key === "File metadata" && Array.isArray(value)) {
+      html += renderFileReferenceMetadataTable(value);
+    } else if (Array.isArray(value)) {
       html += `<div class="mb-4">`;
       html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">${escapeHtml(key)} <span class="normal-case font-normal">(${value.length})</span></h4>`;
       if (value.length > 0 && typeof value[0] !== "object") {
@@ -3782,6 +3971,8 @@ function initWorkspace() {
     })
     .catch((err) => console.error("Error fetching features:", err))
     .finally(initTaskDone);
+
+  loadFileReferenceOptions();
 
   // Feature relevance: disable target feature in checkbox lists
   const targetDropdown = document.getElementById(

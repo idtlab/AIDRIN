@@ -133,6 +133,38 @@
             <span class="info-icon">i<span class="info-text">Define expected valid values for selected columns or HDF5 datasets. Values that do not satisfy these conditions are flagged.</span></span>
           </label>
         </div>
+
+        <div class="checkboxContainerIndividual" id="file-reference-validation-control">
+          <label class="material-checkbox">
+            <input type="checkbox" name="file_reference_validation" id="toggleButton_file_reference_validation" onchange="toggleValue(this)" disabled />
+            <span class="checkmark"></span>
+            Validate referenced files
+            <span class="info-icon">i<span class="info-text">Check whether paths stored in selected targets identify regular files available to this AIDRIN server, and report file metadata.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <p id="file-reference-message" class="text-xs text-gray-600 dark:text-gray-300">
+              {% if globus_mode %}File-reference validation is available only for files uploaded to the local AIDRIN server.{% else %}Loading server filesystem options...{% endif %}
+            </p>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white" for="file-reference-targets">Path-bearing targets:</label>
+              <select id="file-reference-targets" name="file_reference_targets" multiple required class="w-full" style="max-width: none; min-height: 7rem;"></select>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Choose exact columns or string-valued HDF5 datasets. Suggested names appear first but are not preselected.</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white" for="file-reference-root">Allowed filesystem root:</label>
+              <select id="file-reference-root" name="file_reference_root_id" required class="w-full" style="max-width: none;"></select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white" for="file-reference-subdirectory">Base subdirectory (optional):</label>
+              <input id="file-reference-subdirectory" name="file_reference_base_subdirectory" type="text" class="textWrapper w-full" style="max-width: none;" placeholder="Relative to the selected root" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white" for="file-reference-max-results">Detail records:</label>
+              <input id="file-reference-max-results" name="file_reference_max_results" type="number" min="0" step="1" value="100" class="textWrapper w-full" style="max-width: none;" />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Use 0 for unlimited details. This does not change the administrator scan cap.</p>
+            </div>
+          </div>
+        </div>
       </div>
       <div id="custom-outlier-editor" class="hidden mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
         <input type="hidden" name="custom_outlier_rules" id="custom-outlier-rules-json" value="[]" />
