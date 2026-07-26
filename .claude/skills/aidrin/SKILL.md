@@ -1,6 +1,6 @@
 ---
 name: aidrin
-description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
+description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to validate file paths stored in a dataset, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
 ---
 
 # Assessing dataset AI-readiness with AIDRIN
@@ -24,6 +24,7 @@ only when MCP is absent.
 | Summarize dataset | `summarize_dataset(file_path)` | `aidrin summarize <file>` |
 | Quality baseline | `run_data_quality_check(file_path)` | `aidrin data-quality <file> [--detail]` |
 | Single metric | `run_aidrin_metric(file_path, metric, ...)` | `aidrin run <metric> <file> <args...>` |
+| Validate file references | `verify_file_references(file_path, path_targets, ...)` | `aidrin run file-reference-validation <file> <targets> [...]` |
 | Batch | `run_batch(config_path)` | `aidrin batch <config>` |
 | Create custom metric | `create_custom_metric(name, directory)` | `aidrin add-custom-module <name> --dir <dir>` |
 | Run custom metric | `run_custom_metric(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> metric` |
@@ -79,6 +80,7 @@ Dimension → metric mapping for focused requests:
 | Privacy / PII / anonymity | k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk |
 | HIPAA / PHI compliance | hipaa-compliance |
 | Data quality / completeness / duplicates / outliers | completeness, duplicity, outliers |
+| File paths / referenced files / manifest validation | file-reference-validation |
 | Data structure / distribution shape / collinearity / redundant features | max-pairwise-correlation, skewness, kurtosis |
 | Feature relevance / AI impact | feature-relevance, correlations |
 | Class imbalance | class-imbalance |
@@ -87,6 +89,11 @@ Dimension → metric mapping for focused requests:
 
 Always add the zero-arg quality baseline (completeness, duplicity, outliers) even for
 dimension-specific requests — it takes no column args and gives essential context.
+
+For a focused file-reference request, run only `file-reference-validation` unless the
+user also asks for broader readiness analysis. Confirm the path-bearing targets and,
+when relative references do not use the manifest directory, the base directory. MCP
+checks the filesystem of the MCP server host, not the user's client machine.
 
 ### 3. Inspect the dataset
 

@@ -9,7 +9,11 @@ import pytest
 
 pytest.importorskip("mcp")
 
-from aidrin.mcp.server import run_aidrin_metric, run_custom_outlier_check  # noqa: E402
+from aidrin.mcp.server import (  # noqa: E402
+    run_aidrin_metric,
+    run_custom_outlier_check,
+    verify_file_references,
+)
 
 
 def _write_csv() -> str:
@@ -72,3 +76,32 @@ def test_dedicated_mcp_tool_rejects_multiple_rule_sources():
     finally:
         _remove(csv_path)
         _remove(rules_path)
+
+
+def test_file_reference_tools_return_equivalent_results(tmp_path):
+    referenced_file = tmp_path / "artifact.bin"
+    referenced_file.write_bytes(b"aidrin")
+    manifest = tmp_path / "manifest.csv"
+    pd.DataFrame({"file_path": [referenced_file.name]}).to_csv(manifest, index=False)
+
+    dedicated = json.loads(
+        verify_file_references(
+            str(manifest),
+            "file_path",
+            base_dir=str(tmp_path),
+            max_results=1,
+        )
+    )
+    generic = json.loads(
+        run_aidrin_metric(
+            str(manifest),
+            "file-reference-validation",
+            path_targets="file_path",
+            base_dir=str(tmp_path),
+            max_results=1,
+        )
+    )
+
+    assert dedicated == generic
+    assert dedicated["Summary"]["all_references_valid"] is True
+    assert dedicated["File metadata"][0]["size_bytes"] == 6

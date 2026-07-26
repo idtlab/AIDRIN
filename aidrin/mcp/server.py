@@ -97,6 +97,7 @@ def run_aidrin_metric(
     rules_file: str | None = None,
     max_outliers: int = 100,
     max_export_rows: int = 10000,
+    max_results: int = 100,
     scan_limit: int | None = None,
     stop_after_outliers: bool = False,
     columns: str | None = None,
@@ -118,6 +119,8 @@ def run_aidrin_metric(
     timestamp_column: str | None = None,
     batch_column: str | None = None,
     target_columns: str | None = None,
+    path_targets: str | None = None,
+    base_dir: str | None = None,
 ) -> str:
     """
     Run a single AIDRIN built-in metric against a dataset.
@@ -132,7 +135,8 @@ def run_aidrin_metric(
         rules_file: Server-local path to a JSON array of valid-value rules when metric is outliers-custom.
         max_outliers: Preview cap per custom outlier rule; 0 means unlimited.
         max_export_rows: Export row cap per custom outlier rule; 0 means unlimited.
-        scan_limit: Optional maximum values to scan per custom outlier rule.
+        max_results: Maximum detail records for file-reference-validation; 0 means unlimited.
+        scan_limit: Optional maximum values to scan for custom outliers or file-reference-validation.
         stop_after_outliers: Stop scanning after the preview cap is reached.
         columns: Comma-separated columns (required by: correlations, representation_rate, hipaa_compliance).
         target_column: Target/label column (required by: class_imbalance, feature_relevance).
@@ -155,6 +159,8 @@ def run_aidrin_metric(
         timestamp_column: Datetime column (temporal_completeness).
         batch_column: Batch/partition column (null_count_trend).
         target_columns: Comma-separated columns to count nulls in (null_count_trend, optional).
+        path_targets: Comma-separated path-bearing targets (file-reference-validation).
+        base_dir: Server-local directory used to resolve relative file references.
     """
     kwargs: dict[str, Any] = {
         k: v
@@ -164,6 +170,7 @@ def run_aidrin_metric(
             ("rules_file", rules_file),
             ("max_outliers", max_outliers),
             ("max_export_rows", max_export_rows),
+            ("max_results", max_results),
             ("scan_limit", scan_limit),
             ("stop_after_outliers", stop_after_outliers),
             ("target_column", target_column),
@@ -184,6 +191,8 @@ def run_aidrin_metric(
             ("timestamp_column", timestamp_column),
             ("batch_column", batch_column),
             ("target_columns", target_columns),
+            ("path_targets", path_targets),
+            ("base_dir", base_dir),
         ]
         if v is not None
     }
@@ -194,6 +203,42 @@ def run_aidrin_metric(
         strip_visualizations=True,
         save_images=False,
         **kwargs,
+    )
+    return _dumps(result)
+
+
+@mcp_server.tool()
+def verify_file_references(
+    file_path: str,
+    path_targets: str,
+    file_type: str | None = None,
+    base_dir: str | None = None,
+    max_results: int = 100,
+    scan_limit: int | None = None,
+) -> str:
+    """
+    Validate file references stored in selected dataset targets and return file metadata.
+    Relative references and all filesystem checks are resolved on the MCP server host.
+
+    Args:
+        file_path: Absolute path to the manifest dataset.
+        path_targets: Comma-separated columns or string-valued HDF5 dataset paths.
+        file_type: Optional file-type override.
+        base_dir: Server-local directory used to resolve relative references. Defaults to
+                  the manifest's parent directory.
+        max_results: Maximum invalid and metadata detail records; 0 means unlimited.
+        scan_limit: Optional maximum reference values to scan; omitted or 0 means unlimited.
+    """
+    result = run_metric(
+        "file-reference-validation",
+        file_path,
+        file_type=file_type,
+        path_targets=path_targets,
+        base_dir=base_dir,
+        max_results=max_results,
+        scan_limit=scan_limit,
+        strip_visualizations=True,
+        save_images=False,
     )
     return _dumps(result)
 
