@@ -39,6 +39,10 @@ class HeadlessConfig:
     timestamp_column: Optional[str] = None
     batch_column: Optional[str] = None
     target_columns: Optional[List[str]] = field(default_factory=list)
+    path_targets: Optional[List[str]] = field(default_factory=list)
+    base_dir: Optional[str] = None
+    max_results: Optional[int] = 100
+    scan_limit: Optional[int] = None
     save_images: Optional[bool] = None
     image_dir: Optional[str] = None
 
@@ -63,6 +67,10 @@ class HeadlessConfig:
             "timestamp-column": "timestamp_column",
             "batch-column": "batch_column",
             "target-columns": "target_columns",
+            "path-targets": "path_targets",
+            "base-dir": "base_dir",
+            "max-results": "max_results",
+            "scan-limit": "scan_limit",
             "file-path": "file_path",
             "file-type": "file_type",
             "file-name": "file_name",
@@ -90,6 +98,7 @@ class HeadlessConfig:
             "required_columns",
             "duplicate_columns",
             "target_columns",
+            "path_targets",
         ):
             if key in normalized:
                 normalized[key] = _normalize_list(normalized[key])

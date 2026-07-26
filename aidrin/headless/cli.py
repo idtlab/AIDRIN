@@ -269,6 +269,9 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "timestamp_column": getattr(args, "timestamp_column", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
+        "path_targets": _parse_list(getattr(args, "path_targets", None)),
+        "base_dir": getattr(args, "base_dir", None),
+        "max_results": getattr(args, "max_results", 100),
         "rules": parsed_rules,
         "rules_json": rules_json,
         "rules_file": rules_file,
@@ -306,6 +309,8 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
     for arg in required_args:
         if arg == "columns":
             parser.add_argument("columns", help="Comma-separated column list", metavar="columns")
+        elif arg == "path-targets":
+            parser.add_argument("path_targets", help="Comma-separated path-bearing targets", metavar="path-targets")
         elif arg == "target-column":
             parser.add_argument("target_column", help="Target column name", metavar="target-column")
         elif arg == "quasi-identifiers":
@@ -502,6 +507,10 @@ def main() -> None:
             mparser.add_argument("--max-export-rows", type=int, default=10000, help="Export row cap per rule; 0 means unlimited")
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum values to scan per rule")
             mparser.add_argument("--stop-after-outliers", action="store_true", help="Stop scanning after preview cap is reached")
+        if metric_name == "file_reference_validation":
+            mparser.add_argument("--base-dir", default=None, help="Directory used to resolve relative file references")
+            mparser.add_argument("--max-results", type=int, default=100, help="Maximum invalid and metadata detail records; 0 means unlimited")
+            mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum reference values to scan; 0 means unlimited")
         _configure_minimal_run_args(mparser)
         mparser.set_defaults(_metric_key=metric_name, _action="metric")
 

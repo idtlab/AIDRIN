@@ -178,6 +178,7 @@ class TestListCommand(unittest.TestCase):
         self.assertIn("duplicity", text)
         self.assertIn("outliers", text)
         self.assertIn("outliers-custom", text)
+        self.assertIn("file-reference-validation", text)
 
     def test_list_category_filter(self):
         stdout, _, _ = _run_cli("list", "--category", "data-quality")
@@ -472,6 +473,66 @@ class TestRunMetricNameResolution(unittest.TestCase):
         from aidrin.headless.api import run_metric
         with self.assertRaises(ValueError):
             run_metric("hipaa-compliance", self.csv, save_images=False)
+
+
+class TestFileReferenceValidationInterfaces(unittest.TestCase):
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.base_dir = self.temp_dir.name
+        self.target_path = os.path.join(self.base_dir, "artifact.bin")
+        with open(self.target_path, "wb") as handle:
+            handle.write(b"aidrin")
+        self.csv = os.path.join(self.base_dir, "manifest.csv")
+        pd.DataFrame({"file_path": ["artifact.bin", "missing.bin"]}).to_csv(self.csv, index=False)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_cli_forwards_targets_base_dir_and_caps(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "file-reference-validation",
+            self.csv,
+            "file_path",
+            "--base-dir",
+            self.base_dir,
+            "--max-results",
+            "1",
+            "--scan-limit",
+            "1",
+        )
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["Summary"]["scanned_values"], 1)
+        self.assertEqual(result["Summary"]["unscanned_values"], 1)
+        self.assertEqual(result["File metadata"][0]["size_bytes"], 6)
+
+    def test_run_metric_requires_path_targets(self):
+        from aidrin.headless.api import run_metric
+
+        with self.assertRaisesRegex(ValueError, "path_targets is required"):
+            run_metric("file-reference-validation", self.csv, save_images=False)
+
+    def test_batch_normalizes_and_forwards_file_reference_options(self):
+        from aidrin.headless.api import run_batch_metrics
+        from aidrin.headless.config import HeadlessConfig
+
+        config = HeadlessConfig.from_dict({
+            "file-path": self.csv,
+            "metrics": ["file-reference-validation"],
+            "path-targets": "file_path",
+            "base-dir": self.base_dir,
+            "max-results": 1,
+            "scan-limit": 1,
+            "save-images": False,
+        })
+        self.assertEqual(config.path_targets, ["file_path"])
+        result = run_batch_metrics(config)
+        metric_result = result["file_reference_validation"]
+        self.assertEqual(metric_result["Summary"]["scanned_values"], 1)
+        self.assertEqual(metric_result["Summary"]["unscanned_values"], 1)
+        self.assertEqual(len(metric_result["File metadata"]), 1)
 
 
 class TestCustomOutlierRulesFile(unittest.TestCase):

@@ -25,6 +25,7 @@ from .runners import (
     run_skewness,
     run_entropy_risk,
     run_feature_coverage_ratio,
+    run_file_reference_validation,
     run_feature_relevance,
     run_hipaa_compliance,
     run_k_anonymity,
@@ -120,6 +121,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Flags values that fail user-provided valid-value range, regex, and compound rules.",
         "runner": run_outliers_custom,
         "required_args": ["rules-json"],
+    },
+    "file_reference_validation": {
+        "category": "data-quality",
+        "description": "Validates selected dataset values as references to files on this host.",
+        "runner": run_file_reference_validation,
+        "required_args": ["path-targets"],
     },
     "correlations": {
         "category": "impact-of-data-on-AI",
@@ -603,6 +610,21 @@ def run_metric(
         )
         return _finalize(result)
 
+    if metric_key == "file_reference_validation":
+        path_targets = _normalize_list(kwargs.get("path_targets"))
+        if not path_targets:
+            raise ValueError("path_targets is required for file_reference_validation")
+        result = metric["runner"](
+            file_path,
+            file_type,
+            file_name,
+            path_targets,
+            kwargs.get("base_dir"),
+            kwargs.get("max_results", 100),
+            kwargs.get("scan_limit"),
+        )
+        return _finalize(result)
+
     if metric_key == "feature_relevance":
         cat_columns = _normalize_list(kwargs.get("cat_columns")) or []
         num_columns = _normalize_list(kwargs.get("num_columns")) or []
@@ -734,6 +756,10 @@ def run_batch_metrics(
         "timestamp_column": config_obj.timestamp_column,
         "batch_column": config_obj.batch_column,
         "target_columns": config_obj.target_columns,
+        "path_targets": config_obj.path_targets,
+        "base_dir": config_obj.base_dir,
+        "max_results": config_obj.max_results,
+        "scan_limit": config_obj.scan_limit,
         "save_images": bool(config_obj.save_images) if config_obj.save_images is not None else True,
         "image_dir": config_obj.image_dir,
         "verbose": verbose,
