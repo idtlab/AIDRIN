@@ -175,3 +175,14 @@ Add `tests/unit/test_file_reference_validation.py` and extend existing CLI, MCP,
 Update CLI, web, Sphinx MCP, bundled skill, and metric-reference documentation. Verify documented commands against the implementation, then run full pytest, flake8, Prettier for touched frontend assets, Sphinx build, and wheel build.
 
 No additional files should change unless a required gate proves one necessary.
+
+## Follow-up: unified exact and regex target selection
+
+- [x] Keep exact target names as the default and add full-match regex expansion to the core metric.
+- [x] Forward `target_match` through the runner, headless API, CLI, batch configuration, generic MCP tool, dedicated MCP tool, and web route.
+- [x] Reuse one searchable target-picker implementation for file-reference targets and custom-outlier exact targets.
+- [x] Keep file references multi-select and custom-outlier exact targets single-select.
+- [x] Add exact/regex switching and matched-target previews to both web workflows.
+- [x] Preserve Python regex compatibility by treating browser matching as a preview and leaving authoritative validation to the server.
+- [ ] Update public documentation and examples for file-reference regex selection.
+- [ ] Run the full test, lint, frontend formatting, documentation, and package-build gates.

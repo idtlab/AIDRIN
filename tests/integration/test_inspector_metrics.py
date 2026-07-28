@@ -186,6 +186,30 @@ def test_data_quality_file_reference_validation_returns_metadata(uploaded_client
     assert result["File metadata"][0]["size_bytes"] == 6
 
 
+def test_data_quality_file_reference_validation_accepts_regex_targets(uploaded_client, app):
+    upload_dir = Path(app.config["UPLOAD_FOLDER"])
+    artifact = upload_dir / "artifact.bin"
+    artifact.write_bytes(b"aidrin")
+    _uploaded_manifest_path(uploaded_client).write_text(
+        "primary_path,notes\nartifact.bin,ok\n", encoding="utf-8"
+    )
+    app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [str(upload_dir)]
+
+    response = uploaded_client.post(
+        "/data-quality?return_type=json",
+        data={
+            "file_reference_validation": "yes",
+            "file_reference_target_match": "regex",
+            "file_reference_targets": r".*_path",
+            "file_reference_root_id": "root-0",
+        },
+    )
+    result = response.get_json()["File Reference Validation"]
+
+    assert list(result["Target summaries"]) == ["primary_path"]
+    assert result["Summary"]["all_references_valid"] == 1
+
+
 def test_file_reference_bad_root_id_is_metric_scoped(uploaded_client, app):
     app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [app.config["UPLOAD_FOLDER"]]
 

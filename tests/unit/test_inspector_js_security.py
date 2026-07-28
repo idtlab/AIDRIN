@@ -41,7 +41,7 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
     assert "loadFileReferenceOptions();" in source
     assert "window.AIDRIN_GLOBUS_MODE" in source
     assert 'id="toggleButton_file_reference_validation"' in panel
-    assert 'input.name = "file_reference_targets"' in source
+    assert 'inputName: "file_reference_targets"' in source
     assert 'name="file_reference_root_id"' in panel
     assert 'name="file_reference_base_subdirectory"' in panel
     assert 'name="file_reference_max_results"' in panel
@@ -57,11 +57,26 @@ def test_file_reference_targets_use_searchable_collapsed_multi_select():
     assert 'role="listbox" aria-multiselectable="true"' in panel
     assert '<select id="file-reference-targets"' not in panel
     assert "function initFileReferenceTargetPicker()" in source
-    assert "function filterFileReferenceTargets(query)" in source
-    assert "function updateFileReferenceTargetSummary()" in source
-    assert 'input.name = "file_reference_targets"' in source
+    assert "function filterTargetPicker(picker, query)" in source
+    assert "function updateTargetPickerSummary(picker)" in source
+    assert 'inputName: "file_reference_targets"' in source
     assert 'badge.textContent = "Suggested"' in source
-    assert 'showToast("Select at least one path-bearing target."' in source
+    assert '"Enter a target pattern."' in source
+
+
+def test_file_reference_and_custom_outliers_share_searchable_target_picker():
+    source = INSPECTOR_JS.read_text()
+    panel = DATA_QUALITY_PANEL.read_text()
+    assert "function renderTargetPicker(picker, targets, options = {})" in source
+    assert 'id="file-reference-target-picker" data-target-picker' in panel
+    assert 'data-field="target" data-target-picker' in source
+    assert "renderTargetPicker(picker, customOutlierTargets)" in source
+    assert ".custom-outlier-target" not in source
+    assert "function fullMatchTargetNames(patternText, targets, targetType)" in source
+    assert "function updateRegexTargetPreview(" in source
+    assert 'name="file_reference_target_match"' in panel
+    assert 'name="file_reference_targets" disabled' in panel
+    assert 'data-section="target-regex-preview"' in source
 
 
 def test_file_reference_tables_escape_values_and_warn_on_partial_scans():

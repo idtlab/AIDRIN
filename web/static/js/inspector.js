@@ -11,6 +11,7 @@ let activePanel = "data-overview";
 let codeMirrorEditor = null;
 let lastMetricResult = null; // Store last result for JSON download
 let customOutlierTargets = [];
+let fileReferenceTargets = [];
 let customOutlierRuleCounter = 0;
 
 function isFileReferenceTarget(target) {
@@ -28,88 +29,239 @@ function isFileReferenceTarget(target) {
   );
 }
 
-function updateFileReferenceTargetSummary() {
-  const options = document.querySelectorAll(
-    '#file-reference-target-options input[name="file_reference_targets"]',
-  );
-  const selected = Array.from(options).filter((input) => input.checked);
-  const summary = document.getElementById("file-reference-target-summary");
-  if (!summary) return;
-  if (selected.length === 0) {
-    summary.textContent = "Select path-bearing targets...";
-  } else {
-    summary.textContent = `${selected.length} target${selected.length === 1 ? "" : "s"} selected`;
-  }
+function targetPickerElements(picker) {
+  return {
+    button: picker?.querySelector("[data-target-picker-button]"),
+    summary: picker?.querySelector("[data-target-picker-summary]"),
+    menu: picker?.querySelector("[data-target-picker-menu]"),
+    search: picker?.querySelector("[data-target-picker-search]"),
+    options: picker?.querySelector("[data-target-picker-options]"),
+    empty: picker?.querySelector("[data-target-picker-empty]"),
+  };
 }
 
-function setFileReferenceTargetMenuOpen(open) {
-  const button = document.getElementById("file-reference-target-button");
-  const menu = document.getElementById("file-reference-target-menu");
+function selectedTargetPickerInputs(picker) {
+  return Array.from(
+    picker?.querySelectorAll("[data-target-picker-option-input]:checked") || [],
+  );
+}
+
+function updateTargetPickerSummary(picker) {
+  const { summary } = targetPickerElements(picker);
+  if (!summary) return;
+  const selected = selectedTargetPickerInputs(picker);
+  const placeholder = picker.dataset.placeholder || "Select a target...";
+  if (selected.length === 0) summary.textContent = placeholder;
+  else if (picker.dataset.multiple === "true") {
+    summary.textContent = `${selected.length} target${selected.length === 1 ? "" : "s"} selected`;
+  } else summary.textContent = selected[0].dataset.displayLabel;
+}
+
+function setTargetPickerOpen(picker, open) {
+  const { button, menu, search } = targetPickerElements(picker);
   if (!button || !menu) return;
   const shouldOpen = Boolean(open) && !button.disabled;
   menu.classList.toggle("hidden", !shouldOpen);
   button.setAttribute("aria-expanded", String(shouldOpen));
-  if (shouldOpen)
-    document.getElementById("file-reference-target-search")?.focus();
+  if (shouldOpen) search?.focus();
 }
 
-function toggleFileReferenceTargetControl(enabled) {
-  const button = document.getElementById("file-reference-target-button");
-  const search = document.getElementById("file-reference-target-search");
+function setTargetPickerEnabled(picker, enabled) {
+  const { button, search } = targetPickerElements(picker);
   if (button) button.disabled = !enabled;
   if (search) search.disabled = !enabled;
-  document
-    .querySelectorAll(
-      '#file-reference-target-options input[name="file_reference_targets"]',
-    )
-    .forEach((input) => {
-      input.disabled = !enabled;
-    });
-  if (!enabled) setFileReferenceTargetMenuOpen(false);
+  picker
+    ?.querySelectorAll("[data-target-picker-option-input]")
+    .forEach((input) => (input.disabled = !enabled));
+  if (!enabled) setTargetPickerOpen(picker, false);
 }
 
-function filterFileReferenceTargets(query) {
+function filterTargetPicker(picker, query) {
   const normalized = String(query || "")
     .trim()
     .toLowerCase();
   let visible = 0;
-  document
-    .querySelectorAll(
-      "#file-reference-target-options [data-file-reference-option]",
-    )
-    .forEach((option) => {
-      const matches = !normalized || option.dataset.search.includes(normalized);
-      option.classList.toggle("hidden", !matches);
-      if (matches) visible += 1;
-    });
-  document
-    .getElementById("file-reference-target-empty")
-    ?.classList.toggle("hidden", visible !== 0);
+  picker?.querySelectorAll("[data-target-picker-option]").forEach((option) => {
+    const matches = !normalized || option.dataset.search.includes(normalized);
+    option.classList.toggle("hidden", !matches);
+    if (matches) visible += 1;
+  });
+  targetPickerElements(picker).empty?.classList.toggle("hidden", visible !== 0);
 }
 
-function initFileReferenceTargetPicker() {
-  const picker = document.getElementById("file-reference-target-picker");
-  const button = document.getElementById("file-reference-target-button");
-  const search = document.getElementById("file-reference-target-search");
+function initTargetPicker(picker) {
+  const { button, search } = targetPickerElements(picker);
   if (!picker || !button || picker.dataset.initialized === "true") return;
   picker.dataset.initialized = "true";
   button.addEventListener("click", () => {
-    setFileReferenceTargetMenuOpen(
+    setTargetPickerOpen(
+      picker,
       button.getAttribute("aria-expanded") !== "true",
     );
   });
   search?.addEventListener("input", () =>
-    filterFileReferenceTargets(search.value),
+    filterTargetPicker(picker, search.value),
   );
   document.addEventListener("click", (event) => {
-    if (!picker.contains(event.target)) setFileReferenceTargetMenuOpen(false);
+    if (!picker.contains(event.target)) setTargetPickerOpen(picker, false);
   });
   picker.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      setFileReferenceTargetMenuOpen(false);
+      setTargetPickerOpen(picker, false);
       button.focus();
     }
   });
+}
+
+function renderTargetPicker(picker, targets, options = {}) {
+  if (!picker) return;
+  initTargetPicker(picker);
+  const elements = targetPickerElements(picker);
+  const selected = new Set(
+    selectedTargetPickerInputs(picker).map((input) => input.value),
+  );
+  elements.options?.replaceChildren();
+  targets.forEach((target) => {
+    const label = document.createElement("label");
+    label.dataset.targetPickerOption = "true";
+    label.dataset.search =
+      `${target.name} ${target.display_label || ""}`.toLowerCase();
+    label.setAttribute("role", "option");
+    label.className =
+      "flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.targetPickerOptionInput = "true";
+    input.name = options.inputName || "";
+    input.value = target.name;
+    input.dataset.targetType = target.target_type;
+    input.dataset.displayLabel = target.display_label || target.name;
+    input.checked = selected.has(target.name);
+    label.setAttribute("aria-selected", String(input.checked));
+    input.className =
+      "checkbox individual rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-800";
+    input.addEventListener("change", () => {
+      if (picker.dataset.multiple !== "true" && input.checked) {
+        picker
+          .querySelectorAll("[data-target-picker-option-input]")
+          .forEach((other) => {
+            if (other !== input) other.checked = false;
+          });
+        setTargetPickerOpen(picker, false);
+      }
+      picker
+        .querySelectorAll("[data-target-picker-option]")
+        .forEach((option) => {
+          const optionInput = option.querySelector(
+            "[data-target-picker-option-input]",
+          );
+          option.setAttribute(
+            "aria-selected",
+            String(Boolean(optionInput?.checked)),
+          );
+        });
+      updateTargetPickerSummary(picker);
+      picker.dispatchEvent(
+        new CustomEvent("target-picker-change", { bubbles: true }),
+      );
+    });
+
+    const name = document.createElement("span");
+    name.className = "min-w-0 flex-1 truncate";
+    name.textContent = target.display_label || target.name;
+    name.title = target.display_label || target.name;
+    label.append(input, name);
+    if (options.suggested?.test(target.name)) {
+      const badge = document.createElement("span");
+      badge.className =
+        "shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+      badge.textContent = "Suggested";
+      label.appendChild(badge);
+    }
+    elements.options?.appendChild(label);
+  });
+  if (elements.search) elements.search.value = "";
+  updateTargetPickerSummary(picker);
+  filterTargetPicker(picker, "");
+}
+
+function fullMatchTargetNames(patternText, targets, targetType) {
+  if (!patternText) return { matches: [] };
+  try {
+    const pattern = new RegExp(`^(?:${patternText})$`);
+    return {
+      matches: targets.filter(
+        (target) =>
+          (!targetType || target.target_type === targetType) &&
+          pattern.test(target.name),
+      ),
+    };
+  } catch (error) {
+    return { matches: [], error: error.message };
+  }
+}
+
+function updateRegexTargetPreview(element, patternText, targets, targetType) {
+  if (!element) return;
+  const result = fullMatchTargetNames(patternText, targets, targetType);
+  if (!patternText)
+    element.textContent = "Enter a pattern to preview matching targets.";
+  else if (result.error)
+    element.textContent =
+      "Preview unavailable in this browser. The AIDRIN server will validate this pattern.";
+  else if (!result.matches.length)
+    element.textContent = "No targets match this pattern.";
+  else {
+    const names = result.matches
+      .slice(0, 3)
+      .map((target) => target.display_label || target.name);
+    const remainder = result.matches.length - names.length;
+    element.textContent = `${result.matches.length} matching target${result.matches.length === 1 ? "" : "s"}: ${names.join(", ")}${remainder ? `, and ${remainder} more` : ""}`;
+  }
+  element.dataset.valid = String(
+    Boolean(patternText && !result.error && result.matches.length),
+  );
+}
+
+function initFileReferenceTargetPicker() {
+  initTargetPicker(document.getElementById("file-reference-target-picker"));
+  const mode = document.getElementById("file-reference-target-match");
+  const pattern = document.getElementById("file-reference-target-pattern");
+  mode?.addEventListener("change", updateFileReferenceTargetMode);
+  pattern?.addEventListener("input", updateFileReferenceTargetMode);
+}
+
+function updateFileReferenceTargetMode() {
+  const enabled = Boolean(
+    document.getElementById("toggleButton_file_reference_validation")?.checked,
+  );
+  const regex =
+    document.getElementById("file-reference-target-match")?.value === "regex";
+  const picker = document.getElementById("file-reference-target-picker");
+  const pattern = document.getElementById("file-reference-target-pattern");
+  document
+    .getElementById("file-reference-target-exact")
+    ?.classList.toggle("hidden", regex);
+  document
+    .getElementById("file-reference-target-regex")
+    ?.classList.toggle("hidden", !regex);
+  setTargetPickerEnabled(picker, enabled && !regex);
+  if (pattern) pattern.disabled = !enabled || !regex;
+  updateRegexTargetPreview(
+    document.getElementById("file-reference-target-preview"),
+    pattern?.value.trim(),
+    fileReferenceTargets,
+  );
+}
+
+function toggleFileReferenceTargetControl(enabled) {
+  updateFileReferenceTargetMode();
+  if (!enabled)
+    setTargetPickerOpen(
+      document.getElementById("file-reference-target-picker"),
+      false,
+    );
 }
 
 function loadFileReferenceOptions() {
@@ -141,51 +293,13 @@ function loadFileReferenceOptions() {
         return leftSuggested - rightSuggested;
       });
 
-      const targetOptions = document.getElementById(
-        "file-reference-target-options",
+      fileReferenceTargets = targets;
+      renderTargetPicker(
+        document.getElementById("file-reference-target-picker"),
+        targets,
+        { inputName: "file_reference_targets", suggested: suggestedName },
       );
-      if (targetOptions) {
-        targetOptions.replaceChildren();
-        targets.forEach((target) => {
-          const label = document.createElement("label");
-          label.dataset.fileReferenceOption = "true";
-          label.dataset.search =
-            `${target.name} ${target.display_label || ""}`.toLowerCase();
-          label.setAttribute("role", "option");
-          label.setAttribute("aria-selected", "false");
-          label.className =
-            "flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600";
-
-          const input = document.createElement("input");
-          input.type = "checkbox";
-          input.name = "file_reference_targets";
-          input.value = target.name;
-          input.disabled = true;
-          input.className =
-            "checkbox individual rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-800";
-          input.addEventListener("change", () => {
-            label.setAttribute("aria-selected", String(input.checked));
-            updateFileReferenceTargetSummary();
-          });
-
-          const name = document.createElement("span");
-          name.className = "min-w-0 flex-1 truncate";
-          name.textContent = target.display_label || target.name;
-          name.title = target.display_label || target.name;
-          label.append(input, name);
-
-          if (suggestedName.test(target.name)) {
-            const badge = document.createElement("span");
-            badge.className =
-              "shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
-            badge.textContent = "Suggested";
-            label.appendChild(badge);
-          }
-          targetOptions.appendChild(label);
-        });
-        updateFileReferenceTargetSummary();
-        filterFileReferenceTargets("");
-      }
+      updateFileReferenceTargetMode();
 
       const rootSelect = document.getElementById("file-reference-root");
       if (rootSelect) {
@@ -842,14 +956,32 @@ async function workspaceSubmit(targetUrl) {
     if (customOutliersSelected && !customOutlierRules) {
       return;
     }
-    if (
-      formData.get("file_reference_validation") === "yes" &&
-      formData.getAll("file_reference_targets").length === 0
-    ) {
-      if (typeof showToast === "function") {
-        showToast("Select at least one path-bearing target.", "error");
+    if (formData.get("file_reference_validation") === "yes") {
+      const targetMatch =
+        formData.get("file_reference_target_match") || "exact";
+      const selectedTargets = formData
+        .getAll("file_reference_targets")
+        .map((value) => String(value).trim())
+        .filter(Boolean);
+      let message = "";
+      if (!selectedTargets.length) {
+        message =
+          targetMatch === "regex"
+            ? "Enter a target pattern."
+            : "Select at least one path-bearing target.";
+      } else if (targetMatch === "regex") {
+        const preview = fullMatchTargetNames(
+          selectedTargets[0],
+          fileReferenceTargets,
+        );
+        if (!preview.error && !preview.matches.length)
+          message =
+            "The target pattern does not match any path-bearing targets.";
       }
-      return;
+      if (message) {
+        if (typeof showToast === "function") showToast(message, "error");
+        return;
+      }
     }
     processedFormData.set(
       "custom_outlier_rules",
@@ -2082,13 +2214,24 @@ function addCustomOutlierRuleRow() {
             <option value="regex">Regular expression</option>
           </select>
           <div data-section="target-exact" class="min-w-0 flex-1">
-            <select data-field="target" aria-label="Exact target"
-                  class="custom-outlier-target w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+            <div data-field="target" data-target-picker data-multiple="false" data-placeholder="Select a target..." class="relative">
+              <button type="button" data-target-picker-button aria-haspopup="listbox" aria-expanded="false"
+                      class="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-2 py-1 text-left text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                <span data-target-picker-summary>Select a target...</span><span aria-hidden="true">&#9662;</span>
+              </button>
+              <div data-target-picker-menu class="absolute z-30 mt-1 hidden w-full min-w-64 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-600 dark:bg-gray-700">
+                <input type="search" data-target-picker-search aria-label="Search exact targets" placeholder="Search targets..." autocomplete="off"
+                       class="mb-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                <div data-target-picker-options role="listbox" class="max-h-56 space-y-1 overflow-y-auto"></div>
+                <p data-target-picker-empty class="hidden px-2 py-3 text-sm font-normal text-gray-500 dark:text-gray-400">No matching targets.</p>
+              </div>
+            </div>
           </div>
           <div data-section="target-regex" class="hidden min-w-0 flex-1">
             <input type="text" data-field="target_regex" placeholder="Target pattern, e.g. ^/S_[0-9]+_[0-9]+/X$" aria-label="Target pattern (regular expression)"
                    title="Matches complete target names in this file."
                    class="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+            <p data-section="target-regex-preview" class="mt-1 text-xs font-normal text-gray-500 dark:text-gray-400"></p>
           </div>
           <label data-section="target-type" class="hidden w-36 shrink-0">
             <span class="sr-only">Match targets of type</span>
@@ -2140,6 +2283,15 @@ function addCustomOutlierRuleRow() {
   row
     .querySelector('[data-field="target_match"]')
     .addEventListener("change", () => updateCustomOutlierTargetMatch(row));
+  row
+    .querySelector('[data-field="target_regex"]')
+    .addEventListener("input", () => updateCustomOutlierRegexPreview(row));
+  row
+    .querySelector('[data-field="target_type"]')
+    .addEventListener("change", () => updateCustomOutlierRegexPreview(row));
+  row
+    .querySelector('[data-field="target"][data-target-picker]')
+    .addEventListener("target-picker-change", serializeCustomOutlierRules);
   row.addEventListener("input", serializeCustomOutlierRules);
   row.addEventListener("change", serializeCustomOutlierRules);
 
@@ -2210,18 +2362,11 @@ function addCustomOutlierConditionRow(ruleRow) {
 
 function updateCustomOutlierTargetOptions(scope) {
   const root = scope || document;
-  root.querySelectorAll(".custom-outlier-target").forEach((select) => {
-    const selected = select.value;
-    select.innerHTML = "";
-    customOutlierTargets.forEach((target) => {
-      const option = document.createElement("option");
-      option.value = target.name;
-      option.dataset.targetType = target.target_type;
-      option.textContent = target.display_label || target.name;
-      select.appendChild(option);
+  root
+    .querySelectorAll('[data-field="target"][data-target-picker]')
+    .forEach((picker) => {
+      renderTargetPicker(picker, customOutlierTargets);
     });
-    if (selected) select.value = selected;
-  });
   root.querySelectorAll('[data-field="target_type"]').forEach((select) => {
     const selected = select.value;
     const targetTypes = [
@@ -2237,6 +2382,9 @@ function updateCustomOutlierTargetOptions(scope) {
     });
     if (selected && targetTypes.includes(selected)) select.value = selected;
   });
+  root
+    .querySelectorAll(".custom-outlier-rule")
+    .forEach(updateCustomOutlierRegexPreview);
 }
 
 function updateCustomOutlierTargetMatch(row) {
@@ -2254,6 +2402,16 @@ function updateCustomOutlierTargetMatch(row) {
   row
     .querySelector('[data-section="target-type"]')
     ?.classList.toggle("hidden", !isRegex || targetTypes.length <= 1);
+  updateCustomOutlierRegexPreview(row);
+}
+
+function updateCustomOutlierRegexPreview(row) {
+  updateRegexTargetPreview(
+    row.querySelector('[data-section="target-regex-preview"]'),
+    row.querySelector('[data-field="target_regex"]')?.value.trim(),
+    customOutlierTargets,
+    customOutlierRegexTargetType(row),
+  );
 }
 
 function customOutlierRegexTargetType(row) {
@@ -2268,13 +2426,16 @@ function serializeCustomOutlierRules() {
   const rows = document.querySelectorAll(".custom-outlier-rule");
   const rules = [];
   rows.forEach((row, index) => {
-    const targetSelect = row.querySelector('[data-field="target"]');
+    const targetPicker = row.querySelector(
+      '[data-field="target"][data-target-picker]',
+    );
+    const selectedTarget = selectedTargetPickerInputs(targetPicker)[0];
     const targetMatch =
       row.querySelector('[data-field="target_match"]')?.value || "exact";
     const target =
       targetMatch === "regex"
         ? row.querySelector('[data-field="target_regex"]')?.value.trim()
-        : targetSelect?.value;
+        : selectedTarget?.value;
     if (!target) return;
     const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
     const rule = {
@@ -2284,7 +2445,7 @@ function serializeCustomOutlierRules() {
       target_type:
         targetMatch === "regex"
           ? customOutlierRegexTargetType(row)
-          : targetSelect?.selectedOptions[0]?.dataset.targetType || "column",
+          : selectedTarget?.dataset.targetType || "column",
       allow_missing: Boolean(
         row.querySelector('[data-field="allow_missing"]')?.checked,
       ),
@@ -2483,12 +2644,31 @@ function serializeCustomOutlierCondition(condition) {
 
 function validateCustomOutlierRuleSelection(rules) {
   if (!Array.isArray(rules) || rules.length === 0) {
+    const hasRows = Boolean(document.querySelector(".custom-outlier-rule"));
     return showCustomOutlierValidationError(
-      "Add at least one custom outlier rule before submitting.",
+      hasRows
+        ? "Select a target for each custom outlier rule before submitting."
+        : "Add at least one custom outlier rule before submitting.",
     );
   }
   for (const rule of rules) {
     const ruleName = rule.name || rule.id || "Custom outlier rule";
+    if (rule.target_match === "regex") {
+      const preview = fullMatchTargetNames(
+        rule.target,
+        customOutlierTargets,
+        rule.target_type,
+      );
+      if (
+        customOutlierTargets.length &&
+        !preview.error &&
+        !preview.matches.length
+      ) {
+        return showCustomOutlierValidationError(
+          `${ruleName} does not match any available targets.`,
+        );
+      }
+    }
     const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
     if (error) return showCustomOutlierValidationError(error);
   }
