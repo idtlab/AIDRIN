@@ -54,32 +54,34 @@
             </p>
             <div>
               <span class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Path-bearing targets:</span>
-              <select id="file-reference-target-match" name="file_reference_target_match" aria-label="Target match mode"
-                      class="mb-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                <option value="exact">Choose exact names</option>
-                <option value="regex">Use a regular expression</option>
-              </select>
-              <div id="file-reference-target-exact">
-              <div id="file-reference-target-picker" data-target-picker data-multiple="true" data-placeholder="Select path-bearing targets..." class="relative">
-                <button type="button" id="file-reference-target-button" data-target-picker-button aria-haspopup="listbox" aria-expanded="false" disabled
-                        class="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white disabled:cursor-not-allowed disabled:opacity-60">
-                  <span id="file-reference-target-summary" data-target-picker-summary>Select path-bearing targets...</span>
-                  <span aria-hidden="true">&#9662;</span>
-                </button>
-                <div id="file-reference-target-menu" data-target-picker-menu class="absolute z-20 mt-1 hidden w-full rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-600 dark:bg-gray-700">
-                  <label class="sr-only" for="file-reference-target-search">Search path-bearing targets</label>
-                  <input type="search" id="file-reference-target-search" data-target-picker-search placeholder="Search targets..." autocomplete="off" disabled
-                         class="mb-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-                  <div id="file-reference-target-options" data-target-picker-options role="listbox" aria-multiselectable="true" class="max-h-56 space-y-1 overflow-y-auto"></div>
-                  <p id="file-reference-target-empty" data-target-picker-empty class="hidden px-2 py-3 text-sm text-gray-500 dark:text-gray-400">No matching targets.</p>
+              <div class="flex items-start gap-2">
+                <select id="file-reference-target-match" name="file_reference_target_match" aria-label="Target match mode"
+                        class="w-28 shrink-0 rounded-lg border border-gray-300 bg-gray-50 px-2 py-2 text-sm font-medium text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                  <option value="exact">Exact name</option>
+                  <option value="regex">Regex</option>
+                </select>
+                <div id="file-reference-target-exact" class="min-w-0 flex-1">
+                  <div id="file-reference-target-picker" data-target-picker data-multiple="true" data-placeholder="Select path-bearing targets..." class="relative">
+                    <button type="button" id="file-reference-target-button" data-target-picker-button aria-haspopup="listbox" aria-expanded="false" disabled
+                            class="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-left text-sm text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white disabled:cursor-not-allowed disabled:opacity-60">
+                      <span id="file-reference-target-summary" data-target-picker-summary>Select path-bearing targets...</span>
+                      <span aria-hidden="true">&#9662;</span>
+                    </button>
+                    <div id="file-reference-target-menu" data-target-picker-menu class="absolute z-20 mt-1 hidden w-full rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-600 dark:bg-gray-700">
+                      <label class="sr-only" for="file-reference-target-search">Search path-bearing targets</label>
+                      <input type="search" id="file-reference-target-search" data-target-picker-search placeholder="Search targets..." autocomplete="off" disabled
+                             class="mb-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                      <div id="file-reference-target-options" data-target-picker-options role="listbox" aria-multiselectable="true" class="max-h-56 space-y-1 overflow-y-auto"></div>
+                      <p id="file-reference-target-empty" data-target-picker-empty class="hidden px-2 py-3 text-sm text-gray-500 dark:text-gray-400">No matching targets.</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              </div>
-              <div id="file-reference-target-regex" class="hidden">
-                <input type="text" id="file-reference-target-pattern" name="file_reference_targets" disabled
-                       placeholder="Full-match pattern, e.g. .*_path" aria-label="Path target regular expression"
-                       class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
-                <p id="file-reference-target-preview" class="mt-1 text-xs text-gray-500 dark:text-gray-400"></p>
+                <div id="file-reference-target-regex" class="hidden min-w-0 flex-1">
+                  <input type="text" id="file-reference-target-pattern" name="file_reference_targets" disabled
+                         placeholder="Full-match pattern, e.g. .*_path" aria-label="Path target regular expression"
+                         class="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 font-mono text-sm text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                  <p id="file-reference-target-preview" class="mt-1 text-xs text-gray-500 dark:text-gray-400"></p>
+                </div>
               </div>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Choose exact names or use a regular expression that matches complete target names. Suggested names appear first but are not preselected.</p>
             </div>

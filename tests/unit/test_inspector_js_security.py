@@ -82,6 +82,19 @@ def test_file_reference_and_custom_outliers_share_searchable_target_picker():
     assert 'data-section="target-regex-preview"' in source
 
 
+def test_target_pickers_use_compact_side_by_side_shaded_controls():
+    source = INSPECTOR_JS.read_text()
+    panel = DATA_STRUCTURE_PANEL.read_text()
+    assert 'class="flex items-start gap-2"' in panel
+    assert panel.count('class="w-28 shrink-0') == 1
+    assert '<option value="regex">Regex</option>' in panel
+    assert "bg-gray-50 px-2 py-2 text-sm" in source
+    assert 'class="w-28 shrink-0' in source
+    assert '<option value="regex">Regex</option>' in source
+    assert "function setTargetPickerOptionSelected(option, selected)" in source
+    assert 'option.classList.toggle("bg-blue-50", selected)' in source
+
+
 def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
     source = INSPECTOR_JS.read_text()
     assert "function renderFileReferenceInvalidTable(rows)" in source

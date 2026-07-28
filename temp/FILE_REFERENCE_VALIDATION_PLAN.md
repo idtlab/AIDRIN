@@ -187,3 +187,4 @@ No additional files should change unless a required gate proves one necessary.
 - [x] Update public documentation and examples for file-reference regex selection.
 - [x] Run the full test, lint, frontend formatting, documentation, and package-build gates.
 - [x] Place the web control and dispatch under Data Structure instead of Data Quality.
+- [x] Use compact side-by-side match and target controls with shaded searchable options in both web workflows.

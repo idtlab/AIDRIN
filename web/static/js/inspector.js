@@ -113,6 +113,14 @@ function initTargetPicker(picker) {
   });
 }
 
+function setTargetPickerOptionSelected(option, selected) {
+  option.setAttribute("aria-selected", String(selected));
+  option.classList.toggle("bg-blue-50", selected);
+  option.classList.toggle("dark:bg-blue-900/30", selected);
+  option.classList.toggle("bg-gray-50", !selected);
+  option.classList.toggle("dark:bg-gray-800", !selected);
+}
+
 function renderTargetPicker(picker, targets, options = {}) {
   if (!picker) return;
   initTargetPicker(picker);
@@ -128,7 +136,7 @@ function renderTargetPicker(picker, targets, options = {}) {
       `${target.name} ${target.display_label || ""}`.toLowerCase();
     label.setAttribute("role", "option");
     label.className =
-      "flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600";
+      "flex cursor-pointer items-center gap-2 rounded-md bg-gray-50 px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-600";
 
     const input = document.createElement("input");
     input.type = "checkbox";
@@ -138,7 +146,7 @@ function renderTargetPicker(picker, targets, options = {}) {
     input.dataset.targetType = target.target_type;
     input.dataset.displayLabel = target.display_label || target.name;
     input.checked = selected.has(target.name);
-    label.setAttribute("aria-selected", String(input.checked));
+    setTargetPickerOptionSelected(label, input.checked);
     input.className =
       "checkbox individual rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-800";
     input.addEventListener("change", () => {
@@ -156,10 +164,7 @@ function renderTargetPicker(picker, targets, options = {}) {
           const optionInput = option.querySelector(
             "[data-target-picker-option-input]",
           );
-          option.setAttribute(
-            "aria-selected",
-            String(Boolean(optionInput?.checked)),
-          );
+          setTargetPickerOptionSelected(option, Boolean(optionInput?.checked));
         });
       updateTargetPickerSummary(picker);
       picker.dispatchEvent(
@@ -2210,14 +2215,14 @@ function addCustomOutlierRuleRow() {
         <span>Target</span>
         <div class="mt-1 flex items-center gap-2">
           <select data-field="target_match" aria-label="Target match mode"
-                  class="w-36 shrink-0 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                  class="w-28 shrink-0 rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
             <option value="exact">Exact name</option>
-            <option value="regex">Regular expression</option>
+            <option value="regex">Regex</option>
           </select>
           <div data-section="target-exact" class="min-w-0 flex-1">
             <div data-field="target" data-target-picker data-multiple="false" data-placeholder="Select a target..." class="relative">
               <button type="button" data-target-picker-button aria-haspopup="listbox" aria-expanded="false"
-                      class="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-2 py-1 text-left text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                      class="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-left text-sm font-normal text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
                 <span data-target-picker-summary>Select a target...</span><span aria-hidden="true">&#9662;</span>
               </button>
               <div data-target-picker-menu class="absolute z-30 mt-1 hidden w-full min-w-64 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-600 dark:bg-gray-700">
