@@ -121,6 +121,7 @@ def run_aidrin_metric(
     target_columns: str | None = None,
     path_targets: str | None = None,
     base_dir: str | None = None,
+    target_match: str = "exact",
 ) -> str:
     """
     Run a single AIDRIN built-in metric against a dataset.
@@ -161,6 +162,7 @@ def run_aidrin_metric(
         target_columns: Comma-separated columns to count nulls in (null_count_trend, optional).
         path_targets: Comma-separated path-bearing targets (file-reference-validation).
         base_dir: Server-local directory used to resolve relative file references.
+        target_match: Interpret path_targets as exact names or full-match regular expressions.
     """
     kwargs: dict[str, Any] = {
         k: v
@@ -193,6 +195,7 @@ def run_aidrin_metric(
             ("target_columns", target_columns),
             ("path_targets", path_targets),
             ("base_dir", base_dir),
+            ("target_match", target_match),
         ]
         if v is not None
     }
@@ -215,6 +218,7 @@ def verify_file_references(
     base_dir: str | None = None,
     max_results: int = 100,
     scan_limit: int | None = None,
+    target_match: str = "exact",
 ) -> str:
     """
     Validate file references stored in selected dataset targets and return file metadata.
@@ -228,6 +232,7 @@ def verify_file_references(
                   the manifest's parent directory.
         max_results: Maximum invalid and metadata detail records; 0 means unlimited.
         scan_limit: Optional maximum reference values to scan; omitted or 0 means unlimited.
+        target_match: Interpret path_targets as exact names or full-match regular expressions.
     """
     result = run_metric(
         "file-reference-validation",
@@ -237,6 +242,7 @@ def verify_file_references(
         base_dir=base_dir,
         max_results=max_results,
         scan_limit=scan_limit,
+        target_match=target_match,
         strip_visualizations=True,
         save_images=False,
     )

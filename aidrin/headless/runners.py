@@ -186,6 +186,7 @@ def run_file_reference_validation(
     base_dir: Optional[str] = None,
     max_results: int = 100,
     scan_limit: Optional[int] = None,
+    target_match: str = "exact",
 ) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(
@@ -195,6 +196,8 @@ def run_file_reference_validation(
         base_dir,
         max_results,
         scan_limit,
+        None,
+        target_match,
     )
 
 

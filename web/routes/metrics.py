@@ -416,6 +416,7 @@ def data_quality():
                         path_targets = []
                         for value in request.form.getlist("file_reference_targets"):
                             path_targets.extend(part.strip() for part in value.split(",") if part.strip())
+                        target_match = request.form.get("file_reference_target_match", "exact")
                         roots = _file_reference_allowed_roots()
                         if not roots:
                             raise ValueError("File-reference validation is not configured by the server administrator.")
@@ -433,6 +434,7 @@ def data_quality():
                                 max_results=max_results,
                                 scan_limit=_file_reference_web_scan_limit(),
                                 allowed_roots=roots,
+                                target_match=target_match,
                             )
                     except Exception as e:
                         metric_time_log.error("File Reference Validation error: %s", e, exc_info=True)

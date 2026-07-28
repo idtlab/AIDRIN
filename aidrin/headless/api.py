@@ -622,6 +622,7 @@ def run_metric(
             kwargs.get("base_dir"),
             kwargs.get("max_results", 100),
             kwargs.get("scan_limit"),
+            kwargs.get("target_match", "exact"),
         )
         return _finalize(result)
 
@@ -760,6 +761,7 @@ def run_batch_metrics(
         "base_dir": config_obj.base_dir,
         "max_results": config_obj.max_results,
         "scan_limit": config_obj.scan_limit,
+        "target_match": config_obj.target_match,
         "save_images": bool(config_obj.save_images) if config_obj.save_images is not None else True,
         "image_dir": config_obj.image_dir,
         "verbose": verbose,

@@ -249,6 +249,57 @@ def test_target_errors_are_scoped_and_prevent_all_valid(tmp_path):
     assert result["Errors"][1]["error"] == "Target not found: absent"
 
 
+def test_regex_targets_expand_in_discovery_order_and_deduplicate(tmp_path):
+    target = tmp_path / "target.txt"
+    target.write_text("ok", encoding="utf-8")
+    manifest = tmp_path / "manifest.csv"
+    pd.DataFrame({
+        "primary_path": [target.name],
+        "backup_path": [target.name],
+        "count": [1],
+    }).to_csv(manifest, index=False)
+
+    result = calculate_file_reference_validation(
+        _file_info(manifest),
+        [r".*_path", r"primary_.*"],
+        target_match="regex",
+    )
+
+    assert list(result["Target summaries"]) == ["primary_path", "backup_path"]
+    assert result["Summary"]["valid_references"] == 2
+    assert result["Errors"] == []
+
+
+def test_regex_target_reports_no_path_bearing_matches(tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    pd.DataFrame({"path": ["missing.txt"], "count": [1]}).to_csv(manifest, index=False)
+
+    result = calculate_file_reference_validation(
+        _file_info(manifest), r"count|absent", target_match="regex"
+    )
+
+    assert result["Target summaries"] == {}
+    assert result["Errors"] == [{
+        "target": "count|absent",
+        "error": "No path-bearing targets matched regex: count|absent",
+    }]
+
+
+@pytest.mark.parametrize(
+    ("target_match", "message"),
+    [("glob", "Unsupported target_match"), ("regex", "Invalid target regex")],
+)
+def test_invalid_target_match_is_rejected(tmp_path, target_match, message):
+    manifest = tmp_path / "manifest.csv"
+    pd.DataFrame({"path": ["missing.txt"]}).to_csv(manifest, index=False)
+    target = "[" if target_match == "regex" else "path"
+
+    with pytest.raises(ValueError, match=message):
+        calculate_file_reference_validation(
+            _file_info(manifest), target, target_match=target_match
+        )
+
+
 def test_commonpath_value_error_is_outside_root(monkeypatch):
     monkeypatch.setattr(os.path, "commonpath", lambda _paths: (_ for _ in ()).throw(ValueError("different drives")))
     assert _is_within_roots("C:/data/file", ["D:/data"]) is False

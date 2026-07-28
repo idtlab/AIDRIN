@@ -278,6 +278,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "max_outliers": getattr(args, "max_outliers", 100),
         "max_export_rows": getattr(args, "max_export_rows", 10000),
         "scan_limit": getattr(args, "scan_limit", None),
+        "target_match": getattr(args, "target_match", "exact"),
         "stop_after_outliers": getattr(args, "stop_after_outliers", False),
         # Default to no image generation/saving for headless usage
         "save_images": getattr(args, "save_images", False),
@@ -508,6 +509,12 @@ def main() -> None:
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum values to scan per rule")
             mparser.add_argument("--stop-after-outliers", action="store_true", help="Stop scanning after preview cap is reached")
         if metric_name == "file_reference_validation":
+            mparser.add_argument(
+                "--target-match",
+                choices=("exact", "regex"),
+                default="exact",
+                help="Interpret path-targets as exact names (default) or full-match regular expressions",
+            )
             mparser.add_argument("--base-dir", default=None, help="Directory used to resolve relative file references")
             mparser.add_argument("--max-results", type=int, default=100, help="Maximum invalid and metadata detail records; 0 means unlimited")
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum reference values to scan; 0 means unlimited")

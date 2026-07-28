@@ -1,6 +1,7 @@
 import errno
 import math
 import os
+import re
 import stat
 from datetime import datetime, timezone
 
@@ -51,6 +52,52 @@ def _normalize_targets(path_targets):
     if not normalized:
         raise ValueError("path_targets must contain at least one target")
     return normalized
+
+
+def _normalize_target_match(target_match):
+    normalized = str(target_match or "exact").strip().lower()
+    if normalized not in {"exact", "regex"}:
+        raise ValueError(f"Unsupported target_match: {normalized}")
+    return normalized
+
+
+def _select_targets(discovered, path_targets, target_match):
+    eligible = [target for target in discovered if _target_is_string_capable(target)]
+    selected = []
+    errors = []
+    selected_names = set()
+
+    if target_match == "exact":
+        by_name = {target["name"]: target for target in discovered}
+        for name in path_targets:
+            target = by_name.get(name)
+            if target is None:
+                errors.append({"target": name, "error": f"Target not found: {name}"})
+            elif not _target_is_string_capable(target):
+                errors.append({
+                    "target": name,
+                    "error": f"Target must contain string file paths; found dtype {target.get('dtype', 'unknown')}",
+                })
+            else:
+                selected.append(target)
+        return selected, errors
+
+    for pattern_text in path_targets:
+        try:
+            pattern = re.compile(pattern_text)
+        except re.error as exc:
+            raise ValueError(f"Invalid target regex {pattern_text!r}: {exc}") from exc
+        matches = [target for target in eligible if pattern.fullmatch(target["name"])]
+        if not matches:
+            errors.append({
+                "target": pattern_text,
+                "error": f"No path-bearing targets matched regex: {pattern_text}",
+            })
+        for target in matches:
+            if target["name"] not in selected_names:
+                selected_names.add(target["name"])
+                selected.append(target)
+    return selected, errors
 
 
 def _stat_directory(path, field):
@@ -295,27 +342,17 @@ def calculate_file_reference_validation(
     max_results=100,
     scan_limit=None,
     allowed_roots=None,
+    target_match="exact",
 ):
     path_targets = _normalize_targets(path_targets)
+    target_match = _normalize_target_match(target_match)
     max_results = _non_negative_int(max_results, 100, "max_results")
     scan_limit = _non_negative_int(scan_limit, None, "scan_limit")
     base_dir, allowed_roots = _prepare_directories(file_info, base_dir, allowed_roots)
 
-    discovered = {target["name"]: target for target in iter_targets(file_info)}
-    selected = []
-    errors = []
-    target_summaries = {}
-
-    for name in path_targets:
-        target = discovered.get(name)
-        if target is None:
-            errors.append({"target": name, "error": f"Target not found: {name}"})
-            continue
-        if not _target_is_string_capable(target):
-            errors.append({"target": name, "error": f"Target must contain string file paths; found dtype {target.get('dtype', 'unknown')}"})
-            continue
-        selected.append(target)
-        target_summaries[name] = _new_target_summary(target)
+    discovered = list(iter_targets(file_info))
+    selected, errors = _select_targets(discovered, path_targets, target_match)
+    target_summaries = {target["name"]: _new_target_summary(target) for target in selected}
 
     candidate_values = sum(summary["candidate_values"] for summary in target_summaries.values())
     invalid_details = []
@@ -478,6 +515,7 @@ def file_reference_validation(
     max_results=100,
     scan_limit=None,
     allowed_roots=None,
+    target_match="exact",
 ):
     return calculate_file_reference_validation(
         file_info,
@@ -486,4 +524,5 @@ def file_reference_validation(
         max_results=max_results,
         scan_limit=scan_limit,
         allowed_roots=allowed_roots,
+        target_match=target_match,
     )

@@ -105,3 +105,28 @@ def test_file_reference_tools_return_equivalent_results(tmp_path):
     assert dedicated == generic
     assert dedicated["Summary"]["all_references_valid"] is True
     assert dedicated["File metadata"][0]["size_bytes"] == 6
+
+
+def test_file_reference_tools_support_regex_targets(tmp_path):
+    referenced_file = tmp_path / "artifact.bin"
+    referenced_file.write_bytes(b"aidrin")
+    manifest = tmp_path / "manifest.csv"
+    pd.DataFrame({"primary_path": [referenced_file.name]}).to_csv(manifest, index=False)
+
+    dedicated = json.loads(
+        verify_file_references(
+            str(manifest), r".*_path", base_dir=str(tmp_path), target_match="regex"
+        )
+    )
+    generic = json.loads(
+        run_aidrin_metric(
+            str(manifest),
+            "file-reference-validation",
+            path_targets=r".*_path",
+            base_dir=str(tmp_path),
+            target_match="regex",
+        )
+    )
+
+    assert dedicated == generic
+    assert list(dedicated["Target summaries"]) == ["primary_path"]

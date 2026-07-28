@@ -43,6 +43,7 @@ class HeadlessConfig:
     base_dir: Optional[str] = None
     max_results: Optional[int] = 100
     scan_limit: Optional[int] = None
+    target_match: str = "exact"
     save_images: Optional[bool] = None
     image_dir: Optional[str] = None
 
@@ -71,6 +72,7 @@ class HeadlessConfig:
             "base-dir": "base_dir",
             "max-results": "max_results",
             "scan-limit": "scan_limit",
+            "target-match": "target_match",
             "file-path": "file_path",
             "file-type": "file_type",
             "file-name": "file_name",

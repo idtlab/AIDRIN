@@ -508,6 +508,21 @@ class TestFileReferenceValidationInterfaces(unittest.TestCase):
         self.assertEqual(result["Summary"]["unscanned_values"], 1)
         self.assertEqual(result["File metadata"][0]["size_bytes"], 6)
 
+    def test_cli_supports_regex_target_matching(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "file-reference-validation",
+            self.csv,
+            r".*_path",
+            "--target-match",
+            "regex",
+            "--base-dir",
+            self.base_dir,
+        )
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(list(result["Target summaries"]), ["file_path"])
+
     def test_run_metric_requires_path_targets(self):
         from aidrin.headless.api import run_metric
 
@@ -525,9 +540,11 @@ class TestFileReferenceValidationInterfaces(unittest.TestCase):
             "base-dir": self.base_dir,
             "max-results": 1,
             "scan-limit": 1,
+            "target-match": "regex",
             "save-images": False,
         })
         self.assertEqual(config.path_targets, ["file_path"])
+        self.assertEqual(config.target_match, "regex")
         result = run_batch_metrics(config)
         metric_result = result["file_reference_validation"]
         self.assertEqual(metric_result["Summary"]["scanned_values"], 1)
