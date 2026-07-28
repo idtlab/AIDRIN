@@ -28,6 +28,90 @@ function isFileReferenceTarget(target) {
   );
 }
 
+function updateFileReferenceTargetSummary() {
+  const options = document.querySelectorAll(
+    '#file-reference-target-options input[name="file_reference_targets"]',
+  );
+  const selected = Array.from(options).filter((input) => input.checked);
+  const summary = document.getElementById("file-reference-target-summary");
+  if (!summary) return;
+  if (selected.length === 0) {
+    summary.textContent = "Select path-bearing targets...";
+  } else {
+    summary.textContent = `${selected.length} target${selected.length === 1 ? "" : "s"} selected`;
+  }
+}
+
+function setFileReferenceTargetMenuOpen(open) {
+  const button = document.getElementById("file-reference-target-button");
+  const menu = document.getElementById("file-reference-target-menu");
+  if (!button || !menu) return;
+  const shouldOpen = Boolean(open) && !button.disabled;
+  menu.classList.toggle("hidden", !shouldOpen);
+  button.setAttribute("aria-expanded", String(shouldOpen));
+  if (shouldOpen)
+    document.getElementById("file-reference-target-search")?.focus();
+}
+
+function toggleFileReferenceTargetControl(enabled) {
+  const button = document.getElementById("file-reference-target-button");
+  const search = document.getElementById("file-reference-target-search");
+  if (button) button.disabled = !enabled;
+  if (search) search.disabled = !enabled;
+  document
+    .querySelectorAll(
+      '#file-reference-target-options input[name="file_reference_targets"]',
+    )
+    .forEach((input) => {
+      input.disabled = !enabled;
+    });
+  if (!enabled) setFileReferenceTargetMenuOpen(false);
+}
+
+function filterFileReferenceTargets(query) {
+  const normalized = String(query || "")
+    .trim()
+    .toLowerCase();
+  let visible = 0;
+  document
+    .querySelectorAll(
+      "#file-reference-target-options [data-file-reference-option]",
+    )
+    .forEach((option) => {
+      const matches = !normalized || option.dataset.search.includes(normalized);
+      option.classList.toggle("hidden", !matches);
+      if (matches) visible += 1;
+    });
+  document
+    .getElementById("file-reference-target-empty")
+    ?.classList.toggle("hidden", visible !== 0);
+}
+
+function initFileReferenceTargetPicker() {
+  const picker = document.getElementById("file-reference-target-picker");
+  const button = document.getElementById("file-reference-target-button");
+  const search = document.getElementById("file-reference-target-search");
+  if (!picker || !button || picker.dataset.initialized === "true") return;
+  picker.dataset.initialized = "true";
+  button.addEventListener("click", () => {
+    setFileReferenceTargetMenuOpen(
+      button.getAttribute("aria-expanded") !== "true",
+    );
+  });
+  search?.addEventListener("input", () =>
+    filterFileReferenceTargets(search.value),
+  );
+  document.addEventListener("click", (event) => {
+    if (!picker.contains(event.target)) setFileReferenceTargetMenuOpen(false);
+  });
+  picker.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setFileReferenceTargetMenuOpen(false);
+      button.focus();
+    }
+  });
+}
+
 function loadFileReferenceOptions() {
   const checkbox = document.getElementById(
     "toggleButton_file_reference_validation",
@@ -57,19 +141,50 @@ function loadFileReferenceOptions() {
         return leftSuggested - rightSuggested;
       });
 
-      const targetSelect = document.getElementById("file-reference-targets");
-      if (targetSelect) {
-        targetSelect.replaceChildren();
+      const targetOptions = document.getElementById(
+        "file-reference-target-options",
+      );
+      if (targetOptions) {
+        targetOptions.replaceChildren();
         targets.forEach((target) => {
-          const option = document.createElement("option");
-          option.value = target.name;
-          const suggested = suggestedName.test(target.name)
-            ? "Suggested: "
-            : "";
-          option.textContent =
-            suggested + (target.display_label || target.name);
-          targetSelect.appendChild(option);
+          const label = document.createElement("label");
+          label.dataset.fileReferenceOption = "true";
+          label.dataset.search =
+            `${target.name} ${target.display_label || ""}`.toLowerCase();
+          label.setAttribute("role", "option");
+          label.setAttribute("aria-selected", "false");
+          label.className =
+            "flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600";
+
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.name = "file_reference_targets";
+          input.value = target.name;
+          input.disabled = true;
+          input.className =
+            "checkbox individual rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-800";
+          input.addEventListener("change", () => {
+            label.setAttribute("aria-selected", String(input.checked));
+            updateFileReferenceTargetSummary();
+          });
+
+          const name = document.createElement("span");
+          name.className = "min-w-0 flex-1 truncate";
+          name.textContent = target.display_label || target.name;
+          name.title = target.display_label || target.name;
+          label.append(input, name);
+
+          if (suggestedName.test(target.name)) {
+            const badge = document.createElement("span");
+            badge.className =
+              "shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+            badge.textContent = "Suggested";
+            label.appendChild(badge);
+          }
+          targetOptions.appendChild(label);
         });
+        updateFileReferenceTargetSummary();
+        filterFileReferenceTargets("");
       }
 
       const rootSelect = document.getElementById("file-reference-root");
@@ -98,6 +213,7 @@ function loadFileReferenceOptions() {
         return;
       }
       checkbox.disabled = false;
+      toggleFileReferenceTargetControl(checkbox.checked);
       if (message) {
         message.textContent = `Paths are checked on this AIDRIN server. Web scans are capped at ${Number(config.scan_limit).toLocaleString()} values; use CLI or MCP for larger complete scans.`;
       }
@@ -724,6 +840,15 @@ async function workspaceSubmit(targetUrl) {
       ? await resolveCustomOutlierRules()
       : [];
     if (customOutliersSelected && !customOutlierRules) {
+      return;
+    }
+    if (
+      formData.get("file_reference_validation") === "yes" &&
+      formData.getAll("file_reference_targets").length === 0
+    ) {
+      if (typeof showToast === "function") {
+        showToast("Select at least one path-bearing target.", "error");
+      }
       return;
     }
     processedFormData.set(
@@ -3972,6 +4097,7 @@ function initWorkspace() {
     .catch((err) => console.error("Error fetching features:", err))
     .finally(initTaskDone);
 
+  initFileReferenceTargetPicker();
   loadFileReferenceOptions();
 
   // Feature relevance: disable target feature in checkbox lists

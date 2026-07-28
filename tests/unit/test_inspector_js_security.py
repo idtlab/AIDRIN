@@ -41,10 +41,27 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
     assert "loadFileReferenceOptions();" in source
     assert "window.AIDRIN_GLOBUS_MODE" in source
     assert 'id="toggleButton_file_reference_validation"' in panel
-    assert 'name="file_reference_targets"' in panel
+    assert 'input.name = "file_reference_targets"' in source
     assert 'name="file_reference_root_id"' in panel
     assert 'name="file_reference_base_subdirectory"' in panel
     assert 'name="file_reference_max_results"' in panel
+
+
+def test_file_reference_targets_use_searchable_collapsed_multi_select():
+    source = INSPECTOR_JS.read_text()
+    panel = DATA_QUALITY_PANEL.read_text()
+    assert 'id="file-reference-target-button"' in panel
+    assert 'aria-haspopup="listbox"' in panel
+    assert 'id="file-reference-target-menu"' in panel
+    assert 'id="file-reference-target-search"' in panel
+    assert 'role="listbox" aria-multiselectable="true"' in panel
+    assert '<select id="file-reference-targets"' not in panel
+    assert "function initFileReferenceTargetPicker()" in source
+    assert "function filterFileReferenceTargets(query)" in source
+    assert "function updateFileReferenceTargetSummary()" in source
+    assert 'input.name = "file_reference_targets"' in source
+    assert 'badge.textContent = "Suggested"' in source
+    assert 'showToast("Select at least one path-bearing target."' in source
 
 
 def test_file_reference_tables_escape_values_and_warn_on_partial_scans():

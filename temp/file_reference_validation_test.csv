@@ -1,0 +1,6 @@
+path,expected_status,notes
+../README.md,valid,Existing regular file
+../pyproject.toml,valid,Existing regular file
+../docs,invalid,Directory rather than a regular file
+missing-file.txt,invalid,File does not exist
+,missing,Blank reference
