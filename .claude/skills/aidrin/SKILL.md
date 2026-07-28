@@ -94,6 +94,8 @@ For a focused file-reference request, run only `file-reference-validation` unles
 user also asks for broader readiness analysis. Confirm the path-bearing targets and,
 when relative references do not use the manifest directory, the base directory. MCP
 checks the filesystem of the MCP server host, not the user's client machine.
+Use `target_match="regex"` only when the user wants each target value treated as a
+full-match regular expression; exact names remain the default.
 
 ### 3. Inspect the dataset
 

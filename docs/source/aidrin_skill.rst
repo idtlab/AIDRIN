@@ -78,6 +78,8 @@ or with ``run_aidrin_metric`` using metric ``file-reference-validation`` and the
 ``path_targets`` argument. Relative paths default to the manifest's directory;
 pass ``base_dir`` when they use another root. ``max_results`` caps invalid and
 metadata details, while ``scan_limit`` optionally caps all inspected occurrences.
+Set ``target_match="regex"`` to interpret each ``path_targets`` value as a
+regular expression matched against the complete column or HDF5 dataset name.
 Both the manifest and its referenced files are read from the MCP server host, not
 the Claude client machine.
 

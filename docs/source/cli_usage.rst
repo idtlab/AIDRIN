@@ -113,6 +113,10 @@ Examples:
    aidrin run file-reference-validation /path/to/manifest.csv "path,image_path" \
      --base-dir /data/project --max-results 100
 
+   # Match complete target names with a regular expression
+   aidrin run file-reference-validation /path/to/manifest.csv '.*_path' \
+     --target-match regex --base-dir /data/project
+
    # Data structure (no arguments needed)
    aidrin run constant-feature-count /path/to/sample_dataset.csv
    aidrin run max-pairwise-correlation /path/to/sample_dataset.csv
@@ -229,8 +233,8 @@ list or comma-separated targets:
    metrics:
      - file-reference-validation
    path-targets:
-     - path
-     - image_path
+     - .*_path
+   target-match: regex
    base-dir: /data/project
    max-results: 100
    scan-limit: 0
@@ -321,7 +325,7 @@ Available Metrics
      - ``rules-json``
    * - Data Quality
      - ``file-reference-validation``
-     - ``path-targets``; optional ``--base-dir``, ``--max-results``, ``--scan-limit``
+     - ``path-targets``; optional ``--target-match``, ``--base-dir``, ``--max-results``, ``--scan-limit``
    * - Data Structure
      - ``constant-feature-count``
      - —
@@ -402,6 +406,7 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
        "file-reference-validation",
        "/path/to/manifest.csv",
        path_targets=["path", "image_path"],
+       target_match="exact",
        base_dir="/data/project",
        max_results=100,
    )

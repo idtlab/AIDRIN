@@ -202,9 +202,10 @@ aidrin run null-count-trend path/to/batches.csv --batch-column machine_id --targ
 
 ### file-reference-validation
 
-- **Syntax:** `aidrin run file-reference-validation <file> "<targets>" [--base-dir <dir>] [--max-results <n>] [--scan-limit <n>]`
+- **Syntax:** `aidrin run file-reference-validation <file> "<targets>" [--target-match exact|regex] [--base-dir <dir>] [--max-results <n>] [--scan-limit <n>]`
 - **Args:**
   - `<targets>` (required) — comma-separated path-bearing columns, or string-valued HDF5 dataset paths
+  - `--target-match` — interpret targets as exact names (default) or regular expressions matched against complete target names
   - `--base-dir` — directory used to resolve relative references; defaults to the manifest file's directory
   - `--max-results` — cap for invalid-reference and file-metadata detail arrays (default `100`; `0` means unlimited)
   - `--scan-limit` — optional global cap on values scanned (`0` or omitted means unlimited)
@@ -221,6 +222,7 @@ aidrin run null-count-trend path/to/batches.csv --batch-column machine_id --targ
 
 ```bash
 aidrin run file-reference-validation path/to/manifest.csv "path,image_path" --base-dir /data/project
+aidrin run file-reference-validation path/to/manifest.csv '.*_path' --target-match regex --base-dir /data/project
 ```
 
 ---
