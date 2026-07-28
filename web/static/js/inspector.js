@@ -956,33 +956,6 @@ async function workspaceSubmit(targetUrl) {
     if (customOutliersSelected && !customOutlierRules) {
       return;
     }
-    if (formData.get("file_reference_validation") === "yes") {
-      const targetMatch =
-        formData.get("file_reference_target_match") || "exact";
-      const selectedTargets = formData
-        .getAll("file_reference_targets")
-        .map((value) => String(value).trim())
-        .filter(Boolean);
-      let message = "";
-      if (!selectedTargets.length) {
-        message =
-          targetMatch === "regex"
-            ? "Enter a target pattern."
-            : "Select at least one path-bearing target.";
-      } else if (targetMatch === "regex") {
-        const preview = fullMatchTargetNames(
-          selectedTargets[0],
-          fileReferenceTargets,
-        );
-        if (!preview.error && !preview.matches.length)
-          message =
-            "The target pattern does not match any path-bearing targets.";
-      }
-      if (message) {
-        if (typeof showToast === "function") showToast(message, "error");
-        return;
-      }
-    }
     processedFormData.set(
       "custom_outlier_rules",
       JSON.stringify(customOutlierRules),
@@ -995,6 +968,34 @@ async function workspaceSubmit(targetUrl) {
       "max_export_rows",
       String(customOutlierLimitValue(formData.get("max_export_rows"), 10000)),
     );
+  }
+  if (
+    targetUrl === "/data-structure" &&
+    formData.get("file_reference_validation") === "yes"
+  ) {
+    const targetMatch = formData.get("file_reference_target_match") || "exact";
+    const selectedTargets = formData
+      .getAll("file_reference_targets")
+      .map((value) => String(value).trim())
+      .filter(Boolean);
+    let message = "";
+    if (!selectedTargets.length) {
+      message =
+        targetMatch === "regex"
+          ? "Enter a target pattern."
+          : "Select at least one path-bearing target.";
+    } else if (targetMatch === "regex") {
+      const preview = fullMatchTargetNames(
+        selectedTargets[0],
+        fileReferenceTargets,
+      );
+      if (!preview.error && !preview.matches.length)
+        message = "The target pattern does not match any path-bearing targets.";
+    }
+    if (message) {
+      if (typeof showToast === "function") showToast(message, "error");
+      return;
+    }
   }
 
   // Save form state for cache restore

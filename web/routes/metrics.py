@@ -216,7 +216,6 @@ def data_quality():
                 "temporal completeness", "null count trend",
                 "outliers", "duplicity", "duplicate detection by features",
                 "custom_outliers",
-                "file_reference_validation",
             ) if request.form.get(m) == "yes"
         ]
         metric_time_log.info("Data Quality request started: %s", selected)
@@ -410,45 +409,6 @@ def data_quality():
                             final_dict["Custom Criteria Outliers"] = custom_dict
                     metric_time_log.info("Custom Criteria Outliers took %.2f seconds", time.time() - t0)
 
-                if "file_reference_validation" in selected:
-                    t0 = time.time()
-                    try:
-                        path_targets = []
-                        for value in request.form.getlist("file_reference_targets"):
-                            path_targets.extend(part.strip() for part in value.split(",") if part.strip())
-                        target_match = request.form.get("file_reference_target_match", "exact")
-                        roots = _file_reference_allowed_roots()
-                        if not roots:
-                            raise ValueError("File-reference validation is not configured by the server administrator.")
-                        base_dir = _file_reference_base_dir(
-                            roots,
-                            request.form.get("file_reference_root_id"),
-                            request.form.get("file_reference_base_subdirectory"),
-                        )
-                        max_results = request.form.get("file_reference_max_results", 100)
-                        with tracer.start_as_current_span("metric.file_reference_validation"):
-                            reference_dict = calculate_file_reference_validation(
-                                file_info,
-                                path_targets,
-                                base_dir=base_dir,
-                                max_results=max_results,
-                                scan_limit=_file_reference_web_scan_limit(),
-                                allowed_roots=roots,
-                                target_match=target_match,
-                            )
-                    except Exception as e:
-                        metric_time_log.error("File Reference Validation error: %s", e, exc_info=True)
-                        final_dict["File Reference Validation"] = {
-                            "Error": f"{type(e).__name__}: {e}",
-                            "Description": (
-                                "Validates selected dataset values as references to regular files "
-                                "available on the AIDRIN web server."
-                            ),
-                        }
-                    else:
-                        final_dict["File Reference Validation"] = reference_dict
-                    metric_time_log.info("File Reference Validation took %.2f seconds", time.time() - t0)
-
             except Exception as e:
                 metric_time_log.error("Data Quality error: %s", e, exc_info=True)
                 return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
@@ -478,6 +438,7 @@ def data_structure():
         selected = [
             m for m in (
                 "constant feature count", "max pairwise correlation", "skewness", "kurtosis",
+                "file_reference_validation",
             ) if request.form.get(m) == "yes"
         ]
         metric_time_log.info("Data Structure request started: %s", selected)
@@ -524,6 +485,45 @@ def data_structure():
                     with tracer.start_as_current_span("metric.kurtosis"):
                         final_dict["Kurtosis"] = kurtosis(file_info)
                     metric_time_log.info("Kurtosis took %.2f seconds", time.time() - t0)
+
+                if "file_reference_validation" in selected:
+                    t0 = time.time()
+                    try:
+                        path_targets = []
+                        for value in request.form.getlist("file_reference_targets"):
+                            path_targets.extend(part.strip() for part in value.split(",") if part.strip())
+                        target_match = request.form.get("file_reference_target_match", "exact")
+                        roots = _file_reference_allowed_roots()
+                        if not roots:
+                            raise ValueError("File-reference validation is not configured by the server administrator.")
+                        base_dir = _file_reference_base_dir(
+                            roots,
+                            request.form.get("file_reference_root_id"),
+                            request.form.get("file_reference_base_subdirectory"),
+                        )
+                        max_results = request.form.get("file_reference_max_results", 100)
+                        with tracer.start_as_current_span("metric.file_reference_validation"):
+                            reference_dict = calculate_file_reference_validation(
+                                file_info,
+                                path_targets,
+                                base_dir=base_dir,
+                                max_results=max_results,
+                                scan_limit=_file_reference_web_scan_limit(),
+                                allowed_roots=roots,
+                                target_match=target_match,
+                            )
+                    except Exception as e:
+                        metric_time_log.error("File Reference Validation error: %s", e, exc_info=True)
+                        final_dict["File Reference Validation"] = {
+                            "Error": f"{type(e).__name__}: {e}",
+                            "Description": (
+                                "Validates selected dataset values as references to regular files "
+                                "available on the AIDRIN web server."
+                            ),
+                        }
+                    else:
+                        final_dict["File Reference Validation"] = reference_dict
+                    metric_time_log.info("File Reference Validation took %.2f seconds", time.time() - t0)
 
             except Exception as e:
                 metric_time_log.error("Data Structure error: %s", e, exc_info=True)

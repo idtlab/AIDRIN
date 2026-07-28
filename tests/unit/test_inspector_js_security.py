@@ -9,6 +9,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
 DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_quality.html"
+DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_structure.html"
 
 
 def test_result_renderer_escapes_untrusted_display_values():
@@ -36,11 +37,13 @@ def test_custom_outlier_targets_load_only_when_enabled():
 
 def test_file_reference_ui_keeps_custom_outlier_loading_independent():
     source = INSPECTOR_JS.read_text()
-    panel = DATA_QUALITY_PANEL.read_text()
+    panel = DATA_STRUCTURE_PANEL.read_text()
+    quality_panel = DATA_QUALITY_PANEL.read_text()
     assert "function loadFileReferenceOptions()" in source
     assert "loadFileReferenceOptions();" in source
     assert "window.AIDRIN_GLOBUS_MODE" in source
     assert 'id="toggleButton_file_reference_validation"' in panel
+    assert 'id="toggleButton_file_reference_validation"' not in quality_panel
     assert 'inputName: "file_reference_targets"' in source
     assert 'name="file_reference_root_id"' in panel
     assert 'name="file_reference_base_subdirectory"' in panel
@@ -49,7 +52,7 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
 
 def test_file_reference_targets_use_searchable_collapsed_multi_select():
     source = INSPECTOR_JS.read_text()
-    panel = DATA_QUALITY_PANEL.read_text()
+    panel = DATA_STRUCTURE_PANEL.read_text()
     assert 'id="file-reference-target-button"' in panel
     assert 'aria-haspopup="listbox"' in panel
     assert 'id="file-reference-target-menu"' in panel
@@ -66,7 +69,7 @@ def test_file_reference_targets_use_searchable_collapsed_multi_select():
 
 def test_file_reference_and_custom_outliers_share_searchable_target_picker():
     source = INSPECTOR_JS.read_text()
-    panel = DATA_QUALITY_PANEL.read_text()
+    panel = DATA_STRUCTURE_PANEL.read_text()
     assert "function renderTargetPicker(picker, targets, options = {})" in source
     assert 'id="file-reference-target-picker" data-target-picker' in panel
     assert 'data-field="target" data-target-picker' in source

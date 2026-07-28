@@ -186,3 +186,4 @@ No additional files should change unless a required gate proves one necessary.
 - [x] Preserve Python regex compatibility by treating browser matching as a preview and leaving authoritative validation to the server.
 - [x] Update public documentation and examples for file-reference regex selection.
 - [x] Run the full test, lint, frontend formatting, documentation, and package-build gates.
+- [x] Place the web control and dispatch under Data Structure instead of Data Quality.

@@ -162,7 +162,7 @@ def test_file_reference_invalid_config_does_not_break_target_discovery(uploaded_
     assert data["file_reference"]["enabled"] is False
 
 
-def test_data_quality_file_reference_validation_returns_metadata(uploaded_client, app):
+def test_data_structure_file_reference_validation_returns_metadata(uploaded_client, app):
     upload_dir = Path(app.config["UPLOAD_FOLDER"])
     artifact = upload_dir / "artifact.bin"
     artifact.write_bytes(b"aidrin")
@@ -170,7 +170,7 @@ def test_data_quality_file_reference_validation_returns_metadata(uploaded_client
     app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [str(upload_dir)]
 
     response = uploaded_client.post(
-        "/data-quality?return_type=json",
+        "/data-structure?return_type=json",
         data={
             "file_reference_validation": "yes",
             "file_reference_targets": "file_path",
@@ -186,7 +186,7 @@ def test_data_quality_file_reference_validation_returns_metadata(uploaded_client
     assert result["File metadata"][0]["size_bytes"] == 6
 
 
-def test_data_quality_file_reference_validation_accepts_regex_targets(uploaded_client, app):
+def test_data_structure_file_reference_validation_accepts_regex_targets(uploaded_client, app):
     upload_dir = Path(app.config["UPLOAD_FOLDER"])
     artifact = upload_dir / "artifact.bin"
     artifact.write_bytes(b"aidrin")
@@ -196,7 +196,7 @@ def test_data_quality_file_reference_validation_accepts_regex_targets(uploaded_c
     app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [str(upload_dir)]
 
     response = uploaded_client.post(
-        "/data-quality?return_type=json",
+        "/data-structure?return_type=json",
         data={
             "file_reference_validation": "yes",
             "file_reference_target_match": "regex",
@@ -210,13 +210,28 @@ def test_data_quality_file_reference_validation_accepts_regex_targets(uploaded_c
     assert result["Summary"]["all_references_valid"] == 1
 
 
-def test_file_reference_bad_root_id_is_metric_scoped(uploaded_client, app):
+def test_data_quality_no_longer_dispatches_file_reference_validation(uploaded_client, app):
     app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [app.config["UPLOAD_FOLDER"]]
 
     response = uploaded_client.post(
         "/data-quality?return_type=json",
         data={
-            "completeness": "yes",
+            "file_reference_validation": "yes",
+            "file_reference_targets": "education",
+            "file_reference_root_id": "root-0",
+        },
+    )
+
+    assert "File Reference Validation" not in response.get_json()
+
+
+def test_file_reference_bad_root_id_is_metric_scoped(uploaded_client, app):
+    app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [app.config["UPLOAD_FOLDER"]]
+
+    response = uploaded_client.post(
+        "/data-structure?return_type=json",
+        data={
+            "constant feature count": "yes",
             "file_reference_validation": "yes",
             "file_reference_targets": "education",
             "file_reference_root_id": "root-999",
@@ -224,7 +239,7 @@ def test_file_reference_bad_root_id_is_metric_scoped(uploaded_client, app):
     )
     data = response.get_json()
 
-    assert "Completeness" in data
+    assert "Constant Feature Count" in data
     assert "Select an allowed filesystem root" in data["File Reference Validation"]["Error"]
 
 
@@ -232,7 +247,7 @@ def test_file_reference_rejects_base_directory_traversal(uploaded_client, app):
     app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [app.config["UPLOAD_FOLDER"]]
 
     response = uploaded_client.post(
-        "/data-quality?return_type=json",
+        "/data-structure?return_type=json",
         data={
             "file_reference_validation": "yes",
             "file_reference_targets": "education",
@@ -258,7 +273,7 @@ def test_file_reference_enforces_root_and_web_scan_cap(uploaded_client, app, tmp
     app.config["FILE_REFERENCE_WEB_SCAN_LIMIT"] = 1
 
     response = uploaded_client.post(
-        "/data-quality?return_type=json",
+        "/data-structure?return_type=json",
         data={
             "file_reference_validation": "yes",
             "file_reference_targets": "file_path",
@@ -280,7 +295,7 @@ def test_file_reference_reports_absolute_path_outside_root(uploaded_client, app,
     app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [app.config["UPLOAD_FOLDER"]]
 
     response = uploaded_client.post(
-        "/data-quality?return_type=json",
+        "/data-structure?return_type=json",
         data={
             "file_reference_validation": "yes",
             "file_reference_targets": "file_path",
