@@ -480,9 +480,21 @@ class TestGroupedEqsimLayout:
 
         assert df is not None
         assert df.shape == (100, 3)
-        assert list(df.columns) == ["X", "Y", "Z"]
-        assert (df["X"] == 0.0).any()
-        assert df["X"].isna().sum() == 0
+        assert list(df.columns) == ["S_01_01/X", "S_01_01/Y", "S_01_01/Z"]
+        assert (df["S_01_01/X"] == 0.0).any()
+        assert df["S_01_01/X"].isna().sum() == 0
+
+    def test_read_selected_waveforms_keeps_station_path_context(self, tmp_path, logger):
+        """Selecting the same short names from two stations stays distinguishable."""
+        fpath = str(tmp_path / "rechdf5.h5")
+        _make_mock_rechdf5(fpath, nx=2, ny=2, npts=50)
+
+        keys = ["S_01_01/X", "S_01_02/X"]
+        df = hdf5Reader(fpath, logger, selected_keys=keys).read()
+
+        assert df is not None
+        assert df.shape == (50, 2)
+        assert list(df.columns) == ["S_01_01/X", "S_01_02/X"]
 
     def test_pandas_hdf5_stays_legacy_not_multi_dataset(self, logger):
         from pathlib import Path
