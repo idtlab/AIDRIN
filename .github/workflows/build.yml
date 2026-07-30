@@ -46,7 +46,17 @@ jobs:
       # libexpat DLL on Windows (pyexpat ImportError), so build without it and
       # pre-install the exact build-system.requires ourselves.
       run: |
-        python -m pip install build setuptools==78.1.1 wheel
+        python -m pip install build wheel tomli
+        python - <<'PY'
+        import subprocess, sys
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
+        with open("pyproject.toml", "rb") as f:
+            reqs = tomllib.load(f)["build-system"]["requires"]
+        subprocess.check_call([sys.executable, "-m", "pip", "install", *reqs])
+        PY
         python -m build --no-isolation
 
     - name: Verify wheel installs
