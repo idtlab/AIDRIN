@@ -1,10 +1,12 @@
 import base64
+import json
 import math
 import os
 import re
 import sys
 import time
 import importlib.util
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from typing import Any, Dict, List, Optional
@@ -13,9 +15,11 @@ from .config import HeadlessConfig
 from .runners import (
     run_class_imbalance,
     run_completeness,
+    run_constant_feature_count,
     run_correlations,
     run_differential_privacy,
     run_duplicity,
+    run_duplicity_by_features,
     run_kurtosis,
     run_max_pairwise_correlation,
     run_skewness,
@@ -57,6 +61,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "runner": run_outliers,
         "required_args": [],
     },
+    "constant_feature_count": {
+        "category": "data-structure",
+        "description": "Count and list of columns with a single distinct non-null value.",
+        "runner": run_constant_feature_count,
+        "required_args": [],
+    },
     "max_pairwise_correlation": {
         "category": "data-structure",
         "description": "Strongest absolute pairwise correlation between features.",
@@ -80,6 +90,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Percentage of rows where every required column is non-null.",
         "runner": run_row_level_completeness,
         "required_args": ["required-columns"],
+    },
+    "duplicity_by_features": {
+        "category": "data-quality",
+        "description": "Duplicate rows computed using only the selected feature columns.",
+        "runner": run_duplicity_by_features,
+        "required_args": ["duplicate-columns"],
     },
     "feature_coverage_ratio": {
         "category": "data-quality",
@@ -184,6 +200,48 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "required_args": ["columns"],
     },
 }
+
+
+def _has_custom_outlier_rule_source(value: Any) -> bool:
+    """Return whether a custom-outlier rule source was meaningfully supplied."""
+    return value is not None and value != "" and value != []
+
+
+def _load_custom_outlier_rules_file(rules_file: str) -> List[Any]:
+    """Read a UTF-8 JSON custom-outlier rules array from a local file."""
+    path = Path(rules_file).expanduser()
+    try:
+        raw_rules = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"Unable to read custom-outlier rules file: {path}") from exc
+
+    try:
+        rules = json.loads(raw_rules)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in custom-outlier rules file: {path}") from exc
+
+    if not isinstance(rules, list):
+        raise ValueError(f"Custom-outlier rules file must contain a JSON array: {path}")
+    return rules
+
+
+def _resolve_custom_outlier_rules(kwargs: Dict[str, Any]) -> Any:
+    """Resolve exactly one supplied custom-outlier rules source."""
+    sources = {
+        "rules": kwargs.get("rules"),
+        "rules_json": kwargs.get("rules_json"),
+        "rules_file": kwargs.get("rules_file"),
+    }
+    supplied = [
+        (name, value) for name, value in sources.items() if _has_custom_outlier_rule_source(value)
+    ]
+    if len(supplied) != 1:
+        raise ValueError("Provide exactly one custom-outlier rule source: rules, rules_json, or rules_file")
+
+    source_name, source_value = supplied[0]
+    if source_name == "rules_file":
+        return _load_custom_outlier_rules_file(source_value)
+    return source_value
 
 
 def _sanitize(obj: Any) -> Any:
@@ -463,7 +521,7 @@ def run_metric(
     start_time = time.time()
 
     if metric_key in {
-        "completeness", "duplicity", "outliers",
+        "completeness", "duplicity", "outliers", "constant_feature_count",
         "max_pairwise_correlation", "skewness", "kurtosis",
     }:
         result = metric["runner"](file_path, file_type, file_name)
@@ -488,6 +546,13 @@ def run_metric(
         if not required_columns:
             raise ValueError("required_columns is required for row_level_completeness")
         result = metric["runner"](file_path, file_type, file_name, required_columns)
+        return _finalize(result)
+
+    if metric_key == "duplicity_by_features":
+        duplicate_columns = _normalize_list(kwargs.get("duplicate_columns"))
+        if not duplicate_columns:
+            raise ValueError("duplicate_columns is required for duplicity_by_features")
+        result = metric["runner"](file_path, file_type, file_name, duplicate_columns)
         return _finalize(result)
 
     if metric_key == "feature_coverage_ratio":
@@ -525,9 +590,7 @@ def run_metric(
         return _finalize(result)
 
     if metric_key == "outliers_custom":
-        rules = kwargs.get("rules") or kwargs.get("rules_json")
-        if not rules:
-            raise ValueError("rules_json is required for outliers_custom")
+        rules = _resolve_custom_outlier_rules(kwargs)
         result = metric["runner"](
             file_path,
             file_type,
@@ -665,6 +728,7 @@ def run_batch_metrics(
         "y_true_column": config_obj.y_true_column,
         "sensitive_attribute_column": config_obj.sensitive_attribute_column,
         "required_columns": config_obj.required_columns,
+        "duplicate_columns": config_obj.duplicate_columns,
         "threshold": config_obj.threshold,
         "frequency": config_obj.frequency,
         "timestamp_column": config_obj.timestamp_column,

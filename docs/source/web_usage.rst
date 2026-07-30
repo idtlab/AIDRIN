@@ -84,10 +84,10 @@ Evaluates dataset completeness by checking for missing values.
       scalar or an array of multiple sentinels.
    4. **HDF5 native fill value** – the value stored in the dataset's own
       metadata (``dataset.fillvalue``).  When this equals the dtype default
-      (``0`` / ``0.0``) and no fill-value attributes are present, a warning
-      is logged before replacement because zero is a legitimate measurement in
-      many scientific datasets (e.g. counts, indices).  Set a ``_FillValue``
-      attribute in the file to an unambiguous sentinel to suppress this warning.
+      (``0`` / ``0.0``) and no fill-value attributes are present, it is treated
+      as valid data because zero is a legitimate measurement in many scientific
+      datasets (e.g. counts, indices). Set a ``_FillValue`` attribute to an
+      unambiguous sentinel when zero represents missing data.
 
 calculate_correlations
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -270,7 +270,7 @@ Calculates entropy risk for quasi-identifier columns. It measures the uncertaint
 Local and Web Application Usage
 --------------------------------
 
-AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Web Application Installation <./web_installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure and Organization**. Each dimension includes specific metrics to assess dataset readiness.
+AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Web Application Installation <./web_installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure**. Each dimension includes specific metrics to assess dataset readiness.
 
 Web Application Workflow
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -349,6 +349,12 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
   - **Parameters**: None (uses entire dataset).
   - **Result**: A duplicity score (0 for no duplicates).
 
+- **Duplicates by Selected Features**:
+
+  - **Method**: Identifies duplicate rows by comparing only the selected feature columns, rather than the whole row.
+  - **Parameters**: Features to compare.
+  - **Result**: Duplicate row count and percentage, plus the top 10 largest duplicate groups with their feature values and row counts.
+
 
 - **Outliers**:
 
@@ -359,8 +365,8 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
 - **Custom Criteria Outliers**:
 
   - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
-  - **Parameters**: Target, criteria rules, maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached.
-  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable.
+  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. In the manual editor, choose **Regular expression** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
+  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target.
 
 Impact of Data on AI
 ^^^^^^^^^^^^^^^^^^^^
@@ -515,11 +521,18 @@ The system returns:
    AIDRIN focuses on the completeness and structure of your metadata.
    It does **not** validate the factual accuracy of the content.
 
-Data Structure and Organization
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Data Structure
+^^^^^^^^^^^^^^
 
-Assesses structural and distributional properties of the feature set. All three
-metrics operate on the numeric, non-constant columns and require no parameters.
+Assesses structural and distributional properties of the feature set. All four
+metrics require no parameters; the latter three operate on the numeric,
+non-constant columns.
+
+- **Constant Feature Count**:
+
+  - **Method**: Counts columns that have a single distinct value. Null is treated as a value like any other: a column that is entirely null counts as constant, and a column with one real value plus some nulls does not (it has two distinct values — the value and null).
+  - **Parameters**: None (uses entire dataset).
+  - **Result**: The count of constant columns, the total column count, and the constant columns with their single value (``null`` for an all-null column).
 
 - **Max Pairwise Correlation**:
 

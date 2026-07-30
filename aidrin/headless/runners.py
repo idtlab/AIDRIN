@@ -24,6 +24,8 @@ from aidrin.structured_data_metrics.feature_relevance import (
 from aidrin.structured_data_metrics.null_count_trend import null_count_trend
 from aidrin.structured_data_metrics.outliers import outliers
 from aidrin.structured_data_metrics.row_level_completeness import row_level_completeness
+from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
+from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.privacy_measure import (
     compute_entropy_risk,
@@ -77,10 +79,15 @@ def _call_task(task: Any, *args: Any) -> Any:
     unwrapped = getattr(task, "__wrapped__", None)
     if unwrapped is None:
         return task(*args)
+    # __wrapped__ is a bound method (self is already bound by Celery's Task
+    # descriptor), so the plain call is correct. Tasks with a trailing
+    # default arg (e.g. ``top_n=20``) would otherwise silently accept the
+    # extra NullTask() as a real positional argument instead of raising
+    # TypeError, corrupting the argument binding without any error.
     try:
-        return unwrapped(NullTask(), *args)
-    except TypeError:
         return unwrapped(*args)
+    except TypeError:
+        return unwrapped(NullTask(), *args)
 
 
 def run_completeness(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
@@ -91,6 +98,11 @@ def run_completeness(file_path: str, file_type: Optional[str], file_name: Option
 def run_duplicity(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(duplicity, file_info)
+
+
+def run_constant_feature_count(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(constant_feature_count, file_info)
 
 
 def run_max_pairwise_correlation(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
@@ -121,6 +133,16 @@ def run_row_level_completeness(
 ) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(row_level_completeness, required_columns, file_info)
+
+
+def run_duplicity_by_features(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    features: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(duplicity_by_features, features, file_info)
 
 
 def run_feature_coverage_ratio(

@@ -7,6 +7,15 @@
       <div id="checkboxContainer_structure" class="checkboxContainer">
         <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
+            <input type="checkbox" name="constant feature count" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check constant feature count
+            <span class="info-icon">i<span class="info-text">This option reports the number of columns that have a single distinct value, and lists those columns.</span></span>
+          </label>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
             <input type="checkbox" name="max pairwise correlation" onchange="toggleValue(this)" />
             <span class="checkmark"></span>
             Check max pairwise correlation

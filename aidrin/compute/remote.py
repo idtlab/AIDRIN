@@ -44,6 +44,10 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Row-Level Completeness"] = aidrin.calculate_row_level_completeness(
                 params.get("required_columns", []), file_info
             )
+        if "duplicity_by_features" in selected:
+            result["Duplicates by Selected Features"] = aidrin.calculate_duplicity_by_features(
+                params.get("duplicate_features", []), file_info
+            )
         if "feature_coverage_ratio" in selected:
             result["Feature Coverage Ratio"] = aidrin.calculate_feature_coverage_ratio(
                 params.get("threshold", 0.9), file_info
@@ -105,8 +109,13 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         """Run selected data-structure sub-metrics and bundle results."""
         result = {}
         selected = params.get(
-            "selected", ["max_pairwise_correlation", "skewness", "kurtosis"]
+            "selected",
+            ["constant_feature_count", "max_pairwise_correlation", "skewness", "kurtosis"],
         )
+        if "constant_feature_count" in selected:
+            result["Constant Feature Count"] = (
+                aidrin.calculate_constant_feature_count(file_info)
+            )
         if "max_pairwise_correlation" in selected:
             result["Max Pairwise Correlation"] = (
                 aidrin.calculate_max_pairwise_correlation(file_info)
@@ -130,6 +139,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         import matplotlib.pyplot as plt
         import seaborn as sns
         from aidrin.file_handling.file_parser import read_file as _read_file
+        from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 
         df = _read_file(file_info)
         if isinstance(df, str):
@@ -169,12 +179,16 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         # /summary-statistics panel).
         categorical_summary = {}
         for col in categorical_columns:
-            counts = df[col].value_counts(dropna=True)
-            count = int(df[col].notna().sum())
+            # value_counts() and nunique() both hash, so a column holding
+            # arrays/lists/dicts (parquet/HDF5/JSON) would raise and take the
+            # whole summary down. Normalize such columns first.
+            series = hashable_series(df[col])
+            counts = series.value_counts(dropna=True)
+            count = int(series.notna().sum())
             freq = int(counts.iloc[0]) if not counts.empty else 0
             categorical_summary[str(col)] = {
                 "count": count,
-                "unique": int(df[col].nunique(dropna=True)),
+                "unique": safe_nunique(series, dropna=True),
                 "top": str(counts.index[0]) if not counts.empty else "—",
                 "freq": freq,
                 "freq_pct": round(freq / count * 100, 1) if count else 0.0,
@@ -216,7 +230,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             "categorical_summary": categorical_summary,
             "histograms": histograms,
             "class_imbalance_features": [
-                col for col in all_features if df[col].nunique() <= 30
+                col for col in all_features if safe_nunique(df[col]) <= 30
             ],
         }
 
@@ -264,6 +278,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         "completeness": lambda: aidrin.calculate_completeness(file_info),
         "outliers": lambda: aidrin.calculate_outliers(file_info),
         "duplicates": lambda: aidrin.calculate_duplicates(file_info),
+        "constant_feature_count": lambda: aidrin.calculate_constant_feature_count(file_info),
         "max_pairwise_correlation": lambda: aidrin.calculate_max_pairwise_correlation(
             file_info
         ),
@@ -271,6 +286,9 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         "kurtosis": lambda: aidrin.calculate_kurtosis(file_info),
         "row_level_completeness": lambda: aidrin.calculate_row_level_completeness(
             params.get("required_columns", []), file_info
+        ),
+        "duplicity_by_features": lambda: aidrin.calculate_duplicity_by_features(
+            params.get("duplicate_features", []), file_info
         ),
         "feature_coverage_ratio": lambda: aidrin.calculate_feature_coverage_ratio(
             params.get("threshold", 0.9), file_info

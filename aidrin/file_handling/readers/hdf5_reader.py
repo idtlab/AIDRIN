@@ -242,14 +242,24 @@ class hdf5Reader(BaseFileReader):
             return []
 
     def _column_name_from_path(self, path, used_names):
-        """Pick a unique DataFrame column name for an HDF5 dataset path."""
+        """Prefer the full dataset path so group/station context is preserved.
+
+        Examples: ``S_01_01/X``, ``D1.fill_starts``. Falls back only if the full
+        path is already used as a column name (duplicate selection).
+        """
+        full = path.strip("/") or path
+        if full not in used_names:
+            return full
         short = path.split("/")[-1] or path
         if short not in used_names:
             return short
-        dotted = path.strip("/").replace("/", ".")
+        dotted = full.replace("/", ".")
         if dotted not in used_names:
             return dotted
-        return path
+        suffix = 2
+        while f"{full}_{suffix}" in used_names:
+            suffix += 1
+        return f"{full}_{suffix}"
 
     def _read_compatible_dataset_paths(self, paths):
         """Merge multiple same-length 1D datasets into one DataFrame."""
@@ -353,7 +363,7 @@ class hdf5Reader(BaseFileReader):
             data = obj[()]
             data = self._apply_fill_values(data, obj, path)
 
-            col_name = path.split("/")[-1] or path
+            col_name = self._column_name_from_path(path, set())
             if getattr(data, "ndim", 0) == 0:
                 df = pd.DataFrame({col_name: [data]})
             elif data.ndim == 1:

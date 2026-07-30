@@ -17,7 +17,7 @@ HDF5_BLOCK_ELEMENT_LIMIT = 1_000_000
 
 def iter_targets(file_info):
     """Return selectable value targets for tabular files and native HDF5 files."""
-    file_path, _file_name, file_type = file_info
+    file_path, _file_name, file_type = file_info[:3]
     if file_type == ".h5":
         return _iter_hdf5_targets(file_path)
     return _iter_column_targets(file_info)
@@ -42,6 +42,7 @@ def _iter_column_targets(file_info):
     df = read_file(file_info)
     if not hasattr(df, "columns"):
         return []
+    _normalize_tabular_columns(df)
 
     targets = []
     for col in df.columns:
@@ -61,6 +62,7 @@ def _iter_column_value_blocks(file_info, target):
     df = read_file(file_info)
     if not hasattr(df, "columns"):
         raise ValueError("Unable to read tabular file")
+    _normalize_tabular_columns(df)
 
     name = target["name"]
     if name not in df.columns:
@@ -82,6 +84,11 @@ def _iter_column_value_blocks(file_info, target):
         "offset": None,
         "locate": locate,
     }
+
+
+def _normalize_tabular_columns(df):
+    """Use the same string column names exposed by metric outputs and the UI."""
+    df.columns = [str(col) for col in df.columns]
 
 
 def _iter_hdf5_targets(file_path):
@@ -196,14 +203,13 @@ def _hdf5_missing_mask(dataset, values, display_name):
         return missing_mask
 
     reader = hdf5Reader("", logger)
-    explicit_fills, uncertain_fills = reader._collect_fill_values(dataset)
-    all_fills = explicit_fills | uncertain_fills
-    if not all_fills:
+    explicit_fills, _uncertain_fills = reader._collect_fill_values(dataset)
+    if not explicit_fills:
         return missing_mask
 
     matched = set()
     fill_match_count = 0
-    for fill_value in all_fills:
+    for fill_value in explicit_fills:
         try:
             fill_mask = values == fill_value
         except TypeError:
@@ -216,27 +222,13 @@ def _hdf5_missing_mask(dataset, values, display_name):
     if not matched:
         return missing_mask
 
-    uncertain_matched = matched & uncertain_fills
-    if uncertain_matched:
-        logger.warning(
-            "Dataset '%s': %d/%d value(s) match the HDF5 default fill value %s "
-            "and will be marked as missing. If zero is a valid measurement here "
-            "(e.g. counts, indices), set a '_FillValue' attribute in the file to "
-            "an unambiguous sentinel, or pass fill_values=[] at construction time "
-            "to suppress native fill value missing handling.",
-            display_name,
-            fill_match_count,
-            values.size,
-            uncertain_matched,
-        )
-    else:
-        logger.info(
-            "Dataset '%s': marked %d/%d value(s) matching explicit fill sentinel(s) %s as missing.",
-            display_name,
-            fill_match_count,
-            values.size,
-            matched,
-        )
+    logger.info(
+        "Dataset '%s': marked %d/%d value(s) matching explicit fill sentinel(s) %s as missing.",
+        display_name,
+        fill_match_count,
+        values.size,
+        matched,
+    )
     return missing_mask
 
 
