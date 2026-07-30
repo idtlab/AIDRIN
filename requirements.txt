@@ -9,7 +9,7 @@
 #   uv pip compile pyproject.toml -o requirements.txt
 
 celery==5.5.3
-redis==6.4.0
+redis==8.0.1
 shap==0.48.0
 h5py==3.14.0
 blinker>=1.7.0
