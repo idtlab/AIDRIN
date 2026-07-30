@@ -197,7 +197,7 @@ requires-dist = [
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "shap", specifier = ">=0.48.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = "==6.2.1" },
-    { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = "==1.2.2" },
+    { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = "==3.1.0" },
     { name = "sphinxemoji", marker = "extra == 'docs'" },
 ]
 provides-extras = ["globus", "telemetry", "llm", "mcp", "agentic", "dev", "docs"]
@@ -225,7 +225,7 @@ dev = [
 docs = [
     { name = "breathe" },
     { name = "sphinx", specifier = "==6.2.1" },
-    { name = "sphinx-rtd-theme", specifier = "==1.2.2" },
+    { name = "sphinx-rtd-theme", specifier = "==3.1.0" },
     { name = "sphinxemoji" },
 ]
 mcp = [
@@ -5136,16 +5136,16 @@ wheels = [
 
 [[package]]
 name = "sphinx-rtd-theme"
-version = "1.2.2"
+version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "docutils" },
     { name = "sphinx" },
     { name = "sphinxcontrib-jquery" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/66/86/7b2c3d15f44cb3ea2e1c54481494121d755081aa57a8076de3fa2be4d587/sphinx_rtd_theme-1.2.2.tar.gz", hash = "sha256:01c5c5a72e2d025bd23d1f06c59a4831b06e6ce6c01fdd5ebfe9986c0a880fc7", size = 2784122, upload-time = "2023-06-07T13:29:30.819Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/84/68/a1bfbf38c0f7bccc9b10bbf76b94606f64acb1552ae394f0b8285bfaea25/sphinx_rtd_theme-3.1.0.tar.gz", hash = "sha256:b44276f2c276e909239a4f6c955aa667aaafeb78597923b1c60babc76db78e4c", size = 7620915, upload-time = "2026-01-12T16:03:31.17Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/32/9ccebf3a82c085e8fc12b67cc3dbf840789fb6c7835ed0d61686d6509aa9/sphinx_rtd_theme-1.2.2-py2.py3-none-any.whl", hash = "sha256:6a7e7d8af34eb8fc57d52a09c6b6b9c46ff44aea5951bc831eeb9245378f3689", size = 2824805, upload-time = "2023-06-07T13:29:27.534Z" },
+    { url = "https://files.pythonhosted.org/packages/87/c7/b5c8015d823bfda1a346adb2c634a2101d50bb75d421eb6dcb31acd25ebc/sphinx_rtd_theme-3.1.0-py2.py3-none-any.whl", hash = "sha256:1785824ae8e6632060490f67cf3a72d404a85d2d9fc26bce3619944de5682b89", size = 7655617, upload-time = "2026-01-12T16:03:28.101Z" },
 ]
 
 [[package]]
