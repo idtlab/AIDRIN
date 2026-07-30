@@ -1,0 +1,24 @@
+version: 2
+
+updates:
+  # pyproject.toml + uv.lock. Without this entry the lock file is never
+  # refreshed, so transitive pins (pillow, ...) go stale and keep raising
+  # alerts long after requirements.txt has already been bumped.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      # One PR per week for routine minor/patch drift. Majors stay
+      # separate so they can be reviewed on their own.
+      lock-maintenance:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pip"
+    directory: "/docs"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
