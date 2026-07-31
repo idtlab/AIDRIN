@@ -122,3 +122,46 @@ class TestResolve(_ProfileTestCase):
         message = str(ctx.exception)
         self.assertIn("aidrin remote configure", message)
         self.assertIn("AIDRIN_GLOBUS_ENDPOINT", message)
+
+    def test_project_default_wins_and_reports_source_project(self):
+        profiles.save_profile("nersc", "user-uuid", default=True)
+        profiles.save_profile("lab", "project-uuid", default=True, local=True)
+        target = profiles.resolve()
+        self.assertEqual(target.endpoint, "project-uuid")
+        self.assertEqual(target.profile, "lab")
+        self.assertEqual(target.source, "project")
+
+    def test_user_default_reports_source_user(self):
+        profiles.save_profile("nersc", "user-uuid", default=True)
+        target = profiles.resolve()
+        self.assertEqual(target.endpoint, "user-uuid")
+        self.assertEqual(target.profile, "nersc")
+        self.assertEqual(target.source, "user")
+
+    def test_dangling_project_default_falls_through_to_user_default(self):
+        profiles.save_profile("nersc", "user-uuid", default=True)
+        # Hand-edited project file: its default names a profile that isn't
+        # defined anywhere (not even in this same file).
+        project_path = profiles.project_config_path()
+        project_path.write_text(json.dumps({"default": "ghost", "profiles": {}}))
+        target = profiles.resolve()
+        self.assertEqual(target.endpoint, "user-uuid")
+        self.assertEqual(target.profile, "nersc")
+        self.assertEqual(target.source, "user")
+
+
+class TestWritePermissions(_ProfileTestCase):
+
+    def test_write_corrects_preexisting_wide_permissions(self):
+        # If the config file already exists at a wider mode (e.g. created
+        # before this module enforced 0600, or by another tool), saving a
+        # profile must still leave it at 0600 -- the create path used to
+        # write the full content before chmod-ing, which is what this
+        # guards against.
+        path = profiles.user_config_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"default": None, "profiles": {}}))
+        os.chmod(path, 0o644)
+        profiles.save_profile("nersc", "uuid-1")
+        mode = stat.S_IMODE(path.stat().st_mode)
+        self.assertEqual(mode, 0o600)

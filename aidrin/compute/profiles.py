@@ -14,6 +14,7 @@ wins over a user default.
 
 import json
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -59,9 +60,31 @@ def _load(path: Path) -> Dict[str, Any]:
 
 
 def _write(path: Path, data: Dict[str, Any]) -> None:
+    """Write ``data`` to ``path`` at mode 0600, with no window where the
+    content is on disk at a wider mode.
+
+    A plain ``write_text`` followed by ``chmod`` creates the file (or
+    truncates an existing one) at the process umask first, so the full
+    content is briefly readable at whatever mode the file already had.
+    Instead, write to a sibling temp file created at 0600 and atomically
+    rename it into place; the destination inherits the temp file's mode.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    os.chmod(path, 0o600)
+    content = json.dumps(data, indent=2) + "\n"
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
+    )
+    try:
+        os.chmod(tmp_name, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 def save_profile(
@@ -140,13 +163,25 @@ def resolve(
     if env_endpoint:
         return RemoteTarget(endpoint=env_endpoint, profile=None, source="env")
 
-    default_name = merged.get("default")
-    if default_name and default_name in merged["profiles"]:
-        entry = merged["profiles"][default_name]
+    # Project and user defaults are independent fallback candidates. A
+    # dangling default (e.g. from hand-editing one file to name a profile
+    # that isn't defined anywhere) falls through to the next candidate
+    # rather than aborting resolution.
+    project_default = _load(project_config_path()).get("default")
+    user_default = _load(user_config_path()).get("default")
+    for default_name, source in (
+        (project_default, "project"),
+        (user_default, "user"),
+    ):
+        if not default_name:
+            continue
+        entry = merged["profiles"].get(default_name)
+        if entry is None:
+            continue
         return RemoteTarget(
             endpoint=entry["endpoint"],
             profile=default_name,
-            source="user",
+            source=source,
             aidrin_version=entry.get("aidrin_version"),
         )
 
