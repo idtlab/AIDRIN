@@ -63,7 +63,7 @@ def summarize_dataset(
                       and categorical. All column names still appear in 'columns'.
                       If one type has fewer columns than its share, the remainder goes
                       to the other type.
-        endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
+        endpoint: Optional Globus Compute endpoint UUID. When set, the summary runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
@@ -289,8 +289,8 @@ def run_batch(
 
     Args:
         config_path: Absolute path to a YAML or JSON batch config.
-        endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
-                  on that endpoint and file_path must be a path visible there.
+        endpoint: Optional Globus Compute endpoint UUID. config_path is read
+                  locally; each metric's file_path inside it must be a path visible on that endpoint.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
     config = HeadlessConfig.from_file(config_path)
