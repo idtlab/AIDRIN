@@ -122,6 +122,64 @@ class TestImagePolicy(unittest.TestCase):
         self.assertTrue(result["Visualization"].startswith(target_dir))
         self.assertTrue(os.path.exists(result["Visualization"]))
 
+    def test_run_metric_accepts_api_params_positionally(self):
+        """A positional call through strip_visualizations must not raise.
+
+        ``api.run_metric``'s signature is (metric_name, file_path, file_type,
+        file_name, save_images, image_dir, verbose, strip_visualizations,
+        **kwargs). If the executor's parameter order drifts, a caller that
+        works against the local module breaks against the remote one.
+        """
+        rec = _Recorder()
+        with patch("aidrin.compute.executor.client", rec):
+            _executor(rec).run_metric(
+                "completeness", "/x.csv", None, None, True, None, False, False
+            )
+        _endpoint, command, kwargs = rec.submitted[0]
+        self.assertEqual(command, "run_metric")
+        self.assertEqual(kwargs["metric_name"], "completeness")
+
+
+class TestBatchImagePolicy(unittest.TestCase):
+
+    def test_batch_default_never_writes_images_and_strips_viz(self):
+        from aidrin.headless.config import HeadlessConfig
+
+        rec = _Recorder()
+        config = HeadlessConfig.from_dict(
+            {"file_path": "/scratch/data.csv", "metrics": ["completeness"]}
+        )
+        with patch("aidrin.compute.executor.client", rec):
+            _executor(rec).run_batch_metrics(config)
+        _endpoint, _command, kwargs = rec.submitted[0]
+        self.assertFalse(kwargs["config"]["save_images"])
+        self.assertTrue(kwargs["strip_visualizations"])
+
+    def test_batch_with_images_requested_keeps_viz_payload_and_writes_locally(self):
+        from aidrin.headless.config import HeadlessConfig
+        import base64
+
+        png = base64.b64encode(b"not-a-real-png").decode()
+        rec = _Recorder(result={"completeness": {"Visualization": png}})
+        target_dir = tempfile.mkdtemp()
+        config = HeadlessConfig.from_dict(
+            {
+                "file_path": "/scratch/data.csv",
+                "metrics": ["completeness"],
+                "save_images": True,
+                "image_dir": target_dir,
+            }
+        )
+        with patch("aidrin.compute.executor.client", rec):
+            result = _executor(rec).run_batch_metrics(config)
+        _endpoint, _command, kwargs = rec.submitted[0]
+        self.assertFalse(kwargs["config"]["save_images"])
+        self.assertFalse(kwargs["strip_visualizations"])
+        self.assertTrue(
+            result["completeness"]["Visualization"].startswith(target_dir)
+        )
+        self.assertTrue(os.path.exists(result["completeness"]["Visualization"]))
+
 
 class TestDetach(unittest.TestCase):
 

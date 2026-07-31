@@ -1,8 +1,17 @@
 """Executes headless AIDRIN calls on a remote Globus Compute endpoint.
 
 ``RemoteExecutor`` is duck-typed against the ``aidrin.headless.api`` *module*:
-it exposes the same four function names with the same signatures, so callers
-substitute one for the other and never branch on local versus remote.
+it exposes the same four function names with the same signatures (parameter
+names and order), so callers substitute one for the other and never branch on
+local versus remote.
+
+Two defaults are intentionally different from the ``api`` module, because a
+remote submission has constraints a local call does not: ``save_images``
+defaults to off (``api`` defaults it on) since the endpoint must never write
+files, and ``strip_visualizations`` resolves via the image policy below
+(``True`` unless images were requested) rather than a fixed default, since
+Globus Compute caps a task result near 10 MB and visualization payloads are
+base64 PNGs.
 """
 
 from dataclasses import asdict, is_dataclass
@@ -78,13 +87,35 @@ class RemoteExecutor:
         metric_name: str,
         file_path: str,
         file_type: Optional[str] = None,
+        file_name: Optional[str] = None,
+        save_images: bool = False,
+        image_dir: Optional[str] = None,
+        verbose: bool = False,
+        strip_visualizations: Optional[bool] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        save_images, image_dir = self._image_policy(kwargs)
-        payload = {"metric_name": metric_name, "file_path": file_path, "file_type": file_type}
+        """Same parameter order as ``api.run_metric`` so positional calls work.
+
+        ``save_images`` defaults to ``False`` here (``api`` defaults to
+        ``True``) and ``strip_visualizations`` defaults to ``None``, a sentinel
+        meaning "let the image policy decide" rather than ``api``'s fixed
+        ``False`` -- see the module docstring.
+        """
+        image_kwargs: Dict[str, Any] = {"save_images": save_images, "image_dir": image_dir}
+        if strip_visualizations is not None:
+            image_kwargs["strip_visualizations"] = strip_visualizations
+        want_images, image_dir = self._image_policy(image_kwargs)
+        payload = {
+            "metric_name": metric_name,
+            "file_path": file_path,
+            "file_type": file_type,
+            "file_name": file_name,
+            "verbose": verbose,
+        }
+        payload.update(image_kwargs)
         payload.update(kwargs)
         result = self._call("run_metric", payload)
-        return _maybe_save_images(metric_name, result, save_images, image_dir)
+        return _maybe_save_images(metric_name, result, want_images, image_dir)
 
     def summarize_dataset(
         self,
@@ -120,16 +151,38 @@ class RemoteExecutor:
         self,
         config: Any,
         verbose: bool = False,
-        strip_visualizations: bool = False,
+        strip_visualizations: Optional[bool] = None,
     ) -> Dict[str, Any]:
+        """Same image policy as ``run_metric``, applied to the batch config.
+
+        ``HeadlessConfig``/dict carries its own ``save_images``/``image_dir``,
+        so those (not a method parameter) are what "the caller wants images"
+        is read from. ``strip_visualizations`` defaults to ``None`` here (a
+        sentinel meaning "let the image policy decide"), unlike ``api``'s
+        fixed ``False`` default, for the same reason as ``run_metric``.
+        """
         # run_batch_metrics accepts a dict, so the endpoint never needs the
         # config file itself. Paths inside it must be endpoint-visible.
-        payload = asdict(config) if is_dataclass(config) else dict(config)
-        return self._call(
+        payload_config = asdict(config) if is_dataclass(config) else dict(config)
+        image_kwargs: Dict[str, Any] = {
+            "save_images": payload_config.get("save_images"),
+            "image_dir": payload_config.get("image_dir"),
+        }
+        if strip_visualizations is not None:
+            image_kwargs["strip_visualizations"] = strip_visualizations
+        want_images, image_dir = self._image_policy(image_kwargs)
+        payload_config["save_images"] = image_kwargs["save_images"]
+        result = self._call(
             "batch",
             {
-                "config": payload,
+                "config": payload_config,
                 "verbose": verbose,
-                "strip_visualizations": strip_visualizations,
+                "strip_visualizations": image_kwargs["strip_visualizations"],
             },
         )
+        if not want_images:
+            return result
+        return {
+            metric_name: _maybe_save_images(metric_name, metric_result, True, image_dir)
+            for metric_name, metric_result in result.items()
+        }
