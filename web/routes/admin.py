@@ -1,14 +1,13 @@
 import os
 
-from flask import Blueprint, jsonify, redirect, render_template, send_from_directory
+from flask import Blueprint, current_app, jsonify, redirect, render_template, send_from_directory
 
 admin_bp = Blueprint("admin", __name__)
 
 
 @admin_bp.route("/images/<path:filename>")
 def serve_image(filename):
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(os.path.join(root_dir, "..", "..", "aidrin", "images"), filename)
+    return send_from_directory(current_app.config["IMAGES_FOLDER"], filename)
 
 
 @admin_bp.route("/docs/<path:filename>")

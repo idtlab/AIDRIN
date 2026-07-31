@@ -123,8 +123,12 @@ def create_app():
     # project_root is the parent of web/
     project_root = os.path.dirname(app.root_path)
 
+    # Root for runtime state. Defaults to the project root; packaged builds (the macOS
+    # .app) point AIDRIN_DATA_DIR somewhere writable because the bundle itself is not.
+    state_root = os.environ.get("AIDRIN_DATA_DIR") or project_root
+
     # Upload folder at project root (outside the package)
-    upload_folder = os.path.join(project_root, "data", "uploads")
+    upload_folder = os.path.join(state_root, "data", "uploads")
     os.makedirs(upload_folder, exist_ok=True)
     app.config["UPLOAD_FOLDER"] = upload_folder
 
@@ -148,10 +152,17 @@ def create_app():
     sample_data_folder = os.path.join(project_root, "examples", "sample_data")
     app.config["SAMPLE_DATA_FOLDER"] = sample_data_folder
 
-    # Custom metrics folder stays inside the aidrin package (dynamic import target)
+    # Custom metrics folder stays inside the aidrin package (dynamic import target).
+    # Uploaded scripts are loaded by file path, so a packaged build can relocate this
+    # via AIDRIN_CUSTOM_METRICS_DIR without breaking the import.
     import aidrin as _aidrin_pkg
     aidrin_root = os.path.dirname(_aidrin_pkg.__file__)
-    custom_metrics_folder = os.path.join(aidrin_root, "custom_metrics")
+
+    # Images ship inside the aidrin package. Resolve them from the package itself rather
+    # than by walking up from a route module's __file__: a packaged build keeps the .py
+    # files in an archive, so web/routes/ is not a real directory to traverse out of.
+    app.config["IMAGES_FOLDER"] = os.path.join(aidrin_root, "images")
+    custom_metrics_folder = os.environ.get("AIDRIN_CUSTOM_METRICS_DIR") or os.path.join(aidrin_root, "custom_metrics")
     os.makedirs(custom_metrics_folder, exist_ok=True)
     app.config["CUSTOM_METRICS_FOLDER"] = custom_metrics_folder
     app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {"py"}

@@ -1,5 +1,7 @@
 """Tests for admin routes: images, docs, logs, publications."""
 
+import os
+
 
 # -------------------------------------------------
 # Publications
@@ -66,3 +68,15 @@ def test_serve_logo_image(client):
     response = client.get("/images/logoNoBackground.png")
     assert response.status_code == 200
     assert response.content_type.startswith("image/")
+
+
+def test_images_folder_resolves_from_the_aidrin_package(app):
+    """The images directory must be derived from the aidrin package location.
+
+    Walking up from web/routes/__file__ works in a source checkout but not in a
+    packaged build, where the .py files live in an archive and web/routes/ is not a
+    real directory, so the '..' traversal never resolves.
+    """
+    folder = app.config["IMAGES_FOLDER"]
+    assert os.path.isdir(folder)
+    assert os.path.isfile(os.path.join(folder, "logoNoBackground.png"))
