@@ -32,6 +32,8 @@ uploads/
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+# ...except the macOS bundle spec, which is source, not a build artifact.
+!packaging/macos/aidrin.spec
 
 # Installer logs
 pip-log.txt
