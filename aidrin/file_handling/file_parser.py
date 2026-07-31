@@ -200,7 +200,7 @@ def filter_file(file_info, kept_keys):
 # Parses the uploaded file into a pandas database
 
 
-def read_file(file_info, columns=None):
+def read_file(file_info, columns=None, subset=None, reduce=None):
     """
 
     Parses a given file into pandas Dataframe.
@@ -217,8 +217,14 @@ def read_file(file_info, columns=None):
             -file_path: str, relative or absolute path of the file.
             -file_name: str, file name.
             -file_type: str, file format. Passed from front end select value.
+            - optional selected_keys (4th element) for HDF5/Zarr path selection.
     columns: list of str, optional
         When given, only these columns are returned.
+    subset: dict, optional
+        Zarr only. Map of axis index -> slice or int, applied before reduce.
+    reduce: str, optional
+        Zarr only. ``\"spatial_mean\"`` averages all axes except axis 0 so a
+        multi-dim array becomes a 1D column suitable for existing metrics.
     Returns
     ----------
     pd.Dataframe, None, or str
@@ -248,7 +254,9 @@ def read_file(file_info, columns=None):
         cache_path = _frame_cache_path(file_path) if cacheable else None
 
         # Fast path: reload a fresh cache without touching the source.
-        if cacheable and os.path.exists(cache_path):
+        # Skip cache when Zarr subset/reduce options are set (options change the frame).
+        use_cache = cacheable and subset is None and reduce is None
+        if use_cache and os.path.exists(cache_path):
             try:
                 import pandas as pd
 
@@ -263,7 +271,15 @@ def read_file(file_info, columns=None):
 
         # Slow path: parse the source once.
         reader_cls = READER_MAP[file_type]
-        if file_type in _SELECTION_FILE_TYPES:
+        if file_type == ".zarr":
+            df = reader_cls(
+                file_path,
+                file_upload_time_log,
+                selected_keys=selected_keys,
+                subset=subset,
+                reduce=reduce,
+            ).read()
+        elif file_type in _SELECTION_FILE_TYPES:
             df = reader_cls(
                 file_path, file_upload_time_log, selected_keys=selected_keys
             ).read()
@@ -274,7 +290,7 @@ def read_file(file_info, columns=None):
         # Best-effort cache for future calls. Failure is non-fatal: we still
         # return the freshly parsed frame below, so a read-only directory or an
         # unserialisable frame never turns a successful parse into an error.
-        if cacheable:
+        if use_cache:
             _write_frame_cache(cache_path, df)
 
         if columns is not None:

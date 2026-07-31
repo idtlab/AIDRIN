@@ -129,7 +129,7 @@ def test_zarr_compatible_group_auto_read(tmp_path, logger):
 
     df = reader.read()
     assert df is not None
-    assert set(df.columns) == {"temp", "x"}
+    assert set(df.columns) == {"temp", "station/x"}
     assert len(df) == 4
 
 
@@ -159,7 +159,7 @@ def test_zarr_grouped_hierarchical_selection(tmp_path, logger):
         str(store), logger, selected_keys=["S1/X", "S1/Y"]
     ).read()
     assert df is not None
-    assert set(df.columns) == {"X", "Y"}
+    assert set(df.columns) == {"S1/X", "S1/Y"}
     assert len(df) == 10
 
 
@@ -185,3 +185,65 @@ def test_zarr_empty_store(tmp_path, logger):
     inv = zarrReader(str(store), logger).inventory()
     assert inv["type"] == INVENTORY_EMPTY
     assert zarrReader(str(store), logger).read() is None
+
+
+def _write_multidim_store(path):
+    """3D array shaped like (time, lat, lon) for subset/reduce tests."""
+    root = zarr.open_group(str(path), mode="w")
+    # time=5, lat=4, lon=3 — values = time index for easy spatial-mean checks
+    data = np.zeros((5, 4, 3), dtype=np.float64)
+    for t in range(5):
+        data[t, :, :] = float(t)
+    arr = root.create_array("tmax_grid", shape=data.shape, dtype="f8")
+    arr[:] = data
+
+
+def test_zarr_multidim_requires_reduce(tmp_path, logger):
+    store = tmp_path / "grid.zarr"
+    _write_multidim_store(store)
+    df = zarrReader(str(store), logger, selected_keys=["tmax_grid"]).read()
+    assert df is None
+
+
+def test_zarr_spatial_mean_reduce(tmp_path, logger):
+    store = tmp_path / "grid.zarr"
+    _write_multidim_store(store)
+    df = zarrReader(
+        str(store),
+        logger,
+        selected_keys=["tmax_grid"],
+        reduce="spatial_mean",
+    ).read()
+    assert df is not None
+    assert list(df.columns) == ["tmax_grid"]
+    assert len(df) == 5
+    assert list(df["tmax_grid"]) == [0.0, 1.0, 2.0, 3.0, 4.0]
+
+
+def test_zarr_subset_then_spatial_mean(tmp_path, logger):
+    store = tmp_path / "grid.zarr"
+    _write_multidim_store(store)
+    # First 3 time steps, subset of lat/lon
+    df = zarrReader(
+        str(store),
+        logger,
+        selected_keys=["tmax_grid"],
+        subset={0: slice(0, 3), 1: slice(0, 2), 2: slice(0, 2)},
+        reduce="spatial_mean",
+    ).read()
+    assert df is not None
+    assert len(df) == 3
+    assert list(df["tmax_grid"]) == [0.0, 1.0, 2.0]
+
+
+def test_zarr_read_file_passes_subset_reduce(tmp_path):
+    store = tmp_path / "grid.zarr"
+    _write_multidim_store(store)
+    df = read_file(
+        (str(store), "grid.zarr", ".zarr", ["tmax_grid"]),
+        reduce="spatial_mean",
+        subset={0: slice(1, 4)},
+    )
+    assert df is not None
+    assert len(df) == 3
+    assert list(df["tmax_grid"]) == [1.0, 2.0, 3.0]

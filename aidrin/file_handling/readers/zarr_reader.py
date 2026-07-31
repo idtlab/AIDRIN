@@ -34,12 +34,25 @@ def _require_zarr():
     return zarr
 
 
-class zarrReader(StructuredFileReader):
-    """Read Zarr directory stores into pandas DataFrames."""
+# Reduce a multi-dim array to 1D by averaging all axes except axis 0 (time-first).
+REDUCE_SPATIAL_MEAN = "spatial_mean"
+_VALID_REDUCE = {None, "", REDUCE_SPATIAL_MEAN}
 
-    def __init__(self, file_path: str, logger, selected_keys=None):
+
+class zarrReader(StructuredFileReader):
+    """Read Zarr directory stores into pandas DataFrames.
+
+    Multi-dimensional arrays can be sliced and reduced before conversion::
+
+        zarrReader(path, logger, selected_keys=["tmax"], subset={0: slice(0, 14)},
+                   reduce="spatial_mean")
+    """
+
+    def __init__(self, file_path: str, logger, selected_keys=None, subset=None, reduce=None):
         super().__init__(file_path, logger)
         self._explicit_selected_keys = selected_keys
+        self._subset = subset
+        self._reduce = reduce
 
     def _open_store(self):
         zarr = _require_zarr()
@@ -236,19 +249,113 @@ class zarrReader(StructuredFileReader):
             return None
         return obj
 
+    def _normalize_subset(self, subset, ndim: int):
+        """Build a numpy index tuple from ``{axis: slice|int}``."""
+        if not subset:
+            return None
+        if not isinstance(subset, dict):
+            raise ValueError("subset must be a dict of axis -> slice or int")
+
+        index = [slice(None)] * ndim
+        for axis, selector in subset.items():
+            try:
+                axis_i = int(axis)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"subset axis must be an int, got {axis!r}") from exc
+            if axis_i < 0:
+                axis_i += ndim
+            if axis_i < 0 or axis_i >= ndim:
+                raise ValueError(f"subset axis {axis} out of range for ndim={ndim}")
+            if not isinstance(selector, (slice, int, np.integer)):
+                raise ValueError(
+                    f"subset[{axis}] must be slice or int, got {type(selector).__name__}"
+                )
+            index[axis_i] = selector
+        return tuple(index)
+
+    def _apply_subset(self, data, subset):
+        if subset is None:
+            return data
+        index = self._normalize_subset(subset, data.ndim)
+        if index is None:
+            return data
+        return data[index]
+
+    def _apply_reduce(self, data, reduce):
+        """Reduce multi-dim data to 1D (or scalar) for tabular metrics."""
+        mode = (reduce or "").strip().lower() or None
+        if mode not in _VALID_REDUCE:
+            raise ValueError(
+                f"Unsupported reduce={reduce!r}; use None or '{REDUCE_SPATIAL_MEAN}'"
+            )
+        if mode is None:
+            return data
+        if data.ndim <= 1:
+            return data
+        # Keep axis 0 (typically time); average remaining spatial/member axes.
+        axes = tuple(range(1, data.ndim))
+        return np.nanmean(data, axis=axes)
+
+    def _prepare_array_data(self, arr):
+        """Load array, apply optional subset/reduce, return numpy data."""
+        data = np.asarray(arr[:])
+        try:
+            data = self._apply_subset(data, self._subset)
+            data = self._apply_reduce(data, self._reduce)
+        except ValueError as exc:
+            self.logger.warning("%s", exc)
+            return None
+
+        if getattr(data, "ndim", 0) >= 3 and not self._reduce:
+            self.logger.warning(
+                "Zarr array has ndim=%s after subset; pass reduce='%s' "
+                "(mean over axes 1..) to build a 1D table column, or subset further.",
+                data.ndim,
+                REDUCE_SPATIAL_MEAN,
+            )
+            return None
+        return data
+
+    def _column_name_from_path(self, path: str, used_names):
+        full = path.strip("/") if path not in ("", "(root)") else "value"
+        if not full:
+            full = "value"
+        if full not in used_names:
+            return full
+        short = path.split("/")[-1] or full
+        if short not in used_names:
+            return short
+        dotted = full.replace("/", ".")
+        if dotted not in used_names:
+            return dotted
+        suffix = 2
+        while f"{full}_{suffix}" in used_names:
+            suffix += 1
+        return f"{full}_{suffix}"
+
     def _array_to_frame(self, path: str, arr):
-        data = arr[:]
-        col_name = path.split("/")[-1] if path not in ("", "(root)") else "value"
+        data = self._prepare_array_data(arr)
+        if data is None:
+            return None
+
+        col_name = self._column_name_from_path(path, set())
         if getattr(data, "ndim", 0) == 0:
             df = pd.DataFrame({col_name: [data]})
         elif data.ndim == 1:
             df = pd.DataFrame({col_name: data})
-        else:
+        elif data.ndim == 2:
             try:
                 df = pd.DataFrame(data)
             except Exception:
                 df = pd.DataFrame(data.tolist())
-            df.columns = [str(col) for col in df.columns]
+            df.columns = [f"{col_name}_{i}" for i in range(df.shape[1])]
+        else:
+            self.logger.warning(
+                "Cannot convert ndim=%s Zarr array '%s' to a DataFrame",
+                getattr(data, "ndim", None),
+                path,
+            )
+            return None
         df.columns = [str(col) for col in df.columns]
         return df if not df.empty else None
 
@@ -271,10 +378,14 @@ class zarrReader(StructuredFileReader):
             arr = self._resolve_array(root, path)
             if arr is None:
                 return None
-            data = np.asarray(arr[:])
+            data = self._prepare_array_data(arr)
+            if data is None:
+                return None
+            data = np.asarray(data)
             if data.ndim != 1:
                 self.logger.warning(
-                    "Zarr multi-select requires 1D arrays; '%s' has ndim=%s",
+                    "Zarr multi-select requires 1D arrays after subset/reduce; "
+                    "'%s' has ndim=%s",
                     path,
                     data.ndim,
                 )
@@ -289,8 +400,7 @@ class zarrReader(StructuredFileReader):
                     length,
                 )
                 return None
-            short = path.split("/")[-1] or path
-            name = short if short not in columns else path.replace("/", ".")
+            name = self._column_name_from_path(path, set(columns))
             columns[name] = data
 
         df = pd.DataFrame(columns)

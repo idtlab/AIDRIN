@@ -284,6 +284,13 @@ def summarize_dataset(
     ext = f".{file_type}" if file_type else path.suffix.lower()
     df = read_file((file_path, path.name, ext))
 
+    if df is None or isinstance(df, str):
+        detail = df if isinstance(df, str) else (
+            "Unable to build a table from this file. For multi-array Zarr/HDF5 stores, "
+            "select compatible paths (selected_keys) or reduce multi-dim arrays first."
+        )
+        raise ValueError(detail)
+
     num_cols = df.select_dtypes(include="number").columns.tolist()
     cat_cols = df.select_dtypes(include="object").columns.tolist()
     missing = df.isnull().sum()
