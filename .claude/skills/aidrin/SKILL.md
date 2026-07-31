@@ -18,25 +18,26 @@ accepts named parameters (no positional ordering), suppresses image side-effects
 by default, and returns structured JSON directly. Fall back to the `aidrin` CLI
 only when MCP is absent.
 
-| Action | MCP tool | CLI equivalent |
-|---|---|---|
-| Preflight | `list_metrics()` | `aidrin list` |
-| Summarize dataset | `summarize_dataset(file_path)` | `aidrin summarize <file>` |
-| Quality baseline | `run_data_quality_check(file_path)` | `aidrin data-quality <file> [--detail]` |
-| Single metric | `run_aidrin_metric(file_path, metric, ...)` | `aidrin run <metric> <file> <args...>` |
-| Batch | `run_batch(config_path)` | `aidrin batch <config>` |
-| Create custom metric | `create_custom_metric(name, directory)` | `aidrin add-custom-module <name> --dir <dir>` |
-| Run custom metric | `run_custom_metric(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> metric` |
-| Apply custom remedy | `run_custom_remedy(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> remedy` |
-| Build agentic index | `agentic_build_index(config_path)` | `aidrin agentic build-index -c <config>` |
-| Run agentic pipeline | `agentic_run(config_path, output_path, skip_vector)` | `aidrin agentic run -c <config> -o <output> [--skip-vector]` |
+| Action | MCP tool | CLI equivalent | Remote |
+|---|---|---|---|
+| Preflight | `list_metrics()` | `aidrin list` | `aidrin remote check` |
+| List endpoints | `list_remote_profiles()` | `aidrin remote list` | n/a |
+| Summarize dataset | `summarize_dataset(file_path)` | `aidrin summarize <file>` | add `profile=` / `aidrin remote summarize` |
+| Quality baseline | `run_data_quality_check(file_path)` | `aidrin data-quality <file> [--detail]` | add `profile=` / `aidrin remote data-quality` |
+| Single metric | `run_aidrin_metric(file_path, metric, ...)` | `aidrin run <metric> <file> <args...>` | add `profile=` / `aidrin remote run <metric>` |
+| Batch | `run_batch(config_path)` | `aidrin batch <config>` | add `profile=` / `aidrin remote batch` |
+| Create custom metric | `create_custom_metric(name, directory)` | `aidrin add-custom-module <name> --dir <dir>` | local-only |
+| Run custom metric | `run_custom_metric(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> metric` | local-only |
+| Apply custom remedy | `run_custom_remedy(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> remedy` | local-only |
+| Build agentic index | `agentic_build_index(config_path)` | `aidrin agentic build-index -c <config>` | local-only |
+| Run agentic pipeline | `agentic_run(config_path, output_path, skip_vector)` | `aidrin agentic run -c <config> -o <output> [--skip-vector]` | local-only |
 
 ## Workflow
 
 Copy this checklist and work through it in order:
 
 ```
-- [ ] 1. Preflight: confirm AIDRIN is available; read which metrics exist
+- [ ] 1. Preflight: confirm AIDRIN is available; read which metrics exist; check for remote endpoints
 - [ ] 2. Elicit intent: how will the user use this dataset?
 - [ ] 3. Inspect: read the AIDRIN-parsed schema + descriptive stats
 - [ ] 4. Plan: map intent + columns → metrics + arguments (with rationale)
@@ -58,6 +59,10 @@ data-structure, impact-of-data-on-AI, fairness-and-bias, data-governance).
 The returned list is the source of truth. If a metric the user requests is
 not listed, **do not run it** — instead, offer to implement it as a custom
 metric using `create_custom_metric` (see the Custom metrics section below).
+
+**Remote endpoints:** also call `list_remote_profiles()` (MCP) or run
+`aidrin remote list` (CLI). If any profile is configured, ask once whether this
+dataset is local or on that endpoint, then keep that answer for the session.
 
 ### 2. Elicit intent
 
@@ -297,6 +302,36 @@ aidrin agentic run -c path/to/config.yaml -o path/to/results.json [--skip-vector
 
 Returns combined JSON: `profile` + `queries` (one entry per question: retrieval, execution, complexity, remediation) + `token_usage`.
 
+## Remote datasets (Globus Compute)
+
+When the dataset lives on a remote machine (HPC scratch, a lab server) that runs
+a Globus Compute endpoint, AIDRIN can execute the metrics there and return only
+the results. The data never moves.
+
+**MCP:** pass `profile="<name>"` (or `endpoint="<uuid>"`) to `summarize_dataset`,
+`run_data_quality_check`, `run_aidrin_metric`, or `run_batch`.
+
+**CLI:** prefix the command with `remote`, for example
+`aidrin remote summarize /scratch/proj/data.csv`. The arguments and the JSON are
+identical to a local run, so steps 3 through 8 of the workflow are unchanged.
+
+What differs:
+
+- **Paths are remote.** `file_path` is a path on the endpoint's filesystem. You
+  cannot list it, so ask the user for the full path. A wrong path comes back as
+  a metric error, not as a local file-not-found. For `run_batch`/`aidrin remote
+  batch`, this applies only to the `file_path` *inside* the config — the config
+  file itself is read from wherever it sits (locally for the CLI, on the MCP
+  server's machine for `run_batch`).
+- **Local-only:** custom metrics, remedies, and the agentic pipeline. They need
+  files or credentials on this machine. Say so plainly rather than retrying.
+- **Setup:** if no profile is configured, the user runs
+  `aidrin remote configure --name <name> --endpoint <uuid>` once. Do not run
+  this for them: it needs an endpoint UUID only they have.
+- **Version skew:** the endpoint may run an older AIDRIN. If a metric that
+  `list_metrics()` reports fails remotely with an unknown-metric error, that is
+  the likely cause; report it rather than working around it.
+
 ## Gotchas
 
 **MCP:**
@@ -316,6 +351,10 @@ Returns combined JSON: `profile` + `queries` (one entry per question: retrieval,
 - `statistical_rates` is label-distribution, not model-output fairness.
 - `feature_relevance` needs at least one of categorical/numerical columns plus the target, or it exits 2 (CLI) / errors in JSON (MCP).
 - Confirm column roles with the user before running any governance or fairness metrics. Wrong quasi-identifiers produce falsely reassuring privacy results.
+- Remote runs never write files on the endpoint. Visualizations come back in the
+  result and are written on your machine.
+- A remote result is capped near 10 MB. If a run fails on result size, rerun
+  without image output.
 
 ## Scope
 

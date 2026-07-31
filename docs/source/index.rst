@@ -58,6 +58,7 @@ Three Ways to Use AIDRIN
 
    cli_installation
    cli_usage
+   remote
 
 .. toctree::
    :maxdepth: 2
