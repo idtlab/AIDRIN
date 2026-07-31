@@ -382,7 +382,63 @@ def remote_env_probe():
     import sys
     import aidrin
 
+    try:
+        import aidrin.headless.api  # noqa: F401
+
+        headless_import = True
+    except Exception as exc:
+        headless_import = f"{type(exc).__name__}: {exc}"
+
     return {
         "aidrin_version": aidrin.__version__,
         "python_version": ".".join(map(str, sys.version_info[:3])),
+        "headless_import": headless_import,
     }
+
+
+def remote_headless_runner(command, kwargs):
+    """Execute an ``aidrin.headless.api`` call on the remote endpoint.
+
+    Runs ON the Globus Compute endpoint. ``remote_metric_runner`` speaks the
+    web app's metric vocabulary; this one speaks the headless API's, so the CLI
+    and MCP server need no name translation and there stays exactly one metric
+    registry governing both local and remote runs.
+
+    Parameters
+    ----------
+    command : str
+        One of ``run_metric``, ``summarize``, ``data_quality``, ``batch``.
+    kwargs : dict
+        Keyword arguments forwarded verbatim to the matching API function.
+
+    Returns
+    -------
+    dict
+        The API result, or ``{"Error": ..., "ErrorType": ...}``. Errors are
+        returned rather than raised, matching the convention the local CLI and
+        MCP server already use.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    from aidrin.headless import api
+
+    dispatch = {
+        "run_metric": api.run_metric,
+        "summarize": api.summarize_dataset,
+        "data_quality": api.run_data_quality,
+        "batch": api.run_batch_metrics,
+    }
+
+    fn = dispatch.get(command)
+    if fn is None:
+        return {
+            "Error": f"Unknown remote command: {command}",
+            "ErrorType": "UnknownCommand",
+        }
+
+    try:
+        return fn(**(kwargs or {}))
+    except Exception as exc:
+        return {"Error": str(exc), "ErrorType": type(exc).__name__}

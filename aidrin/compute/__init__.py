@@ -5,6 +5,10 @@ a remote compute endpoint, which has ``aidrin`` installed but not the ``web``
 Flask application.
 """
 
-from aidrin.compute.remote import remote_metric_runner, remote_env_probe
+from aidrin.compute.remote import (
+    remote_env_probe,
+    remote_headless_runner,
+    remote_metric_runner,
+)
 
-__all__ = ["remote_metric_runner", "remote_env_probe"]
+__all__ = ["remote_metric_runner", "remote_env_probe", "remote_headless_runner"]
