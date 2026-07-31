@@ -14,6 +14,7 @@ Globus Compute caps a task result near 10 MB and visualization payloads are
 base64 PNGs.
 """
 
+import sys
 from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, Optional
 
@@ -62,7 +63,13 @@ class RemoteExecutor:
         task_id = client.submit(conn, self.target.endpoint, command, kwargs)
         if self.detach:
             raise AsyncSubmitted(task_id)
-        return client.poll(conn, task_id, timeout=self.timeout)
+        # Progress goes to stderr so stdout stays byte-identical to a local run.
+        sys.stderr.write(f"Submitted task {task_id}; waiting for the result...\n")
+        try:
+            return client.poll(conn, task_id, timeout=self.timeout)
+        except KeyboardInterrupt:
+            client.cancel(conn, task_id)
+            raise
 
     @staticmethod
     def _image_policy(kwargs: Dict[str, Any]) -> tuple:
