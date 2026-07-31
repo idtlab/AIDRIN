@@ -103,7 +103,7 @@ def check(client, task_id: str) -> Dict[str, Any]:
         return {"status": "completed", "result": result}
     except Exception as exc:
         text = str(exc).lower()
-        if "pending" in text or "waiting" in text or "running" in text:
+        if "pending" in text or "waiting" in text:
             return {"status": "processing"}
         return {"status": "failed", "error": str(exc)}
 

@@ -145,6 +145,28 @@ class TestCheckAndPoll(unittest.TestCase):
             compute_client.poll(stub, "task-abc", sleep=lambda _s: None, now=lambda: 0.0)
         self.assertIn("--save-images", str(ctx.exception))
 
+    def test_check_does_not_treat_running_as_pending(self):
+        # A genuine failure whose message happens to contain "running" must not
+        # be misclassified as still-processing (matches web.globus.check_task,
+        # which only matches "pending"/"waiting").
+        stub = _StubClient(results=[("error", "error while running the batch job")])
+        status = compute_client.check(stub, "task-abc")
+        self.assertEqual(status["status"], "failed")
+        self.assertIn("error while running the batch job", status["error"])
+
+    def test_check_still_treats_pending_as_processing(self):
+        # Guard against over-correcting: "pending" must still map to processing.
+        stub = _StubClient(results=[("error", "Task pending on remote endpoint")])
+        status = compute_client.check(stub, "task-abc")
+        self.assertEqual(status["status"], "processing")
+
+    def test_poll_raises_remote_error_for_running_failure_not_timeout(self):
+        stub = _StubClient(results=[("error", "error while running the batch job")])
+        with self.assertRaises(compute_client.RemoteError) as ctx:
+            compute_client.poll(stub, "task-abc", sleep=lambda _s: None, now=lambda: 0.0)
+        self.assertNotIsInstance(ctx.exception, compute_client.RemoteTimeout)
+        self.assertIn("error while running the batch job", str(ctx.exception))
+
 
 class TestProbe(unittest.TestCase):
 
