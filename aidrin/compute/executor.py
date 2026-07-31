@@ -14,9 +14,8 @@ Globus Compute caps a task result near 10 MB and visualization payloads are
 base64 PNGs.
 """
 
-import sys
 from dataclasses import asdict, is_dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from aidrin.compute import client
 from aidrin.compute.profiles import RemoteTarget
@@ -45,11 +44,18 @@ class RemoteExecutor:
         timeout: float = client.DEFAULT_TIMEOUT,
         detach: bool = False,
         compute_client: Any = None,
+        on_submit: Optional[Callable[[str], None]] = None,
     ):
+        """``on_submit`` is called with the task id once a blocking call has
+        been submitted. Reporting it is the caller's decision -- the CLI writes
+        a progress line to stderr, the MCP server may want something else -- so
+        this module stays free of any presentation choice.
+        """
         self.target = target
         self.timeout = timeout
         self.detach = detach
         self._client = compute_client
+        self.on_submit = on_submit
 
     # -- internals ---------------------------------------------------------
 
@@ -63,8 +69,8 @@ class RemoteExecutor:
         task_id = client.submit(conn, self.target.endpoint, command, kwargs)
         if self.detach:
             raise AsyncSubmitted(task_id)
-        # Progress goes to stderr so stdout stays byte-identical to a local run.
-        sys.stderr.write(f"Submitted task {task_id}; waiting for the result...\n")
+        if self.on_submit is not None:
+            self.on_submit(task_id)
         try:
             return client.poll(conn, task_id, timeout=self.timeout)
         except KeyboardInterrupt:

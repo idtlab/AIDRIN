@@ -16,10 +16,12 @@ from aidrin.compute.profiles import RemoteTarget
 class _Recorder:
     """Stands in for aidrin.compute.client."""
 
-    def __init__(self, result=None):
+    def __init__(self, result=None, poll_error=None):
         self.result = result if result is not None else {"ok": True}
+        self.poll_error = poll_error
         self.submitted = []
         self.polled = []
+        self.cancelled = []
 
     def get_client(self):
         return "stub-client"
@@ -30,7 +32,12 @@ class _Recorder:
 
     def poll(self, client, task_id, timeout=600.0, interval=2.0):
         self.polled.append((task_id, timeout))
+        if self.poll_error is not None:
+            raise self.poll_error
         return self.result
+
+    def cancel(self, client, task_id):
+        self.cancelled.append(task_id)
 
 
 def _executor(recorder, **kwargs):
@@ -197,6 +204,35 @@ class TestDetach(unittest.TestCase):
         with patch("aidrin.compute.executor.client", rec):
             _executor(rec, timeout=42).summarize_dataset("/x.csv")
         self.assertEqual(rec.polled[0][1], 42)
+
+
+class TestInterrupt(unittest.TestCase):
+
+    def test_ctrl_c_cancels_the_task_before_re_raising(self):
+        rec = _Recorder(poll_error=KeyboardInterrupt())
+        with patch("aidrin.compute.executor.client", rec):
+            with self.assertRaises(KeyboardInterrupt):
+                _executor(rec).summarize_dataset("/x.csv")
+        self.assertEqual(rec.cancelled, ["task-xyz"])
+
+
+class TestSubmitCallback(unittest.TestCase):
+
+    def test_on_submit_receives_the_task_id(self):
+        rec = _Recorder()
+        seen = []
+        with patch("aidrin.compute.executor.client", rec):
+            _executor(rec, on_submit=seen.append).summarize_dataset("/x.csv")
+        self.assertEqual(seen, ["task-xyz"])
+
+    def test_detached_submission_does_not_fire_on_submit(self):
+        """Detached mode reports the id through AsyncSubmitted, not the hook."""
+        rec = _Recorder()
+        seen = []
+        with patch("aidrin.compute.executor.client", rec):
+            with self.assertRaises(AsyncSubmitted):
+                _executor(rec, detach=True, on_submit=seen.append).summarize_dataset("/x.csv")
+        self.assertEqual(seen, [])
 
 
 class TestDuckTyping(unittest.TestCase):

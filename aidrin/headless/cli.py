@@ -461,6 +461,35 @@ REMOTE_MANAGEMENT = {
 REMOTE_FORBIDDEN = {"add-custom-module", "agentic"}
 
 
+REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
+
+Run an aidrin command on a Globus Compute endpoint. Every command takes exactly
+the same arguments as its local counterpart, because the same parser handles it:
+
+  aidrin remote summarize /scratch/data.csv
+  aidrin remote run completeness /scratch/data.csv
+
+Paths are resolved on the endpoint, not on this machine.
+
+management commands:
+  configure --name NAME --endpoint UUID   probe an endpoint and save it as a profile
+  list                                    show saved profiles as JSON
+  remove NAME                             delete a saved profile
+  check                                   report the endpoint's aidrin and python versions
+  login, status                           confirm Globus authentication
+  logout                                  drop the cached Globus tokens
+  task ID [--wait | --cancel]             inspect, wait on, or cancel a submitted task
+
+flags (before the command):
+  --profile NAME      use a saved profile
+  --endpoint UUID     use this endpoint, ignoring profiles
+  --async             submit and print the task id instead of waiting
+  --timeout SECONDS   how long to wait for a result (default 600)
+
+Per-command help is the local help: aidrin remote summarize --help
+"""
+
+
 def _split_remote_argv(argv: List[str]):
     """Pull remote-only flags out of argv, leaving the local command untouched."""
     pre = argparse.ArgumentParser(add_help=False)
@@ -490,7 +519,10 @@ def _remote_management(argv: List[str], opts) -> None:
         parser.add_argument("--local", action="store_true", help="Write ./.aidrin.json instead of ~/.aidrin/config.json")
         args = parser.parse_args(rest)
         if not args.endpoint:
-            raise ValueError("aidrin remote configure needs --endpoint <uuid>")
+            # Exit 2 like every other usage error in this feature; argparse
+            # would have done the same had it seen the missing flag itself.
+            sys.stderr.write("Error: aidrin remote configure needs --endpoint <uuid>\n")
+            sys.exit(2)
         sys.stderr.write(f"Probing endpoint {args.endpoint}...\n")
         env = compute_client.probe(compute_client.get_client(), args.endpoint)
         path = profiles.save_profile(
@@ -558,7 +590,7 @@ def _remote_management(argv: List[str], opts) -> None:
     raise ValueError(f"Unknown remote subcommand: {action}")
 
 
-def _make_remote_executor(opts):
+def _make_remote_executor(opts, on_submit=None):
     """Resolve the endpoint and build the executor the dispatch will use."""
     from aidrin import __version__ as local_version
     from aidrin.compute import client as compute_client
@@ -583,6 +615,7 @@ def _make_remote_executor(opts):
         target,
         timeout=opts.timeout or compute_client.DEFAULT_TIMEOUT,
         detach=opts.detach,
+        on_submit=on_submit,
     )
 
 
@@ -590,9 +623,15 @@ def main() -> None:
     argv = sys.argv[1:]
     executor = _local_api
     remote_opts = None
+    remote_task_id = None
 
     if argv and argv[0] == "remote":
         remote_opts, argv = _split_remote_argv(argv[1:])
+        if argv and argv[0] in {"-h", "--help"}:
+            # `aidrin remote <command> --help` is deliberately left to the local
+            # parser: identical help is what proves identical arguments.
+            sys.stdout.write(REMOTE_HELP)
+            return
         if not argv:
             sys.stderr.write(
                 "Error: 'aidrin remote' needs a subcommand, e.g. "
@@ -738,8 +777,15 @@ def main() -> None:
                 "module lives on this machine and the endpoint cannot import it.\n"
             )
             sys.exit(2)
+
+        def _note_submission(task_id: str) -> None:
+            """Report the task on stderr and remember it for the Ctrl-C path."""
+            nonlocal remote_task_id
+            remote_task_id = task_id
+            sys.stderr.write(f"Submitted task {task_id}; waiting for the result...\n")
+
         try:
-            executor = _make_remote_executor(remote_opts)
+            executor = _make_remote_executor(remote_opts, on_submit=_note_submission)
         except Exception as exc:
             sys.stderr.write(f"Error: {exc}\n")
             sys.exit(2)
@@ -877,13 +923,21 @@ def main() -> None:
         _dump_result({"task_id": submitted.task_id})
         return
     except KeyboardInterrupt:
-        sys.stderr.write("\nInterrupted; remote task cancelled.\n")
+        # Only claim a cancellation when there was a task to cancel: a local run,
+        # or an interrupt that lands before submission, cancelled nothing.
+        if remote_task_id:
+            sys.stderr.write(f"\nInterrupted; cancelled remote task {remote_task_id}.\n")
+        else:
+            sys.stderr.write("\nInterrupted.\n")
         sys.exit(130)
     except Exception as exc:
         sys.stderr.write(f"Error: {exc}\n")
         sys.exit(1)
     finally:
-        if cleanup_path:
+        # Under `remote`, file_path names a file on the endpoint. This client
+        # never read it and must not delete a sidecar next to it, which a shared
+        # filesystem would happily let it do.
+        if cleanup_path and remote_opts is None:
             clear_frame_cache(cleanup_path)
 
 

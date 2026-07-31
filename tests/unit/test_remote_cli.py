@@ -1,5 +1,6 @@
 """Unit tests for the `aidrin remote` CLI surface."""
 
+import argparse
 import io
 import json
 import os
@@ -7,8 +8,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-
-from aidrin.compute.executor import AsyncSubmitted
 
 
 def _run_cli(*argv: str) -> tuple[str, str, int]:
@@ -76,6 +75,13 @@ class TestManagementCommands(_RemoteCliTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["default"], "nersc")
 
+    def test_help_lists_the_management_surface(self):
+        out, _err, code = _run_cli("remote", "--help")
+        self.assertEqual(code, 0)
+        for expected in ("configure", "list", "remove", "check", "login", "logout",
+                         "status", "task", "--profile", "--endpoint", "--async", "--timeout"):
+            self.assertIn(expected, out)
+
     def test_remove_reports_unknown_profile(self):
         _out, err, code = _run_cli("remote", "remove", "ghost")
         self.assertEqual(code, 1)
@@ -133,6 +139,24 @@ class TestExecution(_RemoteCliTestCase):
         self.assertIn("task-1", err)
         self.assertEqual(json.loads(out), {"shape": {"rows": 3, "columns": 1}})
 
+    def test_interrupt_cancels_the_remote_task_and_exits_130(self):
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.submit", return_value="task-9"), \
+             patch("aidrin.compute.client.poll", side_effect=KeyboardInterrupt), \
+             patch("aidrin.compute.client.cancel") as cancel:
+            _out, err, code = _run_cli("remote", "summarize", "/x.csv")
+        self.assertEqual(code, 130)
+        self.assertEqual(cancel.call_args[0][1], "task-9")
+        self.assertIn("task-9", err)
+
+    def test_interrupt_before_submission_claims_no_cancellation(self):
+        with patch("aidrin.compute.client.get_client", side_effect=KeyboardInterrupt), \
+             patch("aidrin.compute.client.cancel") as cancel:
+            _out, err, code = _run_cli("remote", "summarize", "/x.csv")
+        self.assertEqual(code, 130)
+        cancel.assert_not_called()
+        self.assertNotIn("cancelled", err.lower())
+
     def test_version_skew_warns_on_stderr(self):
         from aidrin.compute import profiles
 
@@ -176,7 +200,66 @@ class TestGuards(_RemoteCliTestCase):
         self.assertIn("subcommand", err)
 
 
+class TestPreParserFlagCollisions(unittest.TestCase):
+    """`_split_remote_argv` eats these four flags before the local parser runs.
+
+    A subcommand that declared one of them would never see it under `remote`,
+    with no error at all -- the bug `remote configure --endpoint` already hit.
+    `remote configure` is the one deliberate case; it reads the value back from
+    the pre-parser and its parser lives outside this tree.
+    """
+
+    RESERVED = {"--profile", "--endpoint", "--timeout", "--async"}
+
+    @staticmethod
+    def _build_parser():
+        """Grab the parser main() builds, without main() having to expose it."""
+        from aidrin.headless.cli import main
+
+        captured = {}
+
+        def _spy(self, args=None, namespace=None):
+            captured["parser"] = self
+            raise SystemExit(0)
+
+        with patch.object(argparse.ArgumentParser, "parse_args", _spy), \
+             patch("sys.argv", ["aidrin", "list"]):
+            try:
+                main()
+            except SystemExit:
+                pass
+        return captured["parser"]
+
+    def _walk(self, parser, prefix="aidrin"):
+        yield prefix, parser
+        for action in parser._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                for name, sub in action.choices.items():
+                    yield from self._walk(sub, f"{prefix} {name}")
+
+    def test_no_subcommand_declares_a_remote_only_flag(self):
+        commands = dict(self._walk(self._build_parser()))
+        # Guard against a vacuous pass if the capture ever stops working.
+        self.assertIn("aidrin summarize", commands)
+        self.assertIn("aidrin run completeness", commands)
+
+        offenders = [
+            f"{name} {option}"
+            for name, sub in commands.items()
+            for action in sub._actions
+            for option in action.option_strings
+            if option in self.RESERVED
+        ]
+        self.assertEqual(offenders, [], f"remote-only flags shadowed: {offenders}")
+
+
 class TestLocalCliUnaffected(unittest.TestCase):
+
+    def test_local_interrupt_claims_no_remote_cancellation(self):
+        with patch("aidrin.headless.api.summarize_dataset", side_effect=KeyboardInterrupt):
+            _out, err, code = _run_cli("summarize", "/x.csv")
+        self.assertEqual(code, 130)
+        self.assertNotIn("remote", err.lower())
 
     def test_local_summarize_still_works(self):
         import numpy as np
