@@ -98,7 +98,7 @@ def _dump_result(result: object) -> None:
 
 
 def _fail_on_remote_error(result: object, remote_opts) -> None:
-    """Exit 1 when a remote dispatch came back as an error result.
+    """Exit 1 when a remote dispatch came back as a raised-on-the-worker error.
 
     ``remote_headless_runner`` returns a worker exception as data
     (``{"Error": ..., "ErrorType": ...}``), so the Globus task itself succeeds
@@ -106,18 +106,25 @@ def _fail_on_remote_error(result: object, remote_opts) -> None:
     print the error dict -- or, for the ``data-quality`` summary, an all-N/A
     report -- and exit 0, while the same failure locally exits 1.
 
+    ``ErrorType`` is what makes a result a failure, not ``Error``. Many metrics
+    return a plain ``{"Error": "No numerical features found in the dataset."}``
+    as an ordinary result for input they cannot score, which the local CLI
+    prints and exits 0 on; the worker passes such a result back untouched.
+    ``ErrorType`` is set only by the runner's ``except`` wrapper, so requiring
+    it separates "the worker raised" from "the metric reported a problem", and
+    remote keeps matching local in both cases.
+
     Only a *top-level* error counts: a batch result is keyed by metric name, so
     an error nested under one metric is that metric failing, which the local
     path also reports in its JSON without failing the run.
     """
     if remote_opts is None or not isinstance(result, dict):
         return
-    if "Error" not in result and "ErrorType" not in result:
+    if "ErrorType" not in result:
         return
     error = result.get("Error", "remote execution failed")
-    error_type = result.get("ErrorType")
     # stdout stays for results only.
-    sys.stderr.write(f"Error: {error_type}: {error}\n" if error_type else f"Error: {error}\n")
+    sys.stderr.write(f"Error: {result['ErrorType']}: {error}\n")
     raise SystemExit(1)
 
 
@@ -619,7 +626,11 @@ def _remote_management(argv: List[str], opts) -> None:
             return
         if args.wait:
             timeout = opts.timeout or compute_client.DEFAULT_TIMEOUT
-            _dump_result(_round_floats(compute_client.poll(conn, args.task_id, timeout=timeout)))
+            result = compute_client.poll(conn, args.task_id, timeout=timeout)
+            # Recovering a result is still a run: a task that failed on the
+            # worker must fail here too, exactly as the dispatch paths do.
+            _fail_on_remote_error(result, opts)
+            _dump_result(_round_floats(result))
             return
         _dump_result(compute_client.check(conn, args.task_id))
         return

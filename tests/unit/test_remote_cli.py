@@ -106,6 +106,23 @@ class TestManagementCommands(_RemoteCliTestCase):
             _run_cli("remote", "--timeout", "30", "check")
             self.assertEqual(probe.call_args.kwargs["timeout"], 30.0)
 
+    def test_task_wait_fails_when_the_recovered_result_is_a_worker_error(self):
+        error = {"Error": "File not found: /nope.csv", "ErrorType": "ValueError"}
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.poll", return_value=error):
+            out, err, code = _run_cli("remote", "task", "task-5", "--wait")
+        self.assertEqual(code, 1)
+        self.assertIn("File not found: /nope.csv", err)
+        self.assertEqual(out, "")
+
+    def test_task_wait_prints_a_metric_error_result_and_exits_0(self):
+        result = {"Error": "No numerical features found in the dataset."}
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.poll", return_value=result):
+            out, _err, code = _run_cli("remote", "task", "task-5", "--wait")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out), result)
+
     def test_logout_without_sdk_support_explains_the_alternative(self):
         class _NoLogout:
             pass
@@ -237,9 +254,16 @@ class TestGuards(_RemoteCliTestCase):
 
 
 class TestRemoteFailuresExitNonZero(_RemoteCliTestCase):
-    """A worker exception comes back as data, so the CLI must fail on it itself."""
+    """A worker exception comes back as data, so the CLI must fail on it itself.
+
+    ``ErrorType`` is the marker: the runner's ``except`` wrapper is the only
+    thing that sets it. A metric that returns a plain ``{"Error": ...}`` for
+    input it cannot score is an ordinary result, not a failure.
+    """
 
     ERROR_RESULT = {"Error": "File not found: /nope.csv", "ErrorType": "ValueError"}
+    # What a metric returns for a file it cannot score; no exception was raised.
+    METRIC_ERROR_RESULT = {"Error": "No numerical features found in the dataset."}
 
     def setUp(self):
         super().setUp()
@@ -296,6 +320,28 @@ class TestRemoteFailuresExitNonZero(_RemoteCliTestCase):
         out, _err, code = self._run_with_result(result, "remote", "batch", str(config))
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["completeness"]["Error"], "boom")
+
+    def test_metric_error_result_without_error_type_matches_the_local_run(self):
+        """`{"Error": ...}` with no ErrorType is a result, and prints like one."""
+        out, _err, code = self._run_with_result(
+            self.METRIC_ERROR_RESULT, "remote", "run", "outliers", "/x.csv"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out), self.METRIC_ERROR_RESULT)
+
+        with patch("aidrin.headless.api.run_metric", return_value=self.METRIC_ERROR_RESULT):
+            local_out, _local_err, local_code = _run_cli("run", "outliers", "/x.csv")
+        self.assertEqual((out, code), (local_out, local_code))
+
+    def test_data_quality_error_result_without_error_type_matches_the_local_run(self):
+        out, _err, code = self._run_with_result(
+            self.METRIC_ERROR_RESULT, "remote", "data-quality", "/x.csv"
+        )
+        self.assertEqual(code, 0)
+
+        with patch("aidrin.headless.api.run_data_quality", return_value=self.METRIC_ERROR_RESULT):
+            local_out, _local_err, local_code = _run_cli("data-quality", "/x.csv")
+        self.assertEqual((out, code), (local_out, local_code))
 
     def test_successful_remote_run_still_exits_0(self):
         out, _err, code = self._run_with_result(
