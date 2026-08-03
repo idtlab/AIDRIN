@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -78,6 +79,21 @@ def test_dedicated_mcp_tool_rejects_multiple_rule_sources():
 
 class TestMcpRemoteRouting(unittest.TestCase):
     """endpoint/profile route through RemoteExecutor; absence stays local."""
+
+    def setUp(self):
+        # Redirect both profile locations into temp dirs, so the tests never
+        # read (or depend on the shape of) a real ~/.aidrin/config.json.
+        self.home = tempfile.mkdtemp()
+        self.project = tempfile.mkdtemp()
+        self._env = patch.dict(os.environ, {"AIDRIN_CONFIG_DIR": self.home}, clear=False)
+        self._env.start()
+        os.environ.pop("AIDRIN_GLOBUS_ENDPOINT", None)
+        self._cwd = patch.object(Path, "cwd", staticmethod(lambda: Path(self.project)))
+        self._cwd.start()
+
+    def tearDown(self):
+        self._cwd.stop()
+        self._env.stop()
 
     def test_summarize_local_by_default(self):
         from aidrin.mcp import server

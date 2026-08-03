@@ -182,6 +182,8 @@ class TestBatchImagePolicy(unittest.TestCase):
         _endpoint, _command, kwargs = rec.submitted[0]
         self.assertFalse(kwargs["config"]["save_images"])
         self.assertFalse(kwargs["strip_visualizations"])
+        # image_dir is a directory on this machine; the endpoint never sees it.
+        self.assertNotIn("image_dir", kwargs["config"])
         self.assertTrue(
             result["completeness"]["Visualization"].startswith(target_dir)
         )

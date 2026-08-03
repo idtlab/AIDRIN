@@ -47,6 +47,14 @@ The one exception is ``aidrin remote batch``: ``config.yaml`` is a path on
 ``file-path`` value written inside that config must be visible on the
 endpoint.
 
+Exit codes match the local commands: a run that fails on the endpoint prints
+the error on stderr and exits 1, leaving stdout empty.
+
+One output shape does differ. When a batch config sets ``save_images: true``,
+a local run writes the image files and then strips the visualization keys from
+the JSON, while a remote run keeps those keys, holding the path of each file
+written on your machine.
+
 Long-running jobs
 -----------------
 
@@ -56,6 +64,28 @@ Long-running jobs
    # prints {"task_id": "..."}
    aidrin remote task <task-id>          # status
    aidrin remote task <task-id> --wait   # block for the result
+   aidrin remote task <task-id> --cancel # cancel it
+
+``--timeout SECONDS`` caps how long a blocking run waits for its result
+(default 600). It also caps the endpoint probe used by ``check`` and applies to
+``task --wait``. On a timeout the task keeps running; recover it later with
+``aidrin remote task <task-id> --wait``.
+
+Managing profiles and credentials
+---------------------------------
+
+.. code-block:: bash
+
+   aidrin remote list                 # saved profiles, as JSON
+   aidrin remote remove nersc         # delete a profile (--local for ./.aidrin.json)
+   aidrin remote check                # the endpoint's aidrin and python versions
+   aidrin remote login                # authenticate, if the cached tokens are gone
+   aidrin remote status               # same check, reported as a status
+   aidrin remote logout               # drop the cached Globus tokens
+
+Authentication is handled entirely by ``globus-compute-sdk``, which caches
+tokens under ``~/.globus_compute/`` and shares them with the
+``globus-compute-endpoint`` CLI. AIDRIN stores no credentials of its own.
 
 Choosing an endpoint
 --------------------

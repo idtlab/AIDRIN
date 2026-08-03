@@ -185,6 +185,10 @@ class RemoteExecutor:
             image_kwargs["strip_visualizations"] = strip_visualizations
         want_images, image_dir = self._image_policy(image_kwargs)
         payload_config["save_images"] = image_kwargs["save_images"]
+        # image_dir names a directory on this machine and the endpoint never
+        # writes files (save_images is forced False above), so sending it would
+        # be inert at best. run_metric drops it the same way.
+        payload_config.pop("image_dir", None)
         result = self._call(
             "batch",
             {
