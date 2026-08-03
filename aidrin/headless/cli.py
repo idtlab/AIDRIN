@@ -28,6 +28,13 @@ def _parse_list(value: Optional[str]) -> Optional[List[str]]:
     return items or None
 
 
+def _parse_path_targets(value: Optional[str], target_match: str) -> Optional[List[str]]:
+    if str(target_match).strip().lower() == "regex":
+        pattern = str(value).strip() if value is not None else ""
+        return [pattern] if pattern else None
+    return _parse_list(value)
+
+
 def _parse_custom_outlier_rule_texts(rule_texts: Optional[List[str]]) -> Optional[List[dict]]:
     if not rule_texts:
         return None
@@ -249,6 +256,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
     ]
     if sum(value is not None and value != "" and value != [] for _, value in sources) > 1:
         raise ValueError("Use exactly one custom-outlier rule source: rules-json, --rule, or --rules-file")
+    target_match = getattr(args, "target_match", "exact")
     return {
         "columns": _parse_list(getattr(args, "columns", None)),
         "target_column": getattr(args, "target_column", None),
@@ -269,7 +277,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "timestamp_column": getattr(args, "timestamp_column", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
-        "path_targets": _parse_list(getattr(args, "path_targets", None)),
+        "path_targets": _parse_path_targets(getattr(args, "path_targets", None), target_match),
         "base_dir": getattr(args, "base_dir", None),
         "max_results": getattr(args, "max_results", 100),
         "rules": parsed_rules,
@@ -278,7 +286,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "max_outliers": getattr(args, "max_outliers", 100),
         "max_export_rows": getattr(args, "max_export_rows", 10000),
         "scan_limit": getattr(args, "scan_limit", None),
-        "target_match": getattr(args, "target_match", "exact"),
+        "target_match": target_match,
         "stop_after_outliers": getattr(args, "stop_after_outliers", False),
         # Default to no image generation/saving for headless usage
         "save_images": getattr(args, "save_images", False),
@@ -311,7 +319,11 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
         if arg == "columns":
             parser.add_argument("columns", help="Comma-separated column list", metavar="columns")
         elif arg == "path-targets":
-            parser.add_argument("path_targets", help="Comma-separated path-bearing targets", metavar="path-targets")
+            parser.add_argument(
+                "path_targets",
+                help="Comma-separated exact targets, or one full-match pattern with --target-match regex",
+                metavar="path-targets",
+            )
         elif arg == "target-column":
             parser.add_argument("target_column", help="Target column name", metavar="target-column")
         elif arg == "quasi-identifiers":

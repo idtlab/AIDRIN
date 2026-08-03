@@ -224,9 +224,6 @@ function updateRegexTargetPreview(element, patternText, targets, targetType) {
     const remainder = result.matches.length - names.length;
     element.textContent = `${result.matches.length} matching target${result.matches.length === 1 ? "" : "s"}: ${names.join(", ")}${remainder ? `, and ${remainder} more` : ""}`;
   }
-  element.dataset.valid = String(
-    Boolean(patternText && !result.error && result.matches.length),
-  );
 }
 
 function initFileReferenceTargetPicker() {
@@ -989,13 +986,6 @@ async function workspaceSubmit(targetUrl) {
         targetMatch === "regex"
           ? "Enter a target pattern."
           : "Select at least one path-bearing target.";
-    } else if (targetMatch === "regex") {
-      const preview = fullMatchTargetNames(
-        selectedTargets[0],
-        fileReferenceTargets,
-      );
-      if (!preview.error && !preview.matches.length)
-        message = "The target pattern does not match any path-bearing targets.";
     }
     if (message) {
       if (typeof showToast === "function") showToast(message, "error");
@@ -2659,22 +2649,6 @@ function validateCustomOutlierRuleSelection(rules) {
   }
   for (const rule of rules) {
     const ruleName = rule.name || rule.id || "Custom outlier rule";
-    if (rule.target_match === "regex") {
-      const preview = fullMatchTargetNames(
-        rule.target,
-        customOutlierTargets,
-        rule.target_type,
-      );
-      if (
-        customOutlierTargets.length &&
-        !preview.error &&
-        !preview.matches.length
-      ) {
-        return showCustomOutlierValidationError(
-          `${ruleName} does not match any available targets.`,
-        );
-      }
-    }
     const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
     if (error) return showCustomOutlierValidationError(error);
   }

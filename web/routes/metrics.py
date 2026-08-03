@@ -490,9 +490,13 @@ def data_structure():
                     t0 = time.time()
                     try:
                         path_targets = []
-                        for value in request.form.getlist("file_reference_targets"):
-                            path_targets.extend(part.strip() for part in value.split(",") if part.strip())
                         target_match = request.form.get("file_reference_target_match", "exact")
+                        for value in request.form.getlist("file_reference_targets"):
+                            if target_match == "regex":
+                                if value.strip():
+                                    path_targets.append(value.strip())
+                            else:
+                                path_targets.extend(part.strip() for part in value.split(",") if part.strip())
                         roots = _file_reference_allowed_roots()
                         if not roots:
                             raise ValueError("File-reference validation is not configured by the server administrator.")

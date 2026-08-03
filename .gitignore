@@ -184,3 +184,6 @@ examples/*_vector_store/
 
 dump.rdb
 celerybeat-schedule.db
+# CocoIndex Code (ccc)
+/.cocoindex_code/
+temp/

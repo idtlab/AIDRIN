@@ -32,9 +32,9 @@ def _non_negative_int(value, default, field):
     return normalized
 
 
-def _normalize_targets(path_targets):
+def _normalize_targets(path_targets, target_match):
     if isinstance(path_targets, str):
-        values = path_targets.split(",")
+        values = path_targets.split(",") if target_match == "exact" else [path_targets]
     elif isinstance(path_targets, (list, tuple, set)):
         values = path_targets
     elif path_targets is None:
@@ -344,8 +344,8 @@ def calculate_file_reference_validation(
     allowed_roots=None,
     target_match="exact",
 ):
-    path_targets = _normalize_targets(path_targets)
     target_match = _normalize_target_match(target_match)
+    path_targets = _normalize_targets(path_targets, target_match)
     max_results = _non_negative_int(max_results, 100, "max_results")
     scan_limit = _non_negative_int(scan_limit, None, "scan_limit")
     base_dir, allowed_roots = _prepare_directories(file_info, base_dir, allowed_roots)

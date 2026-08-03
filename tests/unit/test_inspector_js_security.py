@@ -82,6 +82,14 @@ def test_file_reference_and_custom_outliers_share_searchable_target_picker():
     assert 'data-section="target-regex-preview"' in source
 
 
+def test_python_regex_preview_is_advisory_for_submission():
+    source = INSPECTOR_JS.read_text()
+    assert '"No targets match this pattern."' in source
+    assert "The target pattern does not match any path-bearing targets." not in source
+    assert "does not match any available targets." not in source
+    assert "element.dataset.valid" not in source
+
+
 def test_target_pickers_use_compact_side_by_side_shaded_controls():
     source = INSPECTOR_JS.read_text()
     panel = DATA_STRUCTURE_PANEL.read_text()

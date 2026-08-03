@@ -200,7 +200,7 @@ def test_data_structure_file_reference_validation_accepts_regex_targets(uploaded
         data={
             "file_reference_validation": "yes",
             "file_reference_target_match": "regex",
-            "file_reference_targets": r".*_path",
+            "file_reference_targets": r"primary_[a-z]{1,4}",
             "file_reference_root_id": "root-0",
         },
     )

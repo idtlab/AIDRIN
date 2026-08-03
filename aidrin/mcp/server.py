@@ -119,7 +119,7 @@ def run_aidrin_metric(
     timestamp_column: str | None = None,
     batch_column: str | None = None,
     target_columns: str | None = None,
-    path_targets: str | None = None,
+    path_targets: str | list[str] | None = None,
     base_dir: str | None = None,
     target_match: str = "exact",
 ) -> str:
@@ -160,7 +160,7 @@ def run_aidrin_metric(
         timestamp_column: Datetime column (temporal_completeness).
         batch_column: Batch/partition column (null_count_trend).
         target_columns: Comma-separated columns to count nulls in (null_count_trend, optional).
-        path_targets: Comma-separated path-bearing targets (file-reference-validation).
+        path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
         base_dir: Server-local directory used to resolve relative file references.
         target_match: Interpret path_targets as exact names or full-match regular expressions.
     """
@@ -213,7 +213,7 @@ def run_aidrin_metric(
 @mcp_server.tool()
 def verify_file_references(
     file_path: str,
-    path_targets: str,
+    path_targets: str | list[str],
     file_type: str | None = None,
     base_dir: str | None = None,
     max_results: int = 100,
@@ -226,7 +226,7 @@ def verify_file_references(
 
     Args:
         file_path: Absolute path to the manifest dataset.
-        path_targets: Comma-separated columns or string-valued HDF5 dataset paths.
+        path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
         file_type: Optional file-type override.
         base_dir: Server-local directory used to resolve relative references. Defaults to
                   the manifest's parent directory.

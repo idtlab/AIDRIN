@@ -513,7 +513,7 @@ class TestFileReferenceValidationInterfaces(unittest.TestCase):
             "run",
             "file-reference-validation",
             self.csv,
-            r".*_path",
+            r"file_[a-z]{1,4}",
             "--target-match",
             "regex",
             "--base-dir",
@@ -521,6 +521,20 @@ class TestFileReferenceValidationInterfaces(unittest.TestCase):
         )
         self.assertEqual(code, 0, stderr)
         result = json.loads(stdout)
+        self.assertEqual(list(result["Target summaries"]), ["file_path"])
+
+    def test_string_api_preserves_regex_target_commas(self):
+        from aidrin.headless.api import run_metric
+
+        result = run_metric(
+            "file-reference-validation",
+            self.csv,
+            path_targets=r"file_[a-z]{1,4}",
+            target_match="regex",
+            base_dir=self.base_dir,
+            save_images=False,
+        )
+
         self.assertEqual(list(result["Target summaries"]), ["file_path"])
 
     def test_run_metric_requires_path_targets(self):
@@ -536,14 +550,14 @@ class TestFileReferenceValidationInterfaces(unittest.TestCase):
         config = HeadlessConfig.from_dict({
             "file-path": self.csv,
             "metrics": ["file-reference-validation"],
-            "path-targets": "file_path",
+            "path-targets": r"file_[a-z]{1,4}",
             "base-dir": self.base_dir,
             "max-results": 1,
             "scan-limit": 1,
             "target-match": "regex",
             "save-images": False,
         })
-        self.assertEqual(config.path_targets, ["file_path"])
+        self.assertEqual(config.path_targets, [r"file_[a-z]{1,4}"])
         self.assertEqual(config.target_match, "regex")
         result = run_batch_metrics(config)
         metric_result = result["file_reference_validation"]

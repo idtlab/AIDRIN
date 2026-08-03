@@ -173,14 +173,17 @@ summary and preview rows. Use
 ``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
 or export rows.
 
-File-reference validation requires an exact comma-separated target list. Relative
-references are resolved from ``--base-dir``, or from the manifest's directory when
-that option is omitted. A valid reference must resolve to a regular file on the
-machine running AIDRIN. The result includes complete/partial scan counts, occurrence-
-level invalid reasons, and one metadata record per resolved file with size, owner
-when available, creation time when supported by the operating system, and modification
-time. ``--scan-limit`` is unlimited when omitted or set to ``0``; ``--max-results 0``
-returns unlimited detail records.
+File-reference validation accepts a comma-separated target list for exact matching.
+With ``--target-match regex``, the target argument is one complete regular-expression
+pattern, so commas inside quantifiers such as ``{1,3}`` are preserved. Use a list in
+the Python API or batch configuration when multiple regex patterns are needed.
+Relative references are resolved from ``--base-dir``, or from the manifest's
+directory when that option is omitted. A valid reference must resolve to a regular
+file on the machine running AIDRIN. The result includes complete/partial scan counts,
+occurrence-level invalid reasons, and one metadata record per resolved file with
+size, owner when available, creation time when supported by the operating system,
+and modification time. ``--scan-limit`` is unlimited when omitted or set to ``0``;
+``--max-results 0`` returns unlimited detail records.
 
 Options available on all ``run`` subcommands:
 

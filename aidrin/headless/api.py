@@ -611,8 +611,8 @@ def run_metric(
         return _finalize(result)
 
     if metric_key == "file_reference_validation":
-        path_targets = _normalize_list(kwargs.get("path_targets"))
-        if not path_targets:
+        path_targets = kwargs.get("path_targets")
+        if path_targets is None or path_targets == "" or path_targets == []:
             raise ValueError("path_targets is required for file_reference_validation")
         result = metric["runner"](
             file_path,

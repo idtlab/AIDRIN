@@ -261,13 +261,27 @@ def test_regex_targets_expand_in_discovery_order_and_deduplicate(tmp_path):
 
     result = calculate_file_reference_validation(
         _file_info(manifest),
-        [r".*_path", r"primary_.*"],
+        [r".*_[a-z]{1,4}", r"primary_.*"],
         target_match="regex",
     )
 
     assert list(result["Target summaries"]) == ["primary_path", "backup_path"]
     assert result["Summary"]["valid_references"] == 2
     assert result["Errors"] == []
+
+
+def test_regex_string_preserves_commas_in_quantifiers(tmp_path):
+    target = tmp_path / "target.txt"
+    target.write_text("ok", encoding="utf-8")
+    manifest = tmp_path / "manifest.csv"
+    pd.DataFrame({"file_12_path": [target.name]}).to_csv(manifest, index=False)
+
+    result = calculate_file_reference_validation(
+        _file_info(manifest), r"file_[0-9]{1,3}_path", target_match="regex"
+    )
+
+    assert list(result["Target summaries"]) == ["file_12_path"]
+    assert result["Summary"]["all_references_valid"] is True
 
 
 def test_regex_target_reports_no_path_bearing_matches(tmp_path):

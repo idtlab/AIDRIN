@@ -115,14 +115,14 @@ def test_file_reference_tools_support_regex_targets(tmp_path):
 
     dedicated = json.loads(
         verify_file_references(
-            str(manifest), r".*_path", base_dir=str(tmp_path), target_match="regex"
+            str(manifest), r"primary_[a-z]{1,4}", base_dir=str(tmp_path), target_match="regex"
         )
     )
     generic = json.loads(
         run_aidrin_metric(
             str(manifest),
             "file-reference-validation",
-            path_targets=r".*_path",
+            path_targets=r"primary_[a-z]{1,4}",
             base_dir=str(tmp_path),
             target_match="regex",
         )
@@ -130,3 +130,24 @@ def test_file_reference_tools_support_regex_targets(tmp_path):
 
     assert dedicated == generic
     assert list(dedicated["Target summaries"]) == ["primary_path"]
+
+
+def test_file_reference_mcp_tool_accepts_explicit_regex_pattern_list(tmp_path):
+    referenced_file = tmp_path / "artifact.bin"
+    referenced_file.write_bytes(b"aidrin")
+    manifest = tmp_path / "manifest.csv"
+    pd.DataFrame({
+        "primary_path": [referenced_file.name],
+        "backup_path": [referenced_file.name],
+    }).to_csv(manifest, index=False)
+
+    result = json.loads(
+        verify_file_references(
+            str(manifest),
+            [r"primary_[a-z]{1,4}", r"backup_[a-z]{1,4}"],
+            base_dir=str(tmp_path),
+            target_match="regex",
+        )
+    )
+
+    assert list(result["Target summaries"]) == ["primary_path", "backup_path"]

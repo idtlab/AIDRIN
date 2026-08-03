@@ -14,6 +14,13 @@ def _normalize_list(value: Optional[Any]) -> Optional[List[str]]:
     return [str(value).strip()]
 
 
+def _normalize_path_targets(value: Optional[Any], target_match: str) -> Optional[List[str]]:
+    if isinstance(value, str) and str(target_match).strip().lower() == "regex":
+        pattern = value.strip()
+        return [pattern] if pattern else None
+    return _normalize_list(value)
+
+
 @dataclass
 class HeadlessConfig:
     file_path: str
@@ -100,10 +107,13 @@ class HeadlessConfig:
             "required_columns",
             "duplicate_columns",
             "target_columns",
-            "path_targets",
         ):
             if key in normalized:
                 normalized[key] = _normalize_list(normalized[key])
+        if "path_targets" in normalized:
+            normalized["path_targets"] = _normalize_path_targets(
+                normalized["path_targets"], normalized.get("target_match", "exact")
+            )
         return cls(**normalized)
 
     @classmethod
