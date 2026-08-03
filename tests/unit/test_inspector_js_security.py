@@ -82,6 +82,14 @@ def test_file_reference_and_custom_outliers_share_searchable_target_picker():
     assert 'data-section="target-regex-preview"' in source
 
 
+def test_target_pickers_share_one_document_click_handler():
+    source = INSPECTOR_JS.read_text()
+    assert "function closeTargetPickersOnDocumentClick(event)" in source
+    assert "function ensureTargetPickerDocumentHandler()" in source
+    assert "ensureTargetPickerDocumentHandler();" in source
+    assert source.count('document.addEventListener("click"') == 1
+
+
 def test_python_regex_preview_is_advisory_for_submission():
     source = INSPECTOR_JS.read_text()
     assert '"No targets match this pattern."' in source

@@ -186,6 +186,27 @@ def test_data_structure_file_reference_validation_returns_metadata(uploaded_clie
     assert result["File metadata"][0]["size_bytes"] == 6
 
 
+def test_data_structure_file_reference_validation_preserves_comma_target_names(uploaded_client, app):
+    upload_dir = Path(app.config["UPLOAD_FOLDER"])
+    artifact = upload_dir / "artifact.bin"
+    artifact.write_bytes(b"aidrin")
+    _uploaded_manifest_path(uploaded_client).write_text('"file,path"\nartifact.bin\n', encoding="utf-8")
+    app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [str(upload_dir)]
+
+    response = uploaded_client.post(
+        "/data-structure?return_type=json",
+        data={
+            "file_reference_validation": "yes",
+            "file_reference_targets": "file,path",
+            "file_reference_root_id": "root-0",
+        },
+    )
+    result = response.get_json()["File Reference Validation"]
+
+    assert list(result["Target summaries"]) == ["file,path"]
+    assert result["Summary"]["all_references_valid"] == 1
+
+
 def test_data_structure_file_reference_validation_accepts_regex_targets(uploaded_client, app):
     upload_dir = Path(app.config["UPLOAD_FOLDER"])
     artifact = upload_dir / "artifact.bin"

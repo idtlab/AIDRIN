@@ -13,6 +13,7 @@ let lastMetricResult = null; // Store last result for JSON download
 let customOutlierTargets = [];
 let fileReferenceTargets = [];
 let customOutlierRuleCounter = 0;
+let targetPickerDocumentHandlerRegistered = false;
 
 function isFileReferenceTarget(target) {
   const dtype = String(target?.dtype || "").toLowerCase();
@@ -89,10 +90,25 @@ function filterTargetPicker(picker, query) {
   targetPickerElements(picker).empty?.classList.toggle("hidden", visible !== 0);
 }
 
+function closeTargetPickersOnDocumentClick(event) {
+  document
+    .querySelectorAll('[data-target-picker][data-initialized="true"]')
+    .forEach((picker) => {
+      if (!picker.contains(event.target)) setTargetPickerOpen(picker, false);
+    });
+}
+
+function ensureTargetPickerDocumentHandler() {
+  if (targetPickerDocumentHandlerRegistered) return;
+  document.addEventListener("click", closeTargetPickersOnDocumentClick);
+  targetPickerDocumentHandlerRegistered = true;
+}
+
 function initTargetPicker(picker) {
   const { button, search } = targetPickerElements(picker);
   if (!picker || !button || picker.dataset.initialized === "true") return;
   picker.dataset.initialized = "true";
+  ensureTargetPickerDocumentHandler();
   button.addEventListener("click", () => {
     setTargetPickerOpen(
       picker,
@@ -102,9 +118,6 @@ function initTargetPicker(picker) {
   search?.addEventListener("input", () =>
     filterTargetPicker(picker, search.value),
   );
-  document.addEventListener("click", (event) => {
-    if (!picker.contains(event.target)) setTargetPickerOpen(picker, false);
-  });
   picker.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       setTargetPickerOpen(picker, false);
