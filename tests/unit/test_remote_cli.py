@@ -37,8 +37,14 @@ class _RemoteCliTestCase(unittest.TestCase):
         os.environ.pop("AIDRIN_GLOBUS_ENDPOINT", None)
         self._cwd = patch.object(Path, "cwd", staticmethod(lambda: Path(self.project)))
         self._cwd.start()
+        # globus-compute-sdk is not a test dependency, and the CLI now refuses a
+        # remote run without it. Every test here is about what happens once the
+        # SDK is present; TestGuards covers the absent case explicitly.
+        self._sdk = patch("aidrin.compute.client.is_available", return_value=True)
+        self._sdk.start()
 
     def tearDown(self):
+        self._sdk.stop()
         self._cwd.stop()
         self._env.stop()
 
@@ -86,6 +92,29 @@ class TestManagementCommands(_RemoteCliTestCase):
         _out, err, code = _run_cli("remote", "remove", "ghost")
         self.assertEqual(code, 1)
         self.assertIn("ghost", err)
+
+    def test_check_honours_timeout_and_defaults_to_the_probe_timeout(self):
+        from aidrin.compute import client as compute_client
+        from aidrin.compute import profiles
+
+        profiles.save_profile("nersc", "uuid-1", default=True)
+        probe_result = {"aidrin_version": "0.9.2", "python_version": "3.12.4"}
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.probe", return_value=probe_result) as probe:
+            _run_cli("remote", "check")
+            self.assertEqual(probe.call_args.kwargs["timeout"], compute_client.PROBE_TIMEOUT)
+            _run_cli("remote", "--timeout", "30", "check")
+            self.assertEqual(probe.call_args.kwargs["timeout"], 30.0)
+
+    def test_logout_without_sdk_support_explains_the_alternative(self):
+        class _NoLogout:
+            pass
+
+        with patch("aidrin.compute.client.get_client", return_value=_NoLogout()):
+            _out, err, code = _run_cli("remote", "logout")
+        self.assertEqual(code, 1)
+        self.assertIn("globus-compute-endpoint", err)
+        self.assertIn("~/.globus_compute/", err)
 
 
 class TestExecution(_RemoteCliTestCase):
@@ -198,6 +227,83 @@ class TestGuards(_RemoteCliTestCase):
         _out, err, code = _run_cli("remote")
         self.assertEqual(code, 2)
         self.assertIn("subcommand", err)
+
+    def test_missing_sdk_exits_2_before_announcing_the_run(self):
+        with patch("aidrin.compute.client.is_available", return_value=False):
+            _out, err, code = _run_cli("remote", "summarize", "/x.csv")
+        self.assertEqual(code, 2)
+        self.assertIn("pip install 'aidrin[globus]'", err)
+        self.assertNotIn("Running on Globus Compute endpoint", err)
+
+
+class TestRemoteFailuresExitNonZero(_RemoteCliTestCase):
+    """A worker exception comes back as data, so the CLI must fail on it itself."""
+
+    ERROR_RESULT = {"Error": "File not found: /nope.csv", "ErrorType": "ValueError"}
+
+    def setUp(self):
+        super().setUp()
+        from aidrin.compute import profiles
+
+        profiles.save_profile("nersc", "uuid-1", default=True)
+
+    def _run_with_result(self, result, *argv):
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.submit", return_value="task-1"), \
+             patch("aidrin.compute.client.poll", return_value=result):
+            return _run_cli(*argv)
+
+    def test_metric_error_result_exits_1_with_stderr_message(self):
+        out, err, code = self._run_with_result(
+            self.ERROR_RESULT, "remote", "run", "completeness", "/nope.csv"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("File not found: /nope.csv", err)
+        self.assertNotIn("File not found", out)
+
+    def test_data_quality_error_result_exits_1_instead_of_summarizing(self):
+        out, err, code = self._run_with_result(
+            self.ERROR_RESULT, "remote", "data-quality", "/nope.csv"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("File not found: /nope.csv", err)
+        self.assertNotIn("Data Quality Summary", out)
+
+    def test_summarize_error_result_exits_1(self):
+        _out, err, code = self._run_with_result(
+            self.ERROR_RESULT, "remote", "summarize", "/nope.csv"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("File not found: /nope.csv", err)
+
+    def test_batch_error_result_exits_1(self):
+        config = Path(self.project) / "batch.json"
+        config.write_text('{"file-path": "/nope.csv", "metrics": ["completeness"]}')
+        _out, err, code = self._run_with_result(
+            self.ERROR_RESULT, "remote", "batch", str(config)
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("File not found: /nope.csv", err)
+
+    def test_batch_per_metric_error_still_exits_0(self):
+        """An error under one metric is that metric failing, as it is locally."""
+        config = Path(self.project) / "batch.json"
+        config.write_text('{"file-path": "/data.csv", "metrics": ["completeness"]}')
+        result = {
+            "completeness": {"Error": "boom", "ErrorType": "ValueError"},
+            "duplicity": {"Duplicity scores": {"Overall duplicity of the dataset": 0.0}},
+        }
+        out, _err, code = self._run_with_result(result, "remote", "batch", str(config))
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["completeness"]["Error"], "boom")
+
+    def test_successful_remote_run_still_exits_0(self):
+        out, _err, code = self._run_with_result(
+            {"Overall Completeness": 1.0, "Completeness scores": {"a": 1.0}},
+            "remote", "run", "completeness", "/data.csv",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["Overall Completeness"], 1.0)
 
 
 class TestPreParserFlagCollisions(unittest.TestCase):

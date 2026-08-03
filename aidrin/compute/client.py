@@ -18,6 +18,10 @@ DEFAULT_TIMEOUT = 600.0
 DEFAULT_INTERVAL = 2.0
 PROBE_TIMEOUT = 60.0
 
+GLOBUS_MISSING_MESSAGE = (
+    "Globus support is not installed. Install it with: pip install 'aidrin[globus]'"
+)
+
 _sdk_available = False
 try:  # pragma: no cover - depends on the optional extra being installed
     from globus_compute_sdk import Client as ComputeClient
@@ -63,10 +67,7 @@ def is_available() -> bool:
 def get_client():
     """Build a Globus Compute client, triggering the SDK's own login if needed."""
     if not _sdk_available:
-        raise GlobusUnavailable(
-            "Globus support is not installed. Install it with: "
-            "pip install 'aidrin[globus]'"
-        )
+        raise GlobusUnavailable(GLOBUS_MISSING_MESSAGE)
     return ComputeClient()
 
 

@@ -97,6 +97,30 @@ def _dump_result(result: object) -> None:
     sys.stdout.write("\n")
 
 
+def _fail_on_remote_error(result: object, remote_opts) -> None:
+    """Exit 1 when a remote dispatch came back as an error result.
+
+    ``remote_headless_runner`` returns a worker exception as data
+    (``{"Error": ..., "ErrorType": ...}``), so the Globus task itself succeeds
+    and nothing raises on this side. Without this, a failed remote run would
+    print the error dict -- or, for the ``data-quality`` summary, an all-N/A
+    report -- and exit 0, while the same failure locally exits 1.
+
+    Only a *top-level* error counts: a batch result is keyed by metric name, so
+    an error nested under one metric is that metric failing, which the local
+    path also reports in its JSON without failing the run.
+    """
+    if remote_opts is None or not isinstance(result, dict):
+        return
+    if "Error" not in result and "ErrorType" not in result:
+        return
+    error = result.get("Error", "remote execution failed")
+    error_type = result.get("ErrorType")
+    # stdout stays for results only.
+    sys.stderr.write(f"Error: {error_type}: {error}\n" if error_type else f"Error: {error}\n")
+    raise SystemExit(1)
+
+
 def _summarize_data_quality(result: dict) -> None:
     """Print a compact summary of data quality results."""
     # Completeness
@@ -554,14 +578,27 @@ def _remote_management(argv: List[str], opts) -> None:
 
     if action == "check":
         target = profiles.resolve(endpoint=opts.endpoint, profile=opts.profile)
-        env = compute_client.probe(compute_client.get_client(), target.endpoint)
+        env = compute_client.probe(
+            compute_client.get_client(),
+            target.endpoint,
+            timeout=opts.timeout or compute_client.PROBE_TIMEOUT,
+        )
         _dump_result({"endpoint": target.endpoint, "profile": target.profile, **env})
         return
 
     if action in {"login", "logout", "status"}:
         conn = compute_client.get_client()
         if action == "logout":
-            conn.logout()
+            # Not every globus-compute-sdk release exposes Client.logout(), and
+            # an AttributeError traceback would not tell anyone what to do next.
+            logout = getattr(conn, "logout", None)
+            if not callable(logout):
+                raise ValueError(
+                    "This globus-compute-sdk has no Client.logout(). Log out with "
+                    "'globus-compute-endpoint logout', or delete the cached tokens "
+                    "in ~/.globus_compute/."
+                )
+            logout()
             sys.stderr.write("Logged out of Globus.\n")
             return
         # `get_client()` triggers the SDK's own login flow when needed, so
@@ -596,6 +633,12 @@ def _make_remote_executor(opts, on_submit=None):
     from aidrin.compute import client as compute_client
     from aidrin.compute.executor import RemoteExecutor
     from aidrin.compute import profiles
+
+    # Check before anything is announced: the client is built lazily, so without
+    # this the "Running on ..." line below would be printed and only then
+    # contradicted by the SDK-missing error.
+    if not compute_client.is_available():
+        raise compute_client.GlobusUnavailable(compute_client.GLOBUS_MISSING_MESSAGE)
 
     target = profiles.resolve(endpoint=opts.endpoint, profile=opts.profile)
 
@@ -828,6 +871,7 @@ def main() -> None:
                     file_type=getattr(args, "file_type", None),
                     **_build_run_kwargs(args),
                 )
+                _fail_on_remote_error(result, remote_opts)
                 if getattr(args, "detail", True):
                     _dump_result(_round_floats(result))
                 else:
@@ -871,6 +915,7 @@ def main() -> None:
                 file_type=getattr(args, "file_type", None),
                 **_build_run_kwargs(args),
             )
+            _fail_on_remote_error(result, remote_opts)
             if getattr(args, "detail", True):
                 _dump_result(_round_floats(result))
             else:
@@ -885,6 +930,7 @@ def main() -> None:
                 verbose=args.verbose,
                 strip_visualizations=args.no_viz,
             )
+            _fail_on_remote_error(result, remote_opts)
             _dump_result(_round_floats(result))
             return
 
@@ -894,6 +940,7 @@ def main() -> None:
                 file_type=args.file_type,
                 max_features=args.max_features,
             )
+            _fail_on_remote_error(result, remote_opts)
             if args.human_readable:
                 _print_summary_table(result, args.file_path)
             else:
@@ -907,6 +954,7 @@ def main() -> None:
                 verbose=args.verbose,
                 strip_visualizations=True,
             )
+            _fail_on_remote_error(result, remote_opts)
             if args.detail:
                 _dump_result(_round_floats(result))
             else:
