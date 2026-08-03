@@ -14,6 +14,7 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.utils import safe_join
 from aidrin.file_handling.file_parser import read_file
 from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -154,7 +155,10 @@ def _file_reference_base_dir(roots, root_id, subdirectory):
     relative = (subdirectory or "").strip()
     if os.path.isabs(relative):
         raise ValueError("Base subdirectory must be relative to the selected root.")
-    candidate = os.path.realpath(os.path.join(root, relative))
+    candidate = safe_join(root, relative)
+    if candidate is None:
+        raise ValueError("Base subdirectory must stay inside the selected root.")
+    candidate = os.path.realpath(candidate)
     try:
         inside_root = (
             os.path.commonpath([os.path.normcase(candidate), os.path.normcase(root)])

@@ -259,6 +259,26 @@ def test_file_reference_rejects_base_directory_traversal(uploaded_client, app):
     assert "must stay inside" in response.get_json()["File Reference Validation"]["Error"]
 
 
+def test_file_reference_rejects_symlinked_base_directory(uploaded_client, app, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = Path(app.config["UPLOAD_FOLDER"]) / "linked"
+    link.symlink_to(outside, target_is_directory=True)
+    app.config["FILE_REFERENCE_ALLOWED_ROOTS"] = [app.config["UPLOAD_FOLDER"]]
+
+    response = uploaded_client.post(
+        "/data-structure?return_type=json",
+        data={
+            "file_reference_validation": "yes",
+            "file_reference_targets": "education",
+            "file_reference_root_id": "root-0",
+            "file_reference_base_subdirectory": "linked",
+        },
+    )
+
+    assert "must stay inside" in response.get_json()["File Reference Validation"]["Error"]
+
+
 def test_file_reference_enforces_root_and_web_scan_cap(uploaded_client, app, tmp_path):
     upload_dir = Path(app.config["UPLOAD_FOLDER"])
     allowed = upload_dir / "allowed.bin"
