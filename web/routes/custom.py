@@ -80,7 +80,7 @@ def custom_metrics():
             except Exception as e:
                 metric_time_log.error("Custom metric failed to load: %s", e, exc_info=True)
                 return jsonify(
-                    {"error": f"Error loading your custom metric code: {type(e).__name__}: {e}"}
+                    {"error": "Error loading your custom metric code. Please check your code and try again."}
                 ), 400
 
             from aidrin.custom_metrics.base_dr import BaseDRAgent
