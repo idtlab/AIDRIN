@@ -10,6 +10,14 @@ from unittest.mock import patch
 
 from aidrin.compute import profiles
 
+# Windows has no POSIX permission bits: os.chmod there only toggles the
+# read-only flag, and st_mode reports 0o666 regardless. Access to the config
+# is governed by NTFS ACLs instead, so the 0600 assertions below are
+# meaningful only on POSIX.
+posix_modes_only = unittest.skipUnless(
+    os.name == "posix", "POSIX file mode bits are not available on this platform"
+)
+
 
 class _ProfileTestCase(unittest.TestCase):
     """Redirects both config locations into temp dirs for every test."""
@@ -40,6 +48,7 @@ class TestSaveAndList(_ProfileTestCase):
         self.assertEqual(data["profiles"]["nersc"]["endpoint"], "uuid-1")
         self.assertEqual(data["profiles"]["nersc"]["aidrin_version"], "0.9.2")
 
+    @posix_modes_only
     def test_config_file_is_owner_only(self):
         path = profiles.save_profile("nersc", "uuid-1")
         mode = stat.S_IMODE(path.stat().st_mode)
@@ -152,6 +161,7 @@ class TestResolve(_ProfileTestCase):
 
 class TestWritePermissions(_ProfileTestCase):
 
+    @posix_modes_only
     def test_write_corrects_preexisting_wide_permissions(self):
         # If the config file already exists at a wider mode (e.g. created
         # before this module enforced 0600, or by another tool), saving a

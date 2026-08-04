@@ -68,6 +68,12 @@ def _write(path: Path, data: Dict[str, Any]) -> None:
     content is briefly readable at whatever mode the file already had.
     Instead, write to a sibling temp file created at 0600 and atomically
     rename it into place; the destination inherits the temp file's mode.
+
+    The 0600 is POSIX-only. On Windows ``os.chmod`` merely toggles the
+    read-only flag and access is governed by NTFS ACLs, so the file ends up
+    at the directory's inherited permissions. That is acceptable here: the
+    file holds endpoint UUIDs, not credentials. Globus tokens live in the
+    SDK's own store under ``~/.globus_compute/``.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(data, indent=2) + "\n"
