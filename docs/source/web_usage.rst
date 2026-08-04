@@ -402,6 +402,13 @@ testing you can run an endpoint on the same machine under a different name.
 The endpoint machine needs ``aidrin`` installed, network access to
 authenticate with Globus, and the dataset reachable at the path you enter.
 
+For file-reference validation, the endpoint must expose a **Globus Compute worker**
+with ``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` and
+``AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT`` configured in ``worker_init``. The
+worker reads paths already visible on its filesystem; Globus Connect and Globus
+Transfer are not used. CLI, Python API, and MCP checks remain local to the host
+running those interfaces.
+
 **Running a remote analysis**
 
 1. Select the **Remote (Globus)** tab.
