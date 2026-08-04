@@ -44,6 +44,10 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Row-Level Completeness"] = aidrin.calculate_row_level_completeness(
                 params.get("required_columns", []), file_info
             )
+        if "duplicity_by_features" in selected:
+            result["Duplicates by Selected Features"] = aidrin.calculate_duplicity_by_features(
+                params.get("duplicate_features", []), file_info
+            )
         if "feature_coverage_ratio" in selected:
             result["Feature Coverage Ratio"] = aidrin.calculate_feature_coverage_ratio(
                 params.get("threshold", 0.9), file_info
@@ -101,6 +105,27 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Custom Criteria Outliers"] = r
         return result
 
+    def _data_structure():
+        """Run selected data-structure sub-metrics and bundle results."""
+        result = {}
+        selected = params.get(
+            "selected",
+            ["constant_feature_count", "max_pairwise_correlation", "skewness", "kurtosis"],
+        )
+        if "constant_feature_count" in selected:
+            result["Constant Feature Count"] = (
+                aidrin.calculate_constant_feature_count(file_info)
+            )
+        if "max_pairwise_correlation" in selected:
+            result["Max Pairwise Correlation"] = (
+                aidrin.calculate_max_pairwise_correlation(file_info)
+            )
+        if "skewness" in selected:
+            result["Skewness"] = aidrin.calculate_skewness(file_info)
+        if "kurtosis" in selected:
+            result["Kurtosis"] = aidrin.calculate_kurtosis(file_info)
+        return result
+
     def _custom_outlier_targets():
         """Discover selectable custom-outlier targets on the remote file."""
         from aidrin.file_handling.value_iterators import iter_targets
@@ -114,6 +139,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         import matplotlib.pyplot as plt
         import seaborn as sns
         from aidrin.file_handling.file_parser import read_file as _read_file
+        from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 
         df = _read_file(file_info)
         if isinstance(df, str):
@@ -153,12 +179,16 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         # /summary-statistics panel).
         categorical_summary = {}
         for col in categorical_columns:
-            counts = df[col].value_counts(dropna=True)
-            count = int(df[col].notna().sum())
+            # value_counts() and nunique() both hash, so a column holding
+            # arrays/lists/dicts (parquet/HDF5/JSON) would raise and take the
+            # whole summary down. Normalize such columns first.
+            series = hashable_series(df[col])
+            counts = series.value_counts(dropna=True)
+            count = int(series.notna().sum())
             freq = int(counts.iloc[0]) if not counts.empty else 0
             categorical_summary[str(col)] = {
                 "count": count,
-                "unique": int(df[col].nunique(dropna=True)),
+                "unique": safe_nunique(series, dropna=True),
                 "top": str(counts.index[0]) if not counts.empty else "—",
                 "freq": freq,
                 "freq_pct": round(freq / count * 100, 1) if count else 0.0,
@@ -173,7 +203,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
                 fig, ax = plt.subplots(figsize=(4, 3))
                 fig.patch.set_alpha(0)
                 ax.set_facecolor("none")
-                sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=curve_color)
+                sns.kdeplot(df[column], bw_adjust=0.5, cut=0, ax=ax, color=curve_color)
                 ax.set_xlabel("Values", fontsize=10, color=text_color)
                 ax.set_ylabel("Density", fontsize=10, color=text_color)
                 ax.tick_params(colors=text_color, labelsize=8)
@@ -200,7 +230,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             "categorical_summary": categorical_summary,
             "histograms": histograms,
             "class_imbalance_features": [
-                col for col in all_features if df[col].nunique() <= 30
+                col for col in all_features if safe_nunique(df[col]) <= 30
             ],
         }
 
@@ -243,12 +273,22 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     dispatch = {
         "summary_statistics": _summary_statistics,
         "data_quality": _data_quality,
+        "data_structure": _data_structure,
         "custom_outlier_targets": _custom_outlier_targets,
         "completeness": lambda: aidrin.calculate_completeness(file_info),
         "outliers": lambda: aidrin.calculate_outliers(file_info),
         "duplicates": lambda: aidrin.calculate_duplicates(file_info),
+        "constant_feature_count": lambda: aidrin.calculate_constant_feature_count(file_info),
+        "max_pairwise_correlation": lambda: aidrin.calculate_max_pairwise_correlation(
+            file_info
+        ),
+        "skewness": lambda: aidrin.calculate_skewness(file_info),
+        "kurtosis": lambda: aidrin.calculate_kurtosis(file_info),
         "row_level_completeness": lambda: aidrin.calculate_row_level_completeness(
             params.get("required_columns", []), file_info
+        ),
+        "duplicity_by_features": lambda: aidrin.calculate_duplicity_by_features(
+            params.get("duplicate_features", []), file_info
         ),
         "feature_coverage_ratio": lambda: aidrin.calculate_feature_coverage_ratio(
             params.get("threshold", 0.9), file_info

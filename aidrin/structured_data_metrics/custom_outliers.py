@@ -30,7 +30,7 @@ def calculate_custom_outliers(
     scan_limit = _validate_optional_non_negative_int(scan_limit, "scan_limit")
     max_export_rows = _validate_cap(max_export_rows, 10000, "max_export_rows")
     stop_after_outliers = _coerce_bool(stop_after_outliers)
-    target_map = _target_map(file_info)
+    targets = iter_targets(file_info)
 
     summaries = {}
     previews = {}
@@ -39,45 +39,56 @@ def calculate_custom_outliers(
     errors = []
 
     for rule in validated:
-        key = _internal_rule_key(rule["id"])
-        summaries[key] = _base_summary(rule, max_outliers, scan_limit, stop_after_outliers, max_export_rows)
-        previews[key] = []
-        exports[key] = []
-        hdf5_aggregates[key] = _new_hdf5_aggregate_state()
-
-        target = target_map.get((rule["target_type"], rule["target"]))
-        if target is None:
-            message = f"Target not found: {rule['target']}"
+        matched_targets = _matching_targets(rule, targets)
+        if not matched_targets:
+            key = _unique_execution_key(rule, rule["target"], summaries)
+            summaries[key] = _base_summary(rule, max_outliers, scan_limit, stop_after_outliers, max_export_rows)
+            previews[key] = []
+            exports[key] = []
+            hdf5_aggregates[key] = _new_hdf5_aggregate_state()
+            message = _target_not_found_message(rule)
             summaries[key]["errors"] = [message]
             errors.append({"rule_id": rule["id"], "target": rule["target"], "error": message})
             continue
 
-        try:
-            for block in iter_value_blocks(file_info, target):
-                should_stop = _apply_rule_to_block(
-                    rule,
-                    block,
-                    summaries[key],
-                    previews[key],
-                    exports[key],
-                    hdf5_aggregates[key],
-                    max_outliers,
-                    max_export_rows,
-                    scan_limit,
-                    stop_after_outliers,
-                )
-                if should_stop:
-                    break
-        except Exception as exc:
-            message = str(exc)
-            summaries[key]["errors"] = [message]
-            errors.append({"rule_id": rule["id"], "target": rule["target"], "error": message})
+        for target in matched_targets:
+            execution_rule = dict(rule)
+            execution_rule["target"] = target["name"]
+            key = _unique_execution_key(rule, target["name"], summaries)
+            summaries[key] = _base_summary(execution_rule, max_outliers, scan_limit, stop_after_outliers, max_export_rows)
+            if rule["target_match"] == "regex":
+                summaries[key]["target_match"] = "regex"
+                summaries[key]["target_pattern"] = rule["target"]
+            previews[key] = []
+            exports[key] = []
+            hdf5_aggregates[key] = _new_hdf5_aggregate_state()
 
-        total = summaries[key]["total"]
-        outlier_count = summaries[key]["outlier"]
-        summaries[key]["outlier_rate"] = (outlier_count / total) if total else 0.0
-        summaries[key]["truncated"] = outlier_count > len(previews[key])
-        summaries[key]["export_truncated"] = outlier_count > len(exports[key])
+            try:
+                for block in iter_value_blocks(file_info, target):
+                    should_stop = _apply_rule_to_block(
+                        execution_rule,
+                        block,
+                        summaries[key],
+                        previews[key],
+                        exports[key],
+                        hdf5_aggregates[key],
+                        max_outliers,
+                        max_export_rows,
+                        scan_limit,
+                        stop_after_outliers,
+                    )
+                    if should_stop:
+                        break
+            except Exception as exc:
+                message = str(exc)
+                summaries[key]["errors"] = [message]
+                errors.append({"rule_id": rule["id"], "target": target["name"], "error": message})
+
+            total = summaries[key]["total"]
+            outlier_count = summaries[key]["outlier"]
+            summaries[key]["outlier_rate"] = (outlier_count / total) if total else 0.0
+            summaries[key]["truncated"] = outlier_count > len(previews[key])
+            summaries[key]["export_truncated"] = outlier_count > len(exports[key])
 
     result = {
         "Rule summaries": summaries,
@@ -180,14 +191,27 @@ def _validate_rules(rules):
             raise ValueError(f"Rule {rule_id} must use criteria tree syntax")
         criteria = _validate_rule_criteria(raw_rule.get("criteria"), rule_id)
 
+        target_match = str(raw_rule.get("target_match") or "exact").strip().lower()
+        if target_match not in {"exact", "regex"}:
+            raise ValueError(f"Rule {rule_id} has unsupported target_match: {target_match}")
+        compiled_target_pattern = None
+        if target_match == "regex":
+            try:
+                compiled_target_pattern = re.compile(target)
+            except re.error as exc:
+                raise ValueError(f"Rule {rule_id} has invalid target regex: {exc}")
+
         rule = {
             "id": rule_id,
             "name": str(raw_rule.get("name") or rule_id),
             "target": target,
             "target_type": target_type,
+            "target_match": target_match,
             "criteria": criteria,
             "allow_missing": bool(raw_rule.get("allow_missing", False)),
         }
+        if compiled_target_pattern is not None:
+            rule["_compiled_target_pattern"] = compiled_target_pattern
 
         validated.append(rule)
     return validated
@@ -280,8 +304,35 @@ def _coerce_bound(value, rule_id, field):
     return bound
 
 
-def _target_map(file_info):
-    return {(target["target_type"], target["name"]): target for target in iter_targets(file_info)}
+def _matching_targets(rule, targets):
+    candidates = [target for target in targets if target["target_type"] == rule["target_type"]]
+    if rule["target_match"] == "exact":
+        return [target for target in candidates if target["name"] == rule["target"]]
+    return [target for target in candidates if rule["_compiled_target_pattern"].fullmatch(target["name"])]
+
+
+def _target_not_found_message(rule):
+    if rule["target_match"] == "regex":
+        return (
+            f"No targets matched regex: {rule['target']}. "
+            "Check the pattern and target type against the Target list."
+        )
+    return (
+        f"Target not found: {rule['target']}. "
+        "Select an exact column or HDF5 dataset path from the Target list."
+    )
+
+
+def _unique_execution_key(rule, target_name, summaries):
+    if rule["target_match"] == "exact":
+        return _internal_rule_key(rule["id"])
+    base = _internal_rule_key(f"{rule['id']}__{target_name}")
+    key = base
+    suffix = 2
+    while key in summaries:
+        key = f"{base}_{suffix}"
+        suffix += 1
+    return key
 
 
 def _internal_rule_key(rule_id):
@@ -402,7 +453,12 @@ def _build_missing_checker(block):
     if "missing_mask" in block:
         mask_at = mask_lookup(block["missing_mask"])
         return lambda idx, _value: mask_at(idx)
-    return lambda _idx, value: bool(pd.isna(value))
+    return lambda _idx, value: _is_scalar_missing(value)
+
+
+def _is_scalar_missing(value):
+    missing = pd.isna(value)
+    return bool(missing) if np.isscalar(missing) else False
 
 
 def _invalid_result(rule, value):
@@ -433,10 +489,9 @@ def _criteria_invalid_result(criteria, value):
         return None, None
 
     if criteria["type"] == "range":
-        numeric = pd.to_numeric(value, errors="coerce")
-        if pd.isna(numeric):
+        number = _coerce_numeric_scalar(value)
+        if number is None:
             return "non_numeric", "NaN"
-        number = float(numeric)
         if "min" in criteria:
             if criteria["min_inclusive"]:
                 if number < criteria["min"]:
@@ -455,6 +510,16 @@ def _criteria_invalid_result(criteria, value):
     if criteria["_compiled_pattern"].fullmatch(text):
         return None, None
     return "regex_mismatch", f"!= /{criteria.get('pattern', '')}/"
+
+
+def _coerce_numeric_scalar(value):
+    try:
+        numeric = pd.to_numeric(value, errors="coerce")
+    except (TypeError, ValueError):
+        return None
+    if not np.isscalar(numeric) or pd.isna(numeric):
+        return None
+    return float(numeric)
 
 
 def _canonical_string(value):
@@ -613,7 +678,11 @@ def _json_scalar(value):
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     if isinstance(value, np.generic):
-        return value.item()
-    if pd.isna(value):
+        value = value.item()
+    if isinstance(value, np.ndarray):
+        return [_json_scalar(item) for item in value.tolist()]
+    if isinstance(value, (list, tuple)):
+        return [_json_scalar(item) for item in value]
+    if _is_scalar_missing(value):
         return None
     return value

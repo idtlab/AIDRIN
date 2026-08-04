@@ -3,7 +3,8 @@
 ## Contents
 
 - [Invocation & conventions](#invocation--conventions)
-- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, feature-coverage-ratio, temporal-completeness, null-count-trend
+- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, duplicity-by-features, feature-coverage-ratio, temporal-completeness, null-count-trend
+- [Data structure](#data-structure): constant-feature-count, max-pairwise-correlation, skewness, kurtosis
 - [Impact on AI](#impact-on-ai): correlations, feature-relevance
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
 - [Data governance](#data-governance): k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk, hipaa-compliance
@@ -108,6 +109,27 @@ aidrin run row-level-completeness examples/sample_data/csv/adult.csv --required-
 
 ---
 
+### duplicity-by-features
+
+- **Syntax:** `aidrin run duplicity-by-features <file> --duplicate-columns "<cols>"`
+- **Args:**
+  - `--duplicate-columns` (required) — comma-separated columns to compare when detecting duplicate rows
+- **Output keys:**
+  - `Duplicate count` — integer count of duplicate rows (rows after the first occurrence of each value combination)
+  - `Duplicate percentage` — scalar percentage (0–100) of rows that are duplicates
+  - `Total rows` — integer total row count
+  - `Duplicate groups` — list of `{"Feature values": {...}, "Row count": int}`, the top 10 largest duplicate groups, sorted descending by size
+  - `Description` — string
+- **Direction:** lower duplicate percentage = fewer redundant rows = better.
+
+**Example:**
+
+```bash
+aidrin run duplicity-by-features examples/sample_data/csv/adult.csv --duplicate-columns "age,workclass"
+```
+
+---
+
 ### feature-coverage-ratio
 
 - **Syntax:** `aidrin run feature-coverage-ratio <file> --threshold <0–1>`
@@ -172,6 +194,93 @@ aidrin run temporal-completeness path/to/timeseries.csv --timestamp-column time 
 
 ```bash
 aidrin run null-count-trend path/to/batches.csv --batch-column machine_id --target-columns "temperature,pressure"
+```
+
+---
+
+## Data structure
+
+These four take **no arguments** (like the zero-arg quality baseline).
+`max-pairwise-correlation`, `skewness`, and `kurtosis` operate on the numeric,
+non-constant columns.
+
+### constant-feature-count
+
+- **Syntax:** `aidrin run constant-feature-count <file>`
+- **Args:** none (file only)
+- **Output keys:**
+  - `Constant feature count` — integer count of columns with exactly one distinct value (null counts as a value: an all-null column is constant; a column with one real value plus nulls is not, since that's two distinct values)
+  - `Total features` — integer total column count
+  - `Constant features` — object mapping each constant column name to its single value (`null` for an all-null column)
+- **Direction:** any constant features present = columns carrying no information for modeling and candidates for removal.
+
+**Example:**
+
+```bash
+aidrin run constant-feature-count examples/sample_data/csv/adult.csv
+```
+
+---
+
+### max-pairwise-correlation
+
+- **Syntax:** `aidrin run max-pairwise-correlation <file>`
+- **Args (in order):** none
+- **Output keys:**
+  - `Max Pairwise Correlation` — scalar, strongest absolute Pearson correlation between any two numeric features (0–1)
+  - `Most Correlated Pair` — string `"colA ~ colB"`
+  - `Top Correlated Pairs` — list of `{"pair", "correlation"}` objects, ranked
+  - `Numeric Features Considered` — integer count of numeric non-constant columns used
+  - `Max Pairwise Correlation Visualization` — base64 heatmap (stripped by default)
+  - `Description` — string
+- **Direction:** near 1.0 = redundant/collinear features (consider dropping one); near 0 = independent.
+
+**Example:**
+
+```bash
+aidrin run max-pairwise-correlation examples/sample_data/csv/adult.csv
+```
+
+---
+
+### skewness
+
+- **Syntax:** `aidrin run skewness <file>`
+- **Args (in order):** none
+- **Output keys:**
+  - `Skewness` — object mapping each numeric feature to its skewness
+  - `Most Skewed Feature` — string
+  - `Max Absolute Skewness` — scalar
+  - `Numeric Features Considered` — integer
+  - `Skewness Visualization` — base64 bar chart (stripped by default)
+  - `Description` — string
+- **Direction:** |value| far from 0 = asymmetric/long-tailed distribution; ~0 = symmetric.
+
+**Example:**
+
+```bash
+aidrin run skewness examples/sample_data/csv/adult.csv
+```
+
+---
+
+### kurtosis
+
+- **Syntax:** `aidrin run kurtosis <file>`
+- **Args (in order):** none
+- **Output keys:**
+  - `Kurtosis` — object mapping each numeric feature to its excess kurtosis (Fisher; normal = 0)
+  - `Most Extreme Kurtosis Feature` — string
+  - `Max Absolute Excess Kurtosis` — scalar
+  - `Numeric Features Considered` — integer
+  - `Kurtosis Visualization` — base64 bar chart (stripped by default)
+  - `Description` — string
+- **Direction:** positive = heavier tails / more outliers than normal; negative = lighter tails.
+
+**Example:**
+
+```bash
+aidrin run kurtosis examples/sample_data/csv/adult.csv
 ```
 
 ---

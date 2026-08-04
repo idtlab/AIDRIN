@@ -178,6 +178,26 @@ def test_data_quality_custom_outlier_error_is_metric_scoped(uploaded_client):
     assert "Error" in data["Custom Criteria Outliers"]
 
 
+def test_data_quality_custom_outlier_missing_target_is_actionable(uploaded_client):
+    rules = [{
+        "id": "missing-target",
+        "target": "missing_column",
+        "target_type": "column",
+        "criteria": {"type": "range", "min": 0, "max": 1},
+    }]
+    response = uploaded_client.post(
+        "/data-quality?return_type=json",
+        data={
+            "custom_outliers": "yes",
+            "custom_outlier_rules": json.dumps(rules),
+        },
+        follow_redirects=True,
+    )
+    error = response.get_json()["Custom Criteria Outliers"]["Errors"][0]["error"]
+    assert "Target not found: missing_column" in error
+    assert "Select an exact column or HDF5 dataset path from the Target list." in error
+
+
 # -------------------------------------------------
 # Fairness metric
 # -------------------------------------------------

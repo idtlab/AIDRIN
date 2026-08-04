@@ -67,8 +67,9 @@ def list_metrics(category: str | None = None) -> str:
     List all available AIDRIN metrics grouped by category.
 
     Args:
-        category: Optional filter. One of: data-quality, impact-of-data-on-AI,
-                  fairness-and-bias, data-governance, custom_metrics. Omit for all.
+        category: Optional filter. One of: data-quality, data-structure,
+                  impact-of-data-on-AI, fairness-and-bias, data-governance,
+                  custom_metrics. Omit for all.
     """
     return _dumps(list_available_metrics(category=category))
 
@@ -93,6 +94,7 @@ def run_aidrin_metric(
     metric: str,
     file_type: str | None = None,
     rules_json: str | None = None,
+    rules_file: str | None = None,
     max_outliers: int = 100,
     max_export_rows: int = 10000,
     scan_limit: int | None = None,
@@ -110,6 +112,7 @@ def run_aidrin_metric(
     epsilon: float | None = None,
     distance_metric: str | None = None,
     required_columns: str | None = None,
+    duplicate_columns: str | None = None,
     threshold: float | None = None,
     frequency: str | None = None,
     timestamp_column: str | None = None,
@@ -126,6 +129,7 @@ def run_aidrin_metric(
         metric: Metric name, e.g. completeness, outliers-custom, k_anonymity, class_imbalance.
         file_type: File-type override.
         rules_json: JSON array of valid-value rules when metric is outliers-custom.
+        rules_file: Server-local path to a JSON array of valid-value rules when metric is outliers-custom.
         max_outliers: Preview cap per custom outlier rule; 0 means unlimited.
         max_export_rows: Export row cap per custom outlier rule; 0 means unlimited.
         scan_limit: Optional maximum values to scan per custom outlier rule.
@@ -143,6 +147,7 @@ def run_aidrin_metric(
         epsilon: Epsilon value for differential_privacy.
         distance_metric: Distance metric override (class_imbalance).
         required_columns: Comma-separated required columns (row_level_completeness).
+        duplicate_columns: Comma-separated columns to compare for duplicates (duplicity_by_features).
         threshold: Coverage threshold in [0, 1] (feature_coverage_ratio, default 0.9).
         frequency: Interval frequency for temporal_completeness (default "D").
             One of: min (minute), h (hourly), D (daily), W (weekly),
@@ -156,6 +161,7 @@ def run_aidrin_metric(
         for k, v in [
             ("columns", columns),
             ("rules_json", rules_json),
+            ("rules_file", rules_file),
             ("max_outliers", max_outliers),
             ("max_export_rows", max_export_rows),
             ("scan_limit", scan_limit),
@@ -172,6 +178,7 @@ def run_aidrin_metric(
             ("epsilon", epsilon),
             ("distance_metric", distance_metric),
             ("required_columns", required_columns),
+            ("duplicate_columns", duplicate_columns),
             ("threshold", threshold),
             ("frequency", frequency),
             ("timestamp_column", timestamp_column),
@@ -194,7 +201,8 @@ def run_aidrin_metric(
 @mcp_server.tool()
 def run_custom_outlier_check(
     file_path: str,
-    rules_json: str,
+    rules_json: str | None = None,
+    rules_file: str | None = None,
     file_type: str | None = None,
     max_outliers: int = 100,
     max_export_rows: int = 10000,
@@ -204,14 +212,17 @@ def run_custom_outlier_check(
     """
     Run Custom Criteria Outliers against selected dataset targets.
     Rules are a JSON array using the same criteria-tree syntax as the web UI:
-    each rule has id, target, target_type, criteria, and optional name/allow_missing.
+    each rule has id, target, target_type, criteria, and optional name,
+    allow_missing, and target_match. Set target_match to regex to apply a rule
+    to every target whose complete name matches target.
     Criteria define expected valid values and support numeric ranges, regex
     patterns, and nested and/or/not operators. Values that do not satisfy the
     rule are flagged as outliers.
 
     Args:
         file_path: Absolute path to the dataset.
-        rules_json: JSON array of valid-value rules.
+        rules_json: JSON array of valid-value rules. Provide this or rules_file.
+        rules_file: Server-local path to a JSON array of valid-value rules.
         file_type: Optional file-type override.
         max_outliers: Preview cap per rule; 0 means unlimited.
         max_export_rows: Export row cap per rule; 0 means unlimited.
@@ -223,6 +234,7 @@ def run_custom_outlier_check(
         file_path,
         file_type=file_type,
         rules_json=rules_json,
+        rules_file=rules_file,
         max_outliers=max_outliers,
         max_export_rows=max_export_rows,
         scan_limit=scan_limit,

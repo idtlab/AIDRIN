@@ -108,10 +108,11 @@
               class="flex items-center w-full p-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
               style="color: var(--textColor);">
         <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z"/></svg>
-        <span class="flex-1 text-left">Data Structure</span>
+        <span class="flex-1 text-left">Data Structure and Organization</span>
         <svg class="w-4 h-4 transition-transform text-gray-400" id="pillar-structure-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
       </button>
       <ul id="pillar-structure" class="hidden pl-9 space-y-1 pt-1">
+        <li><button onclick="showPanel('data-structure')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Data Structure</button></li>
         {% if file_type == '.csv' %}
         <li><button onclick="showPanel('custom-metrics')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Custom Metrics</button></li>
         {% else %}

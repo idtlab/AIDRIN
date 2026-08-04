@@ -22,6 +22,7 @@ from aidrin.file_handling.file_parser import (
     READER_MAP,
     SUPPORTED_FILE_TYPES,
 )
+from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
     clear_all_user_cache,
@@ -520,13 +521,20 @@ def summary_statistics():
 
         categorical_summary = {}
         for col in categorical_columns:
-            counts = df[col].value_counts(dropna=True)
-            count = int(df[col].notna().sum())
+            # value_counts() and nunique() both hash, so a column holding
+            # arrays/lists/dicts (parquet/HDF5/JSON) would raise and take the
+            # whole summary down. Normalize such columns first.
+            series = hashable_series(df[col])
+            counts = series.value_counts(dropna=True)
+            count = int(series.notna().sum())
             freq = int(counts.iloc[0]) if not counts.empty else 0
+            top = str(counts.index[0]) if not counts.empty else "—"
+            if len(top) > 80:
+                top = top[:77] + "..."
             categorical_summary[str(col)] = {
                 "count": count,
-                "unique": int(df[col].nunique(dropna=True)),
-                "top": str(counts.index[0]) if not counts.empty else "—",
+                "unique": safe_nunique(series, dropna=True),
+                "top": top,
                 "freq": freq,
                 "freq_pct": round(freq / count * 100, 1) if count else 0.0,
             }
@@ -582,7 +590,7 @@ def extract_features():
         all_features = numerical_columns + categorical_columns
 
         class_imbalance_features = [
-            col for col in all_features if df[col].nunique() <= 30
+            col for col in all_features if safe_nunique(df[col]) <= 30
         ]
 
         response_data = {

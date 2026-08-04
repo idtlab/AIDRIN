@@ -28,9 +28,16 @@ from aidrin.structured_data_metrics.conditional_demo_disp import (
 from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
 from aidrin.structured_data_metrics.null_count_trend import null_count_trend
 from aidrin.structured_data_metrics.row_level_completeness import row_level_completeness
+from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
+from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
+from aidrin.structured_data_metrics.kurtosis import kurtosis
+from aidrin.structured_data_metrics.max_pairwise_correlation import (
+    max_pairwise_correlation,
+)
+from aidrin.structured_data_metrics.skewness import skewness
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
     categorize_metadata,
@@ -106,7 +113,8 @@ def data_quality():
             m for m in (
                 "completeness", "row level completeness", "feature coverage ratio",
                 "temporal completeness", "null count trend",
-                "outliers", "duplicity", "custom_outliers",
+                "outliers", "duplicity", "duplicate detection by features",
+                "custom_outliers",
             ) if request.form.get(m) == "yes"
         ]
         metric_time_log.info("Data Quality request started: %s", selected)
@@ -235,6 +243,26 @@ def data_quality():
                     final_dict["Duplicity"] = dup_dict
                     metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
 
+                if "duplicate detection by features" in selected:
+                    dup_features = [
+                        c.strip()
+                        for c in request.form.getlist("features for duplicate detection")
+                        if c.strip()
+                    ]
+                    if not dup_features:
+                        final_dict["Duplicates by Selected Features"] = {
+                            "Error": "No features selected for duplicate detection."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.duplicity_by_features"):
+                            final_dict["Duplicates by Selected Features"] = duplicity_by_features(
+                                dup_features, file_info
+                            )
+                        metric_time_log.info(
+                            "Duplicates by Selected Features took %.2f seconds", time.time() - t0
+                        )
+
                 if "custom_outliers" in selected:
                     t0 = time.time()
                     try:
@@ -290,6 +318,82 @@ def data_quality():
             return store_result("metrics.data_quality", final_dict)
 
     return get_result_or_default("metrics.data_quality", file_path, file_name)
+
+
+# ---------------------------------------------------------------------------
+# Data Structure
+# ---------------------------------------------------------------------------
+
+@metrics_bp.route("/data-structure", methods=["GET", "POST"])
+def data_structure():
+    final_dict = {}
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = build_file_info(file_path, file_name, file_type)
+
+    if request.method == "POST":
+        start_time = time.time()
+        selected = [
+            m for m in (
+                "constant feature count", "max pairwise correlation", "skewness", "kurtosis",
+            ) if request.form.get(m) == "yes"
+        ]
+        metric_time_log.info("Data Structure request started: %s", selected)
+
+        tracer = get_tracer()
+        with tracer.start_as_current_span("metric.data_structure") as span:
+            span.set_attribute("metric.pillar", "data_structure")
+            span.set_attribute("metric.selected", ",".join(selected))
+            span.set_attribute("file.name", file_name or "")
+            span.set_attribute("file.type", file_type or "")
+
+            try:
+                if "constant feature count" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.constant_feature_count"):
+                        cfc_dict = constant_feature_count(file_info)
+                    cfc_dict["Description"] = (
+                        "Columns with a single distinct value carry no information "
+                        "for modeling and are candidates for removal."
+                    )
+                    final_dict["Constant Feature Count"] = cfc_dict
+                    metric_time_log.info(
+                        "Constant Feature Count took %.2f seconds", time.time() - t0
+                    )
+
+                if "max pairwise correlation" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.max_pairwise_correlation"):
+                        final_dict["Max Pairwise Correlation"] = max_pairwise_correlation(
+                            file_info
+                        )
+                    metric_time_log.info(
+                        "Max Pairwise Correlation took %.2f seconds", time.time() - t0
+                    )
+
+                if "skewness" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.skewness"):
+                        final_dict["Skewness"] = skewness(file_info)
+                    metric_time_log.info("Skewness took %.2f seconds", time.time() - t0)
+
+                if "kurtosis" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.kurtosis"):
+                        final_dict["Kurtosis"] = kurtosis(file_info)
+                    metric_time_log.info("Kurtosis took %.2f seconds", time.time() - t0)
+
+            except Exception as e:
+                metric_time_log.error("Data Structure error: %s", e, exc_info=True)
+                return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
+
+            duration_ms = (time.time() - start_time) * 1000
+            span.set_attribute("metric.duration_ms", duration_ms)
+            metric_time_log.info("Data Structure completed in %.2f seconds", time.time() - start_time)
+            return store_result("metrics.data_structure", final_dict)
+
+    return get_result_or_default("metrics.data_structure", file_path, file_name)
 
 
 # ---------------------------------------------------------------------------

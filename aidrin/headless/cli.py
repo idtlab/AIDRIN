@@ -241,8 +241,14 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
     rule_texts = getattr(args, "rule_texts", None)
     parsed_rules = _parse_custom_outlier_rule_texts(rule_texts)
     rules_json = getattr(args, "rules_json", None)
-    if parsed_rules is not None and rules_json:
-        raise ValueError("Use either rules-json or --rule, not both")
+    rules_file = getattr(args, "rules_file", None)
+    sources = [
+        ("rules-json", rules_json),
+        ("--rule", parsed_rules),
+        ("--rules-file", rules_file),
+    ]
+    if sum(value is not None and value != "" and value != [] for _, value in sources) > 1:
+        raise ValueError("Use exactly one custom-outlier rule source: rules-json, --rule, or --rules-file")
     return {
         "columns": _parse_list(getattr(args, "columns", None)),
         "target_column": getattr(args, "target_column", None),
@@ -257,6 +263,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "y_true_column": getattr(args, "y_true_column", None),
         "sensitive_attribute_column": getattr(args, "sensitive_attribute_column", None),
         "required_columns": _parse_list(getattr(args, "required_columns", None)),
+        "duplicate_columns": _parse_list(getattr(args, "duplicate_columns", None)),
         "threshold": getattr(args, "threshold", None),
         "frequency": getattr(args, "frequency", None),
         "timestamp_column": getattr(args, "timestamp_column", None),
@@ -264,6 +271,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
         "rules": parsed_rules,
         "rules_json": rules_json,
+        "rules_file": rules_file,
         "max_outliers": getattr(args, "max_outliers", 100),
         "max_export_rows": getattr(args, "max_export_rows", 10000),
         "scan_limit": getattr(args, "scan_limit", None),
@@ -342,6 +350,9 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
         elif arg == "required-columns":
             parser.add_argument("--required-columns", dest="required_columns", default=None,
                                 help="Comma-separated required columns (rows missing any are incomplete)")
+        elif arg == "duplicate-columns":
+            parser.add_argument("--duplicate-columns", dest="duplicate_columns", default=None,
+                                help="Comma-separated columns to compare when detecting duplicate rows")
         elif arg == "threshold":
             parser.add_argument("--threshold", dest="threshold", type=float, default=None,
                                 help="Coverage threshold in [0, 1] (default 0.9)")
@@ -486,6 +497,7 @@ def main() -> None:
                     "Rules describe valid values; use rules-json for OR/NOT/nested rules."
                 ),
             )
+            mparser.add_argument("--rules-file", help="Path to a JSON array of custom outlier rules")
             mparser.add_argument("--max-outliers", type=int, default=100, help="Preview cap per rule; 0 means unlimited")
             mparser.add_argument("--max-export-rows", type=int, default=10000, help="Export row cap per rule; 0 means unlimited")
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum values to scan per rule")

@@ -48,3 +48,40 @@ All notable changes to AIDRIN are documented here. This project loosely follows
     (`s`/`ms`/… no longer hang on long spans).
   - `null_count_trend` — null counts grouped by a batch column, to spot quality
     regressions (params: `batch_column`, optional `target_columns`).
+  - `duplicity_by_features` — duplicate rows computed using only selected
+    feature columns, with counts, percentage, and the largest duplicate groups
+    (param: `duplicate_columns`).
+
+- **New "Data Structure" pillar** (CLI, Python library, batch, MCP, Globus, and
+  web UI), under a new `data-structure` category with a matching web panel:
+  - `constant_feature_count` — count of columns with a single distinct
+    value, along with each constant column's value (no params). Null is
+    treated as a value like any other, so an all-null column counts as
+    constant.
+  - `max_pairwise_correlation` — strongest absolute pairwise (Pearson)
+    correlation between features, flagging redundant/collinear columns; returns
+    the max, the most-correlated pair, the top pairs, and a heatmap.
+  - `skewness` — per-feature skewness (distribution asymmetry) with a bar chart.
+  - `kurtosis` — per-feature excess kurtosis (Fisher's definition; tail
+    heaviness) with a bar chart.
+
+  All four are available in the web UI under the "Data Structure" sidebar tab.
+  `max_pairwise_correlation`, `skewness`, and `kurtosis` operate on the
+  numeric, non-constant columns.
+
+### Fixed
+
+- **Datasets with array-valued columns no longer break the summary or
+  duplicity.** Object columns holding arrays/lists/dicts — routine in parquet,
+  HDF5 and JSON (e.g. a per-node measurement array) — are unhashable, and
+  `nunique()` / `value_counts()` / `duplicated()` all hash. This raised
+  `TypeError: unhashable type: 'numpy.ndarray'`, which surfaced as a failed web
+  summary ("An internal error occurred") and made the `duplicity` metric — and
+  therefore the whole `aidrin data-quality` bundle — unusable on such files.
+
+  Normalization now lives in a shared helper,
+  `aidrin/file_handling/hashable_utils.py` (`make_hashable`, `hashable_series`,
+  `hashable_frame`, `safe_nunique`), used by both the duplicity metric and the
+  web summary route. Values are converted to nested tuples, which preserves
+  equality so distinct-counting and duplicate detection stay correct.
+  `duplicity._make_hashable` remains as an alias for backwards compatibility.

@@ -323,7 +323,7 @@ def summary_histograms(df):
         fig.patch.set_alpha(0)
         ax.set_facecolor("none")
 
-        sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=curve_color)
+        sns.kdeplot(df[column], bw_adjust=0.5, cut=0, ax=ax, color=curve_color)
 
         ax.set_xlabel("Values", fontsize=10, color=text_color)
         ax.set_ylabel("Density", fontsize=10, color=text_color)
