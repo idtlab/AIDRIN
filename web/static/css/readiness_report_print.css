@@ -2,7 +2,40 @@
 
 @page {
   size: A4;
-  margin: 14mm 12mm 16mm 12mm;
+  margin: 14mm 12mm 22mm 12mm;
+  @bottom-right {
+    content: element(pdf-footer);
+    vertical-align: middle;
+  }
+}
+
+@page :first {
+  margin-bottom: 16mm;
+  @bottom-right {
+    content: none;
+  }
+}
+
+.pdf-running-footer {
+  position: running(pdf-footer);
+  width: 100%;
+  text-align: right;
+}
+
+.pdf-footer-logo-img {
+  height: 8mm;
+  width: auto;
+}
+
+.pdf-first-page-header {
+  text-align: center;
+  margin: 0 0 10pt 0;
+  page-break-after: avoid;
+}
+
+.pdf-header-logo-img {
+  height: 28mm;
+  width: auto;
 }
 
 body {

@@ -6,6 +6,14 @@
 </head>
 <body>
 
+  <div class="pdf-running-footer" aria-hidden="true">
+    <img src="{{ logo_url }}" alt="AIDRIN" class="pdf-footer-logo-img" />
+  </div>
+
+  <header class="pdf-first-page-header">
+    <img src="{{ logo_url }}" alt="AIDRIN" class="pdf-header-logo-img" />
+  </header>
+
   <div class="intro">
     <h1>{% if include_details %}AI Data Readiness Report (Full){% else %}AI Data Readiness Report{% endif %}</h1>
     <p><strong>Dataset:</strong> {{ file_name }}</p>

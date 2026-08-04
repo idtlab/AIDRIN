@@ -762,6 +762,16 @@ def pdf_filename(file_name: str, *, full: bool = False) -> str:
     return f"{prefix}-{stem}-{date}.pdf"
 
 
+def readiness_pdf_logo_uri(app) -> str:
+    """Return a file URI for the AIDRIN logo used in readiness report PDFs."""
+    images_dir = Path(app.root_path).resolve().parent / "aidrin" / "images"
+    for name in ("logoNoBackground.png", "logo.png"):
+        logo_path = images_dir / name
+        if logo_path.is_file():
+            return logo_path.as_uri()
+    raise RuntimeError(f"AIDRIN logo not found under {images_dir}")
+
+
 def render_readiness_report_pdf(app, context: dict[str, Any]) -> bytes:
     """Render PDF bytes from a prepared context dict."""
     try:
@@ -772,7 +782,11 @@ def render_readiness_report_pdf(app, context: dict[str, Any]) -> bytes:
         ) from exc
 
     footnotes = FootnoteRegistry()
-    render_context = {**context, "footnotes": footnotes}
+    render_context = {
+        **context,
+        "footnotes": footnotes,
+        "logo_url": readiness_pdf_logo_uri(app),
+    }
     html = render_template("readiness_report/pdf.html", **render_context)
     static_root = Path(app.root_path) / "static"
     css_path = static_root / "css" / "readiness_report_print.css"

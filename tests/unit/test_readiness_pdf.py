@@ -1,6 +1,7 @@
 """Unit tests for readiness report PDF context and rendering."""
 
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from web.readiness.pdf import (
@@ -14,6 +15,7 @@ from web.readiness.pdf import (
     build_pdf_context,
     fmt_pct,
     pdf_filename,
+    readiness_pdf_logo_uri,
     render_readiness_report_pdf,
 )
 
@@ -198,11 +200,23 @@ class TestReadinessPdfContext(unittest.TestCase):
         self.assertTrue(full_name.startswith("readiness-report-full-my_data__1_"))
 
 
+class TestReadinessPdfLogo(unittest.TestCase):
+    def test_readiness_pdf_logo_uri_resolves_aidrin_image(self):
+        import web.readiness.pdf as pdf_module
+
+        app = MagicMock()
+        app.root_path = str(Path(pdf_module.__file__).resolve().parent.parent)
+        uri = readiness_pdf_logo_uri(app)
+        self.assertTrue(uri.startswith("file:"))
+        self.assertTrue(uri.endswith("logoNoBackground.png"))
+
+
 class TestReadinessPdfRender(unittest.TestCase):
     @patch("weasyprint.HTML")
     @patch("weasyprint.CSS")
     @patch("web.readiness.pdf.render_template", return_value="<html></html>")
-    def test_render_readiness_report_pdf(self, _mock_template, _mock_css, mock_html):
+    @patch("web.readiness.pdf.readiness_pdf_logo_uri", return_value="file:///tmp/logo.png")
+    def test_render_readiness_report_pdf(self, _mock_logo, _mock_template, _mock_css, mock_html):
         mock_instance = MagicMock()
         mock_instance.write_pdf.return_value = b"%PDF-1.4"
         mock_html.return_value = mock_instance
@@ -211,6 +225,8 @@ class TestReadinessPdfRender(unittest.TestCase):
         result = render_readiness_report_pdf(app, {"file_name": "data.csv"})
         self.assertEqual(result, b"%PDF-1.4")
         mock_instance.write_pdf.assert_called_once()
+        _mock_template.assert_called_once()
+        self.assertEqual(_mock_template.call_args.kwargs["logo_url"], "file:///tmp/logo.png")
 
 
 if __name__ == "__main__":
