@@ -341,7 +341,7 @@ What differs:
 **CLI:**
 - `aidrin run` returns exit 0 even when a metric fails; detect failures via `Error`/`ErrorType` in the JSON output.
 - Per-metric args are **positional**, in the order shown by `aidrin run <metric> -h`. NOT `--flags`. Quote comma-separated column lists: `"zip,age"`.
-- `aidrin run` writes visualization PNGs to `/tmp/aidrin_images` by default. Suppress via `aidrin batch` with `"save-images": false`.
+- `aidrin run` does not write images. `aidrin batch` does: it writes visualization PNGs to `/tmp/aidrin_images` unless the config sets `"save-images": false`, or `"image-dir"` to send them elsewhere.
 - If `aidrin` is not on PATH, see [reference/installation.md](reference/installation.md).
 - `--detail` is already the default for `run`/`batch`; no need to add it.
 
@@ -351,10 +351,13 @@ What differs:
 - `statistical_rates` is label-distribution, not model-output fairness.
 - `feature_relevance` needs at least one of categorical/numerical columns plus the target, or it exits 2 (CLI) / errors in JSON (MCP).
 - Confirm column roles with the user before running any governance or fairness metrics. Wrong quasi-identifiers produce falsely reassuring privacy results.
-- Remote runs never write files on the endpoint. Visualizations come back in the
-  result and are written on your machine.
-- A remote result is capped near 10 MB. If a run fails on result size, rerun
-  without image output.
+- Remote runs produce no images by default: visualization payloads are stripped
+  on the endpoint, so nothing is written anywhere. Only a batch config that sets
+  `save_images: true` brings them back, and even then they are written on your
+  machine, never on the endpoint.
+- A remote result is capped near 10 MB. Since images are off by default a run
+  should not hit that cap; if one does, it was asking for images, so rerun
+  without them.
 
 ## Scope
 

@@ -115,6 +115,8 @@ Limitations
 -----------
 
 * Custom metrics, remedies, and the agentic pipeline are local-only.
-* Results are capped near 10 MB, so visualization payloads are stripped unless
-  you ask for images.
-* Images are written on your machine, never on the endpoint.
+* Images are off by default. Results are capped near 10 MB, so visualization
+  payloads are stripped on the endpoint unless a batch config asks for images
+  with ``save_images: true``.
+* When you do ask for them, the images are written on your machine. The
+  endpoint never writes files.
