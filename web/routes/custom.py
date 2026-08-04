@@ -115,7 +115,7 @@ def custom_metrics():
                 except Exception as e:
                     metric_time_log.error("Custom remedy() raised: %s", e, exc_info=True)
                     return jsonify(
-                        {"error": f"Error running remedy(): {type(e).__name__}: {e}"}
+                        {"error": "Error running remedy()."}
                     ), 400
 
                 if not isinstance(new_data, pd.DataFrame):
