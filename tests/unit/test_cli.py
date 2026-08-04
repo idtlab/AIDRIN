@@ -633,5 +633,65 @@ class TestCLIErrorHandling(unittest.TestCase):
         self.assertNotEqual(code, 0)
 
 
+# ===========================================================================
+# selected-keys (HDF5 / Zarr)
+# ===========================================================================
+
+
+class TestSelectedKeysCLI(unittest.TestCase):
+    """CLI --selected-keys for multi-array Zarr stores."""
+
+    @classmethod
+    def setUpClass(cls):
+        pytest = __import__("pytest")
+        zarr = pytest.importorskip("zarr")
+        cls._tmpdir = tempfile.TemporaryDirectory()
+        store = os.path.join(cls._tmpdir.name, "pick.zarr")
+        root = zarr.open_group(store, mode="w")
+        for name, length in (("age", 20), ("income", 20), ("meta", 1)):
+            arr = root.create_array(name, shape=(length,), dtype="f8")
+            arr[:] = np.arange(length, dtype=np.float64)
+        cls.store = store
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmpdir.cleanup()
+
+    def test_run_completeness_with_selected_keys(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "completeness",
+            self.store,
+            "--selected-keys",
+            "age,income",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        scores = payload.get("Completeness scores", {})
+        self.assertIn("age", scores)
+        self.assertIn("income", scores)
+        self.assertNotIn("meta", scores)
+
+    def test_summarize_with_selected_keys(self):
+        stdout, stderr, code = _run_cli(
+            "summarize",
+            self.store,
+            "--selected-keys",
+            "age",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["shape"]["columns"], 1)
+        self.assertIn("age", payload.get("numerical", {}))
+
+    def test_build_file_info_includes_selected_keys(self):
+        from aidrin.headless.runners import _build_file_info, using_selected_keys
+
+        with using_selected_keys(["S1/X", "S1/Y"]):
+            info = _build_file_info(self.store, None, None)
+        self.assertEqual(info[2], ".zarr")
+        self.assertEqual(info[3], ["S1/X", "S1/Y"])
+
+
 if __name__ == "__main__":
     unittest.main()

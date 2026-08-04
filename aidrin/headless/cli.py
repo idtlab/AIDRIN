@@ -269,6 +269,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "timestamp_column": getattr(args, "timestamp_column", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
+        "selected_keys": _parse_list(getattr(args, "selected_keys", None)),
         "rules": parsed_rules,
         "rules_json": rules_json,
         "rules_file": rules_file,
@@ -287,6 +288,12 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
 
 def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read (same idea as web selected_keys)",
+    )
     parser.add_argument("--save-images", dest="save_images", action="store_true", help="Save visualizations to disk")
     parser.add_argument("--no-save-images", dest="save_images", action="store_false", help="Do not save visualizations")
     parser.set_defaults(save_images=True)
@@ -298,6 +305,13 @@ def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
 
 def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
     """Lightweight args for top-level metric shortcuts."""
+    parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
 
 
@@ -530,13 +544,30 @@ def main() -> None:
     dq_parser = subparsers.add_parser("data-quality", help="Run fast data quality metrics (completeness, duplicity, outliers)")
     dq_parser.add_argument("file_path")
     dq_parser.add_argument("--file-type", dest="file_type", default=None)
+    dq_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
 
     # Dataset summary command
     summarize_parser = subparsers.add_parser("summarize", help="Describe numerical and categorical features of a dataset")
     summarize_parser.add_argument("file_path", help="Path to the dataset")
-    summarize_parser.add_argument("--file-type", dest="file_type", default=None, help="File type override (csv, parquet, xlsx, hdf5, json, npz)")
+    summarize_parser.add_argument(
+        "--file-type",
+        dest="file_type",
+        default=None,
+        help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
+    )
+    summarize_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     summarize_parser.add_argument(
         "--max-features", dest="max_features", type=int, default=None,
         help="Limit stats to N features (split evenly between numerical and categorical)"
@@ -669,6 +700,7 @@ def main() -> None:
                 args.file_path,
                 file_type=args.file_type,
                 max_features=args.max_features,
+                selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             if args.human_readable:
                 _print_summary_table(result, args.file_path)
@@ -682,6 +714,7 @@ def main() -> None:
                 file_type=args.file_type,
                 verbose=args.verbose,
                 strip_visualizations=True,
+                selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             if args.detail:
                 _dump_result(_round_floats(result))

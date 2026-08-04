@@ -20,6 +20,14 @@ Quick Start
    # Run a batch of metrics from a YAML config
    aidrin batch /path/to/my_project/batch_config.yaml
 
+   # HDF5 / Zarr: pick compatible 1D arrays (comma-separated paths)
+   aidrin run completeness /path/to/store.zarr --selected-keys age,income
+   aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
+
+Install Zarr support with ``pip install 'aidrin[zarr]'`` (Python >= 3.11). Local web upload
+does not accept ``.zarr`` directories; use the CLI or library. Multi-dimensional grids are not
+auto-flattened — select 1D (or a single 2D) arrays only.
+
 ----
 
 Sample Dataset
@@ -206,6 +214,9 @@ Results are printed as JSON to stdout. Redirect to a file to save:
      - class-imbalance
 
    target-column: approved
+
+For HDF5/Zarr multi-array stores, add ``selected-keys`` (list or comma-separated string)
+with compatible 1D paths, for example ``selected-keys: [age, income]``.
 
 **Example** — fairness analysis on the sample dataset:
 

@@ -1,7 +1,9 @@
 import os
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from aidrin.file_handling.file_parser import read_file
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -48,6 +50,22 @@ os.environ.setdefault("AIDRIN_HEADLESS", "1")
 _EXCEL_TYPES = {".xls", ".xlsx", ".xlsm", ".xlsb"}
 _EXCEL_KEY = ".xls, .xlsb, .xlsx, .xlsm"
 
+# Optional HDF5/Zarr path selection for the current headless call (CLI/API/batch).
+_selected_keys_ctx: ContextVar[Optional[List[str]]] = ContextVar(
+    "aidrin_selected_keys", default=None
+)
+
+
+@contextmanager
+def using_selected_keys(selected_keys: Optional[List[str]] = None) -> Iterator[None]:
+    """Apply ``selected_keys`` to all ``_build_file_info`` calls in this context."""
+    keys = [str(k).strip() for k in (selected_keys or []) if str(k).strip()] or None
+    token = _selected_keys_ctx.set(keys)
+    try:
+        yield
+    finally:
+        _selected_keys_ctx.reset(token)
+
 
 class NullTask:
     def update_state(self, *args: Any, **kwargs: Any) -> None:
@@ -68,10 +86,16 @@ def _normalize_file_type(file_type: Optional[str], file_path: str) -> Optional[s
 
 
 def _build_file_info(
-    file_path: str, file_type: Optional[str], file_name: Optional[str]
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    selected_keys: Optional[List[str]] = None,
 ) -> tuple:
     normalized_type = _normalize_file_type(file_type, file_path)
     final_name = file_name or os.path.basename(file_path)
+    keys = selected_keys if selected_keys is not None else _selected_keys_ctx.get()
+    if keys:
+        return (file_path, final_name, normalized_type, list(keys))
     return (file_path, final_name, normalized_type)
 
 

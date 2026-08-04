@@ -188,9 +188,8 @@ def test_zarr_empty_store(tmp_path, logger):
 
 
 def _write_multidim_store(path):
-    """3D array shaped like (time, lat, lon) for subset/reduce tests."""
+    """3D array shaped like (time, lat, lon) — not tabular without aggregation."""
     root = zarr.open_group(str(path), mode="w")
-    # time=5, lat=4, lon=3 — values = time index for easy spatial-mean checks
     data = np.zeros((5, 4, 3), dtype=np.float64)
     for t in range(5):
         data[t, :, :] = float(t)
@@ -198,52 +197,18 @@ def _write_multidim_store(path):
     arr[:] = data
 
 
-def test_zarr_multidim_requires_reduce(tmp_path, logger):
+def test_zarr_multidim_refused(tmp_path, logger):
+    """ndim >= 3 must not be averaged or flattened for metrics."""
     store = tmp_path / "grid.zarr"
     _write_multidim_store(store)
     df = zarrReader(str(store), logger, selected_keys=["tmax_grid"]).read()
     assert df is None
 
 
-def test_zarr_spatial_mean_reduce(tmp_path, logger):
-    store = tmp_path / "grid.zarr"
-    _write_multidim_store(store)
-    df = zarrReader(
-        str(store),
-        logger,
-        selected_keys=["tmax_grid"],
-        reduce="spatial_mean",
-    ).read()
+def test_zarr_read_file_selected_keys(tmp_path):
+    store = tmp_path / "pick.zarr"
+    _write_grouped_hierarchical_store(store)
+    df = read_file((str(store), "pick.zarr", ".zarr", ["S1/X", "S1/Y"]))
     assert df is not None
-    assert list(df.columns) == ["tmax_grid"]
-    assert len(df) == 5
-    assert list(df["tmax_grid"]) == [0.0, 1.0, 2.0, 3.0, 4.0]
-
-
-def test_zarr_subset_then_spatial_mean(tmp_path, logger):
-    store = tmp_path / "grid.zarr"
-    _write_multidim_store(store)
-    # First 3 time steps, subset of lat/lon
-    df = zarrReader(
-        str(store),
-        logger,
-        selected_keys=["tmax_grid"],
-        subset={0: slice(0, 3), 1: slice(0, 2), 2: slice(0, 2)},
-        reduce="spatial_mean",
-    ).read()
-    assert df is not None
-    assert len(df) == 3
-    assert list(df["tmax_grid"]) == [0.0, 1.0, 2.0]
-
-
-def test_zarr_read_file_passes_subset_reduce(tmp_path):
-    store = tmp_path / "grid.zarr"
-    _write_multidim_store(store)
-    df = read_file(
-        (str(store), "grid.zarr", ".zarr", ["tmax_grid"]),
-        reduce="spatial_mean",
-        subset={0: slice(1, 4)},
-    )
-    assert df is not None
-    assert len(df) == 3
-    assert list(df["tmax_grid"]) == [1.0, 2.0, 3.0]
+    assert list(df.columns) == ["S1/X", "S1/Y"]
+    assert len(df) == 10

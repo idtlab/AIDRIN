@@ -39,6 +39,7 @@ class HeadlessConfig:
     timestamp_column: Optional[str] = None
     batch_column: Optional[str] = None
     target_columns: Optional[List[str]] = field(default_factory=list)
+    selected_keys: Optional[List[str]] = field(default_factory=list)
     save_images: Optional[bool] = None
     image_dir: Optional[str] = None
 
@@ -68,6 +69,7 @@ class HeadlessConfig:
             "file-name": "file_name",
             "image-dir": "image_dir",
             "save-images": "save_images",
+            "selected-keys": "selected_keys",
         }
 
         normalized: Dict[str, Any] = {}
@@ -90,6 +92,7 @@ class HeadlessConfig:
             "required_columns",
             "duplicate_columns",
             "target_columns",
+            "selected_keys",
         ):
             if key in normalized:
                 normalized[key] = _normalize_list(normalized[key])

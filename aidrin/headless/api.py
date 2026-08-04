@@ -28,6 +28,7 @@ from .runners import (
     run_feature_relevance,
     run_hipaa_compliance,
     run_k_anonymity,
+    using_selected_keys,
     run_l_diversity,
     run_multiple_attribute_risk,
     run_null_count_trend,
@@ -354,19 +355,24 @@ def summarize_dataset(
     file_path: str,
     file_type: Optional[str] = None,
     max_features: Optional[int] = None,
+    selected_keys: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Return shape, per-column descriptive stats, and missing counts for a dataset."""
-    from pathlib import Path
     from aidrin.file_handling.file_parser import read_file
+    from .runners import _build_file_info
 
-    path = Path(file_path)
-    ext = f".{file_type}" if file_type else path.suffix.lower()
-    df = read_file((file_path, path.name, ext))
+    file_info = _build_file_info(
+        file_path,
+        file_type,
+        None,
+        selected_keys=_normalize_list(selected_keys),
+    )
+    df = read_file(file_info)
 
     if df is None or isinstance(df, str):
         detail = df if isinstance(df, str) else (
             "Unable to build a table from this file. For multi-array Zarr/HDF5 stores, "
-            "select compatible paths (selected_keys) or reduce multi-dim arrays first."
+            "pass selected_keys with compatible 1D paths."
         )
         raise ValueError(detail)
 
@@ -497,6 +503,31 @@ def _maybe_save_images(
 
 
 def run_metric(
+    metric_name: str,
+    file_path: str,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    save_images: bool = True,
+    image_dir: Optional[str] = None,
+    verbose: bool = False,
+    strip_visualizations: bool = False,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    with using_selected_keys(_normalize_list(kwargs.get("selected_keys"))):
+        return _run_metric_impl(
+            metric_name,
+            file_path,
+            file_type=file_type,
+            file_name=file_name,
+            save_images=save_images,
+            image_dir=image_dir,
+            verbose=verbose,
+            strip_visualizations=strip_visualizations,
+            **kwargs,
+        )
+
+
+def _run_metric_impl(
     metric_name: str,
     file_path: str,
     file_type: Optional[str] = None,
@@ -741,6 +772,7 @@ def run_batch_metrics(
         "timestamp_column": config_obj.timestamp_column,
         "batch_column": config_obj.batch_column,
         "target_columns": config_obj.target_columns,
+        "selected_keys": config_obj.selected_keys,
         "save_images": bool(config_obj.save_images) if config_obj.save_images is not None else True,
         "image_dir": config_obj.image_dir,
         "verbose": verbose,
@@ -765,6 +797,7 @@ def run_data_quality(
     file_name: Optional[str] = None,
     verbose: bool = False,
     strip_visualizations: bool = True,
+    selected_keys: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Run fast data quality metrics (completeness, duplicity, outliers).
 
@@ -777,6 +810,7 @@ def run_data_quality(
             file_type=file_type,
             file_name=file_name,
             metrics=["completeness", "duplicity", "outliers"],
+            selected_keys=selected_keys or [],
             save_images=False,
         ),
         verbose=verbose,
