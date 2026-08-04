@@ -39,6 +39,7 @@ function _readinessTruncatedListItems(items, maxItems, renderItem) {
 
 let customOutlierTargets = [];
 let fileReferenceTargets = [];
+const globusDiscoveryCache = new Map();
 let customOutlierRuleCounter = 0;
 let targetPickerDocumentHandlerRegistered = false;
 
@@ -306,73 +307,101 @@ function toggleFileReferenceTargetControl(enabled) {
     );
 }
 
+function applyFileReferenceOptions(data, executionLocation) {
+  const checkbox = document.getElementById(
+    "toggleButton_file_reference_validation",
+  );
+  const message = document.getElementById("file-reference-message");
+  if (!checkbox) return;
+  const config = data.file_reference || {
+    enabled: false,
+    roots: [],
+    message:
+      "This Globus Compute worker does not support file-reference validation. Upgrade AIDRIN on the endpoint.",
+  };
+  checkbox.disabled = true;
+
+  if (!data.success || !config.enabled) {
+    checkbox.checked = false;
+    toggleFileReferenceTargetControl(false);
+    if (message) {
+      message.textContent =
+        config.message ||
+        data.message ||
+        "File-reference validation is unavailable.";
+    }
+    return;
+  }
+
+  const targets = (data.targets || []).filter(isFileReferenceTarget);
+  const suggestedName = /(path|file|filename|filepath|location)/i;
+  targets.sort((left, right) => {
+    const leftSuggested = suggestedName.test(left.name) ? 0 : 1;
+    const rightSuggested = suggestedName.test(right.name) ? 0 : 1;
+    return leftSuggested - rightSuggested;
+  });
+
+  fileReferenceTargets = targets;
+  renderTargetPicker(
+    document.getElementById("file-reference-target-picker"),
+    targets,
+    { inputName: "file_reference_targets", suggested: suggestedName },
+  );
+  updateFileReferenceTargetMode();
+
+  const rootSelect = document.getElementById("file-reference-root");
+  if (rootSelect) {
+    rootSelect.replaceChildren();
+    if ((config.roots || []).length !== 1) {
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Select a configured root";
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      rootSelect.appendChild(placeholder);
+    }
+    (config.roots || []).forEach((root) => {
+      const option = document.createElement("option");
+      option.value = root.id;
+      option.textContent = root.label;
+      rootSelect.appendChild(option);
+    });
+  }
+
+  if (!targets.length) {
+    if (message)
+      message.textContent =
+        "No string-valued targets are available in this dataset.";
+    return;
+  }
+  checkbox.disabled = false;
+  toggleFileReferenceTargetControl(checkbox.checked);
+  if (message) {
+    message.textContent = `Paths are checked on ${executionLocation}. Scans are capped at ${Number(config.scan_limit).toLocaleString()} values by the administrator.`;
+  }
+}
+
 function loadFileReferenceOptions() {
   const checkbox = document.getElementById(
     "toggleButton_file_reference_validation",
   );
   const message = document.getElementById("file-reference-message");
-  if (!checkbox || window.AIDRIN_GLOBUS_MODE) return Promise.resolve();
+  if (!checkbox) return Promise.resolve();
 
-  return fetch("/custom-outlier-targets", { method: "POST" })
-    .then((response) => response.json())
-    .then((data) => {
-      const config = data.file_reference || {};
-      if (!data.success || !config.enabled) {
-        if (message) {
-          message.textContent =
-            config.message ||
-            data.message ||
-            "File-reference validation is unavailable.";
-        }
-        return;
-      }
-
-      const targets = (data.targets || []).filter(isFileReferenceTarget);
-      const suggestedName = /(path|file|filename|filepath|location)/i;
-      targets.sort((left, right) => {
-        const leftSuggested = suggestedName.test(left.name) ? 0 : 1;
-        const rightSuggested = suggestedName.test(right.name) ? 0 : 1;
-        return leftSuggested - rightSuggested;
-      });
-
-      fileReferenceTargets = targets;
-      renderTargetPicker(
-        document.getElementById("file-reference-target-picker"),
-        targets,
-        { inputName: "file_reference_targets", suggested: suggestedName },
+  const request = window.AIDRIN_GLOBUS_MODE
+    ? loadGlobusTargetDiscovery()
+    : fetch("/custom-outlier-targets", { method: "POST" }).then((response) =>
+        response.json(),
       );
-      updateFileReferenceTargetMode();
 
-      const rootSelect = document.getElementById("file-reference-root");
-      if (rootSelect) {
-        rootSelect.replaceChildren();
-        if ((config.roots || []).length !== 1) {
-          const placeholder = document.createElement("option");
-          placeholder.value = "";
-          placeholder.textContent = "Select a configured root";
-          placeholder.disabled = true;
-          placeholder.selected = true;
-          rootSelect.appendChild(placeholder);
-        }
-        (config.roots || []).forEach((root) => {
-          const option = document.createElement("option");
-          option.value = root.id;
-          option.textContent = root.label;
-          rootSelect.appendChild(option);
-        });
-      }
-
-      if (!targets.length) {
-        if (message)
-          message.textContent =
-            "No string-valued targets are available in this dataset.";
-        return;
-      }
-      checkbox.disabled = false;
-      toggleFileReferenceTargetControl(checkbox.checked);
-      if (message) {
-        message.textContent = `Paths are checked on this AIDRIN server. Web scans are capped at ${Number(config.scan_limit).toLocaleString()} values; use CLI or MCP for larger complete scans.`;
-      }
+  return request
+    .then((data) => {
+      applyFileReferenceOptions(
+        data,
+        window.AIDRIN_GLOBUS_MODE
+          ? "the Globus Compute worker"
+          : "this AIDRIN server",
+      );
     })
     .catch((error) => {
       if (message)
@@ -840,6 +869,40 @@ async function workspaceSubmit(targetUrl) {
       if (gFormData.get("kurtosis") === "yes") {
         selected.push("kurtosis");
         selectedNames.push("Kurtosis");
+      }
+      if (gFormData.get("file_reference_validation") === "yes") {
+        const targetMatch =
+          gFormData.get("file_reference_target_match") || "exact";
+        const pathTargets = Array.from(
+          gFormData.getAll("file_reference_targets"),
+        )
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+        const rootId = gFormData.get("file_reference_root_id");
+        if (!pathTargets.length || !rootId) {
+          if (typeof showToast === "function") {
+            showToast(
+              !pathTargets.length
+                ? targetMatch === "regex"
+                  ? "Enter a target pattern."
+                  : "Select at least one path-bearing target."
+                : "Select an allowed filesystem root.",
+              "error",
+            );
+          }
+          return;
+        }
+        selected.push("file_reference_validation");
+        selectedNames.push("File Reference Validation");
+        remoteParams.path_targets = pathTargets;
+        remoteParams.target_match = targetMatch;
+        remoteParams.root_id = rootId;
+        remoteParams.base_subdirectory =
+          gFormData.get("file_reference_base_subdirectory") || "";
+        remoteParams.max_results = customOutlierLimitValue(
+          gFormData.get("file_reference_max_results"),
+          100,
+        );
       }
       if (selected.length === 0) {
         if (typeof showToast === "function")
@@ -1776,6 +1839,7 @@ function pollGlobusSummary(taskId) {
 
 /** Disconnect from Globus — clear tokens. */
 function disconnectGlobus() {
+  clearGlobusDiscoveryCache();
   fetch("/globus/disconnect", { method: "POST" })
     .then(() => window.location.reload())
     .catch((err) => console.error("Globus disconnect error:", err));
@@ -1783,6 +1847,7 @@ function disconnectGlobus() {
 
 /** Load a remote dataset via Globus Compute. */
 function loadGlobusDataset() {
+  clearGlobusDiscoveryCache();
   const endpointId = document
     .getElementById("globus-endpoint-id")
     ?.value?.trim();
@@ -2163,24 +2228,36 @@ function loadCustomOutlierTargets() {
     });
 }
 
-function loadGlobusCustomOutlierTargets(message) {
+function globusDiscoveryKey() {
+  return JSON.stringify([
+    window.AIDRIN_GLOBUS_ENDPOINT || "",
+    window.AIDRIN_GLOBUS_FILE_PATH || "",
+    window.AIDRIN_GLOBUS_FILE_TYPE || "",
+  ]);
+}
+
+function clearGlobusDiscoveryCache() {
+  globusDiscoveryCache.clear();
+}
+
+function loadGlobusTargetDiscovery() {
   const endpointId = window.AIDRIN_GLOBUS_ENDPOINT || "";
   const filePath = window.AIDRIN_GLOBUS_FILE_PATH || "";
   const fileName = window.AIDRIN_GLOBUS_FILE_NAME || "";
   const fileType = window.AIDRIN_GLOBUS_FILE_TYPE || "";
   if (!endpointId || !filePath) {
-    if (message) {
-      message.textContent =
-        "Remote target discovery requires a loaded Globus file.";
-      message.classList.remove("hidden");
-    }
-    return Promise.resolve();
+    return Promise.reject(
+      new Error("Remote target discovery requires a loaded Globus file."),
+    );
   }
-  if (message) {
-    message.textContent = "Loading remote targets...";
-    message.classList.remove("hidden");
-  }
-  return fetch("/globus/submit", {
+
+  const key = globusDiscoveryKey();
+  const cached = globusDiscoveryCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return cached.promise;
+  if (cached) globusDiscoveryCache.delete(key);
+
+  const entry = { expiresAt: Infinity, promise: null };
+  entry.promise = fetch("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2192,22 +2269,49 @@ function loadGlobusCustomOutlierTargets(message) {
       params: {},
     }),
   })
-    .then((r) => r.json())
-    .then((data) => {
-      if (data.error) throw new Error(data.error);
+    .then((response) =>
+      response.json().then((data) => ({ ok: response.ok, data })),
+    )
+    .then(({ ok, data }) => {
+      if (!ok || data.error)
+        throw new Error(data.error || "Remote target discovery was rejected.");
+      entry.expiresAt = Number(data.negotiation_expires_at || 0) * 1000;
       if (!data.task_id) return data.result || data;
       return pollGlobusCustomOutlierTargets(data.task_id);
     })
+    .then((result) => {
+      if (!result?.success || Date.now() >= entry.expiresAt) {
+        globusDiscoveryCache.delete(key);
+      }
+      return result;
+    })
+    .catch((err) => {
+      globusDiscoveryCache.delete(key);
+      throw err;
+    });
+  globusDiscoveryCache.set(key, entry);
+  return entry.promise;
+}
+
+function loadGlobusCustomOutlierTargets(message) {
+  if (message) {
+    message.textContent = "Loading remote targets...";
+    message.classList.remove("hidden");
+  }
+  return loadGlobusTargetDiscovery()
     .then((result) => {
       if (result && result.success) {
         customOutlierTargets = result.targets || [];
         updateCustomOutlierTargetOptions();
         if (message) message.classList.add("hidden");
-      } else if (message) {
-        message.textContent =
-          (result && (result.message || result.error)) ||
-          "Remote target discovery failed.";
-        message.classList.remove("hidden");
+      } else {
+        clearGlobusDiscoveryCache();
+        if (message) {
+          message.textContent =
+            (result && (result.message || result.error)) ||
+            "Remote target discovery failed.";
+          message.classList.remove("hidden");
+        }
       }
     })
     .catch((err) => {
@@ -2227,6 +2331,7 @@ function pollGlobusCustomOutlierTargets(taskId) {
         .then((r) => r.json())
         .then((data) => {
           if (data.status === "completed") {
+            if (data.capability_invalidated) clearGlobusDiscoveryCache();
             resolve(data.result);
           } else if (data.status === "failed") {
             reject(new Error(data.error || "Task failed"));
@@ -2934,6 +3039,9 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
             );
 
           const tempDiv = document.createElement("div");
+          const executionNote = checkUrlBase.includes("globus")
+            ? '<p class="mb-3 text-xs text-gray-500 dark:text-gray-400">Execution location: Globus Compute worker</p>'
+            : "";
           if (isBundle) {
             // Render each sub-metric as its own card (matches local renderWorkspaceResults)
             let html = "";
@@ -2942,9 +3050,10 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
                 html += buildResultCard(subType, subResult);
               }
             }
-            tempDiv.innerHTML = html;
+            tempDiv.innerHTML = executionNote + html;
           } else {
-            tempDiv.innerHTML = buildResultCard(metricName, result);
+            tempDiv.innerHTML =
+              executionNote + buildResultCard(metricName, result);
           }
 
           // Replace placeholder with all rendered cards

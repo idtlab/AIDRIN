@@ -151,7 +151,7 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
     quality_panel = DATA_QUALITY_PANEL.read_text(encoding="utf-8")
     assert "function loadFileReferenceOptions()" in source
     assert "loadFileReferenceOptions();" in source
-    assert "window.AIDRIN_GLOBUS_MODE" in source
+    assert "loadGlobusTargetDiscovery()" in source
     assert 'id="toggleButton_file_reference_validation"' in panel
     assert 'id="toggleButton_file_reference_validation"' not in quality_panel
     assert 'inputName: "file_reference_targets"' in source
@@ -228,6 +228,32 @@ def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
     assert "escapeHtml(formatValue(value))" in source
     assert "Partial scan:" in source
     assert "!results.Summary.scan_complete" in source
+
+
+def test_globus_file_reference_discovery_is_shared_and_expires():
+    source = INSPECTOR_JS.read_text()
+    assert "const globusDiscoveryCache = new Map();" in source
+    assert "function globusDiscoveryKey()" in source
+    assert "function loadGlobusTargetDiscovery()" in source
+    assert "negotiation_expires_at" in source
+    assert "Date.now() < cached.expiresAt" in source
+    assert "Date.now() >= entry.expiresAt" in source
+    assert "if (data.capability_invalidated) clearGlobusDiscoveryCache();" in source
+    assert source.count('metric_name: "custom_outlier_targets"') == 1
+
+
+def test_globus_file_reference_parameters_are_serialized_without_policy():
+    source = INSPECTOR_JS.read_text()
+    assert 'selected.push("file_reference_validation")' in source
+    assert "remoteParams.path_targets = pathTargets" in source
+    assert "remoteParams.target_match = targetMatch" in source
+    assert "remoteParams.root_id = rootId" in source
+    assert "remoteParams.base_subdirectory" in source
+    assert "remoteParams.max_results" in source
+    globus_block = source[source.index('if (window.AIDRIN_GLOBUS_MODE)') : source.index("// Local mode:")]
+    assert "allowed_roots" not in globus_block
+    assert "file_reference_scan_limit" not in globus_block
+    assert "Execution location: Globus Compute worker" in source
 
 
 def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():

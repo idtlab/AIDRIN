@@ -531,6 +531,38 @@ def test_worker_policy_cannot_be_overridden_in_file_reference_submission(client,
     assert "controlled by the Compute worker" in response.get_json()["error"]
 
 
+def test_bundled_file_reference_submission_forwards_browser_choices(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    captured = {}
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["file_reference_validation_v1"]),
+    )
+
+    def capture_submission(_client, _endpoint_id, _metric_name, _path, _name, _type, **params):
+        captured.update(params)
+        return "file-reference-task"
+
+    monkeypatch.setattr(globus_routes, "submit_metric", capture_submission)
+    params = {
+        "selected": ["constant_feature_count", "file_reference_validation"],
+        "path_targets": ["primary_path", "secondary_path"],
+        "target_match": "exact",
+        "root_id": "root-0",
+        "base_subdirectory": "artifacts",
+        "max_results": 25,
+    }
+
+    response = client.post("/globus/submit", json=_submission("data_structure", params))
+
+    assert response.status_code == 200
+    assert captured == params
+
+
 def test_baseline_incompatible_worker_is_rejected_even_with_capability(client, monkeypatch):
     if not is_globus_available():
         return
