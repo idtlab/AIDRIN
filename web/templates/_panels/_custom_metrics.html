@@ -1,11 +1,20 @@
-<!-- Custom Metrics panel (CodeMirror editor, CSV only) -->
+<!-- Custom Metrics panel (CodeMirror editor) -->
 <div id="panel-custom-metrics" class="metric-panel hidden">
   <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Define Custom Metric</h2>
 
     <div class="flex flex-col">
-      <p class="text-sm text-gray-700 dark:text-gray-300 mb-2"><strong>Define your custom <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">metric()</code> and <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">remedy()</code> functions:</strong></p>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">The <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">metric()</code> function should return a dictionary with metric results. The <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">remedy()</code> function should return a modified dataset as a dataframe. Leave <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">remedy()</code> as-is if not needed.</p>
+      <div class="mb-4 p-4 text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <p class="font-semibold text-gray-900 dark:text-white mb-2">How to use this panel</p>
+        <ol class="list-decimal list-inside space-y-1">
+          <li>Write a <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">metric()</code> method below that returns a dictionary of results based on your own criteria.</li>
+          <li>Optionally, write a <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">remedy()</code> method that returns a cleaned or corrected version of the dataset. It <strong>must return a pandas DataFrame</strong>. Any other return type will fail. Leave it as-is if you don't need it.</li>
+          <li>Click <strong>Save</strong> any time you change the code. <strong>Submit always runs the last saved version</strong>, not whatever is currently typed in the editor.</li>
+          <li>If you want to download the remedied dataset, check the <strong>Apply Remedy</strong> box below before clicking Submit. If it is left unchecked, <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">remedy()</code> will not run and no download link will appear, even if you wrote one.</li>
+          <li>Click <strong>Submit</strong> to run your code against the currently uploaded dataset.</li>
+          <li>Metric results appear below. If <strong>Apply Remedy</strong> was checked, a download link for the remedied dataset is included with the results (always a <strong>CSV</strong> file, regardless of the original format).</li>
+        </ol>
+      </div>
 
       <div class="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
         <textarea id="metricCodeEditor" name="metric_code"></textarea>
@@ -15,13 +24,18 @@
         <input type="checkbox" id="apply_remedy" name="apply_remedy" value="yes" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
         Apply Remedy
       </label>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        This box must be checked before you click Submit to generate a downloadable remedied dataset — it is unchecked by default on every run, even after a previous run. It is always saved as a <strong>CSV</strong> file, regardless of the original file's format.
+      </p>
 
       <div class="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <span id="custom-metrics-save-status" class="flex-1 text-xs font-medium"></span>
         <button onclick="saveCustomMetricFile()" type="button"
                 class="px-5 py-2.5 text-sm font-medium rounded-lg border cursor-pointer text-blue-700 border-blue-700 hover:text-white hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:text-blue-500 dark:border-blue-500 dark:hover:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-800 transition-colors">
           Save
         </button>
         <button id="custom-metrics-submit" type="button" onclick="withSubmitGuard(this, submitCustomMetric);" disabled
+                title="Save your changes first — Submit always runs the last saved version, not what's in the editor"
                 class="px-5 py-2.5 text-sm font-medium text-white rounded-lg bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-700">
           Submit
         </button>

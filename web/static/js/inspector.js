@@ -3069,8 +3069,40 @@ function initCodeMirror() {
   // Load existing code
   fetch("/load-custom-metric")
     .then((r) => r.text())
-    .then((code) => codeMirrorEditor.setValue(code))
+    .then((code) => {
+      codeMirrorEditor.setValue(code);
+      // Submit always runs the last *saved* file on disk, not whatever is
+      // currently in the editor — so any edit past this point must force a
+      // fresh Save before Submit is usable again. Attached after setValue()
+      // so the programmatic initial load doesn't itself count as an edit.
+      codeMirrorEditor.on("change", () => _markCustomMetricUnsaved());
+    })
     .catch((err) => console.error("Error loading custom metric:", err));
+}
+
+/**
+ * Reflect whether the editor's current content matches what's saved on the
+ * server. Submit is disabled while unsaved, since it reads the saved file,
+ * not the live editor — silently running stale code otherwise.
+ */
+function _setCustomMetricSaveState(state) {
+  const submitBtn = document.getElementById("custom-metrics-submit");
+  const status = document.getElementById("custom-metrics-save-status");
+  if (submitBtn) submitBtn.disabled = state !== "saved";
+  if (!status) return;
+  if (state === "unsaved") {
+    status.textContent = "Unsaved changes: click Save before Submit";
+    status.className = "flex-1 text-xs font-medium text-amber-600 dark:text-amber-400";
+  } else if (state === "saved") {
+    status.textContent = "Saved";
+    status.className = "flex-1 text-xs font-medium text-green-600 dark:text-green-400";
+  } else {
+    status.textContent = "";
+  }
+}
+
+function _markCustomMetricUnsaved() {
+  _setCustomMetricSaveState("unsaved");
 }
 
 function saveCustomMetricFile() {
@@ -3087,13 +3119,7 @@ function saveCustomMetricFile() {
   fetch("/save-custom-metric-text", { method: "POST", body: formData })
     .then((r) => r.json())
     .then((data) => {
-      if (data.message) {
-        // Enable submit button after successful save
-        const submitBtn = document.getElementById("custom-metrics-submit");
-        if (submitBtn) {
-          submitBtn.disabled = false;
-        }
-      }
+      _setCustomMetricSaveState(data.message ? "saved" : "unsaved");
       showToast(data.message || data.error, data.error ? "error" : "success");
     })
     .catch((err) => showToast("Error saving file: " + err, "error"));
@@ -3129,7 +3155,18 @@ function submitCustomMetric() {
   })
     .then((response) => {
       if (response.ok) return response.json();
-      throw new Error(`Server error (${response.status})`);
+      // The backend always returns a JSON body with a specific {error: ...}
+      // message (e.g. a syntax error in the user's code, with file/line
+      // info) — parse it instead of discarding it in favor of a generic
+      // "Server error (500)".
+      return response
+        .json()
+        .catch(() => null)
+        .then((data) => {
+          throw new Error(
+            (data && data.error) || `Server error (${response.status})`,
+          );
+        });
     })
     .then((data) => {
       lastMetricResult = data;
@@ -3138,7 +3175,7 @@ function submitCustomMetric() {
     .catch((error) => {
       console.error("Error:", error);
       if (metricsDiv)
-        metricsDiv.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error.message}</div>`;
+        metricsDiv.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error.message)}</div>`;
     });
 }
 

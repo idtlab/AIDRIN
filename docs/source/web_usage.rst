@@ -582,23 +582,26 @@ Notes
 Custom Metrics and Remedies
 ----------------------------
 
-This section explains how to define custom metrics and remediation logic for your uploaded CSV files
-using the **CustomDR** class inside the CodeMirror editor. After uploading a dataset, you
-will navigate to a page where you can write Python code that extends the platform's data-review logic.
+This section explains how to define custom metrics and remediation logic for your uploaded dataset
+using the **CustomDR** class inside the CodeMirror editor. Custom metrics work with any file
+format AIDRIN supports (CSV, Excel, JSON, NumPy ``.npz``, HDF5, Parquet). After uploading a
+dataset, you will navigate to a page where you can write Python code that extends the platform's
+data-review logic.
 
 Workflow
 ~~~~~~~~
 
-1. Navigate to the file upload page and upload a CSV file.
-2. After upload, click the **Define Custom Metrics** button. You will be redirected to ``/customMetrics``.
+1. Navigate to the file upload page and upload a dataset.
+2. In the left sidebar, click the **Custom Metrics** tab (a standalone top-level tab, alongside Data Overview and the metric pillars — it is not nested inside another category).
 3. A CodeMirror Python editor appears, preloaded with an editable ``CustomDR`` class that inherits from ``BaseDRAgent`` and contains two methods:
    - ``metric()``: returns a dictionary of metric results.
-   - ``remedy()``: returns a modified dataset based on your remediation logic.
+   - ``remedy()``: returns a modified dataset, as a **pandas DataFrame**, based on your remediation logic.
 4. Write or modify your code inside the editor.
-5. Press **Save** to store your custom logic on the server (temporary, 1-hour expiration).
-6. Press **Submit** to execute your ``metric()`` function, and optionally your ``remedy()`` function if you have checked the **Apply Remedy** box.
+5. Press **Save** to store your custom logic on the server (temporary, 1-hour expiration). **Submit stays disabled — and shows "Unsaved changes" — until you Save**; it always runs the last saved version, not whatever is currently typed in the editor.
+6. If you want a downloadable remedied dataset, check the **Apply Remedy** box *before* clicking Submit — it is unchecked by default on every run, and ``remedy()`` will not run at all if it is left unchecked, even if you implemented it.
+7. Press **Submit** to execute your ``metric()`` function, and (if Apply Remedy was checked) your ``remedy()`` function.
 
-The platform will display your computed metric dictionary, any remediated dataset to download (if remedy is enabled), and any warnings or errors raised by your code.
+The platform will display your computed metric dictionary, any remediated dataset to download (if remedy was applied), and any errors raised by your code — including the specific line number for a syntax error, or which of ``metric()``/``remedy()`` raised an exception.
 
 Understanding the ``CustomDR`` Base Class
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -609,7 +612,7 @@ Below is the template initially shown in CodeMirror:
 
     from aidrin.custom_metrics.base_dr import BaseDRAgent
     from typing import Any
-    from typing import Dict, Union, Any
+    import pandas as pd
 
     class CustomDR(BaseDRAgent):
         def __init__(self, dataset: Any, **kwargs):
@@ -630,12 +633,14 @@ Below is the template initially shown in CodeMirror:
 
             return {"message": "Placeholder metric. Implement your logic here."}
 
-        def remedy(self, **kwargs**):
+        def remedy(self, **kwargs) -> pd.DataFrame:
             """
             Applies custom remediation logic based on the calculated metrics.
+            Access metric results via kwargs.get("metric_results", {}).
             """
 
             # IMPLEMENT YOUR REMEDIATION LOGIC BELOW
+            # metric_results = kwargs.get("metric_results", {})
             # For example, filling null values with a default value
 
             # df_remedied: pd.DataFrame = self.dataset.copy()
@@ -732,6 +737,9 @@ When you click **Submit**:
 3. The system calls your ``metric()`` method to compute metrics.
 4. If **Apply Remedy** is checked, the system calls your ``remedy()`` method to get the modified dataset.
 5. Metrics and (optionally) the remedied data preview are displayed on the results section of the page.
+   The remedied dataset is always saved as CSV for download, regardless of the original file's
+   format, since formats like JSON/NPZ/HDF5 don't round-trip losslessly back to their original
+   structure.
 
 Best Practices for Writing Custom Metrics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
