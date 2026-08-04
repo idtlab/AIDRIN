@@ -2218,7 +2218,7 @@ function addCustomOutlierRuleRow() {
         <span>Target</span>
         <div class="mt-1 flex items-center gap-2">
           <select data-field="target_match" aria-label="Target match mode"
-                  class="w-28 shrink-0 rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                  class="w-32 shrink-0 rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
             <option value="exact">Exact name</option>
             <option value="regex">Regex</option>
           </select>
