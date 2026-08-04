@@ -423,6 +423,7 @@ def remote_headless_runner(command, kwargs):
     matplotlib.use("Agg")
 
     from aidrin.headless import api
+    from aidrin.file_handling.file_parser import clear_frame_cache
 
     dispatch = {
         "run_metric": api.run_metric,
@@ -438,7 +439,27 @@ def remote_headless_runner(command, kwargs):
             "ErrorType": "UnknownCommand",
         }
 
+    kwargs = kwargs or {}
     try:
-        return fn(**(kwargs or {}))
+        return fn(**kwargs)
     except Exception as exc:
         return {"Error": str(exc), "ErrorType": type(exc).__name__}
+    finally:
+        # read_file() leaves a `.aidrin.feather` cache sidecar next to the
+        # dataset it parses (aidrin/file_handling/file_parser.py). The local
+        # CLI sweeps its own sidecar in its own `finally` (aidrin/headless/
+        # cli.py) but deliberately skips that for remote runs, since the
+        # client never read the remote file. Nothing else reaps it on the
+        # endpoint, so without this it would linger next to the dataset —
+        # often on a shared HPC filesystem. Best-effort only: it must never
+        # change the result returned above or raise on its own.
+        try:
+            if command == "batch":
+                config = kwargs.get("config")
+                file_path = config.get("file_path") if isinstance(config, dict) else None
+            else:
+                file_path = kwargs.get("file_path")
+            if isinstance(file_path, str) and file_path:
+                clear_frame_cache(file_path)
+        except Exception:
+            pass

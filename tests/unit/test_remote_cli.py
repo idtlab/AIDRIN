@@ -143,6 +143,27 @@ class TestManagementCommands(_RemoteCliTestCase):
         self.assertIn("running", err.lower())
         self.assertIn("--wait", err)
 
+    def test_task_wait_interrupt_names_the_task_and_exits_130(self):
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.poll", side_effect=KeyboardInterrupt):
+            out, err, code = _run_cli("remote", "task", "task-5", "--wait")
+        self.assertEqual(code, 130)
+        self.assertEqual(out, "")
+        self.assertIn("task-5", err)
+        self.assertIn("aidrin remote task task-5 --wait", err)
+
+    def test_check_interrupt_exits_130_without_inventing_a_task_id(self):
+        from aidrin.compute import profiles
+
+        profiles.save_profile("nersc", "uuid-1", default=True)
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.probe", side_effect=KeyboardInterrupt):
+            out, err, code = _run_cli("remote", "check")
+        self.assertEqual(code, 130)
+        self.assertEqual(out, "")
+        self.assertIn("Interrupted", err)
+        self.assertNotIn("cancelled", err.lower())
+
     def test_logout_without_sdk_support_explains_the_alternative(self):
         class _NoLogout:
             pass

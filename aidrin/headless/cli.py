@@ -709,6 +709,32 @@ def main() -> None:
         if argv[0] in REMOTE_MANAGEMENT:
             try:
                 _remote_management(argv, remote_opts)
+            except KeyboardInterrupt:
+                # `_remote_management` blocks on `compute_client.poll` (task
+                # --wait) or `compute_client.probe` (configure/check), none of
+                # which flow through the polished handler below (that one only
+                # covers the run/summarize/etc. dispatch, and knows about
+                # cancellation attempted by RemoteExecutor). Without this,
+                # Ctrl-C here fell through to the bare `except Exception`
+                # below -- which doesn't catch KeyboardInterrupt -- and dumped
+                # a traceback instead of exiting 130 like every other
+                # interrupt in this command.
+                if argv[0] == "task" and "--wait" in argv[1:]:
+                    task_id = next((a for a in argv[1:] if not a.startswith("-")), None)
+                    if task_id:
+                        sys.stderr.write(
+                            f"\nInterrupted while waiting for task {task_id}. It may "
+                            "still be running on the endpoint. Recover the result "
+                            f"later with: aidrin remote task {task_id} --wait\n"
+                        )
+                    else:
+                        sys.stderr.write("\nInterrupted.\n")
+                else:
+                    # configure/check block on a probe task internal to
+                    # client.probe -- no id to report and no cancellation was
+                    # attempted, so claiming either would be dishonest.
+                    sys.stderr.write("\nInterrupted.\n")
+                sys.exit(130)
             except Exception as exc:
                 sys.stderr.write(f"Error: {exc}\n")
                 sys.exit(1)

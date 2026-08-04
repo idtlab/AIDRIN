@@ -77,6 +77,59 @@ class TestRemoteHeadlessRunner(unittest.TestCase):
         self.assertIn("ErrorType", result)
 
 
+class TestRemoteHeadlessRunnerCacheCleanup(unittest.TestCase):
+    """The endpoint has no upload-folder reaper for its `.aidrin.feather`
+    cache sidecar (unlike the web app) and the local CLI's own cleanup is
+    deliberately skipped for remote runs (it would delete a sidecar next to
+    a same-named *local* path it never read). Nothing else sweeps the
+    sidecar `read_file()` leaves next to the dataset it parses on the
+    endpoint's filesystem, so `remote_headless_runner` must do it itself.
+    """
+
+    def setUp(self):
+        # An isolated directory, not the shared system tmp dir that
+        # `_sample_csv()` uses: other tests' own cache sidecars (or leftovers
+        # from a previous run) would otherwise pollute the directory listing
+        # this test class asserts on.
+        self.tmpdir = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmpdir, "data.csv")
+        rng = np.random.default_rng(7)
+        pd.DataFrame(
+            {
+                "age": rng.integers(20, 70, size=40),
+                "income": rng.integers(20_000, 90_000, size=40),
+                "sex": rng.choice(["M", "F"], size=40),
+            }
+        ).to_csv(self.path, index=False)
+
+    def _cache_sidecars(self):
+        return [name for name in os.listdir(self.tmpdir) if name.endswith(".aidrin.feather")]
+
+    def test_summarize_leaves_no_cache_sidecar(self):
+        remote_headless_runner("summarize", {"file_path": self.path})
+        self.assertEqual(self._cache_sidecars(), [])
+
+    def test_run_metric_leaves_no_cache_sidecar(self):
+        remote_headless_runner(
+            "run_metric",
+            {"metric_name": "completeness", "file_path": self.path, "save_images": False},
+        )
+        self.assertEqual(self._cache_sidecars(), [])
+
+    def test_batch_leaves_no_cache_sidecar(self):
+        remote_headless_runner(
+            "batch",
+            {"config": {"file_path": self.path, "metrics": ["completeness"], "save_images": False}},
+        )
+        self.assertEqual(self._cache_sidecars(), [])
+
+    def test_cleanup_runs_on_the_error_path_too(self):
+        missing = os.path.join(self.tmpdir, "definitely-missing.csv")
+        result = remote_headless_runner("summarize", {"file_path": missing})
+        self.assertIn("Error", result)
+        self.assertEqual(self._cache_sidecars(), [])
+
+
 class TestRemoteEnvProbe(unittest.TestCase):
 
     def test_probe_reports_headless_import(self):
