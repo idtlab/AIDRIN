@@ -3092,10 +3092,12 @@ function _setCustomMetricSaveState(state) {
   if (!status) return;
   if (state === "unsaved") {
     status.textContent = "Unsaved changes: click Save before Submit";
-    status.className = "flex-1 text-xs font-medium text-amber-600 dark:text-amber-400";
+    status.className =
+      "flex-1 text-xs font-medium text-amber-600 dark:text-amber-400";
   } else if (state === "saved") {
     status.textContent = "Saved";
-    status.className = "flex-1 text-xs font-medium text-green-600 dark:text-green-400";
+    status.className =
+      "flex-1 text-xs font-medium text-green-600 dark:text-green-400";
   } else {
     status.textContent = "";
   }
