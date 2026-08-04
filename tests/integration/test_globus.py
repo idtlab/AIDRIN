@@ -1,6 +1,7 @@
 """Tests for Globus Compute integration (mocked — no real endpoint needed)."""
 
 import os
+import json
 import sys
 import tempfile
 
@@ -125,6 +126,73 @@ def test_remote_runner_custom_outlier_targets():
 
     assert result["success"] is True
     assert any(target["name"] == "age" for target in result["targets"])
+    assert result["file_reference"]["enabled"] is False
+
+
+def test_remote_runner_file_reference_discovery_uses_worker_environment(monkeypatch, tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("path\nartifact.bin\n", encoding="utf-8")
+    monkeypatch.setenv("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", json.dumps([str(tmp_path)]))
+    monkeypatch.setenv("AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT", "17")
+
+    result = remote_metric_runner("custom_outlier_targets", str(manifest), manifest.name, ".csv")
+
+    assert result["file_reference"] == {
+        "enabled": True,
+        "roots": [{"id": "root-0", "label": str(tmp_path)}],
+        "scan_limit": 17,
+    }
+
+
+def test_remote_runner_file_reference_standalone_and_bundled(monkeypatch, tmp_path):
+    artifact = tmp_path / "artifact.bin"
+    artifact.write_bytes(b"aidrin")
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("path\nartifact.bin\n", encoding="utf-8")
+    monkeypatch.setenv("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", json.dumps([str(tmp_path)]))
+    params = {
+        "path_targets": ["path"],
+        "root_id": "root-0",
+        "base_subdirectory": "",
+        "max_results": 5,
+        "target_match": "exact",
+    }
+
+    standalone = remote_metric_runner(
+        "file_reference_validation", str(manifest), manifest.name, ".csv", **params
+    )
+    bundled = remote_metric_runner(
+        "data_structure",
+        str(manifest),
+        manifest.name,
+        ".csv",
+        selected=["constant_feature_count", "file_reference_validation"],
+        **params,
+    )
+
+    assert standalone["Summary"]["all_references_valid"] is True
+    assert "File Reference Validation" not in standalone
+    assert bundled["File Reference Validation"]["Summary"] == standalone["Summary"]
+    assert "Constant Feature Count" in bundled
+
+
+def test_remote_runner_file_reference_failure_is_metric_scoped(monkeypatch, tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("path\nmissing.bin\n", encoding="utf-8")
+    monkeypatch.delenv("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", raising=False)
+
+    result = remote_metric_runner(
+        "data_structure",
+        str(manifest),
+        manifest.name,
+        ".csv",
+        selected=["constant_feature_count", "file_reference_validation"],
+        path_targets=["path"],
+        root_id="root-0",
+    )
+
+    assert "Constant Feature Count" in result
+    assert "Select an allowed filesystem root" in result["File Reference Validation"]["Error"]
 
 
 def test_remote_runner_data_quality_custom_outliers():
@@ -198,6 +266,8 @@ def test_remote_env_probe_reports_versions():
     info = remote_env_probe()
     assert info["aidrin_version"] == aidrin.__version__
     assert info["python_version"] == ".".join(map(str, sys.version_info[:3]))
+    assert info["capability_schema_version"] == 1
+    assert info["capabilities"] == ["file_reference_validation_v1"]
 
 
 # -------------------------------------------------
