@@ -98,7 +98,7 @@ def custom_metrics():
             except Exception as e:
                 metric_time_log.error("Custom metric() raised: %s", e, exc_info=True)
                 return jsonify(
-                    {"error": f"Error running metric(): {type(e).__name__}: {e}"}
+                    {"error": "Error running metric(). Please check your custom metric code and try again."}
                 ), 400
 
             if not isinstance(metric_results, dict):
