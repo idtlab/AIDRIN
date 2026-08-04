@@ -115,6 +115,49 @@ did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mc
 
 ----
 
+Available Tools
+---------------
+
+The MCP server exposes eleven tools. You do not normally call these by name;
+Claude selects them from your request. They are listed here so you know what is
+reachable.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 32 68
+
+   * - Tool
+     - What it does
+   * - ``list_metrics``
+     - Lists all available metrics, grouped by category
+   * - ``summarize_dataset``
+     - Describes a dataset's numerical and categorical features
+   * - ``run_data_quality_check``
+     - Runs the three core data quality metrics: completeness, duplicity, outliers
+   * - ``run_aidrin_metric``
+     - Runs a single built-in metric against a dataset
+   * - ``run_custom_outlier_check``
+     - Runs Custom Criteria Outliers against selected targets
+   * - ``run_batch``
+     - Runs multiple metrics declared in a YAML or JSON batch config
+   * - ``create_custom_metric``
+     - Generates a ``CustomDR`` template file with ``metric()`` and ``remedy()`` stubs
+   * - ``run_custom_metric``
+     - Runs the ``metric()`` method of a ``CustomDR`` class defined in a ``.py`` file
+   * - ``run_custom_remedy``
+     - Runs the ``remedy()`` method of a ``CustomDR`` class and applies it to the dataset
+   * - ``agentic_build_index``
+     - Builds the FAISS vector index from the domain-literature PDFs in the agentic config
+   * - ``agentic_run``
+     - Runs the full agentic evaluation pipeline
+
+.. warning::
+
+   ``run_custom_metric``, ``run_custom_remedy``, and the agentic tools execute
+   Python from the files you point them at. Only use them with code you trust.
+
+----
+
 Running an Assessment
 ---------------------
 

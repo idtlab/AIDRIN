@@ -11,7 +11,7 @@ Current Capabilities
 
 AIDRIN provides several core functionalities to assess and enhance dataset readiness:
 
-- Evaluation of **dataset readiness** across multiple dimensions. See the `Key Features <index.html#key-features>`_ section for details.
+- Evaluation of **dataset readiness** across multiple dimensions. See the :doc:`documentation home page <index>` for the dimensions AIDRIN evaluates.
 - **Metadata analysis** for FAIR principles (Findable, Accessible, Interoperable, Reusable).
 - Interactive **web-based dashboards** and Python API access for programmatic analyses.
 

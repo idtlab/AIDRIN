@@ -87,6 +87,25 @@ prints a compact summary.
    # Output full per-feature JSON instead of summary
    aidrin data-quality /path/to/sample_dataset.csv --detail
 
+   # Override the format inferred from the file extension
+   aidrin data-quality /path/to/data --file-type .parquet
+
+``aidrin summarize``
+~~~~~~~~~~~~~~~~~~~~
+
+Describes the numerical and categorical features of a dataset: dtypes, ranges,
+and cardinality. Useful for deciding which columns to feed to other metrics.
+
+.. code-block:: bash
+
+   aidrin summarize /path/to/sample_dataset.csv
+
+   # Human-readable table instead of JSON
+   aidrin summarize /path/to/sample_dataset.csv --summary
+
+   # Cap how many features are described
+   aidrin summarize /path/to/sample_dataset.csv --max-features 20
+
 ``aidrin run``
 ~~~~~~~~~~~~~~
 
@@ -151,6 +170,7 @@ Examples:
    aidrin run t-closeness /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
    aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
+   aidrin run differential-privacy /path/to/sample_dataset.csv "age,income" 1.0
 
 For custom criteria outliers, ``--rule``, ``rules-json``, and ``--rules-file``
 describe expected valid values. Values that do not satisfy those conditions are
@@ -185,6 +205,7 @@ Runs a set of metrics defined in a JSON or YAML config file. Useful for reproduc
 
    aidrin batch /path/to/my_project/batch_config.yaml
    aidrin batch /path/to/my_project/batch_config.yaml -v          # verbose
+   aidrin batch /path/to/my_project/batch_config.yaml --viz       # keep visualization data
 
 Results are printed as JSON to stdout. Redirect to a file to save:
 
@@ -257,96 +278,21 @@ The remedy output CSV is saved to a ``remedy_data/`` folder next to the module f
 Available Metrics
 -----------------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 25 25 50
+``aidrin list`` prints the current catalogue, grouped by category, with the
+required arguments for each metric:
 
-   * - Category
-     - Metric
-     - Required Args
-   * - Data Quality
-     - ``completeness``
-     - —
-   * - Data Quality
-     - ``duplicity``
-     - —
-   * - Data Quality
-     - ``outliers``
-     - —
-   * - Data Quality
-     - ``row-level-completeness``
-     - ``--required-columns``
-   * - Data Quality
-     - ``duplicity-by-features``
-     - ``--duplicate-columns``
-   * - Data Quality
-     - ``feature-coverage-ratio``
-     - ``--threshold`` (default ``0.9``)
-   * - Data Quality
-     - ``temporal-completeness``
-     - ``--timestamp-column``, ``--frequency`` (one of ``ms, s, min, h, D, W, ME, QE, YE``; default ``D``)
-   * - Data Quality
-     - ``null-count-trend``
-     - ``--batch-column``, ``--target-columns`` (optional)
-   * - Data Quality
-     - ``outliers-custom``
-     - ``rules-json``
-   * - Data Structure
-     - ``constant-feature-count``
-     - —
-   * - Data Structure
-     - ``max-pairwise-correlation``
-     - —
-   * - Data Structure
-     - ``skewness``
-     - —
-   * - Data Structure
-     - ``kurtosis``
-     - —
-   * - Impact on AI
-     - ``correlations``
-     - ``columns``
-   * - Impact on AI
-     - ``feature-relevance``
-     - ``categorical-columns``, ``numerical-columns``, ``target-column``
-   * - Fairness & Bias
-     - ``class-imbalance``
-     - ``target-column``
-   * - Fairness & Bias
-     - ``statistical-rates``
-     - ``target-column``, ``sensitive-attribute-column``
-   * - Fairness & Bias
-     - ``representation-rate``
-     - ``columns``
-   * - Data Governance
-     - ``k-anonymity``
-     - ``quasi-identifiers``
-   * - Data Governance
-     - ``l-diversity``
-     - ``quasi-identifiers``, ``sensitive-column``
-   * - Data Governance
-     - ``t-closeness``
-     - ``quasi-identifiers``, ``sensitive-column``
-   * - Data Governance
-     - ``entropy-risk``
-     - ``quasi-identifiers``
-   * - Data Governance
-     - ``single-attribute-risk``
-     - ``id-column``, ``eval-columns``
-   * - Data Governance
-     - ``multiple-attribute-risk``
-     - ``id-column``, ``eval-columns``
-   * - Data Governance
-     - ``hipaa-compliance``
-     - ``columns``
-   * - Custom
-     - ``custom``
-     - ``<name-or-path>``, varies — see ``aidrin run custom -h``
+.. code-block:: bash
+
+   aidrin list
+   aidrin list --category data-governance
+
+For the equivalent web interface and Python library names, see
+:ref:`metric_names`. For what each metric measures, see :ref:`web_usage`.
 
 ----
 
-Using AIDRIN as a Python Library
----------------------------------
+Headless Python API
+-------------------
 
 All CLI metrics are also available as a Python API for use in notebooks or scripts:
 
@@ -366,9 +312,6 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
        max_outliers=100,
    )
 
-The custom outlier rules in CLI and Python calls define valid values; values
-that fail the rule are reported in the outlier preview/export rows.
-
    # Fast data quality bundle
    result = run_data_quality("/path/to/sample_dataset.csv")
 
@@ -376,7 +319,11 @@ that fail the rule are reported in the outlier preview/export rows.
    config = HeadlessConfig.from_file("/path/to/my_project/batch_config.yaml")
    result = run_batch_metrics(config)
 
-For the web interface's lower-level functional API, see the :ref:`web_usage` page.
+The custom outlier rules in CLI and Python calls define valid values; values
+that fail the rule are reported in the outlier preview/export rows.
+
+For the per-metric functional API (``from aidrin import calculate_completeness``),
+see :ref:`python_api`.
 
 ----
 
@@ -487,8 +434,13 @@ file in the ``data/`` subdirectory:
 Step 2: Add domain literature
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Download papers that cite the dataset (published 2016–2026) in the link above, and place their PDFs in
-``examples/agentic/power_consumption/sources/``.
+Download papers that cite the dataset (published 2016–2026) in the link above. Create a
+``sources/`` directory inside the example project and place the PDFs there. It is not
+included in the repository:
+
+.. code-block:: bash
+
+   mkdir -p examples/agentic/power_consumption/sources
 
 Your example project directory should then look like this:
 

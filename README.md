@@ -9,7 +9,14 @@
 [![Docs](https://img.shields.io/readthedocs/aidrin?logo=readthedocs&logoColor=white)](https://aidrin.readthedocs.io/en/latest/)
 [![Dependencies](https://img.shields.io/librariesio/github/idtlab/AIDRIN)](https://libraries.io/github/idtlab/AIDRIN)
 
-**AIDRIN** (AI Data Readiness Infrastructure) is a lightweight, open-source tool designed to evaluate the readiness of datasets for AI and machine learning workflows. It provides an intuitive web interface to assess dataset quality, completeness, and structure through quantitative metrics.
+**AIDRIN** (AI Data Readiness Infrastructure) is a lightweight, open-source tool designed to evaluate the readiness of datasets for AI and machine learning workflows. It assesses dataset quality, completeness, and structure through quantitative metrics, across six dimensions of data readiness.
+
+There are four ways to use it:
+
+- **Web interface**: an interactive dashboard, hosted at [aidrin.org](https://aidrin.org) or self-hosted.
+- **Command line**: `aidrin data-quality data.csv` and friends, for pipelines and CI. Includes an agentic evaluation component for domain-aware question answering and remediation.
+- **Python library**: `pip install aidrin`, for notebooks and scripts.
+- **Claude Code**: an MCP server (`aidrin-mcp`) and skill, to assess datasets in plain language.
 
 For installation, usage, and contribution guidelines, please refer to the [AIDRIN documentation](https://aidrin.readthedocs.io/en/latest/).
 
