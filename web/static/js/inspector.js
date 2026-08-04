@@ -404,9 +404,14 @@ function loadFileReferenceOptions() {
       );
     })
     .catch((error) => {
-      if (message)
+      checkbox.checked = false;
+      checkbox.disabled = true;
+      toggleFileReferenceTargetControl(false);
+      if (window.AIDRIN_GLOBUS_MODE) clearGlobusDiscoveryCache();
+      if (message) {
         message.textContent =
           "Unable to load file-reference options: " + error.message;
+      }
     });
 }
 

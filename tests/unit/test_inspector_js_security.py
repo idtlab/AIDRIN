@@ -239,6 +239,8 @@ def test_globus_file_reference_discovery_is_shared_and_expires():
     assert "Date.now() < cached.expiresAt" in source
     assert "Date.now() >= entry.expiresAt" in source
     assert "if (data.capability_invalidated) clearGlobusDiscoveryCache();" in source
+    assert "checkbox.disabled = true;" in source
+    assert "if (window.AIDRIN_GLOBUS_MODE) clearGlobusDiscoveryCache();" in source
     assert source.count('metric_name: "custom_outlier_targets"') == 1
 
 
