@@ -150,9 +150,24 @@ def probe(client, endpoint_id: str, timeout: float = PROBE_TIMEOUT) -> Dict[str,
     return result
 
 
-def cancel(client, task_id: str) -> None:
-    """Best-effort cancellation. Never raises: the caller is already exiting."""
+def cancel(client, task_id: str) -> bool:
+    """Best-effort cancellation. Never raises: the caller is already exiting.
+
+    Globus Compute's current SDK exposes no per-task cancellation API at all
+    (verified against globus-compute-sdk 4.x: ``Client`` has no
+    ``cancel_task`` method), so returning ``False`` is the normal, expected
+    result here -- a submitted task keeps running to completion on the
+    endpoint no matter what happens on this machine. Older SDKs did expose
+    ``Client.cancel_task``; when present it is looked up with ``getattr`` and
+    called, and ``True`` means only that the call was made and did not raise,
+    not that the endpoint actually stopped the task.
+    """
+    cancel_task = getattr(client, "cancel_task", None)
+    if cancel_task is None:
+        return False
     try:
-        client.cancel_task(task_id)
+        cancel_task(task_id)
+        return True
     except Exception as exc:  # pragma: no cover - backend dependent
         logger.debug("Could not cancel task %s: %s", task_id, exc)
+        return False

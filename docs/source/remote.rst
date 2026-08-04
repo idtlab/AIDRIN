@@ -64,12 +64,22 @@ Long-running jobs
    # prints {"task_id": "..."}
    aidrin remote task <task-id>          # status
    aidrin remote task <task-id> --wait   # block for the result
-   aidrin remote task <task-id> --cancel # cancel it
+   aidrin remote task <task-id> --cancel # request cancellation (see below)
 
 ``--timeout SECONDS`` caps how long a blocking run waits for its result
 (default 600). It also caps the endpoint probe used by ``check`` and applies to
 ``task --wait``. On a timeout the task keeps running; recover it later with
 ``aidrin remote task <task-id> --wait``.
+
+Globus Compute's current SDK exposes no API to cancel a task once it has been
+submitted, so cancellation almost always fails. ``--cancel`` reports this
+plainly, exits non-zero, and reminds you that the task is still running on
+the endpoint; recover its result later with ``aidrin remote task <task-id>
+--wait``. Pressing Ctrl-C during a blocking run behaves the same way: the
+interrupt message tells you whether the task was actually cancelled or is
+still running, and the process exits 130 either way. If an older
+``globus-compute-sdk`` that does support task cancellation is installed,
+``--cancel`` and Ctrl-C use it and report success normally.
 
 Managing profiles and credentials
 ---------------------------------

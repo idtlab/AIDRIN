@@ -16,9 +16,10 @@ from aidrin.compute.profiles import RemoteTarget
 class _Recorder:
     """Stands in for aidrin.compute.client."""
 
-    def __init__(self, result=None, poll_error=None):
+    def __init__(self, result=None, poll_error=None, cancel_result=False):
         self.result = result if result is not None else {"ok": True}
         self.poll_error = poll_error
+        self.cancel_result = cancel_result
         self.submitted = []
         self.polled = []
         self.cancelled = []
@@ -38,6 +39,7 @@ class _Recorder:
 
     def cancel(self, client, task_id):
         self.cancelled.append(task_id)
+        return self.cancel_result
 
 
 def _executor(recorder, **kwargs):
@@ -213,9 +215,35 @@ class TestInterrupt(unittest.TestCase):
     def test_ctrl_c_cancels_the_task_before_re_raising(self):
         rec = _Recorder(poll_error=KeyboardInterrupt())
         with patch("aidrin.compute.executor.client", rec):
+            ex = _executor(rec)
             with self.assertRaises(KeyboardInterrupt):
-                _executor(rec).summarize_dataset("/x.csv")
+                ex.summarize_dataset("/x.csv")
         self.assertEqual(rec.cancelled, ["task-xyz"])
+
+    def test_ctrl_c_records_true_when_cancel_succeeds(self):
+        rec = _Recorder(poll_error=KeyboardInterrupt(), cancel_result=True)
+        with patch("aidrin.compute.executor.client", rec):
+            ex = _executor(rec)
+            with self.assertRaises(KeyboardInterrupt):
+                ex.summarize_dataset("/x.csv")
+        self.assertTrue(ex.last_cancel_succeeded)
+
+    def test_ctrl_c_records_false_when_cancel_is_not_supported(self):
+        # Mirrors the real globus-compute-sdk 4.x case: cancel() cannot
+        # actually cancel anything, and _call must not paper over that.
+        rec = _Recorder(poll_error=KeyboardInterrupt(), cancel_result=False)
+        with patch("aidrin.compute.executor.client", rec):
+            ex = _executor(rec)
+            with self.assertRaises(KeyboardInterrupt):
+                ex.summarize_dataset("/x.csv")
+        self.assertFalse(ex.last_cancel_succeeded)
+
+    def test_last_cancel_succeeded_is_none_before_any_interrupt(self):
+        rec = _Recorder()
+        with patch("aidrin.compute.executor.client", rec):
+            ex = _executor(rec)
+            ex.summarize_dataset("/x.csv")
+        self.assertIsNone(ex.last_cancel_succeeded)
 
 
 class TestSubmitCallback(unittest.TestCase):

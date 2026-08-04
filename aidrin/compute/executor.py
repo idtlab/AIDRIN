@@ -56,6 +56,9 @@ class RemoteExecutor:
         self.detach = detach
         self._client = compute_client
         self.on_submit = on_submit
+        # Set on a Ctrl-C during `_call`, so the CLI can report honestly
+        # whether the resulting `client.cancel()` actually cancelled anything.
+        self.last_cancel_succeeded: Optional[bool] = None
 
     # -- internals ---------------------------------------------------------
 
@@ -74,7 +77,7 @@ class RemoteExecutor:
         try:
             return client.poll(conn, task_id, timeout=self.timeout)
         except KeyboardInterrupt:
-            client.cancel(conn, task_id)
+            self.last_cancel_succeeded = client.cancel(conn, task_id)
             raise
 
     @staticmethod

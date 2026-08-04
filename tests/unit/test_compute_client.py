@@ -192,14 +192,26 @@ class TestProbe(unittest.TestCase):
 
 class TestCancel(unittest.TestCase):
 
-    def test_cancel_calls_through(self):
+    def test_cancel_calls_through_and_returns_true(self):
         stub = _StubClient()
-        compute_client.cancel(stub, "task-abc")
+        result = compute_client.cancel(stub, "task-abc")
         self.assertEqual(stub.cancelled, ["task-abc"])
+        self.assertTrue(result)
 
-    def test_cancel_swallows_backend_errors(self):
+    def test_cancel_swallows_backend_errors_and_returns_false(self):
         class _Boom:
             def cancel_task(self, task_id):
                 raise RuntimeError("no such task")
 
-        compute_client.cancel(_Boom(), "task-abc")  # must not raise
+        result = compute_client.cancel(_Boom(), "task-abc")  # must not raise
+        self.assertFalse(result)
+
+    def test_cancel_returns_false_when_sdk_has_no_cancel_task(self):
+        # This is the real globus-compute-sdk 4.x case: Client has no
+        # cancel_task method at all, unlike the older SDK versions the rest
+        # of this test module simulates.
+        class _NoCancelSupport:
+            pass
+
+        result = compute_client.cancel(_NoCancelSupport(), "task-abc")
+        self.assertFalse(result)

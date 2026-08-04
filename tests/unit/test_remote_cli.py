@@ -123,6 +123,26 @@ class TestManagementCommands(_RemoteCliTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out), result)
 
+    def test_task_cancel_reports_success_when_the_sdk_supports_it(self):
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.cancel", return_value=True):
+            _out, err, code = _run_cli("remote", "task", "task-5", "--cancel")
+        self.assertEqual(code, 0)
+        self.assertIn("Cancelled task-5", err)
+
+    def test_task_cancel_does_not_claim_success_when_unsupported(self):
+        # This is the real globus-compute-sdk 4.x case: cancel() cannot
+        # actually cancel anything (see aidrin.compute.client.cancel).
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.cancel", return_value=False):
+            _out, err, code = _run_cli("remote", "task", "task-5", "--cancel")
+        self.assertNotEqual(code, 0)
+        self.assertNotIn("Cancelled task-5", err)
+        self.assertIn("not supported", err.lower())
+        self.assertIn("task-5", err)
+        self.assertIn("running", err.lower())
+        self.assertIn("--wait", err)
+
     def test_logout_without_sdk_support_explains_the_alternative(self):
         class _NoLogout:
             pass
@@ -189,11 +209,27 @@ class TestExecution(_RemoteCliTestCase):
         with patch("aidrin.compute.client.get_client", return_value="stub"), \
              patch("aidrin.compute.client.submit", return_value="task-9"), \
              patch("aidrin.compute.client.poll", side_effect=KeyboardInterrupt), \
-             patch("aidrin.compute.client.cancel") as cancel:
+             patch("aidrin.compute.client.cancel", return_value=True) as cancel:
             _out, err, code = _run_cli("remote", "summarize", "/x.csv")
         self.assertEqual(code, 130)
         self.assertEqual(cancel.call_args[0][1], "task-9")
         self.assertIn("task-9", err)
+        self.assertIn("cancelled remote task task-9", err)
+
+    def test_interrupt_reports_still_running_when_cancel_is_not_supported(self):
+        # This is the real globus-compute-sdk 4.x case: cancel() cannot
+        # actually cancel anything, so the interrupt message must not claim
+        # it did.
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.submit", return_value="task-9"), \
+             patch("aidrin.compute.client.poll", side_effect=KeyboardInterrupt), \
+             patch("aidrin.compute.client.cancel", return_value=False):
+            _out, err, code = _run_cli("remote", "summarize", "/x.csv")
+        self.assertEqual(code, 130)
+        self.assertNotIn("cancelled remote task", err)
+        self.assertIn("task-9", err)
+        self.assertIn("running", err.lower())
+        self.assertIn("--wait", err)
 
     def test_interrupt_before_submission_claims_no_cancellation(self):
         with patch("aidrin.compute.client.get_client", side_effect=KeyboardInterrupt), \

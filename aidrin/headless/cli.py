@@ -621,9 +621,16 @@ def _remote_management(argv: List[str], opts) -> None:
         args = parser.parse_args(rest)
         conn = compute_client.get_client()
         if args.cancel:
-            compute_client.cancel(conn, args.task_id)
-            sys.stderr.write(f"Cancelled {args.task_id}\n")
-            return
+            cancelled = compute_client.cancel(conn, args.task_id)
+            if cancelled:
+                sys.stderr.write(f"Cancelled {args.task_id}\n")
+                return
+            sys.stderr.write(
+                f"Cancellation is not supported by the installed Globus Compute SDK; "
+                f"task {args.task_id} continues running on the endpoint. Recover the "
+                f"result later with: aidrin remote task {args.task_id} --wait\n"
+            )
+            sys.exit(1)
         if args.wait:
             timeout = opts.timeout or compute_client.DEFAULT_TIMEOUT
             result = compute_client.poll(conn, args.task_id, timeout=timeout)
@@ -983,9 +990,18 @@ def main() -> None:
         return
     except KeyboardInterrupt:
         # Only claim a cancellation when there was a task to cancel: a local run,
-        # or an interrupt that lands before submission, cancelled nothing.
+        # or an interrupt that lands before submission, cancelled nothing. Even
+        # then, `_call` only *attempted* a cancellation -- report what actually
+        # happened, tracked on the executor by RemoteExecutor._call.
         if remote_task_id:
-            sys.stderr.write(f"\nInterrupted; cancelled remote task {remote_task_id}.\n")
+            if getattr(executor, "last_cancel_succeeded", False):
+                sys.stderr.write(f"\nInterrupted; cancelled remote task {remote_task_id}.\n")
+            else:
+                sys.stderr.write(
+                    f"\nInterrupted; task {remote_task_id} could not be cancelled and "
+                    "continues running on the endpoint. Recover the result later with: "
+                    f"aidrin remote task {remote_task_id} --wait\n"
+                )
         else:
             sys.stderr.write("\nInterrupted.\n")
         sys.exit(130)
