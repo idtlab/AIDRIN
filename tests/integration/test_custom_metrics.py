@@ -144,7 +144,12 @@ class NotCustomDR:
     assert "CustomDR" in response.get_json()["error"]
 
 
-def test_custom_metrics_runtime_error_in_metric_returns_400(uploaded_client):
+def test_custom_metrics_runtime_error_in_metric_returns_400(uploaded_client, caplog):
+    """Runtime exceptions from the user's metric() get a 400 with a generic,
+    phase-labeled message — the exception text itself (which could echo
+    unrelated internal details) is deliberately not reflected back in the
+    HTTP response (CodeQL: information exposure through an exception), but
+    is still fully captured in the server logs for debugging."""
     code = """
 from aidrin.custom_metrics.base_dr import BaseDRAgent
 
@@ -156,7 +161,31 @@ class CustomDR(BaseDRAgent):
     assert response.status_code == 400
     data = response.get_json()
     assert "Error running metric()" in data["error"]
-    assert "boom" in data["error"]
+    assert "boom" not in data["error"]
+    assert "boom" in caplog.text
+
+
+def test_custom_metrics_runtime_error_in_remedy_returns_400(uploaded_client, caplog):
+    code = """
+from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+class CustomDR(BaseDRAgent):
+    def metric(self, **kwargs):
+        return {}
+
+    def remedy(self, **kwargs):
+        raise ValueError("kaboom")
+"""
+    with uploaded_client.session_transaction() as sess:
+        if "session_id" not in sess:
+            sess["session_id"] = "test-session-errors"
+    uploaded_client.post("/save-custom-metric-text", data={"metric_code": code, "apply_remedy": "no"})
+    response = uploaded_client.post("/custom-metrics?return_type=json", data={"apply_remedy": "yes"})
+    assert response.status_code == 400
+    data = response.get_json()
+    assert "Error running remedy()" in data["error"]
+    assert "kaboom" not in data["error"]
+    assert "kaboom" in caplog.text
 
 
 def test_custom_metrics_non_dict_metric_result_returns_400(uploaded_client):
