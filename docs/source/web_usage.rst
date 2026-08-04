@@ -545,6 +545,11 @@ path-bearing targets and filesystem settings.
      export AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS='["/data/project","/data/shared"]'
      export AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT=10000
 
+  AIDRIN does not fall back to the process working directory or filesystem root
+  when this allowlist is unset. The local Docker Compose stack uses ``["/app"]``
+  for development testing; production deployments should allow only the
+  directories that contain referenced data.
+
   The selected base directory must remain inside its configured root, and every
   referenced file must remain inside one of the configured roots after resolving
   symbolic links. Paths are checked on the web server, not on the browser's
