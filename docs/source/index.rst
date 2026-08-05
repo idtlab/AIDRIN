@@ -3,6 +3,10 @@
 AIDRIN Documentation
 ====================
 
+.. image:: https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21798062-orange
+   :target: https://doi.org/10.5281/zenodo.21798062
+   :alt: DOI
+
 **AIDRIN** (AI Data Readiness Infrastructure) is an open-source tool for
 evaluating whether a dataset is ready for artificial intelligence and machine
 learning work. It scores quality, structure, fairness, and privacy risk, and

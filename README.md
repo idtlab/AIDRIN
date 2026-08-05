@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/aidrin?logo=pypi&logoColor=white)](https://pypi.org/project/aidrin/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue?logo=python&logoColor=white)](https://pypi.org/project/aidrin/)
-[![DOI](https://img.shields.io/badge/DOI-10.1145%2F3676288.3676296-orange)](https://doi.org/10.1145/3676288.3676296)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21798062-orange)](https://doi.org/10.5281/zenodo.21798062)
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/idtlab/AIDRIN/tests.yml?branch=develop&label=tests&logo=github)](https://github.com/idtlab/AIDRIN/actions/workflows/tests.yml)
 [![Build](https://img.shields.io/github/actions/workflow/status/idtlab/AIDRIN/build.yml?branch=develop&label=build&logo=github)](https://github.com/idtlab/AIDRIN/actions/workflows/build.yml)
