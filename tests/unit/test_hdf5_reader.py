@@ -32,6 +32,7 @@ if "pkg_resources" not in sys.modules:
 
 import h5py
 import numpy as np
+import pandas as pd
 import pytest
 
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
@@ -44,6 +45,14 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 @pytest.fixture
 def logger():
     return logging.getLogger("test_hdf5_reader")
+
+
+def _sample_path(*parts):
+    """Path to a bundled sample dataset, or None when it is not available."""
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "sample_data" / Path(*parts)
+    return path if path.is_file() else None
 
 
 def _make_hdf5(path, data, fillvalue=None, attrs=None):
@@ -397,18 +406,8 @@ class TestIncompatibleRootLayout:
         assert df.shape == (16, 2)
 
     def test_adult_sample_still_reads(self, logger):
-        from pathlib import Path
-
-        sample = (
-            Path(__file__).resolve().parents[2]
-            / "web"
-            / "static"
-            / "datasets"
-            / "test_data"
-            / "h5"
-            / "adult.h5"
-        )
-        if not sample.is_file():
+        sample = _sample_path("h5", "adult.h5")
+        if sample is None:
             pytest.skip("adult.h5 sample not available")
 
         df = hdf5Reader(str(sample), logger).read()
@@ -497,19 +496,108 @@ class TestGroupedEqsimLayout:
         assert list(df.columns) == ["S_01_01/X", "S_01_02/X"]
 
     def test_pandas_hdf5_stays_legacy_not_multi_dataset(self, logger):
-        from pathlib import Path
-
-        sample = (
-            Path(__file__).resolve().parents[2]
-            / "web"
-            / "static"
-            / "datasets"
-            / "test_data"
-            / "h5"
-            / "adult.h5"
-        )
-        if not sample.is_file():
+        sample = _sample_path("h5", "adult.h5")
+        if sample is None:
             pytest.skip("adult.h5 sample not available")
 
         inv = hdf5Reader(str(sample), logger).inventory()
         assert inv["type"] == "legacy"
+
+
+class TestPandasHDFStoreLayouts:
+    """A pandas HDFStore file must read back as the frame pandas wrote.
+
+    Both store formats keep their real data behind pandas' private block
+    layout (``axis0``, ``block0_values``, ``_i_table/…``).  Walking those
+    datasets as if they were independent arrays concatenates the row index and
+    the column-name arrays into the data, so the reader has to recognise the
+    layout and let pandas decode it.
+    """
+
+    def test_fixed_format_adult_matches_source_csv(self, logger):
+        sample = _sample_path("h5", "adult.h5")
+        csv_sample = _sample_path("csv", "adult.csv")
+        if sample is None or csv_sample is None:
+            pytest.skip("adult sample pair not available")
+
+        expected = pd.read_csv(csv_sample)
+        df = hdf5Reader(str(sample), logger).read()
+
+        assert df is not None
+        assert list(df.columns) == list(expected.columns)
+        assert df.reset_index(drop=True).equals(expected)
+
+    def test_fixed_format_employees_reads_named_columns(self, logger):
+        sample = _sample_path("h5", "employees.h5")
+        if sample is None:
+            pytest.skip("employees.h5 sample not available")
+
+        df = hdf5Reader(str(sample), logger).read()
+
+        assert df is not None
+        assert df.shape == (8, 7)
+        assert not any(str(col).isdigit() for col in df.columns)
+
+    def test_table_format_reads_named_columns(self, tmp_path, logger):
+        pytest.importorskip("tables")
+        expected = pd.DataFrame(
+            {"reading": np.arange(6, dtype=np.int64), "station": list("abcdef")}
+        )
+        fpath = str(tmp_path / "table_format.h5")
+        expected.to_hdf(fpath, key="data", format="table")
+
+        df = hdf5Reader(fpath, logger).read()
+
+        assert df is not None
+        assert list(df.columns) == ["reading", "station"]
+        assert df.reset_index(drop=True).equals(expected)
+
+    def test_pandas_store_offers_no_dataset_picker(self, logger):
+        """A decoded store is one coherent table, so selection stays unnecessary."""
+        sample = _sample_path("h5", "employees.h5")
+        if sample is None:
+            pytest.skip("employees.h5 sample not available")
+
+        assert hdf5Reader(str(sample), logger).inventory()["type"] == "legacy"
+
+
+class TestPandasHDFStoreMultipleFrames:
+    """A store may hold several frames, so the caller has to be able to choose."""
+
+    @staticmethod
+    def _write_two_frames(path):
+        pd.DataFrame({"alpha": [1, 2, 3]}).to_hdf(path, key="first", format="table")
+        pd.DataFrame({"beta": [4.5, 5.5, 6.5]}).to_hdf(path, key="second", format="table")
+
+    def test_selected_key_picks_that_frame(self, tmp_path, logger):
+        pytest.importorskip("tables")
+        fpath = str(tmp_path / "two_frames.h5")
+        self._write_two_frames(fpath)
+
+        df = hdf5Reader(fpath, logger, selected_keys=["second"]).read()
+
+        assert df is not None
+        assert list(df.columns) == ["beta"]
+
+    def test_leading_slash_key_form_also_resolves(self, tmp_path, logger):
+        pytest.importorskip("tables")
+        fpath = str(tmp_path / "two_frames.h5")
+        self._write_two_frames(fpath)
+
+        df = hdf5Reader(fpath, logger, selected_keys=["/second"]).read()
+
+        assert df is not None
+        assert list(df.columns) == ["beta"]
+
+    def test_defaulting_to_first_frame_is_logged(self, tmp_path, logger, caplog):
+        """Choosing for the user silently would hide half the file."""
+        pytest.importorskip("tables")
+        fpath = str(tmp_path / "two_frames.h5")
+        self._write_two_frames(fpath)
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger).read()
+
+        assert df is not None
+        assert list(df.columns) == ["alpha"]
+        assert "second" in caplog.text
