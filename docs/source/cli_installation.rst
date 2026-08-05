@@ -12,8 +12,8 @@ For web application installation, see the :ref:`web_installation` page.
 
 ----
 
-Option 1: Install from Source
-------------------------------
+Install from Source
+-------------------
 
 Use this if you want the latest development version or plan to contribute:
 
@@ -33,8 +33,8 @@ Once installed, the ``aidrin`` command is available system-wide:
 
 ----
 
-Option 2: Install from PyPI
-----------------------------
+Install from PyPI
+-----------------
 
 The simplest way to get the CLI:
 
