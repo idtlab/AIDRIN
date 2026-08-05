@@ -22,19 +22,23 @@ What We Can Do
 - Analyze **DCAT and DataCite JSON metadata** for FAIR compliance.
 - Identify **missing or incomplete metadata elements**.
 - Work with **structured tabular datasets** (CSV, Excel, JSON, NumPy ``.npz``,
-  HDF5 ``.h5``, and Parquet ``.parquet``) for data readiness checks.  For HDF5
-  files, format-native missing
-  data sentinels (``_FillValue``, ``missing_value``, and non-default dataset
-  fill values) are automatically normalised to ``NaN`` before any metric is
-  computed, ensuring accurate completeness, outlier, and privacy scores. A
-  default zero without an explicit fill-value attribute is treated as data.
+  HDF5 ``.h5``, and Parquet ``.parquet``) for data readiness checks.
+- Run **user-authored custom metrics and remedies**: write a ``CustomDR``
+  class with your own ``metric()`` and ``remedy()`` logic and run it from the
+  web interface, the CLI, the Python library, or MCP.
+- Run through **Claude Code**, via the ``aidrin-mcp`` MCP server and a
+  bundled Claude Code skill.
+- Answer **domain-aware data readiness questions**, and suggest remediation
+  grounded in scientific literature, through the **agentic evaluation**
+  component.
 
 What We Cannot Do
 ~~~~~~~~~~~~~~~~~
 
 - Validate the **factual accuracy** of dataset content (e.g., correctness of values or labels).
 - Process **very large datasets** beyond system-imposed limits (see below).
-- Automatically fix or transform datasets.
+- Automatically fix or transform datasets on its own; remediation requires a
+  user-authored ``remedy()``. The remedied output is limited to CSV formats.
 - Guarantee compliance with every possible **domain-specific standard**.
 
 File and Size Limits

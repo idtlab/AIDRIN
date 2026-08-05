@@ -240,3 +240,12 @@ server, which dispatches on the same registry as the command line.
    relative to the working directory, creating ``noisy/`` if needed. On the
    command line that is wherever you ran ``aidrin``; in the web interface it is
    on the server.
+
+Custom Metrics and Remedies
+----------------------------
+
+AIDRIN supports user-authored metrics and remedies (a ``CustomDR`` class) 
+and have no fixed catalogue entry,so they are not in the mapping table above. See
+:ref:`web_usage_custom_metrics` for the web interface workflow, 
+:ref:`cli_add_custom_module` for the CLI scaffold-and-run workflow, and
+:ref:`aidrin_skill_tools` for the MCP equivalents.

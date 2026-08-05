@@ -115,6 +115,8 @@ did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mc
 
 ----
 
+.. _aidrin_skill_tools:
+
 Available Tools
 ---------------
 

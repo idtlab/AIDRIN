@@ -252,6 +252,8 @@ Results are printed as JSON to stdout. Redirect to a file to save:
 
    aidrin batch /path/to/my_project/fairness_config.yaml > fairness_results.json
 
+.. _cli_add_custom_module:
+
 ``aidrin add-custom-module``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

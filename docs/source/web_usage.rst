@@ -439,6 +439,8 @@ always clear what produced the text.
 
 ----
 
+.. _web_usage_custom_metrics:
+
 Custom Metrics and Remedies
 ----------------------------
 
