@@ -16,7 +16,7 @@ with open(_version_path) as _version_file:
     exec(_version_file.read(), _version_globals)
 
 project = 'AIDRIN'
-copyright = '2025, IDT Lab'
+copyright = '2025-2026, IDT Lab'
 author = 'IDT Lab'
 release = _version_globals["__version__"]
 
@@ -34,12 +34,26 @@ exclude_patterns = []
 html_theme = 'sphinx_rtd_theme'
 
 html_theme_options = {
-    'style_nav_header_background': '#efefef',
+    'style_nav_header_background': '#f4f3f9',
     'logo_only': True,
     'collapse_navigation': False,
-    'navigation_depth': 2,
+    'navigation_depth': 3,
     'sticky_navigation': True,
 }
+
+# -- Options for linkcheck ---------------------------------------------------
+
+linkcheck_ignore = [
+    # Local development server; only reachable while the app is running.
+    r"^https?://127\.0\.0\.1(:\d+)?",
+    r"^https?://localhost(:\d+)?",
+    # The ACM Digital Library returns 403 to the linkcheck client. The DOIs
+    # themselves resolve correctly in a browser.
+    r"^https://doi\.org/10\.1145/",
+    # Returns 406 to the linkcheck client's Accept header; 200 to curl and to
+    # a browser.
+    r"^https://www\.accountablehq\.com/",
+]
 
 html_logo = "_static/logo.png"
 html_static_path = ['_static']

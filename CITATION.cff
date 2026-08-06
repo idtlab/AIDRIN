@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: If you use this software, please cite it using the metadata from this file.
-title: "AIDRIN - AI Data Readiness Inspector"
+title: "AIDRIN - AI Data Readiness Infrastructure"
 type: software
 authors:
   - family-names: Hiniduma
@@ -12,9 +12,6 @@ authors:
     email: sbyna@lbl.gov
     affiliation: The Ohio State University
     orcid: "https://orcid.org/0000-0003-3048-3448"
-  - family-names: Ryan
-    given-names: Dylan
-    affiliation: The Ohio State University
   - family-names: Bez
     given-names: Jean Luca
     email: jlbez@lbl.gov
@@ -26,13 +23,17 @@ authors:
     orcid: "https://orcid.org/0000-0003-2130-2887"
 url: https://aidrin.io
 repository-code: https://github.com/idtlab/AIDRIN
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21798062
+    description: Zenodo archive of AIDRIN
 abstract: AIDRIN is a tool developed to assess the readiness of datasets for artificial intelligence applications. It helps users quickly evaluate the quality, structure, and completeness of their data to ensure it meets the foundational requirements for machine learning and other AI workflows.
 keywords:
   - data readiness
   - AI
   - data management
 preferred-citation:
-  type: article
+  type: software
   authors:
     - family-names: Hiniduma
       given-names: Kaveen
@@ -42,7 +43,5 @@ preferred-citation:
       given-names: Jean Luca
     - family-names: Madduri
       given-names: Ravi
-  title: "AI Data Readiness Inspector (AIDRIN) for Quantitative Assessment of Data Readiness for AI"
-  journal: "Proceedings of the 36th International Conference on Scientific and Statistical Database Management"
-  year: 2024
-  doi: "10.1145/3676288.3676296"
+  title: "AIDRIN - AI Data Readiness Infrastructure"
+  doi: "10.5281/zenodo.21798062"

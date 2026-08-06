@@ -75,19 +75,21 @@ flask --app 'web:create_app()' run --debug                                # http
 aidrin list                                  # list metrics
 aidrin data-quality data.csv                 # fast completeness/duplicity/outliers
 aidrin run completeness data.csv             # single metric (arguments are POSITIONAL, not flags)
-aidrin run class_imbalance data.csv income   # metric + required column(s)
+aidrin run class-imbalance data.csv income   # metric + required column(s)
 aidrin batch config.yaml                      # multiple metrics from a YAML/JSON config
 aidrin add-custom-module my_audit --dir ./    # scaffold a custom metric/remedy
 ```
-Library/CLI metric keys are lowercase with underscores (`class_imbalance`). Run failures surface in
-the JSON output; do not rely on the exit code alone.
+Library metric keys use underscores (`class_imbalance`); CLI subcommands use hyphens
+(`class-imbalance`); `cli.py` registers subparsers via `metric_name.replace("_", "-")`, so
+`aidrin run class_imbalance` is an invalid choice. The bare form without `run` accepts either.
+Run failures surface in the JSON output; do not rely on the exit code alone.
 
 ### Agentic pipeline (optional)
 Needs `[agentic]` installed and an LLM key (`OPENAI_API_KEY`, or `GOOGLE_API_KEY` for Gemini
 embeddings). Driven by a YAML config (see `examples/agentic/`):
 `aidrin agentic build-index -c config.yaml` then `aidrin agentic run -c config.yaml -o results.json`.
 
-### MCP server (on the `aidrin-mcp` branch, not yet on develop)
+### MCP server
 `pip install -e '.[mcp]'` then run `aidrin-mcp` (stdio). Exposes the metrics/agentic tools to MCP
 clients. The custom-metric and agentic tools execute code: only point them at trusted inputs.
 
@@ -141,7 +143,7 @@ npx --yes prettier@3 --check web/static/css web/static/js   # only if you touche
 ## Gotchas
 
 - Correlations use `dython.associations` (pandas-only, O(cols^2)); `dython` needs `pkg_resources`,
-  hence the `setuptools<81` pin. `shap` can be slow to resolve on some Python versions.
+  hence the `setuptools` build pin in `pyproject.toml`. `shap` can be slow to resolve on some Python versions.
 - Matplotlib uses the non-interactive `Agg` backend and is **not thread-safe**: do not generate plots
   from concurrent threads (e.g. several metric calls at once in one process will serialize/contend).
 - Boolean columns are treated as **categorical** in the Data Overview summary.
