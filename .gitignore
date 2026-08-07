@@ -189,3 +189,6 @@ examples/*_vector_store/
 
 dump.rdb
 celerybeat-schedule.db
+
+# Project-local Globus Compute endpoint profiles (aidrin remote configure --local)
+.aidrin.json
