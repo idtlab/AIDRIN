@@ -1,0 +1,2001 @@
+applicant_id,age,income,credit_score,employment_years,education,gender,ethnicity,loan_amount,loan_purpose,approved
+A00000,44,70328,609,4.6,High School,Female,White,46712,auto,1
+A00001,53,85424,732,2.5,High School,Female,Asian,14748,business,1
+A00002,36,20000,674,9.9,High School,Male,White,28176,home,1
+A00003,62,110448,726,5.8,Master,Female,White,25751,auto,1
+A00004,64,62021,665,6.0,Bachelor,Male,Black,16402,home,1
+A00005,54,89901,617,2.0,High School,Male,Hispanic,10883,home,1
+A00006,40,61839,689,13.0,Other,Male,White,15648,auto,1
+A00007,59,50481,578,21.4,Bachelor,Male,White,98606,education,1
+A00008,53,41556,723,4.5,Bachelor,Female,White,53635,personal,1
+A00009,43,61101,605,6.4,Bachelor,Female,Black,49826,home,1
+A00010,40,40658,753,1.3,Bachelor,Male,Other,11740,education,1
+A00011,57,82514,652,9.6,Bachelor,Female,White,6973,business,1
+A00012,45,20000,765,5.3,Bachelor,Male,Other,52954,auto,1
+A00013,29,35420,590,2.9,PhD,Male,White,45424,business,0
+A00014,64,167191,625,5.5,Bachelor,Female,Hispanic,24582,education,0
+A00015,24,33669,710,5.6,Bachelor,Male,Asian,16375,education,1
+A00016,51,42480,773,0.5,High School,Female,Black,6828,home,1
+A00017,49,28866,813,15.8,PhD,Male,White,44087,home,1
+A00018,46,59964,683,4.9,Bachelor,Female,White,56891,personal,1
+A00019,23,31515,827,4.2,High School,Male,White,12793,personal,1
+A00020,42,43854,656,1.6,Other,Male,Black,11967,education,0
+A00021,60,81578,767,4.9,Bachelor,Female,Other,59447,education,1
+A00022,31,32232,604,1.2,High School,Female,White,13180,education,1
+A00023,51,78681,713,3.3,High School,Male,White,91422,education,1
+A00024,58,80284,492,5.9,Bachelor,Female,White,20186,business,0
+A00025,62,92316,590,12.1,Other,Male,Black,16167,education,0
+A00026,43,53333,717,0.1,Bachelor,Male,Black,22835,home,1
+A00027,34,300000,575,2.3,High School,Male,White,16166,home,1
+A00028,51,92292,714,1.2,Bachelor,Female,Hispanic,54228,personal,0
+A00029,42,59571,752,18.2,Bachelor,Female,White,44741,business,1
+A00030,48,28982,639,1.8,High School,Female,Black,52600,home,0
+A00031,53,46247,602,2.4,PhD,Female,White,25530,home,0
+A00032,52,115358,642,4.9,High School,Male,White,15289,auto,1
+A00033,31,136724,602,1.1,PhD,Male,Black,21867,education,1
+A00034,54,119014,671,3.8,Master,Male,Black,15669,education,0
+A00035,44,78520,688,26.1,High School,Female,White,71202,home,1
+A00036,61,23077,655,0.9,Master,Male,Hispanic,49110,home,0
+A00037,50,65663,813,0.2,Master,Female,White,20471,auto,1
+A00038,60,23275,622,0.5,Bachelor,Female,White,10496,education,1
+A00039,64,20080,791,5.3,Bachelor,Female,Other,75559,auto,1
+A00040,64,56584,596,12.8,High School,Male,Asian,24571,education,0
+A00041,53,67098,685,3.6,High School,Male,White,19848,home,1
+A00042,47,84290,774,4.7,Master,Female,Asian,76093,personal,1
+A00043,26,66057,770,2.4,High School,Female,Hispanic,14647,personal,1
+A00044,37,67437,646,3.6,High School,Male,White,17066,auto,1
+A00045,41,27152,724,12.2,Bachelor,Female,White,18313,personal,1
+A00046,55,46028,713,5.3,High School,Female,White,7682,education,1
+A00047,46,20000,636,17.9,Master,Male,Black,28355,home,1
+A00048,40,20000,729,8.6,Master,Female,Asian,11969,auto,1
+A00049,27,76449,828,8.2,Master,Male,White,13952,home,1
+A00050,52,31198,717,7.9,High School,Non-binary,White,12537,business,1
+A00051,40,82743,725,8.1,Bachelor,Male,White,13771,business,1
+A00052,22,95321,733,10.6,Master,Male,White,11258,business,1
+A00053,33,33806,563,2.0,Bachelor,Male,Hispanic,26843,home,0
+A00054,59,69855,716,2.7,Master,Female,White,19448,auto,1
+A00055,26,32968,598,8.5,Bachelor,Non-binary,Black,22888,education,1
+A00056,38,20000,632,14.9,Bachelor,Male,White,144788,home,1
+A00057,43,52785,850,3.2,High School,Male,Hispanic,19449,home,1
+A00058,24,36955,659,2.1,Master,Male,Hispanic,35737,auto,1
+A00059,28,37644,620,0.7,High School,Male,Black,39143,education,0
+A00060,62,160364,772,0.5,PhD,Female,White,20946,home,1
+A00061,46,20000,604,5.2,Bachelor,Male,Black,27420,personal,1
+A00062,30,61680,644,1.6,High School,Non-binary,Black,22394,education,1
+A00063,28,26987,779,14.3,Master,Female,Black,25901,home,1
+A00064,39,84538,683,1.0,Bachelor,Male,Black,13777,home,1
+A00065,52,58633,555,3.6,High School,Female,Asian,14833,personal,1
+A00066,53,61550,723,8.0,Other,Non-binary,White,22326,education,1
+A00067,29,27807,648,2.4,Master,Female,White,4548,personal,1
+A00068,52,30966,803,3.0,Bachelor,Female,Other,72901,business,1
+A00069,60,85506,631,23.8,Master,Male,White,124080,personal,1
+A00070,30,141843,764,0.7,Bachelor,Male,Asian,25242,personal,1
+A00071,22,65393,822,5.2,Bachelor,Female,Black,37510,business,1
+A00072,63,28611,611,2.5,High School,Male,Asian,52304,personal,0
+A00073,43,60075,664,1.1,High School,Female,Black,7633,personal,1
+A00074,55,210340,711,16.6,Bachelor,Female,Hispanic,46287,auto,1
+A00075,35,52127,611,6.0,Bachelor,Male,Hispanic,15659,education,0
+A00076,34,117842,701,1.6,Master,Male,White,137665,personal,1
+A00077,30,31438,662,4.1,Bachelor,Male,White,18946,personal,1
+A00078,30,47798,660,8.5,Bachelor,Female,White,45549,home,0
+A00079,41,71092,683,3.2,Master,Male,White,19096,home,0
+A00080,25,62217,685,3.0,Other,Male,Other,127689,auto,1
+A00081,58,30951,693,4.6,Bachelor,Female,White,14619,business,1
+A00082,43,30160,632,1.9,PhD,Female,Hispanic,55942,auto,0
+A00083,61,88696,635,0.1,Master,Female,White,36364,business,1
+A00084,43,100200,670,14.5,High School,Female,White,30438,home,1
+A00085,34,121453,676,0.3,Bachelor,Male,Other,26455,home,1
+A00086,43,144691,644,5.5,High School,Non-binary,White,12918,business,1
+A00087,27,53144,705,0.7,Master,Female,Black,2782,auto,0
+A00088,57,40671,534,0.7,Bachelor,Male,White,52026,home,1
+A00089,52,110259,621,4.1,Bachelor,Male,White,14897,auto,1
+A00090,27,75195,657,1.4,Master,Male,White,56144,auto,1
+A00091,46,27187,611,11.0,Bachelor,Female,Black,29183,education,0
+A00092,44,26365,810,1.6,Bachelor,Female,White,57538,personal,1
+A00093,29,65851,681,12.5,PhD,Female,Hispanic,41836,home,1
+A00094,26,44074,694,10.8,Other,Non-binary,Black,3066,business,1
+A00095,54,48249,641,17.7,Master,Male,White,36023,auto,1
+A00096,32,93294,678,5.6,High School,Female,White,16731,education,1
+A00097,43,77297,582,14.4,High School,Female,White,55938,auto,0
+A00098,31,108871,666,1.2,High School,Female,Hispanic,35346,auto,1
+A00099,49,20000,605,10.8,Bachelor,Male,White,35681,education,0
+A00100,23,57070,657,2.0,High School,Female,White,17715,education,0
+A00101,36,74370,475,12.1,PhD,Female,White,10613,home,0
+A00102,45,20000,589,7.2,Master,Male,White,15579,home,0
+A00103,40,33092,797,4.8,Bachelor,Female,Black,5219,auto,1
+A00104,47,29605,746,6.1,High School,Male,White,13735,personal,0
+A00105,28,49663,785,5.8,Bachelor,Male,White,6827,auto,1
+A00106,40,130185,791,1.6,Bachelor,Female,White,6973,education,1
+A00107,54,164975,733,5.8,Master,Male,Black,24177,education,1
+A00108,35,30074,643,17.9,High School,Female,Black,33766,auto,0
+A00109,27,67233,597,5.4,Master,Female,White,21473,home,1
+A00110,58,68547,771,0.8,High School,Male,White,14779,education,1
+A00111,55,61856,685,11.3,High School,Male,Black,10322,personal,1
+A00112,50,62279,850,1.8,Other,Male,White,17089,personal,1
+A00113,56,58820,650,7.6,High School,Male,Black,11409,auto,1
+A00114,55,134934,837,0.4,High School,Female,White,20946,education,0
+A00115,53,94985,667,2.3,Bachelor,Male,White,6520,auto,1
+A00116,43,25949,786,0.1,Bachelor,Non-binary,White,38601,personal,1
+A00117,21,79018,815,5.0,High School,Male,White,13993,education,1
+A00118,47,83735,598,4.2,High School,Male,Black,29762,personal,1
+A00119,33,59217,641,4.4,High School,Female,White,44791,personal,1
+A00120,55,96650,597,9.8,Bachelor,Female,White,28632,auto,1
+A00121,41,54876,581,2.8,High School,Female,White,41743,education,1
+A00122,60,55286,733,1.9,Master,Female,White,4216,education,1
+A00123,47,52719,664,0.3,PhD,Female,Black,14849,auto,0
+A00124,45,20000,684,4.7,High School,Male,Hispanic,53234,personal,0
+A00125,61,46712,724,8.9,Bachelor,Male,Other,33103,education,1
+A00126,41,32828,531,14.0,High School,Non-binary,White,96642,auto,1
+A00127,37,24055,782,0.6,High School,Male,White,86120,education,1
+A00128,37,115891,652,0.8,High School,Female,White,27991,personal,1
+A00129,59,66338,722,1.7,Master,Female,Asian,18005,education,1
+A00130,54,48151,729,13.1,Bachelor,Female,White,10231,business,1
+A00131,28,34930,789,2.8,Bachelor,Female,White,15053,personal,1
+A00132,42,58553,671,6.0,Master,Non-binary,Hispanic,15889,auto,1
+A00133,37,88863,510,1.6,Master,Male,White,13703,personal,1
+A00134,49,29846,684,6.5,Bachelor,Female,White,10565,education,1
+A00135,23,48878,696,0.1,High School,Female,White,30371,education,1
+A00136,52,82523,597,4.6,Other,Male,Black,85588,business,0
+A00137,53,20000,691,0.8,Bachelor,Female,Hispanic,46472,home,1
+A00138,30,47356,651,16.7,Master,Male,White,17018,business,1
+A00139,27,37889,572,1.5,Master,Male,Black,49574,education,0
+A00140,48,45238,733,0.6,Bachelor,Female,White,29065,business,1
+A00141,32,36280,634,11.3,High School,Female,White,21320,personal,0
+A00142,62,53240,647,0.6,High School,Male,Asian,20282,education,0
+A00143,55,155465,642,2.3,Bachelor,Female,Hispanic,18770,personal,0
+A00144,63,40362,778,16.8,Bachelor,Male,Asian,37080,education,1
+A00145,44,58397,676,3.7,Master,Male,Hispanic,24630,auto,0
+A00146,62,162242,686,9.6,Master,Male,White,12298,business,1
+A00147,21,35241,644,0.6,PhD,Female,White,11831,home,1
+A00148,33,145627,717,2.0,Other,Male,White,28133,personal,1
+A00149,21,49177,787,10.8,Master,Male,White,31036,home,1
+A00150,50,142791,731,1.0,High School,Female,White,17145,education,1
+A00151,43,76889,734,1.1,Bachelor,Male,White,8905,personal,1
+A00152,33,58939,728,1.0,Bachelor,Male,White,59920,home,1
+A00153,34,47127,569,31.0,Bachelor,Male,Hispanic,50558,education,1
+A00154,49,33710,609,5.8,High School,Female,White,4492,education,1
+A00155,28,51301,663,1.5,Bachelor,Female,White,64322,auto,1
+A00156,43,83986,621,7.8,Bachelor,Female,Hispanic,18635,business,1
+A00157,47,48636,594,2.9,Bachelor,Male,Black,25642,auto,0
+A00158,31,40539,530,0.5,Master,Male,White,54752,auto,0
+A00159,31,42172,572,11.9,Bachelor,Female,Black,82621,auto,1
+A00160,36,88919,659,9.0,Bachelor,Male,Hispanic,49133,business,1
+A00161,47,102241,674,8.5,Bachelor,Male,Asian,26710,personal,1
+A00162,32,32850,616,1.3,Bachelor,Male,White,7328,home,1
+A00163,37,32821,686,7.6,High School,Male,White,4354,education,1
+A00164,44,61550,645,2.8,Bachelor,Male,Black,44468,auto,0
+A00165,29,122580,767,4.8,Bachelor,Female,White,64448,auto,1
+A00166,46,97498,667,15.5,Master,Female,Hispanic,11479,personal,0
+A00167,27,23130,735,12.4,High School,Female,Black,17750,business,1
+A00168,27,41837,696,4.6,Other,Male,Hispanic,14103,personal,0
+A00169,31,28047,567,3.4,Master,Female,Other,13806,business,0
+A00170,33,41751,672,6.6,Bachelor,Female,Black,52050,business,0
+A00171,22,128366,581,9.9,Bachelor,Female,Asian,26231,business,1
+A00172,63,20877,671,7.6,Bachelor,Male,Black,18336,business,0
+A00173,34,20000,620,2.9,Master,Female,White,184612,personal,0
+A00174,56,29817,710,0.5,Master,Male,Hispanic,6991,auto,1
+A00175,60,58243,572,3.8,Master,Female,Black,34143,home,0
+A00176,56,71143,681,0.1,PhD,Female,Other,9516,education,1
+A00177,57,63733,725,0.9,Bachelor,Female,White,19419,home,1
+A00178,25,99251,752,8.0,Master,Female,White,24807,home,1
+A00179,37,20000,618,4.5,Bachelor,Female,Hispanic,43289,home,1
+A00180,53,100007,681,4.5,Bachelor,Female,White,17873,home,1
+A00181,46,40649,694,4.3,Bachelor,Male,Black,16423,business,1
+A00182,21,76031,803,5.0,Master,Male,White,17618,education,1
+A00183,45,22157,561,6.9,High School,Female,White,9283,personal,0
+A00184,56,49166,607,10.2,High School,Non-binary,White,36528,auto,1
+A00185,57,56486,850,11.0,High School,Female,Hispanic,27586,auto,1
+A00186,37,98071,658,2.6,PhD,Male,White,31198,education,1
+A00187,31,20000,528,1.8,Bachelor,Female,Hispanic,20834,business,0
+A00188,34,49933,633,13.8,Bachelor,Male,Hispanic,18876,personal,0
+A00189,34,25561,458,1.4,Bachelor,Male,Black,56414,business,0
+A00190,36,66389,699,23.4,Bachelor,Male,White,49882,education,1
+A00191,34,78145,744,14.7,PhD,Male,White,68311,personal,1
+A00192,41,106117,607,2.8,Other,Female,Hispanic,29675,home,1
+A00193,22,35560,642,9.1,Master,Male,White,64999,education,1
+A00194,33,85505,753,15.8,Master,Male,White,15790,auto,1
+A00195,34,110917,539,0.3,High School,Female,Asian,18756,home,1
+A00196,27,20000,574,5.7,High School,Male,White,57301,auto,0
+A00197,59,70785,661,9.8,Bachelor,Male,White,43249,business,1
+A00198,50,87125,619,10.1,Master,Male,Other,17459,auto,1
+A00199,61,41972,656,0.5,High School,Male,White,9537,personal,0
+A00200,45,23707,578,6.0,Master,Female,White,18710,business,1
+A00201,25,86316,697,0.7,High School,Male,White,12734,business,1
+A00202,60,23868,668,7.8,High School,Male,Hispanic,87518,auto,1
+A00203,41,44045,723,0.6,Bachelor,Male,Asian,40458,personal,1
+A00204,51,47854,696,3.7,Master,Male,Hispanic,11935,auto,1
+A00205,37,75306,696,3.6,Master,Male,Other,9547,auto,1
+A00206,42,33658,564,2.1,Bachelor,Male,White,11817,business,0
+A00207,42,32508,719,2.4,Master,Male,Black,14086,business,1
+A00208,33,52018,653,1.0,Master,Male,White,19276,auto,1
+A00209,45,89664,666,2.3,Bachelor,Female,Asian,53725,auto,1
+A00210,53,193391,763,11.4,Master,Male,Asian,10165,education,1
+A00211,21,20000,622,28.3,High School,Male,White,137534,education,0
+A00212,26,59231,788,1.4,Bachelor,Female,Hispanic,10356,home,1
+A00213,58,25541,795,35.1,High School,Male,Black,7134,auto,1
+A00214,46,90335,740,21.9,Bachelor,Female,White,85020,home,1
+A00215,63,27913,601,7.4,Bachelor,Male,Black,63386,home,1
+A00216,47,32702,505,8.1,High School,Male,Other,19036,auto,0
+A00217,49,34421,766,0.2,Bachelor,Female,White,29883,home,1
+A00218,60,46830,688,4.8,Master,Male,White,30493,business,0
+A00219,50,59511,620,3.8,Bachelor,Male,Other,24572,business,1
+A00220,35,65527,773,2.2,High School,Female,White,7807,auto,0
+A00221,44,48851,611,16.1,High School,Non-binary,White,3024,personal,1
+A00222,31,22072,646,6.0,Bachelor,Male,Hispanic,11206,education,0
+A00223,35,75862,721,27.5,Master,Female,Black,94176,auto,1
+A00224,50,47487,590,0.7,PhD,Male,White,97181,home,1
+A00225,27,98424,671,6.4,Bachelor,Female,White,17863,education,1
+A00226,50,32059,767,2.6,Master,Male,Hispanic,10235,personal,1
+A00227,46,20000,696,11.4,Bachelor,Female,White,27515,home,0
+A00228,34,48030,779,1.5,Other,Male,Black,31294,home,1
+A00229,22,106678,770,13.0,High School,Female,Asian,35616,education,1
+A00230,52,53990,680,14.1,Bachelor,Male,White,2917,personal,1
+A00231,57,43486,493,10.1,Bachelor,Female,Asian,275461,auto,0
+A00232,53,29079,591,10.1,Bachelor,Female,Hispanic,54501,business,1
+A00233,39,140738,741,2.2,High School,Female,Asian,18801,education,1
+A00234,49,26429,555,4.1,High School,Non-binary,White,12397,home,0
+A00235,39,31721,653,2.1,Bachelor,Male,White,48525,personal,1
+A00236,36,69010,707,5.0,Master,Female,Black,32738,home,0
+A00237,35,20000,797,3.7,Master,Male,Asian,23711,education,1
+A00238,30,105319,633,3.5,High School,Female,Other,31782,business,0
+A00239,63,71290,628,0.7,PhD,Female,White,20127,business,1
+A00240,50,84081,675,19.9,Bachelor,Male,White,30378,personal,1
+A00241,28,68519,708,0.5,Other,Male,White,39383,business,1
+A00242,59,44503,667,0.4,High School,Female,Black,28988,business,0
+A00243,27,25902,763,0.0,Master,Female,Hispanic,27798,home,0
+A00244,47,45069,616,6.2,PhD,Female,Hispanic,67123,auto,0
+A00245,28,27305,689,23.2,Master,Female,White,6138,auto,1
+A00246,36,65623,715,0.7,Master,Male,Other,11634,auto,1
+A00247,49,79544,647,0.6,Bachelor,Female,White,22499,home,1
+A00248,64,118905,747,4.4,Master,Female,White,12284,home,1
+A00249,64,61270,691,5.0,Bachelor,Female,Black,16045,education,1
+A00250,60,85369,743,21.8,Bachelor,Female,White,61709,business,1
+A00251,31,41015,695,0.4,Other,Female,Hispanic,19551,personal,1
+A00252,25,36791,710,8.7,High School,Female,Black,5098,personal,1
+A00253,60,65134,629,2.9,Bachelor,Female,White,15698,education,1
+A00254,61,38875,629,3.1,PhD,Female,White,23074,personal,0
+A00255,33,57613,777,11.8,High School,Female,White,22737,education,1
+A00256,21,25933,730,2.1,High School,Male,Black,34366,education,0
+A00257,49,28883,598,6.3,Bachelor,Male,White,32193,auto,0
+A00258,24,71771,694,0.2,Master,Female,White,19711,business,1
+A00259,22,83450,490,0.4,PhD,Female,White,8480,auto,0
+A00260,62,27135,634,10.2,High School,Female,Hispanic,15476,education,0
+A00261,42,73303,756,1.2,Bachelor,Female,White,13383,personal,0
+A00262,25,35609,669,7.7,Bachelor,Male,White,17534,education,1
+A00263,49,49508,689,2.0,Master,Male,White,38289,auto,0
+A00264,37,114710,438,16.2,Master,Female,White,30432,business,1
+A00265,44,79577,648,7.6,Other,Female,White,42582,business,1
+A00266,60,79025,707,5.4,Bachelor,Male,White,16199,business,1
+A00267,31,154087,717,8.2,High School,Male,Hispanic,73621,home,1
+A00268,49,32134,756,24.7,Bachelor,Male,White,37732,auto,1
+A00269,57,27132,663,2.7,Bachelor,Male,White,24095,home,0
+A00270,39,31784,666,11.9,Bachelor,Female,Other,35691,personal,1
+A00271,63,42078,573,5.6,High School,Male,White,12828,auto,0
+A00272,40,20000,663,0.0,High School,Male,White,4076,education,0
+A00273,41,43284,579,7.4,PhD,Female,White,13556,personal,1
+A00274,59,35357,532,2.8,High School,Female,White,40053,personal,0
+A00275,48,78453,593,0.5,Bachelor,Female,White,23486,auto,0
+A00276,59,60563,800,1.0,Master,Male,Asian,19742,personal,1
+A00277,55,34186,658,0.1,High School,Male,White,11178,business,1
+A00278,52,69840,697,14.8,High School,Male,Hispanic,4607,business,1
+A00279,31,75656,638,1.9,Bachelor,Female,Other,68863,home,0
+A00280,38,30911,536,13.7,Bachelor,Male,White,18651,business,1
+A00281,59,36467,754,7.9,Bachelor,Female,Black,15620,business,1
+A00282,48,20000,506,0.7,Bachelor,Female,White,12870,education,1
+A00283,33,25478,635,2.3,High School,Female,White,60091,education,1
+A00284,35,31398,675,3.7,High School,Male,Hispanic,44581,auto,0
+A00285,55,51251,698,3.4,High School,Male,White,10159,business,0
+A00286,28,27799,621,3.8,Bachelor,Female,Other,55917,home,1
+A00287,25,36023,532,5.8,Bachelor,Male,Black,19612,auto,0
+A00288,54,23501,615,17.3,PhD,Female,White,13515,education,1
+A00289,33,54321,620,2.2,High School,Male,White,17415,home,1
+A00290,54,63286,618,1.8,Bachelor,Non-binary,Black,11770,personal,1
+A00291,44,62406,757,0.1,Bachelor,Female,White,7656,personal,1
+A00292,64,49385,582,4.2,Master,Male,White,40982,education,0
+A00293,44,20000,704,6.1,Bachelor,Female,White,18461,education,1
+A00294,59,33793,692,2.1,High School,Female,White,36089,auto,0
+A00295,58,38392,756,0.9,Bachelor,Female,Other,27716,auto,1
+A00296,30,38484,669,4.3,Bachelor,Male,White,34160,personal,1
+A00297,64,51276,743,2.1,Master,Male,White,4286,education,1
+A00298,53,115303,666,5.0,High School,Female,Hispanic,11010,personal,1
+A00299,25,79798,714,18.2,Master,Male,Hispanic,34734,home,1
+A00300,21,27105,559,14.1,Bachelor,Female,Asian,7943,home,0
+A00301,32,73647,468,7.9,Master,Male,Asian,29686,education,0
+A00302,21,71982,710,7.9,High School,Female,White,7240,business,1
+A00303,36,30223,714,14.9,Master,Male,White,22318,education,1
+A00304,64,81578,718,1.8,Master,Female,Black,79856,personal,1
+A00305,42,44523,638,7.6,Bachelor,Male,White,40932,home,1
+A00306,22,21036,799,10.0,Bachelor,Male,Hispanic,5011,personal,1
+A00307,42,64416,643,5.0,High School,Male,White,43420,education,1
+A00308,30,55836,713,0.1,High School,Female,Asian,94635,auto,1
+A00309,58,42761,727,3.0,Master,Male,Hispanic,206408,business,1
+A00310,24,47931,817,14.0,Bachelor,Female,Black,32210,business,1
+A00311,54,31842,654,11.4,Master,Male,White,7394,personal,1
+A00312,40,70691,627,7.0,Master,Female,Other,31186,home,1
+A00313,21,47759,560,0.6,Master,Female,Hispanic,78970,business,0
+A00314,50,54169,804,4.6,Master,Male,Hispanic,18964,auto,1
+A00315,41,60735,713,4.5,Bachelor,Male,Hispanic,50740,education,0
+A00316,54,24520,716,0.3,Bachelor,Male,White,11252,education,1
+A00317,48,28664,850,2.5,High School,Female,White,29669,business,1
+A00318,55,20000,706,5.1,Master,Non-binary,White,3005,auto,1
+A00319,41,68792,575,6.2,Other,Male,Black,10298,auto,1
+A00320,21,23686,664,8.4,Bachelor,Female,Black,21918,education,1
+A00321,26,53079,602,1.5,PhD,Female,White,16470,business,0
+A00322,41,61242,648,6.4,Other,Female,Other,7781,personal,1
+A00323,38,70362,647,2.8,Bachelor,Female,White,14768,home,1
+A00324,55,23803,633,0.6,Master,Non-binary,Hispanic,28673,education,0
+A00325,39,47141,568,3.9,Bachelor,Female,White,20558,home,0
+A00326,58,133541,807,6.8,High School,Female,White,23126,business,1
+A00327,29,137116,703,2.9,High School,Male,White,39560,business,1
+A00328,37,88644,661,7.5,Bachelor,Female,Hispanic,16738,personal,0
+A00329,54,60023,740,5.9,Master,Non-binary,Hispanic,65338,home,0
+A00330,26,26820,717,1.9,Bachelor,Female,White,9982,business,1
+A00331,35,75446,702,0.4,Master,Male,White,102991,business,0
+A00332,54,44586,734,6.0,Master,Female,Black,53660,business,1
+A00333,46,68618,690,5.5,Master,Male,White,16567,business,1
+A00334,55,33533,733,1.2,High School,Female,Black,17475,education,1
+A00335,43,44189,740,0.8,Bachelor,Male,White,25987,home,1
+A00336,58,54094,693,2.1,High School,Female,Asian,35558,personal,1
+A00337,59,56827,662,5.8,High School,Male,Hispanic,52872,auto,0
+A00338,63,65922,802,1.3,High School,Male,White,7536,home,1
+A00339,26,34630,641,8.7,High School,Male,Hispanic,31255,business,0
+A00340,47,21895,711,9.2,High School,Male,White,4051,personal,1
+A00341,26,129945,713,1.5,Bachelor,Male,Asian,19113,business,1
+A00342,31,218284,631,0.7,Bachelor,Female,Black,70483,auto,1
+A00343,34,64116,615,1.1,High School,Female,White,7086,personal,0
+A00344,49,22150,651,21.8,PhD,Female,Hispanic,6127,personal,1
+A00345,39,30825,640,1.3,Bachelor,Female,White,26281,auto,1
+A00346,59,66534,563,1.0,PhD,Male,Asian,66832,education,1
+A00347,34,109608,627,0.7,Bachelor,Female,Asian,28575,personal,1
+A00348,48,23677,701,0.4,High School,Female,Black,4799,home,1
+A00349,54,45496,781,0.5,PhD,Male,White,5730,auto,1
+A00350,64,55136,724,20.7,PhD,Female,Black,23818,education,1
+A00351,31,82351,472,0.1,Bachelor,Female,White,8574,home,1
+A00352,53,39888,731,4.1,Bachelor,Female,White,24571,home,0
+A00353,24,20000,635,0.7,Bachelor,Female,Asian,25765,business,1
+A00354,44,71162,716,5.0,Bachelor,Male,White,14886,auto,1
+A00355,39,96266,678,0.9,Master,Female,White,94070,auto,1
+A00356,63,46650,664,11.6,Bachelor,Male,White,35325,auto,1
+A00357,55,62513,671,15.2,High School,Female,Other,58062,home,1
+A00358,61,36875,678,8.2,High School,Male,Asian,46003,business,0
+A00359,58,29511,787,5.6,High School,Female,White,19534,auto,1
+A00360,39,90749,678,7.2,High School,Female,White,18853,business,1
+A00361,53,61851,766,4.6,Bachelor,Male,Hispanic,17359,personal,1
+A00362,22,65789,755,2.6,PhD,Male,White,37982,education,1
+A00363,45,120724,733,0.6,High School,Male,Other,13091,personal,1
+A00364,23,26032,537,7.8,Bachelor,Female,Asian,87555,home,1
+A00365,52,35199,769,6.3,High School,Female,Hispanic,12128,personal,1
+A00366,63,53893,643,1.6,Bachelor,Male,White,26149,auto,0
+A00367,50,34940,737,4.2,Bachelor,Female,Hispanic,18338,auto,0
+A00368,57,78423,602,0.1,Bachelor,Female,Other,15357,personal,1
+A00369,31,43807,585,3.8,Other,Male,White,125226,education,0
+A00370,64,27023,838,2.6,Other,Female,Asian,15502,business,1
+A00371,45,50993,603,0.3,Master,Male,White,17261,personal,0
+A00372,50,54295,771,0.0,Master,Male,Other,12947,education,1
+A00373,54,85888,689,2.1,Bachelor,Male,Black,22761,auto,1
+A00374,49,62061,646,11.9,Bachelor,Male,White,20311,education,1
+A00375,34,64646,676,17.4,Bachelor,Female,White,8996,auto,1
+A00376,47,59407,575,24.1,Master,Female,White,15685,education,1
+A00377,49,43785,678,7.8,High School,Male,White,35873,auto,1
+A00378,58,31897,593,7.1,High School,Female,Asian,50090,personal,1
+A00379,42,58296,648,1.4,High School,Male,White,22453,education,1
+A00380,43,40139,754,0.3,Bachelor,Male,Other,23090,business,1
+A00381,43,135116,700,11.4,Master,Female,White,16501,business,1
+A00382,26,109678,561,25.9,High School,Female,Black,14735,auto,0
+A00383,24,71661,748,3.4,Bachelor,Female,Other,10554,auto,0
+A00384,21,61517,679,3.1,Bachelor,Male,Black,6340,personal,1
+A00385,50,46500,636,2.7,Master,Male,Asian,12557,home,1
+A00386,39,23001,739,1.4,High School,Male,Other,45398,auto,1
+A00387,59,43057,666,4.8,High School,Female,Black,15685,business,1
+A00388,51,52095,586,12.9,Bachelor,Male,Hispanic,16700,education,1
+A00389,27,56256,827,2.5,Bachelor,Female,White,16442,business,1
+A00390,25,64972,678,0.1,Master,Male,White,59621,home,1
+A00391,37,85203,673,7.9,Bachelor,Male,White,10480,auto,1
+A00392,61,32360,647,7.9,PhD,Male,Hispanic,27491,education,1
+A00393,23,32537,774,14.4,Bachelor,Female,Black,20852,auto,1
+A00394,29,117068,638,19.4,Bachelor,Female,Black,23256,education,1
+A00395,22,77853,556,11.2,Other,Non-binary,Asian,26781,personal,1
+A00396,39,38775,625,2.6,High School,Female,White,23057,business,1
+A00397,64,45966,786,2.0,Master,Female,Other,41540,business,1
+A00398,51,46090,746,1.9,High School,Male,White,21516,home,1
+A00399,42,49958,659,1.1,Bachelor,Female,White,88920,education,1
+A00400,27,65095,789,3.2,High School,Female,Black,22824,personal,1
+A00401,36,224357,739,10.8,Bachelor,Female,White,5637,business,1
+A00402,44,54932,658,4.5,Master,Male,Black,36704,business,1
+A00403,33,72952,666,1.1,High School,Male,Hispanic,30142,personal,0
+A00404,52,20000,706,0.1,High School,Female,Hispanic,22607,personal,1
+A00405,64,36646,613,1.4,Bachelor,Male,White,17896,auto,0
+A00406,30,102466,680,7.9,High School,Male,White,4057,auto,1
+A00407,32,62404,704,3.6,Bachelor,Male,White,4640,auto,0
+A00408,26,20000,545,1.6,Other,Female,White,82290,business,0
+A00409,52,73453,664,0.7,High School,Male,White,13788,auto,1
+A00410,41,154956,655,0.3,Bachelor,Female,White,47690,personal,1
+A00411,33,20000,762,13.8,Bachelor,Female,Hispanic,6109,personal,1
+A00412,30,121982,532,1.7,High School,Female,Asian,9532,business,1
+A00413,24,20000,649,0.8,High School,Male,Hispanic,37907,home,1
+A00414,41,86059,641,8.6,Master,Female,White,20292,business,1
+A00415,51,48767,756,3.1,Bachelor,Male,Black,33864,auto,1
+A00416,31,20000,676,11.1,Master,Male,White,21787,education,1
+A00417,21,64066,823,0.9,Bachelor,Male,White,18654,auto,1
+A00418,41,97782,732,12.7,Bachelor,Male,White,12784,home,1
+A00419,50,60981,647,0.6,PhD,Female,Asian,8474,business,1
+A00420,36,69626,699,0.8,PhD,Male,Black,67653,education,1
+A00421,32,38291,651,0.0,PhD,Female,White,77176,business,0
+A00422,27,20000,748,6.6,High School,Male,Black,9595,education,0
+A00423,53,74244,573,1.3,Other,Non-binary,Other,9106,auto,1
+A00424,58,140063,614,23.7,Master,Female,White,16676,home,1
+A00425,54,96543,716,0.6,Master,Male,Hispanic,28921,auto,1
+A00426,43,20000,778,4.9,Master,Female,White,19044,personal,1
+A00427,52,20000,503,14.1,Other,Male,White,32847,business,1
+A00428,38,29508,789,1.0,Bachelor,Female,Asian,21175,education,1
+A00429,22,20000,668,2.0,Master,Female,White,20096,home,1
+A00430,37,50337,529,9.5,Master,Female,Hispanic,151821,personal,1
+A00431,51,62071,439,15.2,Master,Male,White,14470,business,0
+A00432,49,20782,557,4.0,Master,Non-binary,Black,81793,home,1
+A00433,64,78141,678,3.1,High School,Female,Black,70086,auto,1
+A00434,64,70309,674,7.0,Bachelor,Female,Asian,32967,home,1
+A00435,31,35281,730,4.6,Bachelor,Male,Hispanic,4717,personal,1
+A00436,21,44200,636,1.2,Master,Male,Black,22580,personal,0
+A00437,33,20000,591,11.7,Master,Female,White,14592,education,0
+A00438,59,40160,646,0.4,Master,Female,White,22383,home,1
+A00439,56,49238,682,1.3,Master,Female,Black,9410,business,1
+A00440,25,54244,698,6.5,Bachelor,Female,White,40336,auto,1
+A00441,28,61532,616,4.0,High School,Female,White,48435,home,1
+A00442,45,56757,752,4.2,Bachelor,Male,Other,56163,auto,1
+A00443,50,41831,630,0.8,PhD,Female,White,16224,auto,1
+A00444,64,58204,610,12.2,Bachelor,Male,White,9437,home,1
+A00445,54,89430,636,1.7,PhD,Female,Asian,29183,business,1
+A00446,30,46290,765,6.9,Other,Male,Black,89756,auto,1
+A00447,22,59311,669,0.1,Bachelor,Female,Hispanic,23283,education,0
+A00448,48,43839,624,4.1,Master,Female,White,31629,education,1
+A00449,45,33254,754,4.8,Bachelor,Female,White,18252,business,0
+A00450,61,67085,850,18.9,Bachelor,Male,Black,14723,business,1
+A00451,46,35131,696,11.3,High School,Female,White,37295,education,1
+A00452,43,61801,778,25.4,High School,Male,Hispanic,20234,personal,1
+A00453,34,49858,762,1.8,High School,Male,White,30418,education,1
+A00454,24,40849,631,10.7,Bachelor,Female,White,33057,home,1
+A00455,59,40260,682,2.5,High School,Female,White,29086,personal,0
+A00456,57,36138,577,1.0,Bachelor,Male,White,34416,business,1
+A00457,28,20000,663,11.1,Bachelor,Female,White,11132,education,1
+A00458,51,61681,629,6.4,Bachelor,Male,Hispanic,10601,auto,0
+A00459,37,56326,647,12.8,PhD,Female,Black,21288,personal,1
+A00460,40,81617,620,2.0,Bachelor,Female,White,21701,education,1
+A00461,58,35636,657,4.8,High School,Female,Black,14503,auto,1
+A00462,58,152852,722,5.1,Other,Female,White,26710,business,1
+A00463,29,39032,670,2.1,Master,Non-binary,White,45550,auto,0
+A00464,34,28996,530,12.2,Master,Female,Asian,56954,education,0
+A00465,57,27005,620,1.2,Master,Male,Hispanic,68173,business,1
+A00466,61,20000,558,9.8,High School,Male,Black,7693,auto,0
+A00467,24,122955,699,19.9,Master,Female,White,8687,home,1
+A00468,57,111595,720,1.6,High School,Male,White,17470,auto,1
+A00469,42,70294,700,2.3,Bachelor,Female,Hispanic,23487,home,1
+A00470,46,28633,617,4.5,High School,Male,Black,18201,auto,1
+A00471,24,145329,699,26.1,Master,Female,Black,14155,home,1
+A00472,50,39694,642,0.6,High School,Female,Other,17265,education,0
+A00473,50,41713,588,1.7,High School,Female,White,32423,education,1
+A00474,50,116117,739,4.8,High School,Female,Hispanic,7603,auto,1
+A00475,55,72790,745,0.6,Master,Male,Black,143585,business,1
+A00476,62,183627,755,10.7,High School,Female,White,22399,home,1
+A00477,58,56910,631,1.2,Bachelor,Male,White,51055,home,1
+A00478,53,38629,774,0.3,Bachelor,Female,Black,13849,education,1
+A00479,64,33959,640,2.0,Master,Female,White,34873,home,1
+A00480,50,20000,732,12.6,High School,Male,Black,23862,personal,1
+A00481,50,41474,639,1.2,PhD,Male,Hispanic,43715,auto,0
+A00482,44,97416,662,0.5,Bachelor,Male,White,18790,education,1
+A00483,54,70213,486,2.7,High School,Male,White,76210,auto,0
+A00484,24,49621,655,11.7,High School,Female,Black,6676,education,0
+A00485,43,26985,687,1.6,High School,Male,White,47075,home,1
+A00486,39,56169,647,9.2,Bachelor,Female,Asian,24221,personal,1
+A00487,61,90011,820,9.0,High School,Non-binary,White,9753,home,1
+A00488,24,63476,587,2.1,PhD,Female,Other,104993,auto,0
+A00489,49,54178,634,4.0,Bachelor,Female,White,96660,personal,1
+A00490,29,30388,607,2.0,High School,Male,White,4191,education,1
+A00491,59,82479,634,1.7,Bachelor,Female,Hispanic,25372,business,0
+A00492,58,20000,762,5.4,High School,Female,White,38736,home,1
+A00493,31,61679,798,20.3,High School,Non-binary,White,31362,auto,1
+A00494,59,229164,623,2.9,Bachelor,Male,White,74044,business,1
+A00495,42,20000,622,23.9,High School,Male,Hispanic,62699,auto,1
+A00496,63,42411,587,3.4,High School,Non-binary,Black,27232,education,0
+A00497,53,48788,784,6.0,PhD,Female,White,136173,home,1
+A00498,22,37140,769,3.0,Master,Male,White,46605,education,1
+A00499,29,91292,671,1.1,PhD,Female,White,16628,auto,1
+A00500,38,65086,568,0.3,High School,Male,Other,14159,personal,0
+A00501,30,53711,575,15.0,PhD,Female,White,59556,auto,0
+A00502,26,79091,693,2.2,Bachelor,Male,Black,11680,personal,1
+A00503,64,49515,723,17.9,High School,Male,White,15870,personal,1
+A00504,59,300000,514,3.4,Master,Male,Black,18184,personal,1
+A00505,40,53680,654,0.0,High School,Male,Other,29275,business,0
+A00506,30,55114,809,4.7,Bachelor,Male,White,18868,education,1
+A00507,28,20000,662,13.2,Master,Male,Hispanic,7680,education,0
+A00508,61,35380,799,6.1,Bachelor,Male,White,55807,home,1
+A00509,35,97579,731,11.0,Bachelor,Female,Black,15938,home,1
+A00510,21,21998,593,4.4,Bachelor,Female,White,110851,auto,0
+A00511,38,20000,656,1.4,High School,Female,White,28090,business,0
+A00512,40,49980,669,3.1,Other,Male,White,60704,home,1
+A00513,48,111574,603,5.8,High School,Male,White,36486,personal,1
+A00514,35,50283,602,11.5,High School,Female,Other,63072,personal,1
+A00515,61,40067,800,0.8,High School,Female,Hispanic,34761,home,0
+A00516,49,20000,601,13.8,PhD,Non-binary,White,26585,home,0
+A00517,64,64302,766,0.2,Master,Female,White,52816,personal,1
+A00518,37,72894,645,0.0,Bachelor,Female,Hispanic,160938,home,1
+A00519,49,20000,677,1.7,Other,Female,White,17750,home,1
+A00520,37,96830,724,7.7,High School,Male,White,41603,home,1
+A00521,51,77607,632,0.7,PhD,Female,Hispanic,21934,business,1
+A00522,53,96702,725,15.8,High School,Female,White,33019,home,1
+A00523,35,69571,516,7.8,Bachelor,Female,White,22782,home,0
+A00524,62,72562,715,1.2,High School,Male,White,3919,auto,0
+A00525,58,66998,482,1.5,Other,Male,White,18766,business,0
+A00526,60,82543,661,1.1,PhD,Male,Black,49003,personal,0
+A00527,30,20000,748,4.6,Bachelor,Male,Hispanic,11942,auto,1
+A00528,52,20000,729,8.0,High School,Female,Other,46016,auto,0
+A00529,25,31520,576,1.4,High School,Female,White,25511,education,0
+A00530,25,45347,586,1.6,Bachelor,Male,Hispanic,18897,education,0
+A00531,63,61875,624,3.3,Bachelor,Female,Asian,45462,business,1
+A00532,27,59564,694,0.2,High School,Male,Black,37980,auto,1
+A00533,59,95823,517,18.7,Master,Female,Other,30835,business,1
+A00534,39,97645,678,0.7,Bachelor,Male,Other,49648,personal,1
+A00535,34,29044,704,3.6,PhD,Female,Hispanic,25912,business,1
+A00536,24,56564,657,4.8,Bachelor,Female,Other,5909,business,1
+A00537,50,29475,722,2.8,Bachelor,Female,Black,16276,home,1
+A00538,52,43785,697,11.6,Bachelor,Female,White,5200,personal,1
+A00539,41,59460,636,2.5,High School,Male,Asian,37268,business,1
+A00540,56,20000,525,2.6,Bachelor,Female,Hispanic,45114,business,0
+A00541,35,208302,690,5.4,Master,Male,White,46787,home,1
+A00542,45,68860,603,3.8,High School,Male,White,32574,education,0
+A00543,33,34288,633,5.9,Bachelor,Female,White,47778,business,1
+A00544,46,155814,718,1.3,PhD,Female,Asian,6239,business,1
+A00545,26,39796,793,3.9,Bachelor,Female,White,20210,home,1
+A00546,41,53077,676,3.0,Bachelor,Male,White,7101,home,1
+A00547,45,36597,724,3.0,Master,Female,White,16536,education,0
+A00548,45,132084,564,2.2,Bachelor,Male,White,80257,business,0
+A00549,40,46028,699,3.7,High School,Female,Other,52817,auto,1
+A00550,49,53620,675,2.8,Master,Female,White,37415,business,1
+A00551,43,100938,778,26.6,PhD,Female,White,19047,personal,1
+A00552,33,69639,636,13.3,High School,Female,White,9947,personal,1
+A00553,30,47448,660,1.4,High School,Female,Hispanic,25581,business,1
+A00554,49,95438,764,0.3,Master,Male,Black,53559,business,1
+A00555,62,224827,672,0.5,Bachelor,Non-binary,White,30573,home,1
+A00556,54,59304,591,2.1,Bachelor,Female,White,6194,home,0
+A00557,49,52578,850,4.4,Bachelor,Male,Asian,23949,business,1
+A00558,61,54305,593,4.4,Master,Male,Hispanic,4766,personal,1
+A00559,60,107608,674,3.3,Bachelor,Male,Hispanic,41912,home,1
+A00560,43,34217,707,14.7,High School,Female,White,12652,education,1
+A00561,25,41481,701,11.2,High School,Female,Other,8279,auto,1
+A00562,48,20000,664,14.2,Bachelor,Female,Hispanic,42376,home,0
+A00563,48,24093,665,1.0,PhD,Male,White,34458,auto,1
+A00564,33,35929,661,1.0,Bachelor,Male,Other,26527,education,0
+A00565,58,47402,590,8.0,Bachelor,Female,Asian,127180,business,1
+A00566,59,141697,850,0.8,PhD,Male,Hispanic,36607,personal,1
+A00567,35,67615,662,7.5,Bachelor,Male,Hispanic,13148,personal,1
+A00568,41,28360,727,0.5,Bachelor,Male,White,33368,home,1
+A00569,29,31672,653,4.6,High School,Male,White,17520,personal,1
+A00570,28,111842,651,0.4,Master,Male,White,60682,education,1
+A00571,32,96371,643,1.9,Master,Female,Black,27578,home,1
+A00572,37,49855,556,2.1,Master,Male,White,29849,business,0
+A00573,33,37589,667,9.2,Bachelor,Male,White,6947,home,1
+A00574,27,96274,647,0.7,Bachelor,Female,Asian,23134,education,1
+A00575,40,27011,773,7.3,High School,Non-binary,White,21056,personal,1
+A00576,48,62020,584,1.9,Other,Female,Hispanic,9707,personal,0
+A00577,35,191682,633,5.1,High School,Female,White,18449,auto,1
+A00578,44,55448,608,13.8,Bachelor,Female,White,31213,home,1
+A00579,32,30780,795,8.7,Master,Female,White,21949,education,1
+A00580,51,62706,610,9.9,High School,Female,White,7117,home,0
+A00581,49,36974,724,20.2,Bachelor,Female,White,17701,personal,0
+A00582,63,21237,757,0.6,High School,Female,White,15147,auto,1
+A00583,23,74654,668,17.7,Bachelor,Male,Black,25714,home,1
+A00584,58,95865,569,16.4,Other,Male,White,23586,auto,1
+A00585,35,40678,570,5.0,Bachelor,Male,White,15846,auto,1
+A00586,23,39091,748,11.5,Other,Male,White,15359,business,0
+A00587,51,27530,579,0.1,High School,Male,White,23243,personal,1
+A00588,28,44803,711,4.5,Bachelor,Female,White,47590,business,1
+A00589,28,34981,689,3.6,PhD,Female,White,27526,business,1
+A00590,64,26725,710,24.3,PhD,Male,Hispanic,68765,auto,1
+A00591,30,152558,717,1.8,Bachelor,Male,Black,54532,personal,1
+A00592,45,64854,605,4.5,Master,Male,Asian,72936,personal,1
+A00593,29,69108,601,1.2,PhD,Female,Hispanic,65834,business,0
+A00594,26,83286,737,4.7,Master,Male,White,76907,business,1
+A00595,21,77856,629,9.8,Bachelor,Male,White,8755,auto,1
+A00596,21,38258,459,7.3,High School,Male,White,36972,education,1
+A00597,41,57729,731,0.0,High School,Female,Black,58375,personal,1
+A00598,40,41713,597,0.3,Bachelor,Male,White,67455,education,1
+A00599,22,63772,717,6.5,Bachelor,Female,White,11889,business,1
+A00600,36,60175,791,5.8,High School,Female,Other,37268,personal,1
+A00601,33,38964,681,4.2,High School,Female,White,23392,personal,0
+A00602,46,22079,759,1.7,Bachelor,Female,White,96533,auto,1
+A00603,64,53516,692,0.1,Bachelor,Male,Asian,7260,education,1
+A00604,51,43366,806,9.3,Bachelor,Male,White,11903,auto,1
+A00605,61,20000,595,5.7,Bachelor,Female,White,5174,education,1
+A00606,29,66476,679,8.8,High School,Male,White,24728,business,0
+A00607,30,87483,733,8.1,PhD,Female,White,134735,auto,1
+A00608,54,223465,664,4.3,Bachelor,Female,Other,21258,auto,1
+A00609,34,38765,772,3.1,High School,Male,Black,23880,auto,1
+A00610,58,35481,645,0.6,Bachelor,Male,White,34207,business,1
+A00611,41,25193,845,3.8,Bachelor,Female,White,20069,personal,1
+A00612,29,55558,849,3.8,Bachelor,Non-binary,White,29519,home,1
+A00613,58,55347,702,1.6,Bachelor,Female,Black,30144,personal,1
+A00614,45,30128,724,12.3,Bachelor,Male,White,11198,home,1
+A00615,56,44136,775,6.5,Master,Female,White,20430,education,1
+A00616,40,20000,585,0.8,High School,Male,Black,39876,home,0
+A00617,26,85461,575,15.9,Bachelor,Male,Asian,46298,personal,1
+A00618,50,30871,780,5.2,High School,Female,Asian,62242,business,1
+A00619,26,48011,701,1.9,Bachelor,Non-binary,Hispanic,28806,auto,0
+A00620,50,20826,661,17.5,Bachelor,Male,White,29279,business,1
+A00621,39,34564,680,3.7,Master,Female,Hispanic,40140,personal,1
+A00622,55,41450,489,11.0,High School,Male,Asian,13686,auto,0
+A00623,59,48689,664,6.0,Bachelor,Male,White,13245,business,1
+A00624,38,65371,619,1.6,Bachelor,Male,White,19933,auto,1
+A00625,59,116243,753,7.5,Bachelor,Female,White,7942,business,1
+A00626,25,76086,759,2.0,Master,Male,Other,30501,education,1
+A00627,25,87316,726,2.4,High School,Female,Asian,50983,business,1
+A00628,64,116735,711,3.1,Bachelor,Male,Hispanic,12481,business,1
+A00629,46,68997,560,2.9,Bachelor,Male,White,31198,business,1
+A00630,40,47952,727,5.5,Master,Male,Other,13315,home,1
+A00631,27,89811,730,9.0,High School,Male,White,9766,personal,1
+A00632,33,93321,779,3.4,PhD,Female,White,114056,home,1
+A00633,51,72340,849,4.2,Other,Female,Black,9879,auto,1
+A00634,57,20480,544,0.7,Master,Female,Hispanic,7915,education,0
+A00635,61,29587,648,4.5,High School,Male,Asian,26154,personal,0
+A00636,38,41568,620,1.3,Master,Female,White,27304,business,1
+A00637,41,78258,693,2.4,High School,Female,White,37563,home,1
+A00638,28,48396,681,2.6,PhD,Male,White,109205,auto,1
+A00639,24,96966,661,4.6,Bachelor,Female,White,11828,home,1
+A00640,40,107919,762,8.1,High School,Female,Asian,13866,education,1
+A00641,46,100659,591,3.8,Bachelor,Female,White,79781,business,0
+A00642,25,101045,596,0.4,Master,Female,White,46690,business,0
+A00643,38,26312,598,16.2,PhD,Female,White,41775,business,1
+A00644,49,65485,651,1.5,Bachelor,Female,Hispanic,13740,business,1
+A00645,56,34046,581,3.6,Bachelor,Female,Asian,54214,personal,0
+A00646,62,20000,676,18.2,Master,Non-binary,White,41879,personal,1
+A00647,35,41254,666,16.0,Master,Male,White,25632,auto,1
+A00648,38,108536,617,5.1,Master,Female,Asian,13794,auto,1
+A00649,59,64630,749,7.3,Bachelor,Female,Black,23989,home,1
+A00650,51,164503,675,11.1,Bachelor,Male,White,82354,auto,1
+A00651,33,54520,765,2.1,PhD,Female,White,9180,education,1
+A00652,51,212922,664,7.3,High School,Female,Other,11616,business,1
+A00653,27,54530,678,2.0,Bachelor,Female,Hispanic,13329,personal,1
+A00654,40,49686,634,8.1,High School,Female,White,15856,education,0
+A00655,34,22751,679,3.0,Bachelor,Male,White,21750,personal,1
+A00656,64,95448,736,1.9,Master,Female,White,47422,education,1
+A00657,22,36269,647,10.5,High School,Female,White,31860,personal,1
+A00658,58,33248,721,1.1,Bachelor,Female,White,23125,personal,1
+A00659,33,105739,614,6.4,High School,Male,White,27490,education,1
+A00660,22,98216,740,0.1,PhD,Male,White,36286,personal,1
+A00661,50,96686,633,3.7,Master,Female,White,5736,personal,1
+A00662,50,39445,748,11.9,Bachelor,Male,White,51910,auto,1
+A00663,27,47544,684,9.8,Master,Male,White,11371,auto,0
+A00664,22,47291,801,4.4,High School,Female,Hispanic,15447,home,0
+A00665,25,78394,587,2.6,Master,Female,White,28921,personal,1
+A00666,38,124509,561,1.5,Master,Female,Asian,20737,education,1
+A00667,26,61137,630,1.0,High School,Female,Asian,32517,education,1
+A00668,51,160321,569,0.4,Other,Female,Other,24672,auto,1
+A00669,24,83978,569,2.1,High School,Female,White,17475,auto,0
+A00670,55,42579,729,1.0,Bachelor,Female,White,74832,education,1
+A00671,59,80597,679,8.0,High School,Female,Black,38810,education,1
+A00672,52,136429,641,0.0,Master,Female,White,28048,home,1
+A00673,62,162587,649,10.0,High School,Male,White,38331,business,1
+A00674,62,99920,632,1.5,High School,Male,White,12528,auto,1
+A00675,23,49781,812,11.6,Bachelor,Female,Black,125469,auto,1
+A00676,36,43044,621,7.3,Other,Female,Hispanic,9227,home,1
+A00677,54,69261,574,1.2,High School,Female,White,24113,home,1
+A00678,35,133837,743,6.2,Bachelor,Female,Asian,17515,auto,1
+A00679,53,63593,662,24.0,Bachelor,Female,Hispanic,16991,business,1
+A00680,55,64390,843,3.2,Master,Male,White,15315,personal,1
+A00681,64,50556,637,2.4,High School,Female,White,11880,personal,0
+A00682,35,40266,747,7.4,Bachelor,Female,White,56992,auto,0
+A00683,36,44476,766,8.6,Other,Male,Asian,8402,business,1
+A00684,22,53170,638,4.6,Bachelor,Female,Hispanic,48380,auto,1
+A00685,33,137428,620,0.4,Bachelor,Female,Black,37005,home,0
+A00686,33,42453,739,0.1,PhD,Female,Black,16240,education,1
+A00687,40,50592,725,16.4,Bachelor,Male,White,33728,business,1
+A00688,39,29166,567,4.9,Bachelor,Male,Asian,19412,business,1
+A00689,58,75355,589,2.2,Bachelor,Female,Asian,9128,home,0
+A00690,55,111302,477,5.1,Master,Female,Hispanic,9206,business,1
+A00691,53,129923,727,4.7,PhD,Female,White,37210,auto,1
+A00692,21,55382,659,0.2,Bachelor,Male,White,35698,auto,1
+A00693,41,69190,667,0.6,Bachelor,Female,White,26731,home,1
+A00694,53,44706,544,2.7,Bachelor,Male,White,16103,auto,1
+A00695,31,67292,592,24.9,High School,Male,Black,18913,education,1
+A00696,39,59182,641,2.5,High School,Male,Hispanic,16976,home,0
+A00697,52,50764,626,5.9,High School,Female,Asian,5444,auto,1
+A00698,55,53244,689,0.4,High School,Female,White,23132,education,1
+A00699,58,64289,726,2.6,Master,Male,White,33455,home,1
+A00700,39,41089,850,2.6,High School,Female,White,23250,personal,1
+A00701,38,42382,678,7.2,High School,Female,Other,90700,auto,1
+A00702,37,136546,769,2.0,Bachelor,Female,Hispanic,9861,business,1
+A00703,50,249279,613,15.0,High School,Female,White,12979,business,1
+A00704,39,23798,546,0.8,High School,Female,Black,24499,business,0
+A00705,38,23024,651,12.3,High School,Male,Black,26769,auto,0
+A00706,28,27603,552,0.8,High School,Male,White,4812,home,0
+A00707,42,46075,681,11.8,Bachelor,Female,White,35673,home,1
+A00708,31,83907,617,3.8,Master,Female,White,26866,auto,1
+A00709,44,69895,523,28.1,PhD,Female,White,4041,education,1
+A00710,60,54351,818,0.5,Master,Female,Black,20062,business,1
+A00711,55,67330,636,5.8,Bachelor,Female,White,11535,business,1
+A00712,42,32362,548,21.3,PhD,Female,Hispanic,15326,personal,0
+A00713,64,42341,751,4.9,Bachelor,Female,Black,7551,personal,1
+A00714,64,48433,621,16.8,Bachelor,Male,White,30728,auto,1
+A00715,40,20000,767,0.9,Bachelor,Female,Other,90167,education,1
+A00716,54,24421,621,2.3,Bachelor,Non-binary,White,27228,personal,1
+A00717,36,25010,636,2.1,Bachelor,Male,Black,3914,business,0
+A00718,59,77533,707,4.5,High School,Male,White,27680,education,1
+A00719,37,56795,727,3.0,Master,Female,Hispanic,18850,personal,0
+A00720,32,70730,741,0.2,High School,Female,White,9128,home,1
+A00721,26,20000,672,6.1,Master,Male,White,29228,business,1
+A00722,58,20127,722,2.6,PhD,Male,White,44525,personal,1
+A00723,34,72979,739,17.7,Bachelor,Male,Hispanic,12902,education,1
+A00724,56,20000,696,1.9,High School,Male,Black,5913,business,0
+A00725,24,102209,668,8.4,Bachelor,Female,Black,4405,home,1
+A00726,43,20000,564,4.6,Bachelor,Female,White,12931,business,0
+A00727,39,81308,727,13.2,Other,Female,Black,19449,auto,1
+A00728,40,28763,683,1.5,Master,Male,Black,14576,personal,0
+A00729,28,91981,646,0.7,Master,Male,White,12751,auto,1
+A00730,24,300000,782,1.0,Bachelor,Male,White,34693,auto,1
+A00731,36,20000,565,0.6,Master,Female,White,31896,auto,0
+A00732,41,74401,811,6.3,Master,Female,Hispanic,25839,business,1
+A00733,55,20000,678,2.2,High School,Male,White,42327,personal,0
+A00734,41,63326,705,10.1,High School,Non-binary,White,13029,auto,1
+A00735,31,43301,648,4.5,High School,Male,Other,9176,auto,1
+A00736,32,52990,546,16.2,Bachelor,Male,Asian,14503,business,0
+A00737,47,28367,668,2.5,PhD,Female,White,13724,education,1
+A00738,40,78301,706,1.5,Bachelor,Male,Asian,4268,education,0
+A00739,60,20557,734,7.3,Bachelor,Female,White,14236,personal,1
+A00740,40,103257,664,0.0,PhD,Male,Asian,53310,education,1
+A00741,45,38347,504,20.6,High School,Female,White,41801,business,1
+A00742,23,21128,556,0.1,High School,Male,White,33528,personal,1
+A00743,29,127639,844,5.1,PhD,Male,Other,24472,auto,1
+A00744,58,47079,592,6.2,PhD,Male,White,70201,personal,0
+A00745,36,153980,794,10.3,Master,Female,Hispanic,9432,personal,1
+A00746,39,102008,605,2.1,High School,Female,White,10179,education,1
+A00747,46,30367,665,3.7,Other,Female,White,54145,auto,1
+A00748,23,46583,730,1.7,Master,Male,Other,22518,home,1
+A00749,43,52713,614,0.7,Master,Male,White,12875,home,0
+A00750,36,122489,807,8.4,High School,Male,Asian,34253,personal,1
+A00751,27,63736,686,6.7,Bachelor,Female,Asian,15509,education,0
+A00752,39,54490,716,15.2,Master,Male,White,11270,business,1
+A00753,40,43480,658,2.0,PhD,Male,White,11022,auto,1
+A00754,29,47556,732,1.4,Bachelor,Female,White,28488,auto,1
+A00755,44,107232,806,1.4,Bachelor,Female,White,25968,personal,1
+A00756,53,49129,669,0.1,Master,Male,White,74116,business,0
+A00757,32,38677,818,6.3,Bachelor,Male,White,17464,auto,1
+A00758,63,34936,631,0.0,Bachelor,Male,Hispanic,17227,home,0
+A00759,47,35162,741,2.9,High School,Female,White,69682,personal,1
+A00760,55,21136,719,3.7,High School,Male,Hispanic,48461,home,0
+A00761,24,31250,594,4.2,Master,Female,White,24733,home,1
+A00762,54,120457,697,20.1,High School,Male,White,6318,auto,1
+A00763,35,43305,680,0.0,High School,Female,White,11504,personal,1
+A00764,52,74805,611,1.2,PhD,Female,White,9477,business,0
+A00765,56,20000,708,7.9,Master,Male,Black,22678,home,1
+A00766,32,68939,691,9.4,High School,Male,White,14666,personal,1
+A00767,32,44497,674,11.6,Bachelor,Male,Hispanic,79405,personal,1
+A00768,23,36722,674,8.1,Master,Female,Hispanic,6265,business,1
+A00769,47,54642,672,2.1,Bachelor,Female,White,8698,home,1
+A00770,55,36406,650,7.4,Bachelor,Female,Asian,26787,home,0
+A00771,39,20000,691,11.2,Bachelor,Male,Other,33427,personal,1
+A00772,28,85250,628,9.4,High School,Male,White,2780,personal,1
+A00773,34,56715,850,0.8,Master,Female,Other,5495,personal,1
+A00774,38,40604,567,1.6,High School,Female,White,17838,education,0
+A00775,61,27454,633,1.0,Bachelor,Female,Black,65175,education,0
+A00776,26,20294,639,11.4,High School,Female,White,99728,home,1
+A00777,36,56068,843,4.5,High School,Female,Hispanic,15810,home,1
+A00778,49,129064,574,2.3,High School,Female,Hispanic,19215,auto,1
+A00779,31,55375,714,1.1,PhD,Female,Other,11276,business,1
+A00780,59,21382,699,0.5,High School,Female,Other,36554,education,1
+A00781,61,56110,706,7.5,High School,Female,White,74818,business,1
+A00782,37,47476,778,0.5,High School,Non-binary,Black,60163,education,1
+A00783,53,82324,777,5.2,Master,Male,White,21521,education,1
+A00784,54,70547,643,1.8,Bachelor,Female,White,11261,personal,0
+A00785,50,20000,695,0.9,PhD,Female,White,22171,business,1
+A00786,29,67991,530,0.0,Master,Male,Asian,66478,personal,0
+A00787,23,26847,687,2.7,Bachelor,Female,Black,15987,personal,1
+A00788,36,20888,616,3.2,Master,Male,White,5154,business,1
+A00789,26,43779,665,14.5,High School,Male,Other,16514,personal,1
+A00790,33,62729,545,2.7,Other,Male,Hispanic,17619,auto,0
+A00791,49,20000,712,1.0,Other,Female,White,5130,education,1
+A00792,46,74812,544,5.7,High School,Female,White,26519,home,0
+A00793,30,77497,691,0.2,Bachelor,Female,Hispanic,33017,home,1
+A00794,21,50422,581,17.5,High School,Male,Black,97529,home,1
+A00795,30,29127,612,12.4,Bachelor,Female,White,7586,home,0
+A00796,41,27238,772,7.9,Master,Male,White,39514,education,1
+A00797,55,90722,727,14.9,PhD,Male,White,47737,business,1
+A00798,37,20000,771,3.6,Bachelor,Male,White,33379,personal,1
+A00799,33,92844,804,10.6,Master,Female,White,9843,personal,1
+A00800,45,44394,618,3.9,Master,Male,White,9396,home,1
+A00801,24,46281,799,31.3,High School,Female,White,23807,education,1
+A00802,30,20000,562,4.6,Bachelor,Female,Black,23674,education,0
+A00803,22,44889,739,5.1,Master,Male,White,14079,home,1
+A00804,44,70838,640,4.4,Master,Female,White,61902,home,0
+A00805,40,21985,605,5.8,Other,Male,White,15984,auto,0
+A00806,46,66117,729,21.7,High School,Male,Other,4841,personal,1
+A00807,48,51710,755,0.8,High School,Male,White,18411,auto,1
+A00808,38,33314,753,1.2,High School,Female,White,32345,auto,1
+A00809,59,81863,697,4.4,High School,Female,White,28957,personal,1
+A00810,61,20000,690,4.6,Bachelor,Female,Hispanic,28778,auto,1
+A00811,25,60355,722,2.7,PhD,Female,White,72779,business,1
+A00812,61,129529,704,0.8,Bachelor,Male,White,9028,personal,0
+A00813,29,116304,723,9.1,Master,Female,Asian,15693,home,1
+A00814,31,61937,696,1.7,Bachelor,Male,Hispanic,75814,education,1
+A00815,44,40904,747,9.6,Bachelor,Male,White,4564,auto,1
+A00816,22,33473,549,26.5,Master,Non-binary,White,21100,home,1
+A00817,37,40873,669,15.0,Master,Male,Other,58872,home,1
+A00818,29,67933,569,1.4,Bachelor,Male,Other,58175,business,0
+A00819,42,30201,702,1.7,PhD,Male,Hispanic,37350,business,0
+A00820,56,77223,811,2.4,Bachelor,Male,Hispanic,38114,education,1
+A00821,61,176291,642,8.1,High School,Female,Asian,9577,business,1
+A00822,30,47234,690,9.3,Bachelor,Female,Other,66074,business,1
+A00823,44,21880,740,0.3,Master,Female,White,8433,home,1
+A00824,41,21876,514,3.2,Bachelor,Male,Other,8845,home,1
+A00825,39,78115,638,12.9,Master,Female,Hispanic,30040,auto,1
+A00826,48,47294,709,5.2,Bachelor,Female,Black,14847,education,1
+A00827,64,82958,448,5.3,Bachelor,Female,White,25987,personal,1
+A00828,38,35589,601,1.7,PhD,Female,White,31089,personal,1
+A00829,23,80690,768,3.2,Bachelor,Female,Hispanic,91353,personal,1
+A00830,61,44579,760,7.2,Bachelor,Female,Black,31162,auto,1
+A00831,62,31586,709,7.8,High School,Female,White,13429,education,1
+A00832,35,38538,750,12.1,Bachelor,Male,Black,37842,home,1
+A00833,43,23903,697,0.6,Bachelor,Male,White,11323,education,1
+A00834,58,161719,724,6.2,High School,Female,White,45730,home,1
+A00835,43,46266,654,5.0,Bachelor,Male,Black,23195,personal,1
+A00836,42,72164,689,0.9,High School,Male,Black,30346,education,1
+A00837,61,35520,629,4.2,High School,Non-binary,White,5300,business,1
+A00838,57,26077,781,4.2,Bachelor,Male,White,3638,home,1
+A00839,43,42602,801,0.8,High School,Male,White,6626,personal,1
+A00840,28,94912,790,2.4,Bachelor,Female,Black,89020,education,1
+A00841,40,35866,647,15.4,Master,Male,Asian,8790,home,1
+A00842,50,29076,603,12.8,Bachelor,Male,Hispanic,39570,auto,0
+A00843,32,53813,782,8.9,High School,Male,Hispanic,13180,auto,1
+A00844,44,66132,723,2.4,Bachelor,Male,White,18178,home,0
+A00845,49,131361,706,3.8,High School,Male,White,21252,home,1
+A00846,24,60612,629,19.5,Bachelor,Female,Asian,82044,business,1
+A00847,46,72142,714,14.6,Master,Male,White,35157,personal,1
+A00848,53,75475,593,10.5,Bachelor,Male,White,29972,business,1
+A00849,30,24543,730,2.6,Bachelor,Female,White,62153,business,1
+A00850,45,27501,790,1.1,PhD,Male,Black,13272,home,1
+A00851,52,25582,810,1.0,High School,Male,White,51775,home,1
+A00852,22,22042,736,0.2,PhD,Male,White,45299,home,1
+A00853,49,79005,569,4.5,Master,Male,Black,44887,personal,0
+A00854,32,58339,695,5.3,Bachelor,Male,White,19457,business,1
+A00855,38,51415,850,16.6,High School,Male,White,15524,personal,1
+A00856,49,20000,610,5.6,High School,Female,Hispanic,10983,personal,0
+A00857,21,168263,675,1.4,PhD,Non-binary,Other,11547,auto,1
+A00858,21,28665,793,9.1,High School,Female,White,10576,education,1
+A00859,40,167893,729,1.6,PhD,Male,White,29539,business,1
+A00860,62,20546,850,13.0,Bachelor,Female,White,18349,business,1
+A00861,21,30108,621,0.3,Bachelor,Female,White,31104,business,0
+A00862,55,20000,600,1.8,Bachelor,Male,Asian,32542,education,1
+A00863,24,60917,777,24.2,High School,Female,Hispanic,9435,home,1
+A00864,42,25317,584,2.6,Bachelor,Female,White,9211,personal,1
+A00865,39,25750,664,0.0,PhD,Male,Hispanic,18344,business,1
+A00866,41,21514,674,2.2,High School,Non-binary,White,11847,personal,1
+A00867,24,78152,762,2.8,PhD,Male,White,10890,auto,1
+A00868,54,75122,729,1.6,Other,Male,Asian,85523,home,1
+A00869,33,145396,716,7.5,High School,Male,White,6459,personal,1
+A00870,54,32486,647,4.6,Bachelor,Male,White,111129,personal,1
+A00871,49,55898,777,6.7,High School,Non-binary,Asian,27753,personal,1
+A00872,45,22615,850,6.4,Bachelor,Female,White,48484,education,1
+A00873,34,40093,735,0.1,Other,Male,White,44119,personal,0
+A00874,49,35907,687,1.4,PhD,Female,White,36082,auto,1
+A00875,64,64774,576,12.1,PhD,Female,White,83238,business,0
+A00876,61,90238,629,12.9,High School,Female,White,9265,education,0
+A00877,61,88844,662,4.0,Bachelor,Female,White,19436,home,1
+A00878,30,29563,637,2.9,High School,Female,White,11133,business,0
+A00879,46,89239,678,3.2,PhD,Female,White,5671,auto,1
+A00880,38,47741,822,3.2,High School,Male,Black,12977,home,1
+A00881,63,40345,779,14.9,High School,Female,Asian,98522,business,1
+A00882,62,32044,667,0.1,High School,Male,Black,19172,business,0
+A00883,59,35032,583,5.4,High School,Male,Black,107668,auto,0
+A00884,28,139439,786,2.5,High School,Male,Hispanic,116851,personal,0
+A00885,35,58950,676,12.5,High School,Male,White,241857,business,1
+A00886,52,54435,541,7.3,PhD,Female,White,101153,home,1
+A00887,53,41883,736,3.5,Master,Female,White,145292,auto,1
+A00888,36,212689,762,7.5,High School,Female,White,28570,personal,1
+A00889,27,107259,485,23.5,Master,Female,Other,26440,home,1
+A00890,27,31804,614,2.3,Bachelor,Male,White,27885,personal,1
+A00891,51,41598,671,6.4,Master,Female,Asian,22027,education,1
+A00892,40,43107,738,16.2,Bachelor,Male,White,24828,business,1
+A00893,42,53504,638,9.6,Bachelor,Male,White,40204,business,1
+A00894,56,32185,613,0.7,Bachelor,Female,White,15174,education,1
+A00895,21,63786,738,9.1,High School,Female,White,7316,education,1
+A00896,54,117154,642,6.0,Bachelor,Male,White,29463,education,1
+A00897,33,22288,723,12.1,Master,Male,Black,12654,business,1
+A00898,61,24912,591,3.7,Master,Male,White,13747,business,0
+A00899,63,36684,571,4.0,Bachelor,Female,Hispanic,19649,education,0
+A00900,43,37719,740,9.5,Bachelor,Male,Asian,16354,education,1
+A00901,34,162605,700,2.2,Master,Male,White,53531,business,1
+A00902,31,89413,753,5.0,High School,Female,Other,19275,business,1
+A00903,28,86387,637,13.1,High School,Female,White,55734,business,1
+A00904,64,41830,616,0.4,Bachelor,Male,White,25973,education,1
+A00905,29,41283,788,6.3,High School,Female,White,20520,education,1
+A00906,40,20516,558,22.5,Bachelor,Male,Black,24998,education,1
+A00907,42,78358,780,4.8,High School,Male,White,7837,education,1
+A00908,50,65816,785,8.7,Bachelor,Female,Black,28867,home,1
+A00909,58,106042,748,18.2,Master,Male,Asian,43449,education,1
+A00910,45,43195,624,2.4,Master,Male,White,48663,education,0
+A00911,54,45023,614,0.2,Master,Female,Hispanic,7467,home,1
+A00912,45,54286,663,0.1,Bachelor,Female,Black,6534,personal,0
+A00913,40,83712,576,2.0,PhD,Female,White,14336,business,0
+A00914,27,20289,603,25.6,Master,Female,White,66684,home,1
+A00915,30,76239,731,2.4,Bachelor,Male,White,26285,auto,1
+A00916,40,48421,731,17.1,High School,Female,White,11851,education,1
+A00917,23,25973,596,2.3,Bachelor,Male,Hispanic,6888,personal,0
+A00918,34,20000,734,8.6,Bachelor,Female,White,12743,education,0
+A00919,41,45166,716,0.2,Master,Male,White,12073,personal,1
+A00920,41,116847,800,4.9,Master,Male,Hispanic,46559,home,1
+A00921,56,133894,725,3.7,PhD,Male,Black,49515,education,1
+A00922,63,60671,764,0.4,PhD,Female,Asian,9509,personal,1
+A00923,53,159086,718,10.7,Bachelor,Male,White,40236,personal,1
+A00924,24,47773,758,4.6,Other,Female,Black,37071,auto,1
+A00925,38,86853,577,1.3,PhD,Female,White,8571,business,1
+A00926,53,37393,670,6.1,High School,Female,Black,20597,home,1
+A00927,47,35998,676,7.6,Bachelor,Male,White,28930,home,1
+A00928,41,32646,660,1.5,High School,Male,White,25099,personal,1
+A00929,40,20000,715,1.2,High School,Female,Other,5605,business,1
+A00930,38,106112,730,6.0,High School,Female,Hispanic,24463,auto,1
+A00931,46,33356,711,11.2,Bachelor,Male,Black,36644,personal,1
+A00932,28,30307,665,10.1,High School,Female,White,77938,personal,0
+A00933,43,24149,621,3.7,High School,Male,Hispanic,12899,home,1
+A00934,30,43363,767,4.1,High School,Male,White,14237,home,1
+A00935,50,141222,707,5.2,Master,Male,White,18637,auto,1
+A00936,59,172175,598,0.2,PhD,Male,White,27805,business,1
+A00937,43,20000,664,7.5,Other,Male,White,23804,education,1
+A00938,38,39629,540,7.1,Bachelor,Female,White,35719,education,1
+A00939,62,26354,682,16.0,High School,Male,Hispanic,8953,education,0
+A00940,50,88698,664,30.5,PhD,Female,White,30257,education,1
+A00941,39,58218,634,2.4,High School,Female,Hispanic,12163,business,1
+A00942,22,33458,806,2.1,Other,Female,Asian,19640,home,1
+A00943,21,51202,587,3.2,Master,Male,White,86371,education,1
+A00944,30,36810,736,1.3,Bachelor,Female,Hispanic,7196,auto,1
+A00945,31,129126,850,1.1,High School,Male,White,17613,business,1
+A00946,52,68062,766,4.0,High School,Female,Asian,7944,home,1
+A00947,43,73269,677,10.6,Bachelor,Male,White,24895,home,0
+A00948,64,20000,589,10.2,Bachelor,Female,White,50949,education,0
+A00949,44,47095,571,2.4,Master,Male,White,25228,education,1
+A00950,60,171086,647,0.3,Bachelor,Female,Asian,20062,education,1
+A00951,45,108627,625,0.7,Bachelor,Male,White,63749,personal,1
+A00952,36,20000,622,1.2,High School,Male,Hispanic,28692,business,0
+A00953,52,40617,653,6.6,Bachelor,Female,White,42431,auto,0
+A00954,40,23839,671,2.5,High School,Male,Black,39034,business,0
+A00955,33,136852,718,12.9,Master,Female,White,2206,education,1
+A00956,41,56758,580,5.2,Bachelor,Female,White,20716,auto,1
+A00957,50,30925,625,0.8,Master,Female,White,9297,home,0
+A00958,37,50035,667,0.3,Bachelor,Female,White,11345,home,1
+A00959,51,20000,664,5.7,High School,Female,Hispanic,71658,auto,1
+A00960,64,25566,826,0.3,Master,Female,Hispanic,16320,personal,1
+A00961,39,50104,698,3.0,Master,Male,White,100112,education,1
+A00962,33,81422,550,1.8,Master,Female,White,7142,education,1
+A00963,38,20000,713,3.5,Bachelor,Female,White,9256,auto,1
+A00964,57,38999,723,3.8,PhD,Male,Hispanic,40533,auto,1
+A00965,28,89842,669,7.8,High School,Male,Hispanic,16762,business,0
+A00966,63,20519,582,1.5,Bachelor,Male,Asian,28165,home,0
+A00967,39,56247,820,22.3,Master,Female,Asian,20133,business,1
+A00968,58,51000,594,8.6,High School,Male,White,19652,personal,0
+A00969,55,137122,732,2.7,Master,Female,White,17268,personal,1
+A00970,55,42698,696,0.0,Bachelor,Female,Asian,25427,auto,1
+A00971,60,44224,728,2.4,High School,Female,White,36802,personal,1
+A00972,29,81877,816,7.4,High School,Male,White,80140,auto,1
+A00973,47,22118,724,1.7,Master,Female,White,18732,auto,1
+A00974,25,42936,635,1.2,Master,Female,Hispanic,16076,auto,0
+A00975,34,37293,768,10.0,High School,Male,Black,14501,home,1
+A00976,22,45100,629,8.9,High School,Male,Other,71383,auto,0
+A00977,51,81555,693,17.0,High School,Male,White,38263,personal,1
+A00978,47,68356,576,1.3,High School,Female,White,4821,business,0
+A00979,53,31281,597,7.7,Master,Male,White,4654,auto,1
+A00980,28,53210,684,1.6,High School,Male,Hispanic,11338,auto,1
+A00981,35,119882,709,13.1,High School,Male,White,26479,auto,1
+A00982,50,29767,543,15.0,High School,Male,Asian,21444,home,0
+A00983,57,53481,719,6.8,Bachelor,Male,White,33250,home,0
+A00984,59,43656,614,0.3,Master,Female,Hispanic,19142,personal,0
+A00985,24,47202,782,4.8,Master,Male,Hispanic,67368,business,1
+A00986,38,20000,651,0.6,Bachelor,Female,White,40851,business,0
+A00987,21,114285,590,0.4,Other,Male,Hispanic,23436,auto,0
+A00988,57,30803,686,1.2,Bachelor,Male,White,55065,personal,0
+A00989,26,90729,606,9.5,PhD,Female,Hispanic,5889,home,1
+A00990,57,33764,781,3.5,Bachelor,Female,Hispanic,20577,personal,1
+A00991,27,33681,680,17.3,High School,Female,Black,24587,education,1
+A00992,21,101506,667,6.5,Master,Male,White,35654,auto,1
+A00993,59,88994,727,1.8,Bachelor,Female,Other,5585,business,0
+A00994,40,55558,599,10.0,Master,Female,Asian,17884,education,1
+A00995,39,77395,576,1.3,High School,Male,Black,30344,auto,1
+A00996,49,41227,712,1.0,Bachelor,Female,Other,32264,business,1
+A00997,33,48775,592,2.2,PhD,Male,White,56891,business,0
+A00998,51,32959,591,13.3,High School,Male,White,40505,business,1
+A00999,39,84325,746,34.3,High School,Female,White,20979,education,1
+A01000,32,32336,722,0.1,High School,Female,White,37796,auto,1
+A01001,38,119502,579,5.4,Bachelor,Female,White,18749,education,1
+A01002,21,40558,630,2.6,Master,Female,Black,24770,personal,1
+A01003,34,49627,607,11.5,Bachelor,Male,White,41599,auto,1
+A01004,47,77283,822,8.5,PhD,Female,White,21242,personal,1
+A01005,27,49727,752,0.7,Bachelor,Non-binary,Hispanic,29424,home,1
+A01006,26,40997,646,2.7,Bachelor,Male,Hispanic,47526,home,1
+A01007,49,48145,726,0.2,High School,Male,Other,38938,auto,1
+A01008,39,83808,571,1.1,High School,Female,White,59087,home,0
+A01009,27,32934,626,5.7,Master,Male,Hispanic,141883,personal,0
+A01010,53,45444,688,5.5,High School,Female,White,38651,auto,1
+A01011,55,49324,716,16.6,High School,Female,White,15229,home,1
+A01012,22,82351,672,4.0,PhD,Female,Hispanic,33171,business,0
+A01013,29,46170,699,0.7,Bachelor,Female,White,32050,personal,1
+A01014,37,145071,686,5.2,High School,Female,Hispanic,35983,personal,1
+A01015,53,44626,666,7.1,Master,Female,White,72839,home,1
+A01016,24,42505,656,1.7,Bachelor,Male,White,5725,business,1
+A01017,56,44239,645,1.5,PhD,Female,White,73944,auto,1
+A01018,35,22248,698,6.5,Master,Female,White,96793,personal,1
+A01019,26,26316,712,0.3,High School,Female,White,34698,business,1
+A01020,58,35653,695,15.8,High School,Non-binary,White,35373,business,1
+A01021,24,96906,585,6.4,High School,Female,White,18154,personal,0
+A01022,26,48056,600,2.5,Master,Female,Hispanic,22138,personal,1
+A01023,62,36651,711,2.9,Bachelor,Female,White,38498,home,0
+A01024,43,102326,797,1.9,Master,Female,Black,36564,business,1
+A01025,41,124331,692,0.2,Bachelor,Female,Black,39205,home,1
+A01026,51,104112,647,9.7,Bachelor,Male,White,36364,personal,1
+A01027,48,29382,697,1.4,High School,Male,White,45193,business,1
+A01028,47,36419,589,4.3,High School,Female,Black,41328,home,0
+A01029,22,145545,784,1.4,Bachelor,Male,Asian,9706,auto,1
+A01030,45,56652,694,8.2,Bachelor,Male,White,42865,personal,1
+A01031,33,41748,626,2.5,PhD,Male,Hispanic,97428,business,0
+A01032,56,75433,666,2.2,High School,Female,White,21562,auto,1
+A01033,43,89713,637,4.2,Master,Non-binary,White,73100,personal,1
+A01034,26,34791,784,4.3,High School,Female,White,10574,business,1
+A01035,59,55919,663,17.9,Master,Female,White,21508,home,1
+A01036,33,85471,692,4.4,High School,Female,White,13188,auto,1
+A01037,32,24436,725,1.0,Master,Male,White,66394,personal,1
+A01038,62,49385,620,0.9,High School,Male,White,81828,auto,0
+A01039,55,25118,695,16.3,High School,Male,Black,20346,home,1
+A01040,58,27169,701,16.4,Bachelor,Male,White,56209,business,1
+A01041,50,34966,555,3.2,Bachelor,Female,Hispanic,82495,personal,1
+A01042,61,65268,700,5.5,Bachelor,Male,Asian,21453,education,1
+A01043,26,40408,676,1.4,Bachelor,Female,White,24435,personal,1
+A01044,47,33221,690,0.1,Other,Female,White,39612,home,0
+A01045,33,50560,682,2.3,High School,Male,White,11225,business,1
+A01046,38,24632,700,9.5,Bachelor,Non-binary,Asian,24054,business,1
+A01047,31,63403,786,4.2,PhD,Female,White,122299,personal,1
+A01048,30,96648,585,1.9,Master,Female,White,14764,education,1
+A01049,40,46745,652,2.1,Bachelor,Female,Other,43610,personal,1
+A01050,61,43408,733,12.5,Bachelor,Non-binary,White,33491,home,0
+A01051,48,61332,718,1.5,High School,Female,White,19321,home,1
+A01052,36,20000,716,0.8,Bachelor,Female,Asian,26299,business,1
+A01053,40,67649,850,5.5,Bachelor,Male,Asian,89509,home,1
+A01054,44,300000,729,1.6,Master,Female,White,34299,personal,1
+A01055,31,45542,770,20.2,Master,Female,White,38865,home,1
+A01056,43,45639,655,5.1,High School,Male,White,79275,business,1
+A01057,51,76585,600,31.2,High School,Male,White,17474,education,1
+A01058,31,131557,654,0.2,Bachelor,Male,White,9532,business,1
+A01059,46,87990,736,8.4,Bachelor,Male,White,90642,business,1
+A01060,52,20000,712,28.6,Bachelor,Male,Black,24568,education,1
+A01061,43,68736,712,2.2,Bachelor,Male,Hispanic,45020,education,1
+A01062,33,229385,662,7.7,Bachelor,Female,Other,11969,education,1
+A01063,45,71215,650,3.3,PhD,Female,Hispanic,30056,business,0
+A01064,55,24519,665,0.2,Bachelor,Female,White,9158,business,0
+A01065,30,58052,737,6.1,High School,Male,White,23178,education,1
+A01066,46,22733,747,2.2,Bachelor,Female,White,13116,auto,1
+A01067,50,102711,599,0.4,Bachelor,Male,White,10914,home,1
+A01068,35,27624,740,2.7,High School,Male,White,17283,business,1
+A01069,38,51253,627,2.6,High School,Female,Hispanic,3516,auto,0
+A01070,60,29299,717,0.5,Bachelor,Female,White,8708,education,0
+A01071,36,35317,664,2.1,Master,Non-binary,White,41189,personal,0
+A01072,47,119573,805,8.1,PhD,Female,White,29089,business,1
+A01073,27,52160,646,10.7,Bachelor,Female,Other,9326,auto,1
+A01074,61,35048,694,9.0,High School,Female,Black,34142,education,0
+A01075,47,24658,728,5.7,Bachelor,Female,White,10909,auto,0
+A01076,54,20000,610,21.2,Bachelor,Male,White,39244,business,1
+A01077,47,23138,674,2.1,Other,Male,Asian,20080,home,1
+A01078,36,52426,658,2.5,Bachelor,Non-binary,White,16981,personal,0
+A01079,35,88268,638,6.6,Master,Non-binary,Black,20478,personal,1
+A01080,51,35024,644,4.0,PhD,Male,Hispanic,170693,auto,1
+A01081,58,125784,768,15.9,Bachelor,Male,Hispanic,12003,auto,1
+A01082,26,31872,632,8.8,High School,Male,White,26403,education,1
+A01083,58,42497,725,8.5,Bachelor,Female,Asian,41154,business,0
+A01084,57,25648,705,12.5,Bachelor,Male,White,10199,business,1
+A01085,25,88827,568,6.7,Bachelor,Female,White,6152,home,1
+A01086,25,172561,721,4.1,Other,Male,White,13617,business,1
+A01087,51,20000,566,4.7,High School,Male,White,40439,home,1
+A01088,58,39827,730,14.9,Bachelor,Male,White,16754,auto,1
+A01089,38,104701,639,0.1,High School,Female,Hispanic,18308,business,0
+A01090,49,20575,680,3.1,High School,Male,Asian,45643,personal,0
+A01091,64,68872,576,8.5,Bachelor,Male,White,11555,business,1
+A01092,35,102015,689,5.7,Master,Female,Hispanic,20516,home,1
+A01093,30,51376,754,0.5,Bachelor,Female,Other,6561,business,1
+A01094,64,68197,615,12.5,Bachelor,Male,White,28469,home,1
+A01095,33,141003,631,3.5,High School,Female,Hispanic,26465,auto,1
+A01096,41,157795,716,6.4,Bachelor,Male,Other,41623,home,1
+A01097,40,47231,718,0.2,Bachelor,Female,Hispanic,8811,personal,1
+A01098,44,35616,485,8.5,Master,Male,White,18891,auto,0
+A01099,32,28226,841,9.6,Bachelor,Female,Asian,7920,education,0
+A01100,50,88095,722,1.3,PhD,Non-binary,Hispanic,18090,business,1
+A01101,51,21524,735,2.2,Master,Female,White,72072,personal,1
+A01102,29,42127,668,2.3,Bachelor,Female,White,17041,personal,0
+A01103,42,52136,531,34.4,Bachelor,Male,White,7385,home,1
+A01104,23,36250,733,1.8,Master,Female,White,12785,auto,1
+A01105,30,57982,634,23.8,Other,Male,White,6070,education,1
+A01106,64,228366,723,2.2,Bachelor,Male,White,7811,business,1
+A01107,43,45571,662,3.2,Bachelor,Female,Hispanic,37676,auto,0
+A01108,48,37750,699,5.4,Bachelor,Female,Hispanic,6925,auto,0
+A01109,60,90147,618,12.0,Master,Female,White,28278,business,1
+A01110,52,56599,749,10.7,PhD,Female,White,22484,education,1
+A01111,55,116261,584,5.1,PhD,Female,White,14397,business,0
+A01112,52,54112,850,4.8,High School,Female,White,26420,auto,1
+A01113,42,42232,850,0.3,High School,Female,Black,10403,education,1
+A01114,48,20000,810,4.4,Master,Female,White,43160,home,1
+A01115,33,20000,782,4.5,Bachelor,Male,Other,12598,home,1
+A01116,60,20000,673,12.1,PhD,Female,White,16169,home,1
+A01117,28,61549,773,2.3,Bachelor,Female,White,14701,home,0
+A01118,59,21647,672,3.1,Master,Non-binary,Asian,38237,auto,1
+A01119,59,104124,555,9.1,Master,Male,White,34048,home,1
+A01120,27,49918,800,1.7,High School,Male,White,2704,home,1
+A01121,52,42340,770,8.9,High School,Male,White,26994,personal,1
+A01122,64,29545,677,0.7,Master,Male,Black,5455,personal,0
+A01123,46,71207,581,4.8,High School,Female,White,16763,auto,1
+A01124,35,30251,633,0.3,Master,Male,Hispanic,20200,personal,0
+A01125,59,27140,534,19.0,Bachelor,Male,Black,16619,home,0
+A01126,43,100008,755,12.0,Bachelor,Female,Asian,32881,home,1
+A01127,26,60643,551,6.9,High School,Male,Black,39185,auto,1
+A01128,31,42575,702,4.1,Other,Male,Hispanic,11863,auto,1
+A01129,51,72031,612,18.9,Master,Female,Black,11523,home,1
+A01130,41,49284,565,2.1,Master,Female,White,21401,personal,0
+A01131,30,61685,699,3.7,Master,Non-binary,Black,6406,personal,1
+A01132,56,30028,653,0.6,Bachelor,Female,Black,15039,auto,1
+A01133,26,169776,747,3.8,PhD,Non-binary,White,64761,auto,1
+A01134,30,34621,578,7.2,Bachelor,Male,Black,6600,business,1
+A01135,41,124692,619,6.3,Bachelor,Female,White,16779,personal,0
+A01136,22,43768,488,14.7,High School,Female,White,13713,auto,1
+A01137,38,79559,505,19.4,High School,Female,White,109558,business,0
+A01138,61,76155,823,8.8,Master,Male,White,14324,home,1
+A01139,62,97549,846,1.4,Bachelor,Male,White,15005,education,1
+A01140,59,29602,687,5.6,Master,Male,White,9656,personal,1
+A01141,35,93468,614,26.0,Other,Female,White,22191,education,1
+A01142,23,148429,656,24.7,Bachelor,Female,White,27340,business,1
+A01143,56,41973,749,8.0,High School,Male,Black,10843,business,1
+A01144,37,50052,638,3.1,Master,Female,White,48580,business,1
+A01145,53,35808,699,2.4,High School,Female,Other,27360,business,0
+A01146,26,39820,678,1.3,Master,Female,Hispanic,43543,personal,0
+A01147,50,136879,634,0.6,Bachelor,Male,White,16940,home,1
+A01148,46,26834,637,7.1,Bachelor,Female,White,26756,personal,0
+A01149,61,27853,703,8.3,Bachelor,Female,White,18574,personal,1
+A01150,25,128867,601,5.1,Bachelor,Female,White,70696,personal,1
+A01151,38,71305,716,19.6,Bachelor,Female,White,24173,auto,1
+A01152,64,174944,642,14.5,High School,Female,Black,22181,education,1
+A01153,38,37411,690,12.3,Bachelor,Male,Black,15266,auto,1
+A01154,49,52879,790,10.1,PhD,Female,White,14577,personal,1
+A01155,28,32977,666,7.7,High School,Male,Hispanic,26640,education,1
+A01156,53,53422,753,1.3,Bachelor,Female,White,42432,auto,1
+A01157,33,20000,536,2.7,High School,Female,Hispanic,12738,business,0
+A01158,46,73937,642,8.3,Bachelor,Female,Other,24373,home,1
+A01159,59,59520,682,6.7,High School,Female,White,25523,auto,1
+A01160,50,47356,833,3.5,Master,Male,Hispanic,29339,auto,1
+A01161,41,38784,523,0.3,High School,Male,Hispanic,5619,auto,0
+A01162,29,28656,672,2.7,Master,Female,White,10511,education,1
+A01163,36,75858,796,12.3,High School,Male,White,7385,home,1
+A01164,58,24278,617,4.2,Bachelor,Male,Hispanic,22613,personal,0
+A01165,30,66645,662,2.7,High School,Non-binary,White,10713,education,0
+A01166,49,170190,706,14.5,Master,Male,White,14809,auto,1
+A01167,42,119528,694,10.8,PhD,Male,Black,8472,home,1
+A01168,35,20000,805,4.5,High School,Male,White,15953,personal,1
+A01169,52,35523,715,0.8,Other,Female,White,8961,personal,0
+A01170,36,63124,786,6.1,Bachelor,Male,Other,40389,education,1
+A01171,33,46996,651,12.4,Bachelor,Female,White,32318,auto,1
+A01172,44,21170,620,3.6,Master,Female,White,24839,education,1
+A01173,54,61771,661,1.4,High School,Male,Black,17299,personal,1
+A01174,59,48727,587,11.7,Bachelor,Female,White,4314,auto,1
+A01175,48,154599,718,6.6,High School,Male,Hispanic,15266,business,1
+A01176,50,42110,649,8.9,Master,Female,Black,11978,personal,1
+A01177,55,98794,626,5.6,Bachelor,Male,White,26844,business,1
+A01178,32,22919,719,6.5,PhD,Male,White,36162,personal,1
+A01179,32,26454,588,0.7,High School,Male,Other,28558,personal,0
+A01180,42,75583,741,13.6,PhD,Male,Asian,60501,home,1
+A01181,48,93923,641,4.2,High School,Female,White,13979,auto,1
+A01182,49,27599,772,2.5,Bachelor,Male,White,13523,home,1
+A01183,27,49734,648,2.1,Bachelor,Female,White,50528,education,0
+A01184,55,21397,730,9.3,High School,Male,Asian,25159,education,1
+A01185,37,43970,694,3.5,High School,Female,Hispanic,18077,home,1
+A01186,59,80995,739,6.1,Master,Female,White,96492,education,1
+A01187,52,37760,688,2.4,High School,Male,Asian,34967,home,1
+A01188,64,42217,546,3.8,Bachelor,Female,White,18912,education,1
+A01189,48,24887,760,1.9,Other,Female,White,12723,auto,0
+A01190,44,33222,672,9.2,Bachelor,Female,Black,63653,personal,0
+A01191,29,140767,743,14.6,High School,Female,White,25993,business,1
+A01192,38,51213,735,0.7,High School,Female,Black,22462,business,1
+A01193,58,26865,618,5.3,High School,Male,White,37836,personal,1
+A01194,37,40584,606,4.7,Bachelor,Female,Hispanic,44536,home,0
+A01195,23,20000,732,3.9,Master,Male,Other,34197,auto,1
+A01196,31,26675,655,14.7,High School,Female,White,44675,business,1
+A01197,47,110880,754,10.9,High School,Female,White,31605,business,1
+A01198,48,45004,665,3.6,Bachelor,Female,Hispanic,34334,home,1
+A01199,64,152426,761,4.4,Bachelor,Female,White,12267,auto,1
+A01200,62,46295,713,0.7,Bachelor,Male,Hispanic,93740,auto,0
+A01201,44,47973,703,0.2,PhD,Female,Black,8209,home,1
+A01202,45,72008,650,7.0,High School,Male,White,28211,business,1
+A01203,56,20000,698,1.8,Bachelor,Female,Asian,7559,home,1
+A01204,23,55434,775,2.9,Master,Female,White,20363,personal,1
+A01205,47,47600,675,12.6,Master,Male,White,13946,education,1
+A01206,41,119565,722,2.8,Master,Female,White,24553,business,1
+A01207,55,87448,683,15.1,Master,Male,Hispanic,28952,education,1
+A01208,56,24829,689,5.8,Bachelor,Female,Asian,10248,personal,1
+A01209,49,103288,817,6.8,Bachelor,Non-binary,White,21514,auto,1
+A01210,49,41881,776,3.0,Master,Female,White,67167,education,0
+A01211,51,28490,686,12.4,Master,Female,White,7709,home,1
+A01212,46,55174,697,0.2,Master,Male,Black,11122,personal,1
+A01213,31,43405,623,11.5,Bachelor,Male,White,43853,education,1
+A01214,33,123386,666,4.6,Master,Male,White,23436,home,1
+A01215,53,60136,704,6.9,High School,Male,White,24857,personal,1
+A01216,48,55458,748,21.9,High School,Male,White,49903,personal,1
+A01217,31,84152,739,6.8,Bachelor,Female,Black,11669,home,1
+A01218,59,94440,591,6.3,High School,Female,White,14538,personal,0
+A01219,64,78445,758,2.7,Master,Male,White,13172,business,1
+A01220,48,114883,672,1.1,High School,Female,White,16671,auto,1
+A01221,31,70629,601,2.3,Master,Female,White,64319,business,1
+A01222,62,54208,786,15.3,Bachelor,Male,White,5648,business,1
+A01223,31,103105,797,25.6,High School,Female,White,8472,education,1
+A01224,40,46418,701,3.8,High School,Male,White,7386,business,0
+A01225,58,50008,736,1.8,Bachelor,Female,White,67599,home,1
+A01226,43,137715,741,3.8,Master,Female,White,13473,personal,1
+A01227,31,129722,791,18.0,Bachelor,Male,Black,16960,personal,1
+A01228,24,48780,738,0.4,High School,Male,White,6052,auto,1
+A01229,36,37341,573,0.5,High School,Female,White,17855,education,0
+A01230,50,117936,840,3.8,High School,Male,Black,44056,auto,1
+A01231,52,79241,765,11.3,High School,Female,White,26966,auto,1
+A01232,30,59239,639,19.9,Other,Female,White,20205,auto,1
+A01233,27,40411,597,9.3,High School,Male,Hispanic,6298,personal,1
+A01234,51,59815,720,3.3,High School,Female,White,16943,business,1
+A01235,27,48386,657,2.1,PhD,Female,Asian,24773,personal,0
+A01236,23,32905,706,5.8,Master,Male,White,9962,business,1
+A01237,42,52967,739,3.6,Bachelor,Female,Asian,37194,business,1
+A01238,46,57483,634,3.2,Bachelor,Female,Hispanic,44714,home,0
+A01239,31,39134,590,17.2,PhD,Female,White,14430,personal,1
+A01240,30,84313,710,1.9,High School,Male,White,39366,business,1
+A01241,31,106223,637,13.7,High School,Male,Black,20175,home,1
+A01242,36,87722,691,5.7,PhD,Female,White,55144,home,1
+A01243,21,41533,572,2.0,Master,Female,White,112119,business,0
+A01244,21,77148,659,4.6,Other,Male,Asian,9182,auto,1
+A01245,37,51368,737,3.8,Bachelor,Female,Hispanic,40765,auto,1
+A01246,21,23354,728,1.0,PhD,Female,Other,62565,auto,1
+A01247,35,73396,616,0.5,Bachelor,Male,Hispanic,10132,personal,0
+A01248,46,53512,586,3.0,Master,Female,Hispanic,13903,auto,0
+A01249,22,232379,681,13.9,PhD,Female,Hispanic,13778,auto,1
+A01250,48,117519,724,3.9,High School,Female,Black,19806,auto,1
+A01251,48,75108,712,0.1,High School,Female,Asian,16562,home,1
+A01252,46,56925,639,3.4,Bachelor,Female,Black,18795,home,1
+A01253,48,54080,703,0.6,Master,Female,White,43061,education,1
+A01254,56,26843,800,4.9,High School,Female,Black,4833,home,1
+A01255,24,20000,696,0.3,PhD,Male,White,10106,business,1
+A01256,28,29041,549,2.2,Bachelor,Male,Asian,37644,education,0
+A01257,34,47637,696,15.9,Bachelor,Female,Black,34276,education,0
+A01258,51,20000,843,10.5,Bachelor,Female,Black,9444,auto,0
+A01259,59,35362,577,8.4,PhD,Male,White,34467,business,0
+A01260,61,42253,682,17.2,High School,Male,White,63671,education,1
+A01261,46,43076,661,4.1,Bachelor,Male,White,21179,home,1
+A01262,39,32957,687,0.6,High School,Female,Black,9834,education,0
+A01263,39,39938,695,6.2,PhD,Female,Black,44354,home,1
+A01264,23,137907,771,19.4,Master,Female,White,87416,education,1
+A01265,41,72932,686,3.0,High School,Male,White,10840,education,1
+A01266,43,35025,782,8.6,High School,Female,White,22729,education,1
+A01267,30,47051,670,2.4,Bachelor,Male,White,52687,auto,1
+A01268,54,48195,651,2.2,Bachelor,Male,Asian,24155,education,1
+A01269,56,30922,626,11.7,Master,Male,Asian,5443,business,1
+A01270,34,30900,534,7.1,Bachelor,Female,Hispanic,31405,personal,0
+A01271,61,89887,702,32.0,Bachelor,Female,White,10066,personal,1
+A01272,25,38106,844,2.9,Master,Male,White,7969,home,1
+A01273,61,25417,716,0.6,Bachelor,Male,Asian,5529,business,0
+A01274,54,47768,734,18.8,High School,Female,Other,57086,home,1
+A01275,30,52617,646,7.1,High School,Male,White,11296,education,1
+A01276,49,20000,660,12.8,Bachelor,Female,Black,28757,business,1
+A01277,34,47836,758,6.0,Bachelor,Male,White,35002,education,1
+A01278,56,82519,840,13.2,High School,Male,White,25070,personal,1
+A01279,28,64262,799,4.6,Bachelor,Male,Other,27924,personal,1
+A01280,31,186815,744,1.3,High School,Female,Asian,29876,personal,1
+A01281,34,103846,682,4.3,Master,Male,Other,24599,business,1
+A01282,29,116933,696,1.4,High School,Male,White,11990,business,0
+A01283,35,263037,619,4.5,Bachelor,Female,White,11164,personal,1
+A01284,47,77257,564,0.4,High School,Male,Asian,20252,auto,1
+A01285,48,54059,589,11.2,Bachelor,Female,Black,19911,auto,1
+A01286,45,87925,683,5.2,High School,Male,White,31053,auto,0
+A01287,29,35047,656,5.9,Bachelor,Female,White,53173,business,1
+A01288,29,52292,562,2.9,Master,Male,White,29002,auto,1
+A01289,61,33235,677,4.0,High School,Female,Black,11513,home,0
+A01290,32,62242,654,18.7,Master,Female,Asian,3847,business,1
+A01291,25,33151,586,3.2,Bachelor,Female,White,11906,business,1
+A01292,40,32462,650,6.2,Bachelor,Female,White,7513,education,1
+A01293,21,62823,654,7.3,Bachelor,Male,White,12279,personal,1
+A01294,36,45133,630,13.2,Bachelor,Male,Black,26737,business,0
+A01295,58,20000,754,3.7,Master,Female,White,23564,personal,1
+A01296,32,20468,527,4.9,Master,Female,White,97396,auto,0
+A01297,51,24628,521,6.0,Master,Female,Hispanic,32417,home,0
+A01298,42,28860,680,1.4,High School,Female,White,101451,auto,1
+A01299,36,62859,687,12.9,Master,Female,Black,39031,personal,1
+A01300,50,55902,712,2.8,High School,Female,Black,52499,personal,0
+A01301,47,92889,636,0.2,Bachelor,Female,White,16529,home,1
+A01302,35,77009,606,1.7,High School,Female,Black,9324,personal,1
+A01303,30,93259,679,4.5,High School,Male,Black,15380,education,1
+A01304,61,70617,644,3.6,Bachelor,Female,Black,21818,personal,0
+A01305,28,55592,804,6.2,PhD,Female,Black,13326,business,1
+A01306,63,94808,654,3.2,High School,Male,White,9888,home,1
+A01307,41,85105,675,5.6,Bachelor,Female,White,30744,education,1
+A01308,64,61430,850,11.7,Bachelor,Female,White,9854,home,1
+A01309,36,105097,664,1.2,PhD,Male,White,6458,auto,1
+A01310,45,20000,724,10.5,Master,Female,White,8976,business,0
+A01311,48,41180,731,3.5,High School,Male,White,18260,business,1
+A01312,35,40803,738,20.5,High School,Male,Hispanic,9969,business,1
+A01313,30,97890,703,5.0,Bachelor,Female,White,18352,business,1
+A01314,43,125848,695,0.9,High School,Female,Asian,35609,home,1
+A01315,50,20535,688,10.7,PhD,Female,Black,34876,education,1
+A01316,32,114313,633,5.8,PhD,Male,White,12982,education,1
+A01317,54,24273,706,9.8,PhD,Female,Black,7760,education,1
+A01318,49,24717,842,0.6,High School,Male,White,13898,auto,0
+A01319,28,42592,776,0.4,Master,Female,Asian,37216,business,1
+A01320,62,40500,704,0.8,Master,Male,Asian,44862,business,1
+A01321,22,20000,748,1.9,High School,Female,Hispanic,29211,education,1
+A01322,49,72397,610,5.6,High School,Male,Black,57592,home,0
+A01323,40,73691,659,2.0,High School,Male,Asian,87847,home,0
+A01324,49,92265,755,8.5,Bachelor,Male,Black,14964,auto,1
+A01325,55,37794,798,0.6,Other,Female,Asian,72348,education,1
+A01326,51,47870,618,0.7,Master,Female,White,17882,personal,1
+A01327,49,48133,641,29.2,High School,Female,Asian,49805,business,1
+A01328,57,134968,850,12.0,Bachelor,Male,Black,38826,education,1
+A01329,51,20000,687,2.5,High School,Male,White,4529,auto,1
+A01330,56,27607,825,0.9,High School,Female,Other,10168,home,1
+A01331,38,49184,696,5.4,High School,Male,Black,8291,home,0
+A01332,29,25556,699,0.7,Bachelor,Female,Asian,5294,home,0
+A01333,31,41982,655,0.3,Master,Female,White,44509,personal,1
+A01334,47,45449,755,3.7,Master,Female,Black,115268,home,1
+A01335,44,33037,788,6.8,PhD,Female,Hispanic,17923,personal,1
+A01336,24,50954,597,1.6,High School,Male,White,43622,education,1
+A01337,29,71459,651,2.4,Master,Male,Hispanic,72236,business,0
+A01338,63,42541,753,22.3,High School,Female,Black,26021,personal,1
+A01339,52,37349,669,7.3,Bachelor,Male,White,21584,business,0
+A01340,54,44379,640,19.9,Bachelor,Female,Black,18096,home,1
+A01341,29,48802,760,7.7,High School,Female,White,33861,personal,1
+A01342,23,20000,768,4.8,High School,Male,Hispanic,44344,home,1
+A01343,33,64662,644,1.3,High School,Female,Asian,31870,education,1
+A01344,58,37399,696,0.1,High School,Male,White,31007,business,1
+A01345,43,104497,583,4.1,PhD,Female,White,21142,auto,0
+A01346,55,69886,608,16.1,High School,Male,White,6158,business,1
+A01347,42,98917,689,1.2,Bachelor,Female,White,45169,business,1
+A01348,42,26726,682,1.1,Other,Male,Asian,7881,personal,1
+A01349,47,39228,602,8.8,Bachelor,Male,White,36152,personal,1
+A01350,63,23260,622,0.6,Bachelor,Male,White,40319,auto,1
+A01351,40,32108,594,1.4,PhD,Male,White,8845,business,1
+A01352,47,103908,716,11.8,High School,Female,Black,13544,personal,1
+A01353,61,119670,522,1.3,High School,Male,Hispanic,120232,home,0
+A01354,37,24615,599,10.7,Bachelor,Male,White,20669,business,0
+A01355,57,37236,530,6.8,Bachelor,Male,White,8298,personal,1
+A01356,44,46830,713,17.3,Master,Male,White,41802,home,1
+A01357,59,69658,535,6.8,High School,Male,White,11871,business,0
+A01358,41,20000,682,0.7,Bachelor,Male,White,4738,home,1
+A01359,48,20000,811,23.1,Master,Female,Hispanic,33383,education,1
+A01360,35,65760,813,0.7,Other,Female,White,10579,personal,1
+A01361,48,20000,535,3.4,High School,Female,White,28479,personal,0
+A01362,35,37493,703,7.8,High School,Male,Black,11497,business,1
+A01363,47,54027,600,2.7,PhD,Female,Hispanic,38784,business,0
+A01364,55,62906,584,1.6,Bachelor,Female,White,25509,auto,0
+A01365,40,45024,670,6.5,High School,Female,White,2775,personal,0
+A01366,39,39361,778,0.9,High School,Male,Hispanic,29899,business,1
+A01367,35,81368,727,0.5,Master,Male,White,17469,personal,1
+A01368,53,58169,622,3.1,Bachelor,Male,Hispanic,68416,business,1
+A01369,47,33249,736,21.2,Bachelor,Male,Hispanic,30217,home,1
+A01370,43,50142,500,6.5,PhD,Female,Asian,40333,education,1
+A01371,22,61691,619,1.2,High School,Male,White,12476,business,1
+A01372,25,137439,614,13.9,High School,Male,White,11707,business,1
+A01373,21,78573,686,0.6,Bachelor,Male,Asian,21579,auto,1
+A01374,58,101593,663,18.6,PhD,Male,White,16506,home,1
+A01375,58,33983,668,5.8,High School,Male,White,64241,personal,1
+A01376,23,35792,666,0.5,Master,Male,Black,19483,personal,1
+A01377,23,42564,681,8.2,High School,Female,White,8267,personal,1
+A01378,55,44974,723,5.0,High School,Male,Black,11360,business,0
+A01379,44,26773,691,4.6,PhD,Female,Asian,47669,personal,1
+A01380,34,104773,657,4.8,High School,Female,Black,19267,education,1
+A01381,48,83283,712,3.9,High School,Female,White,18461,business,1
+A01382,31,40806,746,3.2,Master,Female,Other,51438,education,1
+A01383,29,72043,635,16.0,Bachelor,Male,Black,10595,business,0
+A01384,37,56035,675,2.6,Bachelor,Female,White,3684,home,0
+A01385,60,75500,772,9.6,Master,Female,Black,11133,auto,1
+A01386,54,21881,591,13.2,High School,Female,White,26733,auto,0
+A01387,29,44918,824,14.0,Master,Male,White,18040,education,1
+A01388,45,47343,572,5.5,Bachelor,Female,Black,6321,personal,0
+A01389,59,71266,652,4.9,High School,Male,White,49654,home,1
+A01390,62,33622,603,3.1,Master,Female,White,25104,business,1
+A01391,54,20000,850,1.1,Bachelor,Male,Black,30067,personal,1
+A01392,26,25616,639,8.1,PhD,Male,White,30812,business,0
+A01393,31,47257,639,6.9,PhD,Female,White,7794,business,1
+A01394,30,50936,650,2.6,Master,Female,White,28065,home,1
+A01395,27,134625,687,0.4,Bachelor,Female,Black,45522,business,0
+A01396,28,69539,653,0.6,High School,Female,Asian,54844,auto,1
+A01397,34,51478,669,3.7,PhD,Female,White,39222,auto,0
+A01398,45,48077,397,4.1,Bachelor,Male,Hispanic,33206,personal,0
+A01399,38,95083,684,5.6,Master,Non-binary,White,5486,business,1
+A01400,39,34404,681,1.7,Master,Male,White,21764,personal,1
+A01401,31,45063,763,10.9,High School,Male,White,10247,education,1
+A01402,27,25500,784,3.6,High School,Female,White,61434,auto,0
+A01403,64,114845,664,3.4,Bachelor,Male,White,54410,personal,1
+A01404,47,62037,745,5.7,Bachelor,Female,Hispanic,10296,business,1
+A01405,31,32063,591,6.0,High School,Male,Hispanic,21230,personal,0
+A01406,56,45767,741,10.0,Bachelor,Male,Other,26871,home,1
+A01407,57,66555,634,0.5,Master,Male,Asian,45280,education,1
+A01408,63,42174,585,6.7,Bachelor,Female,White,5764,personal,1
+A01409,28,35572,665,5.0,High School,Female,White,3760,personal,1
+A01410,49,33104,792,15.0,Master,Male,White,22709,business,1
+A01411,64,60076,694,3.1,Master,Male,White,2906,home,1
+A01412,56,39543,799,6.5,Other,Male,Asian,25005,education,1
+A01413,30,37337,620,13.3,High School,Male,White,35375,home,0
+A01414,60,21990,763,13.7,PhD,Female,White,59211,personal,1
+A01415,39,51358,627,3.9,Master,Female,White,13385,business,1
+A01416,42,43970,698,0.5,Master,Male,Asian,25057,home,1
+A01417,45,40417,697,4.7,Bachelor,Male,White,37093,business,0
+A01418,54,55230,732,4.7,High School,Female,Hispanic,8599,business,1
+A01419,26,76787,700,14.5,Bachelor,Male,White,45810,home,1
+A01420,44,74677,620,5.5,High School,Male,White,27432,home,0
+A01421,56,68298,750,3.9,High School,Female,White,13570,auto,1
+A01422,45,42429,818,11.2,PhD,Male,Hispanic,24664,home,1
+A01423,33,34884,633,9.8,High School,Male,Hispanic,19703,education,1
+A01424,23,26203,533,8.8,PhD,Male,White,41112,personal,0
+A01425,45,34341,719,0.2,Bachelor,Female,White,16508,home,1
+A01426,51,49602,653,1.2,Master,Male,White,26414,business,1
+A01427,45,30583,669,2.8,High School,Female,White,13403,education,0
+A01428,64,51929,724,2.6,Bachelor,Male,White,10401,personal,1
+A01429,47,27466,643,21.0,Bachelor,Male,White,25266,education,1
+A01430,43,20000,658,15.2,PhD,Female,Black,10749,business,0
+A01431,23,80149,671,2.4,High School,Male,Hispanic,41792,personal,1
+A01432,45,36877,797,0.4,High School,Male,Hispanic,35375,home,1
+A01433,28,29666,682,15.4,PhD,Male,Hispanic,11943,auto,1
+A01434,52,25430,581,0.6,High School,Female,Other,26134,auto,1
+A01435,28,63184,584,2.1,Bachelor,Male,Other,11899,home,1
+A01436,60,111853,691,3.3,High School,Female,White,6103,business,1
+A01437,34,38490,589,0.6,High School,Male,White,13659,home,0
+A01438,40,43073,555,4.5,Bachelor,Male,White,21157,auto,0
+A01439,27,93244,730,7.8,Bachelor,Male,Asian,33427,home,0
+A01440,30,20000,734,4.3,Bachelor,Male,White,24824,business,1
+A01441,61,159551,650,5.2,Bachelor,Female,White,45530,business,1
+A01442,33,212449,703,9.7,Master,Male,White,10047,education,1
+A01443,43,20000,695,11.2,Other,Female,Black,16295,education,1
+A01444,64,46235,728,0.0,High School,Male,Black,82083,education,0
+A01445,48,31844,728,8.4,Bachelor,Female,Hispanic,4699,home,0
+A01446,22,41820,471,3.4,Bachelor,Male,Black,15343,auto,1
+A01447,36,38138,660,14.9,Master,Female,Asian,9346,personal,1
+A01448,38,79782,721,4.0,Bachelor,Male,White,18838,home,1
+A01449,33,45819,647,1.5,Master,Female,Asian,15559,business,0
+A01450,31,28380,682,4.2,Bachelor,Female,Black,35657,home,0
+A01451,43,44209,740,23.2,Bachelor,Female,White,27022,home,1
+A01452,37,66760,686,6.6,Master,Male,Other,7750,auto,1
+A01453,33,24095,800,12.7,Bachelor,Female,Asian,13759,auto,1
+A01454,39,20000,770,1.9,Bachelor,Male,Hispanic,22024,auto,1
+A01455,36,162047,670,2.9,High School,Male,Asian,39795,personal,1
+A01456,31,33341,664,5.2,Bachelor,Female,White,154255,personal,1
+A01457,40,45142,451,12.6,High School,Female,White,38647,business,1
+A01458,62,38612,653,2.5,Master,Male,White,9798,home,1
+A01459,43,68108,571,3.9,Bachelor,Female,Asian,20433,personal,1
+A01460,47,142013,697,0.0,High School,Female,Hispanic,25457,personal,1
+A01461,64,69422,692,1.9,High School,Male,Other,14537,home,1
+A01462,47,20000,735,19.7,Bachelor,Male,Hispanic,32087,auto,1
+A01463,30,21365,791,6.7,PhD,Female,Black,3579,business,1
+A01464,38,38585,677,20.0,Bachelor,Male,White,34286,home,1
+A01465,42,41733,850,10.6,High School,Male,White,15046,home,1
+A01466,41,20000,698,14.1,Bachelor,Male,White,20175,business,1
+A01467,27,80145,575,1.7,Other,Female,Hispanic,71152,auto,0
+A01468,25,25545,635,34.6,Master,Male,White,8028,education,1
+A01469,36,120088,650,3.7,High School,Male,Asian,27396,business,1
+A01470,61,146148,727,6.8,Bachelor,Male,Black,41570,education,1
+A01471,52,42236,604,11.0,Master,Male,White,25242,business,1
+A01472,58,63792,656,7.8,Master,Non-binary,Asian,6055,home,1
+A01473,28,23407,667,0.7,Bachelor,Female,Black,64881,home,1
+A01474,39,71268,644,4.9,Master,Female,Hispanic,18599,auto,1
+A01475,46,36354,744,18.5,Bachelor,Female,White,14443,auto,1
+A01476,40,25531,731,18.2,High School,Male,White,17181,auto,1
+A01477,39,41208,773,7.3,High School,Female,White,16224,business,1
+A01478,36,37069,653,3.9,Bachelor,Non-binary,White,8500,home,1
+A01479,23,40332,776,5.3,High School,Female,Hispanic,25133,home,0
+A01480,58,86665,570,2.0,Bachelor,Female,Other,13659,auto,0
+A01481,62,30601,568,1.5,Master,Male,Asian,37673,auto,0
+A01482,24,138831,582,10.5,Master,Female,White,33325,home,0
+A01483,39,22136,680,1.8,High School,Male,Other,80864,home,1
+A01484,43,129218,776,5.9,High School,Female,White,18595,education,1
+A01485,55,26637,631,21.7,Master,Male,White,11584,home,1
+A01486,64,48991,641,6.5,Bachelor,Female,Hispanic,6796,home,0
+A01487,39,36529,662,7.3,High School,Female,Asian,127347,personal,1
+A01488,53,39885,725,6.1,Master,Female,Asian,37409,home,0
+A01489,62,79285,641,17.0,High School,Male,Hispanic,12658,home,1
+A01490,57,120559,637,6.3,High School,Female,White,85350,home,1
+A01491,33,100139,572,1.3,Master,Female,White,65181,education,0
+A01492,56,38448,634,5.0,Bachelor,Female,White,7472,business,0
+A01493,39,54751,774,1.9,Bachelor,Female,Black,12054,business,1
+A01494,21,30661,687,4.9,Master,Female,White,19813,business,1
+A01495,54,27039,620,1.5,PhD,Female,White,9357,home,0
+A01496,57,24642,778,6.1,High School,Male,White,20388,auto,1
+A01497,36,37701,633,2.7,Bachelor,Male,Black,38931,business,1
+A01498,40,56940,793,8.2,High School,Female,Hispanic,7342,business,1
+A01499,37,20000,792,4.3,Bachelor,Female,White,27844,auto,1
+A01500,26,47676,684,1.6,Bachelor,Male,White,56094,personal,1
+A01501,64,121736,560,3.3,Bachelor,Male,Black,30338,personal,1
+A01502,21,96100,850,6.4,High School,Male,Black,20733,business,1
+A01503,45,34506,710,1.9,Master,Female,White,12906,business,0
+A01504,21,21202,654,0.6,Bachelor,Female,White,42816,personal,1
+A01505,51,64595,756,11.6,PhD,Female,Asian,8590,business,1
+A01506,60,20000,736,2.0,Bachelor,Male,Hispanic,26748,education,0
+A01507,49,95424,784,5.4,Master,Male,White,22480,auto,1
+A01508,47,43124,627,2.9,Bachelor,Female,Black,54202,auto,1
+A01509,57,147087,705,1.8,Bachelor,Male,Black,13819,personal,1
+A01510,63,20000,585,12.6,Master,Male,White,14791,auto,1
+A01511,58,85040,733,27.2,Master,Male,White,8155,business,1
+A01512,31,46151,678,1.6,Bachelor,Female,Other,31251,education,0
+A01513,45,40189,702,7.2,Bachelor,Female,White,15692,auto,1
+A01514,57,21549,668,4.3,Bachelor,Male,White,11051,education,0
+A01515,33,70083,659,15.3,Bachelor,Male,Hispanic,11926,home,1
+A01516,50,73547,610,5.4,Bachelor,Female,White,33849,business,0
+A01517,22,143068,743,1.0,Master,Male,Black,9114,home,1
+A01518,59,89754,799,15.0,Bachelor,Male,White,9785,home,1
+A01519,48,34326,635,25.2,Bachelor,Male,White,45120,auto,1
+A01520,53,26840,724,6.5,Bachelor,Male,White,19285,education,1
+A01521,57,21566,714,1.1,Other,Female,Other,47304,auto,1
+A01522,30,118650,680,14.5,High School,Female,Black,16523,personal,1
+A01523,40,30733,557,3.2,High School,Male,Hispanic,22006,personal,1
+A01524,58,119149,575,1.9,High School,Female,White,24960,auto,0
+A01525,28,67174,617,7.1,Master,Male,Hispanic,66824,personal,0
+A01526,57,59751,508,20.0,Bachelor,Female,White,62611,home,0
+A01527,33,40777,792,10.1,Bachelor,Male,Black,55414,home,1
+A01528,46,72867,709,9.6,High School,Male,White,13318,auto,1
+A01529,43,48567,677,0.9,PhD,Female,Black,10001,personal,1
+A01530,51,39280,504,10.7,Bachelor,Female,White,40482,education,1
+A01531,57,74429,534,8.3,Bachelor,Female,White,66264,business,0
+A01532,36,44963,679,5.2,High School,Female,Hispanic,55840,business,1
+A01533,28,30363,837,5.0,High School,Female,White,22257,education,1
+A01534,39,70255,624,0.3,High School,Female,White,39428,personal,0
+A01535,47,47174,749,0.6,Bachelor,Male,Asian,39987,personal,1
+A01536,54,65732,641,6.9,Bachelor,Male,White,24813,education,0
+A01537,54,37334,684,16.2,High School,Female,Black,25691,business,1
+A01538,35,23730,777,7.6,Bachelor,Female,Hispanic,23826,business,1
+A01539,62,138835,652,5.8,High School,Female,Hispanic,11725,education,1
+A01540,24,123991,624,1.5,Bachelor,Male,White,12722,home,1
+A01541,26,83305,793,7.4,High School,Male,Black,12566,auto,1
+A01542,22,38844,683,0.1,High School,Male,White,6127,personal,1
+A01543,61,40937,767,14.1,High School,Female,White,24693,auto,1
+A01544,28,112352,625,5.0,Master,Male,Hispanic,21322,business,1
+A01545,47,39644,792,3.3,PhD,Female,Other,40520,personal,1
+A01546,56,33539,701,10.2,Bachelor,Male,White,60389,business,1
+A01547,54,150744,714,3.0,High School,Male,White,63540,auto,1
+A01548,62,47638,690,10.4,Other,Female,Hispanic,68512,personal,1
+A01549,23,141641,639,3.9,Other,Male,White,12020,home,1
+A01550,38,21183,679,17.3,Bachelor,Female,Hispanic,7005,business,0
+A01551,43,66897,644,4.5,High School,Male,White,46378,auto,1
+A01552,51,169846,756,2.3,Master,Female,White,66549,business,1
+A01553,48,49903,663,5.9,Other,Female,Black,76480,education,1
+A01554,45,41839,560,6.0,Master,Female,Other,32467,education,1
+A01555,34,24327,545,14.8,Bachelor,Male,White,4458,auto,0
+A01556,25,93845,541,2.2,Bachelor,Male,Asian,29510,education,1
+A01557,39,30881,729,11.7,Other,Female,White,34349,personal,1
+A01558,32,46310,587,4.0,High School,Non-binary,White,59973,personal,1
+A01559,45,23372,704,7.3,High School,Female,White,69127,education,1
+A01560,56,124758,690,10.4,Master,Female,White,45601,personal,1
+A01561,45,98020,674,1.1,High School,Female,Black,13769,personal,1
+A01562,46,48100,715,2.9,Bachelor,Female,White,9669,business,1
+A01563,22,24526,692,3.4,High School,Female,White,33764,education,1
+A01564,49,123197,463,0.9,High School,Female,White,11685,home,1
+A01565,40,39357,654,2.2,High School,Female,Hispanic,71690,education,1
+A01566,26,25257,714,1.1,Bachelor,Female,Asian,5632,auto,1
+A01567,30,20000,811,12.0,Bachelor,Female,White,34665,home,1
+A01568,55,33270,814,5.6,Bachelor,Male,White,28442,personal,1
+A01569,61,20480,570,2.9,Bachelor,Male,Other,18668,auto,0
+A01570,43,33735,652,17.6,PhD,Non-binary,White,10508,business,1
+A01571,63,76622,554,1.5,Bachelor,Female,Hispanic,4232,personal,1
+A01572,28,39134,801,2.6,Other,Male,Black,14398,education,1
+A01573,34,60682,761,12.6,Bachelor,Female,Asian,14601,business,1
+A01574,61,31761,708,0.7,High School,Female,White,53604,business,1
+A01575,28,50975,693,12.0,Master,Female,White,11774,education,1
+A01576,50,155210,790,2.2,Master,Female,White,31641,personal,1
+A01577,30,39771,776,2.0,High School,Male,White,7833,personal,1
+A01578,35,61738,772,2.3,Bachelor,Male,White,32344,auto,1
+A01579,42,20000,716,1.7,Master,Male,Other,3676,personal,1
+A01580,36,122035,652,2.8,High School,Female,White,117740,home,1
+A01581,59,36815,741,5.4,Bachelor,Male,White,19675,home,1
+A01582,63,92071,745,2.5,High School,Female,White,2355,education,1
+A01583,43,45528,664,11.4,High School,Female,White,12404,business,1
+A01584,44,70752,651,1.8,PhD,Female,White,10932,education,1
+A01585,23,73321,770,3.4,Bachelor,Female,White,13034,business,1
+A01586,31,37366,813,0.4,Master,Female,Hispanic,16453,auto,1
+A01587,22,94385,620,7.2,Master,Female,Hispanic,12963,personal,1
+A01588,58,31088,658,4.6,Other,Male,White,11462,personal,1
+A01589,31,78179,708,8.5,Bachelor,Male,Hispanic,8717,home,1
+A01590,35,38788,718,0.9,Bachelor,Female,White,42507,education,0
+A01591,58,60459,638,0.6,High School,Male,White,57578,auto,1
+A01592,52,37153,830,9.5,Bachelor,Female,Asian,17967,business,1
+A01593,48,50512,713,2.8,Bachelor,Male,Asian,21717,education,1
+A01594,22,25724,722,16.3,Master,Female,White,8945,auto,0
+A01595,45,56870,820,8.2,Bachelor,Male,White,23314,auto,1
+A01596,45,50337,644,1.0,High School,Female,White,26475,auto,1
+A01597,35,35451,672,0.8,PhD,Male,White,18480,home,1
+A01598,53,47428,579,8.0,Master,Female,Black,30238,home,0
+A01599,61,53124,666,8.8,Bachelor,Male,White,28196,business,1
+A01600,32,33866,560,7.6,Master,Female,Asian,9477,personal,1
+A01601,35,45376,739,7.3,Bachelor,Male,Hispanic,57207,education,1
+A01602,35,26813,713,14.6,Master,Female,White,18655,personal,1
+A01603,57,200273,657,12.8,Bachelor,Female,Asian,84158,home,1
+A01604,24,92546,671,3.8,Bachelor,Female,Hispanic,30832,personal,1
+A01605,60,57748,740,8.7,High School,Female,White,106590,education,1
+A01606,55,99038,589,4.8,High School,Female,White,56399,business,1
+A01607,42,20000,696,0.8,Master,Female,Asian,26416,home,1
+A01608,46,20000,735,14.9,Bachelor,Male,Other,12351,business,1
+A01609,60,38577,537,0.9,High School,Female,White,12565,auto,0
+A01610,54,21436,734,10.0,High School,Male,Black,33739,personal,1
+A01611,33,42533,546,0.8,Bachelor,Female,Asian,24698,business,0
+A01612,23,55458,670,1.6,Master,Male,Other,13749,personal,0
+A01613,49,85156,586,9.9,Bachelor,Male,White,42892,personal,0
+A01614,27,24761,794,2.2,Master,Female,White,22720,business,1
+A01615,24,62303,587,3.5,PhD,Male,Asian,43096,auto,1
+A01616,64,49445,547,5.2,Bachelor,Male,White,10093,auto,1
+A01617,41,60385,690,23.3,Master,Male,White,49000,personal,1
+A01618,49,35887,646,1.0,High School,Female,Black,32885,business,0
+A01619,30,112406,559,1.4,Bachelor,Male,White,57414,personal,0
+A01620,25,46068,722,4.5,High School,Male,Hispanic,48143,business,1
+A01621,23,142131,520,1.5,High School,Non-binary,White,20579,business,1
+A01622,36,30508,597,2.5,High School,Female,Hispanic,19296,home,1
+A01623,21,76549,633,0.5,High School,Male,White,91713,personal,1
+A01624,39,47296,744,1.1,Master,Female,Hispanic,17457,auto,0
+A01625,35,40269,783,6.6,Bachelor,Male,White,40084,auto,1
+A01626,44,71638,768,8.2,PhD,Female,White,16234,home,1
+A01627,46,40965,667,2.7,Bachelor,Male,Other,4966,home,1
+A01628,34,20000,485,3.1,Bachelor,Male,Hispanic,8251,auto,0
+A01629,41,20000,711,0.3,High School,Male,White,30477,personal,1
+A01630,24,105182,797,10.9,Bachelor,Female,White,38596,personal,1
+A01631,34,102555,778,9.2,Bachelor,Male,Black,30557,education,1
+A01632,64,152116,717,15.3,PhD,Female,Other,55091,auto,1
+A01633,64,48507,584,8.4,PhD,Female,White,30121,auto,1
+A01634,42,22570,637,1.0,High School,Female,Asian,11846,personal,1
+A01635,62,38110,834,13.9,Bachelor,Female,White,35434,home,1
+A01636,43,49357,566,5.7,Bachelor,Male,Hispanic,25227,home,1
+A01637,26,26789,588,16.4,Bachelor,Male,White,13898,home,1
+A01638,59,131813,755,3.7,High School,Male,White,32145,personal,1
+A01639,39,187906,645,0.8,Master,Female,Asian,23470,home,1
+A01640,47,65314,585,3.7,Master,Male,White,13575,personal,1
+A01641,49,48702,802,6.2,Bachelor,Female,Asian,19105,home,1
+A01642,34,22539,716,3.7,Bachelor,Female,White,68244,education,1
+A01643,53,123978,649,3.5,High School,Female,White,66483,personal,1
+A01644,43,51317,588,9.4,PhD,Female,Asian,25604,home,1
+A01645,37,41212,843,20.3,High School,Male,Black,23059,auto,1
+A01646,34,65427,678,3.9,High School,Male,White,6999,business,1
+A01647,53,34495,791,16.5,High School,Female,Black,87159,personal,1
+A01648,31,53536,751,6.3,Master,Male,White,50466,personal,1
+A01649,26,20630,638,6.7,Master,Female,Asian,40197,home,1
+A01650,59,94113,638,1.5,High School,Female,White,3569,business,1
+A01651,35,46044,795,4.1,High School,Male,White,22759,auto,1
+A01652,49,98250,797,2.1,Master,Male,White,19896,education,1
+A01653,52,43447,529,3.1,Bachelor,Male,Black,38034,personal,0
+A01654,57,45174,723,0.4,High School,Male,Asian,15354,personal,1
+A01655,48,23685,670,4.0,Other,Female,Hispanic,18299,home,0
+A01656,52,77331,597,2.9,High School,Non-binary,White,36153,education,0
+A01657,57,28983,700,3.5,Bachelor,Male,White,11862,auto,1
+A01658,62,36612,572,1.4,High School,Female,White,13915,business,0
+A01659,23,49051,642,0.3,Master,Male,Asian,25710,personal,0
+A01660,53,52719,616,5.5,Master,Non-binary,White,64266,auto,0
+A01661,28,20000,640,0.5,Bachelor,Female,Black,42056,home,1
+A01662,60,42681,674,0.9,Master,Male,White,52068,home,1
+A01663,23,78994,598,2.9,PhD,Female,Other,23170,home,1
+A01664,31,39065,805,4.8,Master,Female,White,72843,auto,1
+A01665,29,42837,719,1.4,Bachelor,Male,White,5470,personal,1
+A01666,47,54038,823,0.5,Bachelor,Male,Asian,111056,auto,1
+A01667,21,45452,667,3.7,PhD,Female,Other,123180,education,1
+A01668,21,26415,636,15.2,High School,Male,Black,31738,business,1
+A01669,43,47963,820,5.1,High School,Male,Hispanic,42864,business,0
+A01670,63,89004,633,3.8,High School,Male,Black,21366,auto,0
+A01671,44,26089,665,1.3,Master,Female,White,18626,home,0
+A01672,40,39156,737,5.9,High School,Male,White,13511,home,1
+A01673,49,21397,580,0.4,High School,Female,Hispanic,21179,auto,0
+A01674,45,86234,736,10.5,Bachelor,Male,Hispanic,34363,home,1
+A01675,37,46378,726,20.9,High School,Male,White,30819,education,1
+A01676,46,29433,781,10.9,Bachelor,Female,White,107934,business,1
+A01677,21,51811,751,0.1,Bachelor,Male,Hispanic,23866,business,1
+A01678,31,23809,783,4.8,High School,Female,White,6693,personal,1
+A01679,50,26367,671,11.4,Other,Male,Black,82079,auto,0
+A01680,36,20412,610,10.7,High School,Female,Hispanic,8293,business,0
+A01681,23,25846,848,0.0,Master,Male,White,14079,personal,1
+A01682,26,110680,557,5.4,Bachelor,Female,White,27375,home,1
+A01683,59,31575,565,14.2,High School,Male,White,30752,business,0
+A01684,35,64843,725,6.6,High School,Female,White,6930,home,0
+A01685,21,29679,809,17.2,Bachelor,Male,Black,12122,education,1
+A01686,53,77320,695,7.6,Bachelor,Male,Hispanic,6737,personal,1
+A01687,44,26485,759,9.1,High School,Female,Asian,36220,education,1
+A01688,40,50188,520,3.2,Other,Male,White,56766,education,1
+A01689,60,50600,640,19.3,Bachelor,Male,Hispanic,8287,business,1
+A01690,34,198130,530,6.2,PhD,Female,White,48850,education,1
+A01691,46,71557,742,11.9,High School,Female,Hispanic,46379,business,1
+A01692,53,34346,556,0.2,High School,Female,White,13000,personal,0
+A01693,47,73941,577,14.6,Bachelor,Non-binary,Black,4509,home,0
+A01694,30,176823,721,2.4,High School,Male,White,9348,education,1
+A01695,50,20000,764,0.7,High School,Male,White,13681,personal,1
+A01696,53,29569,667,2.8,High School,Female,Other,75609,auto,1
+A01697,26,42525,725,3.6,High School,Male,White,20037,education,1
+A01698,28,38167,723,3.8,Master,Male,White,9843,business,0
+A01699,50,40148,662,1.3,High School,Male,Black,24792,personal,0
+A01700,26,22414,592,0.9,Other,Male,White,7814,auto,0
+A01701,59,113820,725,4.6,High School,Male,White,33238,personal,1
+A01702,25,20877,729,0.7,Bachelor,Male,White,10075,business,1
+A01703,63,43471,751,10.5,Bachelor,Female,White,11316,home,1
+A01704,50,91812,704,8.9,Bachelor,Female,Asian,29744,personal,1
+A01705,40,48140,586,6.5,PhD,Female,Black,89338,auto,1
+A01706,32,27237,735,3.1,Master,Male,White,127801,auto,1
+A01707,36,21824,679,0.3,High School,Male,White,9586,education,1
+A01708,53,42701,641,1.5,Bachelor,Female,Asian,13666,education,1
+A01709,54,31125,656,0.4,Master,Male,Asian,33270,education,0
+A01710,30,55444,624,2.1,High School,Male,White,56107,home,0
+A01711,44,21144,751,11.3,Bachelor,Female,Black,3900,personal,1
+A01712,64,79843,566,0.9,High School,Female,White,23620,auto,0
+A01713,32,52539,600,14.8,Bachelor,Male,White,14917,home,1
+A01714,51,54934,653,2.9,Bachelor,Female,Asian,4725,education,1
+A01715,28,116383,809,0.5,Bachelor,Female,Asian,7557,business,1
+A01716,57,37696,764,0.6,PhD,Female,White,13985,home,1
+A01717,28,31713,548,5.1,Bachelor,Male,Asian,23087,personal,0
+A01718,34,35289,788,5.0,PhD,Female,Hispanic,49339,business,1
+A01719,41,43672,787,2.9,Master,Female,Hispanic,29245,personal,1
+A01720,37,46417,586,0.4,Bachelor,Male,Hispanic,47006,business,1
+A01721,28,29779,478,6.4,Bachelor,Female,White,22502,home,0
+A01722,49,20000,674,3.3,Bachelor,Female,Asian,12532,auto,1
+A01723,21,35011,769,1.0,Master,Male,White,19015,personal,1
+A01724,64,60833,807,0.9,High School,Male,White,38423,education,1
+A01725,23,53196,610,2.5,PhD,Male,White,50314,home,0
+A01726,35,100683,820,1.1,Bachelor,Female,Hispanic,19568,home,1
+A01727,61,158465,501,8.9,Bachelor,Male,White,10474,education,1
+A01728,27,77311,650,4.7,Bachelor,Female,White,28811,education,0
+A01729,24,112365,646,8.5,Bachelor,Male,Hispanic,32285,auto,1
+A01730,53,77657,772,7.7,Master,Female,White,59052,home,1
+A01731,24,136754,783,15.5,Master,Female,White,12797,business,1
+A01732,60,148822,756,2.5,High School,Female,White,12910,education,1
+A01733,40,86742,571,2.6,Bachelor,Female,Hispanic,40333,home,1
+A01734,59,74893,749,3.4,Bachelor,Male,White,15899,home,1
+A01735,31,43341,720,1.9,Bachelor,Male,White,15371,auto,1
+A01736,27,47819,546,4.1,Bachelor,Female,White,60072,education,0
+A01737,63,40026,514,6.5,High School,Male,Asian,7355,auto,0
+A01738,54,71164,763,3.2,Master,Female,Hispanic,114115,home,1
+A01739,61,31818,665,9.8,Bachelor,Female,White,13492,personal,1
+A01740,35,43710,577,2.2,Bachelor,Female,Asian,44063,business,1
+A01741,38,20000,663,0.3,Master,Male,Hispanic,20190,education,1
+A01742,46,137840,709,15.5,Master,Female,Hispanic,27366,auto,1
+A01743,40,42946,673,10.2,Master,Male,White,17850,business,1
+A01744,31,64430,555,5.2,High School,Female,White,43706,personal,0
+A01745,37,117556,830,1.2,High School,Female,Hispanic,16682,business,1
+A01746,47,58698,760,1.4,Master,Female,White,13927,auto,1
+A01747,22,116611,653,7.9,High School,Female,White,93964,auto,1
+A01748,35,23270,656,25.2,High School,Male,White,22550,personal,1
+A01749,33,206576,708,7.2,High School,Female,White,12828,home,1
+A01750,24,94114,589,9.3,Bachelor,Female,Black,6685,auto,0
+A01751,26,55576,705,1.7,Other,Male,White,97974,home,0
+A01752,42,115271,573,8.0,High School,Female,Black,14164,business,1
+A01753,25,24314,674,2.7,High School,Female,Hispanic,114630,education,0
+A01754,36,41226,586,11.9,PhD,Non-binary,White,30305,home,1
+A01755,45,116605,590,6.5,Other,Female,White,24693,personal,0
+A01756,59,20000,811,2.8,High School,Male,White,25232,education,1
+A01757,25,68615,684,5.9,PhD,Female,White,129671,auto,1
+A01758,40,67461,696,2.2,High School,Male,Hispanic,3813,personal,0
+A01759,25,159777,519,0.9,Master,Female,Black,26146,business,1
+A01760,39,20000,632,11.8,High School,Male,Asian,17815,home,0
+A01761,42,128769,716,5.9,Bachelor,Female,Other,18574,personal,1
+A01762,56,35042,695,1.7,High School,Male,White,24821,home,1
+A01763,40,37488,507,1.1,Master,Male,Black,17800,personal,0
+A01764,62,23548,696,4.8,High School,Male,White,25604,auto,1
+A01765,27,25521,709,0.3,Bachelor,Female,White,21614,auto,1
+A01766,23,62449,782,1.3,Master,Male,White,7701,home,1
+A01767,21,25149,627,2.5,High School,Male,White,29884,personal,0
+A01768,36,76433,500,9.9,PhD,Male,Black,39059,education,0
+A01769,29,32932,600,2.4,Bachelor,Male,Black,14276,business,0
+A01770,25,23675,592,10.1,High School,Female,White,98156,personal,1
+A01771,31,35714,738,11.0,High School,Female,White,64116,education,1
+A01772,63,59995,462,15.8,Bachelor,Male,Black,43267,auto,0
+A01773,56,41505,644,3.0,High School,Male,Hispanic,42849,business,1
+A01774,21,50037,794,0.7,Bachelor,Male,Black,22563,education,1
+A01775,61,74438,680,2.8,Bachelor,Male,White,54890,auto,1
+A01776,30,93849,751,5.1,Bachelor,Male,White,77389,personal,1
+A01777,38,40698,548,5.6,Bachelor,Male,Hispanic,42041,personal,0
+A01778,35,26198,551,1.2,Master,Male,Hispanic,13957,auto,0
+A01779,38,51310,794,2.7,Bachelor,Male,White,21338,business,1
+A01780,54,65016,688,1.8,Bachelor,Female,White,34854,personal,1
+A01781,52,20405,688,5.3,PhD,Male,White,43053,business,1
+A01782,47,28728,590,2.0,High School,Female,Black,20702,home,0
+A01783,48,31840,688,1.5,Bachelor,Female,White,13996,personal,0
+A01784,53,43273,588,4.2,PhD,Female,Black,78226,home,1
+A01785,29,31050,774,2.1,Bachelor,Male,Asian,9340,business,1
+A01786,38,74923,850,0.4,Other,Female,White,10372,education,1
+A01787,25,20000,718,9.0,Bachelor,Female,White,7618,home,1
+A01788,51,20000,629,1.0,Bachelor,Non-binary,White,10354,business,1
+A01789,40,40121,477,0.2,Bachelor,Female,White,59747,auto,0
+A01790,49,44117,545,3.9,High School,Male,Asian,61369,personal,0
+A01791,45,20480,804,1.5,Other,Female,Other,20759,personal,1
+A01792,33,34062,597,0.3,High School,Female,White,32762,education,0
+A01793,27,38536,650,2.6,Other,Male,Asian,21842,business,1
+A01794,63,38716,732,2.2,Master,Male,White,8488,home,1
+A01795,33,53697,798,21.3,PhD,Female,Black,129895,personal,1
+A01796,25,32960,664,11.7,Other,Male,Black,66157,business,1
+A01797,34,118978,647,5.8,Bachelor,Female,White,29247,auto,1
+A01798,60,65704,685,4.3,Other,Male,White,11106,home,0
+A01799,32,30204,629,10.1,Master,Female,Black,18399,education,1
+A01800,64,51880,634,8.5,Bachelor,Male,White,12658,personal,0
+A01801,41,52807,712,3.2,Master,Female,Other,23814,personal,1
+A01802,58,101603,694,10.8,High School,Female,White,28224,home,1
+A01803,49,34192,850,6.1,High School,Female,White,16765,business,1
+A01804,22,77683,715,19.5,High School,Male,Asian,6880,home,1
+A01805,43,50267,772,5.0,Bachelor,Male,White,121254,auto,1
+A01806,39,119963,594,10.3,High School,Male,White,26636,education,1
+A01807,29,106354,722,18.8,Bachelor,Male,White,31738,home,1
+A01808,45,55170,622,14.6,Master,Non-binary,White,15710,home,1
+A01809,25,41882,711,9.5,Master,Male,White,6313,personal,1
+A01810,51,66433,735,8.3,PhD,Male,White,20606,business,1
+A01811,57,43990,683,5.5,Other,Female,White,17007,business,0
+A01812,25,134347,850,5.4,PhD,Male,White,38856,education,1
+A01813,42,51383,794,1.3,Bachelor,Male,Asian,45472,education,1
+A01814,49,38430,774,4.6,High School,Female,Asian,40620,home,1
+A01815,23,37206,741,3.9,PhD,Male,White,48563,education,1
+A01816,38,23675,821,3.8,High School,Female,Other,93240,business,1
+A01817,32,68455,565,0.2,High School,Female,Asian,30087,auto,1
+A01818,22,29971,789,2.5,Bachelor,Male,Asian,53070,education,1
+A01819,56,94739,600,7.0,Bachelor,Female,Hispanic,32698,education,1
+A01820,40,22566,634,3.0,Master,Female,White,4817,personal,0
+A01821,54,52909,724,4.7,High School,Male,White,19465,home,1
+A01822,46,97746,778,1.8,Master,Female,Asian,11001,home,1
+A01823,59,20000,587,1.9,High School,Male,White,26506,auto,0
+A01824,64,164548,638,0.6,High School,Female,Asian,11698,home,1
+A01825,47,37980,687,7.1,Bachelor,Female,Hispanic,35758,personal,1
+A01826,36,53351,665,0.2,Bachelor,Male,White,48282,auto,1
+A01827,39,69069,748,1.4,Master,Male,White,57690,auto,1
+A01828,57,75786,850,1.1,High School,Male,Other,80451,auto,1
+A01829,39,57776,713,3.5,High School,Female,White,5762,personal,1
+A01830,43,89181,621,1.6,High School,Female,Hispanic,8440,business,1
+A01831,29,66932,576,11.3,Master,Male,Other,229177,education,1
+A01832,64,141001,653,3.0,Other,Male,White,49395,business,1
+A01833,49,67063,604,2.8,Master,Female,White,26358,home,0
+A01834,35,159337,717,4.6,Bachelor,Male,White,22598,business,1
+A01835,46,84174,716,4.1,PhD,Male,Hispanic,21046,auto,0
+A01836,38,20000,642,0.6,High School,Male,White,4689,auto,1
+A01837,27,234840,838,11.7,High School,Female,White,11874,home,1
+A01838,59,34731,621,3.4,Bachelor,Male,White,20141,home,1
+A01839,59,120249,670,10.6,High School,Female,White,12423,business,0
+A01840,57,49815,731,9.7,Bachelor,Female,White,13792,personal,1
+A01841,37,92656,751,3.5,Bachelor,Male,White,170584,personal,1
+A01842,32,32432,782,5.5,Bachelor,Female,Hispanic,18009,auto,0
+A01843,23,71356,714,0.3,Bachelor,Male,White,27515,business,1
+A01844,53,42111,764,0.4,Bachelor,Male,Hispanic,26743,home,1
+A01845,35,126424,626,1.4,High School,Female,Asian,35297,business,1
+A01846,60,63780,753,6.0,PhD,Male,Black,15035,education,1
+A01847,59,85953,752,3.9,Master,Female,Black,59729,personal,1
+A01848,26,20000,801,11.4,High School,Female,White,31408,home,1
+A01849,61,46567,546,3.8,High School,Male,Black,7865,business,0
+A01850,27,62713,607,1.9,High School,Non-binary,White,20211,education,0
+A01851,42,56059,745,5.7,High School,Female,White,19192,education,0
+A01852,41,87264,467,1.6,High School,Male,Black,18498,education,0
+A01853,63,39358,719,3.7,High School,Female,White,33104,business,1
+A01854,49,50476,764,10.4,Master,Female,White,36599,education,1
+A01855,59,99581,633,13.7,Master,Male,Black,33300,education,0
+A01856,47,20000,645,0.3,Master,Male,White,28886,education,0
+A01857,57,69815,594,6.3,Bachelor,Male,White,23588,home,1
+A01858,58,40121,638,11.1,Master,Male,White,3940,business,1
+A01859,58,28356,640,0.4,Master,Male,White,41040,business,1
+A01860,39,59989,625,3.5,PhD,Female,White,32554,education,1
+A01861,37,102382,620,1.0,Master,Female,White,10018,business,1
+A01862,64,91444,658,3.2,Master,Female,White,27569,auto,1
+A01863,54,45203,657,15.7,Master,Male,Black,36988,auto,1
+A01864,61,82904,829,1.5,Bachelor,Male,Other,56218,personal,1
+A01865,46,82523,648,3.5,High School,Male,Black,33131,personal,1
+A01866,61,46517,707,9.3,High School,Male,White,28489,personal,1
+A01867,52,32342,633,2.4,Bachelor,Female,Black,46977,home,0
+A01868,53,33485,632,1.3,High School,Male,Asian,17236,education,1
+A01869,28,81041,543,6.2,High School,Female,Asian,30625,business,0
+A01870,45,47796,554,3.0,High School,Male,White,13401,home,0
+A01871,53,26167,583,4.8,Bachelor,Female,White,53542,personal,1
+A01872,54,20000,694,4.3,Other,Female,White,6076,business,0
+A01873,63,80748,766,0.6,Bachelor,Female,Hispanic,42335,auto,1
+A01874,35,35310,537,16.9,High School,Female,White,22340,education,0
+A01875,34,59768,636,3.5,Bachelor,Female,Asian,47682,personal,0
+A01876,63,103138,570,1.9,Bachelor,Female,White,11796,personal,1
+A01877,64,22351,658,3.4,Master,Male,Black,23670,personal,0
+A01878,28,47711,766,1.9,Bachelor,Male,White,23121,personal,1
+A01879,37,44248,644,3.7,High School,Female,White,31166,business,1
+A01880,62,61564,676,5.1,Bachelor,Male,White,9527,personal,1
+A01881,29,103104,796,0.5,High School,Female,Hispanic,36642,personal,1
+A01882,55,22077,716,13.1,Master,Male,White,5030,home,1
+A01883,25,69001,619,0.6,PhD,Female,White,12909,business,1
+A01884,28,91027,692,0.9,PhD,Male,Hispanic,6309,auto,1
+A01885,55,43834,613,16.2,High School,Female,Asian,42726,education,0
+A01886,47,45140,713,3.3,Master,Male,Hispanic,30336,home,1
+A01887,45,63011,721,17.7,Master,Male,Hispanic,31724,business,1
+A01888,58,60288,570,1.4,PhD,Female,White,71578,personal,1
+A01889,34,69522,694,4.2,High School,Male,Asian,17107,education,1
+A01890,43,68649,670,2.8,Bachelor,Male,White,35870,business,1
+A01891,47,27195,723,2.7,High School,Female,Asian,23221,auto,1
+A01892,53,88801,746,12.7,High School,Female,Hispanic,20558,business,1
+A01893,35,98722,718,1.4,Master,Male,White,62648,home,1
+A01894,48,54811,655,2.5,Bachelor,Female,White,116483,personal,1
+A01895,40,20000,754,0.5,High School,Male,Hispanic,15596,auto,1
+A01896,44,45759,610,9.7,Master,Male,Black,42914,education,0
+A01897,58,55085,574,0.6,Bachelor,Female,Black,28432,personal,0
+A01898,38,24667,424,0.6,Other,Male,Other,28706,home,0
+A01899,50,39494,674,1.4,Master,Male,White,26842,personal,1
+A01900,62,21044,614,7.2,PhD,Male,White,16874,business,0
+A01901,54,70571,711,6.8,Master,Female,Black,1251,personal,1
+A01902,64,54153,522,5.7,High School,Female,White,75195,education,1
+A01903,46,20000,628,22.0,High School,Male,Black,12634,auto,0
+A01904,33,60529,717,8.8,PhD,Female,Asian,18155,education,1
+A01905,64,47386,597,2.7,High School,Female,White,18467,education,1
+A01906,49,66826,712,3.6,Bachelor,Male,Hispanic,11765,personal,1
+A01907,31,38757,635,2.1,Bachelor,Non-binary,Hispanic,26693,education,0
+A01908,34,30306,677,12.1,High School,Male,White,21259,education,1
+A01909,32,30868,727,8.7,High School,Male,Hispanic,12416,home,0
+A01910,57,35493,756,2.1,Bachelor,Male,Hispanic,24820,auto,1
+A01911,25,49577,687,3.6,Bachelor,Male,White,21451,education,1
+A01912,53,53571,614,1.8,Master,Female,White,46271,auto,1
+A01913,45,43720,643,4.3,High School,Female,White,7537,auto,1
+A01914,24,38025,730,2.0,Bachelor,Female,Black,11564,home,1
+A01915,47,39702,598,10.0,High School,Male,White,39349,personal,1
+A01916,54,220716,665,9.5,Bachelor,Male,White,13203,personal,1
+A01917,52,30870,649,8.7,High School,Male,Asian,10692,auto,1
+A01918,44,35074,671,7.8,High School,Male,Hispanic,13735,home,0
+A01919,35,300000,599,0.8,Master,Female,Hispanic,20317,personal,1
+A01920,28,63108,531,0.7,High School,Female,Other,20378,personal,0
+A01921,21,21418,721,16.0,Master,Female,White,18620,personal,1
+A01922,36,81276,757,13.2,High School,Female,White,9673,education,1
+A01923,48,28395,536,5.5,High School,Male,Black,40885,business,0
+A01924,22,84578,709,3.5,High School,Male,White,63638,business,0
+A01925,64,43192,766,4.4,PhD,Male,White,4777,auto,1
+A01926,46,37651,727,9.8,Bachelor,Female,Hispanic,6356,education,1
+A01927,33,128733,646,7.9,High School,Male,White,49132,auto,1
+A01928,63,68860,604,3.6,Bachelor,Male,White,77329,business,0
+A01929,29,87885,686,2.5,Bachelor,Female,Black,4010,personal,1
+A01930,63,63637,699,1.1,Master,Male,Black,42291,home,1
+A01931,33,37546,687,8.3,Other,Female,White,81658,home,1
+A01932,37,70743,665,0.4,Bachelor,Male,White,11048,auto,0
+A01933,39,101268,593,1.1,Bachelor,Female,Asian,77943,home,0
+A01934,64,53148,713,8.3,Bachelor,Male,Asian,19103,home,1
+A01935,32,144492,717,4.4,Other,Female,White,28330,personal,1
+A01936,63,81657,696,1.3,Bachelor,Female,White,12389,education,1
+A01937,36,55669,688,0.7,High School,Male,Black,49061,business,0
+A01938,33,57004,814,18.8,Other,Female,White,42940,education,1
+A01939,49,53228,630,0.8,Other,Female,White,87532,business,1
+A01940,51,23138,782,0.8,Bachelor,Female,White,69736,business,1
+A01941,36,46441,621,1.5,Bachelor,Female,White,21865,home,1
+A01942,26,55977,768,6.7,Master,Female,White,264792,home,1
+A01943,38,38190,778,6.4,Master,Male,White,64902,education,1
+A01944,44,60030,656,1.8,Bachelor,Male,Hispanic,33942,auto,1
+A01945,22,49651,812,1.8,Bachelor,Male,White,9919,personal,1
+A01946,24,77980,717,3.1,Bachelor,Female,White,6476,auto,0
+A01947,61,72974,609,8.2,Bachelor,Female,White,6932,auto,1
+A01948,22,54192,650,5.0,High School,Female,Asian,10436,education,1
+A01949,38,21583,770,6.7,Master,Male,White,66293,home,1
+A01950,54,143549,753,3.7,High School,Female,White,32521,personal,1
+A01951,35,45020,595,4.1,Bachelor,Female,Black,13484,home,1
+A01952,42,46698,668,0.5,Master,Male,Hispanic,19757,personal,0
+A01953,24,39914,696,5.0,Bachelor,Female,Hispanic,17922,business,1
+A01954,55,36568,639,0.7,High School,Male,White,41774,personal,1
+A01955,48,123801,850,17.9,PhD,Female,White,10904,auto,1
+A01956,58,112603,698,3.8,High School,Male,White,29136,personal,1
+A01957,59,63999,675,4.2,PhD,Female,Black,28003,personal,1
+A01958,36,45958,775,14.9,High School,Male,White,11169,education,1
+A01959,22,71073,650,11.3,Bachelor,Male,White,78464,auto,1
+A01960,36,51240,760,5.6,Bachelor,Female,White,17388,home,1
+A01961,27,43733,546,5.9,Bachelor,Female,Asian,9954,home,0
+A01962,44,60045,643,2.0,Bachelor,Male,White,43577,education,1
+A01963,27,37620,763,3.1,High School,Male,White,23007,personal,1
+A01964,61,57031,805,0.3,Bachelor,Female,Asian,30538,education,0
+A01965,47,55410,618,2.5,High School,Female,Hispanic,8537,personal,0
+A01966,32,70386,608,1.3,Master,Male,Black,42189,business,0
+A01967,61,33810,725,5.1,Bachelor,Male,Black,125234,business,0
+A01968,54,75062,630,0.1,Bachelor,Male,White,8020,business,1
+A01969,40,28458,658,6.3,High School,Female,Hispanic,29242,personal,0
+A01970,27,34768,750,5.6,Bachelor,Female,White,11751,personal,1
+A01971,36,35690,636,10.5,Bachelor,Female,Other,189412,home,1
+A01972,46,25764,522,4.0,High School,Male,White,59379,education,0
+A01973,54,90165,575,8.7,Master,Female,Black,27603,education,1
+A01974,32,27407,680,7.9,High School,Male,White,8247,personal,0
+A01975,53,32229,530,1.7,High School,Female,White,10008,auto,0
+A01976,33,104114,656,4.8,Master,Male,White,40015,personal,1
+A01977,31,34809,568,12.6,High School,Male,Hispanic,7405,education,0
+A01978,40,43787,811,4.7,High School,Male,White,7593,personal,1
+A01979,28,26709,850,2.7,Master,Male,Other,22182,business,1
+A01980,38,80803,595,10.6,Master,Male,White,24507,auto,1
+A01981,36,81474,700,0.8,High School,Female,Black,29852,personal,1
+A01982,33,76371,603,1.4,High School,Female,Black,15496,home,0
+A01983,55,67678,655,0.4,Bachelor,Female,White,45987,home,1
+A01984,35,51233,824,0.2,Bachelor,Female,Black,11054,education,1
+A01985,51,35788,642,1.9,Bachelor,Male,Hispanic,36363,auto,0
+A01986,52,30062,657,2.9,Bachelor,Female,Black,26141,home,0
+A01987,50,106291,604,10.3,Master,Male,Black,35614,personal,1
+A01988,32,77565,771,21.3,PhD,Male,Black,56703,home,1
+A01989,57,32338,418,8.9,Bachelor,Male,White,15301,education,0
+A01990,31,50206,644,1.7,High School,Male,White,12979,auto,0
+A01991,33,40942,676,0.3,High School,Female,White,5706,auto,1
+A01992,59,24911,627,18.8,High School,Male,Black,4379,auto,1
+A01993,35,54534,749,4.5,Bachelor,Male,Asian,19133,auto,1
+A01994,51,38204,776,4.9,PhD,Female,White,20210,business,1
+A01995,22,27680,567,18.6,Bachelor,Male,White,9238,auto,1
+A01996,48,20181,847,12.0,High School,Female,White,10972,business,1
+A01997,59,20000,566,3.6,Bachelor,Male,Black,74515,education,0
+A01998,52,39227,783,15.3,Other,Female,Hispanic,44385,business,1
+A01999,46,46580,691,0.6,High School,Female,Hispanic,8028,education,1

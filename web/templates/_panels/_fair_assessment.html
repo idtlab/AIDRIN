@@ -1,0 +1,55 @@
+<!-- FAIR Assessment panel (has its own file upload for JSON metadata) -->
+<div id="panel-fair-assessment" class="metric-panel hidden">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">FAIR Compliance Evaluation</h2>
+    <p class="text-sm mb-4 text-gray-500 dark:text-gray-400">Upload a JSON metadata file (DCAT or Datacite) to evaluate FAIR compliance.</p>
+
+    <div class="p-4 mb-4 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+      <h4 class="font-semibold text-gray-900 dark:text-white mb-2">Supported Metadata Standards</h4>
+      <ul class="space-y-2">
+        <li>
+          <strong class="text-gray-900 dark:text-white">DCAT</strong> — Data Catalog Vocabulary, a W3C standard for describing datasets in data catalogs.
+          <a href="https://www.w3.org/TR/vocab-dcat-3/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">W3C Specification</a>
+        </li>
+        <li>
+          <strong class="text-gray-900 dark:text-white">DataCite</strong> — A metadata schema for persistent identification of research data, widely used in academic and scientific repositories.
+          <a href="https://schema.datacite.org/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">DataCite Schema</a>
+        </li>
+      </ul>
+    </div>
+
+    <form id="form-fair-assessment" method="post" enctype="multipart/form-data">
+      <!-- Metadata type selector (before upload) -->
+      <div class="mb-4">
+        <label for="fair-metadata-type" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Metadata type</label>
+        <select name="metadata type" id="fair-metadata-type" required class="w-full" style="max-width: none;">
+          <option value="DCAT">DCAT</option>
+          <option value="Datacite">Datacite</option>
+        </select>
+      </div>
+
+      <!-- File upload — Flowbite dropzone style -->
+      <div>
+        <label for="fair-file" class="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600 transition-colors">
+          <div class="flex flex-col items-center justify-center pt-5 pb-6">
+            <svg id="fairUploadIcon" class="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p class="mb-1 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+            <p id="fairFileLabel" class="text-xs text-gray-500 dark:text-gray-400">JSON metadata file</p>
+          </div>
+          <input id="fair-file" type="file" name="metadata" accept=".json" required class="hidden" />
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <button type="button" onclick="withSubmitGuard(this, submitFairAssessment);"
+                class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+          Submit
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div id="fair-result-container" class="mt-4"></div>
+</div>

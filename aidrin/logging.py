@@ -3,8 +3,10 @@ import os
 
 
 # Initialize time log
-def setup_logging():
-    log_dir = os.path.join(os.path.dirname(__file__), "data", "logs")
+def setup_logging(log_dir=None):
+    if log_dir is None:
+        # Default: data/logs/ at project root (one level above aidrin/)
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "logs")
     os.makedirs(log_dir, exist_ok=True)  # Ensure logs directory exists
 
     log_path = os.path.join(log_dir, "aidrin.log")

@@ -1,0 +1,55 @@
+# Keep the build context small and free of local/runtime state.
+
+# Version control / CI
+.git
+.github
+.gitignore
+.pre-commit-config.yaml
+
+# Local virtualenvs and Python caches
+.venv
+venv
+env
+**/__pycache__
+*.py[cod]
+*.egg-info
+
+# Test / tooling caches
+.pytest_cache
+.tox
+.mypy_cache
+.coverage
+.coverage.*
+htmlcov
+coverage.xml
+
+# Runtime state (regenerated inside the container)
+data
+dump.rdb
+*.rdb
+celerybeat-schedule
+celerybeat-schedule.db
+celerybeat.pid
+
+# Generated custom metrics / remedy files (only base_dr.py + __init__.py ship)
+aidrin/custom_metrics/customDR_*.py
+aidrin/custom_metrics/remedy_data
+
+# Local datasets / scratch
+noisy
+metadata
+
+# Docs build artifacts
+docs/_build
+docs/superpowers
+
+# Editor / OS cruft
+.DS_Store
+**/.DS_Store
+.idea
+.vscode
+
+# Session / agent scratch
+claude.session
+tasks
+AIDRIN-gtag

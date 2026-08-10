@@ -26,7 +26,7 @@ Coding Standards
 
 - Follow **PEP8** style; our CI enforces it.
 - Run `pre-commit` to auto-format and lint your code before committing.
-- **Include tests** for new features (unit, integration, examples).
+- **Include tests** for new features (unit, integration, examples). See :ref:`testing` for how to run the test suite.
 - **Document your code** using proper docstrings:
 
   - **L1 (mandatory)**: summary, params, returns, exceptions, TODOs
@@ -57,5 +57,60 @@ Before you begin:
 - Make sure your issue is labeled properly.
 - Use the correct **issue template** (bug, feature, install, usage).
 - Every change starts with an issue.
+
+Where the Optional Features Live
+=================================
+
+Installation and use of the optional extras are documented in
+:ref:`web_installation` and :ref:`web_usage`. This is the code map.
+
+**Globus Compute** (``pip install -e ".[globus]"``)
+
+- ``aidrin/compute/remote.py``: serialises the metric call and submits it to
+  the endpoint
+- ``web/routes/globus.py`` registers the ``/globus`` routes: ``/auth``,
+  ``/callback``, ``/status``, ``/disconnect``, ``/check-endpoint``, ``/submit``,
+  ``/cache-summary``, ``/check-task/<task_id>``
+- ``web/globus.py``: Globus Auth client and token handling
+- ``web/templates/_components/globus_panel.html``: the Remote (Globus) tab
+
+Reads ``GLOBUS_CLIENT_ID``, and ``GLOBUS_CLIENT_SECRET`` for the confidential
+client flow.
+
+**LLM explanations** (``pip install -e ".[llm]"``)
+
+- ``web/llm.py``: optional-dependency detection and ``explain_metric()``
+- ``web/routes/llm.py`` registers the ``/llm`` routes: ``/configure``,
+  ``/test``, ``/explain``, ``/status``, ``/disconnect``, ``/cache-explanation``
+- ``web/templates/_components/llm_settings.html``: the settings modal
+
+When the ``openai`` package is not installed the feature is hidden in the UI
+with zero overhead, so guard any new code paths the same way. LLM calls happen
+server-side *after* the metric result is rendered, and the explanation loads
+asynchronously so it never blocks results. API keys live in the server-side
+Flask session only. Never surface them in client-side JavaScript or logs.
+
+
+Debugging the Web Interface
+============================
+
+AIDRIN's web interface includes debug logging that is disabled by default to keep the browser console clean. To enable verbose logging during development:
+
+1. Open the browser's developer console (F12 → Console).
+2. Run:
+
+   .. code-block:: javascript
+
+      localStorage.setItem("aidrin_debug", "true");
+
+3. Reload the page. All internal log messages will now appear prefixed with ``[aidrin]``.
+
+To disable debug logging again:
+
+   .. code-block:: javascript
+
+      localStorage.removeItem("aidrin_debug");
+
+This affects ``main.js`` debug output. Errors (``console.error``) are always shown regardless of this setting.
 
 Thank you for contributing to AIDRIN!

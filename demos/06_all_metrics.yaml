@@ -1,0 +1,79 @@
+# Comprehensive demo: all 15 AIDRIN metrics on adult census data.
+# Uses the bundled adult.csv shipped with AIDRIN.
+
+file_path: aidrin/static/datasets/test_data/csv/adult.csv
+file_type: .csv
+file_name: adult.csv
+
+metrics:
+  # Data Quality
+  - completeness
+  - duplicity
+  - outliers
+  # Correlation
+  - correlations
+  - feature_relevance
+  # Fairness
+  - class_imbalance
+  - statistical_rates
+  - representation_rate
+  # Privacy
+  - k_anonymity
+  - l_diversity
+  - t_closeness
+  - entropy_risk
+  - single_attribute_risk
+  - multiple_attribute_risk
+  - differential_privacy
+
+columns:
+  - age
+  - workclass
+  - education
+  - marital.status
+  - occupation
+  - relationship
+  - race
+  - sex
+  - capital.gain
+  - capital.loss
+  - hours.per.week
+  - income
+
+cat_columns:
+  - workclass
+  - education
+  - marital.status
+  - occupation
+  - relationship
+  - race
+  - sex
+
+num_columns:
+  - age
+  - fnlwgt
+  - education.num
+  - capital.gain
+  - capital.loss
+  - hours.per.week
+
+target_column: income
+y_true_column: income
+sensitive_attribute_column: race
+distance_metric: EU
+
+quasi_identifiers:
+  - age
+  - race
+  - sex
+  - marital.status
+
+sensitive_column: income
+
+id_column: ID
+eval_columns:
+  - age
+  - race
+  - sex
+
+epsilon: 1.0
