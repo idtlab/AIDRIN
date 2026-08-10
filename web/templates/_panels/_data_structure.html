@@ -63,9 +63,11 @@
                 <div id="file-reference-target-exact" class="min-w-0 flex-1">
                   <div id="file-reference-target-picker" data-target-picker data-multiple="true" data-placeholder="Select path-bearing targets..." class="relative">
                     <button type="button" id="file-reference-target-button" data-target-picker-button aria-haspopup="listbox" aria-expanded="false" disabled
-                            class="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-left text-sm text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white disabled:cursor-not-allowed disabled:opacity-60">
-                      <span id="file-reference-target-summary" data-target-picker-summary>Select path-bearing targets...</span>
-                      <span aria-hidden="true">&#9662;</span>
+                            class="flex w-full items-center justify-between gap-2 rounded-lg border border-solid border-gray-300 bg-gray-50 px-3 py-2.5 text-left text-sm leading-[1.5] text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white disabled:cursor-not-allowed disabled:opacity-50">
+                      <span id="file-reference-target-summary" data-target-picker-summary class="min-w-0 truncate">Select path-bearing targets...</span>
+                      <svg aria-hidden="true" class="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                      </svg>
                     </button>
                     <div id="file-reference-target-menu" data-target-picker-menu class="absolute z-20 mt-1 hidden w-full rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-600 dark:bg-gray-700">
                       <label class="sr-only" for="file-reference-target-search">Search path-bearing targets</label>
