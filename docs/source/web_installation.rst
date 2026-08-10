@@ -6,18 +6,27 @@ Web Application Installation
 
 This page covers installation and setup of the **AIDRIN web interface**. For the CLI and the agentic evaluation component, see the :ref:`cli` page.
 
-AIDRIN can be used in **three ways**:
+There are **three ways** to run the web interface:
 
-1. **Run locally from source** — best for development or using the latest GitHub version.
-2. **Install as a Python package via PyPI** — simplest for using AIDRIN in scripts or notebooks.
-3. **Use the hosted web application** — no installation required.
+1. **Install from source**: best for development or the latest GitHub version.
+2. **Run with Docker**: the bundled Compose stack, with no local Redis to set up.
+3. **Hosted service**: no installation required.
 
-Choose the option that best fits your workflow.
+To use AIDRIN in notebooks and scripts instead, see :ref:`python_api`; for the
+terminal, see :ref:`cli_installation`.
+
+.. note::
+
+   ``pip install aidrin`` does **not** give you the web interface. Only the
+   ``aidrin`` package is published; the ``web`` package is not part of the
+   wheel, so ``flask --app 'web:create_app()'`` will fail with
+   ``ModuleNotFoundError: No module named 'web'``. Install from source to run
+   the web application.
 
 ----
 
-Option 1: Local Installation from Source
-----------------------------------------
+Install from Source
+-------------------
 
 Works on **macOS**, **Linux**, and **Windows** (via WSL or Anaconda).
 
@@ -166,20 +175,13 @@ use the narrowest directories containing the referenced data. See
 
 .. note::
 
-   **Windows:** If you see ``-B option does not work on Windows`` or
-   ``Can't pickle local object 'celery_init_app.<locals>.FlaskTask'``, drop
-   ``--beat`` from the worker command and use ``--pool=solo`` instead:
+   **Windows:** to run periodic tasks alongside a ``--pool=solo`` worker, start
+   Beat in a separate terminal. This is optional for local development:
 
    .. code-block:: powershell
 
-      PYTHONPATH=. celery -A worker.make_celery worker --pool=solo --loglevel=info
-
-   To run periodic tasks, start Beat in a **separate** terminal (optional for
-   local development):
-
-   .. code-block:: powershell
-
-      PYTHONPATH=. celery -A worker.make_celery beat --loglevel=info
+      $env:PYTHONPATH = "."
+      celery -A worker.make_celery beat --loglevel=info
 
 Once running, visit:
 `http://127.0.0.1:5000 <http://127.0.0.1:5000>`_
@@ -205,49 +207,141 @@ Once running, visit:
 
 ----
 
-Option 2: Install from PyPI
----------------------------
+Run with Docker
+---------------
 
-For quick use in Python scripts or Jupyter notebooks:
+The repository ships a Compose file that starts every service, so you do not
+have to install Redis or run three terminals yourself.
+
+.. warning::
+
+   The Compose file defines no shared volume, so ``web``, ``worker`` and
+   ``beat`` each get their own filesystem. Metrics that run inline will work,
+   but any metric dispatched to Celery cannot see the file the web container
+   received, and the scheduled cleanup prunes an empty directory. Treat this
+   stack as a way to bring the services up, not as a drop-in replacement for
+   the local setup above, until a shared upload volume is added.
 
 .. code-block:: bash
 
-   pip install aidrin
+   git clone https://github.com/idtlab/AIDRIN.git
+   cd AIDRIN
+   docker compose -f docker/local/docker-compose.yml up --build
 
-To pin a specific version:
+This starts five services:
 
-.. code-block:: bash
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
 
-   pip install aidrin==<version>
+   * - Service
+     - Role
+   * - ``web``
+     - Gunicorn serving the app on `http://localhost:5000 <http://localhost:5000>`_
+   * - ``worker``
+     - Celery worker for background metric evaluation
+   * - ``beat``
+     - Celery beat, for scheduled cleanup tasks
+   * - ``redis``
+     - Broker and result backend
+   * - ``jaeger``
+     - Trace viewer on `http://localhost:16686 <http://localhost:16686>`_
 
-Replace ``<version>`` with the latest from
-`PyPI versions <https://pypi.org/project/aidrin/#history>`_.
+The local image is built with the ``llm``, ``globus``, and ``telemetry`` extras
+already installed, so those optional features are available without a rebuild.
+The NERSC image ships ``llm`` and ``globus`` only.
+Stop the stack with ``docker compose -f docker/local/docker-compose.yml down``.
 
-Verify installation:
+.. note::
 
-.. code-block:: python
+   ``docker/NERSC/`` holds a separate image for deployment to NERSC Spin. It runs
+   the web app, worker, and beat together under supervisord, with Redis supplied
+   externally. Because it runs Celery beat in-image, deploy it with **exactly one
+   replica** or scheduled tasks will run more than once.
 
-   import aidrin
-   print(aidrin.__version__)
-
-See :ref:`web_usage` for examples.
 
 ----
 
-Option 3: Use the Hosted Web Application
-----------------------------------------
+Hosted Service
+--------------
 
 For zero setup, use the hosted version at:
-`https://aidrin.io <https://aidrin.io>`_
+`https://aidrin.org <https://aidrin.org>`_
 
 Advantages:
 
 - No installation or dependencies
-- Runs entirely in the browser
+- Use it from any browser, on any platform
 - Same features as the local version
 - All processing is server-side
 
 Simply upload datasets and run analyses directly from the interface.
+
+----
+
+OpenTelemetry Tracing
+---------------------
+
+Optional tracing for the person running the server. This is operator configuration,
+not a user-facing feature; the other extras (``llm`` and ``globus``) are set up
+and used from the web interface, and are documented in :ref:`web_usage`.
+
+AIDRIN supports optional OpenTelemetry tracing for monitoring metric evaluation performance.
+
+**Installation (from local source):**
+
+.. code-block:: bash
+
+   # From the project root:
+   pip install -e ".[telemetry]"
+
+   # Or with dev tools as well:
+   pip install -e ".[telemetry,dev]"
+
+When the telemetry packages are not installed (plain ``pip install -e .``), all tracing
+is a no-op with zero overhead.
+
+**Configuration** via environment variables:
+
+- ``OTEL_EXPORTER_OTLP_ENDPOINT``: collector endpoint (e.g., ``http://localhost:4317``). If not set, traces go to console.
+- ``OTEL_SERVICE_NAME``: service name (defaults to ``aidrin``).
+
+**What gets traced:**
+
+- Every HTTP request (automatic via Flask instrumentation)
+- Each metric evaluation with attributes: ``metric.name``, ``metric.pillar``, ``metric.duration_ms``
+- File metadata: ``file.name``, ``file.type``
+
+**Quick test (console output):**
+
+.. code-block:: bash
+
+   pip install -e ".[telemetry]"
+   flask --app 'web:create_app()' run --debug
+
+Run a metric and observe trace spans printed to the terminal.
+
+**Test with Jaeger:**
+
+.. code-block:: bash
+
+   # Start Jaeger (Docker)
+   docker run -d --name jaeger \
+     -p 16686:16686 -p 4317:4317 \
+     jaegertracing/all-in-one:1.62.0
+
+   # Start AIDRIN with OTLP exporter
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+   flask --app 'web:create_app()' run --debug
+
+   # Open Jaeger UI at http://localhost:16686, select service "aidrin"
+
+**Verify installation:**
+
+``get_tracer()`` returns a real tracer only after ``init_telemetry(app)`` has
+run, so check from inside the application rather than a bare interpreter: start
+the server and confirm spans appear, either on the console or in Jaeger.
+
 
 ----
 

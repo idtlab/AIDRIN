@@ -184,6 +184,10 @@ examples/*_vector_store/
 
 dump.rdb
 celerybeat-schedule.db
+
 # CocoIndex Code (ccc)
 /.cocoindex_code/
 temp/
+
+# Project-local Globus Compute endpoint profiles (aidrin remote configure --local)
+.aidrin.json

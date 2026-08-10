@@ -3,33 +3,44 @@
 Testing
 =======
 
-AIDRIN includes a suite of unit tests that run without a web interface, Celery broker, or Redis instance. They cover the core metrics library, file readers, and data quality functions.
+AIDRIN's tests run entirely offline. Neither suite needs a Celery broker, a
+Redis instance, or a running server: the unit tests exercise the library
+directly, and the integration tests build their own Flask app and run Celery
+tasks eagerly.
 
 ----
 
-Running the Unit Tests
------------------------
+Running the Tests
+-----------------
 
 Prerequisites
 ~~~~~~~~~~~~~
 
-Activate the conda environment and ensure ``pytest`` and ``pytest-cov`` are installed:
+Activate the environment and install the development extra, which pulls in
+``pytest``, ``pytest-flask``, ``pytest-cov``, and ``flake8``:
 
 .. code-block:: bash
 
    conda activate aidrin-env
-   pip install pytest pytest-cov
+   pip install -e ".[dev]"
 
-Running All Unit Tests
-~~~~~~~~~~~~~~~~~~~~~~
+Running the Suites
+~~~~~~~~~~~~~~~~~~
 
 From the project root:
 
 .. code-block:: bash
 
    PYTHONPATH=. pytest tests/unit/ -v
+   PYTHONPATH=. pytest tests/integration/ -v
 
-``PYTHONPATH=.`` is required so Python can locate the ``aidrin`` and ``web`` packages.
+``PYTHONPATH=.`` lets Python locate the ``aidrin``, ``web``, and ``worker``
+packages. It is not needed when you run from the repository root with the
+package installed in editable mode, but it does no harm.
+
+A plain ``.[dev]`` install skips a handful of tests whose optional dependencies
+are absent, notably the agentic and HDF5 sample suites. Install the extras you
+want to exercise.
 
 Running a Specific Test File
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -41,46 +52,115 @@ Running a Specific Test File
 Checking Code Coverage
 ~~~~~~~~~~~~~~~~~~~~~~
 
+Cover all three packages. CI runs this over both suites, appending the second:
+
 .. code-block:: bash
 
-   PYTHONPATH=. pytest tests/unit/ --cov=aidrin --cov-report=term-missing
+   PYTHONPATH=. pytest tests/unit/ \
+     --cov=aidrin --cov=web --cov=worker --cov-report=term-missing
+   PYTHONPATH=. pytest tests/integration/ \
+     --cov=aidrin --cov=web --cov=worker --cov-append --cov-report=term-missing
 
 ----
 
 Test Structure
 --------------
 
-Tests live in ``tests/unit/`` and are grouped by functional area:
+Unit tests live in ``tests/unit/`` and integration tests in
+``tests/integration/``.
+
+Metrics
+~~~~~~~
 
 .. list-table::
    :header-rows: 1
-   :widths: 35 65
+   :widths: 42 58
 
    * - File
      - What is tested
    * - ``test_data_quality.py``
      - Completeness, duplicity, outliers
+   * - ``test_completeness_extras.py``
+     - Row-level completeness, feature coverage ratio, temporal completeness, null-count trend
+   * - ``test_duplicity_by_features.py``
+     - Duplicates compared over selected features only
+   * - ``test_custom_outliers.py``
+     - Custom criteria outlier rules
+   * - ``test_structure_metrics.py``
+     - Data structure metrics: skewness, kurtosis, max pairwise correlation
+   * - ``test_constant_feature_count.py``
+     - Constant feature detection
    * - ``test_fairness.py``
      - Representation rate, statistical rate, class imbalance
+   * - ``test_compare_representation_rate.py``
+     - Representation rate comparison against a reference distribution
    * - ``test_privacy.py``
      - Single/multiple-attribute MM risk scores, k-anonymity, l-diversity, t-closeness, entropy risk
    * - ``test_hipaa.py``
      - HIPAA identifier detection (SSN, email, phone, IP, URL, medical IDs)
+   * - ``test_add_noise.py``
+     - Differential privacy noise statistics
+
+File Handling
+~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
+
+   * - File
+     - What is tested
    * - ``test_file_readers.py``
-     - JSON and NPZ file readers
+     - JSON and NPZ readers
    * - ``test_hdf5_reader.py``
-     - HDF5 file reader
+     - HDF5 reader, including fill-value sentinels
+   * - ``test_excel_reader.py``
+     - Excel reader, including multi-row and merged-cell headers
+   * - ``test_parquet_reader.py``
+     - Parquet reader
+   * - ``test_file_parser_cache.py``
+     - The parse-once Arrow/Feather frame cache
    * - ``test_dtype_guards.py``
      - dtype handling across narrow numeric types and pandas StringDtype
+   * - ``test_hashable_utils.py``
+     - Normalisation of unhashable values
 
-----
+Interfaces
+~~~~~~~~~~
 
-Integration Tests
------------------
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
 
-Integration tests (requiring a running Flask app) live in ``tests/integration/``.
-See :ref:`installation` for instructions on starting the full application stack before running them:
+   * - File
+     - What is tested
+   * - ``test_cli.py``
+     - The ``aidrin`` command line interface
+   * - ``test_agentic.py``
+     - The ``aidrin agentic`` subcommand
+   * - ``test_mcp_server.py``
+     - MCP server rule-file interfaces
+   * - ``test_public_api.py``
+     - The public API exported from ``aidrin/__init__.py``
+   * - ``test_docs_metric_names.py``
+     - That the metric mapping table in the docs still matches the registry
 
-.. code-block:: bash
+Web Application and Security
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   PYTHONPATH=. pytest tests/integration/ -v
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
+
+   * - File
+     - What is tested
+   * - ``test_path_confinement.py``
+     - Upload-folder path-traversal barrier
+   * - ``test_inspector_js_security.py``
+     - Inspector JavaScript contracts: output escaping and the custom-outlier UI
+   * - ``test_upload_cleanup.py``
+     - The scheduled upload-folder reaper in ``worker.tasks``
+
+The integration suite in ``tests/integration/`` covers the Flask routes end to
+end: page rendering, uploads, the inspector, metric endpoints, custom metrics,
+admin pages, Globus, LLM explanations, and telemetry.
