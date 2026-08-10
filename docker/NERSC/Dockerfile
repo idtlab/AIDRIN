@@ -16,7 +16,9 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev $AIDRIN_EXTRAS
 COPY . .
 RUN uv sync --frozen --no-dev $AIDRIN_EXTRAS
-RUN uv pip install gunicorn==23.0.0 supervisor==4.2.5
+# supervisor 4.2.5 imports pkg_resources at startup; setuptools>=82 removed it,
+# so pin setuptools below 82 for the runtime tooling.
+RUN uv pip install gunicorn==23.0.0 supervisor==4.2.5 "setuptools<82"
 
 FROM python:3.13.11-slim-bookworm
 
