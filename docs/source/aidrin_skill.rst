@@ -83,6 +83,10 @@ regular expression matched against the complete column or HDF5 dataset name.
 Both the manifest and its referenced files are read from the MCP server host, not
 the Claude client machine.
 
+The local stdio MCP server intentionally does not apply the web interface's
+configured root allowlist. It uses the filesystem permissions of the account
+that started ``aidrin-mcp`` and should be connected only to trusted clients.
+
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

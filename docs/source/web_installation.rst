@@ -173,6 +173,10 @@ against files copied into the development image. Production deployments should
 use the narrowest directories containing the referenced data. See
 :ref:`web_usage` for the metric workflow and optional scan-limit setting.
 
+This fail-closed policy is specific to the web request boundary. The CLI,
+headless Python API, and local stdio MCP server intentionally rely on the
+filesystem permissions of the account running AIDRIN instead of this allowlist.
+
 .. note::
 
    **Windows:** to run periodic tasks alongside a ``--pool=solo`` worker, start

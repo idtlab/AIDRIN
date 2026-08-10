@@ -205,6 +205,10 @@ size, owner when available, creation time when supported by the operating system
 and modification time. ``--scan-limit`` is unlimited when omitted or set to ``0``;
 ``--max-results 0`` returns unlimited detail records.
 
+The CLI, batch runner, and headless Python API intentionally do not apply the
+web server's configured root allowlist. They run with the invoking account's
+filesystem permissions and can inspect any path that account can access.
+
 Options available on all ``run`` subcommands:
 
 .. list-table::
