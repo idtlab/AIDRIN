@@ -402,6 +402,14 @@ def test_globus_check_endpoint_uses_configured_probe_timeout(client, monkeypatch
     assert captured["timeout"] == 900
 
 
+def test_globus_probe_timeout_reads_aidrin_environment(app, monkeypatch):
+    app.config.pop("GLOBUS_ENDPOINT_PROBE_TIMEOUT", None)
+    monkeypatch.setenv("AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT", "321.5")
+
+    with app.app_context():
+        assert globus_routes._endpoint_probe_timeout() == 321.5
+
+
 @pytest.mark.parametrize("value", [0, -1, "invalid", None])
 def test_invalid_globus_probe_timeout_uses_default(app, value):
     app.config["GLOBUS_ENDPOINT_PROBE_TIMEOUT"] = value

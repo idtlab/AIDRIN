@@ -5,6 +5,7 @@ registered when ``globus-compute-sdk`` is installed.
 """
 
 import logging
+import os
 import time
 
 from flask import (
@@ -70,7 +71,10 @@ def _endpoint_probe_timeout():
     """Return the administrator-configured endpoint probe timeout."""
     value = current_app.config.get(
         "GLOBUS_ENDPOINT_PROBE_TIMEOUT",
-        DEFAULT_ENDPOINT_PROBE_TIMEOUT,
+        os.environ.get(
+            "AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT",
+            DEFAULT_ENDPOINT_PROBE_TIMEOUT,
+        ),
     )
     try:
         timeout = float(value)
