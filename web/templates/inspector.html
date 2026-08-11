@@ -98,7 +98,6 @@
         window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};
         window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
         initFileReferenceTargetPicker();
-        loadFileReferenceOptions();
         showPanel('data-overview');
         // Show Globus info banner + loading spinner for summary stats
         var ws = document.getElementById('workspace-summary');
@@ -115,8 +114,8 @@
         var wh = document.getElementById('workspace-histograms');
         if (wh) wh.style.display = 'none';
 
-        // Fetch summary stats via Globus Compute
-        fetchGlobusSummary();
+        // Serialize the automatic submissions so their session updates cannot conflict.
+        loadInitialGlobusData();
       {% endif %}
     });
   </script>

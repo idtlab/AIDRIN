@@ -163,12 +163,41 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
 
 def test_globus_workspace_loads_file_reference_options():
     template = INSPECTOR_TEMPLATE.read_text()
+    source = INSPECTOR_JS.read_text()
     block_start = template.index("{% elif globus_mode %}")
     block_end = template.index("{% endif %}", block_start)
     globus_block = template[block_start:block_end]
     assert "window.AIDRIN_GLOBUS_MODE = true;" in globus_block
     assert "initFileReferenceTargetPicker();" in globus_block
-    assert "loadFileReferenceOptions();" in globus_block
+    assert "loadInitialGlobusData();" in globus_block
+    assert "async function loadInitialGlobusData()" in source
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the frontend ordering test")
+def test_globus_workspace_serializes_automatic_submissions():
+    source = INSPECTOR_JS.read_text()
+    start = source.index("async function loadInitialGlobusData()")
+    end = source.index("\n}\n", start) + 2
+    initializer = source[start:end]
+    script = f"""
+{initializer}
+let finishDiscovery;
+const calls = [];
+function loadFileReferenceOptions() {{
+  calls.push("discovery");
+  return new Promise((resolve) => {{ finishDiscovery = resolve; }});
+}}
+function fetchGlobusSummary() {{ calls.push("summary"); }}
+(async () => {{
+  const loading = loadInitialGlobusData();
+  await Promise.resolve();
+  if (calls.join(",") !== "discovery") process.exit(1);
+  finishDiscovery();
+  await loading;
+  if (calls.join(",") !== "discovery,summary") process.exit(2);
+}})();
+"""
+    subprocess.run(["node", "-e", script], check=True)
 
 
 def test_file_reference_targets_use_searchable_collapsed_multi_select():

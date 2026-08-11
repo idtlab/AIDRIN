@@ -415,6 +415,11 @@ function loadFileReferenceOptions() {
     });
 }
 
+async function loadInitialGlobusData() {
+  await loadFileReferenceOptions();
+  fetchGlobusSummary();
+}
+
 /**
  * Show a metric panel by ID, hiding all others.
  * @param {string} panelId - The panel name (e.g., 'data-quality', 'fairness')
