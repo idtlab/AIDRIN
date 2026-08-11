@@ -427,6 +427,13 @@ html.dark .info-text {
   display: flex;
 }
 
+/* Target-picker options are flex rows; keep them from collapsing to the
+   block layout above, which would drop the checkbox-to-name gap. */
+.checkboxContainerIndividual [data-target-picker-option] {
+  margin-bottom: 0;
+  display: flex;
+}
+
 .metric-inputs {
   transition: all 0.3s ease;
   overflow: visible !important;
