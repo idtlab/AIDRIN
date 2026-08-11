@@ -128,6 +128,14 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
+   # Validate paths stored in manifest columns against files on this machine
+   aidrin run file-reference-validation /path/to/manifest.csv "path,image_path" \
+     --base-dir /data/project --max-results 100
+
+   # Match complete target names with a regular expression
+   aidrin run file-reference-validation /path/to/manifest.csv '.*_path' \
+     --target-match regex --base-dir /data/project
+
    # Data structure (no arguments needed)
    aidrin run constant-feature-count /path/to/sample_dataset.csv
    aidrin run max-pairwise-correlation /path/to/sample_dataset.csv
@@ -185,6 +193,22 @@ summary and preview rows. Use
 ``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
 or export rows.
 
+File-reference validation accepts a comma-separated target list for exact matching.
+With ``--target-match regex``, the target argument is one complete regular-expression
+pattern, so commas inside quantifiers such as ``{1,3}`` are preserved. Use a list in
+the Python API or batch configuration when multiple regex patterns are needed.
+Relative references are resolved from ``--base-dir``, or from the manifest's
+directory when that option is omitted. A valid reference must resolve to a regular
+file on the machine running AIDRIN. The result includes complete/partial scan counts,
+occurrence-level invalid reasons, and one metadata record per resolved file with
+size, owner when available, creation time when supported by the operating system,
+and modification time. ``--scan-limit`` is unlimited when omitted or set to ``0``;
+``--max-results 0`` returns unlimited detail records.
+
+The CLI, batch runner, and headless Python API intentionally do not apply the
+web server's configured root allowlist. They run with the invoking account's
+filesystem permissions and can inspect any path that account can access.
+
 Options available on all ``run`` subcommands:
 
 .. list-table::
@@ -227,6 +251,21 @@ Results are printed as JSON to stdout. Redirect to a file to save:
      - class-imbalance
 
    target-column: approved
+
+For a file manifest, batch configuration accepts dashed or underscored forms and
+list or comma-separated targets:
+
+.. code-block:: yaml
+
+   file-path: /path/to/manifest.csv
+   metrics:
+     - file-reference-validation
+   path-targets:
+     - .*_path
+   target-match: regex
+   base-dir: /data/project
+   max-results: 100
+   scan-limit: 0
 
 **Example** — fairness analysis on the sample dataset:
 
@@ -312,6 +351,16 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
        "/path/to/sample_dataset.csv",
        rules_json='[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]',
        max_outliers=100,
+   )
+
+   # File references stored in selected columns
+   result = run_metric(
+       "file-reference-validation",
+       "/path/to/manifest.csv",
+       path_targets=["path", "image_path"],
+       target_match="exact",
+       base_dir="/data/project",
+       max_results=100,
    )
 
    # Fast data quality bundle

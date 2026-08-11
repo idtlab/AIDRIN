@@ -9,6 +9,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
 DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_quality.html"
+DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_structure.html"
 
 
 def test_result_renderer_escapes_untrusted_display_values():
@@ -32,6 +33,91 @@ def test_custom_outlier_targets_load_only_when_enabled():
     assert 'const checkbox = document.getElementById("toggleButton_custom_outliers")' in source
     assert "checkbox?.checked" in source
     assert "toggleCustomOutlierEditor(checkbox)" in source
+
+
+def test_file_reference_ui_keeps_custom_outlier_loading_independent():
+    source = INSPECTOR_JS.read_text()
+    panel = DATA_STRUCTURE_PANEL.read_text()
+    quality_panel = DATA_QUALITY_PANEL.read_text()
+    assert "function loadFileReferenceOptions()" in source
+    assert "loadFileReferenceOptions();" in source
+    assert "window.AIDRIN_GLOBUS_MODE" in source
+    assert 'id="toggleButton_file_reference_validation"' in panel
+    assert 'id="toggleButton_file_reference_validation"' not in quality_panel
+    assert 'inputName: "file_reference_targets"' in source
+    assert 'name="file_reference_root_id"' in panel
+    assert 'name="file_reference_base_subdirectory"' in panel
+    assert 'name="file_reference_max_results"' in panel
+
+
+def test_file_reference_targets_use_searchable_collapsed_multi_select():
+    source = INSPECTOR_JS.read_text()
+    panel = DATA_STRUCTURE_PANEL.read_text()
+    assert 'id="file-reference-target-button"' in panel
+    assert 'aria-haspopup="listbox"' in panel
+    assert 'id="file-reference-target-menu"' in panel
+    assert 'id="file-reference-target-search"' in panel
+    assert 'role="listbox" aria-multiselectable="true"' in panel
+    assert '<select id="file-reference-targets"' not in panel
+    assert "function initFileReferenceTargetPicker()" in source
+    assert "function filterTargetPicker(picker, query)" in source
+    assert "function updateTargetPickerSummary(picker)" in source
+    assert 'inputName: "file_reference_targets"' in source
+    assert 'badge.textContent = "Suggested"' in source
+    assert '"Enter a target pattern."' in source
+
+
+def test_file_reference_and_custom_outliers_share_searchable_target_picker():
+    source = INSPECTOR_JS.read_text()
+    panel = DATA_STRUCTURE_PANEL.read_text()
+    assert "function renderTargetPicker(picker, targets, options = {})" in source
+    assert 'id="file-reference-target-picker" data-target-picker' in panel
+    assert 'data-field="target" data-target-picker' in source
+    assert "renderTargetPicker(picker, customOutlierTargets)" in source
+    assert ".custom-outlier-target" not in source
+    assert "function fullMatchTargetNames(patternText, targets, targetType)" in source
+    assert "function updateRegexTargetPreview(" in source
+    assert 'name="file_reference_target_match"' in panel
+    assert 'name="file_reference_targets" disabled' in panel
+    assert 'data-section="target-regex-preview"' in source
+
+
+def test_target_pickers_share_one_document_click_handler():
+    source = INSPECTOR_JS.read_text()
+    assert "function closeTargetPickersOnDocumentClick(event)" in source
+    assert "function ensureTargetPickerDocumentHandler()" in source
+    assert "ensureTargetPickerDocumentHandler();" in source
+    assert source.count('document.addEventListener("click"') == 1
+
+
+def test_python_regex_preview_is_advisory_for_submission():
+    source = INSPECTOR_JS.read_text()
+    assert '"No targets match this pattern."' in source
+    assert "The target pattern does not match any path-bearing targets." not in source
+    assert "does not match any available targets." not in source
+    assert "element.dataset.valid" not in source
+
+
+def test_target_pickers_use_compact_side_by_side_shaded_controls():
+    source = INSPECTOR_JS.read_text()
+    panel = DATA_STRUCTURE_PANEL.read_text()
+    assert 'class="flex items-start gap-2"' in panel
+    assert panel.count('class="w-32 shrink-0') == 1
+    assert '<option value="regex">Regex</option>' in panel
+    assert "bg-gray-50 px-2 py-2 text-sm" in source
+    assert 'class="w-32 shrink-0' in source
+    assert '<option value="regex">Regex</option>' in source
+    assert "function setTargetPickerOptionSelected(option, selected)" in source
+    assert 'option.classList.toggle("bg-blue-50", selected)' in source
+
+
+def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
+    source = INSPECTOR_JS.read_text()
+    assert "function renderFileReferenceInvalidTable(rows)" in source
+    assert "function renderFileReferenceMetadataTable(rows)" in source
+    assert "escapeHtml(formatValue(value))" in source
+    assert "Partial scan:" in source
+    assert "!results.Summary.scan_complete" in source
 
 
 def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
