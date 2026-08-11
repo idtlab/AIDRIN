@@ -97,6 +97,8 @@
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
         window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};
         window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
+        initFileReferenceTargetPicker();
+        loadFileReferenceOptions();
         showPanel('data-overview');
         // Show Globus info banner + loading spinner for summary stats
         var ws = document.getElementById('workspace-summary');

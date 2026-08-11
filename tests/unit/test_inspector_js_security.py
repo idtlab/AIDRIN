@@ -8,6 +8,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
+INSPECTOR_TEMPLATE = REPO_ROOT / "web" / "templates" / "inspector.html"
 DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_quality.html"
 DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_structure.html"
 
@@ -158,6 +159,16 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
     assert 'name="file_reference_root_id"' in panel
     assert 'name="file_reference_base_subdirectory"' in panel
     assert 'name="file_reference_max_results"' in panel
+
+
+def test_globus_workspace_loads_file_reference_options():
+    template = INSPECTOR_TEMPLATE.read_text()
+    block_start = template.index("{% elif globus_mode %}")
+    block_end = template.index("{% endif %}", block_start)
+    globus_block = template[block_start:block_end]
+    assert "window.AIDRIN_GLOBUS_MODE = true;" in globus_block
+    assert "initFileReferenceTargetPicker();" in globus_block
+    assert "loadFileReferenceOptions();" in globus_block
 
 
 def test_file_reference_targets_use_searchable_collapsed_multi_select():
