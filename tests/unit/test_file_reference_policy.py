@@ -51,6 +51,16 @@ def test_resolve_base_dir_rejects_traversal_and_symlink_escape(tmp_path):
         resolve_base_dir([str(root)], "root-0", "link")
 
 
+def test_resolve_base_dir_rejects_safe_join_escape(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "aidrin.file_handling.file_reference_policy.safe_join",
+        lambda *_args: None,
+    )
+
+    with pytest.raises(ValueError, match="stay inside"):
+        resolve_base_dir([str(tmp_path)], "root-0", "nested")
+
+
 def test_resolve_base_dir_rejects_unknown_root(tmp_path):
     with pytest.raises(ValueError, match="Select an allowed"):
         resolve_base_dir([str(tmp_path)], "root-1", "")

@@ -4,6 +4,8 @@ import json
 import logging
 import os
 
+from werkzeug.utils import safe_join
+
 
 DEFAULT_SCAN_LIMIT = 10000
 ALLOWED_ROOTS_ENV = "AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS"
@@ -78,7 +80,10 @@ def resolve_base_dir(roots, root_id, subdirectory):
     if os.path.isabs(relative):
         raise ValueError("Base subdirectory must be relative to the selected root.")
 
-    candidate = os.path.realpath(os.path.join(root, relative))
+    joined = safe_join(root, relative)
+    if joined is None:
+        raise ValueError("Base subdirectory must stay inside the selected root.")
+    candidate = os.path.realpath(joined)
     try:
         inside_root = os.path.commonpath([
             os.path.normcase(candidate),
