@@ -156,6 +156,27 @@ Terminal 3 – Flask Server
    conda activate aidrin-env
    flask --app 'web:create_app()' run --debug
 
+File-reference validation is disabled unless the server administrator explicitly
+allows one or more filesystem roots. Set
+``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` to a JSON array of absolute, existing
+directories before starting Flask. For example:
+
+.. code-block:: bash
+
+   export AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS='["/absolute/path/to/project-data"]'
+   flask --app 'web:create_app()' run --debug
+
+There is intentionally no fallback to the working directory or filesystem root;
+the allowlist prevents web users from probing arbitrary server paths. The local
+Docker Compose stack sets the value to ``["/app"]`` so the feature can be tested
+against files copied into the development image. Production deployments should
+use the narrowest directories containing the referenced data. See
+:ref:`web_usage` for the metric workflow and optional scan-limit setting.
+
+This fail-closed policy is specific to the web request boundary. The CLI,
+headless Python API, and local stdio MCP server intentionally rely on the
+filesystem permissions of the account running AIDRIN instead of this allowlist.
+
 .. note::
 
    **Windows:** to run periodic tasks alongside a ``--pool=solo`` worker, start

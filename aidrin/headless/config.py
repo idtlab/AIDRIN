@@ -14,6 +14,13 @@ def _normalize_list(value: Optional[Any]) -> Optional[List[str]]:
     return [str(value).strip()]
 
 
+def _normalize_path_targets(value: Optional[Any], target_match: str) -> Optional[List[str]]:
+    if isinstance(value, str) and str(target_match).strip().lower() == "regex":
+        pattern = value.strip()
+        return [pattern] if pattern else None
+    return _normalize_list(value)
+
+
 @dataclass
 class HeadlessConfig:
     file_path: str
@@ -40,6 +47,11 @@ class HeadlessConfig:
     batch_column: Optional[str] = None
     target_columns: Optional[List[str]] = field(default_factory=list)
     selected_keys: Optional[List[str]] = field(default_factory=list)
+    path_targets: Optional[List[str]] = field(default_factory=list)
+    base_dir: Optional[str] = None
+    max_results: Optional[int] = 100
+    scan_limit: Optional[int] = None
+    target_match: str = "exact"
     save_images: Optional[bool] = None
     image_dir: Optional[str] = None
 
@@ -64,6 +76,11 @@ class HeadlessConfig:
             "timestamp-column": "timestamp_column",
             "batch-column": "batch_column",
             "target-columns": "target_columns",
+            "path-targets": "path_targets",
+            "base-dir": "base_dir",
+            "max-results": "max_results",
+            "scan-limit": "scan_limit",
+            "target-match": "target_match",
             "file-path": "file_path",
             "file-type": "file_type",
             "file-name": "file_name",
@@ -96,6 +113,10 @@ class HeadlessConfig:
         ):
             if key in normalized:
                 normalized[key] = _normalize_list(normalized[key])
+        if "path_targets" in normalized:
+            normalized["path_targets"] = _normalize_path_targets(
+                normalized["path_targets"], normalized.get("target_match", "exact")
+            )
         return cls(**normalized)
 
     @classmethod
