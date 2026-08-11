@@ -375,6 +375,44 @@ def test_globus_check_endpoint_without_auth(client):
     assert response.status_code == 401
 
 
+def test_globus_check_endpoint_uses_configured_probe_timeout(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    captured = {}
+    client.application.config["GLOBUS_ENDPOINT_PROBE_TIMEOUT"] = 900
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+
+    def capture_compatibility(_client, _endpoint_id, timeout):
+        captured["timeout"] = timeout
+        return _compatibility_report()
+
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        capture_compatibility,
+    )
+
+    response = client.post(
+        "/globus/check-endpoint",
+        json={"endpoint_id": "endpoint-uuid"},
+    )
+
+    assert response.status_code == 200
+    assert captured["timeout"] == 900
+
+
+@pytest.mark.parametrize("value", [0, -1, "invalid", None])
+def test_invalid_globus_probe_timeout_uses_default(app, value):
+    app.config["GLOBUS_ENDPOINT_PROBE_TIMEOUT"] = value
+
+    with app.app_context():
+        assert (
+            globus_routes._endpoint_probe_timeout()
+            == globus_routes.DEFAULT_ENDPOINT_PROBE_TIMEOUT
+        )
+
+
 class _FailingProbeClient:
     """Client whose endpoint cannot deserialise the probe (old aidrin)."""
 

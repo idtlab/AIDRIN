@@ -94,6 +94,10 @@ workers, mount every allowed root at exactly the configured path using
 ``container_cmd_options`` (for example,
 ``-v /data/project:/data/project:ro``).
 
+The web compatibility probe waits 30 seconds by default. Set
+``AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT`` to a positive number of seconds when
+a scheduler-backed provider can take longer to start its first worker.
+
 For a file-reference validation demo, place a manifest and its referenced
 files below a configured worker root, load the manifest by its worker-visible
 path, and use the **Data Structure** panel to enable validation. Select exact

@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 globus_bp = Blueprint("globus", __name__, url_prefix="/globus")
 
 NEGOTIATION_TTL_SECONDS = 300
+DEFAULT_ENDPOINT_PROBE_TIMEOUT = 30.0
 FILE_REFERENCE_CAPABILITY = "file_reference_validation_v1"
 FILE_REFERENCE_UPGRADE_MESSAGE = (
     "File-reference validation is unavailable on this endpoint. Upgrade AIDRIN "
@@ -65,6 +66,26 @@ def _clear_negotiation():
     session.pop("globus_endpoint_negotiation", None)
 
 
+def _endpoint_probe_timeout():
+    """Return the administrator-configured endpoint probe timeout."""
+    value = current_app.config.get(
+        "GLOBUS_ENDPOINT_PROBE_TIMEOUT",
+        DEFAULT_ENDPOINT_PROBE_TIMEOUT,
+    )
+    try:
+        timeout = float(value)
+        if timeout <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid GLOBUS_ENDPOINT_PROBE_TIMEOUT %r; using %.0fs",
+            value,
+            DEFAULT_ENDPOINT_PROBE_TIMEOUT,
+        )
+        return DEFAULT_ENDPOINT_PROBE_TIMEOUT
+    return timeout
+
+
 def _fresh_negotiation(client, endpoint_id, force=False):
     record = session.get("globus_endpoint_negotiation", {})
     fresh = (
@@ -75,7 +96,11 @@ def _fresh_negotiation(client, endpoint_id, force=False):
     if fresh:
         return record, None
 
-    report = check_endpoint_compatibility(client, endpoint_id)
+    report = check_endpoint_compatibility(
+        client,
+        endpoint_id,
+        _endpoint_probe_timeout(),
+    )
     if not report["compatible"]:
         _clear_negotiation()
         return None, report

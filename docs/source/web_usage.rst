@@ -384,6 +384,14 @@ This is optional. Install the extra to enable it:
 
    Set ``GLOBUS_CLIENT_SECRET`` as well if you registered a confidential client.
 
+   Scheduler-backed endpoints may need longer than the default 30 seconds to
+   start a worker for the compatibility probe. Configure the server timeout in
+   seconds before starting AIDRIN, for example:
+
+   .. code-block:: bash
+
+      export AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT=900
+
 **Set up an endpoint on the machine holding your data**
 
 .. code-block:: bash
