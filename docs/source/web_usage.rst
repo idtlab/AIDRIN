@@ -4,273 +4,10 @@
 Web Application Usage
 =====================
 
-Usage via PyPI
---------------
+Overview
+--------
 
-This section describes how to use **AIDRIN** after installing it via TestPyPI. The PyPI package enables data readiness and privacy analysis functions in Python notebooks or scripts, offering a simpler setup compared to cloning the GitHub repository. Note that this method may not include the latest changes available in the repository.
-
-Installation
-~~~~~~~~~~~~
-
-Install AIDRIN from TestPyPI with:
-
-.. code-block:: bash
-
-   pip install -i https://test.pypi.org/simple/ aidrin==<version>
-
-Replace ``<version>`` with the latest version (e.g., ``0.9.7``) from the `TestPyPI page <https://test.pypi.org/project/aidrin/>`_.
-
-Verify the installation:
-
-.. code-block:: python
-
-   import aidrin
-   print(aidrin.__version__)
-
-This displays the installed version (e.g., ``0.9.7``).
-
-Using AIDRIN Functions
-~~~~~~~~~~~~~~~~~~~~~~
-
-AIDRIN provides functions for data readiness and privacy analysis on datasets (e.g., CSV files). Below, we outline the key functions, their purpose, and what they return, using a sample dataset (``adult.csv``) as an example. You can download this dataset from the `UCI Machine Learning Repository <https://archive.ics.uci.edu/ml/datasets/adult>`_.
-You can find sample datasets in the `examples/sample_data` directory of the repository, or download them directly from the web interface's **Sample Data** panel on the inspector page.
-
-Setting Up File Information
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Most functions require a ``file_info`` tuple with the file path, name, and type:
-
-.. code-block:: python
-
-   file_path = "path/to/adult.csv"
-   file_name = "adult.csv"
-   file_type = ".csv"
-   file_info = (file_path, file_name, file_type)
-
-Available Functions
-~~~~~~~~~~~~~~~~~~~
-
-Below are AIDRIN's primary functions, their usage, and the type of output they return.
-
-calculate_completeness
-^^^^^^^^^^^^^^^^^^^^^^
-
-Evaluates dataset completeness by checking for missing values.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import calculate_completeness
-   result = calculate_completeness(file_info)
-
-**Returns**: A dictionary with an overall completeness score (1 for no missing values, 0 for all missing) and a histogram of missing value proportions per column.
-
-.. note::
-
-   **HDF5 fill value handling**: HDF5 datasets encode missing data as a numeric
-   sentinel (the *fill value*) rather than as a blank cell.  When reading an
-   ``.h5`` file AIDRIN automatically translates these sentinels to ``NaN``
-   before computing completeness, so the score reflects true data availability
-   rather than always reporting 100%.
-
-   Sentinels are collected from the following sources, in priority order:
-
-   1. **User-supplied** – pass ``fill_values=[v1, v2, …]`` to ``hdf5Reader``
-      at construction time to declare domain-specific sentinels explicitly.
-   2. **_FillValue attribute** – the NetCDF/CF convention used by virtually
-      all climate, oceanography, and atmospheric HDF5 files.
-   3. **missing_value attribute** – the older NetCDF convention; may be a
-      scalar or an array of multiple sentinels.
-   4. **HDF5 native fill value** – the value stored in the dataset's own
-      metadata (``dataset.fillvalue``).  When this equals the dtype default
-      (``0`` / ``0.0``) and no fill-value attributes are present, it is treated
-      as valid data because zero is a legitimate measurement in many scientific
-      datasets (e.g. counts, indices). Set a ``_FillValue`` attribute to an
-      unambiguous sentinel when zero represents missing data.
-
-calculate_correlations
-^^^^^^^^^^^^^^^^^^^^^^
-
-Calculates correlations between specified columns (numerical or categorical). You can specify the columns interested in analysis using the `columns` parameter.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import calculate_correlations
-   result = calculate_correlations(columns=['age', 'education.num'], file_info=file_info)
-
-**Returns**: A dictionary with numerical correlation scores (automatically choosing Pearson's or Spearman's coefficient based on a normality check) and categorical correlation analysis using Theil's U statistic. It will also return a visualization (heatmap) of the correlations, and the selected numerical method is exposed under ``Correlations Analysis Numerical -> Method``.
-
-calculate_class_distribution
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Analyzes class distribution in a specified column to quantify imbalance. The `column` parameter specifies the target column for analysis. It uses imbalance degree scoring to assess class balance. It measures the Euclidean distance between the actual class distribution and a perfectly balanced distribution.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import calculate_class_distribution
-   result = calculate_class_distribution(column='income', file_info=file_info)
-
-**Returns**: A dictionary with an imbalance degree score and a pie chart visualization of the class distribution.
-
-calculate_duplicates
-^^^^^^^^^^^^^^^^^^^^
-
-Detects duplicate rows in the dataset.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import calculate_duplicates
-   result = calculate_duplicates(file_info=file_info)
-
-**Returns**: A dictionary with the proportion of duplicate rows (0 for no duplicates).
-
-calculate_feature_relevance
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Assesses feature relevance relative to a given target column. Categorical features are encoded using one-hot encoding, and numerical features are used as-is. Then the Pearson correlation coefficient is calculated between each feature and the target column.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import calculate_feature_relevance
-   result = calculate_feature_relevance(file_info=file_info, target_col='income')
-
-**Returns**: A dictionary with feature importance scores for the target column. A bar chart visualization of feature importances is also provided.
-
-calculate_outliers
-^^^^^^^^^^^^^^^^^^
-
-Identifies outliers in numerical columns using the Interquartile Range (IQR) method. This method calculates the first (Q1) and third (Q3) quartiles, computes the IQR (Q3 - Q1), and defines outliers as values below `Q1 - 1.5 * IQR` or above `Q3 + 1.5 * IQR`. The proportion of outliers is calculated for each numerical column, and an overall outlier score is derived by averaging the individual column scores. This is calculated for each numerical column.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import calculate_outliers
-   result = calculate_outliers(file_info=file_info)
-
-**Returns**: A dictionary with outlier scores for each numerical column and an overall score. A bar chart visualization of outlier scores is also provided.
-
-calculate_custom_outliers
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Identifies values that fail user-defined valid-value criteria for a selected target. Each rule describes expected valid values; values that do not satisfy the rule are flagged as outliers. Rules can check numeric ranges, regular expression matches, missing values, or nested criteria combined with ``and``, ``or``, and ``not``. This is useful when domain-specific validity rules are more appropriate than the default IQR outlier method.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import calculate_custom_outliers
-
-   file_info = ("/path/to/data.csv", "data.csv", ".csv")
-   rules = [
-       {
-           "id": "valid-temperature",
-           "name": "Valid temperature range",
-           "target": "temperature",
-           "target_type": "column",
-           "criteria": {
-               "op": "and",
-               "conditions": [
-                   {"type": "range", "min": -50, "max": 60},
-                   {"type": "regex", "pattern": r"^-?\d+(\.\d+)?$"},
-               ],
-           },
-           "allow_missing": False,
-       }
-   ]
-   result = calculate_custom_outliers(
-       file_info=file_info,
-       rules=rules,
-       max_outliers=100,
-       scan_limit=None,
-       stop_after_outliers=False,
-   )
-
-**Returns**: A dictionary with per-rule summaries, a compact outlier preview, CSV export rows, and per-rule errors when a target cannot be evaluated. HDF5 datasets are scanned in blocks so large native datasets do not need to be loaded fully into memory.
-
-calculate_statistical_rates
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Computes statistical rates (e.g., proportions) for groups across classes. The `sensitive_attribute_column` parameter specifies the sensitive attribute for analysis, while the `y_true_column` parameter indicates class labels.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import calculate_statistical_rates
-   result = calculate_statistical_rates(sensitive_attribute_column='sex', y_true_column='income', file_info=file_info)
-
-**Returns**: A dictionary with group proportions, and a visualization (bar chart) of the proportions subdivided by class labels.
-
-compute_k_anonymity
-^^^^^^^^^^^^^^^^^^^
-
-Measures k-anonymity for specified quasi-identifier columns. It calculates the minimum k value across all equivalence classes formed by the quasi-identifiers. The risk score is derived from the minimum k value, where a higher k indicates lower re-identification risk.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import compute_k_anonymity
-   result = compute_k_anonymity(quasi_identifiers=['sex', 'race'], file_info=file_info)
-
-**Returns**: A dictionary with the minimum k-anonymity value, risk score, descriptive statistics, histogram data, and a visualization (histogram).
-
-compute_l_diversity
-^^^^^^^^^^^^^^^^^^^
-
-Quantifies l-diversity for a sensitive attribute within groups defined by quasi-identifiers. It measures the diversity of sensitive attribute values in each group, with a higher l-diversity indicating better protection against attribute disclosure.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import compute_l_diversity
-   result = compute_l_diversity(quasi_identifiers=['sex'], sensitive_column='race', file_info=file_info)
-
-**Returns**: A dictionary with the l-diversity value, risk score, descriptive statistics, histogram data, and a visualization (histogram).
-
-compute_t_closeness
-^^^^^^^^^^^^^^^^^^^
-
-Measures t-closeness for a sensitive attribute relative to its overall distribution. It quantifies the similarity between the distribution of a sensitive attribute in a group and its distribution in the overall dataset. A lower t-closeness value indicates better protection against attribute disclosure.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import compute_t_closeness
-   result = compute_t_closeness(quasi_identifiers=['sex'], sensitive_column='sex', file_info=file_info)
-
-**Returns**: A dictionary with the t-closeness value, risk score, descriptive statistics, histogram data, and a visualization (histogram).
-
-compute_entropy_risk
-^^^^^^^^^^^^^^^^^^^^
-
-Calculates entropy risk for quasi-identifier columns. It measures the uncertainty in identifying individuals based on the quasi-identifiers. A higher entropy value indicates greater uncertainty and lower re-identification risk.
-
-**Usage**:
-
-.. code-block:: python
-
-   from aidrin import compute_entropy_risk
-   result = compute_entropy_risk(quasi_identifiers=['sex'], file_info=file_info)
-
-**Returns**: A dictionary with the entropy risk value, risk score, descriptive statistics, histogram data, and a visualization (bar chart).
-
-Local and Web Application Usage
---------------------------------
-
-AIDRIN can be used as a web application at `aidrin.io <https://aidrin.io>`_ or installed locally (see `Web Application Installation <./web_installation.html>`_). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure**. Each dimension includes specific metrics to assess dataset readiness.
+AIDRIN can be used as a web application at `aidrin.org <https://aidrin.org>`_ or installed locally (see :ref:`Web Application Installation <web_installation>`). Both share the same codebase, but the web application is hosted on a server, eliminating the need to manage dependencies or background services like Redis, Celery, or Flask. The web interface provides a user-friendly way to evaluate datasets across six dimensions of data readiness for AI: **Data Quality**, **Impact of Data on AI**, **Fairness and Bias**, **Data Governance**, **Understandability and Usability**, and **Data Structure**. Each dimension includes specific metrics to assess dataset readiness.
 
 Web Application Workflow
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -278,7 +15,7 @@ Web Application Workflow
 To use the AIDRIN web application:
 
 1. **Upload a Data File**:
-   - Navigate to the file upload page at `aidrin.io <https://aidrin.io/upload-file>`_. or `https://127.0.0.1:5000/upload-file` if running locally.
+   - Navigate to the inspector page at `demo.aidrin.org <https://demo.aidrin.org/inspector>`__, or ``http://127.0.0.1:5000/inspector`` if running locally.
    - Upload a dataset (e.g., CSV file like ``adult.csv``) via the web interface. You can download the sample dataset from the `UCI Machine Learning Repository <https://archive.ics.uci.edu/ml/datasets/adult>`_.
    - The file is processed server-side.
 
@@ -297,10 +34,7 @@ To use the AIDRIN web application:
    - Return to the homepage to select another dimension or upload a new dataset.
 
 5. **AI Explanations (Optional)**:
-   - If the ``openai`` package is installed (``pip install aidrin[llm]``), a sparkle icon appears in the top-right toolbar.
-   - Click it to configure an OpenAI-compatible API endpoint (OpenAI, Ollama, vLLM, etc.).
-   - Once configured, each metric result will include an AI-generated explanation summarizing the key observations and implications for AI/ML.
-   - The model name is shown in each explanation for transparency.
+   - With the ``llm`` extra installed, each metric result can carry a short AI-generated interpretation. See `AI Explanations`_ below.
 
 Data Readiness Dimensions and Metrics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -365,7 +99,7 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
 - **Custom Criteria Outliers**:
 
   - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
-  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. In the manual editor, choose **Regular expression** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
+  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. The exact-name picker is searchable. In the manual editor, choose **Regex** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
   - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target.
 
 Impact of Data on AI
@@ -443,6 +177,24 @@ Focuses on privacy preservation through metrics that assess anonymity and disclo
   - **Parameters**: Quasi-identifier columns (e.g., `['sex']`).
   - **Result**: Bar chart of entropy values.
 
+- **Single Attribute Risk Score**:
+
+  - **Method**: Markov-model risk score computed per evaluated column against an identifier column, estimating how far each attribute alone narrows down an individual.
+  - **Parameters**: An ID column, and the columns to evaluate.
+  - **Result**: Per-column risk scores with a visualization.
+
+- **Multiple Attribute Risk Score**:
+
+  - **Method**: As above, but over combinations of the evaluated columns, capturing risk that only appears when attributes are considered together.
+  - **Parameters**: An ID column, and the columns to evaluate.
+  - **Result**: Combined risk scores with a visualization.
+
+- **Differential Privacy**:
+
+  - **Method**: Adds calibrated noise to the selected columns and reports how the summary statistics shift, so you can judge the utility cost of a given privacy budget.
+  - **Parameters**: Columns to noise, and the privacy budget (epsilon; the panel defaults to 0.1). A smaller epsilon means more noise and stronger privacy.
+  - **Result**: Before-and-after statistics for each column with a visualization. The noised dataset is also written to ``noisy/noisy_data.csv`` on the server.
+
 - **HIPAA Compliance**:
 
   - **Method**: Scans datasets for the presence of 8 out of 18 key HIPAA-regulated identifiers as defined under the `Safe Harbor method <https://www.accountablehq.com/post/what-are-the-18-hipaa-identifiers-a-clear-guide-with-examples>`_. This includes detection of direct and indirect identifiers that could enable re-identification of individuals.
@@ -465,7 +217,7 @@ and provides a detailed assessment against the FAIR criteria.
 How it Works
 ''''''''''''''
 
-1. Navigate to the `FAIR Compliance Report upload page <https://aidrin.io/fair_assessment>`_.
+1. Open the **FAIR Assessment** panel from the sidebar of the `inspector page <https://demo.aidrin.org/inspector>`__.
 2. Upload your metadata file (**DCAT** or **DataCite JSON**).
 3. The system evaluates the file against the FAIR principles and generates a structured report.
 
@@ -509,7 +261,7 @@ The evaluation checks for the presence and quality of specific metadata elements
     - ``contactPoint``
 
 Output
-~~~~~~
+''''''
 
 The system returns:
 
@@ -524,9 +276,37 @@ The system returns:
 Data Structure
 ^^^^^^^^^^^^^^
 
-Assesses structural and distributional properties of the feature set. All four
-metrics require no parameters; the latter three operate on the numeric,
-non-constant columns.
+Assesses structural and distributional properties of the dataset. The four
+statistical metrics require no parameters; the latter three operate on the
+numeric, non-constant columns. Referenced-file validation uses selected
+path-bearing targets and filesystem settings.
+
+- **Referenced Files** (local deployments only):
+
+  - **Method**: Resolves paths stored in selected string-valued columns or HDF5 datasets and checks whether they identify regular files on the AIDRIN web server. Valid files include size, owner when available, creation time when the operating system exposes one, and modification time.
+  - **Parameters**: Search for and select exact path-bearing targets, or choose **Regex** to match complete target names. Also select an administrator-configured filesystem root, an optional relative base subdirectory, and a detail-record cap. Suggested target names appear first but are never selected automatically. Both regex workflows preview their matching targets before submission.
+  - **Result**: Complete or partial scan counts, per-target summaries, invalid-reference locations and reasons, and deduplicated file metadata. A warning appears when the administrator scan cap prevents a complete scan.
+
+  This control is disabled until an administrator configures at least one root.
+  Set ``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` to a JSON array of absolute,
+  existing directories and optionally set a positive web scan cap (default
+  ``10000``):
+
+  .. code-block:: bash
+
+     export AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS='["/data/project","/data/shared"]'
+     export AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT=10000
+
+  AIDRIN does not fall back to the process working directory or filesystem root
+  when this allowlist is unset. The local Docker Compose stack uses ``["/app"]``
+  for development testing; production deployments should allow only the
+  directories that contain referenced data.
+
+  The selected base directory must remain inside its configured root, and every
+  referenced file must remain inside one of the configured roots after resolving
+  symbolic links. Paths are checked on the web server, not on the browser's
+  computer. Globus datasets cannot use this local filesystem check; use CLI or
+  MCP on the host that can access the referenced files instead.
 
 - **Constant Feature Count**:
 
@@ -561,7 +341,7 @@ Notes
 ~~~~~
 
 - **Local vs. Web Application**:
-  - The local installation requires setting up Redis, Celery, and Flask (see `Web Application Installation <./web_installation.html>`_). The web application at `aidrin.io <https://aidrin.io>`_ handles these server-side, offering a no-setup alternative.
+  - The local installation requires setting up Redis, Celery, and Flask (see :ref:`Web Application Installation <web_installation>`). The web application at `aidrin.org <https://aidrin.org>`_ handles these server-side, offering a no-setup alternative.
   - Both use the same codebase, ensuring identical functionality. The web application is ideal for users who prefer a browser-based interface.
 
 - **File Formats**: The web application supports CSV, Excel, JSON, NumPy (``.npz``),
@@ -571,13 +351,123 @@ Notes
   sentinels (``_FillValue``, ``missing_value``, and the HDF5 native fill value) are
   automatically converted to ``NaN`` so that all metrics — completeness, outliers,
   feature relevance, and privacy — operate on accurately marked missing data.  See
-  the ``calculate_completeness`` note above for the full sentinel-resolution order.
+  the ``calculate_completeness`` note in :ref:`python_api` for the full
+  sentinel-resolution order.
   Custom Criteria Outliers can evaluate tabular columns, JSON/NetCDF-style column
   targets discovered by the inspector, and native HDF5 datasets.
 - **Visualizations**: Generated downloadable plots (e.g., histograms, bar charts, heatmaps) are displayed in the web interface.
 - **JSON Reports**: Each dimension's analysis generates a downloadable JSON report containing all metrics, statistics, and visualization data (where applicable).
 
 ----
+
+Remote Datasets (Globus)
+------------------------
+
+AIDRIN can run metrics on a remote machine via `Globus Compute
+<https://www.globus.org/compute>`_, so large datasets never have to be
+transferred to the AIDRIN server. Only the results travel back.
+
+This is optional. Install the extra to enable it:
+
+.. code-block:: bash
+
+   pip install "aidrin[globus]"
+
+**One-time setup**
+
+1. Register an application at `developers.globus.org <https://developers.globus.org/>`_.
+2. Set the client ID before starting the server:
+
+   .. code-block:: bash
+
+      export GLOBUS_CLIENT_ID=<your-client-id>
+
+   Set ``GLOBUS_CLIENT_SECRET`` as well if you registered a confidential client.
+
+**Set up an endpoint on the machine holding your data**
+
+.. code-block:: bash
+
+   pip install globus-compute-endpoint aidrin
+
+   globus-compute-endpoint configure aidrin-endpoint
+   globus-compute-endpoint start aidrin-endpoint
+
+   # Copy the UUID; you will paste it into the web interface
+   globus-compute-endpoint list
+
+Stop an endpoint with ``globus-compute-endpoint stop <name>``. For local
+testing you can run an endpoint on the same machine under a different name.
+
+The endpoint machine needs ``aidrin`` installed, network access to
+authenticate with Globus, and the dataset reachable at the path you enter.
+
+**Running a remote analysis**
+
+1. Select the **Remote (Globus)** tab.
+2. Click **Sign in with Globus**, which redirects to Globus Auth.
+3. Paste the Globus Compute endpoint UUID.
+4. Enter the file path as it exists on the remote machine, e.g.
+   ``/home/user/data/adult.csv``.
+5. Choose the file type and click **Load Remote Dataset**.
+6. Run metrics as usual. Computation happens on the endpoint; only results
+   come back.
+
+AI Explanations
+---------------
+
+AIDRIN can annotate each metric result with a short plain-language
+interpretation, generated by any OpenAI-compatible API (OpenAI, Azure OpenAI,
+Ollama, vLLM, and similar).
+
+This is optional. Install the extra to enable it:
+
+.. code-block:: bash
+
+   pip install "aidrin[llm]"
+
+When the ``openai`` package is absent the feature is hidden entirely, with no
+overhead.
+
+**Setup**
+
+1. Click the sparkle icon in the top-right toolbar to open the AI settings.
+2. Enter the API base URL, API key, and model name.
+3. Click **Test** to verify the connection, then **Save**.
+
+Every metric result then shows an **AI Explanation** callout beneath it.
+
+- **API Base URL**: base URL of the OpenAI-compatible API. Defaults to
+  ``https://api.openai.com/v1``; for Ollama use ``http://localhost:11434/v1``.
+- **API Key**: stored in the server-side Flask session only. It is never
+  exposed to client-side JavaScript or written to logs.
+- **Model**: the model identifier, e.g. ``gpt-4o-mini`` or ``llama3``.
+
+**What is sent to the model**
+
+- The metric name and description, as context
+- The metric scores and values, as JSON
+- The plot image as a base64 PNG, if the model supports vision
+
+If the model does not support vision, AIDRIN retries automatically with
+text-only input. The model name appears in the explanation callout so it is
+always clear what produced the text.
+
+.. note::
+
+   To try this without an API key, run Ollama locally:
+
+   .. code-block:: bash
+
+      ollama serve
+      ollama pull llama3
+
+   Then set the base URL to ``http://localhost:11434/v1``, the API key to any
+   non-empty string, and the model to ``llama3``.
+
+----
+
+.. _web_usage_custom_metrics:
 
 Custom Metrics and Remedies
 ----------------------------

@@ -3,7 +3,7 @@
 ## Contents
 
 - [Invocation & conventions](#invocation--conventions)
-- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, duplicity-by-features, feature-coverage-ratio, temporal-completeness, null-count-trend
+- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, duplicity-by-features, feature-coverage-ratio, temporal-completeness, null-count-trend, file-reference-validation
 - [Data structure](#data-structure): constant-feature-count, max-pairwise-correlation, skewness, kurtosis
 - [Impact on AI](#impact-on-ai): correlations, feature-relevance
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
@@ -24,6 +24,8 @@
   `feature-coverage-ratio`, `temporal-completeness`, `null-count-trend`) take
   their arguments as NAMED `--flags` (e.g. `--required-columns`, `--frequency`),
   not positionally.
+- `file-reference-validation` takes its target list positionally and its path and
+  result controls as named flags.
 - Column lists are comma-separated strings; quote them: `"col_a,col_b"`.
 - `--detail` defaults on for `run`/`batch` (full JSON). Visualizations are
   stripped by default.
@@ -194,6 +196,33 @@ aidrin run temporal-completeness path/to/timeseries.csv --timestamp-column time 
 
 ```bash
 aidrin run null-count-trend path/to/batches.csv --batch-column machine_id --target-columns "temperature,pressure"
+```
+
+---
+
+### file-reference-validation
+
+- **Syntax:** `aidrin run file-reference-validation <file> "<targets>" [--target-match exact|regex] [--base-dir <dir>] [--max-results <n>] [--scan-limit <n>]`
+- **Args:**
+  - `<targets>` (required) — comma-separated path-bearing columns, or string-valued HDF5 dataset paths
+  - `--target-match` — interpret targets as exact names (default) or regular expressions matched against complete target names
+  - `--base-dir` — directory used to resolve relative references; defaults to the manifest file's directory
+  - `--max-results` — cap for invalid-reference and file-metadata detail arrays (default `100`; `0` means unlimited)
+  - `--scan-limit` — optional global cap on values scanned (`0` or omitted means unlimited)
+- **Output keys:**
+  - `Summary` — scanned and unscanned counts, valid/invalid/missing counts, uniqueness counts, validity rate, completion status, and detail truncation flags
+  - `Target summaries` — the same core counts per selected target
+  - `Invalid references` — occurrence-level location, value, resolved path, reason, and message
+  - `File metadata` — one record per resolved regular file, including size, owner when available, creation time when the OS exposes one, and modification time
+  - `Errors` — target-level errors, such as selecting a numeric target
+- **Direction:** a complete scan with `all_references_valid: true` means every scanned occurrence is a non-missing reference to a regular file. Inspect `scan_complete` and truncation flags before drawing conclusions.
+- **Host semantics:** paths are resolved and checked on the machine running AIDRIN. The MCP tool checks the MCP server host.
+
+**Example:**
+
+```bash
+aidrin run file-reference-validation path/to/manifest.csv "path,image_path" --base-dir /data/project
+aidrin run file-reference-validation path/to/manifest.csv '.*_path' --target-match regex --base-dir /data/project
 ```
 
 ---

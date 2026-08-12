@@ -381,6 +381,80 @@ class hdf5Reader(BaseFileReader):
             return None
         return df
 
+    def _select_store_key(self, keys):
+        """Resolve which HDFStore frame to load.
+
+        Honours an explicit or session selection in either key form (pandas
+        reports ``/first`` while callers usually pass ``first``).  When nothing
+        is selected and the store holds more than one frame, warn before
+        defaulting so a multi-frame file never silently reports just one table.
+        """
+        available = {key.strip("/"): key for key in keys}
+        requested = self._get_selected_dataset_keys()
+        for want in requested:
+            match = available.get(want.strip("/"))
+            if match:
+                return match
+
+        if requested:
+            self.logger.warning(
+                "None of the selected keys %s name a frame in '%s' (available: %s).",
+                requested,
+                self.file_path,
+                sorted(available),
+            )
+        if len(keys) > 1:
+            self.logger.warning(
+                "Pandas HDFStore '%s' holds %d frames (%s); reading '%s'. "
+                "Select a key to analyze a different one.",
+                self.file_path,
+                len(keys),
+                sorted(available),
+                keys[0].strip("/"),
+            )
+        return keys[0]
+
+    def _read_pandas_store(self):
+        """Let pandas decode an HDFStore file instead of walking its blocks.
+
+        Both store formats hold the frame behind pandas' private block layout
+        (``axis0``/``block0_values`` for ``fixed``, ``table`` plus an
+        ``_i_table`` index for ``table``).  Walking those datasets as if they
+        were independent arrays folds the row index and the column-name arrays
+        into the data, so only pandas can map them back to the original frame.
+        """
+        try:
+            with pd.HDFStore(self.file_path, mode="r") as store:
+                keys = list(store.keys())
+                if not keys:
+                    self.logger.warning(
+                        "Pandas HDFStore contains no frames: %s", self.file_path
+                    )
+                    return None
+                df = store.get(self._select_store_key(keys))
+        except Exception as exc:
+            self.logger.warning(
+                "Could not decode pandas HDFStore '%s' (%s); "
+                "falling back to raw dataset traversal.",
+                self.file_path,
+                exc,
+            )
+            return None
+
+        if isinstance(df, pd.Series):
+            df = df.to_frame()
+        if not isinstance(df, pd.DataFrame):
+            self.logger.warning(
+                "Pandas HDFStore frame has unsupported type %s", type(df).__name__
+            )
+            return None
+
+        df = self._decode_bytes(df)
+        df.columns = [str(col) for col in df.columns]
+        if df.empty:
+            return None
+        return df
+
     def read(self):
         try:
             inv = self.inventory()
@@ -401,6 +475,11 @@ class hdf5Reader(BaseFileReader):
             if inv["type"] == "empty":
                 self.logger.warning("No datasets found in HDF5 file")
                 return None
+
+            if self._is_pandas_pytables_store():
+                store_df = self._read_pandas_store()
+                if store_df is not None:
+                    return store_df
 
             rows = []
             # Clean up byte strings in all object columns

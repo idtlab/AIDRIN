@@ -5,6 +5,7 @@ import sys
 import tempfile
 
 import pandas as pd
+import pytest
 
 import aidrin
 from web.globus import (
@@ -304,3 +305,46 @@ def test_check_endpoint_compatibility_infra_error_propagates():
     client = _FailingProbeClient(TimeoutError("endpoint offline"))
     with pytest.raises(TimeoutError):
         check_endpoint_compatibility(client, "endpoint-uuid")
+
+
+# -------------------------------------------------
+# Headless remote path (needs a real endpoint)
+# -------------------------------------------------
+
+AIDRIN_TEST_ENDPOINT = os.environ.get("AIDRIN_TEST_ENDPOINT")
+AIDRIN_TEST_REMOTE_FILE = os.environ.get("AIDRIN_TEST_REMOTE_FILE")
+
+
+@pytest.mark.skipif(
+    not (AIDRIN_TEST_ENDPOINT and AIDRIN_TEST_REMOTE_FILE),
+    reason="Set AIDRIN_TEST_ENDPOINT and AIDRIN_TEST_REMOTE_FILE to run",
+)
+def test_remote_summarize_matches_local():
+    """The same file summarized locally and remotely must agree.
+
+    AIDRIN_TEST_REMOTE_FILE must name a file present at the same path on both
+    this machine and the endpoint.
+    """
+    from aidrin.compute.executor import RemoteExecutor
+    from aidrin.compute.profiles import RemoteTarget
+    from aidrin.headless.api import summarize_dataset
+
+    local = summarize_dataset(AIDRIN_TEST_REMOTE_FILE)
+    target = RemoteTarget(endpoint=AIDRIN_TEST_ENDPOINT, profile=None, source="flag")
+    remote = RemoteExecutor(target).summarize_dataset(AIDRIN_TEST_REMOTE_FILE)
+
+    assert remote["shape"] == local["shape"]
+    assert remote["columns"] == local["columns"]
+    assert remote["numerical"].keys() == local["numerical"].keys()
+
+
+@pytest.mark.skipif(
+    not (AIDRIN_TEST_ENDPOINT and AIDRIN_TEST_REMOTE_FILE),
+    reason="Set AIDRIN_TEST_ENDPOINT and AIDRIN_TEST_REMOTE_FILE to run",
+)
+def test_remote_probe_reports_headless_import():
+    from aidrin.compute import client as compute_client
+
+    env = compute_client.probe(compute_client.get_client(), AIDRIN_TEST_ENDPOINT)
+    assert env["headless_import"] is True
+    assert env["aidrin_version"]

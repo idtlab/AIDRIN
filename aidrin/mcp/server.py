@@ -12,12 +12,9 @@ from mcp.server.fastmcp import FastMCP
 from aidrin.headless.api import (
     generate_metric_template,
     list_available_metrics,
-    run_batch_metrics,
     run_custom_metric_logic,
     run_custom_metric_remedy,
-    run_data_quality,
     run_metric,
-    summarize_dataset as _summarize_dataset,
 )
 from aidrin.headless.config import HeadlessConfig
 
@@ -26,6 +23,18 @@ mcp_server = FastMCP("aidrin")
 
 def _dumps(obj: Any) -> str:
     return json.dumps(obj, indent=2, default=str)
+
+
+def _executor(endpoint: str | None, profile: str | None):
+    """Return the remote executor when asked for one, else the local api module."""
+    if not endpoint and not profile:
+        from aidrin.headless import api
+
+        return api
+    from aidrin.compute.executor import RemoteExecutor
+    from aidrin.compute.profiles import resolve
+
+    return RemoteExecutor(resolve(endpoint=endpoint, profile=profile))
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +47,8 @@ def summarize_dataset(
     file_path: str,
     file_type: str | None = None,
     max_features: int | None = None,
+    endpoint: str | None = None,
+    profile: str | None = None,
 ) -> str:
     """
     Summarize a dataset's numerical and categorical features.
@@ -52,8 +63,15 @@ def summarize_dataset(
                       and categorical. All column names still appear in 'columns'.
                       If one type has fewer columns than its share, the remainder goes
                       to the other type.
+        endpoint: Optional Globus Compute endpoint UUID. When set, the summary runs
+                  on that endpoint and file_path must be a path visible there.
+        profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
-    return _dumps(_summarize_dataset(file_path, file_type=file_type, max_features=max_features))
+    return _dumps(
+        _executor(endpoint, profile).summarize_dataset(
+            file_path, file_type=file_type, max_features=max_features
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +93,12 @@ def list_metrics(category: str | None = None) -> str:
 
 
 @mcp_server.tool()
-def run_data_quality_check(file_path: str, file_type: str | None = None) -> str:
+def run_data_quality_check(
+    file_path: str,
+    file_type: str | None = None,
+    endpoint: str | None = None,
+    profile: str | None = None,
+) -> str:
     """
     Run the three core data-quality metrics (completeness, duplicity, outliers) on a dataset.
     Fast path — no column arguments needed.
@@ -83,8 +106,13 @@ def run_data_quality_check(file_path: str, file_type: str | None = None) -> str:
     Args:
         file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
         file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
+        endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
+                  on that endpoint and file_path must be a path visible there.
+        profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
-    result = run_data_quality(file_path, file_type=file_type, strip_visualizations=True)
+    result = _executor(endpoint, profile).run_data_quality(
+        file_path, file_type=file_type, strip_visualizations=True
+    )
     return _dumps(result)
 
 
@@ -97,6 +125,7 @@ def run_aidrin_metric(
     rules_file: str | None = None,
     max_outliers: int = 100,
     max_export_rows: int = 10000,
+    max_results: int = 100,
     scan_limit: int | None = None,
     stop_after_outliers: bool = False,
     columns: str | None = None,
@@ -118,6 +147,11 @@ def run_aidrin_metric(
     timestamp_column: str | None = None,
     batch_column: str | None = None,
     target_columns: str | None = None,
+    path_targets: str | list[str] | None = None,
+    base_dir: str | None = None,
+    target_match: str = "exact",
+    endpoint: str | None = None,
+    profile: str | None = None,
 ) -> str:
     """
     Run a single AIDRIN built-in metric against a dataset.
@@ -132,7 +166,8 @@ def run_aidrin_metric(
         rules_file: Server-local path to a JSON array of valid-value rules when metric is outliers-custom.
         max_outliers: Preview cap per custom outlier rule; 0 means unlimited.
         max_export_rows: Export row cap per custom outlier rule; 0 means unlimited.
-        scan_limit: Optional maximum values to scan per custom outlier rule.
+        max_results: Maximum detail records for file-reference-validation; 0 means unlimited.
+        scan_limit: Optional maximum values to scan for custom outliers or file-reference-validation.
         stop_after_outliers: Stop scanning after the preview cap is reached.
         columns: Comma-separated columns (required by: correlations, representation_rate, hipaa_compliance).
         target_column: Target/label column (required by: class_imbalance, feature_relevance).
@@ -155,6 +190,12 @@ def run_aidrin_metric(
         timestamp_column: Datetime column (temporal_completeness).
         batch_column: Batch/partition column (null_count_trend).
         target_columns: Comma-separated columns to count nulls in (null_count_trend, optional).
+        path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
+        base_dir: Server-local directory used to resolve relative file references.
+        target_match: Interpret path_targets as exact names or full-match regular expressions.
+        endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
+                  on that endpoint and file_path must be a path visible there.
+        profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
     kwargs: dict[str, Any] = {
         k: v
@@ -164,6 +205,7 @@ def run_aidrin_metric(
             ("rules_file", rules_file),
             ("max_outliers", max_outliers),
             ("max_export_rows", max_export_rows),
+            ("max_results", max_results),
             ("scan_limit", scan_limit),
             ("stop_after_outliers", stop_after_outliers),
             ("target_column", target_column),
@@ -184,16 +226,58 @@ def run_aidrin_metric(
             ("timestamp_column", timestamp_column),
             ("batch_column", batch_column),
             ("target_columns", target_columns),
+            ("path_targets", path_targets),
+            ("base_dir", base_dir),
+            ("target_match", target_match),
         ]
         if v is not None
     }
-    result = run_metric(
+    result = _executor(endpoint, profile).run_metric(
         metric,
         file_path,
         file_type=file_type,
         strip_visualizations=True,
         save_images=False,
         **kwargs,
+    )
+    return _dumps(result)
+
+
+@mcp_server.tool()
+def verify_file_references(
+    file_path: str,
+    path_targets: str | list[str],
+    file_type: str | None = None,
+    base_dir: str | None = None,
+    max_results: int = 100,
+    scan_limit: int | None = None,
+    target_match: str = "exact",
+) -> str:
+    """
+    Validate file references stored in selected dataset targets and return file metadata.
+    Relative references and all filesystem checks are resolved on the MCP server host.
+
+    Args:
+        file_path: Absolute path to the manifest dataset.
+        path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
+        file_type: Optional file-type override.
+        base_dir: Server-local directory used to resolve relative references. Defaults to
+                  the manifest's parent directory.
+        max_results: Maximum invalid and metadata detail records; 0 means unlimited.
+        scan_limit: Optional maximum reference values to scan; omitted or 0 means unlimited.
+        target_match: Interpret path_targets as exact names or full-match regular expressions.
+    """
+    result = run_metric(
+        "file-reference-validation",
+        file_path,
+        file_type=file_type,
+        path_targets=path_targets,
+        base_dir=base_dir,
+        max_results=max_results,
+        scan_limit=scan_limit,
+        target_match=target_match,
+        strip_visualizations=True,
+        save_images=False,
     )
     return _dumps(result)
 
@@ -246,16 +330,35 @@ def run_custom_outlier_check(
 
 
 @mcp_server.tool()
-def run_batch(config_path: str) -> str:
+def run_batch(
+    config_path: str,
+    endpoint: str | None = None,
+    profile: str | None = None,
+) -> str:
     """
     Run multiple AIDRIN metrics declared in a YAML or JSON batch config file.
 
     Args:
         config_path: Absolute path to a YAML or JSON batch config.
+        endpoint: Optional Globus Compute endpoint UUID. config_path is read
+                  locally; each metric's file_path inside it must be a path visible on that endpoint.
+        profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
     config = HeadlessConfig.from_file(config_path)
-    result = run_batch_metrics(config, strip_visualizations=True)
+    result = _executor(endpoint, profile).run_batch_metrics(config, strip_visualizations=True)
     return _dumps(result)
+
+
+@mcp_server.tool()
+def list_remote_profiles() -> str:
+    """
+    List configured Globus Compute endpoint profiles for remote execution.
+    Use before asking the user for an endpoint UUID: if a profile exists, pass
+    its name as the `profile` argument to the run tools instead.
+    """
+    from aidrin.compute.profiles import list_profiles
+
+    return _dumps(list_profiles())
 
 
 # ---------------------------------------------------------------------------

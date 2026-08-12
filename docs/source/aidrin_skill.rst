@@ -73,6 +73,20 @@ JSON array in the same format as ``examples/custom_outlier_rules.json``.
 Set ``"target_match": "regex"`` on a rule to apply it to every target whose
 complete column name or HDF5 dataset path matches ``target``.
 
+File manifests can be checked with the dedicated ``verify_file_references`` tool,
+or with ``run_aidrin_metric`` using metric ``file-reference-validation`` and the
+``path_targets`` argument. Relative paths default to the manifest's directory;
+pass ``base_dir`` when they use another root. ``max_results`` caps invalid and
+metadata details, while ``scan_limit`` optionally caps all inspected occurrences.
+Set ``target_match="regex"`` to interpret each ``path_targets`` value as a
+regular expression matched against the complete column or HDF5 dataset name.
+Both the manifest and its referenced files are read from the MCP server host, not
+the Claude client machine.
+
+The local stdio MCP server intentionally does not apply the web interface's
+configured root allowlist. It uses the filesystem permissions of the account
+that started ``aidrin-mcp`` and should be connected only to trusted clients.
+
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -115,6 +129,51 @@ did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mc
 
 ----
 
+.. _aidrin_skill_tools:
+
+Available Tools
+---------------
+
+The MCP server exposes eleven tools. You do not normally call these by name;
+Claude selects them from your request. They are listed here so you know what is
+reachable.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 32 68
+
+   * - Tool
+     - What it does
+   * - ``list_metrics``
+     - Lists all available metrics, grouped by category
+   * - ``summarize_dataset``
+     - Describes a dataset's numerical and categorical features
+   * - ``run_data_quality_check``
+     - Runs the three core data quality metrics: completeness, duplicity, outliers
+   * - ``run_aidrin_metric``
+     - Runs a single built-in metric against a dataset
+   * - ``run_custom_outlier_check``
+     - Runs Custom Criteria Outliers against selected targets
+   * - ``run_batch``
+     - Runs multiple metrics declared in a YAML or JSON batch config
+   * - ``create_custom_metric``
+     - Generates a ``CustomDR`` template file with ``metric()`` and ``remedy()`` stubs
+   * - ``run_custom_metric``
+     - Runs the ``metric()`` method of a ``CustomDR`` class defined in a ``.py`` file
+   * - ``run_custom_remedy``
+     - Runs the ``remedy()`` method of a ``CustomDR`` class and applies it to the dataset
+   * - ``agentic_build_index``
+     - Builds the FAISS vector index from the domain-literature PDFs in the agentic config
+   * - ``agentic_run``
+     - Runs the full agentic evaluation pipeline
+
+.. warning::
+
+   ``run_custom_metric``, ``run_custom_remedy``, and the agentic tools execute
+   Python from the files you point them at. Only use them with code you trust.
+
+----
+
 Running an Assessment
 ---------------------
 
@@ -132,6 +191,11 @@ Point Claude at a dataset and describe your intent:
 .. code-block:: text
 
    Run a full data quality check on /path/to/data.csv and write a report.
+
+.. code-block:: text
+
+   Verify the file paths in the path and image_path columns of
+   /path/to/manifest.csv, resolving relative paths from /data/project.
 
 Claude follows a structured workflow:
 
