@@ -138,10 +138,16 @@ class RemoteExecutor:
         file_path: str,
         file_type: Optional[str] = None,
         max_features: Optional[int] = None,
+        loader: Optional[str] = None,
     ) -> Dict[str, Any]:
         return self._call(
             "summarize",
-            {"file_path": file_path, "file_type": file_type, "max_features": max_features},
+            {
+                "file_path": file_path,
+                "file_type": file_type,
+                "max_features": max_features,
+                "loader": loader,
+            },
         )
 
     def run_data_quality(
@@ -151,6 +157,7 @@ class RemoteExecutor:
         file_name: Optional[str] = None,
         verbose: bool = False,
         strip_visualizations: bool = True,
+        loader: Optional[str] = None,
     ) -> Dict[str, Any]:
         return self._call(
             "data_quality",
@@ -160,6 +167,7 @@ class RemoteExecutor:
                 "file_name": file_name,
                 "verbose": verbose,
                 "strip_visualizations": strip_visualizations,
+                "loader": loader,
             },
         )
 
