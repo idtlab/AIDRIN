@@ -576,6 +576,74 @@ class TestAddCustomModuleCommand(unittest.TestCase):
 
 
 # ===========================================================================
+# Custom loader (--loader / add-custom-loader)
+# ===========================================================================
+
+
+class TestCustomLoaderCLI(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.csv_path = _write_csv(_sample_df(20))
+        self.loader_path = os.path.join(self.tmpdir, "fake_loader.py")
+        with open(self.loader_path, "w", encoding="utf-8") as handle:
+            handle.write(
+                "import pandas as pd\n"
+                "def load(path, **kwargs):\n"
+                "    return pd.DataFrame({'loader_col': [1, 2, 3], 'y': [0.1, 0.2, 0.3]})\n"
+            )
+
+    def tearDown(self):
+        import shutil
+        _clean(self.csv_path)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_add_custom_loader_creates_template(self):
+        out, err, code = _run_cli(
+            "add-custom-loader", "my_ingest", "--dir", self.tmpdir
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        path = os.path.join(self.tmpdir, "my_ingest.py")
+        self.assertTrue(os.path.exists(path))
+        with open(path, encoding="utf-8") as handle:
+            body = handle.read()
+        self.assertIn("def load", body)
+
+    def test_run_completeness_with_loader(self):
+        out, err, code = _run_cli(
+            "run",
+            "completeness",
+            self.csv_path,
+            "--loader",
+            f"{self.loader_path}:load",
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        payload = json.loads(out)
+        blob = json.dumps(payload)
+        self.assertIn("loader_col", blob)
+
+    def test_failed_loader_exits_nonzero(self):
+        bad = os.path.join(self.tmpdir, "bad_loader.py")
+        with open(bad, "w", encoding="utf-8") as handle:
+            handle.write("def load(path, **kwargs):\n    return None\n")
+        # Use an unsupported extension so success cannot come from a built-in reader.
+        weird = os.path.join(self.tmpdir, "data.weird")
+        with open(weird, "w", encoding="utf-8") as handle:
+            handle.write("x")
+        out, err, code = _run_cli(
+            "run",
+            "completeness",
+            weird,
+            "--loader",
+            f"{bad}:load",
+        )
+        self.assertNotEqual(code, 0)
+        combined = (err or "") + (out or "")
+        self.assertIn("Custom loader", combined)
+        self.assertIn("None", combined)
+
+
+# ===========================================================================
 # Frame cache cleanup
 # ===========================================================================
 

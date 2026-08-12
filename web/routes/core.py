@@ -46,7 +46,7 @@ def homepage():
 def inspector():
     if request.method == "POST":
         file_upload_time_log.info("File upload initiated (workspace)")
-        file = request.files["file"]
+        file = request.files.get("file")
 
         if file:
             cleared_count = clear_all_user_cache()
@@ -66,10 +66,79 @@ def inspector():
                 return redirect(url_for("core.inspector"))
             file.save(file_path)
 
+            selected_type = (request.form.get("fileTypeSelector") or "").strip()
+            loader_code = (request.form.get("loader_code") or "").strip()
+            # ".custom" means: any extension + required user loader on upload.
+            if selected_type == ".custom":
+                _, ext = os.path.splitext(display_name or "")
+                file_type = (ext or "").lower() or ".custom"
+                if not loader_code:
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    session["upload_error"] = (
+                        "Custom loader code is required when using "
+                        "'Other / custom loader'. Define load(path, **kwargs) "
+                        "that returns a pandas DataFrame."
+                    )
+                    return redirect(url_for("core.inspector"))
+
+                from aidrin.file_handling.custom_loader import (
+                    CustomLoaderError,
+                    load_dataframe as load_via_custom_loader,
+                )
+
+                loaders_folder = current_app.config.get("CUSTOM_LOADERS_FOLDER")
+                if not loaders_folder:
+                    loaders_folder = os.path.join(
+                        current_app.config.get("CUSTOM_METRICS_FOLDER", "custom_metrics"),
+                        "loaders",
+                    )
+                os.makedirs(loaders_folder, exist_ok=True)
+                if "session_id" not in session:
+                    session["session_id"] = str(uuid.uuid4())
+                loader_path = os.path.join(
+                    loaders_folder, f"custom_loader_{session['session_id']}.py"
+                )
+                with open(loader_path, "w", encoding="utf-8") as handle:
+                    handle.write(loader_code)
+                spec = f"{loader_path}:load"
+                try:
+                    load_via_custom_loader(spec, file_path)
+                except CustomLoaderError as exc:
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    session.pop("custom_loader_spec", None)
+                    session["upload_error"] = str(exc)
+                    file_upload_time_log.error("Upload custom loader failed: %s", exc)
+                    return redirect(url_for("core.inspector"))
+                except Exception as exc:
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    session.pop("custom_loader_spec", None)
+                    session["upload_error"] = (
+                        f"Custom loader '{spec}' failed for '{file_path}': "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    file_upload_time_log.error(
+                        "Upload custom loader failed: %s", exc, exc_info=True
+                    )
+                    return redirect(url_for("core.inspector"))
+                session["custom_loader_spec"] = spec
+            else:
+                file_type = selected_type
+                session.pop("custom_loader_spec", None)
+
             session["uploaded_file_name"] = display_name
             session["uploaded_file_path"] = file_path
-            session["uploaded_file_type"] = request.form.get("fileTypeSelector")
+            session["uploaded_file_type"] = file_type
             session.pop("selected_keys", None)
+            session.pop("upload_error", None)
 
             # Track files this session created so /clear removes only these,
             # never files belonging to other concurrent sessions.
@@ -150,12 +219,15 @@ def inspector():
     effective_file_type = file_type or globus_file_type
 
     try:
+        upload_error = session.pop("upload_error", None)
         return render_template(
             "inspector.html",
             uploaded_file_path=effective_file_path or "",
             uploaded_file_name=effective_file_name or "",
             file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
+            upload_file_types=list(SUPPORTED_FILE_TYPES),
+            upload_error=upload_error,
             file_preview=file_preview if file_preview is not None else [],
             current_checked_keys=current_checked_keys
             if current_checked_keys is not None

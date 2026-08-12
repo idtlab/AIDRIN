@@ -59,6 +59,39 @@ function uploadForm() {
   form.submit();
 }
 
+function uploadCustomForm() {
+  const form = document.getElementById("uploadCustomForm");
+  const fileInput = document.getElementById("file-custom");
+  const loaderCode = document.getElementById("uploadLoaderCode");
+
+  if (!loaderCode || !loaderCode.value.trim()) {
+    if (typeof showToast === "function")
+      showToast("Paste a custom load() function before uploading", "error");
+    return;
+  }
+
+  if (!fileInput.files || fileInput.files.length === 0) {
+    if (typeof showToast === "function")
+      showToast("Please select a file to upload", "error");
+    return;
+  }
+
+  const maxBytes = parseInt(form.dataset.maxUploadBytes, 10);
+  if (maxBytes && fileInput.files[0].size > maxBytes) {
+    const maxMb =
+      form.dataset.maxUploadMb || Math.round(maxBytes / (1024 * 1024));
+    if (typeof showToast === "function")
+      showToast(
+        `File too large. The maximum upload size is ${maxMb} MB.`,
+        "error",
+      );
+    fileInput.value = "";
+    return;
+  }
+
+  form.submit();
+}
+
 //to clear
 function clearFile() {
   if (
@@ -100,13 +133,14 @@ function updateFileInputBasedOnType(
   fileUploadMessage,
 ) {
   const fileType = fileTypeElement.value;
+
   //if a filetype is present, set to that filetype only, otherwise disable
   if (fileType) {
     fileInput.disabled = false;
     fileInput.setAttribute("accept", fileType);
-    debugLog("USER SELECTED FILETYPE: " + fileType);
     fileUploadMessage.style.opacity = "1";
     fileUploadMessage.textContent = "Click to upload or drag and drop";
+    debugLog("USER SELECTED FILETYPE: " + fileType);
   } else {
     fileInput.disabled = true;
     fileInput.removeAttribute("accept");

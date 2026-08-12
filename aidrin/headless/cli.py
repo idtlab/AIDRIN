@@ -16,6 +16,7 @@ from .api import (
     run_metric,
     summarize_dataset,
     generate_metric_template,
+    generate_loader_template,
     run_custom_metric_remedy,
 )
 from .config import HeadlessConfig
@@ -269,6 +270,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "timestamp_column": getattr(args, "timestamp_column", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
+        "loader": getattr(args, "loader", None),
         "rules": parsed_rules,
         "rules_json": rules_json,
         "rules_file": rules_file,
@@ -287,6 +289,12 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
 
 def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
     parser.add_argument("--save-images", dest="save_images", action="store_true", help="Save visualizations to disk")
     parser.add_argument("--no-save-images", dest="save_images", action="store_false", help="Do not save visualizations")
     parser.set_defaults(save_images=True)
@@ -298,6 +306,13 @@ def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
 
 def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
     """Lightweight args for top-level metric shortcuts."""
+    parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
 
 
@@ -468,6 +483,21 @@ def main() -> None:
         help="Directory to create the module in (e.g. --dir /path/to/my_project)",
     )
 
+    loader_parser = subparsers.add_parser(
+        "add-custom-loader",
+        help="Create a custom data-loader template (load(path) -> DataFrame)",
+    )
+    loader_parser.add_argument(
+        "name",
+        help="Name of the loader module (e.g. 'root_ttree'). No spaces or special characters.",
+    )
+    loader_parser.add_argument(
+        "--dir",
+        dest="loader_dir",
+        required=True,
+        help="Directory to create the loader in (e.g. --dir ./loaders)",
+    )
+
     list_parser = subparsers.add_parser("list", help="List available metrics")
     list_parser.add_argument("--category", default=None)
 
@@ -530,13 +560,30 @@ def main() -> None:
     dq_parser = subparsers.add_parser("data-quality", help="Run fast data quality metrics (completeness, duplicity, outliers)")
     dq_parser.add_argument("file_path")
     dq_parser.add_argument("--file-type", dest="file_type", default=None)
+    dq_parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
 
     # Dataset summary command
     summarize_parser = subparsers.add_parser("summarize", help="Describe numerical and categorical features of a dataset")
     summarize_parser.add_argument("file_path", help="Path to the dataset")
-    summarize_parser.add_argument("--file-type", dest="file_type", default=None, help="File type override (csv, parquet, xlsx, hdf5, json, npz)")
+    summarize_parser.add_argument(
+        "--file-type",
+        dest="file_type",
+        default=None,
+        help="File type override (csv, parquet, xlsx, hdf5, json, npz)",
+    )
+    summarize_parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
     summarize_parser.add_argument(
         "--max-features", dest="max_features", type=int, default=None,
         help="Limit stats to N features (split evenly between numerical and categorical)"
@@ -583,6 +630,18 @@ def main() -> None:
                 print(f"Run the metric via: aidrin run custom {path} <dataset> metric")
                 print(f"Run the remedy via: aidrin run custom {path} <dataset> remedy")
             except FileExistsError as e:
+                print(f"{e}")
+            return
+        if args.command == "add-custom-loader":
+            target_dir = args.loader_dir or os.getcwd()
+            try:
+                path = generate_loader_template(args.name, target_dir)
+                print(f"Loader template created at: {path}")
+                print("Implement load(path, **kwargs) to return a pandas DataFrame.")
+                print(
+                    f"Run via: aidrin run completeness <dataset> --loader {path}:load"
+                )
+            except (FileExistsError, ValueError) as e:
                 print(f"{e}")
             return
         if args.command == "list":
@@ -669,6 +728,7 @@ def main() -> None:
                 args.file_path,
                 file_type=args.file_type,
                 max_features=args.max_features,
+                loader=getattr(args, "loader", None),
             )
             if args.human_readable:
                 _print_summary_table(result, args.file_path)
@@ -682,6 +742,7 @@ def main() -> None:
                 file_type=args.file_type,
                 verbose=args.verbose,
                 strip_visualizations=True,
+                loader=getattr(args, "loader", None),
             )
             if args.detail:
                 _dump_result(_round_floats(result))

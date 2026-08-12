@@ -54,15 +54,24 @@ def confine_to_upload_folder(file_path):
 # ---------------------------------------------------------------------------
 
 def build_file_info(file_path, file_name, file_type, selected_keys=None):
-    """Build a file_info tuple, embedding HDF5 dataset keys when needed.
+    """Build a file_info tuple, embedding HDF5 keys / custom loader when needed.
 
     Celery workers do not have Flask session context, so multi-dataset HDF5
-    files must carry ``selected_keys`` in the tuple for background tasks.
+    files must carry ``selected_keys`` in the tuple for background tasks, and
+    an active upload custom loader must carry ``custom_loader_spec`` the same way.
+
+    Tuple shapes:
+      ``(path, name, type)``
+      ``(path, name, type, selected_keys)``
+      ``(path, name, type, loader_spec)``
+      ``(path, name, type, selected_keys, loader_spec)``
 
     The path is confined to the upload folder here so every ``read_file`` fed
     from a session value passes through the path-traversal barrier.
     """
     file_path = confine_to_upload_folder(file_path)
+    parts = [file_path, file_name, file_type]
+
     if file_type == ".h5":
         if selected_keys is None:
             try:
@@ -74,8 +83,21 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
         elif not isinstance(selected_keys, list):
             selected_keys = []
         if selected_keys:
-            return (file_path, file_name, file_type, list(selected_keys))
-    return (file_path, file_name, file_type)
+            parts.append(list(selected_keys))
+
+    loader = None
+    try:
+        loader = session.get("custom_loader_spec")
+    except RuntimeError:
+        loader = None
+    if isinstance(loader, str):
+        loader = loader.strip() or None
+    else:
+        loader = None
+    if loader:
+        parts.append(loader)
+
+    return tuple(parts)
 
 
 def load_dataframe(file_info):
