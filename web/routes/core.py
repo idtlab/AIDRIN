@@ -103,7 +103,7 @@ def inspector():
     file_preview = None
     current_checked_keys = None
 
-    if uploaded_file_path and file_type in [".h5", ".json", ".npz"]:
+    if uploaded_file_path and file_type in [".h5", ".json", ".npz", ".root"]:
         try:
             if file_type in READER_MAP:
                 reader = READER_MAP[file_type](uploaded_file_path, file_upload_time_log)
@@ -172,7 +172,7 @@ def inspector():
         return "<h1>Workspace render error</h1>", 500
 
 
-_SAMPLE_DATA_TYPES = {"csv", "json", "h5", "parquet", "xlsx", "npz", "dcat"}
+_SAMPLE_DATA_TYPES = {"csv", "json", "h5", "parquet", "xlsx", "npz", "dcat", "root"}
 
 
 @core_bp.route("/sample-data/<file_type>/<path:filename>")
