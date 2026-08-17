@@ -1,0 +1,62 @@
+# Local dev stack: web + worker + beat + redis + jaeger.
+#   cd docker/local && docker compose up --build
+#   app   -> http://localhost:5000
+#   traces-> http://localhost:16686 (service "aidrin")
+
+name: aidrin-local
+
+# Only `web` builds/tags aidrin:local; worker/beat reuse the tag.
+x-aidrin-app: &aidrin-app
+  image: aidrin:local
+  environment:
+    FLASK_CELERY__broker_url: redis://redis:6379/0
+    FLASK_CELERY__result_backend: redis://redis:6379/0
+    AIDRIN_SECRET_KEY: dev-secret-change-me
+    AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS: '["/app"]'
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    OTEL_SERVICE_NAME: aidrin
+  depends_on:
+    redis:
+      condition: service_healthy
+    jaeger:
+      condition: service_started
+  restart: unless-stopped
+
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+    restart: unless-stopped
+
+  web:
+    <<: *aidrin-app
+    build:
+      context: ../..
+      dockerfile: docker/local/Dockerfile
+    command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "web:create_app()"]
+    ports:
+      - "5000:5000"
+
+  worker:
+    <<: *aidrin-app
+    command: ["celery", "-A", "worker.make_celery", "worker", "--loglevel=info"]
+    healthcheck:
+      disable: true
+
+  beat:
+    <<: *aidrin-app
+    command: ["celery", "-A", "worker.make_celery", "beat", "--loglevel=info", "--schedule", "/tmp/celerybeat-schedule"]
+    healthcheck:
+      disable: true

@@ -1,0 +1,15 @@
+file_path: demos/patient_records.csv
+file_type: .csv
+metrics:
+  - k_anonymity
+  - l_diversity
+  - t_closeness
+  - entropy_risk
+
+quasi_identifiers:
+  - age
+  - zip_code
+  - gender
+  - marital_status
+
+sensitive_column: diagnosis

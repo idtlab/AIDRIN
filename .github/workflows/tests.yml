@@ -24,6 +24,9 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.12"
             extras: "[globus]"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: "[agentic]"
 
     steps:
     - uses: actions/checkout@v4

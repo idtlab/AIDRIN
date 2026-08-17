@@ -1,0 +1,137 @@
+import json
+import os
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional
+
+
+def _normalize_list(value: Optional[Any]) -> Optional[List[str]]:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return [str(value).strip()]
+
+
+def _normalize_path_targets(value: Optional[Any], target_match: str) -> Optional[List[str]]:
+    if isinstance(value, str) and str(target_match).strip().lower() == "regex":
+        pattern = value.strip()
+        return [pattern] if pattern else None
+    return _normalize_list(value)
+
+
+@dataclass
+class HeadlessConfig:
+    file_path: str
+    file_type: Optional[str] = None
+    file_name: Optional[str] = None
+    metrics: Optional[List[str]] = field(default_factory=list)
+    columns: Optional[List[str]] = field(default_factory=list)
+    target_column: Optional[str] = None
+    quasi_identifiers: Optional[List[str]] = field(default_factory=list)
+    sensitive_column: Optional[str] = None
+    epsilon: Optional[float] = None
+    id_column: Optional[str] = None
+    eval_columns: Optional[List[str]] = field(default_factory=list)
+    distance_metric: Optional[str] = None
+    cat_columns: Optional[List[str]] = field(default_factory=list)
+    num_columns: Optional[List[str]] = field(default_factory=list)
+    y_true_column: Optional[str] = None
+    sensitive_attribute_column: Optional[str] = None
+    required_columns: Optional[List[str]] = field(default_factory=list)
+    duplicate_columns: Optional[List[str]] = field(default_factory=list)
+    threshold: Optional[float] = None
+    frequency: Optional[str] = None
+    timestamp_column: Optional[str] = None
+    batch_column: Optional[str] = None
+    target_columns: Optional[List[str]] = field(default_factory=list)
+    path_targets: Optional[List[str]] = field(default_factory=list)
+    base_dir: Optional[str] = None
+    max_results: Optional[int] = 100
+    scan_limit: Optional[int] = None
+    target_match: str = "exact"
+    save_images: Optional[bool] = None
+    image_dir: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "HeadlessConfig":
+        incoming = dict(data or {})
+
+        # Normalize keys: convert dashes to underscores and apply explicit aliases
+        key_aliases = {
+            "categorical-columns": "cat_columns",
+            "numerical-columns": "num_columns",
+            "target-column": "target_column",
+            "y-true-column": "y_true_column",
+            "quasi-identifiers": "quasi_identifiers",
+            "sensitive-column": "sensitive_column",
+            "sensitive-attribute-column": "sensitive_attribute_column",
+            "eval-columns": "eval_columns",
+            "id-column": "id_column",
+            "distance-metric": "distance_metric",
+            "required-columns": "required_columns",
+            "duplicate-columns": "duplicate_columns",
+            "timestamp-column": "timestamp_column",
+            "batch-column": "batch_column",
+            "target-columns": "target_columns",
+            "path-targets": "path_targets",
+            "base-dir": "base_dir",
+            "max-results": "max_results",
+            "scan-limit": "scan_limit",
+            "target-match": "target_match",
+            "file-path": "file_path",
+            "file-type": "file_type",
+            "file-name": "file_name",
+            "image-dir": "image_dir",
+            "save-images": "save_images",
+        }
+
+        normalized: Dict[str, Any] = {}
+        for raw_key, value in incoming.items():
+            key = raw_key.replace("-", "_")
+            key = key_aliases.get(raw_key, key_aliases.get(key, key))
+            normalized[key] = value
+
+        # Normalize metric names to internal keys (replace dashes with underscores)
+        if "metrics" in normalized and isinstance(normalized["metrics"], list):
+            normalized["metrics"] = [str(m).replace("-", "_") for m in normalized["metrics"]]
+
+        for key in (
+            "metrics",
+            "columns",
+            "quasi_identifiers",
+            "eval_columns",
+            "cat_columns",
+            "num_columns",
+            "required_columns",
+            "duplicate_columns",
+            "target_columns",
+        ):
+            if key in normalized:
+                normalized[key] = _normalize_list(normalized[key])
+        if "path_targets" in normalized:
+            normalized["path_targets"] = _normalize_path_targets(
+                normalized["path_targets"], normalized.get("target_match", "exact")
+            )
+        return cls(**normalized)
+
+    @classmethod
+    def from_json_file(cls, path: str) -> "HeadlessConfig":
+        with open(path, encoding="utf-8") as handle:
+            payload = json.load(handle)
+        return cls.from_dict(payload)
+
+    @classmethod
+    def from_file(cls, path: str) -> "HeadlessConfig":
+        ext = os.path.splitext(path)[1].lower()
+        if ext in (".yaml", ".yml"):
+            import yaml
+
+            with open(path, encoding="utf-8") as handle:
+                payload = yaml.safe_load(handle)
+            return cls.from_dict(payload or {})
+        return cls.from_json_file(path)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)

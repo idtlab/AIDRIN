@@ -4,8 +4,14 @@ from celery import Task, shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.hashable_utils import hashable_frame, make_hashable
 
 logger = logging.getLogger(__name__)
+
+# Backwards-compatible alias: this module was the original home of the
+# conversion helper, which now lives in file_handling.hashable_utils so the
+# summary route and other metrics can share it.
+_make_hashable = make_hashable
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -30,8 +36,13 @@ def duplicity(self: Task, file_info):
         logger.info("Duplicity task started")
         file = read_file(file_info)
         dup_dict = {}
+
+        # Columns holding arrays/lists/dicts (common in parquet/HDF5/JSON) are
+        # unhashable, and duplicated() hashes rows — normalize them first.
+        hashable_file = hashable_frame(file)
+
         # Calculate the proportion of duplicate values
-        duplicate_proportions = file.duplicated().sum() / len(file)
+        duplicate_proportions = hashable_file.duplicated().sum() / len(hashable_file)
 
         dup_dict["Duplicity scores"] = {
             "Overall duplicity of the dataset": duplicate_proportions

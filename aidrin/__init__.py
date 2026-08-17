@@ -77,6 +77,170 @@ def calculate_outliers(file_info):
     return outliers.apply(args=(file_info,)).get()
 
 
+def calculate_row_level_completeness(required_columns, file_info):
+    """Percentage of rows where every required column is non-null.
+
+    Parameters
+    ----------
+    required_columns : list of str
+        Rows missing any of these columns are counted as incomplete.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Row-Level Completeness (%)": float, "Complete rows": int,
+        "Total rows": int, "Description": str}`` or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.row_level_completeness import (
+        row_level_completeness,
+    )
+    return row_level_completeness.apply(args=(required_columns, file_info)).get()
+
+
+def calculate_duplicity_by_features(features, file_info):
+    """Measure duplicate rows using only the selected feature columns.
+
+    Parameters
+    ----------
+    features : list of str
+        Columns to compare when detecting duplicate rows.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Duplicate count": int, "Duplicate percentage": float,
+        "Total rows": int, "Duplicate groups": list, "Description": str}``
+        or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.duplicity_by_features import (
+        duplicity_by_features,
+    )
+    return duplicity_by_features.apply(args=(features, file_info)).get()
+
+
+def calculate_feature_coverage_ratio(threshold, file_info):
+    """Percentage of features whose non-null rate meets *threshold*.
+
+    Parameters
+    ----------
+    threshold : float
+        Value in [0, 1]. A feature is 'covered' if its non-null rate >= threshold.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Feature Coverage Ratio (%)": float, ...,
+        "Feature Coverage Ratio Visualization": base64_str}`` or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.feature_coverage_ratio import (
+        feature_coverage_ratio,
+    )
+    return feature_coverage_ratio.apply(args=(threshold, file_info)).get()
+
+
+def calculate_temporal_completeness(timestamp_column, frequency, file_info):
+    """Percentage of expected time intervals present in the data.
+
+    Parameters
+    ----------
+    timestamp_column : str
+        Column holding datetime values.
+    frequency : str
+        Pandas frequency string, e.g. "D" daily, "h" hourly, "W" weekly.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Temporal Completeness (%)": float, ...,
+        "Temporal Completeness Visualization": base64_str}`` or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.temporal_completeness import (
+        temporal_completeness,
+    )
+    return temporal_completeness.apply(args=(timestamp_column, frequency, file_info)).get()
+
+
+def calculate_null_count_trend(batch_column, target_columns, file_info):
+    """Null counts grouped by a batch column, to spot quality regressions.
+
+    Parameters
+    ----------
+    batch_column : str
+        Column that groups rows into batches (e.g., ingest date, source ID).
+    target_columns : list of str
+        Columns to count nulls in. Leave empty to count across all other columns.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Null counts by batch": dict, ...,
+        "Null Count Trend Visualization": base64_str}`` or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.null_count_trend import null_count_trend
+    return null_count_trend.apply(args=(batch_column, target_columns, file_info)).get()
+
+
+def calculate_custom_outliers(
+    file_info,
+    rules,
+    max_outliers=100,
+    scan_limit=None,
+    stop_after_outliers=False,
+    max_export_rows=10000,
+):
+    """Detect values that fail user-defined valid-value criteria.
+
+    Each rule describes expected valid values for a target; values that do not
+    satisfy the rule are flagged as outliers.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``.
+    rules : list of dict
+        Custom criteria rules with required stable ``id`` values.
+    max_outliers : int, optional
+        Maximum detailed preview records to keep per rule.
+    scan_limit : int, optional
+        Maximum values to scan per rule. Defaults to a full scan.
+    stop_after_outliers : bool, optional
+        Stop scanning a rule after ``max_outliers`` violations are found.
+    max_export_rows : int, optional
+        Maximum downloadable/export rows to keep per rule.
+
+    Returns
+    -------
+    dict
+        ``{"Rule summaries": ..., "Outlier preview": ..., "Outlier export": ...}``,
+        plus ``Errors`` for per-rule target/dtype problems.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.custom_outliers import custom_outliers
+    return custom_outliers.apply(args=(
+        file_info,
+        rules,
+        max_outliers,
+        scan_limit,
+        stop_after_outliers,
+        max_export_rows,
+    )).get()
+
+
 # ---------------------------------------------------------------------------
 # Fairness / Bias
 # ---------------------------------------------------------------------------
@@ -334,12 +498,98 @@ def compute_entropy_risk(quasi_identifiers, file_info):
     return _fn(quasi_identifiers, file_info)
 
 
+# ---------------------------------------------------------------------------
+# Data Structure and Organization
+# ---------------------------------------------------------------------------
+
+def calculate_constant_feature_count(file_info):
+    """Count columns that have a single distinct value (null counts as a value).
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        ``{"Constant feature count": int, "Total features": int,
+        "Constant features": {column: value}}``
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.constant_feature_count import (
+        constant_feature_count,
+    )
+    return constant_feature_count.apply(args=(file_info,)).get()
+
+
+def calculate_max_pairwise_correlation(file_info):
+    """Strongest absolute pairwise correlation between numeric features.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        Max correlation, most-correlated pair, top pairs + heatmap, or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.max_pairwise_correlation import (
+        max_pairwise_correlation,
+    )
+    return max_pairwise_correlation.apply(args=(file_info,)).get()
+
+
+def calculate_skewness(file_info):
+    """Per-feature skewness (distribution asymmetry) for numeric columns.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        Per-column skewness, most-skewed feature + bar chart, or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.skewness import skewness
+    return skewness.apply(args=(file_info,)).get()
+
+
+def calculate_kurtosis(file_info):
+    """Per-feature excess kurtosis (tail heaviness) for numeric columns.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        Per-column excess kurtosis, most-extreme feature + bar chart, or ``{"Error": str}``.
+    """
+    _eager_celery()
+    from aidrin.structured_data_metrics.kurtosis import kurtosis
+    return kurtosis.apply(args=(file_info,)).get()
+
+
 __all__ = [
     "__version__",
     # Data Quality
     "calculate_completeness",
     "calculate_duplicates",
     "calculate_outliers",
+    "calculate_row_level_completeness",
+    "calculate_duplicity_by_features",
+    "calculate_feature_coverage_ratio",
+    "calculate_temporal_completeness",
+    "calculate_null_count_trend",
     # Fairness / Bias
     "calculate_class_distribution",
     "calculate_representation_rate",
@@ -352,4 +602,9 @@ __all__ = [
     "compute_l_diversity",
     "compute_t_closeness",
     "compute_entropy_risk",
+    # Data Structure and Organization
+    "calculate_constant_feature_count",
+    "calculate_max_pairwise_correlation",
+    "calculate_skewness",
+    "calculate_kurtosis",
 ]
