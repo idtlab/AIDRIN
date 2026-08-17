@@ -1,7 +1,7 @@
 .. _appfl_integration:
 
-Integration with APPFL
-=======================
+APPFL
+=====
 
 AIDRIN collaborates closely with the `APPFL framework <https://appfl.ai/en/latest/index.html#>`_ to improve the quality and reliability of datasets used in federated learning workflows. This partnership brings together AIDRIN’s advanced data readiness capabilities and APPFL’s powerful federated learning infrastructure to help researchers and practitioners work with high-quality, AI-ready data from the start.
 

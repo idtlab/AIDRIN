@@ -1,6 +1,6 @@
 ---
 name: aidrin
-description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to check a dataset for bias, fairness, privacy, PII risk, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
+description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to validate file paths stored in a dataset, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
 ---
 
 # Assessing dataset AI-readiness with AIDRIN
@@ -18,25 +18,27 @@ accepts named parameters (no positional ordering), suppresses image side-effects
 by default, and returns structured JSON directly. Fall back to the `aidrin` CLI
 only when MCP is absent.
 
-| Action | MCP tool | CLI equivalent |
-|---|---|---|
-| Preflight | `list_metrics()` | `aidrin list` |
-| Summarize dataset | `summarize_dataset(file_path)` | `aidrin summarize <file>` |
-| Quality baseline | `run_data_quality_check(file_path)` | `aidrin data-quality <file> [--detail]` |
-| Single metric | `run_aidrin_metric(file_path, metric, ...)` | `aidrin run <metric> <file> <args...>` |
-| Batch | `run_batch(config_path)` | `aidrin batch <config>` |
-| Create custom metric | `create_custom_metric(name, directory)` | `aidrin add-custom-module <name> --dir <dir>` |
-| Run custom metric | `run_custom_metric(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> metric` |
-| Apply custom remedy | `run_custom_remedy(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> remedy` |
-| Build agentic index | `agentic_build_index(config_path)` | `aidrin agentic build-index -c <config>` |
-| Run agentic pipeline | `agentic_run(config_path, output_path, skip_vector)` | `aidrin agentic run -c <config> -o <output> [--skip-vector]` |
+| Action | MCP tool | CLI equivalent | Remote |
+|---|---|---|---|
+| Preflight | `list_metrics()` | `aidrin list` | `aidrin remote check` |
+| List endpoints | `list_remote_profiles()` | `aidrin remote list` | n/a |
+| Summarize dataset | `summarize_dataset(file_path)` | `aidrin summarize <file>` | add `profile=` / `aidrin remote summarize` |
+| Quality baseline | `run_data_quality_check(file_path)` | `aidrin data-quality <file> [--detail]` | add `profile=` / `aidrin remote data-quality` |
+| Single metric | `run_aidrin_metric(file_path, metric, ...)` | `aidrin run <metric> <file> <args...>` | add `profile=` / `aidrin remote run <metric>` |
+| Validate file references | `verify_file_references(file_path, path_targets, ...)` | `aidrin run file-reference-validation <file> <targets> [...]` | use the generic tool with `profile=` / `aidrin remote run file-reference-validation` |
+| Batch | `run_batch(config_path)` | `aidrin batch <config>` | add `profile=` / `aidrin remote batch` |
+| Create custom metric | `create_custom_metric(name, directory)` | `aidrin add-custom-module <name> --dir <dir>` | local-only |
+| Run custom metric | `run_custom_metric(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> metric` | local-only |
+| Apply custom remedy | `run_custom_remedy(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> remedy` | local-only |
+| Build agentic index | `agentic_build_index(config_path)` | `aidrin agentic build-index -c <config>` | local-only |
+| Run agentic pipeline | `agentic_run(config_path, output_path, skip_vector)` | `aidrin agentic run -c <config> -o <output> [--skip-vector]` | local-only |
 
 ## Workflow
 
 Copy this checklist and work through it in order:
 
 ```
-- [ ] 1. Preflight: confirm AIDRIN is available; read which metrics exist
+- [ ] 1. Preflight: confirm AIDRIN is available; read which metrics exist; check for remote endpoints
 - [ ] 2. Elicit intent: how will the user use this dataset?
 - [ ] 3. Inspect: read the AIDRIN-parsed schema + descriptive stats
 - [ ] 4. Plan: map intent + columns → metrics + arguments (with rationale)
@@ -51,13 +53,17 @@ Copy this checklist and work through it in order:
 ### 1. Preflight
 
 **MCP:** Call `list_metrics()`. Pass `category=` to filter by group (data-quality,
-impact-of-data-on-AI, fairness-and-bias, data-governance).
+data-structure, impact-of-data-on-AI, fairness-and-bias, data-governance).
 
 **CLI:** Run `aidrin list`. If it fails, see [reference/installation.md](reference/installation.md).
 
 The returned list is the source of truth. If a metric the user requests is
 not listed, **do not run it** — instead, offer to implement it as a custom
 metric using `create_custom_metric` (see the Custom metrics section below).
+
+**Remote endpoints:** also call `list_remote_profiles()` (MCP) or run
+`aidrin remote list` (CLI). If any profile is configured, ask once whether this
+dataset is local or on that endpoint, then keep that answer for the session.
 
 ### 2. Elicit intent
 
@@ -75,15 +81,26 @@ Dimension → metric mapping for focused requests:
 
 | Stated dimension | Metrics to run |
 |---|---|
-| Fairness / bias | class_imbalance, statistical_rates, representation_rate |
-| Privacy / PII / anonymity | k_anonymity, l_diversity, t_closeness, entropy_risk, single_attribute_risk, multiple_attribute_risk |
+| Fairness / bias | class-imbalance, statistical-rates, representation-rate |
+| Privacy / PII / anonymity | k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk |
+| HIPAA / PHI compliance | hipaa-compliance |
 | Data quality / completeness / duplicates / outliers | completeness, duplicity, outliers |
-| Feature relevance / AI impact | feature_relevance, correlations |
-| Class imbalance | class_imbalance |
+| File paths / referenced files / manifest validation | file-reference-validation |
+| Data structure / distribution shape / collinearity / redundant features | max-pairwise-correlation, skewness, kurtosis |
+| Feature relevance / AI impact | feature-relevance, correlations |
+| Class imbalance | class-imbalance |
+| Data structure / organization | constant-feature-count |
 | Full readiness (no specific dimension) | all applicable metrics per the intent table in Step 4 |
 
 Always add the zero-arg quality baseline (completeness, duplicity, outliers) even for
 dimension-specific requests — it takes no column args and gives essential context.
+
+For a focused file-reference request, run only `file-reference-validation` unless the
+user also asks for broader readiness analysis. Confirm the path-bearing targets and,
+when relative references do not use the manifest directory, the base directory. MCP
+checks the filesystem of the MCP server host, not the user's client machine.
+Use `target_match="regex"` only when the user wants each target value treated as a
+full-match regular expression; exact names remain the default.
 
 ### 3. Inspect the dataset
 
@@ -103,16 +120,13 @@ include the zero-arg quality baseline.
 
 | User intent | Metrics | Columns needed |
 |---|---|---|
-| Train supervised model | completeness, duplicity, outliers, feature_relevance, class_imbalance, correlations | target; categorical/numerical features; correlations & feature_relevance need columns |
-| Ensure fairness across groups | class_imbalance, statistical_rates, representation_rate | target + sensitive attribute(s) |
-| Publish / share externally | k_anonymity, l_diversity, t_closeness, entropy_risk, single_attribute_risk, multiple_attribute_risk | quasi-identifiers, sensitive column, id column + eval columns |
-| General quality / exploration | completeness, duplicity, outliers, correlations | correlations needs columns |
-| Contains PII / sensitive data | governance + privacy set above | quasi-identifiers, sensitive column |
+| Train supervised model | completeness, duplicity, outliers, feature-relevance, class-imbalance, correlations | target; categorical/numerical features; correlations & feature-relevance need columns |
+| Ensure fairness across groups | class-imbalance, statistical-rates, representation-rate | target + sensitive attribute(s) |
+| Publish / share externally | k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk | quasi-identifiers, sensitive column, id column + eval columns |
+| General quality / exploration | completeness, duplicity, outliers, constant-feature-count, correlations | correlations needs columns |
+| Contains PII / sensitive data | governance + privacy set above, hipaa-compliance | quasi-identifiers, sensitive column; hipaa-compliance needs columns to scan |
 
 Always-run baseline (zero-arg): completeness, duplicity, outliers.
-
-_Names above are readable labels. MCP uses underscore form (`class_imbalance`);
-CLI `aidrin run` uses dash form (`class-imbalance`). See [reference/metrics.md](reference/metrics.md)._
 
 ### 5. Confirm the plan (HARD gate)
 
@@ -131,14 +145,14 @@ casing / non-existent columns before running.
 
 **MCP path (preferred):**
 - Zero-arg baseline: one call — `run_data_quality_check(file_path="...")` runs completeness, duplicity, and outliers together.
-- Per metric: `run_aidrin_metric(file_path="...", metric="class_imbalance", target_column="income")`. Use **underscore form** for metric names. All column args are named kwargs — no positional ordering to worry about.
+- Per metric: `run_aidrin_metric(file_path="...", metric="class-imbalance", target_column="income")`. All column args are named kwargs — no positional ordering to worry about.
 - If a metric fails, its returned JSON contains an `Error`/`ErrorType` key. Record it as "Not run: <reason>" and continue with the rest.
 
 **CLI path (fallback):**
 - Default: one `aidrin run <metric> <file> <args...>` per metric. This isolates errors.
 - Batch the zero-arg baseline: `aidrin batch <config>` with `{"file_path": "...", "metrics": ["completeness","duplicity","outliers"]}`.
 - NOTE: `aidrin run` exits 0 even on failure — detect failures by checking the JSON output for an `Error`/`ErrorType` key, not the exit code.
-- Metric names under `aidrin run` are **dash form** (`class-imbalance`, `k-anonymity`). Underscore forms are rejected. Args are positional — see [reference/metrics.md](reference/metrics.md) for order.
+- Args are positional — see [reference/metrics.md](reference/metrics.md) for order.
 
 ### 8. Write the report
 
@@ -297,18 +311,46 @@ aidrin agentic run -c path/to/config.yaml -o path/to/results.json [--skip-vector
 
 Returns combined JSON: `profile` + `queries` (one entry per question: retrieval, execution, complexity, remediation) + `token_usage`.
 
+## Remote datasets (Globus Compute)
+
+When the dataset lives on a remote machine (HPC scratch, a lab server) that runs
+a Globus Compute endpoint, AIDRIN can execute the metrics there and return only
+the results. The data never moves.
+
+**MCP:** pass `profile="<name>"` (or `endpoint="<uuid>"`) to `summarize_dataset`,
+`run_data_quality_check`, `run_aidrin_metric`, or `run_batch`.
+
+**CLI:** prefix the command with `remote`, for example
+`aidrin remote summarize /scratch/proj/data.csv`. The arguments and the JSON are
+identical to a local run, so steps 3 through 8 of the workflow are unchanged.
+
+What differs:
+
+- **Paths are remote.** `file_path` is a path on the endpoint's filesystem. You
+  cannot list it, so ask the user for the full path. A wrong path comes back as
+  a metric error, not as a local file-not-found. For `run_batch`/`aidrin remote
+  batch`, this applies only to the `file_path` *inside* the config — the config
+  file itself is read from wherever it sits (locally for the CLI, on the MCP
+  server's machine for `run_batch`).
+- **Local-only:** custom metrics, remedies, and the agentic pipeline. They need
+  files or credentials on this machine. Say so plainly rather than retrying.
+- **Setup:** if no profile is configured, the user runs
+  `aidrin remote configure --name <name> --endpoint <uuid>` once. Do not run
+  this for them: it needs an endpoint UUID only they have.
+- **Version skew:** the endpoint may run an older AIDRIN. If a metric that
+  `list_metrics()` reports fails remotely with an unknown-metric error, that is
+  the likely cause; report it rather than working around it.
+
 ## Gotchas
 
 **MCP:**
-- Metric names in `run_aidrin_metric` use **underscore form** (`class_imbalance`, `k_anonymity`). `list_metrics()` returns **dash form** names (`class-imbalance`, `k-anonymity`) — convert dashes to underscores before passing to `run_aidrin_metric`. Dash form raises `ValueError: Unknown metric`.
 - `run_data_quality_check` and `run_aidrin_metric` suppress image writes internally (`save_images=False`). No workaround needed.
 - Failures surface as `Error`/`ErrorType` keys in the returned JSON — not as raised exceptions.
 
 **CLI:**
 - `aidrin run` returns exit 0 even when a metric fails; detect failures via `Error`/`ErrorType` in the JSON output.
-- Metric names under `aidrin run` are **dash form** (`class-imbalance`, not `class_imbalance`). Underscore forms are rejected.
 - Per-metric args are **positional**, in the order shown by `aidrin run <metric> -h`. NOT `--flags`. Quote comma-separated column lists: `"zip,age"`.
-- `aidrin run` writes visualization PNGs to `/tmp/aidrin_images` by default. Suppress via `aidrin batch` with `"save-images": false`.
+- `aidrin run` does not write images. `aidrin batch` does: it writes visualization PNGs to `/tmp/aidrin_images` unless the config sets `"save-images": false`, or `"image-dir"` to send them elsewhere.
 - If `aidrin` is not on PATH, see [reference/installation.md](reference/installation.md).
 - `--detail` is already the default for `run`/`batch`; no need to add it.
 
@@ -318,6 +360,13 @@ Returns combined JSON: `profile` + `queries` (one entry per question: retrieval,
 - `statistical_rates` is label-distribution, not model-output fairness.
 - `feature_relevance` needs at least one of categorical/numerical columns plus the target, or it exits 2 (CLI) / errors in JSON (MCP).
 - Confirm column roles with the user before running any governance or fairness metrics. Wrong quasi-identifiers produce falsely reassuring privacy results.
+- Remote runs produce no images by default: visualization payloads are stripped
+  on the endpoint, so nothing is written anywhere. Only a batch config that sets
+  `save_images: true` brings them back, and even then they are written on your
+  machine, never on the endpoint.
+- A remote result is capped near 10 MB. Since images are off by default a run
+  should not hit that cap; if one does, it was asking for images, so rerun
+  without them.
 
 ## Scope
 

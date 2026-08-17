@@ -1,5 +1,31 @@
+/* Palette mirrors the light-mode design tokens in web/static/css/theme.css */
+:root {
+  --textColor: #1a1a2e;
+  --textColorSecondary: #6b6b80;
+  --backgroundColor: #f4f3f9;
+  --secondaryColor: #ffffff;
+  /* Half a step from --secondaryColor to --backgroundColor, for surfaces that
+     sit on the white content column rather than on the page. */
+  --surfaceSubtle: #faf9fc;
+  --darkAccent: #4452a8;
+  --brandCoral: #d86470;
+  --linkColor: #4485f4;
+  --visitedColor: #9b6bb0;
+  --borderColor: #e5e7eb;
+  --tertiaryColor: #9b99b0;
+
+  /* Sidebar states. Tinted with --darkAccent rather than black so they stay
+     in the palette's hue instead of reading as neutral gray. */
+  --navSection: rgba(68, 82, 168, 0.05);
+  --navHover: rgba(68, 82, 168, 0.12);
+}
+
 a {
-  color: #627fe7;
+  color: var(--linkColor);
+}
+
+a:visited {
+  color: var(--visitedColor);
 }
 
 .btn {
@@ -8,43 +34,156 @@ a {
 
 .wy-side-nav-search input[type="text"] {
   border-radius: 10px;
-  border-color: #e1e4e5;
+  border-color: var(--borderColor);
+}
+
+body.wy-body-for-nav,
+section.wy-nav-content-wrap {
+  background: var(--backgroundColor);
 }
 
 div.wy-nav-content {
   max-width: 1024px;
+  background: var(--secondaryColor);
+  border-left: 1px solid var(--borderColor);
+  border-right: 1px solid var(--borderColor);
 }
 
 nav.wy-nav-side,
 div.wy-side-nav-search,
 div.ethical-dark-theme .ethical-sidebar,
 div.rst-versions .rst-current-version {
-  background: #efefef;
+  background: var(--backgroundColor);
+}
+
+/* The mobile header takes style_nav_header_background from conf.py, which is
+   now light; the theme's white text and hamburger would be invisible on it. */
+nav.wy-nav-top,
+nav.wy-nav-top a,
+nav.wy-nav-top i {
+  color: var(--textColor);
 }
 
 div.wy-side-nav-search > a img.logo {
+  width: 66.67%;
   margin: 40px auto;
 }
 
 div.wy-menu-vertical p.caption {
-  color: #627fe7;
+  color: var(--darkAccent);
 }
 
-div.wy-menu-vertical a {
-  color: #404040;
+div.wy-menu-vertical a,
+div.wy-menu-vertical li ul li a,
+div.wy-menu-vertical li.current a {
+  color: var(--textColor);
 }
 
-div.wy-menu-vertical a:hover {
-  background-color: #ffffff;
+/* The theme's expanded-nav states are neutral grays (#e3e3e3 / #c9c9c9 /
+   #bdbdbd) stacked by depth, meant for its dark sidebar. Like the app
+   sidebar, convey depth with indentation alone: one tint for the open
+   section, no per-level shading, and the gray divider dropped. */
+div.wy-menu-vertical li.current {
+  background: var(--navSection);
+}
+
+div.wy-menu-vertical li.current a {
+  border-right: none;
+}
+
+div.wy-menu-vertical li.toctree-l1.current > a {
+  border-top-color: var(--borderColor);
+  border-bottom-color: var(--borderColor);
+}
+
+div.wy-menu-vertical li.toctree-l2.current li.toctree-l3 > a,
+div.wy-menu-vertical li.toctree-l3.current li.toctree-l4 > a {
+  background: transparent;
+}
+
+div.wy-menu-vertical a:hover,
+div.wy-menu-vertical li.current a:hover {
+  background-color: var(--navHover);
+}
+
+/* The entry you are on sits on the content surface, like a selected card. */
+div.wy-menu-vertical li.current > a,
+div.wy-menu-vertical li.on a,
+div.wy-menu-vertical li.current > a:hover,
+div.wy-menu-vertical li.on a:hover,
+div.wy-menu-vertical li.toctree-l2.current > a,
+div.wy-menu-vertical li.toctree-l3.current > a {
+  background: var(--secondaryColor);
+  color: var(--textColor);
+}
+
+div.wy-menu-vertical li button.toctree-expand,
+div.wy-menu-vertical li.toctree-l2 button.toctree-expand,
+div.wy-menu-vertical li.toctree-l3 button.toctree-expand,
+div.wy-menu-vertical li.current > a button.toctree-expand,
+div.wy-menu-vertical li.on a button.toctree-expand {
+  color: var(--textColorSecondary);
+}
+
+/* On hover the theme fades the expander to #d9d9d9, which was legible on its
+   dark sidebar but vanishes against a light one. Darken it instead, so the
+   icon reads as active rather than disappearing. */
+div.wy-menu-vertical a:hover button.toctree-expand,
+div.wy-menu-vertical li.current > a:hover button.toctree-expand,
+div.wy-menu-vertical li.on a:hover button.toctree-expand,
+div.wy-menu-vertical li.toctree-l2 a:hover button.toctree-expand,
+div.wy-menu-vertical li.toctree-l3 a:hover button.toctree-expand,
+div.wy-menu-vertical li.toctree-l4 a:hover button.toctree-expand {
+  color: var(--textColor);
 }
 
 .rst-content div[class^="highlight"],
+.rst-content div[class^="highlight"] pre,
 .rst-content pre.literal-block {
   border-radius: 5px;
-  background: #efefef;
+  background: var(--surfaceSubtle);
 }
 
-.admonition note {
+/* The theme stripes rows with #f3f6f6 and borders with #e1e4e5, both neutral
+   grays. Move them onto the palette. */
+.rst-content table.docutils:not(.field-list) tr:nth-child(2n-1) td,
+.wy-table-backed,
+.wy-table-odd td,
+.wy-table-striped tr:nth-child(2n-1) td {
+  background-color: var(--surfaceSubtle);
+}
+
+.rst-content table.docutils,
+.wy-table-bordered-all {
+  border-color: var(--borderColor);
+}
+
+.rst-content table.docutils td,
+.rst-content table.docutils th,
+.wy-table-bordered-all td,
+.wy-table-bordered,
+.wy-table-bordered-rows td,
+.wy-table-horizontal td,
+.wy-table-horizontal th {
+  border-color: var(--borderColor);
+}
+
+.rst-content table.docutils thead th,
+.rst-content table.field-list thead th,
+.wy-table thead th {
+  border-bottom-color: var(--borderColor);
+}
+
+/* The theme sets white-space: nowrap on responsive table cells, so any cell of
+   prose longer than its column scrolls sideways off the page instead of
+   wrapping. Let prose wrap; the container keeps overflow: auto for genuinely
+   wide tables such as code or data. */
+.wy-table-responsive table td,
+.wy-table-responsive table th {
+  white-space: normal;
+}
+
+.admonition {
   border-radius: 5px;
 }
 
@@ -52,21 +191,54 @@ div.wy-menu-vertical a:hover {
   border-radius: 5px 5px 0 0;
 }
 
+/* The theme leaves admonitions on its own blue and orange (#e7f2fa / #6ab0de,
+   #ffedcc / #f0b37e), which read as a different design system next to the app
+   palette. Give them all the same treatment, and distinguish them by the title
+   bar rather than by the body. */
+.rst-content .note,
+.rst-content .seealso,
+.rst-content .tip,
+.rst-content .hint,
+.rst-content .important,
+.rst-content .warning,
+.rst-content .caution,
+.rst-content .attention,
+.rst-content .danger,
+.rst-content .error {
+  background: var(--surfaceSubtle);
+}
+
+.rst-content .note > .admonition-title,
+.rst-content .seealso > .admonition-title,
+.rst-content .tip > .admonition-title,
+.rst-content .hint > .admonition-title,
+.rst-content .important > .admonition-title {
+  background: var(--darkAccent);
+}
+
+.rst-content .warning > .admonition-title,
+.rst-content .caution > .admonition-title,
+.rst-content .attention > .admonition-title,
+.rst-content .danger > .admonition-title,
+.rst-content .error > .admonition-title {
+  background: var(--brandCoral);
+}
+
 div.rst-versions span.rst-current-version {
-  color: #344f90;
+  color: var(--darkAccent);
 }
 
 div.rst-versions span.fa {
-  color: #404040 !important;
+  color: var(--textColor) !important;
 }
 
 div.ethical-dark-theme a,
 div.ethical-dark-theme a:visited {
-  color: #404040 !important;
+  color: var(--textColor) !important;
 }
 
 div.rst-versions {
-  color: #404040;
+  color: var(--textColor);
 }
 
 div.rst-content dl dt {
@@ -78,4 +250,41 @@ div.rst-content dl dt {
   background: #efe7fa;
   color: #65419d;
   border-left: 3px solid #65419d;
+}
+
+/* Screenshot pairs on the home page: a borderless two-up grid rather than a
+   table, with the images filling their cells. */
+.rst-content table.screenshots,
+.rst-content table.screenshots td {
+  border: none;
+  background: transparent;
+  padding: 0 8px;
+}
+
+.rst-content table.screenshots td {
+  vertical-align: top;
+  width: 50%;
+}
+
+.rst-content table.screenshots img {
+  width: 100%;
+  border: 1px solid var(--borderColor);
+  border-radius: 5px;
+}
+
+/* Availability marks in the metric mapping table. Present uses the accent,
+   absent is muted rather than alarming: an unavailable interface is a fact,
+   not an error. */
+.rst-content .support-yes,
+.rst-content .support-no {
+  font-size: 1.05em;
+  line-height: 1;
+}
+
+.rst-content .support-yes {
+  color: var(--darkAccent);
+}
+
+.rst-content .support-no {
+  color: var(--tertiaryColor);
 }

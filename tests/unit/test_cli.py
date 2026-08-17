@@ -49,6 +49,13 @@ def _clean(path: str) -> None:
         pass
 
 
+def _write_json(value) -> str:
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+    json.dump(value, tmp)
+    tmp.close()
+    return tmp.name
+
+
 def _sample_df(n: int = 60) -> pd.DataFrame:
     rng = np.random.default_rng(42)
     return pd.DataFrame(
@@ -170,6 +177,8 @@ class TestListCommand(unittest.TestCase):
         self.assertIn("completeness", text)
         self.assertIn("duplicity", text)
         self.assertIn("outliers", text)
+        self.assertIn("outliers-custom", text)
+        self.assertIn("file-reference-validation", text)
 
     def test_list_category_filter(self):
         stdout, _, _ = _run_cli("list", "--category", "data-quality")
@@ -260,6 +269,89 @@ class TestRunCommand(unittest.TestCase):
         data = json.loads(stdout)
         self.assertIn("Outlier scores", data)
 
+    def test_run_outliers_custom_returns_json(self):
+        rules = json.dumps([{
+            "id": "age-range",
+            "target": "age",
+            "target_type": "column",
+            "criteria": {"type": "range", "min": 20, "max": 60},
+        }])
+        stdout, _, code = _run_cli(
+            "run",
+            "outliers-custom",
+            self.csv,
+            rules,
+            "--max-outliers",
+            "0",
+        )
+        self.assertEqual(code, 0)
+        data = json.loads(stdout)
+        self.assertIn("Rule summaries", data)
+        self.assertEqual(data["Rule summaries"]["age-range"]["preview_limit"], 0)
+
+    def test_run_outliers_custom_accepts_rule_shorthand(self):
+        stdout, _, code = _run_cli(
+            "run",
+            "outliers-custom",
+            self.csv,
+            "--rule",
+            "age >= 20 && age <= 60",
+            "--max-outliers",
+            "0",
+        )
+        self.assertEqual(code, 0)
+        data = json.loads(stdout)
+        self.assertIn("age-1", data["Rule summaries"])
+        self.assertEqual(data["Rule summaries"]["age-1"]["preview_limit"], 0)
+
+    def test_run_outliers_custom_rejects_mixed_target_shorthand(self):
+        _, stderr, code = _run_cli(
+            "run",
+            "outliers-custom",
+            self.csv,
+            "--rule",
+            "age >= 20 && income <= 100000",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("same target", stderr)
+
+    def test_run_outliers_custom_accepts_rules_file(self):
+        rules_path = _write_json([{
+            "id": "age-range",
+            "target": "age",
+            "target_type": "column",
+            "criteria": {"type": "range", "min": 20, "max": 60},
+        }])
+        try:
+            stdout, _, code = _run_cli(
+                "run",
+                "outliers-custom",
+                self.csv,
+                "--rules-file",
+                rules_path,
+            )
+        finally:
+            _clean(rules_path)
+        self.assertEqual(code, 0)
+        self.assertIn("age-range", json.loads(stdout)["Rule summaries"])
+
+    def test_run_outliers_custom_rejects_rules_file_with_rule(self):
+        rules_path = _write_json([])
+        try:
+            _, stderr, code = _run_cli(
+                "run",
+                "outliers-custom",
+                self.csv,
+                "--rules-file",
+                rules_path,
+                "--rule",
+                "age >= 20",
+            )
+        finally:
+            _clean(rules_path)
+        self.assertNotEqual(code, 0)
+        self.assertIn("exactly one custom-outlier rule source", stderr)
+
     def test_run_correlations_exits_zero(self):
         _, _, code = _run_cli("run", "correlations", self.csv, "age,income,sex")
         self.assertEqual(code, 0)
@@ -268,6 +360,284 @@ class TestRunCommand(unittest.TestCase):
         """aidrin completeness <file> maps to aidrin run completeness <file>."""
         _, _, code = _run_cli("completeness", self.csv)
         self.assertEqual(code, 0)
+
+    # --- hipaa-compliance wiring ------------------------------------------
+
+    def test_run_hipaa_compliance_exits_zero(self):
+        _, _, code = _run_cli("run", "hipaa-compliance", self.csv, "age,income,sex")
+        self.assertEqual(code, 0)
+
+    def test_run_hipaa_compliance_no_phi_returns_empty(self):
+        # age (2-digit) and sex (M/F) match no PHI pattern. NB: income is
+        # deliberately excluded — 5-digit incomes can match the postal-code
+        # candidate regex and validate as real ZIPs (a detector false positive).
+        stdout, _, _ = _run_cli("run", "hipaa-compliance", self.csv, "age,sex")
+        self.assertEqual(json.loads(stdout), {})
+
+    def test_run_hipaa_compliance_detects_phi(self):
+        csv = _write_csv(pd.DataFrame({
+            "contact": ["a@b.com", "c@d.org"],
+            "age": [30, 40],
+        }))
+        try:
+            stdout, _, code = _run_cli("run", "hipaa-compliance", csv, "contact")
+            self.assertEqual(code, 0)
+            data = json.loads(stdout)
+            self.assertIn("contact", data)
+            self.assertIn("EMAIL_ADDRESS", data["contact"]["potential_types_detected"])
+        finally:
+            _clean(csv)
+
+    def test_shortcut_multiword_metric(self):
+        """aidrin hipaa-compliance <file> ... routes to `run` (guards the
+        multi-word shortcut fix: the old code passed underscore form to the
+        dash-only `run` subparser and errored)."""
+        _, _, code = _run_cli("hipaa-compliance", self.csv, "age,income,sex")
+        self.assertEqual(code, 0)
+
+    def test_shortcut_underscore_form_resolves(self):
+        """Underscore shortcut form also resolves after dash normalization."""
+        _, _, code = _run_cli("hipaa_compliance", self.csv, "age,income,sex")
+        self.assertEqual(code, 0)
+
+
+# ===========================================================================
+# hipaa summary line (_summarize_metric)
+# ===========================================================================
+
+
+class TestSummarizeHipaa(unittest.TestCase):
+
+    def _capture(self, metric_name: str, result: dict) -> str:
+        from aidrin.headless.cli import _summarize_metric
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            _summarize_metric(metric_name, result)
+        return buf.getvalue()
+
+    def test_no_phi_message(self):
+        out = self._capture("hipaa_compliance", {})
+        self.assertIn("No PHI detected", out)
+
+    def test_findings_printed(self):
+        out = self._capture("hipaa_compliance", {
+            "contact": {
+                "total_flags": 2,
+                "potential_types_detected": ["EMAIL_ADDRESS"],
+                "examples": ["a@b.com"],
+            },
+        })
+        self.assertIn("contact", out)
+        self.assertIn("2 flag", out)
+        self.assertIn("EMAIL_ADDRESS", out)
+
+
+# ===========================================================================
+# run_metric metric-name resolution (dash / underscore)
+# ===========================================================================
+
+
+class TestRunMetricNameResolution(unittest.TestCase):
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+
+    def tearDown(self):
+        _clean(self.csv)
+
+    def test_hipaa_in_registry(self):
+        from aidrin.headless.api import METRIC_REGISTRY
+        self.assertIn("hipaa_compliance", METRIC_REGISTRY)
+
+    def test_dash_form_resolves(self):
+        from aidrin.headless.api import run_metric
+        result = run_metric(
+            "hipaa-compliance", self.csv, columns="age,income,sex", save_images=False
+        )
+        self.assertIsInstance(result, dict)
+
+    def test_underscore_form_resolves(self):
+        from aidrin.headless.api import run_metric
+        result = run_metric(
+            "hipaa_compliance", self.csv, columns="age,income,sex", save_images=False
+        )
+        self.assertIsInstance(result, dict)
+
+    def test_dash_and_underscore_equivalent(self):
+        from aidrin.headless.api import run_metric
+        dash = run_metric("hipaa-compliance", self.csv, columns="age", save_images=False)
+        under = run_metric("hipaa_compliance", self.csv, columns="age", save_images=False)
+        self.assertEqual(dash, under)
+
+    def test_missing_columns_raises(self):
+        from aidrin.headless.api import run_metric
+        with self.assertRaises(ValueError):
+            run_metric("hipaa-compliance", self.csv, save_images=False)
+
+
+class TestFileReferenceValidationInterfaces(unittest.TestCase):
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.base_dir = self.temp_dir.name
+        self.target_path = os.path.join(self.base_dir, "artifact.bin")
+        with open(self.target_path, "wb") as handle:
+            handle.write(b"aidrin")
+        self.csv = os.path.join(self.base_dir, "manifest.csv")
+        pd.DataFrame({"file_path": ["artifact.bin", "missing.bin"]}).to_csv(self.csv, index=False)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_cli_forwards_targets_base_dir_and_caps(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "file-reference-validation",
+            self.csv,
+            "file_path",
+            "--base-dir",
+            self.base_dir,
+            "--max-results",
+            "1",
+            "--scan-limit",
+            "1",
+        )
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["Summary"]["scanned_values"], 1)
+        self.assertEqual(result["Summary"]["unscanned_values"], 1)
+        self.assertEqual(result["File metadata"][0]["size_bytes"], 6)
+
+    def test_cli_supports_regex_target_matching(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "file-reference-validation",
+            self.csv,
+            r"file_[a-z]{1,4}",
+            "--target-match",
+            "regex",
+            "--base-dir",
+            self.base_dir,
+        )
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(list(result["Target summaries"]), ["file_path"])
+
+    def test_string_api_preserves_regex_target_commas(self):
+        from aidrin.headless.api import run_metric
+
+        result = run_metric(
+            "file-reference-validation",
+            self.csv,
+            path_targets=r"file_[a-z]{1,4}",
+            target_match="regex",
+            base_dir=self.base_dir,
+            save_images=False,
+        )
+
+        self.assertEqual(list(result["Target summaries"]), ["file_path"])
+
+    def test_run_metric_requires_path_targets(self):
+        from aidrin.headless.api import run_metric
+
+        with self.assertRaisesRegex(ValueError, "path_targets is required"):
+            run_metric("file-reference-validation", self.csv, save_images=False)
+
+    def test_batch_normalizes_and_forwards_file_reference_options(self):
+        from aidrin.headless.api import run_batch_metrics
+        from aidrin.headless.config import HeadlessConfig
+
+        config = HeadlessConfig.from_dict({
+            "file-path": self.csv,
+            "metrics": ["file-reference-validation"],
+            "path-targets": r"file_[a-z]{1,4}",
+            "base-dir": self.base_dir,
+            "max-results": 1,
+            "scan-limit": 1,
+            "target-match": "regex",
+            "save-images": False,
+        })
+        self.assertEqual(config.path_targets, [r"file_[a-z]{1,4}"])
+        self.assertEqual(config.target_match, "regex")
+        result = run_batch_metrics(config)
+        metric_result = result["file_reference_validation"]
+        self.assertEqual(metric_result["Summary"]["scanned_values"], 1)
+        self.assertEqual(metric_result["Summary"]["unscanned_values"], 1)
+        self.assertEqual(len(metric_result["File metadata"]), 1)
+
+
+class TestCustomOutlierRulesFile(unittest.TestCase):
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+        self.rules = [{
+            "id": "age-range",
+            "target": "age",
+            "target_type": "column",
+            "criteria": {"type": "range", "min": 20, "max": 60},
+        }]
+
+    def tearDown(self):
+        _clean(self.csv)
+
+    def test_run_metric_accepts_rules_file(self):
+        from aidrin.headless.api import run_metric
+
+        rules_path = _write_json(self.rules)
+        try:
+            result = run_metric("outliers-custom", self.csv, rules_file=rules_path, save_images=False)
+        finally:
+            _clean(rules_path)
+        self.assertIn("age-range", result["Rule summaries"])
+
+    def test_rules_file_errors_are_specific(self):
+        from aidrin.headless.api import run_metric
+
+        with self.assertRaisesRegex(ValueError, "Unable to read custom-outlier rules file"):
+            run_metric("outliers-custom", self.csv, rules_file="/not/a/rules-file.json", save_images=False)
+
+        malformed_path = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+        malformed_path.write("{")
+        malformed_path.close()
+        try:
+            with self.assertRaisesRegex(ValueError, "Invalid JSON in custom-outlier rules file"):
+                run_metric("outliers-custom", self.csv, rules_file=malformed_path.name, save_images=False)
+        finally:
+            _clean(malformed_path.name)
+
+        object_path = _write_json({"rules": self.rules})
+        try:
+            with self.assertRaisesRegex(ValueError, "must contain a JSON array"):
+                run_metric("outliers-custom", self.csv, rules_file=object_path, save_images=False)
+        finally:
+            _clean(object_path)
+
+    def test_empty_rules_file_reaches_existing_validator(self):
+        from aidrin.headless.api import run_metric
+
+        rules_path = _write_json([])
+        try:
+            with self.assertRaisesRegex(ValueError, "non-empty list"):
+                run_metric("outliers-custom", self.csv, rules_file=rules_path, save_images=False)
+        finally:
+            _clean(rules_path)
+
+    def test_rule_sources_must_not_be_mixed(self):
+        from aidrin.headless.api import run_metric
+
+        rules_path = _write_json(self.rules)
+        inline_rules = json.dumps(self.rules)
+        try:
+            with self.assertRaisesRegex(ValueError, "Provide exactly one custom-outlier rule source"):
+                run_metric(
+                    "outliers-custom",
+                    self.csv,
+                    rules_json=inline_rules,
+                    rules_file=rules_path,
+                    save_images=False,
+                )
+        finally:
+            _clean(rules_path)
 
 
 # ===========================================================================
@@ -295,6 +665,44 @@ class TestAddCustomModuleCommand(unittest.TestCase):
         _, _, code = _run_cli("add-custom-module", "mymetric", "--dir", self.tmpdir)
         # Should print a message but not raise — exit 0
         self.assertEqual(code, 0)
+
+
+# ===========================================================================
+# Frame cache cleanup
+# ===========================================================================
+
+
+def _frame_cache_siblings(path: str) -> list[str]:
+    directory = os.path.dirname(path) or "."
+    prefix = os.path.basename(path)
+    return [f for f in os.listdir(directory) if f.startswith(prefix) and f.endswith(".aidrin.feather")]
+
+
+class TestFrameCacheCleanup(unittest.TestCase):
+    """The CLI reads files from arbitrary disk locations with no periodic
+    reaper (unlike the web app's managed upload folder), so it must remove
+    its own ``.aidrin.feather`` cache sidecar after each invocation."""
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+
+    def tearDown(self):
+        for name in _frame_cache_siblings(self.csv):
+            _clean(os.path.join(os.path.dirname(self.csv) or ".", name))
+        _clean(self.csv)
+
+    def test_no_cache_sidecar_left_after_run_command(self):
+        _run_cli("run", "completeness", self.csv)
+        self.assertEqual(_frame_cache_siblings(self.csv), [])
+
+    def test_no_cache_sidecar_left_after_data_quality_command(self):
+        _run_cli("data-quality", self.csv)
+        self.assertEqual(_frame_cache_siblings(self.csv), [])
+
+    def test_no_cache_sidecar_left_after_failed_run(self):
+        # Nonexistent target column still exercises read_file() before failing.
+        _run_cli("run", "class-imbalance", self.csv, "not_a_real_column")
+        self.assertEqual(_frame_cache_siblings(self.csv), [])
 
 
 # ===========================================================================

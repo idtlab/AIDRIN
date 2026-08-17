@@ -1,17 +1,19 @@
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import List, Optional
 import os
 
+from aidrin.file_handling.file_parser import clear_frame_cache
+
+from aidrin.headless import api as _local_api
+from aidrin.compute.executor import AsyncSubmitted
+
 from .api import (
     METRIC_REGISTRY,
     list_available_metrics,
-    run_batch_metrics,
-    run_data_quality,
-    run_metric,
-    summarize_dataset,
     generate_metric_template,
     run_custom_metric_remedy,
 )
@@ -25,9 +27,112 @@ def _parse_list(value: Optional[str]) -> Optional[List[str]]:
     return items or None
 
 
+def _parse_path_targets(value: Optional[str], target_match: str) -> Optional[List[str]]:
+    if str(target_match).strip().lower() == "regex":
+        pattern = str(value).strip() if value is not None else ""
+        return [pattern] if pattern else None
+    return _parse_list(value)
+
+
+def _parse_custom_outlier_rule_texts(rule_texts: Optional[List[str]]) -> Optional[List[dict]]:
+    if not rule_texts:
+        return None
+
+    rules = []
+    for index, rule_text in enumerate(rule_texts, start=1):
+        target = None
+        conditions = []
+        for part in re.split(r"\s*&&\s*", rule_text):
+            part = part.strip()
+            if not part:
+                raise ValueError(f"Empty condition in --rule: {rule_text}")
+            match = re.fullmatch(r"(.+?)\s*(>=|<=|==|~=|>|<)\s*(.+)", part)
+            if not match:
+                raise ValueError(
+                    "--rule supports simple conditions like "
+                    "'score >= 0 && score <= 1' or 'name ~= ^[A-Z]+$'"
+                )
+            condition_target, operator, raw_value = (
+                match.group(1).strip(),
+                match.group(2),
+                match.group(3).strip(),
+            )
+            if not condition_target:
+                raise ValueError(f"Missing target in --rule condition: {part}")
+            if target is None:
+                target = condition_target
+            elif condition_target != target:
+                raise ValueError("--rule && shorthand must use the same target in every condition")
+
+            if operator == "~=":
+                conditions.append({"type": "regex", "pattern": raw_value})
+                continue
+
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"Numeric --rule condition requires a finite number: {part}") from exc
+            if not value == value or value in (float("inf"), float("-inf")):
+                raise ValueError(f"Numeric --rule condition requires a finite number: {part}")
+
+            if operator == ">=":
+                conditions.append({"type": "range", "min": value, "min_inclusive": True})
+            elif operator == ">":
+                conditions.append({"type": "range", "min": value, "min_inclusive": False})
+            elif operator == "<=":
+                conditions.append({"type": "range", "max": value, "max_inclusive": True})
+            elif operator == "<":
+                conditions.append({"type": "range", "max": value, "max_inclusive": False})
+            elif operator == "==":
+                conditions.append({"type": "range", "min": value, "max": value})
+
+        assert target is not None
+        criteria = conditions[0] if len(conditions) == 1 else {"op": "and", "conditions": conditions}
+        rule_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", target).strip("-") or f"rule-{index}"
+        rules.append({
+            "id": f"{rule_id}-{index}",
+            "name": rule_text,
+            "target": target,
+            "target_type": "column",
+            "criteria": criteria,
+        })
+    return rules
+
+
 def _dump_result(result: object) -> None:
     sys.stdout.write(json.dumps(result, indent=2))
     sys.stdout.write("\n")
+
+
+def _fail_on_remote_error(result: object, remote_opts) -> None:
+    """Exit 1 when a remote dispatch came back as a raised-on-the-worker error.
+
+    ``remote_headless_runner`` returns a worker exception as data
+    (``{"Error": ..., "ErrorType": ...}``), so the Globus task itself succeeds
+    and nothing raises on this side. Without this, a failed remote run would
+    print the error dict -- or, for the ``data-quality`` summary, an all-N/A
+    report -- and exit 0, while the same failure locally exits 1.
+
+    ``ErrorType`` is what makes a result a failure, not ``Error``. Many metrics
+    return a plain ``{"Error": "No numerical features found in the dataset."}``
+    as an ordinary result for input they cannot score, which the local CLI
+    prints and exits 0 on; the worker passes such a result back untouched.
+    ``ErrorType`` is set only by the runner's ``except`` wrapper, so requiring
+    it separates "the worker raised" from "the metric reported a problem", and
+    remote keeps matching local in both cases.
+
+    Only a *top-level* error counts: a batch result is keyed by metric name, so
+    an error nested under one metric is that metric failing, which the local
+    path also reports in its JSON without failing the run.
+    """
+    if remote_opts is None or not isinstance(result, dict):
+        return
+    if "ErrorType" not in result:
+        return
+    error = result.get("Error", "remote execution failed")
+    # stdout stays for results only.
+    sys.stderr.write(f"Error: {result['ErrorType']}: {error}\n")
+    raise SystemExit(1)
 
 
 def _summarize_data_quality(result: dict) -> None:
@@ -118,6 +223,13 @@ def _summarize_metric(metric_name: str, result: dict) -> None:
             print(f"Outliers ({n} features): {_fmt(overall)}  (max: {_fmt(mx)}, >5%: {high}/{n})")
         else:
             print(f"Outliers: {_fmt(overall)}")
+    elif metric_name == "hipaa_compliance":
+        if not result:
+            print("No PHI detected.")
+        else:
+            for col, findings in result.items():
+                types_str = ", ".join(findings.get("potential_types_detected", []))
+                print(f"{col}: {findings.get('total_flags', 0)} flag(s)  [{types_str}]")
     else:
         # Generic: print top-level keys with scalar values, count dict/list values
         for k, v in result.items():
@@ -163,6 +275,18 @@ def _print_summary_table(result: dict, file_path: str) -> None:
 
 
 def _build_run_kwargs(args: argparse.Namespace) -> dict:
+    rule_texts = getattr(args, "rule_texts", None)
+    parsed_rules = _parse_custom_outlier_rule_texts(rule_texts)
+    rules_json = getattr(args, "rules_json", None)
+    rules_file = getattr(args, "rules_file", None)
+    sources = [
+        ("rules-json", rules_json),
+        ("--rule", parsed_rules),
+        ("--rules-file", rules_file),
+    ]
+    if sum(value is not None and value != "" and value != [] for _, value in sources) > 1:
+        raise ValueError("Use exactly one custom-outlier rule source: rules-json, --rule, or --rules-file")
+    target_match = getattr(args, "target_match", "exact")
     return {
         "columns": _parse_list(getattr(args, "columns", None)),
         "target_column": getattr(args, "target_column", None),
@@ -176,6 +300,24 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "num_columns": _parse_list(getattr(args, "num_columns", None)),
         "y_true_column": getattr(args, "y_true_column", None),
         "sensitive_attribute_column": getattr(args, "sensitive_attribute_column", None),
+        "required_columns": _parse_list(getattr(args, "required_columns", None)),
+        "duplicate_columns": _parse_list(getattr(args, "duplicate_columns", None)),
+        "threshold": getattr(args, "threshold", None),
+        "frequency": getattr(args, "frequency", None),
+        "timestamp_column": getattr(args, "timestamp_column", None),
+        "batch_column": getattr(args, "batch_column", None),
+        "target_columns": _parse_list(getattr(args, "target_columns", None)),
+        "path_targets": _parse_path_targets(getattr(args, "path_targets", None), target_match),
+        "base_dir": getattr(args, "base_dir", None),
+        "max_results": getattr(args, "max_results", 100),
+        "rules": parsed_rules,
+        "rules_json": rules_json,
+        "rules_file": rules_file,
+        "max_outliers": getattr(args, "max_outliers", 100),
+        "max_export_rows": getattr(args, "max_export_rows", 10000),
+        "scan_limit": getattr(args, "scan_limit", None),
+        "target_match": target_match,
+        "stop_after_outliers": getattr(args, "stop_after_outliers", False),
         # Default to no image generation/saving for headless usage
         "save_images": getattr(args, "save_images", False),
         "image_dir": getattr(args, "image_dir", None),
@@ -206,6 +348,12 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
     for arg in required_args:
         if arg == "columns":
             parser.add_argument("columns", help="Comma-separated column list", metavar="columns")
+        elif arg == "path-targets":
+            parser.add_argument(
+                "path_targets",
+                help="Comma-separated exact targets, or one full-match pattern with --target-match regex",
+                metavar="path-targets",
+            )
         elif arg == "target-column":
             parser.add_argument("target_column", help="Target column name", metavar="target-column")
         elif arg == "quasi-identifiers":
@@ -238,8 +386,38 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
             )
         elif arg == "y-true-column":
             parser.add_argument("y_true_column", help="Ground truth column", metavar="y-true-column")
+        elif arg == "rules-json":
+            parser.add_argument(
+                "rules_json",
+                nargs="?",
+                help="JSON array of custom outlier rules. Use 0 for unlimited preview/export caps.",
+                metavar="rules-json",
+            )
         elif arg == "sensitive-attribute-column":
             parser.add_argument("sensitive_attribute_column", help="Sensitive attribute column", metavar="sensitive-attribute-column")
+        elif arg == "required-columns":
+            parser.add_argument("--required-columns", dest="required_columns", default=None,
+                                help="Comma-separated required columns (rows missing any are incomplete)")
+        elif arg == "duplicate-columns":
+            parser.add_argument("--duplicate-columns", dest="duplicate_columns", default=None,
+                                help="Comma-separated columns to compare when detecting duplicate rows")
+        elif arg == "threshold":
+            parser.add_argument("--threshold", dest="threshold", type=float, default=None,
+                                help="Coverage threshold in [0, 1] (default 0.9)")
+        elif arg == "frequency":
+            parser.add_argument("--frequency", dest="frequency", default=None,
+                                choices=["ms", "s", "min", "h", "D", "W", "ME", "QE", "YE"],
+                                help='Interval frequency (default "D"): '
+                                     'ms, s, min, h, D, W, ME, QE, YE')
+        elif arg == "timestamp-column":
+            parser.add_argument("--timestamp-column", dest="timestamp_column", default=None,
+                                help="Datetime column name")
+        elif arg == "batch-column":
+            parser.add_argument("--batch-column", dest="batch_column", default=None,
+                                help="Column that groups rows into batches")
+        elif arg == "target-columns":
+            parser.add_argument("--target-columns", dest="target_columns", default=None,
+                                help="Comma-separated columns to count nulls in (optional)")
 
 
 def _agentic_build_index(args: argparse.Namespace) -> None:
@@ -319,7 +497,267 @@ def _agentic_run(args: argparse.Namespace) -> None:
     print(json.dumps(combined, indent=2, ensure_ascii=False))
 
 
+# ---------------------------------------------------------------------------
+# Remote execution (aidrin remote ...)
+# ---------------------------------------------------------------------------
+
+REMOTE_MANAGEMENT = {
+    "configure", "list", "remove", "check", "login", "logout", "status", "task",
+}
+
+# Commands that cannot run on an endpoint: they need files or credentials that
+# live on the client machine.
+REMOTE_FORBIDDEN = {"add-custom-module", "agentic"}
+
+
+REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
+
+Run an aidrin command on a Globus Compute endpoint. Every command takes exactly
+the same arguments as its local counterpart, because the same parser handles it:
+
+  aidrin remote summarize /scratch/data.csv
+  aidrin remote run completeness /scratch/data.csv
+
+Paths are resolved on the endpoint, not on this machine.
+
+management commands:
+  configure --name NAME --endpoint UUID   probe an endpoint and save it as a profile
+  list                                    show saved profiles as JSON
+  remove NAME                             delete a saved profile
+  check                                   report the endpoint's aidrin and python versions
+  login, status                           confirm Globus authentication
+  logout                                  drop the cached Globus tokens
+  task ID [--wait | --cancel]             inspect, wait on, or cancel a submitted task
+
+flags (before the command):
+  --profile NAME      use a saved profile
+  --endpoint UUID     use this endpoint, ignoring profiles
+  --async             submit and print the task id instead of waiting
+  --timeout SECONDS   how long to wait for a result (default 600)
+
+Per-command help is the local help: aidrin remote summarize --help
+"""
+
+
+def _split_remote_argv(argv: List[str]):
+    """Pull remote-only flags out of argv, leaving the local command untouched."""
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--profile", default=None)
+    pre.add_argument("--endpoint", default=None)
+    pre.add_argument("--timeout", type=float, default=None)
+    pre.add_argument("--async", dest="detach", action="store_true")
+    return pre.parse_known_args(argv)
+
+
+def _remote_management(argv: List[str], opts) -> None:
+    """Handle `aidrin remote <configure|list|remove|check|login|logout|status|task>`."""
+    from aidrin.compute import client as compute_client
+    from aidrin.compute import profiles
+
+    action = argv[0]
+    rest = argv[1:]
+
+    if action == "configure":
+        parser = argparse.ArgumentParser(prog="aidrin remote configure")
+        parser.add_argument("--name", required=True, help="Profile name, e.g. nersc")
+        # `--endpoint` is one of the remote-only flags, so `_split_remote_argv`
+        # has already taken it out of `rest`; it arrives here via `opts`. The
+        # argument stays declared so `--help` still documents it.
+        parser.add_argument("--endpoint", default=opts.endpoint, help="Globus Compute endpoint UUID")
+        parser.add_argument("--default", action="store_true", help="Make this the default profile")
+        parser.add_argument("--local", action="store_true", help="Write ./.aidrin.json instead of ~/.aidrin/config.json")
+        args = parser.parse_args(rest)
+        if not args.endpoint:
+            # Exit 2 like every other usage error in this feature; argparse
+            # would have done the same had it seen the missing flag itself.
+            sys.stderr.write("Error: aidrin remote configure needs --endpoint <uuid>\n")
+            sys.exit(2)
+        sys.stderr.write(f"Probing endpoint {args.endpoint}...\n")
+        env = compute_client.probe(compute_client.get_client(), args.endpoint)
+        path = profiles.save_profile(
+            args.name,
+            args.endpoint,
+            default=args.default,
+            local=args.local,
+            aidrin_version=env.get("aidrin_version"),
+        )
+        sys.stderr.write(
+            f"  aidrin {env.get('aidrin_version')}, python {env.get('python_version')}\n"
+            f"Saved profile '{args.name}' to {path}\n"
+        )
+        return
+
+    if action == "list":
+        _dump_result(profiles.list_profiles())
+        return
+
+    if action == "remove":
+        parser = argparse.ArgumentParser(prog="aidrin remote remove")
+        parser.add_argument("name")
+        parser.add_argument("--local", action="store_true")
+        args = parser.parse_args(rest)
+        if not profiles.remove_profile(args.name, local=args.local):
+            raise ValueError(f"No such profile: {args.name}")
+        sys.stderr.write(f"Removed profile '{args.name}'\n")
+        return
+
+    if action == "check":
+        target = profiles.resolve(endpoint=opts.endpoint, profile=opts.profile)
+        env = compute_client.probe(
+            compute_client.get_client(),
+            target.endpoint,
+            timeout=opts.timeout or compute_client.PROBE_TIMEOUT,
+        )
+        _dump_result({"endpoint": target.endpoint, "profile": target.profile, **env})
+        return
+
+    if action in {"login", "logout", "status"}:
+        conn = compute_client.get_client()
+        if action == "logout":
+            # Not every globus-compute-sdk release exposes Client.logout(), and
+            # an AttributeError traceback would not tell anyone what to do next.
+            logout = getattr(conn, "logout", None)
+            if not callable(logout):
+                raise ValueError(
+                    "This globus-compute-sdk has no Client.logout(). Log out with "
+                    "'globus-compute-endpoint logout', or delete the cached tokens "
+                    "in ~/.globus_compute/."
+                )
+            logout()
+            sys.stderr.write("Logged out of Globus.\n")
+            return
+        # `get_client()` triggers the SDK's own login flow when needed, so
+        # reaching this line means the client is authenticated.
+        sys.stderr.write("Globus login OK (tokens cached by globus-compute-sdk).\n")
+        return
+
+    if action == "task":
+        parser = argparse.ArgumentParser(prog="aidrin remote task")
+        parser.add_argument("task_id")
+        parser.add_argument("--wait", action="store_true", help="Block until the task finishes")
+        parser.add_argument("--cancel", action="store_true", help="Cancel the task")
+        args = parser.parse_args(rest)
+        conn = compute_client.get_client()
+        if args.cancel:
+            cancelled = compute_client.cancel(conn, args.task_id)
+            if cancelled:
+                sys.stderr.write(f"Cancelled {args.task_id}\n")
+                return
+            sys.stderr.write(
+                f"Cancellation is not supported by the installed Globus Compute SDK; "
+                f"task {args.task_id} continues running on the endpoint. Recover the "
+                f"result later with: aidrin remote task {args.task_id} --wait\n"
+            )
+            sys.exit(1)
+        if args.wait:
+            timeout = opts.timeout or compute_client.DEFAULT_TIMEOUT
+            result = compute_client.poll(conn, args.task_id, timeout=timeout)
+            # Recovering a result is still a run: a task that failed on the
+            # worker must fail here too, exactly as the dispatch paths do.
+            _fail_on_remote_error(result, opts)
+            _dump_result(_round_floats(result))
+            return
+        _dump_result(compute_client.check(conn, args.task_id))
+        return
+
+    raise ValueError(f"Unknown remote subcommand: {action}")
+
+
+def _make_remote_executor(opts, on_submit=None):
+    """Resolve the endpoint and build the executor the dispatch will use."""
+    from aidrin import __version__ as local_version
+    from aidrin.compute import client as compute_client
+    from aidrin.compute.executor import RemoteExecutor
+    from aidrin.compute import profiles
+
+    # Check before anything is announced: the client is built lazily, so without
+    # this the "Running on ..." line below would be printed and only then
+    # contradicted by the SDK-missing error.
+    if not compute_client.is_available():
+        raise compute_client.GlobusUnavailable(compute_client.GLOBUS_MISSING_MESSAGE)
+
+    target = profiles.resolve(endpoint=opts.endpoint, profile=opts.profile)
+
+    if target.aidrin_version:
+        local_minor = ".".join(str(local_version).split(".")[:2])
+        remote_minor = ".".join(str(target.aidrin_version).split(".")[:2])
+        if local_minor != remote_minor:
+            sys.stderr.write(
+                f"Warning: endpoint runs aidrin {target.aidrin_version}, "
+                f"this client is {local_version}. Metrics added since the "
+                "endpoint's version will fail there.\n"
+            )
+
+    label = target.profile or target.endpoint
+    sys.stderr.write(f"Running on Globus Compute endpoint {label}\n")
+    return RemoteExecutor(
+        target,
+        timeout=opts.timeout or compute_client.DEFAULT_TIMEOUT,
+        detach=opts.detach,
+        on_submit=on_submit,
+    )
+
+
 def main() -> None:
+    argv = sys.argv[1:]
+    executor = _local_api
+    remote_opts = None
+    remote_task_id = None
+
+    if argv and argv[0] == "remote":
+        remote_opts, argv = _split_remote_argv(argv[1:])
+        if argv and argv[0] in {"-h", "--help"}:
+            # `aidrin remote <command> --help` is deliberately left to the local
+            # parser: identical help is what proves identical arguments.
+            sys.stdout.write(REMOTE_HELP)
+            return
+        if not argv:
+            sys.stderr.write(
+                "Error: 'aidrin remote' needs a subcommand, e.g. "
+                "'aidrin remote configure --name <name> --endpoint <uuid>' or "
+                "'aidrin remote summarize <path>'\n"
+            )
+            sys.exit(2)
+        if argv[0] in REMOTE_FORBIDDEN:
+            sys.stderr.write(
+                f"Error: '{argv[0]}' is local-only. It needs files or credentials "
+                f"on this machine. Run it without the 'remote' prefix.\n"
+            )
+            sys.exit(2)
+        if argv[0] in REMOTE_MANAGEMENT:
+            try:
+                _remote_management(argv, remote_opts)
+            except KeyboardInterrupt:
+                # `_remote_management` blocks on `compute_client.poll` (task
+                # --wait) or `compute_client.probe` (configure/check), none of
+                # which flow through the polished handler below (that one only
+                # covers the run/summarize/etc. dispatch, and knows about
+                # cancellation attempted by RemoteExecutor). Without this,
+                # Ctrl-C here fell through to the bare `except Exception`
+                # below -- which doesn't catch KeyboardInterrupt -- and dumped
+                # a traceback instead of exiting 130 like every other
+                # interrupt in this command.
+                if argv[0] == "task" and "--wait" in argv[1:]:
+                    task_id = next((a for a in argv[1:] if not a.startswith("-")), None)
+                    if task_id:
+                        sys.stderr.write(
+                            f"\nInterrupted while waiting for task {task_id}. It may "
+                            "still be running on the endpoint. Recover the result "
+                            f"later with: aidrin remote task {task_id} --wait\n"
+                        )
+                    else:
+                        sys.stderr.write("\nInterrupted.\n")
+                else:
+                    # configure/check block on a probe task internal to
+                    # client.probe -- no id to report and no cancellation was
+                    # attempted, so claiming either would be dishonest.
+                    sys.stderr.write("\nInterrupted.\n")
+                sys.exit(130)
+            except Exception as exc:
+                sys.stderr.write(f"Error: {exc}\n")
+                sys.exit(1)
+            return
+
     parser = argparse.ArgumentParser(prog="aidrin")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -356,6 +794,32 @@ def main() -> None:
         mparser = run_subparsers.add_parser(metric_cli, help=meta["description"] + extra_help)
         mparser.add_argument("file_path", help="Path to the dataset CSV")
         _add_required_metric_args(mparser, meta.get("required_args", []))
+        if metric_name == "outliers_custom":
+            mparser.add_argument(
+                "--rule",
+                dest="rule_texts",
+                action="append",
+                help=(
+                    "Simple rule shorthand, repeatable. Supports same-target conditions "
+                    "joined by &&, e.g. --rule 'score >= 0 && score <= 1'. "
+                    "Rules describe valid values; use rules-json for OR/NOT/nested rules."
+                ),
+            )
+            mparser.add_argument("--rules-file", help="Path to a JSON array of custom outlier rules")
+            mparser.add_argument("--max-outliers", type=int, default=100, help="Preview cap per rule; 0 means unlimited")
+            mparser.add_argument("--max-export-rows", type=int, default=10000, help="Export row cap per rule; 0 means unlimited")
+            mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum values to scan per rule")
+            mparser.add_argument("--stop-after-outliers", action="store_true", help="Stop scanning after preview cap is reached")
+        if metric_name == "file_reference_validation":
+            mparser.add_argument(
+                "--target-match",
+                choices=("exact", "regex"),
+                default="exact",
+                help="Interpret path-targets as exact names (default) or full-match regular expressions",
+            )
+            mparser.add_argument("--base-dir", default=None, help="Directory used to resolve relative file references")
+            mparser.add_argument("--max-results", type=int, default=100, help="Maximum invalid and metadata detail records; 0 means unlimited")
+            mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum reference values to scan; 0 means unlimited")
         _configure_minimal_run_args(mparser)
         mparser.set_defaults(_metric_key=metric_name, _action="metric")
 
@@ -412,13 +876,41 @@ def main() -> None:
                                     help="Skip rebuilding the vector index; use existing one")
     agentic_run_parser.add_argument("-v", "--verbose", action="store_true", help="Print vector build info to stderr")
 
-    argv = sys.argv[1:]
+    # argv was computed at the top of main() so the `remote` prefix could be
+    # stripped before the local parser ever sees it.
     # Shortcut: allow `aidrin <metric> ...` (dash or underscore) to map to `aidrin run <metric> ...`
     if argv:
         metric_key = argv[0].replace("-", "_")
         if metric_key in METRIC_REGISTRY:
-            argv = ["run", metric_key] + argv[1:]
+            argv = ["run", metric_key.replace("_", "-")] + argv[1:]
     args = parser.parse_args(argv)
+
+    if remote_opts is not None:
+        if args.command == "run" and getattr(args, "metric", None) == "custom":
+            sys.stderr.write(
+                "Error: custom metrics and remedies are local-only. The custom "
+                "module lives on this machine and the endpoint cannot import it.\n"
+            )
+            sys.exit(2)
+
+        def _note_submission(task_id: str) -> None:
+            """Report the task on stderr and remember it for the Ctrl-C path."""
+            nonlocal remote_task_id
+            remote_task_id = task_id
+            sys.stderr.write(f"Submitted task {task_id}; waiting for the result...\n")
+
+        try:
+            executor = _make_remote_executor(remote_opts, on_submit=_note_submission)
+        except Exception as exc:
+            sys.stderr.write(f"Error: {exc}\n")
+            sys.exit(2)
+
+    # Cache sidecar cleanup: unlike the web app (whose uploads live in a
+    # managed, periodically-reaped folder), the CLI reads files from
+    # arbitrary locations on disk, so nothing else will clean up the
+    # ``.aidrin.feather`` cache written by read_file(). Track the dataset
+    # path(s) touched by this invocation and sweep them in `finally` below.
+    cleanup_path = getattr(args, "file_path", None)
 
     try:
         if args.command == "add-custom-module":
@@ -445,12 +937,13 @@ def main() -> None:
                         "Error: provide at least one of categorical-columns or numerical-columns\n"
                     )
                     sys.exit(2)
-                result = run_metric(
+                result = executor.run_metric(
                     metric_key,
                     args.file_path,
                     file_type=getattr(args, "file_type", None),
                     **_build_run_kwargs(args),
                 )
+                _fail_on_remote_error(result, remote_opts)
                 if getattr(args, "detail", True):
                     _dump_result(_round_floats(result))
                 else:
@@ -469,7 +962,7 @@ def main() -> None:
                     )
                     print(f"Remedied data saved to: {output_path}")
                     return
-                result = run_metric(
+                result = executor.run_metric(
                     args.name,
                     args.file_path,
                     file_type=getattr(args, "file_type", None),
@@ -488,12 +981,13 @@ def main() -> None:
                     "Error: provide at least one of categorical-columns or numerical-columns\n"
                 )
                 sys.exit(2)
-            result = run_metric(
+            result = executor.run_metric(
                 args.command,
                 args.file_path,
                 file_type=getattr(args, "file_type", None),
                 **_build_run_kwargs(args),
             )
+            _fail_on_remote_error(result, remote_opts)
             if getattr(args, "detail", True):
                 _dump_result(_round_floats(result))
             else:
@@ -502,20 +996,23 @@ def main() -> None:
 
         if args.command == "batch":
             config = HeadlessConfig.from_file(args.config_path)
-            result = run_batch_metrics(
+            cleanup_path = config.file_path
+            result = executor.run_batch_metrics(
                 config,
                 verbose=args.verbose,
                 strip_visualizations=args.no_viz,
             )
+            _fail_on_remote_error(result, remote_opts)
             _dump_result(_round_floats(result))
             return
 
         if args.command == "summarize":
-            result = summarize_dataset(
+            result = executor.summarize_dataset(
                 args.file_path,
                 file_type=args.file_type,
                 max_features=args.max_features,
             )
+            _fail_on_remote_error(result, remote_opts)
             if args.human_readable:
                 _print_summary_table(result, args.file_path)
             else:
@@ -523,12 +1020,13 @@ def main() -> None:
             return
 
         if args.command == "data-quality":
-            result = run_data_quality(
+            result = executor.run_data_quality(
                 args.file_path,
                 file_type=args.file_type,
                 verbose=args.verbose,
                 strip_visualizations=True,
             )
+            _fail_on_remote_error(result, remote_opts)
             if args.detail:
                 _dump_result(_round_floats(result))
             else:
@@ -541,9 +1039,35 @@ def main() -> None:
             elif args.agentic_command == "run":
                 _agentic_run(args)
             return
+    except AsyncSubmitted as submitted:
+        _dump_result({"task_id": submitted.task_id})
+        return
+    except KeyboardInterrupt:
+        # Only claim a cancellation when there was a task to cancel: a local run,
+        # or an interrupt that lands before submission, cancelled nothing. Even
+        # then, `_call` only *attempted* a cancellation -- report what actually
+        # happened, tracked on the executor by RemoteExecutor._call.
+        if remote_task_id:
+            if getattr(executor, "last_cancel_succeeded", False):
+                sys.stderr.write(f"\nInterrupted; cancelled remote task {remote_task_id}.\n")
+            else:
+                sys.stderr.write(
+                    f"\nInterrupted; task {remote_task_id} could not be cancelled and "
+                    "continues running on the endpoint. Recover the result later with: "
+                    f"aidrin remote task {remote_task_id} --wait\n"
+                )
+        else:
+            sys.stderr.write("\nInterrupted.\n")
+        sys.exit(130)
     except Exception as exc:
         sys.stderr.write(f"Error: {exc}\n")
         sys.exit(1)
+    finally:
+        # Under `remote`, file_path names a file on the endpoint. This client
+        # never read it and must not delete a sidecar next to it, which a shared
+        # filesystem would happily let it do.
+        if cleanup_path and remote_opts is None:
+            clear_frame_cache(cleanup_path)
 
 
 if __name__ == "__main__":

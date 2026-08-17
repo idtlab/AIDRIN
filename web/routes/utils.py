@@ -3,6 +3,7 @@
 import io
 import base64
 import logging
+import os
 import re
 import time
 import uuid
@@ -15,6 +16,38 @@ from flask import current_app, jsonify, redirect, request, session, url_for
 from aidrin.file_handling.file_parser import read_file
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Path confinement
+# ---------------------------------------------------------------------------
+
+def confine_to_upload_folder(file_path):
+    """Return ``file_path`` resolved, iff it lives inside ``UPLOAD_FOLDER``.
+
+    Dataset paths supplied over the web (via the Flask session) flow into
+    ``file_parser``'s ``os.stat``/``os.path.exists``/``tempfile``/``os.replace``
+    calls. This is the path-traversal barrier (CWE-22) for those values: the
+    path is canonicalised with ``os.path.realpath`` and rejected unless it stays
+    within the configured upload directory, so a forged/tampered session cookie
+    cannot steer file operations at arbitrary locations on disk.
+
+    Returns the canonical path on success, or ``""`` for a missing or
+    out-of-bounds path (callers treat an empty path as "no file").
+    """
+    if not file_path:
+        return ""
+    base = os.path.realpath(current_app.config["UPLOAD_FOLDER"])
+    resolved = os.path.realpath(file_path)
+    try:
+        contained = resolved == base or os.path.commonpath([resolved, base]) == base
+    except ValueError:
+        # Different drives / mixed path kinds — not inside the upload folder.
+        contained = False
+    if not contained:
+        logger.warning("Rejected dataset path outside upload folder: %s", file_path)
+        return ""
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +138,31 @@ def infer_column_roles(df, overrides=None):
 # ---------------------------------------------------------------------------
 # File loading
 # ---------------------------------------------------------------------------
+
+def build_file_info(file_path, file_name, file_type, selected_keys=None):
+    """Build a file_info tuple, embedding HDF5 dataset keys when needed.
+
+    Celery workers do not have Flask session context, so multi-dataset HDF5
+    files must carry ``selected_keys`` in the tuple for background tasks.
+
+    The path is confined to the upload folder here so every ``read_file`` fed
+    from a session value passes through the path-traversal barrier.
+    """
+    file_path = confine_to_upload_folder(file_path)
+    if file_type == ".h5":
+        if selected_keys is None:
+            try:
+                selected_keys = session.get("selected_keys") or []
+            except RuntimeError:
+                selected_keys = []
+        if isinstance(selected_keys, str):
+            selected_keys = [key.strip() for key in selected_keys.split(",") if key.strip()]
+        elif not isinstance(selected_keys, list):
+            selected_keys = []
+        if selected_keys:
+            return (file_path, file_name, file_type, list(selected_keys))
+    return (file_path, file_name, file_type)
+
 
 def load_dataframe(file_info):
     """Read a file into a DataFrame, normalizing failures.
@@ -208,6 +266,10 @@ def generate_metric_cache_key(file_name, metric_type, **params):
         dist_metric = params.get("dist_metric", "EU")
         cache_parts.append(f"classimbalance:classes:{classes}:dist_metric:{dist_metric}")
 
+    elif metric_type == "summarystats":
+        selected_keys = params.get("selected_keys", [])
+        cache_parts.append(f"summarystats:keys:{', '.join(sorted(selected_keys))}")
+
     return "|".join(cache_parts)
 
 
@@ -262,6 +324,9 @@ def store_result(metric, final_dict):
         "data": formatted_final_dict,
         "timestamp": time.time(),
     }
+
+    if request.args.get("return_type") == "json":
+        return jsonify(formatted_final_dict)
 
     return redirect(
         url_for(metric, results_id=results_id, return_type=request.args.get("return_type"))
@@ -362,7 +427,7 @@ def summary_histograms(df, columns=None):
         fig.patch.set_alpha(0)
         ax.set_facecolor("none")
 
-        sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=curve_color)
+        sns.kdeplot(df[column], bw_adjust=0.5, cut=0, ax=ax, color=curve_color)
 
         ax.set_xlabel("Values", fontsize=10, color=text_color)
         ax.set_ylabel("Density", fontsize=10, color=text_color)

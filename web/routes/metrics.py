@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 
 from celery.result import AsyncResult
@@ -13,18 +14,33 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.utils import safe_join
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import (
     calc_imbalance_degree,
     class_distribution_plot,
 )
 from aidrin.structured_data_metrics.completeness import completeness
+from aidrin.structured_data_metrics.custom_outliers import calculate_custom_outliers
 from aidrin.structured_data_metrics.conditional_demo_disp import (
     conditional_demographic_disparity,
 )
+from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
+from aidrin.structured_data_metrics.file_reference_validation import calculate_file_reference_validation
+from aidrin.structured_data_metrics.null_count_trend import null_count_trend
+from aidrin.structured_data_metrics.row_level_completeness import row_level_completeness
+from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
+from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
+from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
+from aidrin.structured_data_metrics.kurtosis import kurtosis
+from aidrin.structured_data_metrics.max_pairwise_correlation import (
+    max_pairwise_correlation,
+)
+from aidrin.structured_data_metrics.skewness import skewness
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
     categorize_metadata,
@@ -51,6 +67,8 @@ from aidrin.structured_data_metrics.representation_rate import (
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 from web.routes.utils import (
+    build_file_info,
+    confine_to_upload_folder,
     ensure_json_serializable,
     format_dict_values,
     generate_metric_cache_key,
@@ -62,11 +80,129 @@ from web.routes.utils import (
 metrics_bp = Blueprint("metrics", __name__)
 
 metric_time_log = logging.getLogger("metric")
+METRIC_CELERY_TIMEOUT = 120
+FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT = 10000
+
+
+def _file_reference_allowed_roots():
+    configured = current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS")
+    if configured is None:
+        raw = os.environ.get("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", "")
+        if raw:
+            try:
+                configured = json.loads(raw)
+            except json.JSONDecodeError:
+                metric_time_log.warning("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS must be a JSON array")
+                configured = []
+    if not isinstance(configured, (list, tuple)):
+        if configured is not None:
+            metric_time_log.warning("FILE_REFERENCE_ALLOWED_ROOTS must be a list of absolute directories")
+        return []
+
+    roots = []
+    seen = set()
+    for value in configured:
+        try:
+            path = os.fspath(value)
+            if not os.path.isabs(path):
+                raise ValueError("not absolute")
+            canonical = os.path.realpath(path)
+            if not os.path.isdir(canonical):
+                raise ValueError("not an existing directory")
+        except (TypeError, ValueError, OSError) as exc:
+            metric_time_log.warning("Ignoring invalid file-reference root %r: %s", value, exc)
+            continue
+        key = os.path.normcase(canonical)
+        if key not in seen:
+            seen.add(key)
+            roots.append(canonical)
+    return roots
+
+
+def _file_reference_root_choices(roots):
+    return [
+        {"id": f"root-{index}", "label": root}
+        for index, root in enumerate(roots)
+    ]
+
+
+def _file_reference_web_scan_limit():
+    value = current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT")
+    if value is None:
+        value = os.environ.get(
+            "AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT",
+            FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT,
+        )
+    try:
+        limit = int(value)
+        if limit <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        metric_time_log.warning(
+            "Invalid file-reference web scan limit %r; using %d",
+            value,
+            FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT,
+        )
+        return FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT
+    return limit
+
+
+def _file_reference_base_dir(roots, root_id, subdirectory):
+    choices = {f"root-{index}": root for index, root in enumerate(roots)}
+    if root_id not in choices:
+        raise ValueError("Select an allowed filesystem root.")
+    root = choices[root_id]
+    relative = (subdirectory or "").strip()
+    if os.path.isabs(relative):
+        raise ValueError("Base subdirectory must be relative to the selected root.")
+    candidate = safe_join(root, relative)
+    if candidate is None:
+        raise ValueError("Base subdirectory must stay inside the selected root.")
+    candidate = os.path.realpath(candidate)
+    try:
+        inside_root = (
+            os.path.commonpath([os.path.normcase(candidate), os.path.normcase(root)])
+            == os.path.normcase(root)
+        )
+    except ValueError:
+        inside_root = False
+    if not inside_root:
+        raise ValueError("Base subdirectory must stay inside the selected root.")
+    if not os.path.isdir(candidate):
+        raise ValueError("Base subdirectory must identify an existing directory.")
+    return candidate
 
 
 # ---------------------------------------------------------------------------
 # Data Quality
 # ---------------------------------------------------------------------------
+
+@metrics_bp.route("/custom-outlier-targets", methods=["GET", "POST"])
+def custom_outlier_targets():
+    file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    if not file_path:
+        return jsonify({"success": False, "message": "No file uploaded"}), 200
+    try:
+        targets = iter_targets((file_path, file_name, file_type))
+        roots = _file_reference_allowed_roots()
+        file_reference = {
+            "enabled": bool(roots),
+            "roots": _file_reference_root_choices(roots),
+            "scan_limit": _file_reference_web_scan_limit(),
+        }
+        if not roots:
+            file_reference["message"] = "File-reference validation is not configured by the server administrator."
+        return jsonify({
+            "success": True,
+            "targets": ensure_json_serializable(targets),
+            "file_reference": file_reference,
+        })
+    except Exception as e:
+        metric_time_log.error("Custom outlier target discovery failed: %s", e, exc_info=True)
+        return jsonify({"success": False, "message": "Custom outlier target discovery failed."}), 200
+
 
 @metrics_bp.route("/data-quality", methods=["GET", "POST"])
 def data_quality():
@@ -74,11 +210,18 @@ def data_quality():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
+    file_info = build_file_info(file_path, file_name, file_type)
 
     if request.method == "POST":
         start_time = time.time()
-        selected = [m for m in ("completeness", "outliers", "duplicity") if request.form.get(m) == "yes"]
+        selected = [
+            m for m in (
+                "completeness", "row level completeness", "feature coverage ratio",
+                "temporal completeness", "null count trend",
+                "outliers", "duplicity", "duplicate detection by features",
+                "custom_outliers",
+            ) if request.form.get(m) == "yes"
+        ]
         metric_time_log.info("Data Quality request started: %s", selected)
 
         tracer = get_tracer()
@@ -101,6 +244,86 @@ def data_quality():
                     )
                     final_dict["Completeness"] = compl_dict
                     metric_time_log.info("Completeness took %.2f seconds", time.time() - t0)
+
+                if "row level completeness" in selected:
+                    required_columns = [
+                        c.strip()
+                        for c in request.form.getlist("required columns for row level completeness")
+                        if c.strip()
+                    ]
+                    if not required_columns:
+                        final_dict["Row-Level Completeness"] = {
+                            "Error": "No required columns selected for row-level completeness."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.row_level_completeness"):
+                            final_dict["Row-Level Completeness"] = row_level_completeness(
+                                required_columns, file_info
+                            )
+                        metric_time_log.info(
+                            "Row-Level Completeness took %.2f seconds", time.time() - t0
+                        )
+
+                if "feature coverage ratio" in selected:
+                    threshold_raw = request.form.get("threshold for feature coverage ratio")
+                    threshold = 0.9
+                    if threshold_raw and threshold_raw.strip():
+                        try:
+                            threshold = float(threshold_raw)
+                        except ValueError:
+                            threshold = None
+                    if threshold is None:
+                        final_dict["Feature Coverage Ratio"] = {
+                            "Error": "Invalid threshold value. Threshold must be a number in [0, 1]."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.feature_coverage_ratio"):
+                            final_dict["Feature Coverage Ratio"] = feature_coverage_ratio(
+                                threshold, file_info
+                            )
+                        metric_time_log.info(
+                            "Feature Coverage Ratio took %.2f seconds", time.time() - t0
+                        )
+
+                if "temporal completeness" in selected:
+                    timestamp_column = request.form.get("timestamp column for temporal completeness")
+                    frequency = request.form.get("frequency for temporal completeness") or "D"
+                    if not timestamp_column:
+                        final_dict["Temporal Completeness"] = {
+                            "Error": "No timestamp column selected for temporal completeness."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.temporal_completeness"):
+                            final_dict["Temporal Completeness"] = temporal_completeness(
+                                timestamp_column, frequency, file_info
+                            )
+                        metric_time_log.info(
+                            "Temporal Completeness took %.2f seconds", time.time() - t0
+                        )
+
+                if "null count trend" in selected:
+                    batch_column = request.form.get("batch column for null count trend")
+                    target_columns = [
+                        c.strip()
+                        for c in request.form.getlist("target columns for null count trend")
+                        if c.strip()
+                    ]
+                    if not batch_column:
+                        final_dict["Null Count Trend"] = {
+                            "Error": "No batch column selected for null count trend."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.null_count_trend"):
+                            final_dict["Null Count Trend"] = null_count_trend(
+                                batch_column, target_columns, file_info
+                            )
+                        metric_time_log.info(
+                            "Null Count Trend took %.2f seconds", time.time() - t0
+                        )
 
                 if "outliers" in selected:
                     t0 = time.time()
@@ -125,6 +348,71 @@ def data_quality():
                     final_dict["Duplicity"] = dup_dict
                     metric_time_log.info("Duplicity took %.2f seconds", time.time() - t0)
 
+                if "duplicate detection by features" in selected:
+                    dup_features = [
+                        c.strip()
+                        for c in request.form.getlist("features for duplicate detection")
+                        if c.strip()
+                    ]
+                    if not dup_features:
+                        final_dict["Duplicates by Selected Features"] = {
+                            "Error": "No features selected for duplicate detection."
+                        }
+                    else:
+                        t0 = time.time()
+                        with tracer.start_as_current_span("metric.duplicity_by_features"):
+                            final_dict["Duplicates by Selected Features"] = duplicity_by_features(
+                                dup_features, file_info
+                            )
+                        metric_time_log.info(
+                            "Duplicates by Selected Features took %.2f seconds", time.time() - t0
+                        )
+
+                if "custom_outliers" in selected:
+                    t0 = time.time()
+                    try:
+                        rules = json.loads(request.form.get("custom_outlier_rules", "[]"))
+                    except json.JSONDecodeError as e:
+                        final_dict["Custom Criteria Outliers"] = {"Error": f"Invalid custom outlier rules JSON: {e}"}
+                    else:
+                        max_outliers = request.form.get("max_outliers", 100)
+                        scan_limit = request.form.get("scan_limit") or None
+                        stop_after_outliers = request.form.get("stop_after_outliers") == "yes"
+                        max_export_rows = request.form.get("max_export_rows", 10000)
+                        try:
+                            with tracer.start_as_current_span("metric.custom_outliers"):
+                                # Call the plain function, not the @shared_task
+                                # wrapper: invoking the bound task synchronously
+                                # confuses CodeQL's argument mapping (it aligns
+                                # ``rules`` with the ``file_info`` parameter
+                                # because it can't see Celery's injected
+                                # ``self``), yielding false-positive
+                                # py/path-injection alerts in file_parser.
+                                custom_dict = calculate_custom_outliers(
+                                    file_info,
+                                    rules,
+                                    max_outliers,
+                                    scan_limit,
+                                    stop_after_outliers,
+                                    max_export_rows,
+                                )
+                        except Exception as e:
+                            metric_time_log.error("Custom Criteria Outliers error: %s", e, exc_info=True)
+                            final_dict["Custom Criteria Outliers"] = {
+                                "Error": f"{type(e).__name__}: {e}",
+                                "Description": (
+                                    "Custom criteria outliers are values that violate user-defined range "
+                                    "or regex rules on selected columns or native HDF5 datasets."
+                                ),
+                            }
+                        else:
+                            custom_dict["Description"] = (
+                                "Custom criteria outliers are values that violate user-defined range "
+                                "or regex rules on selected columns or native HDF5 datasets."
+                            )
+                            final_dict["Custom Criteria Outliers"] = custom_dict
+                    metric_time_log.info("Custom Criteria Outliers took %.2f seconds", time.time() - t0)
+
             except Exception as e:
                 metric_time_log.error("Data Quality error: %s", e, exc_info=True)
                 return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
@@ -138,6 +426,123 @@ def data_quality():
 
 
 # ---------------------------------------------------------------------------
+# Data Structure
+# ---------------------------------------------------------------------------
+
+@metrics_bp.route("/data-structure", methods=["GET", "POST"])
+def data_structure():
+    final_dict = {}
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = build_file_info(file_path, file_name, file_type)
+
+    if request.method == "POST":
+        start_time = time.time()
+        selected = [
+            m for m in (
+                "constant feature count", "max pairwise correlation", "skewness", "kurtosis",
+                "file_reference_validation",
+            ) if request.form.get(m) == "yes"
+        ]
+        metric_time_log.info("Data Structure request started: %s", selected)
+
+        tracer = get_tracer()
+        with tracer.start_as_current_span("metric.data_structure") as span:
+            span.set_attribute("metric.pillar", "data_structure")
+            span.set_attribute("metric.selected", ",".join(selected))
+            span.set_attribute("file.name", file_name or "")
+            span.set_attribute("file.type", file_type or "")
+
+            try:
+                if "constant feature count" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.constant_feature_count"):
+                        cfc_dict = constant_feature_count(file_info)
+                    cfc_dict["Description"] = (
+                        "Columns with a single distinct value carry no information "
+                        "for modeling and are candidates for removal."
+                    )
+                    final_dict["Constant Feature Count"] = cfc_dict
+                    metric_time_log.info(
+                        "Constant Feature Count took %.2f seconds", time.time() - t0
+                    )
+
+                if "max pairwise correlation" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.max_pairwise_correlation"):
+                        final_dict["Max Pairwise Correlation"] = max_pairwise_correlation(
+                            file_info
+                        )
+                    metric_time_log.info(
+                        "Max Pairwise Correlation took %.2f seconds", time.time() - t0
+                    )
+
+                if "skewness" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.skewness"):
+                        final_dict["Skewness"] = skewness(file_info)
+                    metric_time_log.info("Skewness took %.2f seconds", time.time() - t0)
+
+                if "kurtosis" in selected:
+                    t0 = time.time()
+                    with tracer.start_as_current_span("metric.kurtosis"):
+                        final_dict["Kurtosis"] = kurtosis(file_info)
+                    metric_time_log.info("Kurtosis took %.2f seconds", time.time() - t0)
+
+                if "file_reference_validation" in selected:
+                    t0 = time.time()
+                    try:
+                        path_targets = []
+                        target_match = request.form.get("file_reference_target_match", "exact")
+                        for value in request.form.getlist("file_reference_targets"):
+                            if value.strip():
+                                path_targets.append(value.strip())
+                        roots = _file_reference_allowed_roots()
+                        if not roots:
+                            raise ValueError("File-reference validation is not configured by the server administrator.")
+                        base_dir = _file_reference_base_dir(
+                            roots,
+                            request.form.get("file_reference_root_id"),
+                            request.form.get("file_reference_base_subdirectory"),
+                        )
+                        max_results = request.form.get("file_reference_max_results", 100)
+                        with tracer.start_as_current_span("metric.file_reference_validation"):
+                            reference_dict = calculate_file_reference_validation(
+                                file_info,
+                                path_targets,
+                                base_dir=base_dir,
+                                max_results=max_results,
+                                scan_limit=_file_reference_web_scan_limit(),
+                                allowed_roots=roots,
+                                target_match=target_match,
+                            )
+                    except Exception as e:
+                        metric_time_log.error("File Reference Validation error: %s", e, exc_info=True)
+                        final_dict["File Reference Validation"] = {
+                            "Error": f"{type(e).__name__}: {e}",
+                            "Description": (
+                                "Validates selected dataset values as references to regular files "
+                                "available on the AIDRIN web server."
+                            ),
+                        }
+                    else:
+                        final_dict["File Reference Validation"] = reference_dict
+                    metric_time_log.info("File Reference Validation took %.2f seconds", time.time() - t0)
+
+            except Exception as e:
+                metric_time_log.error("Data Structure error: %s", e, exc_info=True)
+                return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
+
+            duration_ms = (time.time() - start_time) * 1000
+            span.set_attribute("metric.duration_ms", duration_ms)
+            metric_time_log.info("Data Structure completed in %.2f seconds", time.time() - start_time)
+            return store_result("metrics.data_structure", final_dict)
+
+    return get_result_or_default("metrics.data_structure", file_path, file_name)
+
+
+# ---------------------------------------------------------------------------
 # Fairness
 # ---------------------------------------------------------------------------
 
@@ -147,7 +552,7 @@ def fairness():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
+    file_info = build_file_info(file_path, file_name, file_type)
     file = read_file(file_info)
 
     if request.method == "POST":
@@ -213,31 +618,39 @@ def fairness():
             target = request.form.get("target for conditional demographic disparity")
             sensitive = request.form.get("sensitive for conditional demographic disparity")
             accepted_value = request.form.get("target value for conditional demographic disparity")
-            try:
-                cdd_result = conditional_demographic_disparity.delay(
-                    file[target].to_list(), file[sensitive].to_list(), accepted_value
-                )
-                cdd_dict = cdd_result.get(timeout=60)
-            except Exception as e:
-                metric_time_log.error("Error during Conditional Demographic Disparity analysis: %s", e)
-                final_dict["Conditional Demographic Disparity"] = {"Error": str(e)}
-                cdd_dict = None
-            if cdd_dict is not None:
-                cdd_dict["Description"] = (
-                    "The conditional demographic disparity metric evaluates the distribution "
-                    "of outcomes categorized as positive and negative across various sensitive groups. "
-                    "The user specifies which outcome category is considered \"positive\" for the analysis, "
-                    "with all other outcome categories classified as \"negative\". The metric calculates the "
-                    "proportion of outcomes classified as \"positive\" and \"negative\" within each sensitive group."
-                    " A resulting disparity value of True indicates that within a specific sensitive group, "
-                    "the proportion of outcomes classified as \"negative\" exceeds the proportion classified as"
-                    " \"positive\". This metric provides insights into potential disparities in outcome distribution "
-                    "across sensitive groups based on the user-defined positive outcome criterion."
-                )
-                final_dict["Conditional Demographic Disparity"] = cdd_dict
-                metric_time_log.info(
-                    "Conditional Demographic Disparity took %.2f seconds", time.time() - t0
-                )
+            if not accepted_value or not str(accepted_value).strip():
+                final_dict["Conditional Demographic Disparity"] = {
+                    "Error": (
+                        "Please enter a target value for Conditional Demographic "
+                        "Disparity (a value that exists in the target column)."
+                    )
+                }
+            else:
+                try:
+                    cdd_result = conditional_demographic_disparity.delay(
+                        file[target].to_list(), file[sensitive].to_list(), accepted_value
+                    )
+                    cdd_dict = cdd_result.get(timeout=60)
+                except Exception as e:
+                    metric_time_log.error("Error during Conditional Demographic Disparity analysis: %s", e)
+                    final_dict["Conditional Demographic Disparity"] = {"Error": str(e)}
+                    cdd_dict = None
+                if cdd_dict is not None:
+                    cdd_dict["Description"] = (
+                        "The conditional demographic disparity metric evaluates the distribution "
+                        "of outcomes categorized as positive and negative across various sensitive groups. "
+                        "The user specifies which outcome category is considered \"positive\" for the analysis, "
+                        "with all other outcome categories classified as \"negative\". The metric calculates the "
+                        "proportion of outcomes classified as \"positive\" and \"negative\" within each sensitive group."
+                        " A resulting disparity value of True indicates that within a specific sensitive group, "
+                        "the proportion of outcomes classified as \"negative\" exceeds the proportion classified as"
+                        " \"positive\". This metric provides insights into potential disparities in outcome distribution "
+                        "across sensitive groups based on the user-defined positive outcome criterion."
+                    )
+                    final_dict["Conditional Demographic Disparity"] = cdd_dict
+                    metric_time_log.info(
+                        "Conditional Demographic Disparity took %.2f seconds", time.time() - t0
+                    )
 
         duration = time.time() - start_time
         metric_time_log.info("Fairness completed in %.2f seconds", duration)
@@ -276,11 +689,11 @@ def correlation_analysis():
                     if col.strip()
                 ]
                 columns = cat_cols + num_cols
-                file_info = (file_path, file_name, file_type)
+                file_info = build_file_info(file_path, file_name, file_type)
                 metric_time_log.info("Correlation Analysis: %d categorical, %d numerical columns", len(cat_cols), len(num_cols))
 
                 correlations_result = calc_correlations.delay(columns, file_info)
-                corr_dict = correlations_result.get()
+                corr_dict = correlations_result.get(timeout=METRIC_CELERY_TIMEOUT)
                 if "Message" in corr_dict:
                     metric_time_log.warning("Correlation analysis failed: %s", corr_dict["Message"])
                     final_dict["Error"] = corr_dict["Message"]
@@ -348,10 +761,10 @@ def feature_relevance():
                         "error": "The target feature cannot also be selected as an input feature. "
                                  "Please deselect it from the categorical/numerical features list.",
                     }), 200
-                file_info = (file_path, file_name, file_type)
+                file_info = build_file_info(file_path, file_name, file_type)
                 t0 = time.time()
                 data_cleaning_result = data_cleaning.delay(cat_cols, num_cols, target, file_info)
-                df_json = data_cleaning_result.get()
+                df_json = data_cleaning_result.get(timeout=METRIC_CELERY_TIMEOUT)
                 metric_time_log.info("Feature Relevance — data cleaning took %.2f seconds", time.time() - t0)
 
                 if isinstance(df_json, dict) and "Error" in df_json:
@@ -365,7 +778,7 @@ def feature_relevance():
             try:
                 t0 = time.time()
                 pearson_corr_result = pearson_correlation.delay(df_json, target)
-                correlations = pearson_corr_result.get()
+                correlations = pearson_corr_result.get(timeout=METRIC_CELERY_TIMEOUT)
                 metric_time_log.info("Feature Relevance — Pearson correlation took %.2f seconds", time.time() - t0)
 
                 if isinstance(correlations, dict) and "Error" in correlations:
@@ -381,7 +794,7 @@ def feature_relevance():
             try:
                 t0 = time.time()
                 plot_features_result = plot_features.delay(correlations, target)
-                f_plot = plot_features_result.get()
+                f_plot = plot_features_result.get(timeout=METRIC_CELERY_TIMEOUT)
                 metric_time_log.info("Feature Relevance — plot generation took %.2f seconds", time.time() - t0)
                 if f_plot is None:
                     return jsonify({"trigger": "correlationError", "error": "Visualization generation failed"}), 200
@@ -425,7 +838,7 @@ def class_imbalance():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
+    file_info = build_file_info(file_path, file_name, file_type)
     file = read_file(file_info)
 
     if request.method == "POST":
@@ -510,7 +923,7 @@ def privacy_preservation():
     file_path = session.get("uploaded_file_path")
     file_name = session.get("uploaded_file_name")
     file_type = session.get("uploaded_file_type")
-    file_info = (file_path, file_name, file_type)
+    file_info = build_file_info(file_path, file_name, file_type)
     file = read_file(file_info)
 
     if request.method == "POST":
@@ -716,7 +1129,7 @@ def hipaa_compliance():
     data_file_path = session.get("uploaded_file_path")
     data_file_name = session.get("uploaded_file_name")
     data_file_type = session.get("uploaded_file_type")
-    file_info = (data_file_path, data_file_name, data_file_type)
+    file_info = build_file_info(data_file_path, data_file_name, data_file_type)
 
     if request.method == "POST":
         metric_time_log.info("HIPAA Compliance Evaluation Request Started")

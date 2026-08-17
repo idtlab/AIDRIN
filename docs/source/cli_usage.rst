@@ -87,6 +87,25 @@ prints a compact summary.
    # Output full per-feature JSON instead of summary
    aidrin data-quality /path/to/sample_dataset.csv --detail
 
+   # Override the format inferred from the file extension
+   aidrin data-quality /path/to/data --file-type .parquet
+
+``aidrin summarize``
+~~~~~~~~~~~~~~~~~~~~
+
+Describes the numerical and categorical features of a dataset: dtypes, ranges,
+and cardinality. Useful for deciding which columns to feed to other metrics.
+
+.. code-block:: bash
+
+   aidrin summarize /path/to/sample_dataset.csv
+
+   # Human-readable table instead of JSON
+   aidrin summarize /path/to/sample_dataset.csv --summary
+
+   # Cap how many features are described
+   aidrin summarize /path/to/sample_dataset.csv --max-features 20
+
 ``aidrin run``
 ~~~~~~~~~~~~~~
 
@@ -109,6 +128,41 @@ Examples:
    aidrin run duplicity /path/to/sample_dataset.csv
    aidrin run outliers /path/to/sample_dataset.csv
 
+   # Validate paths stored in manifest columns against files on this machine
+   aidrin run file-reference-validation /path/to/manifest.csv "path,image_path" \
+     --base-dir /data/project --max-results 100
+
+   # Match complete target names with a regular expression
+   aidrin run file-reference-validation /path/to/manifest.csv '.*_path' \
+     --target-match regex --base-dir /data/project
+
+   # Data structure (no arguments needed)
+   aidrin run constant-feature-count /path/to/sample_dataset.csv
+   aidrin run max-pairwise-correlation /path/to/sample_dataset.csv
+   aidrin run skewness /path/to/sample_dataset.csv
+   aidrin run kurtosis /path/to/sample_dataset.csv
+
+   # Data quality (completeness family — arguments are passed as named --flags)
+   aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
+   aidrin run duplicity-by-features /path/to/sample_dataset.csv --duplicate-columns "income,credit_score"
+   aidrin run feature-coverage-ratio /path/to/sample_dataset.csv --threshold 0.9
+   aidrin run null-count-trend /path/to/sample_dataset.csv --batch-column zipcode
+   # temporal-completeness needs a datetime column; --frequency is one of: ms, s, min, h, D, W, ME, QE, YE (default D)
+   aidrin run temporal-completeness /path/to/timeseries.csv --timestamp-column timestamp --frequency D
+
+   # Custom criteria outliers with simple valid-value rule shorthand
+   aidrin run outliers-custom /path/to/sample_dataset.csv \
+     --rule "score >= 0 && score <= 1"
+
+   # Custom criteria outliers with inline valid-value rules JSON for compound rules
+   aidrin run outliers-custom /path/to/sample_dataset.csv \
+     '[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]' \
+     --max-outliers 100
+
+   # Custom criteria outliers with a reusable JSON rules file
+   aidrin run outliers-custom /path/to/sample_dataset.csv \
+     --rules-file examples/custom_outlier_rules.json
+
    # Impact on AI
    aidrin run correlations /path/to/sample_dataset.csv "age,income,credit_score"
    aidrin run feature-relevance /path/to/sample_dataset.csv "gender,education" "age,income,credit_score" approved
@@ -123,6 +177,37 @@ Examples:
    aidrin run l-diversity /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run t-closeness /path/to/sample_dataset.csv "age,zipcode" diagnosis
    aidrin run entropy-risk /path/to/sample_dataset.csv "age,zipcode,gender"
+   aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
+   aidrin run differential-privacy /path/to/sample_dataset.csv "age,income" 1.0
+
+For custom criteria outliers, ``--rule``, ``rules-json``, and ``--rules-file``
+describe expected valid values. Values that do not satisfy those conditions are
+flagged as outliers. A rules file is a UTF-8 JSON array using the same rule
+objects accepted inline; see ``examples/custom_outlier_rules.json``. Supply
+exactly one rule source. Repeat ``--rule`` to add multiple simple column rules.
+The shorthand supports same-target conditions joined by ``&&``. Use inline JSON
+or a rules file for ``OR``, ``NOT``, nested criteria, HDF5 targets, or regex
+target matching. Set ``"target_match": "regex"`` to apply one rule to every
+target whose complete name matches ``target``; each resolved target has its own
+summary and preview rows. Use
+``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
+or export rows.
+
+File-reference validation accepts a comma-separated target list for exact matching.
+With ``--target-match regex``, the target argument is one complete regular-expression
+pattern, so commas inside quantifiers such as ``{1,3}`` are preserved. Use a list in
+the Python API or batch configuration when multiple regex patterns are needed.
+Relative references are resolved from ``--base-dir``, or from the manifest's
+directory when that option is omitted. A valid reference must resolve to a regular
+file on the machine running AIDRIN. The result includes complete/partial scan counts,
+occurrence-level invalid reasons, and one metadata record per resolved file with
+size, owner when available, creation time when supported by the operating system,
+and modification time. ``--scan-limit`` is unlimited when omitted or set to ``0``;
+``--max-results 0`` returns unlimited detail records.
+
+The CLI, batch runner, and headless Python API intentionally do not apply the
+web server's configured root allowlist. They run with the invoking account's
+filesystem permissions and can inspect any path that account can access.
 
 Options available on all ``run`` subcommands:
 
@@ -144,6 +229,7 @@ Runs a set of metrics defined in a JSON or YAML config file. Useful for reproduc
 
    aidrin batch /path/to/my_project/batch_config.yaml
    aidrin batch /path/to/my_project/batch_config.yaml -v          # verbose
+   aidrin batch /path/to/my_project/batch_config.yaml --viz       # keep visualization data
 
 Results are printed as JSON to stdout. Redirect to a file to save:
 
@@ -165,6 +251,21 @@ Results are printed as JSON to stdout. Redirect to a file to save:
      - class-imbalance
 
    target-column: approved
+
+For a file manifest, batch configuration accepts dashed or underscored forms and
+list or comma-separated targets:
+
+.. code-block:: yaml
+
+   file-path: /path/to/manifest.csv
+   metrics:
+     - file-reference-validation
+   path-targets:
+     - .*_path
+   target-match: regex
+   base-dir: /data/project
+   max-results: 100
+   scan-limit: 0
 
 **Example** — fairness analysis on the sample dataset:
 
@@ -189,6 +290,8 @@ Results are printed as JSON to stdout. Redirect to a file to save:
 .. code-block:: bash
 
    aidrin batch /path/to/my_project/fairness_config.yaml > fairness_results.json
+
+.. _cli_add_custom_module:
 
 ``aidrin add-custom-module``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -216,66 +319,21 @@ The remedy output CSV is saved to a ``remedy_data/`` folder next to the module f
 Available Metrics
 -----------------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 25 25 50
+``aidrin list`` prints the current catalogue, grouped by category, with the
+required arguments for each metric:
 
-   * - Category
-     - Metric
-     - Required Args
-   * - Data Quality
-     - ``completeness``
-     - —
-   * - Data Quality
-     - ``duplicity``
-     - —
-   * - Data Quality
-     - ``outliers``
-     - —
-   * - Impact on AI
-     - ``correlations``
-     - ``columns``
-   * - Impact on AI
-     - ``feature-relevance``
-     - ``categorical-columns``, ``numerical-columns``, ``target-column``
-   * - Fairness & Bias
-     - ``class-imbalance``
-     - ``target-column``
-   * - Fairness & Bias
-     - ``statistical-rates``
-     - ``target-column``, ``sensitive-attribute-column``
-   * - Fairness & Bias
-     - ``representation-rate``
-     - ``columns``
-   * - Data Governance
-     - ``k-anonymity``
-     - ``quasi-identifiers``
-   * - Data Governance
-     - ``l-diversity``
-     - ``quasi-identifiers``, ``sensitive-column``
-   * - Data Governance
-     - ``t-closeness``
-     - ``quasi-identifiers``, ``sensitive-column``
-   * - Data Governance
-     - ``entropy-risk``
-     - ``quasi-identifiers``
-   * - Data Governance
-     - ``single-attribute-risk``
-     - ``id-column``, ``eval-columns``
-   * - Data Governance
-     - ``multiple-attribute-risk``
-     - ``id-column``, ``eval-columns``
-   * - Custom
-     - ``custom``
-     - ``<name-or-path>``, varies — see ``aidrin run custom -h``
+.. code-block:: bash
 
-Metric and category names accept either dashes or underscores interchangeably
-(e.g. ``class-imbalance`` and ``class_imbalance`` are equivalent).
+   aidrin list
+   aidrin list --category data-governance
+
+For the equivalent web interface and Python library names, see
+:ref:`metric_names`. For what each metric measures, see :ref:`web_usage`.
 
 ----
 
-Using AIDRIN as a Python Library
----------------------------------
+Headless Python API
+-------------------
 
 All CLI metrics are also available as a Python API for use in notebooks or scripts:
 
@@ -287,6 +345,24 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
    # Single metric
    result = run_metric("completeness", "/path/to/sample_dataset.csv")
 
+   # Custom criteria outliers
+   result = run_metric(
+       "outliers-custom",
+       "/path/to/sample_dataset.csv",
+       rules_json='[{"id":"valid-age","target":"age","target_type":"column","criteria":{"type":"range","min":0,"max":120}}]',
+       max_outliers=100,
+   )
+
+   # File references stored in selected columns
+   result = run_metric(
+       "file-reference-validation",
+       "/path/to/manifest.csv",
+       path_targets=["path", "image_path"],
+       target_match="exact",
+       base_dir="/data/project",
+       max_results=100,
+   )
+
    # Fast data quality bundle
    result = run_data_quality("/path/to/sample_dataset.csv")
 
@@ -294,7 +370,11 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
    config = HeadlessConfig.from_file("/path/to/my_project/batch_config.yaml")
    result = run_batch_metrics(config)
 
-For the web interface's lower-level functional API, see the :ref:`web_usage` page.
+The custom outlier rules in CLI and Python calls define valid values; values
+that fail the rule are reported in the outlier preview/export rows.
+
+For the per-metric functional API (``from aidrin import calculate_completeness``),
+see :ref:`python_api`.
 
 ----
 
@@ -405,8 +485,13 @@ file in the ``data/`` subdirectory:
 Step 2: Add domain literature
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Download papers that cite the dataset (published 2016–2026) in the link above, and place their PDFs in
-``examples/agentic/power_consumption/sources/``.
+Download papers that cite the dataset (published 2016–2026) in the link above. Create a
+``sources/`` directory inside the example project and place the PDFs there. It is not
+included in the repository:
+
+.. code-block:: bash
+
+   mkdir -p examples/agentic/power_consumption/sources
 
 Your example project directory should then look like this:
 

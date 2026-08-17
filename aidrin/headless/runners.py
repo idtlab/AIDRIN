@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -7,13 +8,26 @@ from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import calc_imbalance_degree
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
+from aidrin.structured_data_metrics.custom_outliers import custom_outliers
 from aidrin.structured_data_metrics.duplicity import duplicity
+from aidrin.structured_data_metrics.kurtosis import kurtosis
+from aidrin.structured_data_metrics.max_pairwise_correlation import (
+    max_pairwise_correlation,
+)
+from aidrin.structured_data_metrics.skewness import skewness
+from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
+from aidrin.structured_data_metrics.file_reference_validation import file_reference_validation
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
     pearson_correlation,
     plot_features,
 )
+from aidrin.structured_data_metrics.null_count_trend import null_count_trend
 from aidrin.structured_data_metrics.outliers import outliers
+from aidrin.structured_data_metrics.row_level_completeness import row_level_completeness
+from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
+from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
+from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
 from aidrin.structured_data_metrics.privacy_measure import (
     compute_entropy_risk,
     compute_k_anonymity,
@@ -26,6 +40,7 @@ from aidrin.structured_data_metrics.representation_rate import (
     calculate_representation_rate,
     create_representation_rate_vis,
 )
+from aidrin.structured_data_metrics.hipaa_compliance import detect_hipaa_identifiers
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 
 # Signal metrics to skip chart generation in headless mode
@@ -65,10 +80,15 @@ def _call_task(task: Any, *args: Any) -> Any:
     unwrapped = getattr(task, "__wrapped__", None)
     if unwrapped is None:
         return task(*args)
+    # __wrapped__ is a bound method (self is already bound by Celery's Task
+    # descriptor), so the plain call is correct. Tasks with a trailing
+    # default arg (e.g. ``top_n=20``) would otherwise silently accept the
+    # extra NullTask() as a real positional argument instead of raising
+    # TypeError, corrupting the argument binding without any error.
     try:
-        return unwrapped(NullTask(), *args)
-    except TypeError:
         return unwrapped(*args)
+    except TypeError:
+        return unwrapped(NullTask(), *args)
 
 
 def run_completeness(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
@@ -81,9 +101,128 @@ def run_duplicity(file_path: str, file_type: Optional[str], file_name: Optional[
     return _call_task(duplicity, file_info)
 
 
+def run_constant_feature_count(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(constant_feature_count, file_info)
+
+
+def run_max_pairwise_correlation(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(max_pairwise_correlation, file_info)
+
+
+def run_skewness(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(skewness, file_info)
+
+
+def run_kurtosis(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(kurtosis, file_info)
+
+
 def run_outliers(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(outliers, file_info)
+
+
+def run_row_level_completeness(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    required_columns: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(row_level_completeness, required_columns, file_info)
+
+
+def run_duplicity_by_features(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    features: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(duplicity_by_features, features, file_info)
+
+
+def run_feature_coverage_ratio(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    threshold: float,
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(feature_coverage_ratio, threshold, file_info)
+
+
+def run_temporal_completeness(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    timestamp_column: str,
+    frequency: str,
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(temporal_completeness, timestamp_column, frequency, file_info)
+
+
+def run_null_count_trend(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    batch_column: str,
+    target_columns: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(null_count_trend, batch_column, target_columns, file_info)
+
+
+def run_file_reference_validation(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    path_targets: List[str],
+    base_dir: Optional[str] = None,
+    max_results: int = 100,
+    scan_limit: Optional[int] = None,
+    target_match: str = "exact",
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(
+        file_reference_validation,
+        path_targets,
+        file_info,
+        base_dir,
+        max_results,
+        scan_limit,
+        None,
+        target_match,
+    )
+
+
+def run_outliers_custom(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    rules: Any,
+    max_outliers: int = 100,
+    scan_limit: Optional[int] = None,
+    stop_after_outliers: bool = False,
+    max_export_rows: int = 10000,
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    if isinstance(rules, str):
+        rules = json.loads(rules)
+    return _call_task(
+        custom_outliers,
+        file_info,
+        rules,
+        max_outliers,
+        scan_limit,
+        stop_after_outliers,
+        max_export_rows,
+    )
 
 
 def run_correlations(
@@ -279,6 +418,17 @@ def run_multiple_attribute_risk(
     return generate_multiple_attribute_MM_risk_scores(data, id_column, eval_columns, NullTask())
 
 
+def run_hipaa_compliance(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    columns: List[str],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    df = read_file(file_info)
+    return detect_hipaa_identifiers(df, columns)
+
+
 def _dp_error_payload(error_message: str) -> Dict[str, Any]:
     if "Epsilon must be greater than 0" in error_message:
         return {
@@ -301,6 +451,17 @@ def _dp_error_payload(error_message: str) -> Dict[str, Any]:
             "Mean of feature (after noise)": "N/A",
             "Variance of feature (after noise)": "N/A",
             "Noisy file saved": "Failed - No data to process",
+        }
+    if "No columns selected" in error_message:
+        return {
+            "Error": "No numerical features selected for differential privacy.",
+            "DP Statistics Visualization": "",
+            "Graph interpretation": "No visualization available due to invalid parameters.",
+            "Mean of feature (before noise)": "N/A",
+            "Variance of feature (before noise)": "N/A",
+            "Mean of feature (after noise)": "N/A",
+            "Variance of feature (after noise)": "N/A",
+            "Noisy file saved": "Failed - Invalid parameters",
         }
     return {
         "Error": f"Processing error: {error_message}",

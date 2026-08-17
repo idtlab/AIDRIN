@@ -1,10 +1,12 @@
 import base64
+import json
 import math
 import os
 import re
 import sys
 import time
 import importlib.util
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from typing import Any, Dict, List, Optional
@@ -13,19 +15,31 @@ from .config import HeadlessConfig
 from .runners import (
     run_class_imbalance,
     run_completeness,
+    run_constant_feature_count,
     run_correlations,
     run_differential_privacy,
     run_duplicity,
+    run_duplicity_by_features,
+    run_kurtosis,
+    run_max_pairwise_correlation,
+    run_skewness,
     run_entropy_risk,
+    run_feature_coverage_ratio,
+    run_file_reference_validation,
     run_feature_relevance,
+    run_hipaa_compliance,
     run_k_anonymity,
     run_l_diversity,
     run_multiple_attribute_risk,
+    run_null_count_trend,
     run_outliers,
+    run_outliers_custom,
     run_representation_rate,
+    run_row_level_completeness,
     run_single_attribute_risk,
     run_statistical_rates,
     run_t_closeness,
+    run_temporal_completeness,
 )
 
 
@@ -47,6 +61,72 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Outlier proportions for numerical columns.",
         "runner": run_outliers,
         "required_args": [],
+    },
+    "constant_feature_count": {
+        "category": "data-structure",
+        "description": "Count and list of columns with a single distinct non-null value.",
+        "runner": run_constant_feature_count,
+        "required_args": [],
+    },
+    "max_pairwise_correlation": {
+        "category": "data-structure",
+        "description": "Strongest absolute pairwise correlation between features.",
+        "runner": run_max_pairwise_correlation,
+        "required_args": [],
+    },
+    "skewness": {
+        "category": "data-structure",
+        "description": "Per-feature skewness (distribution asymmetry).",
+        "runner": run_skewness,
+        "required_args": [],
+    },
+    "kurtosis": {
+        "category": "data-structure",
+        "description": "Per-feature excess kurtosis (tail heaviness).",
+        "runner": run_kurtosis,
+        "required_args": [],
+    },
+    "row_level_completeness": {
+        "category": "data-quality",
+        "description": "Percentage of rows where every required column is non-null.",
+        "runner": run_row_level_completeness,
+        "required_args": ["required-columns"],
+    },
+    "duplicity_by_features": {
+        "category": "data-quality",
+        "description": "Duplicate rows computed using only the selected feature columns.",
+        "runner": run_duplicity_by_features,
+        "required_args": ["duplicate-columns"],
+    },
+    "feature_coverage_ratio": {
+        "category": "data-quality",
+        "description": "Percentage of features whose non-null rate meets a threshold.",
+        "runner": run_feature_coverage_ratio,
+        "required_args": ["threshold"],
+    },
+    "temporal_completeness": {
+        "category": "data-quality",
+        "description": "Percentage of expected time intervals present in the data.",
+        "runner": run_temporal_completeness,
+        "required_args": ["timestamp-column", "frequency"],
+    },
+    "null_count_trend": {
+        "category": "data-quality",
+        "description": "Null counts grouped by a batch column, to spot quality regressions.",
+        "runner": run_null_count_trend,
+        "required_args": ["batch-column", "target-columns"],
+    },
+    "outliers_custom": {
+        "category": "data-quality",
+        "description": "Flags values that fail user-provided valid-value range, regex, and compound rules.",
+        "runner": run_outliers_custom,
+        "required_args": ["rules-json"],
+    },
+    "file_reference_validation": {
+        "category": "data-quality",
+        "description": "Validates selected dataset values as references to files on this host.",
+        "runner": run_file_reference_validation,
+        "required_args": ["path-targets"],
     },
     "correlations": {
         "category": "impact-of-data-on-AI",
@@ -120,7 +200,55 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "runner": run_differential_privacy,
         "required_args": ["columns", "epsilon"],
     },
+    "hipaa_compliance": {
+        "category": "data-governance",
+        "description": "Scan columns for HIPAA-regulated PHI (SSN, email, phone, IP, URLs, medical IDs, postal codes).",
+        "runner": run_hipaa_compliance,
+        "required_args": ["columns"],
+    },
 }
+
+
+def _has_custom_outlier_rule_source(value: Any) -> bool:
+    """Return whether a custom-outlier rule source was meaningfully supplied."""
+    return value is not None and value != "" and value != []
+
+
+def _load_custom_outlier_rules_file(rules_file: str) -> List[Any]:
+    """Read a UTF-8 JSON custom-outlier rules array from a local file."""
+    path = Path(rules_file).expanduser()
+    try:
+        raw_rules = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"Unable to read custom-outlier rules file: {path}") from exc
+
+    try:
+        rules = json.loads(raw_rules)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in custom-outlier rules file: {path}") from exc
+
+    if not isinstance(rules, list):
+        raise ValueError(f"Custom-outlier rules file must contain a JSON array: {path}")
+    return rules
+
+
+def _resolve_custom_outlier_rules(kwargs: Dict[str, Any]) -> Any:
+    """Resolve exactly one supplied custom-outlier rules source."""
+    sources = {
+        "rules": kwargs.get("rules"),
+        "rules_json": kwargs.get("rules_json"),
+        "rules_file": kwargs.get("rules_file"),
+    }
+    supplied = [
+        (name, value) for name, value in sources.items() if _has_custom_outlier_rule_source(value)
+    ]
+    if len(supplied) != 1:
+        raise ValueError("Provide exactly one custom-outlier rule source: rules, rules_json, or rules_file")
+
+    source_name, source_value = supplied[0]
+    if source_name == "rules_file":
+        return _load_custom_outlier_rules_file(source_value)
+    return source_value
 
 
 def _sanitize(obj: Any) -> Any:
@@ -217,11 +345,12 @@ def list_available_metrics(category: Optional[str] = None) -> List[Dict[str, Any
 
 
 def get_metric_info(name: str) -> Dict[str, Any]:
-    metric = METRIC_REGISTRY.get(name)
+    metric_key = name.strip().lower().replace("-", "_")
+    metric = METRIC_REGISTRY.get(metric_key)
     if not metric:
         raise ValueError(f"Unknown metric: {name}")
     return {
-        "name": name,
+        "name": metric_key.replace("_", "-"),
         "category": metric["category"],
         "description": metric["description"],
         "required_args": list(metric.get("required_args", [])),
@@ -378,7 +507,7 @@ def run_metric(
     strip_visualizations: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    metric_key = metric_name.strip().lower()
+    metric_key = metric_name.strip().lower().replace("-", "_")
     metric = METRIC_REGISTRY.get(metric_key)
     if not metric:
         # Try resolving as a custom metric
@@ -398,7 +527,10 @@ def run_metric(
     _log_progress(f"Running {metric_key}...", verbose)
     start_time = time.time()
 
-    if metric_key in {"completeness", "duplicity", "outliers"}:
+    if metric_key in {
+        "completeness", "duplicity", "outliers", "constant_feature_count",
+        "max_pairwise_correlation", "skewness", "kurtosis",
+    }:
         result = metric["runner"](file_path, file_type, file_name)
         result = _maybe_save_images(metric_key, result, save_images, image_dir)
         if strip_visualizations:
@@ -416,11 +548,82 @@ def run_metric(
         _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
         return _sanitize(result)
 
+    if metric_key == "row_level_completeness":
+        required_columns = _normalize_list(kwargs.get("required_columns"))
+        if not required_columns:
+            raise ValueError("required_columns is required for row_level_completeness")
+        result = metric["runner"](file_path, file_type, file_name, required_columns)
+        return _finalize(result)
+
+    if metric_key == "duplicity_by_features":
+        duplicate_columns = _normalize_list(kwargs.get("duplicate_columns"))
+        if not duplicate_columns:
+            raise ValueError("duplicate_columns is required for duplicity_by_features")
+        result = metric["runner"](file_path, file_type, file_name, duplicate_columns)
+        return _finalize(result)
+
+    if metric_key == "feature_coverage_ratio":
+        threshold = kwargs.get("threshold")
+        if threshold is None:
+            threshold = 0.9
+        result = metric["runner"](file_path, file_type, file_name, float(threshold))
+        return _finalize(result)
+
+    if metric_key == "temporal_completeness":
+        timestamp_column = kwargs.get("timestamp_column")
+        if not timestamp_column:
+            raise ValueError("timestamp_column is required for temporal_completeness")
+        frequency = kwargs.get("frequency") or "D"
+        result = metric["runner"](
+            file_path, file_type, file_name, timestamp_column, frequency
+        )
+        return _finalize(result)
+
+    if metric_key == "null_count_trend":
+        batch_column = kwargs.get("batch_column")
+        if not batch_column:
+            raise ValueError("batch_column is required for null_count_trend")
+        target_columns = _normalize_list(kwargs.get("target_columns")) or []
+        result = metric["runner"](
+            file_path, file_type, file_name, batch_column, target_columns
+        )
+        return _finalize(result)
+
     if metric_key == "correlations":
         columns = _normalize_list(kwargs.get("columns"))
         if not columns:
             raise ValueError("columns is required for correlations")
         result = metric["runner"](file_path, file_type, file_name, columns)
+        return _finalize(result)
+
+    if metric_key == "outliers_custom":
+        rules = _resolve_custom_outlier_rules(kwargs)
+        result = metric["runner"](
+            file_path,
+            file_type,
+            file_name,
+            rules,
+            kwargs.get("max_outliers", 100),
+            kwargs.get("scan_limit"),
+            bool(kwargs.get("stop_after_outliers", False)),
+            kwargs.get("max_export_rows", 10000),
+        )
+        return _finalize(result)
+
+    if metric_key == "file_reference_validation":
+        path_targets = kwargs.get("path_targets")
+        if path_targets is None or path_targets == "" or path_targets == []:
+            raise ValueError("path_targets is required for file_reference_validation")
+        result = metric["runner"](
+            file_path,
+            file_type,
+            file_name,
+            path_targets,
+            kwargs.get("base_dir"),
+            kwargs.get("max_results", 100),
+            kwargs.get("scan_limit"),
+            kwargs.get("target_match", "exact"),
+        )
         return _finalize(result)
 
     if metric_key == "feature_relevance":
@@ -506,6 +709,13 @@ def run_metric(
         result = metric["runner"](file_path, file_type, file_name, columns, epsilon)
         return _finalize(result)
 
+    if metric_key == "hipaa_compliance":
+        columns = _normalize_list(kwargs.get("columns"))
+        if not columns:
+            raise ValueError("columns is required for hipaa_compliance")
+        result = metric["runner"](file_path, file_type, file_name, columns)
+        return _finalize(result)
+
     raise ValueError(f"Unsupported metric: {metric_name}")
 
 
@@ -540,6 +750,18 @@ def run_batch_metrics(
         "num_columns": config_obj.num_columns,
         "y_true_column": config_obj.y_true_column,
         "sensitive_attribute_column": config_obj.sensitive_attribute_column,
+        "required_columns": config_obj.required_columns,
+        "duplicate_columns": config_obj.duplicate_columns,
+        "threshold": config_obj.threshold,
+        "frequency": config_obj.frequency,
+        "timestamp_column": config_obj.timestamp_column,
+        "batch_column": config_obj.batch_column,
+        "target_columns": config_obj.target_columns,
+        "path_targets": config_obj.path_targets,
+        "base_dir": config_obj.base_dir,
+        "max_results": config_obj.max_results,
+        "scan_limit": config_obj.scan_limit,
+        "target_match": config_obj.target_match,
         "save_images": bool(config_obj.save_images) if config_obj.save_images is not None else True,
         "image_dir": config_obj.image_dir,
         "verbose": verbose,

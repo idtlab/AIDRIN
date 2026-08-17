@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 import uuid
 
 import pandas as pd
@@ -17,12 +18,17 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP
+from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
+from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
     categorical_bars,
     clear_all_user_cache,
+    confine_to_upload_folder,
     ensure_json_serializable,
+    generate_metric_cache_key,
     get_current_user_id,
     infer_column_roles,
+    is_metric_cache_valid,
     load_dataframe,
     summary_histograms,
 )
@@ -53,11 +59,19 @@ def inspector():
             display_name = file.filename
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
             file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
+            # Defense in depth: confirm the destination stays inside the upload
+            # folder before writing, so a bypass of secure_filename can never
+            # steer the write to an arbitrary location.
+            file_path = confine_to_upload_folder(file_path)
+            if not file_path:
+                file_upload_time_log.error("Rejected unsafe upload path: %s", filename)
+                return redirect(url_for("core.inspector"))
             file.save(file_path)
 
             session["uploaded_file_name"] = display_name
             session["uploaded_file_path"] = file_path
             session["uploaded_file_type"] = request.form.get("fileTypeSelector")
+            session.pop("selected_keys", None)
             # Column-role overrides are per-dataset; drop any from a prior file.
             session.pop("column_roles", None)
 
@@ -248,6 +262,41 @@ def filter_file():
         else:
             keys_list = [str(keys)]
 
+        file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
+        file_type = session.get("uploaded_file_type")
+        if file_path and file_type == ".h5" and len(keys_list) > 1:
+            inv = hdf5Reader(file_path, file_upload_time_log).inventory()
+            if inv["type"] == "multi_dataset":
+                ds_by_path = {ds["path"]: ds for ds in inv["datasets"]}
+                lengths = set()
+                for key in keys_list:
+                    ds = ds_by_path.get(key)
+                    if not ds:
+                        return jsonify(
+                            {"success": False, "error": f"Unknown dataset: {key}"}
+                        ), 400
+                    if ds["ndim"] != 1:
+                        return jsonify(
+                            {
+                                "success": False,
+                                "error": (
+                                    f"'{key}' is not a 1D array. Select 1D datasets "
+                                    "with the same length, or choose a single 2D dataset."
+                                ),
+                            }
+                        ), 400
+                    lengths.add(ds["shape"][0] if ds["shape"] else 0)
+                if len(lengths) > 1:
+                    return jsonify(
+                        {
+                            "success": False,
+                            "error": (
+                                "Selected datasets must have the same length to merge "
+                                "into one table."
+                            ),
+                        }
+                    ), 400
+
         session["selected_keys"] = keys_list
         session["minimize_preview"] = True
 
@@ -255,6 +304,50 @@ def filter_file():
     except Exception as e:
         file_upload_time_log.error("Error in filter_file: %s", e, exc_info=True)
         return jsonify({"success": False, "error": "An internal error occurred"}), 500
+
+
+@core_bp.route("/clear-dataset-selection", methods=["POST"])
+def clear_dataset_selection():
+    """Clear HDF5 dataset selection so the user can pick different arrays."""
+    try:
+        file_path = session.get("uploaded_file_path")
+        file_type = session.get("uploaded_file_type")
+        if not file_path or file_type != ".h5":
+            return jsonify({"success": False, "message": "No HDF5 file in session"}), 400
+
+        previous = session.get("selected_keys") or []
+        if isinstance(previous, str):
+            previous = [key.strip() for key in previous.split(",") if key.strip()]
+        session.pop("selected_keys", None)
+        session.pop("minimize_preview", None)
+
+        cleared_count = clear_all_user_cache()
+        file_upload_time_log.info(
+            "HDF5 dataset selection cleared (%d cache entries removed)", cleared_count
+        )
+
+        inv = hdf5Reader(file_path, file_upload_time_log).inventory()
+        if inv["type"] != "multi_dataset":
+            return jsonify(
+                {"success": False, "message": "This file does not require dataset selection"}
+            ), 400
+
+        return jsonify(
+            ensure_json_serializable({
+                "success": True,
+                "needs_dataset_selection": True,
+                "datasets": inv["datasets"],
+                "groups": inv.get("groups", []),
+                "current_checked_keys": previous,
+                "message": (
+                    "This HDF5 file contains multiple datasets with different shapes. "
+                    "Select one or more compatible datasets (same length) to analyze."
+                ),
+            })
+        )
+    except Exception as e:
+        file_upload_time_log.error("Error in clear_dataset_selection: %s", e, exc_info=True)
+        return jsonify({"success": False, "message": "An internal error occurred"}), 500
 
 
 @core_bp.route("/my-cache", methods=["GET"])
@@ -339,7 +432,7 @@ def summary_statistics():
             return jsonify({"success": False, "message": "An internal error occurred"})
 
     try:
-        file_path = session.get("uploaded_file_path")
+        file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_name = session.get("uploaded_file_name")
         file_type = session.get("uploaded_file_type")
 
@@ -347,6 +440,42 @@ def summary_statistics():
             return jsonify({"success": False, "message": "No file uploaded or file not found"}), 200
         if not file_type:
             return jsonify({"success": False, "message": "File type not set in session"}), 200
+
+        selected = []
+        if file_type == ".h5":
+            selected = session.get("selected_keys") or []
+            if isinstance(selected, str):
+                selected = [key.strip() for key in selected.split(",") if key.strip()]
+
+        cache_key = generate_metric_cache_key(file_name, "summarystats", selected_keys=selected)
+        cached_entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
+        if cached_entry and is_metric_cache_valid(cached_entry):
+            current_app.TEMP_RESULTS_CACHE[cache_key] = {
+                "data": cached_entry["data"],
+                "timestamp": time.time(),
+                "expires_at": time.time() + (30 * 60),
+            }
+            return jsonify(cached_entry["data"])
+        if cached_entry:
+            current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+
+        if file_type == ".h5":
+            inv = hdf5Reader(file_path, file_upload_time_log).inventory()
+            if inv["type"] == "multi_dataset" and not selected:
+                return jsonify(
+                    ensure_json_serializable({
+                        "success": False,
+                        "needs_dataset_selection": True,
+                        "datasets": inv["datasets"],
+                        "groups": inv.get("groups", []),
+                        "current_checked_keys": selected,
+                        "message": (
+                            "This HDF5 file contains multiple datasets with "
+                            "different shapes. Select one or more compatible "
+                            "datasets (same length) to analyze."
+                        ),
+                    })
+                ), 200
 
         file_info = (file_path, file_name, file_type)
         df, load_error = load_dataframe(file_info)
@@ -384,18 +513,28 @@ def summary_statistics():
                     new_key = old_key.replace("%", "th percentile")
                     v[new_key] = v.pop(old_key)
 
+        hdf5_multi_dataset = bool(selected)
+        selected_dataset_keys = selected
+
         # Per-column summary for categorical features (numeric codes included).
         # Reports non-null count, distinct values, the most frequent value, its
         # frequency, and that frequency as a percentage of the non-null values.
         categorical_summary = {}
         for col in categorical_columns:
-            counts = df[col].value_counts(dropna=True)
-            count = int(df[col].notna().sum())
+            # value_counts() and nunique() both hash, so a column holding
+            # arrays/lists/dicts (parquet/HDF5/JSON) would raise and take the
+            # whole summary down. Normalize such columns first.
+            series = hashable_series(df[col])
+            counts = series.value_counts(dropna=True)
+            count = int(series.notna().sum())
             freq = int(counts.iloc[0]) if not counts.empty else 0
+            top = str(counts.index[0]) if not counts.empty else "—"
+            if len(top) > 80:
+                top = top[:77] + "..."
             categorical_summary[str(col)] = {
                 "count": count,
-                "unique": int(df[col].nunique(dropna=True)),
-                "top": str(counts.index[0]) if not counts.empty else "—",
+                "unique": safe_nunique(series, dropna=True),
+                "top": top,
                 "freq": freq,
                 "freq_pct": round(freq / count * 100, 1) if count else 0.0,
             }
@@ -426,7 +565,14 @@ def summary_statistics():
             "identifier_summary": identifier_summary,
             "histograms": histograms,
             "categorical_histograms": categorical_histograms,
+            "hdf5_multi_dataset": hdf5_multi_dataset,
+            "selected_dataset_keys": selected_dataset_keys,
         })
+        current_app.TEMP_RESULTS_CACHE[cache_key] = {
+            "data": response_data,
+            "timestamp": time.time(),
+            "expires_at": time.time() + (30 * 60),
+        }
         return jsonify(response_data)
     except Exception as e:
         file_upload_time_log.error("Error computing summary statistics: %s", e, exc_info=True)
@@ -462,7 +608,7 @@ def set_column_roles():
 @core_bp.route("/feature-set", methods=["POST"])
 def extract_features():
     try:
-        file_path = session.get("uploaded_file_path")
+        file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_name = session.get("uploaded_file_name")
         file_type = session.get("uploaded_file_type")
 
@@ -485,7 +631,7 @@ def extract_features():
         all_features = numerical_columns + categorical_columns
 
         class_imbalance_features = [
-            col for col in all_features if df[col].nunique() <= 30
+            col for col in all_features if safe_nunique(df[col]) <= 30
         ]
 
         response_data = {

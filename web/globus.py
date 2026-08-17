@@ -9,6 +9,9 @@ Globus UI entirely.
 
 import logging
 import os
+import sys
+
+from aidrin import __version__ as AIDRIN_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -38,260 +41,13 @@ def is_globus_available():
 # ---------------------------------------------------------------------------
 # The function that runs on the remote endpoint
 # ---------------------------------------------------------------------------
-
-def remote_metric_runner(metric_name, file_path, file_name, file_type, **params):
-    """Execute an AIDRIN metric on the remote Globus Compute endpoint.
-
-    This function is serialised and sent to the remote endpoint, where it
-    imports ``aidrin`` locally and dispatches to the requested metric.
-    The remote environment must have ``pip install aidrin`` completed.
-    """
-    # Ensure matplotlib uses non-interactive backend on remote endpoint
-    import matplotlib
-    matplotlib.use("Agg")
-
-    import aidrin
-
-    file_info = (file_path, file_name, file_type)
-
-    def _data_quality():
-        """Run selected data quality sub-metrics and bundle results."""
-        result = {}
-        selected = params.get("selected", ["completeness", "outliers", "duplicates"])
-        if "completeness" in selected:
-            r = aidrin.calculate_completeness(file_info)
-            r["Description"] = (
-                "Indicate the proportion of available data for each feature, "
-                "with values closer to 1 indicating high completeness, and values near "
-                "0 indicating low completeness."
-            )
-            result["Completeness"] = r
-        if "outliers" in selected:
-            r = aidrin.calculate_outliers(file_info)
-            r["Description"] = (
-                "Outlier scores are calculated for numerical columns using the IQR method, "
-                "where a score of 1 indicates all data points are outliers, "
-                "and 0 signifies no outliers."
-            )
-            result["Outliers"] = r
-        if "duplicates" in selected:
-            r = aidrin.calculate_duplicates(file_info)
-            r["Description"] = (
-                "A value of 0 indicates no duplicates, and a value closer to 1 signifies "
-                "a higher proportion of duplicated data points."
-            )
-            result["Duplicity"] = r
-        return result
-
-    def _summary_statistics():
-        """Compute summary statistics + histograms on the remote file."""
-        import io
-        import base64
-        import pandas as pd
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        from aidrin.file_handling.file_parser import read_file as _read_file
-
-        df = _read_file(file_info)
-        if isinstance(df, str):
-            return {"error": df}
-
-        # Booleans are treated as categorical (excluded from describe() and
-        # select_dtypes("number") below, so they belong with the categorical
-        # summary, not the numerical one).
-        numerical_columns = [
-            col for col, dtype in df.dtypes.items()
-            if pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
-        ]
-        categorical_columns = [
-            col for col, dtype in df.dtypes.items()
-            if pd.api.types.is_string_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
-        ]
-        all_features = numerical_columns + categorical_columns
-
-        # Restrict to numeric columns: describe() would otherwise fall back to
-        # object-column stats (top/freq are strings) and the numeric formatter
-        # below would fail on them when there are no numerical features (#125).
-        numeric_df = df.select_dtypes(include="number")
-        if numeric_df.shape[1] == 0:
-            summary = {}
-        else:
-            summary = numeric_df.describe().map(
-                lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
-            ).to_dict()
-
-        # Rename percentile keys
-        for v in summary.values():
-            for old_key in list(v.keys()):
-                if old_key in ["25%", "50%", "75%"]:
-                    v[old_key.replace("%", "th percentile")] = v.pop(old_key)
-
-        # Per-column summary for categorical features (parity with the local
-        # /summary-statistics panel).
-        categorical_summary = {}
-        for col in categorical_columns:
-            counts = df[col].value_counts(dropna=True)
-            count = int(df[col].notna().sum())
-            freq = int(counts.iloc[0]) if not counts.empty else 0
-            categorical_summary[str(col)] = {
-                "count": count,
-                "unique": int(df[col].nunique(dropna=True)),
-                "top": str(counts.index[0]) if not counts.empty else "—",
-                "freq": freq,
-                "freq_pct": round(freq / count * 100, 1) if count else 0.0,
-            }
-
-        # Generate histograms (transparent, same as local)
-        text_color = "#6b7280"
-        curve_color = "#4485F4"
-        histograms = {}
-        for column in df.select_dtypes(include="number").columns:
-            try:
-                fig, ax = plt.subplots(figsize=(4, 3))
-                fig.patch.set_alpha(0)
-                ax.set_facecolor("none")
-                sns.kdeplot(df[column], bw_adjust=0.5, ax=ax, color=curve_color)
-                ax.set_xlabel("Values", fontsize=10, color=text_color)
-                ax.set_ylabel("Density", fontsize=10, color=text_color)
-                ax.tick_params(colors=text_color, labelsize=8)
-                for spine in ax.spines.values():
-                    spine.set_color(text_color)
-                fig.tight_layout(pad=0.5)
-                buf = io.BytesIO()
-                fig.savefig(buf, format="png", dpi=150, transparent=True)
-                buf.seek(0)
-                histograms[f"{column}_light"] = base64.b64encode(buf.read()).decode("utf-8")
-                plt.close(fig)
-                buf.close()
-            except Exception:
-                pass
-
-        return {
-            "success": True,
-            "records_count": len(df),
-            "features_count": len(df.columns),
-            "categorical_features": list(categorical_columns),
-            "numerical_features": list(numerical_columns),
-            "all_features": all_features,
-            "summary_statistics": summary,
-            "categorical_summary": categorical_summary,
-            "histograms": histograms,
-            "class_imbalance_features": [
-                col for col in all_features if df[col].nunique() <= 30
-            ],
-        }
-
-    def _fairness():
-        """Run selected fairness sub-metrics and bundle results (matching local route)."""
-        from aidrin.structured_data_metrics.representation_rate import (
-            calculate_representation_rate as _calc_rr,
-            create_representation_rate_vis as _vis_rr,
-        )
-        aidrin._eager_celery()
-        result = {}
-        selected = params.get("selected", [])
-
-        if "representation_rate" in selected:
-            columns = params.get("rep_columns", [])
-            rep_dict = {}
-            rep_dict["Probability ratios"] = _calc_rr.apply(args=(columns, file_info)).get()
-            rep_dict["Representation Rate Visualization"] = _vis_rr.apply(args=(columns, file_info)).get()
-            rep_dict["Description"] = (
-                "Probability ratios quantify the relative representation of different "
-                "categories within the sensitive features, highlighting differences in "
-                "representation rates between various groups."
-            )
-            result["Representation Rate"] = rep_dict
-
-        if "statistical_rates" in selected:
-            sr_dict = aidrin.calculate_statistical_rates(
-                params.get("sensitive_attr", ""),
-                params.get("y_true", ""),
-                file_info,
-            )
-            sr_dict["Description"] = (
-                "The graph illustrates the statistical rates of various classes across "
-                "different sensitive attributes."
-            )
-            result["Statistical Rate"] = sr_dict
-
-        return result
-
-    dispatch = {
-        "summary_statistics": _summary_statistics,
-        "data_quality": _data_quality,
-        "completeness": lambda: aidrin.calculate_completeness(file_info),
-        "outliers": lambda: aidrin.calculate_outliers(file_info),
-        "duplicates": lambda: aidrin.calculate_duplicates(file_info),
-        "correlations": lambda: aidrin.calculate_correlations(
-            params.get("columns", []), file_info
-        ),
-        "feature_relevance": lambda: aidrin.calculate_feature_relevance(
-            file_info,
-            params["target_col"],
-            params.get("cat_cols"),
-            params.get("num_cols"),
-        ),
-        "fairness": _fairness,
-        "representation_rate": _fairness,  # alias — routes through _fairness
-        "statistical_rates": _fairness,    # alias
-        "k_anonymity": lambda: aidrin.compute_k_anonymity(
-            params.get("quasi_ids", []), file_info
-        ),
-        "l_diversity": lambda: aidrin.compute_l_diversity(
-            params.get("quasi_ids", []),
-            params["sensitive_col"],
-            file_info,
-        ),
-        "t_closeness": lambda: aidrin.compute_t_closeness(
-            params.get("quasi_ids", []),
-            params["sensitive_col"],
-            file_info,
-        ),
-        "entropy_risk": lambda: aidrin.compute_entropy_risk(
-            params.get("quasi_ids", []), file_info
-        ),
-        "class_distribution": lambda: aidrin.calculate_class_distribution(
-            params["column"], file_info
-        ),
-    }
-
-    fn = dispatch.get(metric_name)
-    if fn is None:
-        return {"error": f"Unknown metric: {metric_name}"}
-
-    try:
-        result = fn()
-        # Ensure all values are JSON-serializable (convert numpy types, etc.)
-        import json
-        try:
-            json.dumps(result)
-        except (TypeError, ValueError):
-            # Fall back to recursive conversion
-            def _make_serializable(obj):
-                import numpy as np
-                import pandas as pd
-                if isinstance(obj, dict):
-                    return {str(k): _make_serializable(v) for k, v in obj.items()}
-                elif isinstance(obj, (list, tuple)):
-                    return [_make_serializable(i) for i in obj]
-                elif isinstance(obj, (np.integer,)):
-                    return int(obj)
-                elif isinstance(obj, (np.floating,)):
-                    return float(obj)
-                elif isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                elif isinstance(obj, (np.bool_,)):
-                    return bool(obj)
-                elif isinstance(obj, pd.Timestamp):
-                    return obj.isoformat()
-                elif isinstance(obj, set):
-                    return list(obj)
-                return obj
-            result = _make_serializable(result)
-        return result
-    except Exception as e:
-        return {"error": f"Remote execution failed: {str(e)}"}
+#
+# ``remote_metric_runner`` now lives in ``aidrin.compute.remote`` so that the
+# Globus Compute worker (which has ``aidrin`` installed but not this ``web``
+# app) can import it during deserialisation. It is re-exported here for
+# backward compatibility with existing imports/tests. ``remote_env_probe`` is
+# used by ``check_endpoint_compatibility`` below.
+from aidrin.compute.remote import remote_metric_runner, remote_env_probe  # noqa: E402,F401
 
 
 # ---------------------------------------------------------------------------
@@ -450,6 +206,138 @@ def register_function(client, force=False):
     _function_uuid_cache[cache_key] = func_uuid
     logger.info("Registered remote_metric_runner with Globus Compute: %s", func_uuid)
     return func_uuid
+
+
+# ---------------------------------------------------------------------------
+# Endpoint compatibility check
+# ---------------------------------------------------------------------------
+
+
+def _minor(version):
+    """Return the ``major.minor`` prefix of a version ("2026.07.1" -> "2026.07")."""
+    return ".".join(str(version).split(".")[:2])
+
+
+def _run_probe_sync(client, endpoint_id, timeout=30, interval=2):
+    """Register + run ``remote_env_probe`` on the endpoint and wait for its result.
+
+    Blocks up to ``timeout`` seconds. Raises TimeoutError if the endpoint does
+    not respond in time (e.g. a cold or busy HPC scheduler).
+    """
+    import time
+
+    func_uuid = client.register_function(remote_env_probe)
+    task_id = client.run(endpoint_id=endpoint_id, function_id=func_uuid)
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            return client.get_result(task_id)
+        except Exception as e:
+            msg = str(e).lower()
+            if any(s in msg for s in ("pending", "waiting", "running")):
+                time.sleep(interval)
+                continue
+            raise
+    raise TimeoutError(
+        f"Endpoint {endpoint_id} did not respond to the environment probe "
+        f"within {timeout}s"
+    )
+
+
+def check_endpoint_compatibility(client, endpoint_id, timeout=30):
+    """Verify the remote endpoint's environment is compatible with this server.
+
+    Runs ``remote_env_probe`` on ``endpoint_id`` and compares the endpoint's
+    ``aidrin`` and Python versions against the local ones. This doubles as a
+    reachability / import check: a successful probe proves the worker can
+    import ``aidrin`` at all — turning "No module named ...", wrong-env, and
+    version-drift failures into a clear message at connect time rather than a
+    dill traceback after a real job runs.
+
+    Returns a report dict::
+
+        {
+            "compatible": bool,          # False on aidrin major.minor mismatch
+            "local":  {"aidrin": ..., "python": ...},
+            "remote": {"aidrin": ..., "python": ...},
+            "warnings": [str, ...],      # non-fatal (e.g. Python minor drift)
+        }
+
+    Policy: an ``aidrin`` major.minor mismatch is **incompatible** (reference
+    serialisation means the worker would run different metric code). A Python
+    major.minor difference is a **warning** — dill can often cross minor
+    versions but it is the classic cause of deserialisation errors.
+    """
+    local_aidrin = AIDRIN_VERSION
+    local_python = ".".join(map(str, sys.version_info[:3]))
+
+    try:
+        remote = _run_probe_sync(client, endpoint_id, timeout=timeout)
+    except Exception as e:
+        # If the endpoint's aidrin predates this change it has no
+        # ``aidrin.compute.remote`` module / ``remote_env_probe`` to
+        # reconstruct, so the probe fails to deserialise there. Treat that as a
+        # clear incompatibility (upgrade the endpoint) rather than a 500 — but
+        # let genuine infra errors (timeout, offline, auth) propagate.
+        detail = str(e)
+        lowered = detail.lower()
+        probe_missing = any(
+            s in lowered
+            for s in (
+                "no module named",
+                "modulenotfound",
+                "cannot import",
+                "importerror",
+                "attributeerror",
+                "remote_env_probe",
+                "aidrin.compute",
+            )
+        )
+        if not probe_missing:
+            raise
+        report = {
+            "compatible": False,
+            "local": {"aidrin": local_aidrin, "python": local_python},
+            "remote": {"aidrin": "unknown", "python": "unknown"},
+            "warnings": [
+                "The endpoint could not load AIDRIN's remote task code. "
+                f"Install aidrin {local_aidrin} in the endpoint's worker "
+                "environment, then restart the endpoint."
+            ],
+        }
+        # Full remote traceback goes to the server log only — never the UI.
+        logger.warning("Endpoint %s probe failed (old aidrin?): %s", endpoint_id, detail)
+        return report
+
+    remote_aidrin = remote.get("aidrin_version", "unknown")
+    remote_python = remote.get("python_version", "unknown")
+
+    warnings = []
+    compatible = True
+
+    if _minor(remote_aidrin) != _minor(local_aidrin):
+        compatible = False
+        warnings.append(
+            f"aidrin version mismatch: web server has {local_aidrin}, "
+            f"endpoint has {remote_aidrin}. Reinstall aidrin on the endpoint "
+            f"so the major.minor versions match."
+        )
+
+    if _minor(remote_python) != _minor(local_python):
+        warnings.append(
+            f"Python version differs: web server {local_python}, "
+            f"endpoint {remote_python}. This can cause serialisation errors."
+        )
+
+    report = {
+        "compatible": compatible,
+        "local": {"aidrin": local_aidrin, "python": local_python},
+        "remote": {"aidrin": remote_aidrin, "python": remote_python},
+        "warnings": warnings,
+    }
+    logger.info("Endpoint %s compatibility: %s", endpoint_id, report)
+    return report
 
 
 # ---------------------------------------------------------------------------

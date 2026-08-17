@@ -282,7 +282,6 @@ input[type="checkbox"].w-3\.5:focus {
   margin-left: 6px;
   position: relative;
   pointer-events: auto;
-  z-index: 1;
 }
 
 .info-text {
@@ -425,6 +424,13 @@ html.dark .info-text {
 
 .checkboxContainerIndividual .material-checkbox {
   margin-bottom: 4px;
+  display: flex;
+}
+
+/* Target-picker options are flex rows; keep them from collapsing to the
+   block layout above, which would drop the checkbox-to-name gap. */
+.checkboxContainerIndividual [data-target-picker-option] {
+  margin-bottom: 0;
   display: flex;
 }
 

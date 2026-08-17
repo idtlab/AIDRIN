@@ -171,7 +171,6 @@ aidrin/custom_metrics/remedy_data/
 
 # Agentic examples — user-supplied files and generated outputs (download/run separately)
 examples/agentic/power_consumption/data/household_power_consumption.txt
-examples/agentic/power_consumption/sources/
 examples/agentic/power_consumption/results.json
 examples/agentic/power_consumption/results*.json
 examples/agentic/**/*_vector_store/
@@ -185,3 +184,10 @@ examples/*_vector_store/
 
 dump.rdb
 celerybeat-schedule.db
+
+# CocoIndex Code (ccc)
+/.cocoindex_code/
+temp/
+
+# Project-local Globus Compute endpoint profiles (aidrin remote configure --local)
+.aidrin.json

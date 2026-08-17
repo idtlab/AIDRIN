@@ -9,15 +9,99 @@
           <label class="material-checkbox">
             <input type="checkbox" name="completeness" id="toggleButton_completeness" onchange="toggleValue(this)" />
             <span class="checkmark"></span>
-            Check completeness
+            Check column-level completeness
             <span class="info-icon">i<span class="info-text">This option checks the proportion of NaN values in each feature and displays a bar chart highlighting features with only missing values.</span></span>
           </label>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="row level completeness" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check row-level completeness
+            <span class="info-icon">i<span class="info-text">This option reports the percentage of rows in which every selected required column is non-null.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Required columns:</label>
+              <div id="rowLevelCompletenessColumnsCheckbox" class="w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="feature coverage ratio" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check feature coverage ratio
+            <span class="info-icon">i<span class="info-text">This option reports the percentage of features whose non-null rate meets or exceeds the given threshold.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Threshold (default 0.9):</label>
+              <input class="textWrapper w-full" type="number" name="threshold for feature coverage ratio" min="0" max="1" step="0.05" value="0.9" style="max-width: none;" />
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="temporal completeness" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check temporal completeness
+            <span class="info-icon">i<span class="info-text">This option reports the percentage of expected time intervals present between the earliest and latest timestamps at the given frequency.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Timestamp column:</label>
+              <select name="timestamp column for temporal completeness" id="temporalCompletenessColumnDropdown" required class="w-full" style="max-width: none;"><option value="" disabled selected>Select a feature</option></select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Frequency:</label>
+              <select name="frequency for temporal completeness" class="w-full" style="max-width: none;">
+                <option value="ms">Millisecond (ms)</option>
+                <option value="s">Second (s)</option>
+                <option value="min">Minute (min)</option>
+                <option value="h">Hourly (h)</option>
+                <option value="D" selected>Daily (D)</option>
+                <option value="W">Weekly (W)</option>
+                <option value="ME">Monthly / month-end (ME)</option>
+                <option value="QE">Quarterly / quarter-end (QE)</option>
+                <option value="YE">Yearly / year-end (YE)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="null count trend" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check null count trend
+            <span class="info-icon">i<span class="info-text">This option reports the total null cells per batch (grouped by the selected batch column), highlighting batches with degraded data quality.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Batch column:</label>
+              <select name="batch column for null count trend" id="nullCountTrendBatchDropdown" required class="w-full" style="max-width: none;"><option value="" disabled selected>Select a feature</option></select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Target columns (optional — defaults to all others):</label>
+              <div id="nullCountTrendTargetColumnsCheckbox" class="w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
             <input type="checkbox" name="outliers" onchange="toggleValue(this)" />
             <span class="checkmark"></span>
             Check outliers
             <span class="info-icon">i<span class="info-text">This option checks for outliers in numerical features using the Inter Quartile Range (IQR) method and displays a bar chart highlighting features with outliers.</span></span>
           </label>
+        </div>
+
+        <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
             <input type="checkbox" name="duplicity" onchange="toggleValue(this)" />
             <span class="checkmark"></span>
@@ -25,6 +109,93 @@
             <span class="info-icon">i<span class="info-text">This option checks for duplicate rows in the dataset and display the proportion of overall duplicates in the dataset.</span></span>
           </label>
         </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="duplicate detection by features" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check duplicates by selected features
+            <span class="info-icon">i<span class="info-text">This option reports duplicate rows computed using only the selected feature columns, including the top 10 largest duplicate groups.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Features:</label>
+              <div id="duplicateFeaturesCheckbox" class="w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="custom_outliers" id="toggleButton_custom_outliers" onchange="toggleValue(this); toggleCustomOutlierEditor(this)" />
+            <span class="checkmark"></span>
+            Check outliers with custom criteria
+            <span class="info-icon">i<span class="info-text">Define expected valid values for selected columns or HDF5 datasets. Values that do not satisfy these conditions are flagged.</span></span>
+          </label>
+        </div>
+
+      </div>
+      <div id="custom-outlier-editor" class="hidden mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <input type="hidden" name="custom_outlier_rules" id="custom-outlier-rules-json" value="[]" />
+        <div class="mb-3 flex flex-wrap gap-4 text-xs font-medium text-gray-700 dark:text-gray-300">
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" name="custom_outlier_rule_source" value="manual" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700" />
+            Define conditions
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" name="custom_outlier_rule_source" value="file" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700" />
+            Select JSON file
+          </label>
+        </div>
+        <div id="custom-outlier-manual-source">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Custom criteria rules</h3>
+            <div class="flex items-center gap-2">
+              <button type="button" id="custom-outlier-add-rule"
+                      class="px-3 py-1.5 text-xs font-medium text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/20">
+                Add rule
+              </button>
+              <button type="button" id="custom-outlier-save-rules"
+                      class="px-3 py-1.5 text-xs font-medium text-emerald-700 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 focus:ring-4 focus:ring-emerald-200 dark:text-emerald-300 dark:border-emerald-700 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 dark:focus:ring-emerald-800">
+                Save rules to JSON
+              </button>
+            </div>
+          </div>
+          <p class="mb-3 text-xs text-gray-600 dark:text-gray-300">Rules define expected valid values. Values that do not satisfy these conditions are flagged.</p>
+          <div id="custom-outlier-message" class="hidden mb-3 text-xs text-amber-700 dark:text-amber-300"></div>
+          <div id="custom-outlier-rule-list" class="space-y-2"></div>
+        </div>
+        <div id="custom-outlier-file-source" class="hidden">
+          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Rules JSON file
+            <input type="file" id="custom-outlier-rules-file" accept="application/json,.json"
+                   class="mt-1 block w-full text-sm text-gray-900 dark:text-gray-300" />
+          </label>
+          <p class="mt-2 text-xs text-gray-600 dark:text-gray-300">Choose a JSON array in the same custom-rule format used by the CLI and MCP server. The file is read in your browser and is not uploaded or saved.</p>
+          <div id="custom-outlier-file-message" class="hidden mt-2 text-xs text-amber-700 dark:text-amber-300"></div>
+        </div>
+        <div class="mt-3 grid gap-3 sm:grid-cols-3">
+          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Preview cap per rule
+            <input type="number" min="0" step="1" name="max_outliers" placeholder="default: 100"
+                   class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+          </label>
+          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Export cap per rule
+            <input type="number" min="0" step="1" name="max_export_rows" value="10000"
+                   class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+          </label>
+          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Scan limit per rule
+            <input type="number" min="0" step="1" name="scan_limit" placeholder="Full scan"
+                   class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+          </label>
+        </div>
+        <label class="mt-3 inline-flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
+          <input type="checkbox" name="stop_after_outliers" value="yes"
+                 class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700" />
+          Stop scanning after preview cap is reached
+        </label>
       </div>
       <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
         <button type="button" onclick="withSubmitGuard(this, () => workspaceSubmit('/data-quality'));"
