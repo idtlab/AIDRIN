@@ -284,6 +284,13 @@ def test_globus_file_reference_discovery_is_shared_and_expires():
     assert source.count('metric_name: "custom_outlier_targets"') == 1
 
 
+def test_local_file_reference_discovery_failure_keeps_server_error():
+    source = INSPECTOR_JS.read_text()
+    assert "(!data.success && data.message) ||" in source
+    assert 'window.AIDRIN_GLOBUS_MODE\n      ? "This Globus Compute worker' in source
+    assert ': "File-reference validation is unavailable on this AIDRIN server."' in source
+
+
 def test_globus_file_reference_parameters_are_serialized_without_policy():
     source = INSPECTOR_JS.read_text()
     assert 'selected.push("file_reference_validation")' in source

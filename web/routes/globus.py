@@ -353,10 +353,6 @@ def submit():
 
     task_id = None
     try:
-        previous_endpoint = session.get("globus_endpoint_id")
-        if previous_endpoint and previous_endpoint != endpoint_id:
-            _clear_negotiation()
-
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
         negotiation, report = _fresh_negotiation(client, endpoint_id)

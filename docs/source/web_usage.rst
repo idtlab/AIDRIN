@@ -414,8 +414,10 @@ For file-reference validation, the endpoint must expose a **Globus Compute worke
 with ``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` and
 ``AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT`` configured in ``worker_init``. The
 worker reads paths already visible on its filesystem; Globus Connect and Globus
-Transfer are not used. CLI, Python API, and MCP checks remain local to the host
-running those interfaces.
+Transfer are not used. Direct Python API calls and local CLI or MCP runs check
+the host running those interfaces. ``aidrin remote`` commands and MCP calls
+with ``endpoint`` or ``profile`` check the selected Compute endpoint instead;
+those headless remote runs do not use this web worker-root policy.
 
 **Running a remote analysis**
 

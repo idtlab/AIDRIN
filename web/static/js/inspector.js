@@ -316,8 +316,9 @@ function applyFileReferenceOptions(data, executionLocation) {
   const config = data.file_reference || {
     enabled: false,
     roots: [],
-    message:
-      "This Globus Compute worker does not support file-reference validation. Upgrade AIDRIN on the endpoint.",
+    message: window.AIDRIN_GLOBUS_MODE
+      ? "This Globus Compute worker does not support file-reference validation. Upgrade AIDRIN on the endpoint."
+      : "File-reference validation is unavailable on this AIDRIN server.",
   };
   checkbox.disabled = true;
 
@@ -326,8 +327,8 @@ function applyFileReferenceOptions(data, executionLocation) {
     toggleFileReferenceTargetControl(false);
     if (message) {
       message.textContent =
+        (!data.success && data.message) ||
         config.message ||
-        data.message ||
         "File-reference validation is unavailable.";
     }
     return;

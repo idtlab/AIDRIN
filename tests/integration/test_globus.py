@@ -652,6 +652,34 @@ def test_expired_negotiation_is_reprobed(client, monkeypatch):
     assert calls == ["probe"]
 
 
+def test_switching_endpoint_reuses_fresh_preflight_negotiation(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    calls = []
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda _client, endpoint_id, _timeout: (
+            calls.append(endpoint_id) or _compatibility_report()
+        ),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "task-id")
+    with client.session_transaction() as flask_session:
+        flask_session["globus_endpoint_id"] = "previous-endpoint"
+
+    checked = client.post(
+        "/globus/check-endpoint",
+        json={"endpoint_id": "endpoint-uuid"},
+    )
+    submitted = client.post("/globus/submit", json=_submission())
+
+    assert checked.status_code == 200
+    assert submitted.status_code == 200
+    assert calls == ["endpoint-uuid"]
+
+
 def test_discovery_context_is_retained_pending_and_cleaned_on_completion(client, monkeypatch):
     if not is_globus_available():
         return

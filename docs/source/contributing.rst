@@ -103,8 +103,11 @@ files below a configured worker root, load the manifest by its worker-visible
 path, and use the **Data Structure** panel to enable validation. Select exact
 targets or a full-match regular expression, the worker root, and an optional
 relative base subdirectory. Globus Connect and Globus Transfer are not part of
-this workflow: Compute reads paths already visible to its workers. The CLI, Python API, and MCP interfaces
-continue to validate paths on their own host.
+this workflow: Compute reads paths already visible to its workers. Direct
+Python API calls and local CLI or MCP runs validate paths on their own host.
+``aidrin remote`` commands and MCP calls that pass ``endpoint`` or ``profile``
+instead validate paths on the selected Compute endpoint; those headless remote
+runs do not use the web worker-root policy described above.
 
 **LLM explanations** (``pip install -e ".[llm]"``)
 

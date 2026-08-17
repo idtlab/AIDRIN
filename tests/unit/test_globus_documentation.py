@@ -26,5 +26,8 @@ def test_globus_docs_cover_worker_and_interface_boundaries():
     assert "Scheduler-backed providers" in contributing
     assert "container_cmd_options" in contributing
     assert "Globus Connect and Globus Transfer are not part" in contributing
-    assert "CLI, Python API, and MCP interfaces" in contributing
+    assert "``aidrin remote`` commands" in contributing
+    assert "MCP calls that pass ``endpoint`` or ``profile``" in contributing
     assert "Globus Compute worker" in usage
+    assert "MCP calls" in usage
+    assert "with ``endpoint`` or ``profile`` check the selected Compute endpoint" in usage
