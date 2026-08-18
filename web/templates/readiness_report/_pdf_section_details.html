@@ -38,6 +38,7 @@
       {% endfor %}
     </ul>
     {% elif block.type == 'chart_group' %}
+    <div class="chart-group">
     <p class="details-subheading">{{ block.title }}</p>
     <div class="chart-grid">
       {% for chart in block.charts %}
@@ -46,6 +47,7 @@
         <img src="data:image/png;base64,{{ chart.image_b64 }}" alt="{{ chart.label }}" />
       </figure>
       {% endfor %}
+    </div>
     </div>
     {% elif block.type == 'chart_wide' %}
     <figure class="chart-figure chart-figure-wide">

@@ -438,16 +438,46 @@ p {
 
 table.data {
   width: 100%;
-  border-collapse: collapse;
+  /* separate + 0 spacing: WeasyPrint can keep rows intact; collapse often splits them. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 8pt;
   margin-bottom: 8pt;
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+table.data thead {
+  display: table-header-group;
+}
+
+table.data tbody {
+  display: table-row-group;
+}
+
+table.data tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 table.data th,
 table.data td {
-  border: 1px solid #e5e7eb;
+  border-style: solid;
+  border-color: #e5e7eb;
+  border-width: 0 1px 1px 0;
   padding: 4pt 5pt;
   text-align: left;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+table.data tr > :first-child {
+  border-left-width: 1px;
+}
+
+table.data thead tr:first-child th,
+table.data tbody:first-of-type tr:first-child td {
+  border-top-width: 1px;
 }
 
 table.data th {
@@ -509,6 +539,8 @@ table.data td.num {
   border: 1px solid #e5e7eb;
   border-radius: 4pt;
   overflow: hidden;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .fair-principle-header {
@@ -535,12 +567,21 @@ table.data td.num {
   width: 100%;
   border-collapse: collapse;
   font-size: 8pt;
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+.fair-check-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .fair-check-table td {
   padding: 4pt 8pt;
   border-bottom: 1px solid #f3f4f6;
   vertical-align: middle;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .fair-check-group td {
@@ -592,10 +633,13 @@ table.data td.num {
 
 .glossary-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 7.5pt;
   line-height: 1.35;
   table-layout: fixed;
+  break-inside: auto;
+  page-break-inside: auto;
 }
 
 .glossary-table col.glossary-col-term {
@@ -606,12 +650,37 @@ table.data td.num {
   width: 78%;
 }
 
+.glossary-table thead {
+  display: table-header-group;
+}
+
+.glossary-table tbody {
+  display: table-row-group;
+}
+
+.glossary-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 .glossary-table th,
 .glossary-table td {
-  border: 1px solid #e5e7eb;
+  border-style: solid;
+  border-color: #e5e7eb;
+  border-width: 0 1px 1px 0;
   vertical-align: top;
   overflow-wrap: break-word;
   word-wrap: break-word;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.glossary-table tr > :first-child {
+  border-left-width: 1px;
+}
+
+.glossary-table thead tr:first-child th {
+  border-top-width: 1px;
 }
 
 .glossary-table th {
@@ -652,6 +721,8 @@ table.data td.num {
   letter-spacing: 0.03em;
   color: #4b5563;
   margin: 8pt 0 4pt 0;
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .details-note {
@@ -660,6 +731,27 @@ table.data td.num {
 
 .details-table {
   margin-bottom: 8pt;
+  table-layout: fixed;
+  width: 100%;
+}
+
+table.data.details-table th,
+table.data.details-table td {
+  padding: 3pt 2pt;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+table.data.details-table td.num,
+table.data.details-table th.num {
+  font-size: 6.5pt;
+}
+
+table.data.details-table th:first-child,
+table.data.details-table td:first-child {
+  width: 16%;
 }
 
 .details-list {
@@ -685,11 +777,18 @@ table.data td.num {
   border-radius: 3pt;
 }
 
+.chart-group {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
 .chart-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6pt;
-  margin-bottom: 8pt;
+  /* Inline-block instead of flex: WeasyPrint does not fragment flex rows, so
+     the whole grid was pushed to the next page and left the title behind. */
+  margin: 0 0 8pt 0;
+  font-size: 0;
+  break-inside: auto;
+  page-break-inside: auto;
 }
 
 .chart-figure {
@@ -699,20 +798,24 @@ table.data td.num {
 }
 
 .chart-figure-small {
-  flex: 0 0 calc((100% - 12pt) / 3);
-  max-width: calc((100% - 12pt) / 3);
+  display: inline-block;
+  vertical-align: top;
+  width: 32.4%;
+  max-width: 32.4%;
+  height: 124pt;
   box-sizing: border-box;
+  padding: 4pt;
   border: 1px solid #e5e7eb;
   border-radius: 4pt;
-  padding: 4pt;
   background: #fafafa;
+  margin: 0 0.4% 6pt 0.4%;
 }
 
 .chart-figure-small figcaption {
   font-size: 7pt;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 3pt;
+  margin: 0 0 3pt 0;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -721,8 +824,10 @@ table.data td.num {
 
 .chart-figure-small img {
   width: 100%;
-  height: auto;
-  display: block;
+  height: 102pt;
+  max-height: 102pt;
+  object-fit: contain;
+  object-position: center;
 }
 
 .chart-figure-wide {

@@ -22,6 +22,12 @@ _NUM_STAT_ORDER = (
     "max",
     "std",
 )
+# Short PDF headers so the 9-column numerical summary fits on A4.
+_NUM_STAT_PDF_HEADERS = {
+    "25th percentile": "25%",
+    "50th percentile": "50%",
+    "75th percentile": "75%",
+}
 _VIZ_LABELS = {
     "completeness": "Completeness by feature",
     "outliers": "Outliers by feature",
@@ -49,6 +55,24 @@ def _fmt_num(value: float | None, decimals: int = 2) -> str:
         return f"{float(value):.{decimals}f}"
     except (TypeError, ValueError):
         return "N/A"
+
+
+def _fmt_compact_num(value: float | None) -> str:
+    """Format a statistic so wide overview tables stay within the PDF page."""
+    if value is None:
+        return "N/A"
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    if v != v or v in (float("inf"), float("-inf")):
+        return "N/A"
+    av = abs(v)
+    if av >= 10000 or (av != 0 and av < 0.01):
+        return f"{v:.3e}"
+    if abs(v - round(v)) < 1e-9:
+        return str(int(round(v)))
+    return f"{v:.2f}"
 
 
 def _heading(text: str) -> dict[str, Any]:
@@ -136,13 +160,14 @@ def prepare_overview_details(section: dict, viz: dict[str, Any] | None) -> dict[
         all_stats = list((num_summary[features[0]] or {}).keys())
         stat_keys = [s for s in _NUM_STAT_ORDER if s in all_stats]
         stat_keys += [s for s in all_stats if s not in stat_keys]
+        headers = ["Feature"] + [_NUM_STAT_PDF_HEADERS.get(s, s) for s in stat_keys]
         rows = []
         for feat in features:
             row = [feat]
             for stat in stat_keys:
                 val = num_summary[feat].get(stat)
-                if isinstance(val, float):
-                    row.append(_fmt_num(val))
+                if isinstance(val, (int, float)) and not isinstance(val, bool):
+                    row.append(_fmt_compact_num(val))
                 elif val is None:
                     row.append("—")
                 else:
@@ -152,7 +177,7 @@ def prepare_overview_details(section: dict, viz: dict[str, Any] | None) -> dict[
         total = num_meta.get("total") or len(num_summary)
         if total > len(features):
             note = f"Showing first {len(features)} of {total} numerical features."
-        blocks.append(_table("Numerical summary statistics", ["Feature", *stat_keys], rows, note=note))
+        blocks.append(_table("Numerical summary statistics", headers, rows, note=note))
 
     profile_meta = section.get("feature_profiles_meta") or {}
     if profile_meta.get("truncated"):
