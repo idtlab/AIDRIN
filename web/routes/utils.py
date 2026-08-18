@@ -408,6 +408,11 @@ def _fig_to_base64(fig):
     return encoded
 
 
+# Every distribution chart in the Data Overview uses this figure size, so the
+# cards in the grid line up whatever kind of chart they hold.
+_DISTRIBUTION_FIGSIZE = (4, 3)
+
+
 def summary_histograms(df, columns=None):
     """Generate base64-encoded KDE distribution plots.
 
@@ -423,7 +428,7 @@ def summary_histograms(df, columns=None):
 
     line_graphs = {}
     for column in columns:
-        fig, ax = plt.subplots(figsize=(4, 3))
+        fig, ax = plt.subplots(figsize=_DISTRIBUTION_FIGSIZE)
         fig.patch.set_alpha(0)
         ax.set_facecolor("none")
 
@@ -442,35 +447,113 @@ def summary_histograms(df, columns=None):
     return line_graphs
 
 
-def categorical_bars(df, columns, max_categories=20):
-    """Generate base64-encoded bar charts of value counts for categorical columns.
+# Individual categories shown before the tail is rolled up. Nine leaves room
+# for the "Other" bar inside a fixed ten-slot axis.
+_CATEGORICAL_MAX_BARS = 9
+# Every categorical chart is laid out on this many slots whether or not it fills
+# them, so bar thickness is identical across columns and the cards in the grid
+# are all the same height. Fewer categories buy blank space, not fatter bars.
+_CATEGORICAL_SLOTS = 10
+# Muted fill for the rolled-up tail, so it reads as a summary, not a category.
+_OTHER_BAR_COLOR = "#c7d6f5"
+# A bar at least this fraction of the widest gets its label drawn inside, where
+# it cannot run off the right edge.
+_LABEL_INSIDE_FRACTION = 0.55
+
+
+def categorical_bars(df, columns, max_categories=_CATEGORICAL_MAX_BARS):
+    """Generate base64-encoded value-count bar charts for categorical columns.
 
     KDE curves are meaningless for discrete/coded columns, so categorical
     columns (including numeric codes like ``flavor``) get a value-count bar
-    chart instead. High-cardinality columns show only the top ``max_categories``.
+    chart instead.
+
+    Bars are horizontal, matching every other chart in the app and letting long
+    category names ("Married-spouse-absent", "Dominican-Republic") read at full
+    length instead of being rotated and clipped.
+
+    Every chart is drawn on a fixed ``_CATEGORICAL_SLOTS``-slot axis at the same
+    figure size as the continuous charts, and vertically centred, so a
+    two-category column and a ten-category one produce bars of the same
+    thickness and cards of the same height throughout the grid — the axis gains
+    blank space rather than the bars stretching to fill it.
+
+    Categories beyond ``max_categories`` are summed into a single ``Other`` bar
+    rather than dropped, so the chart always accounts for every non-null row and
+    the size of the tail stays visible. How many categories it stands for is
+    carried in that bar's value label, keeping the axis tick to a plain
+    ``Other``.
+
+    Ordering: numeric and boolean categories read in value order, so a 1-5
+    rating is a scale rather than a frequency ranking. Everything else has no
+    natural order and reads largest-first.
     """
     text_color = "#6b7280"
     bar_color = "#4485F4"
 
     bars = {}
     for column in columns:
-        counts = df[column].value_counts(dropna=True).head(max_categories)
-        if counts.empty:
+        series = df[column]
+        total = int(series.notna().sum())
+        counts = series.value_counts(dropna=True)
+        if counts.empty or total == 0:
             continue
 
-        fig, ax = plt.subplots(figsize=(4, 3))
+        shown = counts.head(max_categories)
+        hidden = counts.iloc[max_categories:]
+        if pd.api.types.is_numeric_dtype(shown.index) or pd.api.types.is_bool_dtype(shown.index):
+            shown = shown.sort_index()
+        else:
+            shown = shown.sort_values(ascending=False)
+
+        labels = [str(i) for i in shown.index]
+        values = [int(v) for v in shown.values]
+        colors = [bar_color] * len(values)
+        # Per-bar suffix; only the rollup carries one.
+        notes = [""] * len(values)
+        if len(hidden):
+            labels.append("Other")
+            values.append(int(hidden.sum()))
+            colors.append(_OTHER_BAR_COLOR)
+            notes.append(f" · {len(hidden)} categories")
+
+        n = len(values)
+        slots = max(n, _CATEGORICAL_SLOTS)
+        # Centre the bars in the slots, so the slack sits above and below.
+        offset = (slots - n) / 2
+        positions = [offset + i for i in range(n)]
+
+        # Same figure size as the continuous charts, so every card in the Data
+        # Overview grid is the same height.
+        fig, ax = plt.subplots(figsize=_DISTRIBUTION_FIGSIZE)
         fig.patch.set_alpha(0)
         ax.set_facecolor("none")
 
-        ax.bar([str(i) for i in counts.index], counts.values, color=bar_color)
+        ax.barh(positions, values, color=colors, height=0.7)
+        ax.set_yticks(positions)
+        ax.set_yticklabels(labels, fontsize=7, color=text_color)
+        ax.set_xlabel("Count", fontsize=10, color=text_color)
+        ax.tick_params(axis="x", colors=text_color, labelsize=8)
+        ax.invert_yaxis()  # first category at the top
+        ax.set_ylim(slots - 0.5, -0.5)
 
-        ax.set_xlabel("Category", fontsize=10, color=text_color)
-        ax.set_ylabel("Count", fontsize=10, color=text_color)
-        ax.tick_params(colors=text_color, labelsize=8)
-        if len(counts) > 6:
-            for label in ax.get_xticklabels():
-                label.set_rotation(45)
-                label.set_ha("right")
+        widest = max(values)
+        ax.set_xlim(0, widest * 1.3)
+        for position, value, color, note in zip(positions, values, colors, notes):
+            inside = value >= widest * _LABEL_INSIDE_FRACTION
+            ax.text(
+                value - widest * 0.02 if inside else value + widest * 0.02,
+                position,
+                f"{value:,} ({value / total * 100:.1f}%){note}",
+                ha="right" if inside else "left",
+                va="center",
+                fontsize=6.5,
+                # White reads on the solid blue fill but not on the muted
+                # "Other" bar, which keeps the normal text colour.
+                color="white" if inside and color == bar_color else text_color,
+                fontweight="bold" if inside and color == bar_color else "normal",
+            )
+
         for spine in ax.spines.values():
             spine.set_color(text_color)
         fig.tight_layout(pad=0.5)
