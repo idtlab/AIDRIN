@@ -314,6 +314,56 @@ Edit those methods to add your logic, then run by passing the file path directly
 The remedy output CSV is saved to a ``remedy_data/`` folder next to the module file
 (``/path/to/my_project/remedy_data/my_audit_remedy.csv``).
 
+``aidrin add-custom-loader``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Scaffolds a trusted user data loader that returns a ``pandas.DataFrame``. Use this for
+formats AIDRIN does not read natively yet (for example ROOT ``.root`` files via
+``uproot``), or when you need a custom reshape before metrics run.
+
+.. code-block:: bash
+
+   aidrin add-custom-loader my_ingest --dir /path/to/my_project/loaders
+
+This creates ``/path/to/my_project/loaders/my_ingest.py`` with a ``load(path, **kwargs)``
+stub. Implement the body so it returns a non-empty DataFrame, then pass the loader on any
+read command:
+
+.. code-block:: bash
+
+   aidrin run completeness /path/to/store.zarr --loader /path/to/my_project/loaders/my_ingest.py:load
+   aidrin summarize /path/to/sample.root --loader ./examples/custom_loaders/root_ttree_loader.py:load
+   aidrin data-quality /path/to/data.nc --loader ./loaders/nc.py:to_table
+
+Batch YAML accepts the same contract:
+
+.. code-block:: yaml
+
+   file-path: /path/to/sample.root
+   loader: ./examples/custom_loaders/root_ttree_loader.py:load
+   metrics:
+     - completeness
+
+Library API:
+
+.. code-block:: python
+
+   from aidrin.headless.api import run_metric, summarize_dataset
+
+   run_metric("completeness", "sample.root", loader="loaders/root_ttree_loader.py:load")
+   summarize_dataset("sample.root", loader="loaders/root_ttree_loader.py:load")
+
+**Security:** loader scripts execute in-process with full Python access (same trust model as
+custom metrics and the agentic ``paths.data_loader``). Only run trusted scripts.
+
+**Errors:** failures always name the loader spec, dataset path, and cause (missing file,
+import error, exception inside ``load``, or non-DataFrame return). They never look like a
+silent built-in reader miss.
+
+**ROOT note:** AIDRIN's built-in ``rootReader`` is still a stub. Until a real ROOT reader
+ships, use a custom loader with ``uproot`` (install it yourself). See
+``examples/custom_loaders/root_ttree_loader.py``.
+
 ----
 
 Available Metrics

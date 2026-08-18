@@ -187,10 +187,16 @@
         updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
       }
 
-      // Drag and drop support for the upload dropzone
-      const dropzone = document.getElementById('fileUploadContainer');
-      const fileInput2 = document.getElementById('file');
-      if (dropzone && fileInput2) {
+      const customContinue = document.getElementById('upload-custom-continue');
+      const customFileInput = document.getElementById('file-custom');
+      if (customContinue && customFileInput) {
+        customContinue.addEventListener('click', function() {
+          customFileInput.click();
+        });
+      }
+
+      function bindDropzone(dropzone, fileInput, onDrop) {
+        if (!dropzone || !fileInput) return;
         ['dragenter', 'dragover'].forEach(evt => {
           dropzone.addEventListener(evt, function(e) {
             e.preventDefault();
@@ -198,7 +204,6 @@
             dropzone.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
           });
         });
-
         ['dragleave', 'drop'].forEach(evt => {
           dropzone.addEventListener(evt, function(e) {
             e.preventDefault();
@@ -206,15 +211,26 @@
             dropzone.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
           });
         });
-
         dropzone.addEventListener('drop', function(e) {
           const files = e.dataTransfer.files;
           if (files.length > 0) {
-            fileInput2.files = files;
-            uploadForm();
+            fileInput.files = files;
+            onDrop();
           }
         });
       }
+
+      // Drag and drop support for the upload dropzones
+      bindDropzone(
+        document.getElementById('fileUploadContainer'),
+        document.getElementById('file'),
+        uploadForm
+      );
+      bindDropzone(
+        document.getElementById('customFileUploadContainer'),
+        document.getElementById('file-custom'),
+        uploadCustomForm
+      );
     });
   </script>
 {% endblock %}

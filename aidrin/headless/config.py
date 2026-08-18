@@ -46,6 +46,7 @@ class HeadlessConfig:
     timestamp_column: Optional[str] = None
     batch_column: Optional[str] = None
     target_columns: Optional[List[str]] = field(default_factory=list)
+    loader: Optional[str] = None
     path_targets: Optional[List[str]] = field(default_factory=list)
     base_dir: Optional[str] = None
     max_results: Optional[int] = 100
@@ -85,6 +86,8 @@ class HeadlessConfig:
             "file-name": "file_name",
             "image-dir": "image_dir",
             "save-images": "save_images",
+            "data-loader": "loader",
+            "loader": "loader",
         }
 
         normalized: Dict[str, Any] = {}

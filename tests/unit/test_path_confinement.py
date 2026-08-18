@@ -20,6 +20,7 @@ class ConfineToUploadFolderTests(unittest.TestCase):
         self.upload_dir = tempfile.mkdtemp()
         self.app = Flask(__name__)
         self.app.config["UPLOAD_FOLDER"] = self.upload_dir
+        self.app.secret_key = "test-secret"
         self.ctx = self.app.app_context()
         self.ctx.push()
 
@@ -50,6 +51,17 @@ class ConfineToUploadFolderTests(unittest.TestCase):
         inside = os.path.join(self.upload_dir, "abc123_data.csv")
         info = build_file_info(inside, "data.csv", ".csv")
         self.assertEqual(info[0], os.path.realpath(inside))
+
+    def test_build_file_info_embeds_custom_loader_for_celery(self):
+        inside = os.path.join(self.upload_dir, "sample.root")
+        with self.app.test_request_context():
+            from flask import session
+
+            session["custom_loader_spec"] = r"C:\tmp\loader.py:load"
+            info = build_file_info(inside, "sample.root", ".root")
+        self.assertEqual(info[0], os.path.realpath(inside))
+        self.assertEqual(info[2], ".root")
+        self.assertEqual(info[3], r"C:\tmp\loader.py:load")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 import time
 from celery import Celery, Task
 from flask import Flask
@@ -68,6 +69,10 @@ def create_app():
         "result_expires": 600,
     }
     app.config.from_prefixed_env()
+    # Local UI demos without Redis: set AIDRIN_CELERY_EAGER=1 (after env merge)
+    if os.environ.get("AIDRIN_CELERY_EAGER", "").strip().lower() in {"1", "true", "yes"}:
+        app.config["CELERY"]["task_always_eager"] = True
+        app.config["CELERY"]["task_eager_propagates"] = True
 
     # Maximum upload size (default 1 GB; override per deployment via AIDRIN_MAX_UPLOAD_MB).
     # Set after from_prefixed_env so AIDRIN_MAX_UPLOAD_MB takes precedence. Flask rejects
@@ -155,6 +160,12 @@ def create_app():
     os.makedirs(custom_metrics_folder, exist_ok=True)
     app.config["CUSTOM_METRICS_FOLDER"] = custom_metrics_folder
     app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {"py"}
+
+    # Session loaders live outside the repo tree so the Flask debug reloader
+    # does not restart mid-request when Apply writes the script file.
+    custom_loaders_folder = os.path.join(tempfile.gettempdir(), "aidrin_custom_loaders")
+    os.makedirs(custom_loaders_folder, exist_ok=True)
+    app.config["CUSTOM_LOADERS_FOLDER"] = custom_loaders_folder
 
     remedy_folder = os.path.join(custom_metrics_folder, "remedy_data")
     os.makedirs(remedy_folder, exist_ok=True)

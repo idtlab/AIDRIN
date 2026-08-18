@@ -15,11 +15,15 @@
       </a>
     </div>
 
-    <!-- Tab switcher: Upload / Globus (conditional) / ADROIT -->
+    <!-- Tab switcher: Upload / Custom Loader / Globus (conditional) / CLI -->
     <div class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
       <button type="button" onclick="switchUploadTab('local')" id="tab-local"
               class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' if globus_available and globus_authenticated else 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' }}">
         Upload File
+      </button>
+      <button type="button" onclick="switchUploadTab('custom')" id="tab-custom"
+              class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400">
+        Custom Loader
       </button>
       {% if globus_available %}
       <button type="button" onclick="switchUploadTab('globus')" id="tab-globus"
@@ -33,6 +37,13 @@
       </button>
     </div>
 
+    {% if upload_error %}
+    <div class="flex items-start gap-2 p-3 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-300" role="alert">
+      <svg class="w-4 h-4 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>
+      <span>{{ upload_error }}</span>
+    </div>
+    {% endif %}
+
     <!-- Local upload card -->
     <div id="local-upload" class="{{ 'hidden' if globus_available and globus_authenticated else '' }}">
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
@@ -42,7 +53,7 @@
           <label for="fileTypeSelector" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">File type</label>
           <select id="fileTypeSelector" name="fileTypeSelector" class="w-full mb-4" style="max-width: none;">
             <option disabled value="" {% if not file_type %}selected{% endif %}>Select a File Type</option>
-            {% for ext, label in supported_file_types %}
+            {% for ext, label in upload_file_types %}
               <option value="{{ ext }}" {% if file_type == ext %}selected{% endif %}>{{ label }} ({{ ext }})</option>
             {% endfor %}
           </select>
@@ -98,6 +109,56 @@
           </div>
           <div class="file-list" id="fileList"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Custom loader tab -->
+    <div id="custom-upload" class="hidden">
+      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+        <form id="uploadCustomForm" method="post" enctype="multipart/form-data" action="{{ url_for('core.inspector') }}" data-max-upload-bytes="{{ max_upload_bytes }}" data-max-upload-mb="{{ max_upload_mb }}">
+          <input type="hidden" name="fileTypeSelector" value=".custom" />
+
+          <label for="uploadLoaderCode" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">
+            Custom loader <code class="text-xs">load(path, **kwargs)</code>
+          </label>
+          <div class="flex items-start gap-2 p-3 mb-3 text-xs text-amber-800 rounded-lg bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300" role="alert">
+            <span>Trusted scripts only. Use for formats AIDRIN cannot read yet (e.g. ROOT). Paste a loader that returns a pandas DataFrame, then upload the file.</span>
+          </div>
+          <textarea id="uploadLoaderCode" name="loader_code" rows="14"
+                    class="w-full font-mono text-xs p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 mb-4"
+                    placeholder="def load(path, **kwargs): ...">"""Custom AIDRIN data loader (upload).
+
+Trusted scripts only. Return a pandas DataFrame.
+"""
+
+import pandas as pd
+
+
+def load(path: str, **kwargs) -> pd.DataFrame:
+    # ROOT example (install uproot in the server environment):
+    import uproot
+    with uproot.open(path) as f:
+        tree = f[kwargs.get("tree", "tree")]
+        return tree.arrays(library="pd")
+
+    # CSV example:
+    # return pd.read_csv(path)
+</textarea>
+
+          <label id="customFileUploadContainer" for="file-custom"
+                 class="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600 transition-colors">
+            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+              <svg class="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <p class="mb-1 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Any file your loader can read (e.g. .root)</p>
+            </div>
+            <input id="file-custom" name="file" type="file" class="hidden" required
+                   accept=".root,.h5,.hdf5,.csv,.json,.parquet,.npz,.xls,.xlsx,.xlsm,.xlsb,*/*"
+                   onchange="uploadCustomForm();" />
+          </label>
+        </form>
       </div>
     </div>
 

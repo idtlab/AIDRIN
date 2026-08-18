@@ -187,7 +187,30 @@ def filter_file(file_info, kept_keys):
 # Parses the uploaded file into a pandas database
 
 
-def read_file(file_info, columns=None):
+def _unpack_file_info_extras(file_info):
+    """Extract optional ``selected_keys`` / custom-loader extras from ``file_info``.
+
+    Celery workers have no Flask session, so the web layer may embed:
+      ``(path, name, type, selected_keys)``
+      ``(path, name, type, loader_spec)``
+      ``(path, name, type, selected_keys, loader_spec)``
+
+    ``selected_keys`` is a list when present. A trailing ``path.py:function``
+    string is treated as the custom loader spec.
+    """
+    selected_keys = None
+    embedded_loader = None
+    extras = list(file_info[3:]) if len(file_info) > 3 else []
+    if not extras:
+        return None, None
+    if isinstance(extras[-1], str) and ":" in extras[-1]:
+        embedded_loader = extras.pop()
+    if extras:
+        selected_keys = extras[0]
+    return selected_keys, embedded_loader
+
+
+def read_file(file_info, columns=None, loader=None):
     """
 
     Parses a given file into pandas Dataframe.
@@ -204,18 +227,29 @@ def read_file(file_info, columns=None):
             -file_path: str, relative or absolute path of the file.
             -file_name: str, file name.
             -file_type: str, file format. Passed from front end select value.
+            - optional selected_keys (4th element) for HDF5 path selection.
     columns: list of str, optional
         When given, only these columns are returned.
+    loader: str, optional
+        Custom loader spec ``path.py:function``. When set (or present in the
+        headless/Flask loader context), skips built-in readers.
     Returns
     ----------
     pd.Dataframe, None, or str
     Parsed data as a DataFrame, None if file is unsupported,
     or error message string if an exception occurs.
+    Raises ``CustomLoaderError`` when an active custom loader fails.
     """
+    from aidrin.file_handling.custom_loader import (
+        CustomLoaderError,
+        get_active_loader_spec,
+        load_dataframe,
+    )
+
     file_upload_time_log.info("File parsing initiated...")
 
     file_path, file_name, file_type = file_info[:3]
-    selected_keys = file_info[3] if len(file_info) > 3 else None
+    selected_keys, embedded_loader = _unpack_file_info_extras(file_info)
     # path and name are passed from flask, if not in session = None
     if not file_path and file_name:
         file_upload_time_log.error("Missing file path or file name.")
@@ -225,6 +259,32 @@ def read_file(file_info, columns=None):
     if file_path and not os.path.exists(file_path):
         file_upload_time_log.error(f"File not found: {file_path}")
         return f"File not found: {file_path}"
+
+    # Prefer an explicit/context loader; fall back to a spec embedded in
+    # file_info (Celery has no Flask session, so the web layer packs it there).
+    loader_spec = get_active_loader_spec(loader) or embedded_loader
+    if loader_spec:
+        try:
+            kwargs = {}
+            if selected_keys is not None:
+                kwargs["selected_keys"] = selected_keys
+            df = load_dataframe(loader_spec, file_path, **kwargs)
+            file_upload_time_log.info("File loaded via custom loader: %s", loader_spec)
+            if columns is not None:
+                df = df[columns]
+            return df
+        except CustomLoaderError as exc:
+            # Raise so CLI/library/web never treat a loader failure as a silent miss.
+            file_upload_time_log.error("%s", exc, exc_info=True)
+            raise
+        except Exception as e:
+            file_upload_time_log.error(
+                "Unexpected custom loader error: %s", e, exc_info=True
+            )
+            raise CustomLoaderError(
+                f"Custom loader '{loader_spec}' failed for '{file_path}': "
+                f"{type(e).__name__}: {e}"
+            ) from e
 
     if file_type not in READER_MAP:
         file_upload_time_log.warning(f"Unsupported file type: {file_type}")
