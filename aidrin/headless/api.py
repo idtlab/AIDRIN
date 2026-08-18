@@ -533,7 +533,7 @@ def run_metric(
             elapsed = time.time() - start_time
             _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
             return _sanitize(result)
-        except FileNotFoundError:
+        except _CustomScriptNotFound:
             raise ValueError(f"Unknown metric: {metric_name}") from None
 
     _log_progress(f"Running {metric_key}...", verbose)
@@ -872,6 +872,15 @@ def generate_metric_template(metric_name: str, target_dir: str) -> str:
     return file_path
 
 
+class _CustomScriptNotFound(FileNotFoundError):
+    """Raised only when the custom-metric .py script itself can't be resolved.
+
+    Kept distinct from a plain FileNotFoundError (e.g. a missing dataset file)
+    so that run_metric()'s "fall back to Unknown metric" handling below can't
+    accidentally swallow a dataset-not-found error and misreport it.
+    """
+
+
 def _find_script_in_dir(directory: str, stem: str) -> Optional[str]:
     """Return the path to <stem>.py in directory, case-insensitively."""
     target = f"{stem}.py".lower()
@@ -895,7 +904,7 @@ def _resolve_custom_script(metric_name: str) -> str:
     if metric_name.endswith(".py") or os.sep in metric_name or "/" in metric_name:
         path = os.path.abspath(metric_name)
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Custom metric file not found: {metric_name}")
+            raise _CustomScriptNotFound(f"Custom metric file not found: {metric_name}")
         return path
 
     clean_name = _safe_slug(metric_name)
@@ -909,7 +918,7 @@ def _resolve_custom_script(metric_name: str) -> str:
     if path:
         return path
 
-    raise FileNotFoundError(
+    raise _CustomScriptNotFound(
         f"Custom metric '{clean_name}' not found in the current directory or aidrin/custom_metrics/. "
         f"Pass a full path (e.g. aidrin run custom /path/to/{clean_name}.py ...) "
         f"or run from the directory containing {clean_name}.py."
@@ -931,7 +940,7 @@ def run_custom_metric_logic(
     clean_name = os.path.splitext(os.path.basename(script_path))[0]
 
     if not os.path.exists(script_path):
-        raise FileNotFoundError(f"Custom metric file not found at: {script_path}")
+        raise _CustomScriptNotFound(f"Custom metric file not found at: {script_path}")
 
     # 1. Dynamic Import
     spec = importlib.util.spec_from_file_location(clean_name, script_path)
@@ -944,6 +953,8 @@ def run_custom_metric_logic(
     # 2. Load Dataset (supports every format in file_handling/readers/)
     _log_progress(f"Loading dataset: {file_path}", kwargs.get("verbose", False))
     df = read_file(_build_file_info(file_path, file_type, file_name))
+    if not isinstance(df, pd.DataFrame):
+        raise FileNotFoundError(df if isinstance(df, str) else f"Could not read dataset: {file_path}")
 
     # 3. Instantiate and Run
     agent = module.CustomDR(dataset=df, **kwargs)
@@ -979,7 +990,7 @@ def run_custom_metric_remedy(
     clean_name = os.path.splitext(os.path.basename(script_path))[0]
 
     if not os.path.exists(script_path):
-        raise FileNotFoundError(f"Custom metric file not found at: {script_path}")
+        raise _CustomScriptNotFound(f"Custom metric file not found at: {script_path}")
 
     spec = importlib.util.spec_from_file_location(clean_name, script_path)
     module = importlib.util.module_from_spec(spec)
@@ -990,6 +1001,8 @@ def run_custom_metric_remedy(
 
     _log_progress(f"Loading dataset for remedy: {file_path}", kwargs.get("verbose", False))
     df = read_file(_build_file_info(file_path, file_type, file_name))
+    if not isinstance(df, pd.DataFrame):
+        raise FileNotFoundError(df if isinstance(df, str) else f"Could not read dataset: {file_path}")
 
     agent = module.CustomDR(dataset=df, **kwargs)
     if not hasattr(agent, "remedy"):
