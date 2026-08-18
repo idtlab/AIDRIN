@@ -297,13 +297,19 @@ def get_result_or_default(metric, uploaded_file_path, uploaded_file_name):
 # ---------------------------------------------------------------------------
 
 def format_dict_values(d):
-    """Recursively round numeric values in a dict to 2 decimal places."""
+    """Recursively round numeric values in a dict to 3 decimal places.
+
+    Metric charts label their bars at three decimals, and this is what the
+    table beside them renders, so the two must agree. Two decimals collapsed
+    small-but-real scores to ``0.0`` in the table while the chart showed
+    ``0.004`` (issue #211).
+    """
     formatted_dict = {}
     for key, value in d.items():
         if isinstance(value, dict):
             formatted_dict[key] = format_dict_values(value)
         elif isinstance(value, (int, float)):
-            formatted_dict[key] = round(value, 2)
+            formatted_dict[key] = round(value, 3)
         else:
             formatted_dict[key] = value
     return formatted_dict

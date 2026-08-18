@@ -3374,8 +3374,11 @@ function isFlatDict(obj) {
 function formatValue(v) {
   if (v === null || v === undefined) return "—";
   if (typeof v === "boolean") return v ? "Yes" : "No";
+  // Results are rounded to 3 decimals server-side (format_dict_values), which
+  // is also what the charts label their bars with — so a 4th decimal here only
+  // ever appended a meaningless zero and made the table disagree with the plot.
   if (typeof v === "number")
-    return Number.isInteger(v) ? v.toString() : v.toFixed(4);
+    return Number.isInteger(v) ? v.toString() : v.toFixed(3);
   if (Array.isArray(v)) return v.length ? v.map(formatValue).join(", ") : "—";
   if (typeof v === "object")
     return Object.keys(v).length ? JSON.stringify(v) : "—";
