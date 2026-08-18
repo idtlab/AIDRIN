@@ -288,3 +288,12 @@ def test_custom_outlier_ui_explains_valid_value_semantics():
     assert "Rules define expected valid values." in panel
     assert expected in panel
     assert expected in script
+
+
+def test_workspace_init_releases_clear_file_lock_after_overview_load():
+    """loadDataOverview must return its fetch promise so initWorkspace can
+    drop the processing lock. Calling .finally on undefined throws, which left
+    the top-bar clear button with pointer-events-none forever."""
+    source = INSPECTOR_JS.read_text()
+    assert "return fetch(\"/summary-statistics\")" in source
+    assert "Promise.resolve(loadDataOverview()).finally(initTaskDone)" in source

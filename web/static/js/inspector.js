@@ -4526,7 +4526,7 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
   const summaryId = summaryContainerId || "workspace-summary";
   const histogramsId = histogramsContainerId || "workspace-histograms";
 
-  fetch("/summary-statistics")
+  return fetch("/summary-statistics")
     .then((r) => r.json())
     .then((data) => {
       const container = document.getElementById(summaryId);
@@ -6665,7 +6665,9 @@ function initWorkspace() {
   };
   _beginServerProcessing();
 
-  loadDataOverview().finally(initTaskDone);
+  // Promise.resolve so a missing return from loadDataOverview cannot throw
+  // and skip the rest of init (which would leave Clear file disabled forever).
+  Promise.resolve(loadDataOverview()).finally(initTaskDone);
 
   // Populate feature dropdowns via /feature-set (same as metric.js does)
   fetch("/feature-set", { method: "POST" })
