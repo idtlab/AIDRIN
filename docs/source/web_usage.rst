@@ -345,9 +345,12 @@ Notes
   - Both use the same codebase, ensuring identical functionality. The web application is ideal for users who prefer a browser-based interface.
 
 - **File Formats**: The web application supports CSV, Excel, JSON, NumPy (``.npz``),
-  HDF5 (``.h5``), and Parquet (``.parquet``) files for data uploads, and
+  HDF5 (``.h5``), Parquet (``.parquet``), and ROOT (``.root``) files for data uploads, and
   DCAT/DataCite JSON for metadata
-  in the Understandability and Usability dimension.  For HDF5 files, fill-value
+  in the Understandability and Usability dimension. ROOT files use ``uproot``
+  (installed with AIDRIN). Files with
+  a single TTree load automatically; multi-tree files use the same key picker as HDF5/JSON.
+  For HDF5 files, fill-value
   sentinels (``_FillValue``, ``missing_value``, and the HDF5 native fill value) are
   automatically converted to ``NaN`` so that all metrics — completeness, outliers,
   feature relevance, and privacy — operate on accurately marked missing data.  See

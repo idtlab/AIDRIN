@@ -63,7 +63,7 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
     from a session value passes through the path-traversal barrier.
     """
     file_path = confine_to_upload_folder(file_path)
-    if file_type == ".h5":
+    if file_type in (".h5", ".root"):
         if selected_keys is None:
             try:
                 selected_keys = session.get("selected_keys") or []

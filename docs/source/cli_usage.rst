@@ -20,6 +20,15 @@ Quick Start
    # Run a batch of metrics from a YAML config
    aidrin batch /path/to/my_project/batch_config.yaml
 
+ROOT (``.root``) files are supported via ``uproot`` (a core dependency). A single-TTree file
+loads like any other tabular format:
+
+.. code-block:: bash
+
+   aidrin summarize examples/sample_data/root/sample.root --summary
+   aidrin data-quality examples/sample_data/root/sample.root
+   aidrin run completeness examples/sample_data/root/sample.root
+
 ----
 
 Sample Dataset
