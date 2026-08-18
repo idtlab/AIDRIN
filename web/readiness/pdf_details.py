@@ -282,15 +282,14 @@ def prepare_impact_details(section: dict, viz: dict[str, Any] | None) -> dict[st
     ) or {}
     excluded = col_crit.get("excluded") or section.get("columns_dropped") or []
     if excluded:
-        items = [
-            {"primary": e.get("feature", ""), "secondary": e.get("reason", "")}
-            for e in excluded[:_MAX_DETAIL_LIST_ITEMS]
-        ]
         total = (col_crit.get("excluded_meta") or {}).get("total") or len(excluded)
-        title = f"Excluded columns ({total})"
-        if len(excluded) > len(items):
-            items.append({"primary": f"+{len(excluded) - len(items)} more not shown", "secondary": ""})
-        blocks.append(_list_block(title, items))
+        blocks.append(
+            _paired_exclusion_table(
+                f"Excluded columns ({total})",
+                excluded,
+                total=total,
+            )
+        )
 
     return _section_blocks(blocks, "Detailed charts & tables")
 
