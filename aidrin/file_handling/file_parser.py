@@ -272,6 +272,22 @@ def read_file(file_info, columns=None):
             df = reader_cls(file_path, file_upload_time_log).read()
         file_upload_time_log.info("File successfully parsed!")
 
+        # If a reader returns None (for example an invalid Zarr store/path or
+        # incompatible arrays), surface a clear error instead of allowing
+        # downstream code to raise ``AttributeError: 'NoneType'``.
+        if df is None:
+            msg = (
+                f"Reader returned no DataFrame for {file_path}. "
+                "Check the store/path or selected keys; reader returned None."
+            )
+            file_upload_time_log.error(msg)
+            # For Zarr stores, prefer raising so the CLI/runner prints a single
+            # clear error and exits non-zero. Leave other formats unchanged to
+            # preserve existing behavior.
+            if file_type == ".zarr":
+                raise RuntimeError(msg)
+            return msg
+
         # Best-effort cache for future calls. Failure is non-fatal: we still
         # return the freshly parsed frame below, so a read-only directory or an
         # unserialisable frame never turns a successful parse into an error.
@@ -283,5 +299,11 @@ def read_file(file_info, columns=None):
         return df
 
     except Exception as e:
+        # If we intentionally raised a RuntimeError for Zarr (reader returned
+        # no DataFrame), re-raise so the top-level CLI/runner prints a single
+        # clear error and exits non-zero. Preserve existing behavior for
+        # other exceptions/types.
+        if isinstance(e, RuntimeError) and file_type == ".zarr":
+            raise
         file_upload_time_log.error(f"Error while Reading File: {e}", exc_info=True)
         return "Unable to read the uploaded file."
