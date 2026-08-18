@@ -5,6 +5,7 @@ import unittest
 from web.readiness.pdf_details import (
     _fmt_compact_num,
     build_pdf_section_details,
+    prepare_fairness_details,
     prepare_fair_compliance_details,
     prepare_governance_details,
     prepare_overview_details,
@@ -73,6 +74,52 @@ class TestReadinessPdfDetails(unittest.TestCase):
         details = prepare_governance_details(section, {})
         self.assertIsNotNone(details)
         self.assertTrue(any(b["type"] == "table" for b in details["blocks"]))
+
+    def test_prepare_fairness_details_includes_excluded_sensitive_candidates(self):
+        section = {
+            "details": {
+                "representation_rate": {
+                    "visualizations": {"gender": "rep123"},
+                },
+                "class_imbalance": {"visualization": "ci123"},
+                "statistical_rate": {
+                    "visualization": "sr123",
+                    "sensitive": "gender",
+                    "target": "outcome",
+                },
+            },
+            "auto_selection": {
+                "selection_criteria": {
+                    "target_column": {"selected": "outcome"},
+                    "sensitive_attributes": {
+                        "excluded": [
+                            {"feature": "id", "reason": "identifier-like"},
+                            {"feature": "notes", "reason": "free text"},
+                        ],
+                        "excluded_meta": {"total": 2},
+                    },
+                }
+            },
+        }
+        details = prepare_fairness_details(section, {})
+        self.assertIsNotNone(details)
+        rep_group = details["blocks"][0]
+        self.assertEqual(rep_group["type"], "chart_group")
+        self.assertEqual(rep_group["layout"], "single_per_row")
+        self.assertEqual(rep_group["charts"][0]["label"], "gender")
+        self.assertEqual(details["blocks"][1]["size"], "class_imbalance")
+        self.assertEqual(details["blocks"][2]["size"], "statistical_rate")
+        excluded = details["blocks"][-1]
+        self.assertEqual(excluded["type"], "table")
+        self.assertEqual(excluded["layout"], "paired_exclusions")
+        self.assertEqual(excluded["title"], "Excluded sensitive candidates (2)")
+        self.assertEqual(excluded["headers"], [
+            "Feature",
+            "Reason for exclusion",
+            "Feature",
+            "Reason for exclusion",
+        ])
+        self.assertEqual(excluded["rows"][0], ["id", "identifier-like", "notes", "free text"])
 
     def test_build_pdf_section_details_keys(self):
         sections = {

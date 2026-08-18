@@ -706,14 +706,19 @@ table.data td.num {
   margin-top: 10pt;
   padding-top: 8pt;
   border-top: 1px solid #d1d5db;
+  break-inside: auto;
+  page-break-inside: auto;
 }
 
 .details-heading {
   font-size: 10pt;
-  margin: 0 0 8pt 0;
+  margin: 0 0 4pt 0;
   color: #1d4ed8;
-  break-after: avoid;
-  page-break-after: avoid;
+}
+
+.details-heading + .chart-group {
+  break-before: avoid;
+  page-break-before: avoid;
 }
 
 .details-subheading {
@@ -756,6 +761,49 @@ table.data.details-table td:first-child {
   width: 16%;
 }
 
+table.data.details-table-paired_exclusions {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+  font-size: 6.5pt;
+}
+
+table.data.details-table-paired_exclusions col.paired-col-feature {
+  width: 14%;
+}
+
+table.data.details-table-paired_exclusions col.paired-col-reason {
+  width: 36%;
+}
+
+table.data.details-table-paired_exclusions th,
+table.data.details-table-paired_exclusions td {
+  box-sizing: border-box;
+  padding: 2pt 2pt;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+table.data.details-table-paired_exclusions th {
+  font-size: 6pt;
+  line-height: 1.2;
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+table.data.details-table-paired_exclusions th:first-child,
+table.data.details-table-paired_exclusions td:first-child {
+  width: auto;
+}
+
+table.data.details-table-paired_exclusions td.mono {
+  font-size: 6pt;
+  word-break: break-all;
+}
+
 .details-list {
   margin: 0 0 8pt 0;
   padding-left: 14pt;
@@ -782,6 +830,10 @@ table.data.details-table td:first-child {
 .chart-group {
   break-inside: auto;
   page-break-inside: auto;
+}
+
+.chart-group-single_per_row > .details-subheading {
+  margin-top: 4pt;
 }
 
 .chart-grid {
@@ -832,6 +884,24 @@ table.data.details-table td:first-child {
   object-position: center;
 }
 
+.chart-grid-single_per_row {
+  margin-bottom: 4pt;
+}
+
+.chart-figure-small-single_per_row {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 118pt;
+  margin: 0 0 6pt 0;
+}
+
+.chart-figure-small-single_per_row img {
+  height: 98pt;
+  max-height: 98pt;
+  object-position: center top;
+}
+
 .chart-figure-wide {
   margin-bottom: 8pt;
   border: 1px solid #e5e7eb;
@@ -856,6 +926,14 @@ table.data.details-table td:first-child {
   object-fit: contain;
   object-position: top center;
   display: block;
+}
+
+.chart-figure-wide-class_imbalance img {
+  max-height: 88mm;
+}
+
+.chart-figure-wide-statistical_rate img {
+  max-height: 72mm;
 }
 
 .page-break {

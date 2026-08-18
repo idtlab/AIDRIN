@@ -9,11 +9,19 @@
     {% elif block.type == 'table' %}
     <p class="details-subheading">{{ block.title }}</p>
     {% if block.note %}<p class="muted details-note">{{ block.note }}</p>{% endif %}
-    <table class="data details-table">
+    <table class="data details-table{% if block.layout %} details-table-{{ block.layout }}{% endif %}">
+      {% if block.layout == 'paired_exclusions' %}
+      <colgroup>
+        <col class="paired-col-feature" />
+        <col class="paired-col-reason" />
+        <col class="paired-col-feature" />
+        <col class="paired-col-reason" />
+      </colgroup>
+      {% endif %}
       <thead>
         <tr>
           {% for h in block.headers %}
-          <th{% if loop.index > 1 %} class="num"{% endif %}>{{ h }}</th>
+          <th{% if block.layout != 'paired_exclusions' and loop.index > 1 %} class="num"{% endif %}>{{ h }}</th>
           {% endfor %}
         </tr>
       </thead>
@@ -21,7 +29,7 @@
         {% for row in block.rows %}
         <tr>
           {% for cell in row %}
-          <td{% if loop.index > 1 %} class="num"{% else %} class="mono"{% endif %}>{{ cell }}</td>
+          <td{% if block.layout == 'paired_exclusions' %}{% if loop.index == 1 or loop.index == 3 %} class="mono"{% endif %}{% elif loop.index > 1 %} class="num"{% else %} class="mono"{% endif %}>{{ cell }}</td>
           {% endfor %}
         </tr>
         {% endfor %}
@@ -38,11 +46,11 @@
       {% endfor %}
     </ul>
     {% elif block.type == 'chart_group' %}
-    <div class="chart-group">
+    <div class="chart-group{% if block.layout %} chart-group-{{ block.layout }}{% endif %}">
     <p class="details-subheading">{{ block.title }}</p>
-    <div class="chart-grid">
+    <div class="chart-grid{% if block.layout %} chart-grid-{{ block.layout }}{% endif %}">
       {% for chart in block.charts %}
-      <figure class="chart-figure chart-figure-small">
+      <figure class="chart-figure chart-figure-small{% if block.layout %} chart-figure-small-{{ block.layout }}{% endif %}">
         <figcaption>{{ chart.label }}</figcaption>
         <img src="data:image/png;base64,{{ chart.image_b64 }}" alt="{{ chart.label }}" />
       </figure>
@@ -50,7 +58,7 @@
     </div>
     </div>
     {% elif block.type == 'chart_wide' %}
-    <figure class="chart-figure chart-figure-wide">
+    <figure class="chart-figure chart-figure-wide{% if block.size %} chart-figure-wide-{{ block.size }}{% endif %}">
       <figcaption class="details-subheading">{{ block.title }}</figcaption>
       <img src="data:image/png;base64,{{ block.image_b64 }}" alt="{{ block.title }}" />
     </figure>

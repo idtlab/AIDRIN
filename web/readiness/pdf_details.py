@@ -89,6 +89,7 @@ def _table(
     rows: list[list[str]],
     *,
     note: str | None = None,
+    layout: str | None = None,
 ) -> dict[str, Any]:
     return {
         "type": "table",
@@ -96,7 +97,39 @@ def _table(
         "headers": headers,
         "rows": rows,
         "note": note,
+        "layout": layout,
     }
+
+
+def _paired_exclusion_table(
+    title: str,
+    excluded: list[dict[str, Any]],
+    *,
+    total: int | None = None,
+) -> dict[str, Any]:
+    """Two feature/reason pairs per row to save horizontal space in the PDF."""
+    shown = excluded[:_MAX_DETAIL_LIST_ITEMS]
+    headers = [
+        "Feature",
+        "Reason for exclusion",
+        "Feature",
+        "Reason for exclusion",
+    ]
+    rows: list[list[str]] = []
+    for i in range(0, len(shown), 2):
+        left = shown[i]
+        row = [str(left.get("feature", "")), str(left.get("reason", ""))]
+        if i + 1 < len(shown):
+            right = shown[i + 1]
+            row.extend([str(right.get("feature", "")), str(right.get("reason", ""))])
+        else:
+            row.extend(["", ""])
+        rows.append(row)
+    note = None
+    if total and total > len(shown):
+        note = f"Showing first {len(shown)} of {total} excluded candidates."
+        rows.append([f"+{total - len(shown)} more not shown", "", "", ""])
+    return _table(title, headers, rows, note=note, layout="paired_exclusions")
 
 
 def _list_block(title: str, entries: list[dict[str, str]]) -> dict[str, Any]:
@@ -107,16 +140,21 @@ def _pre(title: str, text: str, *, note: str | None = None) -> dict[str, Any]:
     return {"type": "pre", "title": title, "text": text, "note": note}
 
 
-def _chart_group(title: str, charts: list[dict[str, str]]) -> dict[str, Any] | None:
+def _chart_group(
+    title: str,
+    charts: list[dict[str, str]],
+    *,
+    layout: str | None = None,
+) -> dict[str, Any] | None:
     if not charts:
         return None
-    return {"type": "chart_group", "title": title, "charts": charts}
+    return {"type": "chart_group", "title": title, "charts": charts, "layout": layout}
 
 
-def _chart_wide(title: str, image_b64: str) -> dict[str, Any] | None:
+def _chart_wide(title: str, image_b64: str, *, size: str | None = None) -> dict[str, Any] | None:
     if not image_b64:
         return None
-    return {"type": "chart_wide", "title": title, "image_b64": image_b64}
+    return {"type": "chart_wide", "title": title, "image_b64": image_b64, "size": size}
 
 
 def _charts_from_mapping(
@@ -270,7 +308,11 @@ def prepare_fairness_details(section: dict, viz: dict[str, Any] | None) -> dict[
     rep_vis = (det.get("representation_rate") or {}).get("visualizations") or {}
     if not rep_charts:
         rep_charts = _charts_from_mapping(rep_vis)
-    rep_group = _chart_group("Representation rate by sensitive attribute", rep_charts)
+    rep_group = _chart_group(
+        "Representation rate by sensitive attribute",
+        rep_charts,
+        layout="single_per_row",
+    )
     if rep_group:
         blocks.append(rep_group)
     elif (det.get("representation_rate") or {}).get("error"):
@@ -279,10 +321,13 @@ def prepare_fairness_details(section: dict, viz: dict[str, Any] | None) -> dict[
     target = ((section.get("auto_selection") or {}).get("selection_criteria") or {}).get(
         "target_column"
     ) or {}
+    sens_crit = ((section.get("auto_selection") or {}).get("selection_criteria") or {}).get(
+        "sensitive_attributes"
+    ) or {}
     target_name = target.get("selected") or "target"
     ci_b64 = viz.get("class_imbalance") or (det.get("class_imbalance") or {}).get("visualization")
     if ci_b64:
-        blocks.append(_chart_wide(f"Class imbalance — {target_name}", ci_b64))
+        blocks.append(_chart_wide(f"Class imbalance — {target_name}", ci_b64, size="class_imbalance"))
     elif (det.get("class_imbalance") or {}).get("error"):
         blocks.append(_note(f"Class imbalance: {det['class_imbalance']['error']}"))
 
@@ -293,6 +338,7 @@ def prepare_fairness_details(section: dict, viz: dict[str, Any] | None) -> dict[
             _chart_wide(
                 f"Statistical rate — {sr.get('sensitive', 'sensitive')} × {sr.get('target', target_name)}",
                 sr_b64,
+                size="statistical_rate",
             )
         )
     elif sr.get("error"):
@@ -305,6 +351,17 @@ def prepare_fairness_details(section: dict, viz: dict[str, Any] | None) -> dict[
         blocks.append(_table("Conditional demographic disparity (CDD)", ["Group", "Disparity"], rows))
     elif cdd.get("error"):
         blocks.append(_note(f"CDD: {cdd['error']}"))
+
+    excluded = sens_crit.get("excluded") or []
+    if excluded:
+        total = (sens_crit.get("excluded_meta") or {}).get("total") or len(excluded)
+        blocks.append(
+            _paired_exclusion_table(
+                f"Excluded sensitive candidates ({total})",
+                excluded,
+                total=total,
+            )
+        )
 
     return _section_blocks(blocks, "Detailed charts & tables")
 
