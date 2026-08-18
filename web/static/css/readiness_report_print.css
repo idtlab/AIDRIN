@@ -712,6 +712,8 @@ table.data td.num {
   font-size: 10pt;
   margin: 0 0 8pt 0;
   color: #1d4ed8;
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .details-subheading {
@@ -836,12 +838,23 @@ table.data.details-table td:first-child {
   border-radius: 4pt;
   padding: 6pt;
   background: #fafafa;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.chart-figure-wide figcaption {
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .chart-figure-wide img {
   width: 100%;
   max-width: 100%;
   height: auto;
+  /* Fill most of an A4 content area while leaving room for the chart title. */
+  max-height: 220mm;
+  object-fit: contain;
+  object-position: top center;
   display: block;
 }
 
