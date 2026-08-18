@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from aidrin.headless.api import (
     generate_metric_template,
@@ -18,7 +18,7 @@ from aidrin.headless.api import (
 )
 from aidrin.headless.config import HeadlessConfig
 
-mcp_server = FastMCP("aidrin")
+mcp_server = MCPServer("aidrin")
 
 
 def _dumps(obj: Any) -> str:
