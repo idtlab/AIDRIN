@@ -65,6 +65,8 @@ def _normalize_file_type(file_type: Optional[str], file_path: str) -> Optional[s
 
     if candidate in _EXCEL_TYPES:
         return _EXCEL_KEY
+    if candidate == ".hdf5":
+        return ".h5"
     return candidate
 
 
