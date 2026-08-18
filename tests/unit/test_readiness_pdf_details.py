@@ -75,6 +75,45 @@ class TestReadinessPdfDetails(unittest.TestCase):
         self.assertIsNotNone(details)
         self.assertTrue(any(b["type"] == "table" for b in details["blocks"]))
 
+    def test_prepare_governance_details_privacy_charts_and_excluded_qi(self):
+        section = {
+            "details": {
+                "k_anonymity": {"visualization": "k123"},
+                "l_diversity": {"visualization": "l123"},
+                "t_closeness": {"visualization": "t123"},
+            },
+            "auto_selection": {
+                "selection_criteria": {
+                    "quasi_identifiers": {
+                        "excluded": [
+                            {"feature": "ssn", "reason": "high cardinality"},
+                            {"feature": "email", "reason": "direct identifier"},
+                        ],
+                        "excluded_meta": {"total": 2},
+                    }
+                }
+            },
+        }
+        viz = {
+            "k_anonymity": "k123",
+            "l_diversity": "l123",
+            "t_closeness": "t123",
+        }
+        details = prepare_governance_details(section, viz)
+        self.assertIsNotNone(details)
+        privacy = details["blocks"][0]
+        self.assertEqual(privacy["type"], "chart_group")
+        self.assertEqual(privacy["layout"], "two_per_row")
+        self.assertEqual(len(privacy["charts"]), 3)
+        excluded = details["blocks"][-1]
+        self.assertEqual(excluded["type"], "table")
+        self.assertEqual(excluded["layout"], "paired_exclusions")
+        self.assertEqual(excluded["title"], "Excluded quasi-identifier candidates (2)")
+        self.assertEqual(
+            excluded["rows"][0],
+            ["ssn", "high cardinality", "email", "direct identifier"],
+        )
+
     def test_prepare_fairness_details_includes_excluded_sensitive_candidates(self):
         section = {
             "details": {

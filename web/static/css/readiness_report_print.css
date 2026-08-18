@@ -716,11 +716,6 @@ table.data td.num {
   color: #1d4ed8;
 }
 
-.details-heading + .chart-group {
-  break-before: avoid;
-  page-break-before: avoid;
-}
-
 .details-subheading {
   font-size: 7.5pt;
   font-weight: 600;
@@ -899,6 +894,26 @@ table.data.details-table-paired_exclusions td.mono {
 .chart-figure-small-single_per_row img {
   height: 98pt;
   max-height: 98pt;
+  object-position: center top;
+}
+
+.chart-figure-small-two_per_row {
+  display: inline-block;
+  vertical-align: top;
+  width: 49%;
+  max-width: 49%;
+  height: 140pt;
+  box-sizing: border-box;
+  padding: 4pt;
+  border: 1px solid #e5e7eb;
+  border-radius: 4pt;
+  background: #fafafa;
+  margin: 0 0.5% 6pt 0.5%;
+}
+
+.chart-figure-small-two_per_row img {
+  height: 118pt;
+  max-height: 118pt;
   object-position: center top;
 }
 

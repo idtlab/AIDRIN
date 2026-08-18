@@ -384,7 +384,11 @@ def prepare_governance_details(section: dict, viz: dict[str, Any] | None) -> dic
     )
     if mm_b64:
         small_charts.append({"label": _VIZ_LABELS["multiple_attribute_risk"], "image_b64": mm_b64})
-    mm_group = _chart_group("Privacy & linkage charts", small_charts)
+    mm_group = _chart_group(
+        "Privacy & linkage charts",
+        small_charts,
+        layout="two_per_row",
+    )
     if mm_group:
         blocks.append(mm_group)
 
@@ -422,13 +426,13 @@ def prepare_governance_details(section: dict, viz: dict[str, Any] | None) -> dic
     qi_excluded = qi_crit.get("excluded") or []
     if qi_excluded:
         total = (qi_crit.get("excluded_meta") or {}).get("total") or len(qi_excluded)
-        items = [
-            {"primary": e.get("feature", ""), "secondary": e.get("reason", "")}
-            for e in qi_excluded[:_MAX_DETAIL_LIST_ITEMS]
-        ]
-        if len(qi_excluded) > len(items):
-            items.append({"primary": f"+{len(qi_excluded) - len(items)} more not shown", "secondary": ""})
-        blocks.append(_list_block(f"Excluded quasi-identifier candidates ({total})", items))
+        blocks.append(
+            _paired_exclusion_table(
+                f"Excluded quasi-identifier candidates ({total})",
+                qi_excluded,
+                total=total,
+            )
+        )
 
     return _section_blocks(blocks, "Detailed charts & tables")
 
