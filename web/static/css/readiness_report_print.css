@@ -672,6 +672,19 @@ table.data td.num {
   margin-bottom: 3pt;
 }
 
+.details-pre {
+  margin: 0 0 8pt 0;
+  padding: 6pt 8pt;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 7pt;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 3pt;
+}
+
 .chart-grid {
   display: flex;
   flex-wrap: wrap;

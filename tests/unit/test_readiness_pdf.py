@@ -113,6 +113,67 @@ class TestReadinessPdfContext(unittest.TestCase):
         self.assertEqual(context["overview"]["profiles"][0]["type_abbr"], "N")
         self.assertTrue(context["glossary"])
 
+    def test_build_pdf_context_fair_details_only_when_include_details(self):
+        fair = {
+            "FAIR Compliance Checks": {
+                "Total Checks": "2/4",
+                "Findable Checks": "1/1",
+                "Accessible Checks": "1/1",
+                "Interoperable Checks": "0/1",
+                "Reusable Checks": "0/1",
+            },
+            "Findable": {"identifier": "x"},
+            "Other": {"extra_field": "value"},
+            "Original Metadata": {"nested": {"title": "Dataset"}},
+            "Pie chart": "abc",
+        }
+        sections = {
+            "dataset-overview": {"file_metadata": {}, "feature_profiles": []},
+            "data-quality": {
+                "grade": 1,
+                "grade_status": "good",
+                "kpis": [],
+                "needs_attention": {},
+            },
+            "impact-on-ai": {
+                "grade": 1,
+                "grade_status": "good",
+                "kpis": [],
+                "needs_attention": {},
+            },
+            "fairness-bias": {
+                "grade": 1,
+                "grade_status": "good",
+                "kpis": [],
+                "needs_attention": {},
+            },
+            "data-governance": {
+                "grade": 1,
+                "grade_status": "good",
+                "kpis": [],
+                "needs_attention": {},
+            },
+        }
+        scorecard = build_pdf_context(
+            file_name="data.csv", sections=sections, fair_data=fair, include_details=False
+        )
+        full = build_pdf_context(
+            file_name="data.csv", sections=sections, fair_data=fair, include_details=True
+        )
+        self.assertFalse(scorecard["include_details"])
+        self.assertIsNotNone(scorecard["fair_compliance"])
+        self.assertEqual(len(scorecard["fair_compliance"]["principles"]), 4)
+        self.assertEqual(scorecard["section_details"], {})
+        self.assertTrue(full["include_details"])
+        fair_details = full["section_details"]["fair"]
+        self.assertIsNotNone(fair_details)
+        titles = [b.get("title") for b in fair_details["blocks"]]
+        self.assertIn("FAIR Compliance Checks", titles)
+        self.assertIn("Other", titles)
+        self.assertIn("Original Metadata", titles)
+        self.assertNotIn("Findable", titles)
+        self.assertNotIn("Pie chart", titles)
+
     def test_footnote_registry_scopes_per_section(self):
         registry = FootnoteRegistry()
         dq = registry.section("data_quality")

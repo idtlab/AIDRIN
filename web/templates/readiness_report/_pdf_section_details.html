@@ -52,6 +52,10 @@
       <figcaption class="details-subheading">{{ block.title }}</figcaption>
       <img src="data:image/png;base64,{{ block.image_b64 }}" alt="{{ block.title }}" />
     </figure>
+    {% elif block.type == 'pre' %}
+    <p class="details-subheading">{{ block.title }}</p>
+    {% if block.note %}<p class="muted details-note">{{ block.note }}</p>{% endif %}
+    <pre class="details-pre">{{ block.text }}</pre>
     {% endif %}
   {% endfor %}
 </div>

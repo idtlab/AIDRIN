@@ -732,9 +732,13 @@ def build_pdf_context(
     glossary = _collect_glossary_keys(prepared, fair_data)
     section_details: dict[str, dict[str, Any] | None] = {}
     if include_details:
-        from web.readiness.pdf_details import build_pdf_section_details
+        from web.readiness.pdf_details import (
+            build_pdf_section_details,
+            prepare_fair_compliance_details,
+        )
 
         section_details = build_pdf_section_details(sections, visualizations or {})
+        section_details["fair"] = prepare_fair_compliance_details(fair_data)
     return {
         "file_name": file_name,
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),

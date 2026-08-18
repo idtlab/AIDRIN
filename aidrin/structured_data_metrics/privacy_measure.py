@@ -177,33 +177,33 @@ def generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, task=None, i
 
         # Stage 4: Generate visualization (85-100%)
         if include_visualization:
-            if task:
-                task.update_state(
-                    state='PROGRESS',
-                    meta={'current': 90, 'total': 100, 'status': 'Generating visualization...'}
-                )
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 90, 'total': 100, 'status': 'Generating visualization...'}
+            )
 
-            # Create a box plot
-            plt.figure(figsize=(8, 8))
-            plt.boxplot(list(sing_res.values()), tick_labels=list(sing_res.keys()))
-            plt.title("Box plot of single feature risk scores")
-            plt.xlabel("Feature")
-            plt.ylabel("Risk Score")
+        # Create a box plot
+        plt.figure(figsize=(8, 8))
+        plt.boxplot(list(sing_res.values()), tick_labels=list(sing_res.keys()))
+        plt.title("Box plot of single feature risk scores")
+        plt.xlabel("Feature")
+        plt.ylabel("Risk Score")
 
-            # Save the plot as a PNG image in memory
-            image_stream = io.BytesIO()
-            plt.tight_layout()
-            plt.savefig(image_stream, format="png", bbox_inches='tight', dpi=300)
-            plt.close()
+        # Save the plot as a PNG image in memory
+        image_stream = io.BytesIO()
+        plt.tight_layout()
+        plt.savefig(image_stream, format="png", bbox_inches='tight', dpi=300)
+        plt.close()
 
-            # Convert the image to a base64 string
-            image_stream.seek(0)
-            base64_image = base64.b64encode(image_stream.read()).decode("utf-8")
-            image_stream.close()
+        # Convert the image to a base64 string
+        image_stream.seek(0)
+        base64_image = base64.b64encode(image_stream.read()).decode("utf-8")
+        image_stream.close()
 
         result_dict["Descriptive statistics of the risk scores"] = descriptive_stats_dict
         if include_visualization:
-            result_dict["Single attribute risk scoring Visualization"] = base64_image
+        result_dict["Single attribute risk scoring Visualization"] = base64_image
         result_dict["Description"] = (
             "This metric quantifies the re-identification risk for each "
             "quasi-identifier. Lower values are preferred, indicating "
@@ -437,31 +437,31 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None,
 
         # Stage 5: Generate visualization (90-100%)
         if include_visualization:
-            if task:
-                task.update_state(
-                    state='PROGRESS',
-                    meta={'current': 95, 'total': 100, 'status': 'Generating visualization...'}
-                )
+        if task:
+            task.update_state(
+                state='PROGRESS',
+                meta={'current': 95, 'total': 100, 'status': 'Generating visualization...'}
+            )
 
-            x_label = ",".join(eval_cols)
-            # Create a box plot
-            plt.figure(figsize=(8, 8))
-            plt.boxplot(risk_scores, orientation="vertical")
-            plt.title('Box Plot of Multiple Attribute Risk Scores')
-            plt.ylabel('Risk Score')
-            plt.xlabel('Feature Combination')
-            plt.xticks([1], [x_label])
+        x_label = ",".join(eval_cols)
+        # Create a box plot
+        plt.figure(figsize=(8, 8))
+        plt.boxplot(risk_scores, orientation="vertical")
+        plt.title('Box Plot of Multiple Attribute Risk Scores')
+        plt.ylabel('Risk Score')
+        plt.xlabel('Feature Combination')
+        plt.xticks([1], [x_label])
 
-            # Save the plot as a PNG image in memory
-            image_stream = io.BytesIO()
-            plt.tight_layout()
-            plt.savefig(image_stream, format='png', bbox_inches='tight', dpi=300)
-            plt.close()
+        # Save the plot as a PNG image in memory
+        image_stream = io.BytesIO()
+        plt.tight_layout()
+        plt.savefig(image_stream, format='png', bbox_inches='tight', dpi=300)
+        plt.close()
 
-            # Convert the image to a base64 string
-            image_stream.seek(0)
-            base64_image = base64.b64encode(image_stream.read()).decode('utf-8')
-            image_stream.close()
+        # Convert the image to a base64 string
+        image_stream.seek(0)
+        base64_image = base64.b64encode(image_stream.read()).decode('utf-8')
+        image_stream.close()
 
         result_dict["Description"] = (
             "This metric evaluates the joint risk posed by combinations of "
@@ -474,7 +474,7 @@ def generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, task=None,
         )
         result_dict["Descriptive statistics of the risk scores"] = stats_dict
         if include_visualization:
-            result_dict["Multiple attribute risk scoring Visualization"] = base64_image
+        result_dict["Multiple attribute risk scoring Visualization"] = base64_image
         result_dict['Dataset Risk Score'] = normalized_distance
 
     except SoftTimeLimitExceeded:
@@ -918,20 +918,20 @@ def compute_k_anonymity(quasi_identifiers: List[str], file_info, include_visuali
         # Histogram of equivalence class sizes
         hist_data = counts.value_counts().sort_index().to_dict()
         if include_visualization:
-            plt.figure(figsize=(8, 5))
-            plt.bar(hist_data.keys(), hist_data.values(), color="skyblue")
-            plt.xlabel("Equivalence Class Size (k)")
-            plt.ylabel("Number of Equivalence Classes")
-            plt.title("Distribution of Equivalence Class Sizes")
-            plt.grid(axis="y", alpha=0.75)
-            # Save histogram to base64
-            img_stream = io.BytesIO()
-            plt.tight_layout()
-            plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
-            plt.close()
-            img_stream.seek(0)
-            base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
-            img_stream.close()
+        plt.figure(figsize=(8, 5))
+        plt.bar(hist_data.keys(), hist_data.values(), color="skyblue")
+        plt.xlabel("Equivalence Class Size (k)")
+        plt.ylabel("Number of Equivalence Classes")
+        plt.title("Distribution of Equivalence Class Sizes")
+        plt.grid(axis="y", alpha=0.75)
+        # Save histogram to base64
+        img_stream = io.BytesIO()
+        plt.tight_layout()
+        plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
+        plt.close()
+        img_stream.seek(0)
+        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
+        img_stream.close()
 
         # Final result
         result_dict = {
@@ -1049,22 +1049,22 @@ def compute_l_diversity(
         binned_l_diversities = l_diversities.round()
         hist_data = binned_l_diversities.value_counts().sort_index()
         if include_visualization:
-            plt.figure(figsize=(8, 8))
-            plt.bar(hist_data.index, hist_data.values, color="skyblue")
-            plt.xlabel("Number of Distinct Sensitive Values (l)")
-            plt.ylabel("Number of Equivalence Classes")
-            plt.title("Distribution of l-Diversity Across Equivalence Classes")
-            plt.xticks(sorted(hist_data.index))
-            plt.grid(axis="y", alpha=0.75)
+        plt.figure(figsize=(8, 8))
+        plt.bar(hist_data.index, hist_data.values, color="skyblue")
+        plt.xlabel("Number of Distinct Sensitive Values (l)")
+        plt.ylabel("Number of Equivalence Classes")
+        plt.title("Distribution of l-Diversity Across Equivalence Classes")
+        plt.xticks(sorted(hist_data.index))
+        plt.grid(axis="y", alpha=0.75)
 
-            # Save plot to base64 string
-            img_stream = io.BytesIO()
-            plt.tight_layout()
-            plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
-            plt.close()
-            img_stream.seek(0)
-            base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
-            img_stream.close()
+        # Save plot to base64 string
+        img_stream = io.BytesIO()
+        plt.tight_layout()
+        plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
+        plt.close()
+        img_stream.seek(0)
+        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
+        img_stream.close()
 
         # Compose result dictionary
         result_dict = {
@@ -1192,20 +1192,20 @@ def compute_t_closeness(
         # Histogram plot
         hist_data = t_series.round(2).value_counts().sort_index()
         if include_visualization:
-            plt.figure(figsize=(8, 5))
-            plt.bar(hist_data.index, hist_data.values, color="salmon")
-            plt.xlabel("t-Closeness Value (TVD)")
-            plt.ylabel("Number of Equivalence Classes")
-            plt.title("Distribution of T-Closeness Across Equivalence Classes")
-            plt.grid(axis="y", alpha=0.75)
+        plt.figure(figsize=(8, 5))
+        plt.bar(hist_data.index, hist_data.values, color="salmon")
+        plt.xlabel("t-Closeness Value (TVD)")
+        plt.ylabel("Number of Equivalence Classes")
+        plt.title("Distribution of T-Closeness Across Equivalence Classes")
+        plt.grid(axis="y", alpha=0.75)
 
-            img_stream = io.BytesIO()
-            plt.tight_layout()
-            plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
-            plt.close()
-            img_stream.seek(0)
-            base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
-            img_stream.close()
+        img_stream = io.BytesIO()
+        plt.tight_layout()
+        plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
+        plt.close()
+        img_stream.seek(0)
+        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
+        img_stream.close()
 
         result_dict = {
             "t-Value": max_t,
@@ -1307,20 +1307,20 @@ def compute_entropy_risk(quasi_identifiers, file_info, include_visualization=Tru
         # Histogram plot of entropy values
         hist_data = entropy_series.round(2).value_counts().sort_index()
         if include_visualization:
-            plt.figure(figsize=(8, 5))
-            plt.bar(hist_data.index, hist_data.values, color="royalblue")
-            plt.xlabel("Entropy Value")
-            plt.ylabel("Number of Equivalence Classes")
-            plt.title("Distribution of Entropy Across Equivalence Classes")
-            plt.grid(axis="y", alpha=0.75)
+        plt.figure(figsize=(8, 5))
+        plt.bar(hist_data.index, hist_data.values, color="royalblue")
+        plt.xlabel("Entropy Value")
+        plt.ylabel("Number of Equivalence Classes")
+        plt.title("Distribution of Entropy Across Equivalence Classes")
+        plt.grid(axis="y", alpha=0.75)
 
-            img_stream = io.BytesIO()
-            plt.tight_layout()
-            plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
-            plt.close()
-            img_stream.seek(0)
-            base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
-            img_stream.close()
+        img_stream = io.BytesIO()
+        plt.tight_layout()
+        plt.savefig(img_stream, format="png", bbox_inches='tight', dpi=300)
+        plt.close()
+        img_stream.seek(0)
+        base64_image = base64.b64encode(img_stream.read()).decode("utf-8")
+        img_stream.close()
 
         desc_stats = {
             "min": round(entropy_series.min(), 4),

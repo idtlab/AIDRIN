@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from html import escape
 from typing import Any
 
 _MAX_DETAIL_TABLE_ROWS = 50
 _MAX_DETAIL_LIST_ITEMS = 50
+_MAX_PRE_CHARS = 4000
+_FAIR_DETAIL_SKIP = frozenset(
+    ("Findable", "Accessible", "Interoperable", "Reusable", "Pie chart")
+)
 _NUM_STAT_ORDER = (
     "count",
     "min",
@@ -72,6 +77,10 @@ def _table(
 
 def _list_block(title: str, entries: list[dict[str, str]]) -> dict[str, Any]:
     return {"type": "list", "title": title, "entries": entries}
+
+
+def _pre(title: str, text: str, *, note: str | None = None) -> dict[str, Any]:
+    return {"type": "pre", "title": title, "text": text, "note": note}
 
 
 def _chart_group(title: str, charts: list[dict[str, str]]) -> dict[str, Any] | None:
@@ -340,6 +349,51 @@ def prepare_governance_details(section: dict, viz: dict[str, Any] | None) -> dic
         blocks.append(_list_block(f"Excluded quasi-identifier candidates ({total})", items))
 
     return _section_blocks(blocks, "Detailed charts & tables")
+
+
+def _json_preview(value: Any) -> tuple[str, str | None]:
+    text = json.dumps(value, indent=2, default=str, ensure_ascii=False)
+    if len(text) > _MAX_PRE_CHARS:
+        return text[:_MAX_PRE_CHARS] + "\n…", "Truncated for the PDF."
+    return text, None
+
+
+def _scalar_table_rows(obj: dict) -> list[list[str]] | None:
+    if not obj or any(isinstance(v, (dict, list)) for v in obj.values()):
+        return None
+    rows = []
+    for key, val in list(obj.items())[:_MAX_DETAIL_TABLE_ROWS]:
+        rows.append([str(key), "" if val is None else str(val)])
+    return rows
+
+
+def prepare_fair_compliance_details(fair_data: dict | None) -> dict[str, Any] | None:
+    """Build 'Show detailed results' extras: Other, FAIR Compliance Checks, Original Metadata."""
+    if not fair_data or fair_data.get("error"):
+        return None
+    blocks: list[dict[str, Any] | None] = []
+    for key, val in fair_data.items():
+        if key in _FAIR_DETAIL_SKIP:
+            continue
+        if isinstance(val, dict):
+            rows = _scalar_table_rows(val)
+            if rows:
+                note = None
+                total = len(val)
+                if total > len(rows):
+                    note = f"Showing first {len(rows)} of {total} fields."
+                blocks.append(_table(key, ["Field", "Value"], rows, note=note))
+            else:
+                text, note = _json_preview(val)
+                blocks.append(_pre(key, text, note=note))
+        elif isinstance(val, list):
+            text, note = _json_preview(val)
+            blocks.append(_pre(key, text, note=note))
+        else:
+            blocks.append(
+                _table(key, ["Field", "Value"], [[str(key), "" if val is None else str(val)]])
+            )
+    return _section_blocks(blocks, "Detailed results")
 
 
 def build_pdf_section_details(

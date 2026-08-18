@@ -4,6 +4,7 @@ import unittest
 
 from web.readiness.pdf_details import (
     build_pdf_section_details,
+    prepare_fair_compliance_details,
     prepare_governance_details,
     prepare_overview_details,
 )
@@ -52,6 +53,27 @@ class TestReadinessPdfDetails(unittest.TestCase):
             set(result.keys()),
             {"overview", "data_quality", "impact", "fairness", "governance"},
         )
+
+    def test_prepare_fair_compliance_details_skips_principles_and_chart(self):
+        details = prepare_fair_compliance_details(
+            {
+                "FAIR Compliance Checks": {"Total Checks": "2/4", "Findable Checks": "1/1"},
+                "Findable": {"identifier": "x"},
+                "Accessible": {"accessURL": "https://example.org"},
+                "Other": {"extra_field": "value"},
+                "Original Metadata": {"nested": {"title": "Dataset"}},
+                "Pie chart": "abc",
+            }
+        )
+        self.assertIsNotNone(details)
+        titles = [b["title"] for b in details["blocks"]]
+        self.assertEqual(details["heading"], "Detailed results")
+        self.assertIn("FAIR Compliance Checks", titles)
+        self.assertIn("Other", titles)
+        self.assertIn("Original Metadata", titles)
+        self.assertNotIn("Findable", titles)
+        self.assertNotIn("Accessible", titles)
+        self.assertNotIn("Pie chart", titles)
 
 
 if __name__ == "__main__":

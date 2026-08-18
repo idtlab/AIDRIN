@@ -340,6 +340,10 @@
     {% include "readiness_report/_pdf_fair_details.html" %}
     {% set section_name = 'fair' %}
     {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.fair %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
   </div>
   {% endif %}
 

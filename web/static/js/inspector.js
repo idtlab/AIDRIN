@@ -3448,7 +3448,185 @@ function _wireFairFileInput(fileInput, labelEl, iconEl) {
   });
 }
 
-/** Build FAIR assessment result HTML (shared by panel and readiness report). */
+const _FAIR_PRINCIPLE_KEYS = ["Findable", "Accessible", "Interoperable", "Reusable"];
+
+function _fairCheckFailed(value) {
+  if (value === false) return true;
+  const s = String(value);
+  return s === "Fail" || s === "No" || s.includes("CHECK FAILED");
+}
+
+/** Flatten a FAIR principle detail object into table rows (mirrors PDF _fair_value_rows). */
+function _fairValueRows(obj) {
+  const rows = [];
+  if (!obj || typeof obj !== "object") return rows;
+  for (const [key, val] of Object.entries(obj)) {
+    if (val && typeof val === "object") {
+      rows.push({ label: key, isGroup: true });
+      rows.push(..._fairValueRows(val));
+    } else {
+      const failed = _fairCheckFailed(val);
+      rows.push({
+        label: key,
+        isGroup: false,
+        found: !failed,
+        statusLabel: failed ? "Missing" : "Found",
+      });
+    }
+  }
+  return rows;
+}
+
+function _fairPrincipleStats(data, principle, checks) {
+  const checkStr = checks[`${principle} Checks`] || "0/0";
+  const m = checkStr.match(/(\d+)\/(\d+)/);
+  const passed = m ? parseInt(m[1], 10) : 0;
+  const total = m ? parseInt(m[2], 10) : 1;
+  const pct = Math.round((passed / total) * 100);
+  const detail = data[principle];
+  const rows = typeof detail === "object" && detail !== null ? _fairValueRows(detail) : [];
+  return { name: principle, checkStr, passed, total, pct, rows };
+}
+
+function _renderFairCheckBadge(found) {
+  if (found) {
+    return '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Found</span>';
+  }
+  return '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Missing</span>';
+}
+
+function _renderFairPrincipleCardHtml(principle) {
+  let tableHtml = "";
+  if (principle.rows.length) {
+    tableHtml = '<table class="w-full text-xs"><tbody>';
+    principle.rows.forEach((row) => {
+      if (row.isGroup) {
+        tableHtml += `<tr><td colspan="2" class="px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/40 border-b border-gray-100 dark:border-gray-700">${escapeHtml(row.label)}</td></tr>`;
+      } else {
+        tableHtml += `<tr class="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+          <td class="px-3 py-1.5 text-gray-600 dark:text-gray-400">${escapeHtml(row.label)}</td>
+          <td class="px-3 py-1.5 text-right">${_renderFairCheckBadge(row.found)}</td>
+        </tr>`;
+      }
+    });
+    tableHtml += "</tbody></table>";
+  } else {
+    tableHtml = '<p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">No detail available.</p>';
+  }
+
+  return `<div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+      <span class="text-sm font-semibold text-gray-900 dark:text-white">${escapeHtml(principle.name)}</span>
+      <span class="text-xs text-gray-400 dark:text-gray-500">${escapeHtml(principle.checkStr)}</span>
+    </div>
+    ${tableHtml}
+  </div>`;
+}
+
+function _renderFairPrincipleCardsGridHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const cards = _FAIR_PRINCIPLE_KEYS.map((name) =>
+    _renderFairPrincipleCardHtml(_fairPrincipleStats(data, name, checks)),
+  );
+  return `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${cards.join("")}</div>`;
+}
+
+function _fairSupplementaryDetailKeys(data) {
+  const reserved = new Set([..._FAIR_PRINCIPLE_KEYS, "Pie chart"]);
+  return Object.keys(data).filter((k) => !reserved.has(k));
+}
+
+function _renderFairSupplementaryDetailsHtml(data) {
+  const extraKeys = _fairSupplementaryDetailKeys(data);
+  if (!extraKeys.length) return "";
+
+  let html = '<div class="space-y-2">';
+  extraKeys.forEach((k) => {
+    const val = data[k];
+    if (typeof val === "object" && val !== null) {
+      html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <summary class="cursor-pointer flex items-center justify-start px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+          ${escapeHtml(k)}
+        </summary>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+          <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
+        </div>
+      </details>`;
+    } else {
+      html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg">
+        <span class="font-medium text-gray-900 dark:text-white">${escapeHtml(k)}</span>
+        <span class="text-gray-500 dark:text-gray-400">${escapeHtml(val ?? "—")}</span>
+      </div>`;
+    }
+  });
+  html += "</div>";
+  return html;
+}
+
+function _renderFairComplianceSummaryHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const totalCheck = checks["Total Checks"] || "";
+  const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
+  const totalPassed = totalMatch ? parseInt(totalMatch[1], 10) : 0;
+  const totalExpected = totalMatch ? parseInt(totalMatch[2], 10) : 1;
+  const totalPct = Math.round((totalPassed / totalExpected) * 100);
+
+  let html = `<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">${totalPassed}/${totalExpected} checks passed</span>
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-sm font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">${totalPct}%</span>
+  </div>
+  <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+    <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
+  </div>
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">`;
+
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
+    const checkStr = checks[`${k} Checks`] || "0/0";
+    const m = checkStr.match(/(\d+)\/(\d+)/);
+    const passed = m ? parseInt(m[1], 10) : 0;
+    const total = m ? parseInt(m[2], 10) : 1;
+    const pct = Math.round((passed / total) * 100);
+    html += `<div>
+      <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
+      <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
+        <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
+      </div>
+    </div>`;
+  });
+  html += "</div>";
+  return html;
+}
+
+/** Render a FAIR value object as readable HTML with pass/fail badges */
+function renderFairValue(obj) {
+  if (typeof obj !== "object" || obj === null) return String(obj ?? "—");
+  let html = "";
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === "object" && v !== null) {
+      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${k}</span>${renderFairValue(v)}</div>`;
+    } else {
+      const strVal = String(v);
+      const isFail =
+        strVal.includes("CHECK FAILED") ||
+        v === false ||
+        v === "Fail" ||
+        v === "No";
+      let badge = "";
+      if (isFail) {
+        badge =
+          '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">&#10007; Missing</span>';
+      } else {
+        badge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" title="${escapeHtml(strVal)}">&#10003; Found</span>`;
+      }
+      html += `<div class="flex items-center justify-between py-1.5 text-xs border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+        <span class="text-gray-600 dark:text-gray-400 mr-2">${k}</span>${badge}</div>`;
+    }
+  }
+  return html;
+}
+
+/** Build FAIR assessment result HTML for Understandability / FAIR Assessment. */
 function buildFairAssessmentResultHtml(data) {
   const checks = data["FAIR Compliance Checks"] || {};
   const totalCheck = checks["Total Checks"] || "";
@@ -3467,8 +3645,7 @@ function buildFairAssessmentResultHtml(data) {
     </div>
     <div class="grid grid-cols-4 gap-3">`;
 
-  const fairKeys = ["Findable", "Accessible", "Interoperable", "Reusable"];
-  fairKeys.forEach((k) => {
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
     const checkStr = checks[`${k} Checks`] || "0/0";
     const m = checkStr.match(/(\d+)\/(\d+)/);
     const passed = m ? parseInt(m[1], 10) : 0;
@@ -3485,7 +3662,7 @@ function buildFairAssessmentResultHtml(data) {
   html += "</div></div>";
 
   html += '<div class="space-y-2 mb-4">';
-  fairKeys.forEach((k) => {
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
     let val = "—";
     const checkStr = checks[`${k} Checks`] || "";
     if (data[k] !== undefined && typeof data[k] === "object") {
@@ -3504,7 +3681,7 @@ function buildFairAssessmentResultHtml(data) {
   html += "</div>";
 
   const extraKeys = Object.keys(data).filter(
-    (k) => !fairKeys.includes(k) && k !== "Pie chart",
+    (k) => !_FAIR_PRINCIPLE_KEYS.includes(k) && k !== "Pie chart",
   );
   if (extraKeys.length > 0) {
     html +=
@@ -3536,6 +3713,34 @@ function buildFairAssessmentResultHtml(data) {
   return html;
 }
 
+/** Build readiness-report FAIR result HTML (PDF-style cards + on-demand extras). */
+function buildReadinessFairResultHtml(data) {
+  let html = _renderFairComplianceSummaryHtml(data);
+  html += `<div class="mt-4">${_renderFairPrincipleCardsGridHtml(data)}</div>`;
+  if (_fairSupplementaryDetailKeys(data).length) {
+    html += `
+    <details class="group border-t border-gray-200 dark:border-gray-700 pt-3 mt-4" data-fair-details="1">
+      <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+        Show detailed results
+      </summary>
+      <div class="mt-4 fair-compliance-details-content"></div>
+    </details>`;
+  }
+  return html;
+}
+
+function _wireFairComplianceDetails(detailsEl, data) {
+  if (!detailsEl || detailsEl.dataset.fairDetailsWired === "1") return;
+  detailsEl.dataset.fairDetailsWired = "1";
+  detailsEl.addEventListener("toggle", () => {
+    if (!detailsEl.open) return;
+    const target = detailsEl.querySelector(".fair-compliance-details-content");
+    if (!target || target.dataset.rendered === "1") return;
+    target.dataset.rendered = "1";
+    target.innerHTML = _renderFairSupplementaryDetailsHtml(data);
+  });
+}
+
 function renderFairAssessmentResult(data, resultContainer) {
   if (!resultContainer) return false;
   if (data.error) {
@@ -3543,6 +3748,18 @@ function renderFairAssessmentResult(data, resultContainer) {
     return false;
   }
   resultContainer.innerHTML = buildFairAssessmentResultHtml(data);
+  return true;
+}
+
+function renderReadinessFairResult(data, resultContainer) {
+  if (!resultContainer) return false;
+  if (data.error) {
+    resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
+    return false;
+  }
+  resultContainer.innerHTML = buildReadinessFairResultHtml(data);
+  const detailsEl = resultContainer.querySelector("[data-fair-details]");
+  if (detailsEl) _wireFairComplianceDetails(detailsEl, data);
   return true;
 }
 
@@ -3561,7 +3778,8 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
       const resultData = { ...data };
       delete resultData.cached;
       delete resultData.build_time_seconds;
-      const ok = renderFairAssessmentResult(resultData, resultContainer);
+      const render = callbacks?.render || renderFairAssessmentResult;
+      const ok = render(resultData, resultContainer);
       if (ok) {
         callbacks?.onSuccess?.(resultData, data);
       } else {
@@ -3594,6 +3812,7 @@ function submitReadinessFairAssessment() {
     document.getElementById("form-readiness-fair"),
     resultsEl,
     {
+      render: renderReadinessFairResult,
       onSuccess(data) {
         _readinessFairCompliance = { status: "ok", data };
         uploadEl?.classList.add("hidden");
@@ -3616,7 +3835,7 @@ function _restoreReadinessFairFromCache(fairPayload) {
   _readinessFairCompliance = { status: "ok", data };
   uploadEl?.classList.add("hidden");
   resultsEl.classList.remove("hidden");
-  renderFairAssessmentResult(data, resultsEl);
+  renderReadinessFairResult(data, resultsEl);
 
   const metadataType = fairPayload.metadata_type;
   if (metadataType) {
@@ -3683,37 +3902,6 @@ function initReadinessFairSection() {
     document.getElementById("readinessFairFileLabel"),
     document.getElementById("readinessFairUploadIcon"),
   );
-}
-
-/** Render a FAIR value object as readable HTML with pass/fail badges */
-function renderFairValue(obj) {
-  if (typeof obj !== "object" || obj === null) return String(obj ?? "—");
-  let html = "";
-  for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === "object" && v !== null) {
-      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${k}</span>${renderFairValue(v)}</div>`;
-    } else {
-      const strVal = String(v);
-      const isFail =
-        strVal.includes("CHECK FAILED") ||
-        v === false ||
-        v === "Fail" ||
-        v === "No";
-      let badge = "";
-      if (isFail) {
-        badge =
-          '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">&#10007; Missing</span>';
-      } else {
-        // Truncate long values
-        const display =
-          strVal.length > 60 ? strVal.substring(0, 57) + "..." : strVal;
-        badge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" title="${escapeHtml(strVal)}">&#10003; Found</span>`;
-      }
-      html += `<div class="flex items-center justify-between py-1.5 text-xs border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-        <span class="text-gray-600 dark:text-gray-400 mr-2">${k}</span>${badge}</div>`;
-    }
-  }
-  return html;
 }
 
 // ==================== Custom Metrics ====================
