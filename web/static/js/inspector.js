@@ -3686,25 +3686,92 @@ function buildCategoricalSummaryTable(summary) {
  * @param {Object} histograms - Dict of {column_theme: base64_img}
  * @param {string} title - Section heading
  */
-function buildHistogramSection(histograms, title) {
-  if (!histograms) return "";
-  // Always use the light variant — CSS filter handles dark mode
+/**
+ * Strip the "_light" suffix the server keys chart images with.
+ * @param {Object} charts - {`${column}_light`: base64}
+ * @returns {Object} {column: base64}
+ */
+function _chartsByColumn(charts) {
   const columns = {};
-  for (const [key, base64] of Object.entries(histograms)) {
+  for (const [key, base64] of Object.entries(charts || {})) {
     if (key.endsWith("_light")) {
       columns[key.slice(0, -"_light".length)] = base64;
     }
   }
+  return columns;
+}
+
+/**
+ * Swap a distribution card between its line and bar rendering (issue #212).
+ * Both PNGs ship with the summary, so this is a src swap, not a refetch.
+ *
+ * The line PNG is read back off the <img> rather than mirrored into a data-
+ * attribute: these are ~15-30 KB of base64 each, and duplicating them into the
+ * markup doubled the rendered size of the whole section for no gain.
+ * @param {HTMLElement} button - the clicked Line/Bar button
+ * @param {string} kind - "line" or "bar"
+ */
+function toggleDistributionChart(button, kind) {
+  const card = button.closest("[data-chart-card]");
+  if (!card) return;
+  const img = card.querySelector("img");
+  if (!img) return;
+  // Captured once, before the first swap replaces it.
+  if (card._chartLineSrc === undefined) {
+    card._chartLineSrc = img.getAttribute("src");
+  }
+  const next =
+    kind === "bar"
+      ? card.dataset.chartBar &&
+        `data:image/png;base64,${card.dataset.chartBar}`
+      : card._chartLineSrc;
+  if (!next) return;
+  img.src = next;
+
+  card.querySelectorAll("[data-chart-toggle]").forEach((btn) => {
+    const active = btn.dataset.chartToggle === kind;
+    btn.classList.toggle("bg-blue-600", active);
+    btn.classList.toggle("text-white", active);
+    btn.classList.toggle("text-gray-600", !active);
+    btn.classList.toggle("dark:text-gray-300", !active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+}
+
+/**
+ * Build one distribution-chart grid.
+ * @param {Object} histograms - {`${column}_light`: base64} shown by default
+ * @param {string} title - section heading
+ * @param {Object} [altBars] - optional bar-chart twin per column; when a column
+ *   has one, the card gets a Line/Bar toggle
+ */
+function buildHistogramSection(histograms, title, altBars) {
+  if (!histograms) return "";
+  // Always use the light variant — CSS filter handles dark mode
+  const columns = _chartsByColumn(histograms);
   if (Object.keys(columns).length === 0) return "";
+  const bars = _chartsByColumn(altBars);
 
   let html = `<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">${title}</h3>`;
   html +=
     '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">';
   for (const [colName, base64] of Object.entries(columns)) {
+    const bar = bars[colName];
+    const safeName = escapeHtml(colName);
     html += `
-      <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-        <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="w-full" />
-        <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${escapeHtml(colName)}</div>
+      <div data-chart-card${bar ? ` data-chart-bar="${bar}"` : ""} class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${safeName}" class="w-full" />
+        <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs border-t border-gray-200 dark:border-gray-600">
+          <span class="font-medium text-gray-600 dark:text-gray-400 truncate" title="${safeName}">${safeName}</span>
+          ${
+            bar
+              ? `<span class="shrink-0 inline-flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden" role="group" aria-label="Chart type for ${safeName}">
+            <button type="button" data-chart-toggle="line" aria-pressed="true" onclick="toggleDistributionChart(this, 'line')" class="px-2 py-0.5 text-xs font-medium bg-blue-600 text-white">Line</button>
+            <button type="button" data-chart-toggle="bar" aria-pressed="false" onclick="toggleDistributionChart(this, 'bar')" class="px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300">Bar</button>
+          </span>`
+              : ""
+          }
+        </div>
       </div>
     `;
   }
@@ -3717,12 +3784,23 @@ function buildHistogramSection(histograms, title) {
  * continuous columns and value-count bars for categorical columns.
  * @param {Object} histograms - continuous KDE plots (`histograms`)
  * @param {Object} [categoricalHistograms] - categorical bar charts
+ * @param {Object} [histogramBars] - binned twin of each KDE, enabling the
+ *   per-chart Line/Bar toggle. Categorical cards get none: they are already
+ *   bars, and a KDE over a discrete code is what column roles avoid.
  */
-function renderWorkspaceHistograms(histograms, categoricalHistograms) {
+function renderWorkspaceHistograms(
+  histograms,
+  categoricalHistograms,
+  histogramBars,
+) {
   const container = document.getElementById("workspace-histograms");
   if (!container) return;
   container.innerHTML =
-    buildHistogramSection(histograms, "Numerical Feature Distributions") +
+    buildHistogramSection(
+      histograms,
+      "Numerical Feature Distributions",
+      histogramBars,
+    ) +
     buildHistogramSection(
       categoricalHistograms,
       "Categorical Feature Distributions",
@@ -3994,7 +4072,11 @@ function renderWorkspaceSummary(data) {
   // Apply the default "Needs review" filter so continuous columns start hidden.
   filterColumnRoles();
 
-  renderWorkspaceHistograms(data.histograms, data.categorical_histograms);
+  renderWorkspaceHistograms(
+    data.histograms,
+    data.categorical_histograms,
+    data.histogram_bars,
+  );
 }
 
 // ==================== Workspace Init ====================

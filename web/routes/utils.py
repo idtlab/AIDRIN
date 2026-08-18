@@ -447,6 +447,49 @@ def summary_histograms(df, columns=None):
     return line_graphs
 
 
+def continuous_bars(df, columns=None, bins=20):
+    """Generate base64-encoded binned-histogram bars for continuous columns.
+
+    The twin of :func:`summary_histograms`: same columns, same keys, drawn as
+    a binned histogram instead of a KDE curve. A KDE smooths the distribution,
+    which hides the gaps in data that is continuous by dtype but effectively
+    discrete (issue #212), so the Data Overview ships both and lets the reader
+    switch per chart. Columns with no non-null values are skipped — there is
+    nothing to bin, and a blank card is worse than no card.
+
+    Categorical columns are not covered here; they get value-count bars from
+    :func:`categorical_bars` instead.
+    """
+    text_color = "#6b7280"
+    bar_color = "#4485F4"
+
+    if columns is None:
+        columns = list(df.select_dtypes(include="number").columns)
+
+    bar_graphs = {}
+    for column in columns:
+        series = pd.to_numeric(df[column], errors="coerce").dropna()
+        if series.empty:
+            continue
+
+        fig, ax = plt.subplots(figsize=(4, 3))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
+
+        ax.hist(series, bins=bins, color=bar_color)
+
+        ax.set_xlabel("Values", fontsize=10, color=text_color)
+        ax.set_ylabel("Count", fontsize=10, color=text_color)
+        ax.tick_params(colors=text_color, labelsize=8)
+        for spine in ax.spines.values():
+            spine.set_color(text_color)
+        fig.tight_layout(pad=0.5)
+
+        bar_graphs[f"{column}_light"] = _fig_to_base64(fig)
+
+    return bar_graphs
+
+
 # Individual categories shown before the tail is rolled up. Nine leaves room
 # for the "Other" bar inside a fixed ten-slot axis.
 _CATEGORICAL_MAX_BARS = 9

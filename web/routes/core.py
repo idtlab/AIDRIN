@@ -23,6 +23,7 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
     categorical_bars,
     clear_all_user_cache,
+    continuous_bars,
     confine_to_upload_folder,
     ensure_json_serializable,
     generate_metric_cache_key,
@@ -506,6 +507,9 @@ def summary_statistics():
         # ones (a KDE of a discrete code is meaningless). Identifiers get neither.
         histograms = summary_histograms(df, columns=continuous_columns)
         categorical_histograms = categorical_bars(df, categorical_columns)
+        # Binned twin of each KDE curve, so the reader can switch a continuous
+        # chart to bars when the data is effectively discrete (issue #212).
+        histogram_bars = continuous_bars(df, columns=continuous_columns)
 
         for v in summary_statistics.values():
             for old_key in list(v.keys()):
@@ -565,6 +569,7 @@ def summary_statistics():
             "identifier_summary": identifier_summary,
             "histograms": histograms,
             "categorical_histograms": categorical_histograms,
+            "histogram_bars": histogram_bars,
             "hdf5_multi_dataset": hdf5_multi_dataset,
             "selected_dataset_keys": selected_dataset_keys,
         })
