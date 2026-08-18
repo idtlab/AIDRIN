@@ -97,10 +97,10 @@ def completeness(self: Task, file_info, include_visualization=True):
             for bar, val in zip(bars, values):
                 if val > 0.15:
                     ax.text(val - 0.01, bar.get_y() + bar.get_height() / 2,
-                            f'{val:.2f}', ha='right', va='center', fontsize=8, color='white', fontweight='bold')
+                            f'{val:.3f}', ha='right', va='center', fontsize=8, color='white', fontweight='bold')
                 else:
                     ax.text(val + 0.01, bar.get_y() + bar.get_height() / 2,
-                            f'{val:.2f}', ha='left', va='center', fontsize=8, color=text_color)
+                            f'{val:.3f}', ha='left', va='center', fontsize=8, color=text_color)
 
             fig.tight_layout(pad=0.5)
 
