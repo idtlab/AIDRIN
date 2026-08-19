@@ -1,5 +1,6 @@
 """Unit tests for readiness report PDF context and rendering."""
 
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -282,7 +283,7 @@ class TestReadinessPdfRender(unittest.TestCase):
         mock_html = MagicMock(return_value=mock_instance)
         mock_weasyprint.return_value = (mock_html, MagicMock())
         app = MagicMock()
-        app.root_path = "/tmp/web"
+        app.root_path = str(Path(tempfile.gettempdir()) / "web")
         result = render_readiness_report_pdf(app, {"file_name": "data.csv"})
         self.assertEqual(result, b"%PDF-1.4")
         mock_instance.write_pdf.assert_called_once()
