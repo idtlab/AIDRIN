@@ -273,14 +273,14 @@ class TestReadinessPdfLogo(unittest.TestCase):
 
 
 class TestReadinessPdfRender(unittest.TestCase):
-    @patch("weasyprint.HTML")
-    @patch("weasyprint.CSS")
+    @patch("web.readiness.pdf._weasyprint")
     @patch("web.readiness.pdf.render_template", return_value="<html></html>")
     @patch("web.readiness.pdf.readiness_pdf_logo_uri", return_value="file:///tmp/logo.png")
-    def test_render_readiness_report_pdf(self, _mock_logo, _mock_template, _mock_css, mock_html):
+    def test_render_readiness_report_pdf(self, _mock_logo, _mock_template, mock_weasyprint):
         mock_instance = MagicMock()
         mock_instance.write_pdf.return_value = b"%PDF-1.4"
-        mock_html.return_value = mock_instance
+        mock_html = MagicMock(return_value=mock_instance)
+        mock_weasyprint.return_value = (mock_html, MagicMock())
         app = MagicMock()
         app.root_path = "/tmp/web"
         result = render_readiness_report_pdf(app, {"file_name": "data.csv"})

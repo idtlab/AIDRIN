@@ -875,7 +875,7 @@ def _build_data_quality_section(file_info, include_visualizations=False):
 _CORR_MAX_COLUMNS = 25          # cap analysed columns to keep heatmaps readable
 _CORR_HIGH_CARD_MAX = 50        # drop categorical columns with more unique values
 _CORR_ID_UNIQUE_RATIO = 0.9     # drop categorical columns that look like IDs
-_CORR_REDUNDANT_THRESHOLD = 0.8 # |score| at/above which a pair is "redundant"
+_CORR_REDUNDANT_THRESHOLD = 0.8  # |score| at/above which a pair is "redundant"
 _CORR_LEAKAGE_THRESHOLD = 0.95  # |score| at/above which a pair is "leakage risk"
 _CORR_ISOLATED_THRESHOLD = 0.1  # max |score| below which a feature is "isolated"
 
@@ -1378,13 +1378,12 @@ def _build_fairness_bias_section(file_info, include_visualizations=False):
 
     # --- Class Imbalance (auto target) --------------------------------------
     imbalance_degree = None
-    ci_error = None
     if target_col:
         ci_dict = _compute_class_imbalance(
             df, target_col, "EU", include_visualization=include_visualizations
         )
         if "Error" in ci_dict:
-            ci_error = ci_dict["Error"]
+            details["class_imbalance"] = {"error": ci_dict["Error"]}
         else:
             imb = ci_dict.get("Imbalance degree") or {}
             imbalance_degree = imb.get("Imbalance Degree score")

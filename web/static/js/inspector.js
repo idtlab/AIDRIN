@@ -3448,7 +3448,12 @@ function _wireFairFileInput(fileInput, labelEl, iconEl) {
   });
 }
 
-const _FAIR_PRINCIPLE_KEYS = ["Findable", "Accessible", "Interoperable", "Reusable"];
+const _FAIR_PRINCIPLE_KEYS = [
+  "Findable",
+  "Accessible",
+  "Interoperable",
+  "Reusable",
+];
 
 function _fairCheckFailed(value) {
   if (value === false) return true;
@@ -3484,7 +3489,8 @@ function _fairPrincipleStats(data, principle, checks) {
   const total = m ? parseInt(m[2], 10) : 1;
   const pct = Math.round((passed / total) * 100);
   const detail = data[principle];
-  const rows = typeof detail === "object" && detail !== null ? _fairValueRows(detail) : [];
+  const rows =
+    typeof detail === "object" && detail !== null ? _fairValueRows(detail) : [];
   return { name: principle, checkStr, passed, total, pct, rows };
 }
 
@@ -3511,7 +3517,8 @@ function _renderFairPrincipleCardHtml(principle) {
     });
     tableHtml += "</tbody></table>";
   } else {
-    tableHtml = '<p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">No detail available.</p>';
+    tableHtml =
+      '<p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">No detail available.</p>';
   }
 
   return `<div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
@@ -3769,7 +3776,8 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
   const formData = new FormData(form);
   if (resultContainer) {
     resultContainer.classList.remove("hidden");
-    resultContainer.innerHTML = '<p class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">Processing…</p>';
+    resultContainer.innerHTML =
+      '<p class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">Processing…</p>';
   }
 
   return fetch("/fair-assessment", { method: "POST", body: formData })
@@ -3860,7 +3868,11 @@ function _tryRestoreCachedReadinessFair() {
   return fetch("/cached-result/readiness_report_fair")
     .then((r) => r.json())
     .then((resp) => {
-      if (!resp.cached || !resp.fair_compliance || activePanel !== "readiness-report") {
+      if (
+        !resp.cached ||
+        !resp.fair_compliance ||
+        activePanel !== "readiness-report"
+      ) {
         return false;
       }
       return _restoreReadinessFairFromCache(resp.fair_compliance);
@@ -4056,7 +4068,12 @@ function buildCategoricalSummaryTable(summary) {
  * @param {boolean} [skipHeading]
  * @param {string} [layout] - "compact" (default) or "large" for readiness report
  */
-function renderWorkspaceHistograms(histograms, containerId, skipHeading, layout) {
+function renderWorkspaceHistograms(
+  histograms,
+  containerId,
+  skipHeading,
+  layout,
+) {
   const container = document.getElementById(
     containerId || "workspace-histograms",
   );
@@ -4066,9 +4083,7 @@ function renderWorkspaceHistograms(histograms, containerId, skipHeading, layout)
   const gridClass = isLarge
     ? "grid grid-cols-1 sm:grid-cols-2 gap-6"
     : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
-  const imgClass = isLarge
-    ? "w-full h-auto object-contain"
-    : "w-full";
+  const imgClass = isLarge ? "w-full h-auto object-contain" : "w-full";
 
   // Always use the light variant — CSS filter handles dark mode
   const columns = {};
@@ -4688,8 +4703,7 @@ function _dqStatusClasses(status) {
       return {
         text: "text-gray-500 dark:text-gray-400",
         bar: "bg-gray-400",
-        badge:
-          "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+        badge: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
       };
   }
 }
@@ -4706,7 +4720,10 @@ function _readinessNums(values) {
  * (up to maxDecimals) so small non-zero values remain visible. Same precision
  * is used for every value in the group.
  */
-function _readinessDecimalPlaces(values, { minDecimals = 2, maxDecimals = 6 } = {}) {
+function _readinessDecimalPlaces(
+  values,
+  { minDecimals = 2, maxDecimals = 6 } = {},
+) {
   const nums = _readinessNums(values);
   if (!nums.length) return minDecimals;
   if (nums.every((v) => v === 0)) return minDecimals;
@@ -4728,7 +4745,8 @@ function _readinessPctDecimals(values, options) {
 
 /** Format a number with fixed decimals; integers omit the fractional part. */
 function _readinessNum(value, decimals = 2) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "N/A";
   if (typeof value !== "number") return String(value);
   if (Number.isInteger(value)) return value.toLocaleString();
   return value.toFixed(decimals);
@@ -4739,7 +4757,8 @@ function _readinessNumFormatter(values, options) {
   const nums = _readinessNums(values);
   if (nums.length && nums.every((v) => Number.isInteger(v))) {
     return (value) => {
-      if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+      if (value === null || value === undefined || Number.isNaN(value))
+        return "N/A";
       return Number(value).toLocaleString();
     };
   }
@@ -4755,7 +4774,8 @@ function _readinessPctFormatter(values, options) {
 
 /** Format a 0–1 ratio as a percentage, or "N/A" if missing. */
 function _pct(value, decimals = 2) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "N/A";
   return `${(value * 100).toFixed(decimals)}%`;
 }
 
@@ -4768,7 +4788,11 @@ function _readinessSectionError(container, message) {
 
 /** Human-readable section build duration (matches server log precision). */
 function _formatReadinessBuildTime(seconds) {
-  if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) {
+  if (
+    seconds === null ||
+    seconds === undefined ||
+    Number.isNaN(Number(seconds))
+  ) {
     return "";
   }
   return `Prepared in ${Number(seconds).toFixed(2)} seconds`;
@@ -4810,7 +4834,10 @@ function _applyReadinessVisualizations(section, root, vizMap) {
     if (vizMap.categorical_charts) {
       const catHost = root.querySelector("#readiness-categorical-charts");
       if (catHost) {
-        renderCategoricalPieCharts(vizMap.categorical_charts, "readiness-categorical-charts");
+        renderCategoricalPieCharts(
+          vizMap.categorical_charts,
+          "readiness-categorical-charts",
+        );
       }
     }
     if (vizMap.histograms) {
@@ -4858,8 +4885,10 @@ function _loadReadinessSectionVisualizations(section, root) {
   });
   const catHost = root.querySelector("#readiness-categorical-charts");
   const histHost = root.querySelector("#readiness-histograms-inner");
-  if (catHost && !catHost.childElementCount) catHost.innerHTML = _readinessVizSpinnerHtml();
-  if (histHost && !histHost.childElementCount) histHost.innerHTML = _readinessVizSpinnerHtml();
+  if (catHost && !catHost.childElementCount)
+    catHost.innerHTML = _readinessVizSpinnerHtml();
+  if (histHost && !histHost.childElementCount)
+    histHost.innerHTML = _readinessVizSpinnerHtml();
 
   return fetch(`/readiness-report/${section}/visualizations`)
     .then((r) => r.json())
@@ -4868,7 +4897,8 @@ function _loadReadinessSectionVisualizations(section, root) {
         const msg = resp.message || "Could not load charts";
         slots.forEach((slot) => {
           const target = slot.querySelector(".readiness-viz-content");
-          if (target) target.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${_escapeHtml(msg)}</p>`;
+          if (target)
+            target.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${_escapeHtml(msg)}</p>`;
         });
         return;
       }
@@ -4942,7 +4972,13 @@ function _initReadinessReportShell() {
   _updateReadinessExportButton();
 }
 
-function _applyReadinessSection(container, section, data, renderFn, buildTimeSeconds) {
+function _applyReadinessSection(
+  container,
+  section,
+  data,
+  renderFn,
+  buildTimeSeconds,
+) {
   if (!container) {
     _readinessSectionStatus[section] = "error";
     return false;
@@ -4990,7 +5026,10 @@ function _fetchReadinessSection(section, container, renderFn) {
     })
     .catch((err) => {
       _readinessSectionStatus[section] = "error";
-      _readinessSectionError(container, `Error loading section: ${err.message}`);
+      _readinessSectionError(
+        container,
+        `Error loading section: ${err.message}`,
+      );
     })
     .finally(() => {
       _updateReadinessExportButton();
@@ -5005,30 +5044,36 @@ function _restoreCachedReadinessReport() {
   return fetch("/cached-result/readiness_report")
     .then((r) => r.json())
     .then((resp) => {
-      if (!resp.cached || !resp.sections || activePanel !== "readiness-report") {
+      if (
+        !resp.cached ||
+        !resp.sections ||
+        activePanel !== "readiness-report"
+      ) {
         return false;
       }
       _initReadinessReportShell();
       let allOk = true;
-      _getReadinessSectionRenderers().forEach(({ section, container, render }) => {
-        const data = resp.sections[section];
-        if (!data) {
-          _readinessSectionStatus[section] = "error";
-          allOk = false;
-          return;
-        }
-        if (
-          !_applyReadinessSection(
-            container,
-            section,
-            data,
-            render,
-            data.build_time_seconds,
-          )
-        ) {
-          allOk = false;
-        }
-      });
+      _getReadinessSectionRenderers().forEach(
+        ({ section, container, render }) => {
+          const data = resp.sections[section];
+          if (!data) {
+            _readinessSectionStatus[section] = "error";
+            allOk = false;
+            return;
+          }
+          if (
+            !_applyReadinessSection(
+              container,
+              section,
+              data,
+              render,
+              data.build_time_seconds,
+            )
+          ) {
+            allOk = false;
+          }
+        },
+      );
       _updateReadinessExportButton();
       if (resp.fair_compliance) {
         _restoreReadinessFairFromCache(resp.fair_compliance);
@@ -5085,7 +5130,9 @@ function _readinessAllSectionsReady() {
 
 function _updateReadinessExportButton() {
   const bar = document.getElementById("readiness-export-bar");
-  const scorecardBtn = document.getElementById("readiness-export-scorecard-pdf-btn");
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
   const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
   if (!bar) return;
   bar.classList.remove("hidden");
@@ -5097,7 +5144,9 @@ function _updateReadinessExportButton() {
 }
 
 function _wireReadinessExportButton() {
-  const scorecardBtn = document.getElementById("readiness-export-scorecard-pdf-btn");
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
   const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
   if (scorecardBtn && scorecardBtn.dataset.wired !== "1") {
     scorecardBtn.dataset.wired = "1";
@@ -5115,8 +5164,11 @@ function _wireReadinessExportButton() {
 
 function _readinessPdfFilename() {
   const panel = document.getElementById("panel-readiness-report");
-  const raw = panel?.dataset?.datasetName || window.AIDRIN_DATASET_NAME || "dataset";
-  const stem = String(raw).replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_");
+  const raw =
+    panel?.dataset?.datasetName || window.AIDRIN_DATASET_NAME || "dataset";
+  const stem = String(raw)
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^\w.-]+/g, "_");
   const date = new Date().toISOString().slice(0, 10);
   return `readiness-report-${stem || "dataset"}-${date}.pdf`;
 }
@@ -5135,9 +5187,13 @@ function _filenameFromContentDisposition(header) {
 /** Download readiness report PDF from the server (sync build-on-miss). */
 function exportReadinessReportPdf(mode = "scorecard") {
   const isFull = mode === "full";
-  const scorecardBtn = document.getElementById("readiness-export-scorecard-pdf-btn");
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
   const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
-  const scorecardLabel = document.getElementById("readiness-export-scorecard-pdf-label");
+  const scorecardLabel = document.getElementById(
+    "readiness-export-scorecard-pdf-label",
+  );
   const fullLabel = document.getElementById("readiness-export-full-pdf-label");
   const buttons = [scorecardBtn, fullBtn].filter(Boolean);
 
@@ -5148,7 +5204,9 @@ function exportReadinessReportPdf(mode = "scorecard") {
   if (isFull && fullLabel) fullLabel.textContent = "Preparing full PDF…";
   if (!isFull && scorecardLabel) scorecardLabel.textContent = "Preparing PDF…";
 
-  const url = isFull ? "/readiness-report/pdf?mode=full" : "/readiness-report/pdf";
+  const url = isFull
+    ? "/readiness-report/pdf?mode=full"
+    : "/readiness-report/pdf";
 
   return fetch(url)
     .then(async (response) => {
@@ -5163,8 +5221,9 @@ function exportReadinessReportPdf(mode = "scorecard") {
         throw new Error(message);
       }
       const filename =
-        _filenameFromContentDisposition(response.headers.get("Content-Disposition")) ||
-        _readinessPdfFilename();
+        _filenameFromContentDisposition(
+          response.headers.get("Content-Disposition"),
+        ) || _readinessPdfFilename();
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -5218,10 +5277,9 @@ function _readinessNaRow(primary, secondary, value) {
   const valHtml = value
     ? `<span class="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">${_escapeHtml(value)}</span>`
     : "";
-  const sub =
-    secondary
-      ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 pl-0">${secondary}</p>`
-      : "";
+  const sub = secondary
+    ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 pl-0">${secondary}</p>`
+    : "";
   return `<li>
     <div class="flex justify-between gap-3 items-start">
       <span class="text-sm text-gray-700 dark:text-gray-300 min-w-0">${primary}</span>
@@ -5368,7 +5426,14 @@ function _formatBytes(bytes) {
 /** Badge HTML for per-feature readiness status. */
 function _profileStatusBadge(status) {
   const cls = _dqStatusClasses(status);
-  const label = status === "good" ? "Good" : status === "warning" ? "Warning" : status === "poor" ? "Poor" : "—";
+  const label =
+    status === "good"
+      ? "Good"
+      : status === "warning"
+        ? "Warning"
+        : status === "poor"
+          ? "Poor"
+          : "—";
   return `<span class="px-2 py-0.5 rounded text-xs font-medium ${cls.badge}">${label}</span>`;
 }
 
@@ -5389,7 +5454,8 @@ function renderReadinessDatasetOverview(container, overview) {
   const poorCount =
     statusCounts.poor ?? profiles.filter((p) => p.status === "poor").length;
   const warnCount =
-    statusCounts.warning ?? profiles.filter((p) => p.status === "warning").length;
+    statusCounts.warning ??
+    profiles.filter((p) => p.status === "warning").length;
 
   // --- File metadata ---
   let html = `
@@ -5460,7 +5526,10 @@ function renderReadinessDatasetOverview(container, overview) {
   const fmtProfilePct = _readinessPctFormatter(profilePctValues);
 
   profiles.forEach((p, i) => {
-    const stripe = i % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50";
+    const stripe =
+      i % 2 === 0
+        ? "bg-white dark:bg-gray-800"
+        : "bg-gray-50 dark:bg-gray-700/50";
     html += `<tr class="${stripe} border-b dark:border-gray-700">`;
     html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${p.feature}</td>`;
     html += `<td class="px-3 py-2 capitalize">${p.type}</td>`;
@@ -5484,8 +5553,14 @@ function renderReadinessDatasetOverview(container, overview) {
   if (numFeatures.length > 0) {
     const allStats = Object.keys(numSummary[numFeatures[0]] || {});
     const preferredOrder = [
-      "count", "min", "25th percentile", "50th percentile", "mean",
-      "75th percentile", "max", "std",
+      "count",
+      "min",
+      "25th percentile",
+      "50th percentile",
+      "mean",
+      "75th percentile",
+      "max",
+      "std",
     ];
     const statKeys = preferredOrder
       .filter((s) => allStats.includes(s))
@@ -5505,7 +5580,10 @@ function renderReadinessDatasetOverview(container, overview) {
     });
     detailsInner += `</tr></thead><tbody>`;
     numFeatures.forEach((feat, i) => {
-      const stripe = i % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50";
+      const stripe =
+        i % 2 === 0
+          ? "bg-white dark:bg-gray-800"
+          : "bg-gray-50 dark:bg-gray-700/50";
       detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${feat}</td>`;
       statKeys.forEach((s) => {
         const raw = numSummary[feat][s];
@@ -5532,11 +5610,14 @@ function renderReadinessDatasetOverview(container, overview) {
   const hasHistograms =
     overview.histograms && Object.keys(overview.histograms).length > 0;
   const vizDeferred = overview.visualizations_deferred;
-  const profileNumericalCount = profiles.filter((p) => p.type === "numerical").length;
-  const profileCategoricalCount = profiles.filter((p) => p.type === "categorical").length;
+  const profileNumericalCount = profiles.filter(
+    (p) => p.type === "numerical",
+  ).length;
+  const profileCategoricalCount = profiles.filter(
+    (p) => p.type === "categorical",
+  ).length;
   const showCatCharts =
-    catChartCols.length > 0 ||
-    (vizDeferred && profileCategoricalCount > 0);
+    catChartCols.length > 0 || (vizDeferred && profileCategoricalCount > 0);
   const showHistograms =
     hasHistograms || (vizDeferred && profileNumericalCount > 0);
 
@@ -5574,7 +5655,10 @@ function renderReadinessDatasetOverview(container, overview) {
     }
   } else {
     if (catChartCols.length > 0) {
-      renderCategoricalPieCharts(overview.categorical_charts, "readiness-categorical-charts");
+      renderCategoricalPieCharts(
+        overview.categorical_charts,
+        "readiness-categorical-charts",
+      );
     }
     if (hasHistograms) {
       renderWorkspaceHistograms(
@@ -5599,7 +5683,9 @@ function renderReadinessDataQuality(container, dq) {
   const gradeCls = _dqStatusClasses(dq.grade_status);
   const scopeCrit =
     (dq.auto_selection || {}).selection_criteria?.analysis_scope || {};
-  const dqPctValues = [dq.grade, ...kpis.map((k) => k.value)].filter((v) => v != null);
+  const dqPctValues = [dq.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
   const fmtDqPct = _readinessPctFormatter(dqPctValues);
 
   // --- Analysis scope (no column auto-selection required) ---
@@ -5621,12 +5707,12 @@ function renderReadinessDataQuality(container, dq) {
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
 
   kpis.forEach((k) => {
-        const cls = _dqStatusClasses(k.status);
-        const widthPct =
-          k.value === null || k.value === undefined
-            ? 0
-            : Math.max(0, Math.min(100, Math.round(k.value * 100)));
-        html += `
+    const cls = _dqStatusClasses(k.status);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
           <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
             <div class="flex items-baseline justify-between">
               <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
@@ -5637,78 +5723,78 @@ function renderReadinessDataQuality(container, dq) {
             </div>
             <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
           </div>`;
-      });
+  });
   html += "</div>";
 
   // --- Needs attention ---
   const na = dq.needs_attention || {};
-      const incomplete = na.incomplete_features || [];
-      const outlierFeats = na.outlier_features || [];
-      const dupRows = na.duplicate_rows || 0;
-      const naPctValues = [
-        ...incomplete.map((f) => f.completeness),
-        ...outlierFeats.map((f) => f.outlier_proportion),
-        dupRows > 0 ? dupRows : null,
-      ].filter((v) => v != null);
-      const fmtNaPct = _readinessPctFormatter(naPctValues);
+  const incomplete = na.incomplete_features || [];
+  const outlierFeats = na.outlier_features || [];
+  const dupRows = na.duplicate_rows || 0;
+  const naPctValues = [
+    ...incomplete.map((f) => f.completeness),
+    ...outlierFeats.map((f) => f.outlier_proportion),
+    dupRows > 0 ? dupRows : null,
+  ].filter((v) => v != null);
+  const fmtNaPct = _readinessPctFormatter(naPctValues);
 
-      const naItems = [];
-      if (incomplete.length) {
-        const top = incomplete
-          .slice(0, 6)
-          .map(
-            (f) =>
-              `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.completeness)} complete</span></li>`,
-          )
-          .join("");
-        const more =
-          incomplete.length > 6
-            ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${incomplete.length - 6} more</li>`
-            : "";
-        naItems.push(`
+  const naItems = [];
+  if (incomplete.length) {
+    const top = incomplete
+      .slice(0, 6)
+      .map(
+        (f) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.completeness)} complete</span></li>`,
+      )
+      .join("");
+    const more =
+      incomplete.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${incomplete.length - 6} more</li>`
+        : "";
+    naItems.push(`
           <div>
             <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Incomplete features (${incomplete.length})${_readinessInfoIcon("completeness")}</p>
             <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${top}${more}</ul>
           </div>`);
-      }
-      if (outlierFeats.length) {
-        const top = outlierFeats
-          .slice(0, 6)
-          .map(
-            (f) =>
-              `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.outlier_proportion)} outliers</span></li>`,
-          )
-          .join("");
-        const more =
-          outlierFeats.length > 6
-            ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${outlierFeats.length - 6} more</li>`
-            : "";
-        naItems.push(`
+  }
+  if (outlierFeats.length) {
+    const top = outlierFeats
+      .slice(0, 6)
+      .map(
+        (f) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.outlier_proportion)} outliers</span></li>`,
+      )
+      .join("");
+    const more =
+      outlierFeats.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${outlierFeats.length - 6} more</li>`
+        : "";
+    naItems.push(`
           <div>
             <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Features with outliers (${outlierFeats.length})${_readinessInfoIcon("outlier_cleanliness")}</p>
             <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${top}${more}</ul>
           </div>`);
-      }
-      if (dupRows && dupRows > 0) {
-        naItems.push(`
+  }
+  if (dupRows && dupRows > 0) {
+    naItems.push(`
           <div>
             <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Duplicate rows${_readinessInfoIcon("uniqueness")}</p>
             <p class="text-sm text-gray-700 dark:text-gray-300">${fmtNaPct(dupRows)} of rows are exact duplicates.</p>
           </div>`);
-      }
+  }
 
-      if (naItems.length) {
-        html += `
+  if (naItems.length) {
+    html += `
           <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
             <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
           </div>`;
-      } else {
-        html += `
+  } else {
+    html += `
           <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
             <p class="text-sm text-green-800 dark:text-green-400">No data quality issues detected — all features complete, no duplicates, no outliers.</p>
           </div>`;
-      }
+  }
 
   // --- Collapsible details (original charts) ---
   const det = dq.details || {};
@@ -5722,7 +5808,11 @@ function renderReadinessDataQuality(container, dq) {
           <img src="data:image/png;base64,${det.completeness.visualization}" alt="Completeness chart" class="w-full max-w-2xl" />
         </div>`;
     } else if (vizDeferred || det.completeness.visualization_deferred) {
-      detailsInner += _readinessVizSlot("data-quality", "completeness", "Completeness by feature");
+      detailsInner += _readinessVizSlot(
+        "data-quality",
+        "completeness",
+        "Completeness by feature",
+      );
     }
   }
   if (det.outliers) {
@@ -5735,7 +5825,11 @@ function renderReadinessDataQuality(container, dq) {
     } else if (det.outliers.error) {
       detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Outliers: ${det.outliers.error}</p>`;
     } else if (vizDeferred || det.outliers.visualization_deferred) {
-      detailsInner += _readinessVizSlot("data-quality", "outliers", "Outliers by feature");
+      detailsInner += _readinessVizSlot(
+        "data-quality",
+        "outliers",
+        "Outliers by feature",
+      );
     }
   }
 
@@ -5789,7 +5883,9 @@ function renderReadinessImpact(container, impact) {
     ...topPairs.map((p) => p.score),
   ];
   const fmtScore = _readinessNumFormatter(impactScoreValues);
-  const impactPctValues = [impact.grade, ...kpis.map((k) => k.value)].filter((v) => v != null);
+  const impactPctValues = [impact.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
   const fmtImpactPct = _readinessPctFormatter(impactPctValues);
   const fmtPair = (p) =>
     _readinessNaRow(
@@ -5918,7 +6014,8 @@ function renderReadinessImpact(container, impact) {
 
   // --- Collapsible details ---
   const det = impact.details || {};
-  const vizDeferred = impact.visualizations_deferred || det.visualizations_deferred;
+  const vizDeferred =
+    impact.visualizations_deferred || det.visualizations_deferred;
   let detailsInner = "";
 
   if (topPairs.length) {
@@ -6022,10 +6119,14 @@ function renderReadinessFairness(container, fb) {
   const kpis = fb.kpis || [];
   const na = fb.needs_attention || {};
   const gradeCls = _dqStatusClasses(fb.grade_status);
-  const fairnessPctValues = [fb.grade, ...kpis.map((k) => k.value)].filter((v) => v != null);
+  const fairnessPctValues = [fb.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
   const fmtFairnessPct = _readinessPctFormatter(fairnessPctValues);
   const fmtThresholdPct = _readinessPctFormatter(
-    thresholds.minority_class_share != null ? [thresholds.minority_class_share] : [],
+    thresholds.minority_class_share != null
+      ? [thresholds.minority_class_share]
+      : [],
   );
   const imbalanceVals = kpis
     .filter((k) => k.id === "label_balance" && k.raw_imbalance_degree != null)
@@ -6123,7 +6224,9 @@ function renderReadinessFairness(container, fb) {
   if (minorities.length) {
     const targetCol =
       minorities[0].target_column || targetCrit.selected || "target";
-    const fmtMinorityShare = _readinessPctFormatter(minorities.map((m) => m.share));
+    const fmtMinorityShare = _readinessPctFormatter(
+      minorities.map((m) => m.share),
+    );
     const items = minorities
       .map((m) =>
         _readinessNaRow(
@@ -6146,7 +6249,8 @@ function renderReadinessFairness(container, fb) {
 
   const outcomeDisp = na.outcome_disparities || [];
   if (outcomeDisp.length) {
-    const sensCol = outcomeDisp[0].sensitive_column || sel.primary_sensitive || "—";
+    const sensCol =
+      outcomeDisp[0].sensitive_column || sel.primary_sensitive || "—";
     const tgtCol = outcomeDisp[0].target_column || targetCrit.selected || "—";
     const fmtTsd = _readinessNumFormatter(outcomeDisp.map((d) => d.tsd));
     const items = outcomeDisp
@@ -6346,7 +6450,9 @@ function renderReadinessGovernance(container, gov) {
   const lowAnon = na.low_anonymity || [];
   const linkage = na.high_linkage_risk || [];
   const attrDisc = na.attribute_disclosure || [];
-  const govPctValues = [gov.grade, ...kpis.map((k) => k.value)].filter((v) => v != null);
+  const govPctValues = [gov.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
   const fmtGovPct = _readinessPctFormatter(govPctValues);
   const govRiskValues = [
     ...kpis.map((k) => k.raw_worst_mean ?? k.raw_mean).filter((v) => v != null),
@@ -6354,10 +6460,14 @@ function renderReadinessGovernance(container, gov) {
     ...lowAnon.flatMap((x) =>
       x.worst_single_qi ? [x.worst_single_qi.mean_risk] : [],
     ),
-    ...Object.values(singleRisk).map((v) => v.mean_risk).filter((v) => v != null),
+    ...Object.values(singleRisk)
+      .map((v) => v.mean_risk)
+      .filter((v) => v != null),
   ];
   const govMetricValues = [
-    ...kpis.filter((k) => k.id === "distribution_t" && k.raw_t != null).map((k) => k.raw_t),
+    ...kpis
+      .filter((k) => k.id === "distribution_t" && k.raw_t != null)
+      .map((k) => k.raw_t),
     ...attrDisc.map((x) => x.value),
   ];
   const fmtGovRisk = _readinessNumFormatter(govRiskValues);
@@ -6400,7 +6510,8 @@ function renderReadinessGovernance(container, gov) {
     const cls = _dqStatusClasses(k.status);
     let displayVal = fmtGovPct(k.value);
     if (k.id === "anonymity_k" && k.raw_k != null) displayVal = `k=${k.raw_k}`;
-    else if (k.id === "diversity_l" && k.raw_l != null) displayVal = `l=${k.raw_l}`;
+    else if (k.id === "diversity_l" && k.raw_l != null)
+      displayVal = `l=${k.raw_l}`;
     else if (k.id === "distribution_t" && k.raw_t != null)
       displayVal = `t=${fmtGovMetric(k.raw_t)}`;
     else if (k.id === "single_linkage_risk" && k.raw_worst_mean != null)
@@ -6408,7 +6519,8 @@ function renderReadinessGovernance(container, gov) {
     else if (k.id === "linkage_risk" && k.raw_mean != null)
       displayVal = `${fmtGovRisk(k.raw_mean)} risk`;
     else if (k.id === "phi_exposure" && k.columns_flagged != null)
-      displayVal = k.columns_flagged === 0 ? "None" : `${k.columns_flagged} col(s)`;
+      displayVal =
+        k.columns_flagged === 0 ? "None" : `${k.columns_flagged} col(s)`;
 
     const widthPct =
       k.value === null || k.value === undefined
@@ -6437,7 +6549,9 @@ function renderReadinessGovernance(container, gov) {
       items += _readinessNaRow(
         `${_escapeHtml(x.metric)}: k = ${x.value}`,
         x.detail || (qiList ? `Quasi-identifiers: ${qiList}` : null),
-        x.singleton_count != null ? `${x.singleton_count} singleton group(s)` : null,
+        x.singleton_count != null
+          ? `${x.singleton_count} singleton group(s)`
+          : null,
       );
       (x.worst_groups || []).slice(0, 3).forEach((g) => {
         items += _readinessNaRow(
@@ -6500,7 +6614,8 @@ function renderReadinessGovernance(container, gov) {
           : `<span class="font-mono">${_escapeHtml(qis.join(", "))}</span>`;
         return _readinessNaRow(
           `${_escapeHtml(x.metric)}: ${featLabel}`,
-          x.detail || (qis.length ? `Quasi-identifiers: ${qis.join(", ")}` : null),
+          x.detail ||
+            (qis.length ? `Quasi-identifiers: ${qis.join(", ")}` : null),
           `risk ${fmtGovRisk(x.mean_risk)}`,
         );
       })
@@ -6556,8 +6671,16 @@ function renderReadinessGovernance(container, gov) {
     ["l_diversity", "l-Diversity", "visualization"],
     ["t_closeness", "t-Closeness", "visualization"],
     ["entropy_risk", "Entropy risk", "visualization"],
-    ["multiple_attribute_risk", "Multiple-attribute linkage risk", "visualization"],
-    ["differential_privacy", "Differential privacy (illustrative)", "visualization"],
+    [
+      "multiple_attribute_risk",
+      "Multiple-attribute linkage risk",
+      "visualization",
+    ],
+    [
+      "differential_privacy",
+      "Differential privacy (illustrative)",
+      "visualization",
+    ],
   ];
   chartMetrics.forEach(([key, title, visKey]) => {
     const block = det[key];

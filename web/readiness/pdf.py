@@ -760,7 +760,7 @@ def build_pdf_context(
 
 def pdf_filename(file_name: str, *, full: bool = False) -> str:
     stem = re.sub(r"\.[^.]+$", "", file_name or "dataset")
-    stem = re.sub(r"[^\w.-]+", "_", stem) or "dataset"
+    stem = re.sub(r"[^\w.-]", "_", stem) or "dataset"
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     prefix = "readiness-report-full" if full else "readiness-report"
     return f"{prefix}-{stem}-{date}.pdf"
@@ -776,14 +776,25 @@ def readiness_pdf_logo_uri(app) -> str:
     raise RuntimeError(f"AIDRIN logo not found under {images_dir}")
 
 
-def render_readiness_report_pdf(app, context: dict[str, Any]) -> bytes:
-    """Render PDF bytes from a prepared context dict."""
+def _weasyprint():
+    """Import WeasyPrint lazily and return its (HTML, CSS) classes.
+
+    Kept as a separate module-level hook so PDF rendering can be exercised in
+    tests without importing WeasyPrint or its native libraries.
+    """
     try:
         from weasyprint import CSS, HTML
-    except ImportError as exc:
+    except (ImportError, OSError) as exc:
         raise RuntimeError(
-            "WeasyPrint is not installed. Install with: pip install weasyprint"
+            "WeasyPrint could not be loaded. Install the package and its native "
+            "dependencies (pango, cairo, gdk-pixbuf); see the installation docs."
         ) from exc
+    return HTML, CSS
+
+
+def render_readiness_report_pdf(app, context: dict[str, Any]) -> bytes:
+    """Render PDF bytes from a prepared context dict."""
+    HTML, CSS = _weasyprint()
 
     footnotes = FootnoteRegistry()
     render_context = {

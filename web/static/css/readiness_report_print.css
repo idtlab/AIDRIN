@@ -362,9 +362,15 @@ p {
   margin: 4pt 0;
 }
 
-.kpi-value-good { color: #166534; }
-.kpi-value-warning { color: #92400e; }
-.kpi-value-poor { color: #991b1b; }
+.kpi-value-good {
+  color: #166534;
+}
+.kpi-value-warning {
+  color: #92400e;
+}
+.kpi-value-poor {
+  color: #991b1b;
+}
 
 .profile-header {
   display: flex;
@@ -431,10 +437,18 @@ p {
   border-radius: 2pt;
 }
 
-.bar-good { background: #22c55e; }
-.bar-warning { background: #f59e0b; }
-.bar-poor { background: #ef4444; }
-.bar-fair { background: #2563eb; }
+.bar-good {
+  background: #22c55e;
+}
+.bar-warning {
+  background: #f59e0b;
+}
+.bar-poor {
+  background: #ef4444;
+}
+.bar-fair {
+  background: #2563eb;
+}
 
 table.data {
   width: 100%;
