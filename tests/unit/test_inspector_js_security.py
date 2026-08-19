@@ -13,7 +13,7 @@ DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_stru
 
 
 def test_result_renderer_escapes_untrusted_display_values():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     required_fragments = [
         "${escapeHtml(type)}",
         "${escapeHtml(error)}",
@@ -29,16 +29,16 @@ def test_result_renderer_escapes_untrusted_display_values():
 
 
 def test_custom_outlier_targets_load_only_when_enabled():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert 'const checkbox = document.getElementById("toggleButton_custom_outliers")' in source
     assert "checkbox?.checked" in source
     assert "toggleCustomOutlierEditor(checkbox)" in source
 
 
 def test_file_reference_ui_keeps_custom_outlier_loading_independent():
-    source = INSPECTOR_JS.read_text()
-    panel = DATA_STRUCTURE_PANEL.read_text()
-    quality_panel = DATA_QUALITY_PANEL.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    panel = DATA_STRUCTURE_PANEL.read_text(encoding="utf-8")
+    quality_panel = DATA_QUALITY_PANEL.read_text(encoding="utf-8")
     assert "function loadFileReferenceOptions()" in source
     assert "loadFileReferenceOptions();" in source
     assert "window.AIDRIN_GLOBUS_MODE" in source
@@ -51,8 +51,8 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
 
 
 def test_file_reference_targets_use_searchable_collapsed_multi_select():
-    source = INSPECTOR_JS.read_text()
-    panel = DATA_STRUCTURE_PANEL.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    panel = DATA_STRUCTURE_PANEL.read_text(encoding="utf-8")
     assert 'id="file-reference-target-button"' in panel
     assert 'aria-haspopup="listbox"' in panel
     assert 'id="file-reference-target-menu"' in panel
@@ -68,8 +68,8 @@ def test_file_reference_targets_use_searchable_collapsed_multi_select():
 
 
 def test_file_reference_and_custom_outliers_share_searchable_target_picker():
-    source = INSPECTOR_JS.read_text()
-    panel = DATA_STRUCTURE_PANEL.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    panel = DATA_STRUCTURE_PANEL.read_text(encoding="utf-8")
     assert "function renderTargetPicker(picker, targets, options = {})" in source
     assert 'id="file-reference-target-picker" data-target-picker' in panel
     assert 'data-field="target" data-target-picker' in source
@@ -83,7 +83,7 @@ def test_file_reference_and_custom_outliers_share_searchable_target_picker():
 
 
 def test_target_pickers_share_one_document_click_handler():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "function closeTargetPickersOnDocumentClick(event)" in source
     assert "function ensureTargetPickerDocumentHandler()" in source
     assert "ensureTargetPickerDocumentHandler();" in source
@@ -91,7 +91,7 @@ def test_target_pickers_share_one_document_click_handler():
 
 
 def test_python_regex_preview_is_advisory_for_submission():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert '"No targets match this pattern."' in source
     assert "The target pattern does not match any path-bearing targets." not in source
     assert "does not match any available targets." not in source
@@ -99,8 +99,8 @@ def test_python_regex_preview_is_advisory_for_submission():
 
 
 def test_target_pickers_use_compact_side_by_side_shaded_controls():
-    source = INSPECTOR_JS.read_text()
-    panel = DATA_STRUCTURE_PANEL.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    panel = DATA_STRUCTURE_PANEL.read_text(encoding="utf-8")
     assert 'class="flex items-start gap-2"' in panel
     assert panel.count('class="w-32 shrink-0') == 1
     assert '<option value="regex">Regex</option>' in panel
@@ -112,7 +112,7 @@ def test_target_pickers_use_compact_side_by_side_shaded_controls():
 
 
 def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "function renderFileReferenceInvalidTable(rows)" in source
     assert "function renderFileReferenceMetadataTable(rows)" in source
     assert "escapeHtml(formatValue(value))" in source
@@ -121,7 +121,7 @@ def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
 
 
 def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "function serializeCustomOutlierRules()" in source
     assert 'processedFormData.set(\n      "custom_outlier_rules"' in source
     assert "remoteParams.custom_outlier_rules = customOutlierRules" in source
@@ -154,8 +154,8 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
 
 
 def test_custom_outlier_json_file_source_is_browser_only_and_async():
-    panel = DATA_QUALITY_PANEL.read_text()
-    source = INSPECTOR_JS.read_text()
+    panel = DATA_QUALITY_PANEL.read_text(encoding="utf-8")
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert 'name="custom_outlier_rule_source" value="manual" checked' in panel
     assert 'name="custom_outlier_rule_source" value="file"' in panel
     assert 'id="custom-outlier-rules-file" accept="application/json,.json"' in panel
@@ -167,7 +167,7 @@ def test_custom_outlier_json_file_source_is_browser_only_and_async():
 
 
 def test_switching_custom_outlier_rule_sources_clears_stale_results():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "function clearCustomOutlierResults()" in source
     assert "clearCustomOutlierResults();\n        updateCustomOutlierRuleSource();" in source
     assert 'document.getElementById("results-section")' in source
@@ -175,8 +175,8 @@ def test_switching_custom_outlier_rule_sources_clears_stale_results():
 
 
 def test_custom_outlier_manual_rules_can_be_saved_as_json():
-    panel = DATA_QUALITY_PANEL.read_text()
-    source = INSPECTOR_JS.read_text()
+    panel = DATA_QUALITY_PANEL.read_text(encoding="utf-8")
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert 'id="custom-outlier-save-rules"' in panel
     assert "function downloadCustomOutlierRules()" in source
     assert "JSON.stringify(rules, null, 2)" in source
@@ -184,7 +184,7 @@ def test_custom_outlier_manual_rules_can_be_saved_as_json():
 
 
 def _parse_rules_file_in_browser(text):
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     start = source.index("function parseCustomOutlierRulesJson(text)")
     end = source.index("\n\nasync function resolveCustomOutlierRules()", start)
     parser_and_validator = source[start:end]
@@ -250,19 +250,19 @@ def test_custom_outlier_json_file_parser_corpus():
 
 
 def test_custom_outlier_preview_cap_placeholder_documents_default():
-    source = DATA_QUALITY_PANEL.read_text()
+    source = DATA_QUALITY_PANEL.read_text(encoding="utf-8")
     assert 'name="max_outliers" placeholder="default: 100"' in source
 
 
 def test_custom_outlier_export_downloads_csv_without_inline_row_rendering():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert 'key === "Outlier export"' in source
     assert "downloadCustomOutlierExportCsv()" in source
     assert 'link.download = "custom-outlier-export.csv"' in source
 
 
 def test_async_metric_completion_initializes_download_result_store():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "function storeAsyncMetricResult(metricName, result)" in source
     assert 'lastMetricResult = {}' in source
     assert "lastMetricResult[metricName] = result" in source
@@ -270,7 +270,7 @@ def test_async_metric_completion_initializes_download_result_store():
 
 
 def test_custom_outlier_preview_uses_compact_overview_table():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert 'key === "Outlier preview"' in source
     assert "renderCustomOutlierPreviewTable(value)" in source
     assert "flattenOutlierPreviewRows(previewByRule)" in source
@@ -282,8 +282,8 @@ def test_custom_outlier_preview_uses_compact_overview_table():
 
 
 def test_custom_outlier_ui_explains_valid_value_semantics():
-    panel = DATA_QUALITY_PANEL.read_text()
-    script = INSPECTOR_JS.read_text()
+    panel = DATA_QUALITY_PANEL.read_text(encoding="utf-8")
+    script = INSPECTOR_JS.read_text(encoding="utf-8")
     expected = "Values that do not satisfy these conditions are flagged."
     assert "Rules define expected valid values." in panel
     assert expected in panel
@@ -294,6 +294,6 @@ def test_workspace_init_releases_clear_file_lock_after_overview_load():
     """loadDataOverview must return its fetch promise so initWorkspace can
     drop the processing lock. Calling .finally on undefined throws, which left
     the top-bar clear button with pointer-events-none forever."""
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "return fetch(\"/summary-statistics\")" in source
     assert "Promise.resolve(loadDataOverview()).finally(initTaskDone)" in source
