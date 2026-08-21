@@ -3818,9 +3818,17 @@ function buildColumnRolesEditor(roles) {
   const roleOptions = ["continuous", "categorical", "identifier"];
   const cols = Object.keys(roles);
 
-  // Centered section title, consistent with the other Data Overview headings.
+  // Collapsed by default: the roles are inferred, and most readers never need
+  // to correct them. Uses the same <details> disclosure as the nested result
+  // sections, so it opens on click and keeps its state while the panel lives.
   let html =
-    '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mt-6 mb-3 uppercase tracking-wide">Override Column Types</h3>';
+    '<details id="column-roles-panel" class="mt-6 mb-3">' +
+    '<summary class="cursor-pointer flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">' +
+    '<svg class="w-3 h-3 shrink-0" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" fill="none" d="M1 1l4 4 4-4"/></svg>' +
+    "Override Column Types" +
+    `<span class="normal-case font-normal text-gray-500 dark:text-gray-400">(${cols.length})</span>` +
+    "</summary>" +
+    '<div class="mt-3">';
 
   // Search + Apply (app-standard control sizing; left-aligned).
   html += '<div class="flex items-center gap-2 mb-3 text-left">';
@@ -3849,6 +3857,7 @@ function buildColumnRolesEditor(roles) {
   html += "</div>";
   html +=
     '<p id="roles-empty" class="text-xs text-gray-400 italic py-2" style="display:none;">No columns match the filter.</p>';
+  html += "</div></details>";
   return html;
 }
 
