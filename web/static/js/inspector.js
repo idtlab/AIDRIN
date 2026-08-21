@@ -3684,42 +3684,411 @@ function buildCategoricalSummaryTable(summary) {
 // ==================== Histograms ====================
 
 /**
- * Render histogram images in the data overview panel.
- * @param {Object} histograms - Dict of {column_theme: base64_img} from /summary-statistics
+ * Build one distribution section (heading + image grid). Returns "" when the
+ * histogram dict is empty so callers can concatenate sections unconditionally.
+ * @param {Object} histograms - Dict of {column_theme: base64_img}
+ * @param {string} title - Section heading
  */
-function renderWorkspaceHistograms(histograms) {
-  const container = document.getElementById("workspace-histograms");
-  if (!container) return;
-
-  // Always use the light variant — CSS filter handles dark mode
+/**
+ * Strip the "_light" suffix the server keys chart images with.
+ * @param {Object} charts - {`${column}_light`: base64}
+ * @returns {Object} {column: base64}
+ */
+function _chartsByColumn(charts) {
   const columns = {};
-  for (const [key, base64] of Object.entries(histograms)) {
+  for (const [key, base64] of Object.entries(charts || {})) {
     if (key.endsWith("_light")) {
-      const colName = key.slice(0, -"_light".length);
-      columns[colName] = base64;
+      columns[key.slice(0, -"_light".length)] = base64;
     }
   }
+  return columns;
+}
 
-  if (Object.keys(columns).length === 0) {
-    container.innerHTML = "";
-    return;
+/**
+ * Swap a distribution card between its line and bar rendering (issue #212).
+ * Both PNGs ship with the summary, so this is a src swap, not a refetch.
+ *
+ * The line PNG is read back off the <img> rather than mirrored into a data-
+ * attribute: these are ~15-30 KB of base64 each, and duplicating them into the
+ * markup doubled the rendered size of the whole section for no gain.
+ * @param {HTMLElement} button - the clicked Line/Bar button
+ * @param {string} kind - "line" or "bar"
+ */
+function toggleDistributionChart(button, kind) {
+  const card = button.closest("[data-chart-card]");
+  if (!card) return;
+  const img = card.querySelector("img");
+  if (!img) return;
+  // Captured once, before the first swap replaces it.
+  if (card._chartLineSrc === undefined) {
+    card._chartLineSrc = img.getAttribute("src");
   }
+  const next =
+    kind === "bar"
+      ? card.dataset.chartBar &&
+        `data:image/png;base64,${card.dataset.chartBar}`
+      : card._chartLineSrc;
+  if (!next) return;
+  img.src = next;
 
-  let html =
-    '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Numerical Feature Distributions</h3>';
-  html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">';
+  card.querySelectorAll("[data-chart-toggle]").forEach((btn) => {
+    const active = btn.dataset.chartToggle === kind;
+    btn.classList.toggle("bg-blue-600", active);
+    btn.classList.toggle("text-white", active);
+    btn.classList.toggle("text-gray-600", !active);
+    btn.classList.toggle("dark:text-gray-300", !active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+}
 
+/**
+ * Build one distribution-chart grid.
+ * @param {Object} histograms - {`${column}_light`: base64} shown by default
+ * @param {string} title - section heading
+ * @param {Object} [altBars] - optional bar-chart twin per column; when a column
+ *   has one, the card gets a Line/Bar toggle
+ */
+function buildHistogramSection(histograms, title, altBars) {
+  if (!histograms) return "";
+  // Always use the light variant — CSS filter handles dark mode
+  const columns = _chartsByColumn(histograms);
+  if (Object.keys(columns).length === 0) return "";
+  const bars = _chartsByColumn(altBars);
+
+  let html = `<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">${title}</h3>`;
+  html +=
+    '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">';
   for (const [colName, base64] of Object.entries(columns)) {
+    const bar = bars[colName];
+    const safeName = escapeHtml(colName);
     html += `
-      <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-        <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="w-full" />
-        <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${colName}</div>
+      <div data-chart-card${bar ? ` data-chart-bar="${bar}"` : ""} class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${safeName}" class="w-full" />
+        <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs border-t border-gray-200 dark:border-gray-600">
+          <span class="font-medium text-gray-600 dark:text-gray-400 truncate" title="${safeName}">${safeName}</span>
+          ${
+            bar
+              ? `<span class="shrink-0 inline-flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden" role="group" aria-label="Chart type for ${safeName}">
+            <button type="button" data-chart-toggle="line" aria-pressed="true" onclick="toggleDistributionChart(this, 'line')" class="px-2 py-0.5 text-xs font-medium bg-blue-600 text-white">Line</button>
+            <button type="button" data-chart-toggle="bar" aria-pressed="false" onclick="toggleDistributionChart(this, 'bar')" class="px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300">Bar</button>
+          </span>`
+              : ""
+          }
+        </div>
       </div>
     `;
   }
-
   html += "</div>";
+  return html;
+}
+
+/**
+ * Render distribution plots in the data overview panel: KDE curves for
+ * continuous columns and value-count bars for categorical columns.
+ * @param {Object} histograms - continuous KDE plots (`histograms`)
+ * @param {Object} [categoricalHistograms] - categorical bar charts
+ * @param {Object} [histogramBars] - binned twin of each KDE, enabling the
+ *   per-chart Line/Bar toggle. Categorical cards get none: they are already
+ *   bars, and a KDE over a discrete code is what column roles avoid.
+ */
+function renderWorkspaceHistograms(
+  histograms,
+  categoricalHistograms,
+  histogramBars,
+) {
+  const container = document.getElementById("workspace-histograms");
+  if (!container) return;
+  container.innerHTML =
+    buildHistogramSection(
+      histograms,
+      "Numerical Feature Distributions",
+      histogramBars,
+    ) +
+    buildHistogramSection(
+      categoricalHistograms,
+      "Categorical Feature Distributions",
+    );
+}
+
+/**
+ * Build the editable column-roles panel. Each column shows its inferred role
+ * (continuous/categorical/identifier) in a dropdown the user can change; the
+ * Apply button persists overrides and recomputes the overview.
+ * @param {Object} roles - {column: role} from /summary-statistics
+ */
+function buildColumnRolesEditor(roles) {
+  if (!roles || Object.keys(roles).length === 0) return "";
+  const roleOptions = ["continuous", "categorical", "identifier"];
+  const cols = Object.keys(roles);
+
+  // Collapsed by default: the roles are inferred, and most readers never need
+  // to correct them. Uses the same <details> disclosure as the nested result
+  // sections, so it opens on click and keeps its state while the panel lives.
+  let html =
+    '<details id="column-roles-panel" class="mt-6 mb-3">' +
+    '<summary class="cursor-pointer flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">' +
+    '<svg class="w-3 h-3 shrink-0" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" fill="none" d="M1 1l4 4 4-4"/></svg>' +
+    "Override Column Types" +
+    `<span class="normal-case font-normal text-gray-500 dark:text-gray-400">(${cols.length})</span>` +
+    "</summary>" +
+    '<div class="mt-3">';
+
+  // Search + Apply (app-standard control sizing; left-aligned).
+  html += '<div class="flex items-center gap-2 mb-3 text-left">';
+  html +=
+    '<input id="roles-search" type="text" oninput="filterColumnRoles()" placeholder="Filter columns by name…" ' +
+    'class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500" />';
+  html +=
+    '<button id="apply-roles-btn" onclick="applyColumnRoles()" class="px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">Apply</button>';
+  html += "</div>";
+
+  // Capped grid (no scroll — the 14-row limit keeps it compact at any width)
+  html +=
+    '<div id="column-roles-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-1 text-left">';
+  cols.forEach((col) => {
+    html += `
+      <div class="role-row flex items-center justify-between gap-3 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg" data-col="${escapeHtml(col)}">
+        <span class="text-sm font-mono text-gray-900 dark:text-white truncate" title="${escapeHtml(col)}">${escapeHtml(col)}</span>
+        <select data-col="${escapeHtml(col)}" class="role-select" style="flex-shrink:0;">
+          ${roleOptions.map((r) => `<option value="${r}" ${roles[col] === r ? "selected" : ""}>${r}</option>`).join("")}
+        </select>
+      </div>`;
+  });
+  // "More available" tile — occupies the 15th slot when matches exceed the cap.
+  html +=
+    '<div id="roles-more" class="flex items-center justify-center gap-1 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg" style="display:none;"></div>';
+  html += "</div>";
+  html +=
+    '<p id="roles-empty" class="text-xs text-gray-400 italic py-2" style="display:none;">No columns match the filter.</p>';
+  html += "</div></details>";
+  return html;
+}
+
+// Show at most this many matching rows; the rest collapse into a "more" tile.
+const ROLES_VISIBLE_LIMIT = 14;
+
+/** Live-filter the column-role rows by name substring and/or selected role. */
+function filterColumnRoles() {
+  const q = (
+    document.getElementById("roles-search")?.value || ""
+  ).toLowerCase();
+  let matched = 0;
+  document.querySelectorAll("#column-roles-grid .role-row").forEach((row) => {
+    const col = (row.getAttribute("data-col") || "").toLowerCase();
+    const nameMatch = !q || col.includes(q);
+    // Show only the first N matches; matches beyond the cap stay hidden.
+    const show = nameMatch && matched < ROLES_VISIBLE_LIMIT;
+    row.style.display = show ? "" : "none";
+    if (nameMatch) matched++;
+  });
+
+  const overflow = Math.max(0, matched - ROLES_VISIBLE_LIMIT);
+  const more = document.getElementById("roles-more");
+  if (more) {
+    more.textContent = `+${overflow} more — narrow with search`;
+    more.style.display = overflow > 0 ? "" : "none";
+  }
+  const empty = document.getElementById("roles-empty");
+  if (empty) {
+    empty.style.display = matched === 0 ? "" : "none";
+  }
+}
+
+/** Gather role overrides, persist them, and recompute the overview. */
+function applyColumnRoles() {
+  const overrides = {};
+  document.querySelectorAll("#column-roles-grid .role-select").forEach((s) => {
+    overrides[s.getAttribute("data-col")] = s.value;
+  });
+  const btn = document.getElementById("apply-roles-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Applying…";
+  }
+  fetch("/column-roles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ column_roles: overrides }),
+  })
+    .then((r) => r.json())
+    .then(() => refreshWorkspaceSummary())
+    .catch((err) => {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Apply";
+      }
+      console.error("Error applying column roles:", err);
+    });
+}
+
+/** Re-fetch /summary-statistics and re-render the overview (after a role change). */
+function refreshWorkspaceSummary() {
+  const container = document.getElementById("workspace-summary");
+  if (container)
+    container.innerHTML =
+      '<div class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">Recomputing summary…</div>';
+  const hist = document.getElementById("workspace-histograms");
+  if (hist) hist.innerHTML = "";
+  _beginServerProcessing();
+  return fetch("/summary-statistics")
+    .then((r) => r.json())
+    .then((data) => renderWorkspaceSummary(data))
+    .catch((err) => {
+      if (container)
+        container.innerHTML = `<p class="text-sm" style="color: red;">Error loading summary: ${err.message}</p>`;
+    })
+    .finally(() => _endServerProcessing());
+}
+
+/** Render the whole Data Overview panel from a /summary-statistics payload. */
+function renderWorkspaceSummary(data) {
+  const container = document.getElementById("workspace-summary");
+  if (!container) return;
+
+  if (!data.success) {
+    // A multi-dataset HDF5 file reports failure until datasets are picked.
+    if (data.needs_dataset_selection && data.datasets?.length) {
+      renderHdf5DatasetPicker(container, data);
+      return;
+    }
+    container.innerHTML = `
+      <div class="flex items-start gap-2 p-3 text-sm rounded-lg bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+        <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+        <span>${escapeHtml(data.message || "Unable to load summary.")}</span>
+      </div>`;
+    return;
+  }
+
+  const idCount = (data.identifier_features || []).length;
+  let html = "";
+
+  if (data.hdf5_multi_dataset) {
+    const keys = (data.selected_dataset_keys || []).join(", ");
+    const keysDisplay = keys.length > 80 ? `${keys.slice(0, 77)}...` : keys;
+    const escapedKeys = keys
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/"/g, "&quot;");
+    const escapedDisplay = keysDisplay
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;");
+    html += `
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          HDF5 datasets:
+          <span class="font-mono text-xs text-gray-800 dark:text-gray-200" title="${escapedKeys}">${escapedDisplay || "selected"}</span>
+        </p>
+        <button type="button" onclick="returnToHdf5DatasetPicker()" class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+          Change dataset selection
+        </button>
+      </div>`;
+  }
+
+  html += `
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.records_count.toLocaleString()}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Records</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.features_count}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Features</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.numerical_features?.length || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Continuous</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.categorical_features?.length || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Categorical</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${idCount}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Identifiers</div>
+      </div>
+    </div>
+  `;
+
+  html += buildColumnRolesEditor(data.column_roles);
+
+  // Numerical (continuous) statistics table — rows = features, columns = stats
+  if (
+    data.summary_statistics &&
+    Object.keys(data.summary_statistics).length > 0
+  ) {
+    const features = Object.keys(data.summary_statistics);
+    const allStats = Object.keys(data.summary_statistics[features[0]]);
+    html +=
+      '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mt-6 mb-3 uppercase tracking-wide">Numerical Features</h3>';
+    const preferredOrder = [
+      "count",
+      "min",
+      "25th percentile",
+      "50th percentile",
+      "mean",
+      "75th percentile",
+      "max",
+      "std",
+    ];
+    const statKeys = preferredOrder
+      .filter((s) => allStats.includes(s))
+      .concat(allStats.filter((s) => !preferredOrder.includes(s)));
+
+    html += '<div class="relative overflow-x-auto rounded-lg shadow-sm">';
+    html +=
+      '<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
+    html +=
+      '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>';
+    html += '<th scope="col" class="px-4 py-3">Feature</th>';
+    statKeys.forEach((s) => {
+      html += `<th scope="col" class="px-4 py-3 text-right">${s}</th>`;
+    });
+    html += "</tr></thead><tbody>";
+    features.forEach((feat, i) => {
+      const stripe =
+        i % 2 === 0
+          ? "bg-white dark:bg-gray-800"
+          : "bg-gray-50 dark:bg-gray-700/50";
+      html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+      html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(feat)}</td>`;
+      statKeys.forEach((s) => {
+        html += `<td class="px-4 py-2 font-mono text-xs text-right">${data.summary_statistics[feat][s] ?? "—"}</td>`;
+      });
+      html += "</tr>";
+    });
+    html += "</tbody></table></div>";
+  }
+
+  html += buildCategoricalSummaryTable(data.categorical_summary);
+
+  // Identifiers: excluded from stats/plots, listed for transparency
+  if (
+    data.identifier_summary &&
+    Object.keys(data.identifier_summary).length > 0
+  ) {
+    html +=
+      '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mt-6 mb-2 uppercase tracking-wide">Identifiers</h3>';
+    html +=
+      '<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Treated as identifiers and excluded from statistics, distributions, and correlations.</p>';
+    html += '<div class="flex flex-wrap gap-2">';
+    Object.keys(data.identifier_summary).forEach((col) => {
+      const info = data.identifier_summary[col] || {};
+      html += `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"><span class="font-mono">${escapeHtml(col)}</span><span class="opacity-60">${(info.unique ?? 0).toLocaleString()} distinct</span></span>`;
+    });
+    html += "</div>";
+  }
+
   container.innerHTML = html;
+
+  // Apply the default "Needs review" filter so continuous columns start hidden.
+  filterColumnRoles();
+
+  renderWorkspaceHistograms(
+    data.histograms,
+    data.categorical_histograms,
+    data.histogram_bars,
+  );
 }
 
 // ==================== Workspace Init ====================
@@ -4131,125 +4500,7 @@ function initWorkspace() {
 
   fetch("/summary-statistics")
     .then((r) => r.json())
-    .then((data) => {
-      const container = document.getElementById("workspace-summary");
-      if (!container) return;
-
-      if (data.success) {
-        let html = "";
-        if (data.hdf5_multi_dataset) {
-          const keys = (data.selected_dataset_keys || []).join(", ");
-          const keysDisplay =
-            keys.length > 80 ? `${keys.slice(0, 77)}...` : keys;
-          const escapedKeys = keys
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/"/g, "&quot;");
-          const escapedDisplay = keysDisplay
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;");
-          html += `
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-            <p class="text-sm text-gray-600 dark:text-gray-400">
-              HDF5 datasets:
-              <span class="font-mono text-xs text-gray-800 dark:text-gray-200" title="${escapedKeys}">${escapedDisplay || "selected"}</span>
-            </p>
-            <button type="button" onclick="returnToHdf5DatasetPicker()" class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
-              Change dataset selection
-            </button>
-          </div>`;
-        }
-        html += `
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
-              <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.records_count.toLocaleString()}</div>
-              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Records</div>
-            </div>
-            <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
-              <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.features_count}</div>
-              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Features</div>
-            </div>
-            <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
-              <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.numerical_features?.length || 0}</div>
-              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Numerical</div>
-            </div>
-            <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
-              <div class="text-3xl font-bold text-gray-900 dark:text-white">${data.categorical_features?.length || 0}</div>
-              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Categorical</div>
-            </div>
-          </div>
-        `;
-
-        // Summary statistics table — pivoted: rows = features, columns = stats
-        if (
-          data.summary_statistics &&
-          Object.keys(data.summary_statistics).length > 0
-        ) {
-          const features = Object.keys(data.summary_statistics);
-          const allStats = Object.keys(data.summary_statistics[features[0]]);
-          html +=
-            '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Numerical Features</h3>';
-          // Preferred order
-          const preferredOrder = [
-            "count",
-            "min",
-            "25th percentile",
-            "50th percentile",
-            "mean",
-            "75th percentile",
-            "max",
-            "std",
-          ];
-          const statKeys = preferredOrder
-            .filter((s) => allStats.includes(s))
-            .concat(allStats.filter((s) => !preferredOrder.includes(s)));
-
-          html += '<div class="relative overflow-x-auto rounded-lg shadow-sm">';
-          html +=
-            '<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
-          html +=
-            '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>';
-          html += '<th scope="col" class="px-4 py-3">Feature</th>';
-          statKeys.forEach((s) => {
-            html += `<th scope="col" class="px-4 py-3 text-right">${s}</th>`;
-          });
-          html += "</tr></thead><tbody>";
-
-          features.forEach((feat, i) => {
-            const stripe =
-              i % 2 === 0
-                ? "bg-white dark:bg-gray-800"
-                : "bg-gray-50 dark:bg-gray-700/50";
-            html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-            html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${feat}</td>`;
-            statKeys.forEach((s) => {
-              html += `<td class="px-4 py-2 font-mono text-xs text-right">${data.summary_statistics[feat][s] ?? "—"}</td>`;
-            });
-            html += "</tr>";
-          });
-
-          html += "</tbody></table></div>";
-        }
-
-        html += buildCategoricalSummaryTable(data.categorical_summary);
-
-        container.innerHTML = html;
-
-        // Render histograms in the data overview panel
-        if (data.histograms) {
-          renderWorkspaceHistograms(data.histograms);
-        }
-      } else if (data.needs_dataset_selection && data.datasets?.length) {
-        renderHdf5DatasetPicker(container, data);
-      } else {
-        container.innerHTML = `
-          <div class="flex items-start gap-2 p-3 text-sm rounded-lg bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-            <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-            <span>${escapeHtml(data.message)}</span>
-          </div>`;
-      }
-    })
+    .then((data) => renderWorkspaceSummary(data))
     .catch((err) => {
       const container = document.getElementById("workspace-summary");
       if (container) {

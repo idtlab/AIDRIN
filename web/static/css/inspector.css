@@ -49,6 +49,17 @@ html.dark .sidebar-metric-item.active {
   padding-right: 32px; /* room for the chevron */
 }
 
+/* Column-roles editor: match the compact AI-settings control height
+   (px-3 py-2 text-sm) instead of the taller global select padding. */
+#roles-role-filter,
+#column-roles-grid select {
+  padding: 8px 32px 8px 12px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border-radius: 8px;
+  max-width: none;
+}
+
 /* Tables: outer border + header separator */
 .relative.overflow-x-auto {
   border: 1px solid #e5e7eb;
