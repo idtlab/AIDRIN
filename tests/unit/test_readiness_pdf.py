@@ -9,8 +9,10 @@ from web.readiness.pdf import (
     FootnoteRegistry,
     _cap_na_rows,
     _fair_value_rows,
+    _make_readiness_pdf_url_fetcher,
     _na_row,
     _prepare_fair_compliance,
+    _prepare_fairness,
     _prepare_governance,
     _prepare_overview,
     build_pdf_context,
@@ -289,6 +291,121 @@ class TestReadinessPdfRender(unittest.TestCase):
         mock_instance.write_pdf.assert_called_once()
         _mock_template.assert_called_once()
         self.assertEqual(_mock_template.call_args.kwargs["logo_url"], "file:///tmp/logo.png")
+        # HTML() must receive a restricted url_fetcher (not WeasyPrint's default).
+        self.assertIn("url_fetcher", mock_html.call_args.kwargs)
+        self.assertTrue(callable(mock_html.call_args.kwargs["url_fetcher"]))
+
+
+class TestReadinessPdfEscaping(unittest.TestCase):
+    def test_fairness_pair_hint_escapes_markup(self):
+        payload = '<img src="http://attacker.example/x.png">male'
+        prepared = _prepare_fairness(
+            {
+                "auto_selection": {"selection_criteria": {}},
+                "needs_attention": {
+                    "representation_imbalance": [
+                        {
+                            "column": "gender",
+                            "max_ratio": 2.0,
+                            "flagged_pairs": [{"pair": payload, "ratio": 2.0}],
+                        }
+                    ]
+                },
+            }
+        )
+        secondary = str(prepared["needs_attention"][0]["rows"][0]["secondary"])
+        self.assertNotIn("<img", secondary)
+        self.assertIn("&lt;img", secondary)
+
+    def test_governance_detail_fields_escape_markup(self):
+        payload = '<img src="http://attacker.example/x.png">male'
+        prepared = _prepare_governance(
+            {
+                "auto_selection": {"selection_criteria": {}},
+                "needs_attention": {
+                    "low_anonymity": [
+                        {
+                            "metric": "k-anonymity",
+                            "value": 1,
+                            "detail": payload,
+                            "quasi_identifiers": ["age"],
+                        }
+                    ],
+                    "hipaa_phi": [
+                        {
+                            "column": "notes",
+                            "types": [payload],
+                            "total_flags": 1,
+                        }
+                    ],
+                    "high_linkage_risk": [
+                        {
+                            "metric": "MM",
+                            "feature": "zip",
+                            "detail": payload,
+                            "mean_risk": 0.9,
+                        }
+                    ],
+                    "attribute_disclosure": [
+                        {
+                            "metric": "t-closeness",
+                            "value": 0.4,
+                            "detail": payload,
+                            "sensitive_attribute": "diagnosis",
+                        }
+                    ],
+                },
+            }
+        )
+        for block in prepared["needs_attention"]:
+            for row in block["rows"]:
+                secondary = row.get("secondary")
+                if secondary is None:
+                    continue
+                text = str(secondary)
+                self.assertNotIn("<img", text, msg=block["title"])
+                self.assertIn("&lt;img", text, msg=block["title"])
+
+
+class TestReadinessPdfUrlFetcher(unittest.TestCase):
+    def test_blocks_remote_http_urls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "static").mkdir()
+            fetcher = _make_readiness_pdf_url_fetcher([root / "static"])
+            with self.assertRaises(ValueError):
+                fetcher("http://attacker.example/x.png")
+
+    def test_blocks_file_urls_outside_allowed_roots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            allowed = root / "static"
+            allowed.mkdir()
+            outside = root / "secret.txt"
+            outside.write_text("nope", encoding="utf-8")
+            fetcher = _make_readiness_pdf_url_fetcher([allowed])
+            with self.assertRaises(ValueError):
+                fetcher(outside.as_uri())
+
+    def test_allows_file_under_allowed_root(self):
+        import sys
+
+        fake_weasy = MagicMock()
+        fake_weasy.default_url_fetcher.return_value = {
+            "string": b"png",
+            "mime_type": "image/png",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            allowed = root / "static"
+            allowed.mkdir()
+            asset = allowed / "logo.png"
+            asset.write_bytes(b"png")
+            with patch.dict(sys.modules, {"weasyprint": fake_weasy}):
+                fetcher = _make_readiness_pdf_url_fetcher([allowed])
+                result = fetcher(asset.as_uri())
+            self.assertEqual(result["mime_type"], "image/png")
+            fake_weasy.default_url_fetcher.assert_called_once()
 
 
 if __name__ == "__main__":

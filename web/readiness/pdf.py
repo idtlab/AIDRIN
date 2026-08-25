@@ -367,7 +367,10 @@ def _prepare_fairness(fb: dict) -> dict:
             hint = ""
             pairs = item.get("flagged_pairs") or []
             if pairs:
-                hint = f"Worst pair: {pairs[0].get('pair')} (ratio {fmt_num(pairs[0].get('ratio'))})"
+                hint = (
+                    f"Worst pair: {_e(pairs[0].get('pair'))} "
+                    f"(ratio {fmt_num(pairs[0].get('ratio'))})"
+                )
             rows.append(
                 _na_row(
                     f"<span class='mono'>{_e(item.get('column'))}</span>",
@@ -485,7 +488,7 @@ def _prepare_governance(gov: dict) -> dict:
             rows.append(
                 _na_row(
                     f"{_e(item.get('metric'))}: k = {item.get('value')}",
-                    item.get("detail"),
+                    _e(item.get("detail")) if item.get("detail") else None,
                     (
                         f"{item.get('singleton_count')} singleton group(s)"
                         if item.get("singleton_count") is not None
@@ -517,7 +520,7 @@ def _prepare_governance(gov: dict) -> dict:
         rows = [
             _na_row(
                 f"<span class='mono'>{_e(x.get('column'))}</span>",
-                ", ".join(x.get("types") or []) or "Pattern match",
+                _e(", ".join(x.get("types") or []) or "Pattern match"),
                 f"{x.get('total_flags')} flag(s)",
             )
             for x in hipaa_phi
@@ -546,7 +549,13 @@ def _prepare_governance(gov: dict) -> dict:
             rows.append(
                 _na_row(
                     f"{_e(item.get('metric'))}: {label}",
-                    item.get("detail") or (f"Quasi-identifiers: {', '.join(qis)}" if qis else None),
+                    (
+                        _e(item.get("detail"))
+                        if item.get("detail")
+                        else (
+                            f"Quasi-identifiers: {_e(', '.join(qis))}" if qis else None
+                        )
+                    ),
                     f"risk {fmt_num(item.get('mean_risk'))}",
                 )
             )
@@ -565,7 +574,7 @@ def _prepare_governance(gov: dict) -> dict:
         rows = [
             _na_row(
                 f"{_e(x.get('metric'))} = {fmt_num(x.get('value'))}",
-                x.get("detail"),
+                _e(x.get("detail")) if x.get("detail") else None,
             )
             for x in attr_disc
         ]
@@ -792,6 +801,58 @@ def _weasyprint():
     return HTML, CSS
 
 
+def _pdf_allowed_file_roots(app) -> list[Path]:
+    """Local directories WeasyPrint may read while rendering a readiness PDF."""
+    web_root = Path(app.root_path).resolve()
+    return [
+        web_root / "static",
+        web_root.parent / "aidrin" / "images",
+    ]
+
+
+def _make_readiness_pdf_url_fetcher(allowed_roots: list[Path]):
+    """Build a WeasyPrint URL fetcher that blocks remote and arbitrary file access.
+
+    Uploaded dataset values can become HTML in the PDF; without this guard,
+    WeasyPrint's default fetcher would resolve attacker-controlled http(s)/file
+    URLs (SSRF / local file read) during rendering.
+    """
+    from urllib.parse import unquote, urlparse
+
+    resolved_roots = [root.resolve() for root in allowed_roots]
+
+    def _is_under_allowed_root(path: Path) -> bool:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            return False
+        for root in resolved_roots:
+            try:
+                if resolved == root or resolved.is_relative_to(root):
+                    return True
+            except ValueError:
+                continue
+        return False
+
+    def url_fetcher(url, timeout=10, ssl_context=None):
+        parsed = urlparse(url)
+        scheme = (parsed.scheme or "").lower()
+        if scheme not in ("data", "file"):
+            raise ValueError(f"Blocked URL scheme for readiness PDF: {scheme or 'unknown'}")
+        if scheme == "file":
+            # urlparse leaves an empty host and path like /tmp/... on POSIX.
+            file_path = Path(unquote(parsed.path))
+            if parsed.netloc and parsed.netloc not in ("", "localhost"):
+                raise ValueError(f"Blocked non-local file URL: {url}")
+            if not _is_under_allowed_root(file_path):
+                raise ValueError(f"Blocked file URL outside allowed roots: {url}")
+        from weasyprint import default_url_fetcher
+
+        return default_url_fetcher(url, timeout=timeout, ssl_context=ssl_context)
+
+    return url_fetcher
+
+
 def render_readiness_report_pdf(app, context: dict[str, Any]) -> bytes:
     """Render PDF bytes from a prepared context dict."""
     HTML, CSS = _weasyprint()
@@ -806,6 +867,7 @@ def render_readiness_report_pdf(app, context: dict[str, Any]) -> bytes:
     static_root = Path(app.root_path) / "static"
     css_path = static_root / "css" / "readiness_report_print.css"
     base_url = static_root.as_uri() + "/"
-    return HTML(string=html, base_url=base_url).write_pdf(
+    url_fetcher = _make_readiness_pdf_url_fetcher(_pdf_allowed_file_roots(app))
+    return HTML(string=html, base_url=base_url, url_fetcher=url_fetcher).write_pdf(
         stylesheets=[CSS(filename=str(css_path))]
     )
