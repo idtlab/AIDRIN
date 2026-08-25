@@ -2663,15 +2663,22 @@ def _get_or_build_readiness_visualizations(section, file_info):
 
 
 def _readiness_file_info():
-    """Return ``(file_path, file_name, file_type)`` from session, or *None*."""
+    """Return ``(file_path, file_name, file_type)`` from session, or *None*.
+
+    Uses ``build_file_info`` so session paths pass the upload-folder
+    path-traversal barrier (same control as other metric routes).
+    """
     file_path = session.get("uploaded_file_path")
     if not file_path:
         return None
-    return (
+    info = build_file_info(
         file_path,
         session.get("uploaded_file_name"),
         session.get("uploaded_file_type"),
     )
+    if not info[0]:
+        return None
+    return info[:3]
 
 
 def _build_readiness_section(section, file_info, include_visualizations=False):
