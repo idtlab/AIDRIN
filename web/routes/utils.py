@@ -3,6 +3,7 @@
 import io
 import base64
 import logging
+import math
 import os
 import time
 import uuid
@@ -294,7 +295,11 @@ def format_dict_values(d):
 
 
 def ensure_json_serializable(obj):
-    """Recursively convert non-native types (NumPy/Pandas) to JSON-safe Python types."""
+    """Recursively convert non-native types (NumPy/Pandas) to JSON-safe Python types.
+
+    Non-finite floats (NaN, ±Inf) become ``None`` so ``json.dumps(..., allow_nan=False)``
+    succeeds. Returning bare ``NaN`` breaks strict parsers (including ``response.json()``).
+    """
     import numpy as np
 
     if isinstance(obj, dict):
@@ -307,10 +312,11 @@ def ensure_json_serializable(obj):
         return list(obj)
     elif isinstance(obj, (np.integer,)):
         return int(obj)
-    elif isinstance(obj, (np.floating,)):
-        return float(obj)
+    elif isinstance(obj, (np.floating, float)):
+        value = float(obj)
+        return value if math.isfinite(value) else None
     elif isinstance(obj, np.ndarray):
-        return obj.tolist()
+        return ensure_json_serializable(obj.tolist())
     elif isinstance(obj, (np.bool_,)):
         return bool(obj)
     elif pd.isna(obj):

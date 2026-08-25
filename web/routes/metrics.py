@@ -441,13 +441,29 @@ def data_quality():
 
 def _grade_label(score):
     """Map a 0–1 readiness score to a coarse status label."""
-    if score is None:
+    try:
+        if score is None or not math.isfinite(float(score)):
+            return "unknown"
+    except (TypeError, ValueError):
         return "unknown"
     if score >= 0.9:
         return "good"
     if score >= 0.7:
         return "warning"
     return "poor"
+
+
+def _finite_kpi_values(kpis):
+    """Return finite numeric KPI values (exclude None / NaN / Inf)."""
+    present = []
+    for kpi in kpis:
+        value = kpi.get("value") if isinstance(kpi, dict) else None
+        try:
+            if value is not None and math.isfinite(float(value)):
+                present.append(value)
+        except (TypeError, ValueError):
+            continue
+    return present
 
 
 # Dataset-overview readiness thresholds (per-feature profile)
@@ -806,7 +822,7 @@ def _build_data_quality_section(file_info, include_visualizations=False):
         },
     ]
 
-    present = [k["value"] for k in kpis if k["value"] is not None]
+    present = _finite_kpi_values(kpis)
     grade = sum(present) / len(present) if present else None
 
     # --- Needs attention --------------------------------------------------
@@ -1065,7 +1081,7 @@ def _build_impact_on_ai_section(file_info, include_visualizations=False):
         },
     ]
 
-    present = [k["value"] for k in kpis if k["value"] is not None]
+    present = _finite_kpi_values(kpis)
     grade = sum(present) / len(present) if present else None
 
     return {
@@ -1509,7 +1525,7 @@ def _build_fairness_bias_section(file_info, include_visualizations=False):
             "error": "Requires sensitive attribute, target, and auto-positive class.",
         }
 
-    present = [k["value"] for k in kpis if k["value"] is not None]
+    present = _finite_kpi_values(kpis)
     grade = sum(present) / len(present) if present else None
 
     return {
@@ -2288,8 +2304,8 @@ def _build_data_governance_section(file_info, include_visualizations=False):
             "error": "No eligible numerical columns for illustrative DP demo.",
         }
 
-    grade_kpis = [k for k in kpis if k["value"] is not None]
-    grade = sum(k["value"] for k in grade_kpis) / len(grade_kpis) if grade_kpis else None
+    present = _finite_kpi_values(kpis)
+    grade = sum(present) / len(present) if present else None
 
     return {
         "grade": grade,
