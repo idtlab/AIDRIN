@@ -28,6 +28,116 @@ def test_result_renderer_escapes_untrusted_display_values():
         assert fragment in source
 
 
+def test_escape_html_covers_attribute_breakout_chars():
+    """Strong escaper must encode >, ', and \" so attribute breakouts fail."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function escapeHtml(str)")
+    end = source.index("\n\n// ==================== FAIR Assessment", start)
+    escaper = source[start:end]
+    assert ".replace(/>/g, \"&gt;\")" in escaper
+    assert ".replace(/'/g, \"&#39;\")" in escaper
+    assert ".replace(/\"/g, \"&quot;\")" in escaper
+
+
+def test_readiness_and_overview_renderers_escape_dataset_strings():
+    """Dataset-derived strings must not reach innerHTML unescaped."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    required = [
+        'alt="Distribution of ${escapeHtml(colName)}"',
+        "${escapeHtml(p.feature)}",
+        'title="${escapeHtml(p.summary || "")}"',
+        "${escapeHtml(meta.file_name || \"Dataset\")}",
+        "function _escapeHtml(s) {\n  return escapeHtml(s);",
+        "Representation ${escapeHtml(col)}",
+        "Class imbalance: ${escapeHtml(det.class_imbalance.error)}",
+    ]
+    for fragment in required:
+        assert fragment in source, f"missing escape: {fragment!r}"
+
+    # Unescaped forms that previously enabled stored XSS
+    forbidden = [
+        'alt="Distribution of ${colName}"',
+        "${p.feature}</td>",
+        'title="${p.summary || ""}"',
+        "${meta.file_name || \"Dataset\"}",
+        "Dataset overview unavailable: ${overview.error}",
+        "Class imbalance: ${det.class_imbalance.error}",
+    ]
+    for fragment in forbidden:
+        assert fragment not in source, f"unescaped sink still present: {fragment!r}"
+
+
+def test_categorical_pie_charts_escape_column_name_payload():
+    """Column-name XSS payload must not appear raw in pie-chart HTML."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert 'alt="Distribution of ${escapeHtml(colName)}"' in source
+    assert 'alt="Distribution of ${colName}"' not in source
+
+    # Mirror escapeHtml() and the pie-chart template without requiring Node.
+    def escape_html(text):
+        return (
+            str(text)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#39;")
+        )
+
+    payload = '<img src=x onerror=alert(1)>'
+    breakout = '" onerror=alert(1) x="'
+    for col_name in (payload, breakout):
+        html = (
+            f'<img src="data:image/png;base64,AAAA" '
+            f'alt="Distribution of {escape_html(col_name)}" />'
+        )
+        assert payload not in html
+        assert 'alt="Distribution of "' not in html
+        assert "&lt;" in html or "&quot;" in html
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for XSS string repro")
+def test_categorical_pie_charts_escape_column_name_payload_in_node():
+    """Execute renderCategoricalPieCharts in Node when available."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function renderCategoricalPieCharts")
+    end = source.index("\nfunction renderHdf5DatasetPicker", start)
+    esc_start = source.index("function escapeHtml(str)")
+    esc_end = source.index("\n\n// ==================== FAIR Assessment", esc_start)
+    script = f"""
+{source[esc_start:esc_end]}
+{source[start:end]}
+let captured = "";
+const document = {{
+  getElementById: () => ({{
+    set innerHTML(v) {{ captured = v; }},
+    get innerHTML() {{ return captured; }},
+  }}),
+}};
+const payload = '<img src=x onerror=alert(1)>';
+const breakout = '" onerror=alert(1) x="';
+renderCategoricalPieCharts({{ [payload]: "AAAA" }}, "c");
+if (captured.includes(payload)) {{
+  process.stdout.write(JSON.stringify({{ ok: false, reason: "raw payload in html" }}));
+  process.exit(0);
+}}
+renderCategoricalPieCharts({{ [breakout]: "AAAA" }}, "c");
+if (captured.includes('onerror=alert(1)') && !captured.includes('&quot;')) {{
+  process.stdout.write(JSON.stringify({{ ok: false, reason: "attribute breakout" }}));
+  process.exit(0);
+}}
+process.stdout.write(JSON.stringify({{ ok: true, sample: captured.slice(0, 200) }}));
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    result = json.loads(completed.stdout)
+    assert result["ok"] is True, result
+
+
 def test_custom_outlier_targets_load_only_when_enabled():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert 'const checkbox = document.getElementById("toggleButton_custom_outliers")' in source

@@ -1103,7 +1103,7 @@ async function workspaceSubmit(targetUrl) {
         console.error("[inspector] correlationError:", msg);
         const m = document.getElementById("metrics");
         if (m)
-          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${msg}</div>`;
+          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(msg)}</div>`;
         _setSubmitButtonsDisabled(false);
         _endServerProcessing();
         return;
@@ -1132,7 +1132,7 @@ async function workspaceSubmit(targetUrl) {
       console.error("Error:", error);
       const m = document.getElementById("metrics");
       if (m)
-        m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error.message || String(error)}</div>`;
+        m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error.message || String(error))}</div>`;
       _setSubmitButtonsDisabled(false);
       _endServerProcessing();
     });
@@ -1234,7 +1234,7 @@ function renderWorkspaceResults(data, options) {
             const imgStyle = isHeatmap
               ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
               : "";
-            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
+            html += `<img src="${viz.src}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
           }
           html += `</div>`;
         }
@@ -1593,7 +1593,7 @@ function fetchGlobusSummary() {
       if (data.error) {
         const loading = document.getElementById("globus-summary-loading");
         if (loading)
-          loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+          loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
         _endServerProcessing();
         return;
       }
@@ -1612,7 +1612,7 @@ function fetchGlobusSummary() {
     .catch((err) => {
       const loading = document.getElementById("globus-summary-loading");
       if (loading)
-        loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${err.message}</div>`;
+        loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${escapeHtml(err.message)}</div>`;
       _endServerProcessing();
     });
 }
@@ -1625,7 +1625,7 @@ function renderGlobusSummary(data) {
 
   if (data.error) {
     if (content)
-      content.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+      content.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
     _unlockGlobusSidebar();
     return;
   }
@@ -1690,9 +1690,9 @@ function renderGlobusSummary(data) {
             ? "bg-white dark:bg-gray-800"
             : "bg-gray-50 dark:bg-gray-700/50";
         html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${feat}</td>`;
+        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(feat)}</td>`;
         statKeys.forEach((s) => {
-          html += `<td class="px-4 py-2 font-mono text-xs text-right">${data.summary_statistics[feat][s] ?? "—"}</td>`;
+          html += `<td class="px-4 py-2 font-mono text-xs text-right">${escapeHtml(formatValue(data.summary_statistics[feat][s] ?? "—"))}</td>`;
         });
         html += "</tr>";
       });
@@ -1751,7 +1751,7 @@ function pollGlobusSummary(taskId) {
         } else if (response.status === "failed") {
           const loading = document.getElementById("globus-summary-loading");
           if (loading)
-            loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${response.error || "Failed to load summary"}</div>`;
+            loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(response.error || "Failed to load summary")}</div>`;
           _unlockGlobusSidebar();
           _endServerProcessing();
         } else if (attempts < maxAttempts) {
@@ -2038,7 +2038,7 @@ function submitGlobusMetric(metricName, params, displayName) {
         _globusTaskDone();
         const m = document.getElementById("metrics");
         if (m)
-          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${data.error}</div>`;
+          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
         return;
       }
       if (data.task_id && data.is_async) {
@@ -2950,9 +2950,9 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
         } else if (response.status === "failed") {
           _globusTaskDone();
           card.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${metricName}</h3>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${escapeHtml(metricName)}</h3>
             <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">
-              ${response.error || "Task failed"}
+              ${escapeHtml(response.error || "Task failed")}
             </div>`;
         } else if (response.status === "processing") {
           // Update progress bar
@@ -3052,7 +3052,7 @@ function buildResultCard(type, results) {
           const imgStyle = isHeatmap
             ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
             : "";
-          html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
+          html += `<img src="${viz.src}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
         }
         html += `</div>`;
       }
@@ -3133,7 +3133,7 @@ function showToast(message, type, duration) {
     <div class="inline-flex items-center justify-center shrink-0 w-8 h-8 ${c.text} ${c.bg} rounded-lg">
       <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">${c.icon}</svg>
     </div>
-    <div class="ml-3 text-sm font-normal">${message}</div>
+    <div class="ml-3 text-sm font-normal">${escapeHtml(message)}</div>
     <button type="button" class="ml-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex items-center justify-center h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700" onclick="this.parentElement.remove()">
       <svg class="w-3 h-3" fill="none" viewBox="0 0 14 14"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/></svg>
     </button>
@@ -3611,7 +3611,7 @@ function renderFairValue(obj) {
   let html = "";
   for (const [k, v] of Object.entries(obj)) {
     if (typeof v === "object" && v !== null) {
-      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${k}</span>${renderFairValue(v)}</div>`;
+      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${escapeHtml(k)}</span>${renderFairValue(v)}</div>`;
     } else {
       const strVal = String(v);
       const isFail =
@@ -3627,7 +3627,7 @@ function renderFairValue(obj) {
         badge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" title="${escapeHtml(strVal)}">&#10003; Found</span>`;
       }
       html += `<div class="flex items-center justify-between py-1.5 text-xs border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-        <span class="text-gray-600 dark:text-gray-400 mr-2">${k}</span>${badge}</div>`;
+        <span class="text-gray-600 dark:text-gray-400 mr-2">${escapeHtml(k)}</span>${badge}</div>`;
     }
   }
   return html;
@@ -4006,7 +4006,7 @@ function submitCustomMetric() {
     .catch((error) => {
       console.error("Error:", error);
       if (metricsDiv)
-        metricsDiv.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error.message}</div>`;
+        metricsDiv.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error.message)}</div>`;
     });
 }
 
@@ -4109,8 +4109,8 @@ function renderWorkspaceHistograms(
   for (const [colName, base64] of Object.entries(columns)) {
     html += `
       <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-        <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="${imgClass}" />
-        <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${colName}</div>
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${escapeHtml(colName)}" class="${imgClass}" />
+        <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${escapeHtml(colName)}</div>
       </div>
     `;
   }
@@ -4136,7 +4136,7 @@ function renderCategoricalPieCharts(charts, containerId) {
   for (const [colName, base64] of entries) {
     html += `
       <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden p-2">
-        <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="w-full h-auto object-contain mx-auto" style="max-width: 420px;" />
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${escapeHtml(colName)}" class="w-full h-auto object-contain mx-auto" style="max-width: 420px;" />
       </div>`;
   }
   html += "</div>";
@@ -4160,7 +4160,9 @@ function renderHdf5DatasetPicker(container, data) {
     return String(text)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
-      .replace(/"/g, "&quot;");
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function datasetLength(ds) {
@@ -4553,13 +4555,8 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
           const keys = (data.selected_dataset_keys || []).join(", ");
           const keysDisplay =
             keys.length > 80 ? `${keys.slice(0, 77)}...` : keys;
-          const escapedKeys = keys
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/"/g, "&quot;");
-          const escapedDisplay = keysDisplay
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;");
+          const escapedKeys = escapeHtml(keys);
+          const escapedDisplay = escapeHtml(keysDisplay);
           html += `
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
             <p class="text-sm text-gray-600 dark:text-gray-400">
@@ -4634,9 +4631,9 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
                 ? "bg-white dark:bg-gray-800"
                 : "bg-gray-50 dark:bg-gray-700/50";
             html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-            html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${feat}</td>`;
+            html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(feat)}</td>`;
             statKeys.forEach((s) => {
-              html += `<td class="px-4 py-2 font-mono text-xs text-right">${data.summary_statistics[feat][s] ?? "—"}</td>`;
+              html += `<td class="px-4 py-2 font-mono text-xs text-right">${escapeHtml(formatValue(data.summary_statistics[feat][s] ?? "—"))}</td>`;
             });
             html += "</tr>";
           });
@@ -4783,7 +4780,7 @@ function _pct(value, decimals = 2) {
 function _readinessSectionError(container, message) {
   if (!container) return;
   container.classList.add("text-center", "py-8");
-  container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">${message}</p>`;
+  container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">${escapeHtml(message)}</p>`;
 }
 
 /** Human-readable section build duration (matches server log precision). */
@@ -4816,7 +4813,7 @@ const _readinessVizCache = {};
 /** Placeholder for a chart that loads when the details panel is opened. */
 function _readinessVizSlot(section, vizKey, title) {
   return `<div class="readiness-viz-slot mb-4" data-readiness-section="${_escapeHtml(section)}" data-readiness-viz="${_escapeHtml(vizKey)}">
-    <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${title}</p>
+    <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${_escapeHtml(title)}</p>
     <div class="readiness-viz-content text-sm text-gray-500 dark:text-gray-400 py-4 text-center">Open this section to load chart…</div>
   </div>`;
 }
@@ -5252,19 +5249,16 @@ function _exportReadinessReportPdf() {
   return exportReadinessReportPdf("scorecard");
 }
 
-/** Escape text for safe inclusion in readiness info tooltips. */
+/** Escape text for safe inclusion in HTML (alias of escapeHtml). */
 function _escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/"/g, "&quot;");
+  return escapeHtml(s);
 }
 
 /** Format quasi-identifier key/value pairs for display. */
 function _formatQiValues(qiValues) {
   if (!qiValues || typeof qiValues !== "object") return "";
   return Object.entries(qiValues)
-    .map(([k, v]) => `${k}=${v}`)
+    .map(([k, v]) => `${escapeHtml(k)}=${escapeHtml(v)}`)
     .join(", ");
 }
 
@@ -5443,7 +5437,7 @@ function _profileStatusBadge(status) {
  */
 function renderReadinessDatasetOverview(container, overview) {
   if (overview.error) {
-    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Dataset overview unavailable: ${overview.error}</p>`;
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Dataset overview unavailable: ${escapeHtml(overview.error)}</p>`;
     return;
   }
 
@@ -5460,9 +5454,9 @@ function renderReadinessDatasetOverview(container, overview) {
   // --- File metadata ---
   let html = `
     <div class="p-4 mb-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-sm">
-      <p class="font-semibold text-gray-900 dark:text-white mb-2">${meta.file_name || "Dataset"}</p>
+      <p class="font-semibold text-gray-900 dark:text-white mb-2">${escapeHtml(meta.file_name || "Dataset")}</p>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-gray-600 dark:text-gray-300">
-        <div><span class="text-gray-500 dark:text-gray-400">Type:</span> ${meta.file_type || "—"}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Type:</span> ${escapeHtml(meta.file_type || "—")}</div>
         <div><span class="text-gray-500 dark:text-gray-400">Size:</span> ${_formatBytes(meta.file_size_bytes)}</div>
         <div><span class="text-gray-500 dark:text-gray-400">Memory:</span> ${_formatBytes(meta.memory_bytes)}</div>
         <div><span class="text-gray-500 dark:text-gray-400">Rows:</span> ${(meta.rows || 0).toLocaleString()}</div>
@@ -5531,14 +5525,14 @@ function renderReadinessDatasetOverview(container, overview) {
         ? "bg-white dark:bg-gray-800"
         : "bg-gray-50 dark:bg-gray-700/50";
     html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-    html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${p.feature}</td>`;
-    html += `<td class="px-3 py-2 capitalize">${p.type}</td>`;
-    html += `<td class="px-3 py-2 font-mono text-xs">${p.dtype}</td>`;
+    html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(p.feature)}</td>`;
+    html += `<td class="px-3 py-2 capitalize">${escapeHtml(p.type)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs">${escapeHtml(p.dtype)}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${fmtProfilePct(p.pct_missing)}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.n_unique}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.pct_dominant != null ? fmtProfilePct(p.pct_dominant) : "—"}</td>`;
     html += `<td class="px-3 py-2">${_profileStatusBadge(p.status)}</td>`;
-    html += `<td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title="${p.summary || ""}">${p.summary || "—"}</td>`;
+    html += `<td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title="${escapeHtml(p.summary || "")}">${escapeHtml(p.summary || "—")}</td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
@@ -5584,7 +5578,7 @@ function renderReadinessDatasetOverview(container, overview) {
         i % 2 === 0
           ? "bg-white dark:bg-gray-800"
           : "bg-gray-50 dark:bg-gray-700/50";
-      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${feat}</td>`;
+      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${escapeHtml(feat)}</td>`;
       statKeys.forEach((s) => {
         const raw = numSummary[feat][s];
         const display =
@@ -5592,7 +5586,7 @@ function renderReadinessDatasetOverview(container, overview) {
             ? "—"
             : typeof raw === "number"
               ? statFormatters[s](raw)
-              : raw;
+              : escapeHtml(String(raw));
         detailsInner += `<td class="px-3 py-2 font-mono text-xs text-right">${display}</td>`;
       });
       detailsInner += `</tr>`;
@@ -5676,7 +5670,7 @@ function renderReadinessDatasetOverview(container, overview) {
  */
 function renderReadinessDataQuality(container, dq) {
   if (dq.error) {
-    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data quality unavailable: ${dq.error}</p>`;
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data quality unavailable: ${escapeHtml(dq.error)}</p>`;
     return;
   }
   const kpis = dq.kpis || [];
@@ -5693,8 +5687,8 @@ function renderReadinessDataQuality(container, dq) {
     <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
       <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
       <ul class="space-y-2 text-gray-700 dark:text-gray-300">
-        <li><span class="font-medium">Analysis scope:</span> ${scopeCrit.selected || "all columns"}${_readinessInfoIcon("analysis_scope")}<br/>
-          <span class="text-xs text-gray-500 dark:text-gray-400">${scopeCrit.rule || "All columns are evaluated automatically."}</span></li>
+        <li><span class="font-medium">Analysis scope:</span> ${escapeHtml(scopeCrit.selected || "all columns")}${_readinessInfoIcon("analysis_scope")}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(scopeCrit.rule || "All columns are evaluated automatically.")}</span></li>
       </ul>
     </div>`;
 
@@ -5715,13 +5709,13 @@ function renderReadinessDataQuality(container, dq) {
     html += `
           <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
             <div class="flex items-baseline justify-between">
-              <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
+              <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
               <span class="text-2xl font-bold ${cls.text}">${fmtDqPct(k.value)}</span>
             </div>
             <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
               <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
             </div>
-            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
           </div>`;
   });
   html += "</div>";
@@ -5744,7 +5738,7 @@ function renderReadinessDataQuality(container, dq) {
       .slice(0, 6)
       .map(
         (f) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.completeness)} complete</span></li>`,
+          `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(f.feature)}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.completeness)} complete</span></li>`,
       )
       .join("");
     const more =
@@ -5762,7 +5756,7 @@ function renderReadinessDataQuality(container, dq) {
       .slice(0, 6)
       .map(
         (f) =>
-          `<li class="flex justify-between gap-3"><span class="truncate">${f.feature}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.outlier_proportion)} outliers</span></li>`,
+          `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(f.feature)}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.outlier_proportion)} outliers</span></li>`,
       )
       .join("");
     const more =
@@ -5823,7 +5817,7 @@ function renderReadinessDataQuality(container, dq) {
           <img src="data:image/png;base64,${det.outliers.visualization}" alt="Outliers chart" class="w-full max-w-2xl" />
         </div>`;
     } else if (det.outliers.error) {
-      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Outliers: ${det.outliers.error}</p>`;
+      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Outliers: ${escapeHtml(det.outliers.error)}</p>`;
     } else if (vizDeferred || det.outliers.visualization_deferred) {
       detailsInner += _readinessVizSlot(
         "data-quality",
@@ -5858,7 +5852,7 @@ function renderReadinessDataQuality(container, dq) {
  */
 function renderReadinessImpact(container, impact) {
   if (impact.error) {
-    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Impact on AI unavailable: ${impact.error}</p>`;
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Impact on AI unavailable: ${escapeHtml(impact.error)}</p>`;
     return;
   }
 
@@ -5897,7 +5891,7 @@ function renderReadinessImpact(container, impact) {
   const selectedCols = colCrit.selected || [];
   const selectedPreview =
     selectedCols.length > 0
-      ? `${selectedCols.slice(0, 8).join(", ")}${selectedCols.length > 8 ? "…" : ""}`
+      ? `${selectedCols.slice(0, 8).map(escapeHtml).join(", ")}${selectedCols.length > 8 ? "…" : ""}`
       : "none";
 
   // --- Auto-selection criteria ---
@@ -5906,7 +5900,7 @@ function renderReadinessImpact(container, impact) {
       <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
       <ul class="space-y-2 text-gray-700 dark:text-gray-300">
         <li><span class="font-medium">Columns analyzed (${analyzed}):</span> ${selectedPreview}<br/>
-          <span class="text-xs text-gray-500 dark:text-gray-400">${colCrit.rule || ""}</span></li>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(colCrit.rule || "")}</span></li>
         <li><span class="font-medium">Excluded columns:</span> ${dropped.length}</li>
         <li><span class="font-medium">Thresholds:</span>
           redundant |score| ≥ ${_readinessNum(thresholds.redundant_threshold)},
@@ -5935,13 +5929,13 @@ function renderReadinessImpact(container, impact) {
     html += `
       <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
         <div class="flex items-baseline justify-between gap-2">
-          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
           <span class="text-2xl font-bold ${cls.text} shrink-0">${displayVal}</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
           <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
         </div>
-        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
       </div>`;
   });
   html += "</div>";
@@ -6032,13 +6026,13 @@ function renderReadinessImpact(container, impact) {
         i % 2 === 0
           ? "bg-white dark:bg-gray-800"
           : "bg-gray-50 dark:bg-gray-700/50";
-      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${p.a}</td><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${p.b}</td><td class="px-4 py-2 font-mono text-xs text-right">${fmtScore(p.score)}</td></tr>`;
+      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${escapeHtml(p.a)}</td><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${escapeHtml(p.b)}</td><td class="px-4 py-2 font-mono text-xs text-right">${fmtScore(p.score)}</td></tr>`;
     });
     detailsInner += "</tbody></table></div>";
   }
 
   if (det.numerical_visualization) {
-    const method = det.numerical_method ? ` (${det.numerical_method})` : "";
+    const method = det.numerical_method ? ` (${escapeHtml(det.numerical_method)})` : "";
     detailsInner += `
       <div class="mb-4">
         <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical correlation${method}</p>
@@ -6072,7 +6066,7 @@ function renderReadinessImpact(container, impact) {
       dropped,
       _READINESS_MAX_DETAIL_LIST_ITEMS,
       (d) =>
-        `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400 dark:text-gray-500">${d.reason}</span></li>`,
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400 dark:text-gray-500">${escapeHtml(d.reason)}</span></li>`,
     );
     detailsInner += `
       <div class="mb-2">
@@ -6106,7 +6100,7 @@ function renderReadinessImpact(container, impact) {
  */
 function renderReadinessFairness(container, fb) {
   if (fb.error) {
-    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Fairness &amp; Bias unavailable: ${fb.error}</p>`;
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Fairness &amp; Bias unavailable: ${escapeHtml(fb.error)}</p>`;
     return;
   }
 
@@ -6138,13 +6132,13 @@ function renderReadinessFairness(container, fb) {
     <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
       <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
       <ul class="space-y-2 text-gray-700 dark:text-gray-300">
-        <li><span class="font-medium">Sensitive attributes:</span> ${sensCrit.selected?.length ? sensCrit.selected.join(", ") : "none"}<br/>
-          <span class="text-xs text-gray-500 dark:text-gray-400">${sensCrit.rule || ""}</span></li>
-        <li><span class="font-medium">Target column:</span> ${targetCrit.selected || "none"}${targetCrit.reason ? ` (${targetCrit.reason})` : ""}<br/>
-          <span class="text-xs text-gray-500 dark:text-gray-400">${targetCrit.rule || ""}</span></li>
-        <li><span class="font-medium">CDD positive class:</span> ${posCrit.selected ?? "none"}${posCrit.reason ? ` (${posCrit.reason})` : ""}<br/>
-          <span class="text-xs text-gray-500 dark:text-gray-400">${posCrit.rule || ""}</span></li>
-        <li><span class="font-medium">Primary sensitive (statistical rate &amp; CDD):</span> ${sel.primary_sensitive || "none"}</li>
+        <li><span class="font-medium">Sensitive attributes:</span> ${sensCrit.selected?.length ? sensCrit.selected.map(escapeHtml).join(", ") : "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(sensCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Target column:</span> ${escapeHtml(targetCrit.selected || "none")}${targetCrit.reason ? ` (${escapeHtml(targetCrit.reason)})` : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(targetCrit.rule || "")}</span></li>
+        <li><span class="font-medium">CDD positive class:</span> ${escapeHtml(String(posCrit.selected ?? "none"))}${posCrit.reason ? ` (${escapeHtml(posCrit.reason)})` : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(posCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Primary sensitive (statistical rate &amp; CDD):</span> ${escapeHtml(sel.primary_sensitive || "none")}</li>
         <li><span class="font-medium">Flags:</span>
           representation ratio ≥ ${_readinessNum(thresholds.representation_ratio_flag)},
           minority class &lt; ${fmtThresholdPct(thresholds.minority_class_share)},
@@ -6175,13 +6169,13 @@ function renderReadinessFairness(container, fb) {
     html += `
       <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
         <div class="flex items-baseline justify-between">
-          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
           <span class="text-2xl font-bold ${cls.text}">${displayVal}</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
           <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
         </div>
-        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
       </div>`;
   });
   html += "</div>";
@@ -6200,7 +6194,7 @@ function renderReadinessFairness(container, fb) {
       .map((s) => {
         const pairHint =
           s.flagged_pairs && s.flagged_pairs.length
-            ? `Worst pair: ${s.flagged_pairs[0].pair} (ratio ${fmtRatio(s.flagged_pairs[0].ratio)})`
+            ? `Worst pair: ${escapeHtml(s.flagged_pairs[0].pair)} (ratio ${fmtRatio(s.flagged_pairs[0].ratio)})`
             : "";
         return _readinessNaRow(
           `<span class="font-mono font-medium">${_escapeHtml(s.column)}</span>`,
@@ -6324,23 +6318,23 @@ function renderReadinessFairness(container, fb) {
     for (const [col, b64] of Object.entries(repVis)) {
       detailsInner += `
         <div class="mb-4">
-          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Representation rate — ${col}</p>
-          <img src="data:image/png;base64,${b64}" alt="Representation ${col}" class="w-full max-w-2xl" />
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Representation rate — ${escapeHtml(col)}</p>
+          <img src="data:image/png;base64,${b64}" alt="Representation ${escapeHtml(col)}" class="w-full max-w-2xl" />
         </div>`;
     }
   }
   if (det.representation_rate?.error && !Object.keys(repVis).length) {
-    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Representation rate: ${det.representation_rate.error}</p>`;
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Representation rate: ${escapeHtml(det.representation_rate.error)}</p>`;
   }
 
   if (det.class_imbalance?.visualization) {
     detailsInner += `
       <div class="mb-4">
-        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Class imbalance — ${targetCrit.selected || "target"}</p>
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Class imbalance — ${escapeHtml(targetCrit.selected || "target")}</p>
         <img src="data:image/png;base64,${det.class_imbalance.visualization}" alt="Class imbalance" class="w-full max-w-2xl" />
       </div>`;
   } else if (det.class_imbalance?.error) {
-    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Class imbalance: ${det.class_imbalance.error}</p>`;
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Class imbalance: ${escapeHtml(det.class_imbalance.error)}</p>`;
   } else if (
     (vizDeferred || det.class_imbalance?.visualization_deferred) &&
     targetCrit.selected
@@ -6355,11 +6349,11 @@ function renderReadinessFairness(container, fb) {
   if (det.statistical_rate?.visualization) {
     detailsInner += `
       <div class="mb-4">
-        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Statistical rate — ${det.statistical_rate.sensitive} × ${det.statistical_rate.target}</p>
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Statistical rate — ${escapeHtml(det.statistical_rate.sensitive)} × ${escapeHtml(det.statistical_rate.target)}</p>
         <img src="data:image/png;base64,${det.statistical_rate.visualization}" alt="Statistical rate" class="w-full max-w-2xl" />
       </div>`;
   } else if (det.statistical_rate?.error) {
-    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Statistical rate: ${det.statistical_rate.error}</p>`;
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Statistical rate: ${escapeHtml(det.statistical_rate.error)}</p>`;
   } else if (
     (vizDeferred || det.statistical_rate?.visualization_deferred) &&
     sel.primary_sensitive &&
@@ -6376,16 +6370,16 @@ function renderReadinessFairness(container, fb) {
     const rows = Object.entries(det.cdd.disparities)
       .map(
         ([grp, info]) =>
-          `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${grp}</td><td class="px-3 py-2">${info.disparity}</td></tr>`,
+          `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(grp)}</td><td class="px-3 py-2">${escapeHtml(formatValue(info.disparity))}</td></tr>`,
       )
       .join("");
     detailsInner += `
       <div class="mb-4">
-        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Conditional demographic disparity (positive: ${det.cdd.positive_class})</p>
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Conditional demographic disparity (positive: ${escapeHtml(String(det.cdd.positive_class ?? ""))})</p>
         <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Group</th><th class="px-3 py-2">Disparity</th></tr></thead><tbody>${rows}</tbody></table>
       </div>`;
   } else if (det.cdd?.error) {
-    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">CDD: ${det.cdd.error}</p>`;
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">CDD: ${escapeHtml(det.cdd.error)}</p>`;
   }
 
   const excluded = sensCrit.excluded || [];
@@ -6396,7 +6390,7 @@ function renderReadinessFairness(container, fb) {
       excluded,
       _READINESS_MAX_DETAIL_LIST_ITEMS,
       (d) =>
-        `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400">${d.reason}</span></li>`,
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400">${escapeHtml(d.reason)}</span></li>`,
     );
     detailsInner += `
       <div class="mb-2">
@@ -6430,7 +6424,7 @@ function renderReadinessFairness(container, fb) {
  */
 function renderReadinessGovernance(container, gov) {
   if (gov.error) {
-    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data Governance unavailable: ${gov.error}</p>`;
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data Governance unavailable: ${escapeHtml(gov.error)}</p>`;
     return;
   }
 
@@ -6477,13 +6471,13 @@ function renderReadinessGovernance(container, gov) {
     <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
       <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
       <ul class="space-y-2 text-gray-700 dark:text-gray-300">
-        <li><span class="font-medium">Quasi-identifiers:</span> ${qiCrit.selected?.length ? qiCrit.selected.join(", ") : "none"}<br/>
-          <span class="text-xs text-gray-500 dark:text-gray-400">${qiCrit.rule || ""}</span></li>
-        <li><span class="font-medium">Sensitive attribute:</span> ${sensCrit.selected || "none"}<br/>
-          <span class="text-xs text-gray-500 dark:text-gray-400">${sensCrit.rule || ""}</span></li>
-        <li><span class="font-medium">ID column:</span> ${idCrit.selected || "none"}${idCrit.synthetic ? " (synthetic row index)" : ""}<br/>
-          <span class="text-xs text-gray-500 dark:text-gray-400">${idCrit.rule || ""}</span></li>
-        <li><span class="font-medium">HIPAA scan columns:</span> ${(hipaaCrit.selected || []).length} column(s)${hipaaCrit.selected?.length ? ` — ${hipaaCrit.selected.slice(0, 5).join(", ")}${hipaaCrit.selected.length > 5 ? "…" : ""}` : ""}</li>
+        <li><span class="font-medium">Quasi-identifiers:</span> ${qiCrit.selected?.length ? qiCrit.selected.map(escapeHtml).join(", ") : "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(qiCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Sensitive attribute:</span> ${escapeHtml(sensCrit.selected || "none")}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(sensCrit.rule || "")}</span></li>
+        <li><span class="font-medium">ID column:</span> ${escapeHtml(idCrit.selected || "none")}${idCrit.synthetic ? " (synthetic row index)" : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(idCrit.rule || "")}</span></li>
+        <li><span class="font-medium">HIPAA scan columns:</span> ${(hipaaCrit.selected || []).length} column(s)${hipaaCrit.selected?.length ? ` — ${hipaaCrit.selected.slice(0, 5).map(escapeHtml).join(", ")}${hipaaCrit.selected.length > 5 ? "…" : ""}` : ""}</li>
         <li><span class="font-medium">Thresholds:</span>
           k ≥ ${thresholds.k_good ?? "—"}/${thresholds.k_warning ?? "—"},
           l ≥ ${thresholds.l_good ?? "—"}/${thresholds.l_warning ?? "—"},
@@ -6529,13 +6523,13 @@ function renderReadinessGovernance(container, gov) {
     html += `
       <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
         <div class="flex items-baseline justify-between gap-2">
-          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${k.label}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
           <span class="text-xl font-bold ${cls.text} shrink-0">${displayVal}</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
           <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
         </div>
-        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${k.hint || ""}</p>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
       </div>`;
   });
   html += "</div>";
@@ -6545,10 +6539,14 @@ function renderReadinessGovernance(container, gov) {
   if (lowAnon.length) {
     let items = "";
     lowAnon.forEach((x) => {
-      const qiList = (x.quasi_identifiers || []).join(", ");
+      const qiList = (x.quasi_identifiers || []).map(escapeHtml).join(", ");
       items += _readinessNaRow(
-        `${_escapeHtml(x.metric)}: k = ${x.value}`,
-        x.detail || (qiList ? `Quasi-identifiers: ${qiList}` : null),
+        `${_escapeHtml(x.metric)}: k = ${escapeHtml(String(x.value))}`,
+        x.detail
+          ? escapeHtml(x.detail)
+          : qiList
+            ? `Quasi-identifiers: ${qiList}`
+            : null,
         x.singleton_count != null
           ? `${x.singleton_count} singleton group(s)`
           : null,
@@ -6588,7 +6586,7 @@ function renderReadinessGovernance(container, gov) {
       .map((x) =>
         _readinessNaRow(
           `<span class="font-mono">${_escapeHtml(x.column)}</span>`,
-          (x.types || []).join(", ") || "Pattern match",
+          escapeHtml((x.types || []).join(", ") || "Pattern match"),
           `${x.total_flags} flag(s)`,
         ),
       )
@@ -6614,8 +6612,11 @@ function renderReadinessGovernance(container, gov) {
           : `<span class="font-mono">${_escapeHtml(qis.join(", "))}</span>`;
         return _readinessNaRow(
           `${_escapeHtml(x.metric)}: ${featLabel}`,
-          x.detail ||
-            (qis.length ? `Quasi-identifiers: ${qis.join(", ")}` : null),
+          x.detail
+            ? escapeHtml(x.detail)
+            : qis.length
+              ? `Quasi-identifiers: ${qis.map(escapeHtml).join(", ")}`
+              : null,
           `risk ${fmtGovRisk(x.mean_risk)}`,
         );
       })
@@ -6635,12 +6636,13 @@ function renderReadinessGovernance(container, gov) {
   if (attrDiscNa.length) {
     const items = attrDiscNa
       .map((x) => {
-        const qiList = (x.quasi_identifiers || []).join(", ");
+        const qiList = (x.quasi_identifiers || []).map(escapeHtml).join(", ");
         const sens = x.sensitive_attribute || "—";
         return _readinessNaRow(
           `${_escapeHtml(x.metric)} = ${fmtGovMetric(x.value)}`,
-          x.detail ||
-            `Sensitive <span class="font-mono">${_escapeHtml(sens)}</span> within groups of (${qiList})`,
+          x.detail
+            ? escapeHtml(x.detail)
+            : `Sensitive <span class="font-mono">${_escapeHtml(sens)}</span> within groups of (${qiList})`,
           null,
         );
       })
@@ -6688,10 +6690,10 @@ function renderReadinessGovernance(container, gov) {
       detailsInner += `
         <div class="mb-4">
           <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${title}</p>
-          <img src="data:image/png;base64,${block[visKey]}" alt="${title}" class="w-full max-w-2xl" />
+          <img src="data:image/png;base64,${block[visKey]}" alt="${escapeHtml(title)}" class="w-full max-w-2xl" />
         </div>`;
     } else if (block?.error) {
-      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${title}: ${block.error}</p>`;
+      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${escapeHtml(title)}: ${escapeHtml(block.error)}</p>`;
     } else if (block && (vizDeferred || block.visualization_deferred)) {
       detailsInner += _readinessVizSlot("data-governance", key, title);
     }
@@ -6701,7 +6703,7 @@ function renderReadinessGovernance(container, gov) {
     .filter(([, v]) => v.mean_risk != null)
     .map(
       ([q, v]) =>
-        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${q}</td><td class="px-3 py-2 font-mono text-xs">${fmtGovRisk(v.mean_risk)}</td></tr>`,
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(q)}</td><td class="px-3 py-2 font-mono text-xs">${fmtGovRisk(v.mean_risk)}</td></tr>`,
     )
     .join("");
   if (singleRows) {
@@ -6716,7 +6718,7 @@ function renderReadinessGovernance(container, gov) {
   const hipaaRows = Object.entries(hipaaDet)
     .map(
       ([col, info]) =>
-        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${col}</td><td class="px-3 py-2 text-xs">${(info.potential_types_detected || []).join(", ")}</td><td class="px-3 py-2 font-mono text-xs">${info.total_flags}</td></tr>`,
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(col)}</td><td class="px-3 py-2 text-xs">${escapeHtml((info.potential_types_detected || []).join(", "))}</td><td class="px-3 py-2 font-mono text-xs">${escapeHtml(String(info.total_flags ?? ""))}</td></tr>`,
     )
     .join("");
   if (hipaaRows) {
@@ -6735,7 +6737,7 @@ function renderReadinessGovernance(container, gov) {
       qiExcluded,
       _READINESS_MAX_DETAIL_LIST_ITEMS,
       (d) =>
-        `<li class="flex justify-between gap-3"><span class="truncate">${d.feature}</span><span class="text-xs text-gray-400">${d.reason}</span></li>`,
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400">${escapeHtml(d.reason)}</span></li>`,
     );
     detailsInner += `
       <div class="mb-2">
@@ -6745,7 +6747,7 @@ function renderReadinessGovernance(container, gov) {
   }
 
   if (dpCrit.selected?.length) {
-    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">DP demo features: ${dpCrit.selected.join(", ")} (ε=${dpCrit.epsilon ?? "—"}, illustrative only).</p>`;
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">DP demo features: ${dpCrit.selected.map(escapeHtml).join(", ")} (ε=${escapeHtml(String(dpCrit.epsilon ?? "—"))}, illustrative only).</p>`;
   }
 
   if (detailsInner) {
@@ -7100,14 +7102,14 @@ function populateWorkspaceDropdowns(data) {
  */
 function _renderLLMCallout(container, explanation, model) {
   const modelTag = model
-    ? `<span class="ml-2 font-normal normal-case tracking-normal text-purple-400 dark:text-purple-500">(${model})</span>`
+    ? `<span class="ml-2 font-normal normal-case tracking-normal text-purple-400 dark:text-purple-500">(${escapeHtml(model)})</span>`
     : "";
   container.innerHTML = `
     <div class="flex items-start gap-2.5 p-4 text-sm rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
       <svg class="w-5 h-5 shrink-0 mt-0.5 text-purple-400 dark:text-purple-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/></svg>
       <div>
         <div class="text-xs font-semibold uppercase tracking-wide text-purple-500 dark:text-purple-400 mb-1">AI Explanation${modelTag}</div>
-        <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${explanation}</p>
+        <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(explanation)}</p>
       </div>
     </div>`;
 }
@@ -7183,7 +7185,7 @@ function requestLLMExplanation(
         container.innerHTML = `
           <div class="flex items-center gap-2 p-3 text-sm text-yellow-700 dark:text-yellow-400 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-            AI explanation unavailable: ${errMsg}
+            AI explanation unavailable: ${escapeHtml(errMsg)}
           </div>`;
         debugLog("LLM explanation unavailable:", errMsg);
       }
@@ -7192,7 +7194,7 @@ function requestLLMExplanation(
       container.innerHTML = `
         <div class="flex items-center gap-2 p-3 text-sm text-yellow-700 dark:text-yellow-400 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-          AI explanation error: ${err.message || err}
+          AI explanation error: ${escapeHtml(err.message || String(err))}
         </div>`;
       debugLog("LLM explanation error:", err);
     });
