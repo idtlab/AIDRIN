@@ -407,3 +407,11 @@ def test_workspace_init_releases_clear_file_lock_after_overview_load():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "return fetch(\"/summary-statistics\")" in source
     assert "Promise.resolve(loadDataOverview()).finally(initTaskDone)" in source
+
+
+def test_readiness_report_loaded_flag_resets_when_leaving_panel_mid_flight():
+    """_readinessReportLoaded must not stick true if the user navigates away
+    before cache restore finishes, or the panel stays empty until a reload."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert "if (activePanel !== \"readiness-report\") {\n        _readinessReportLoaded = false;" in source
+    assert "if (!restored && activePanel === \"readiness-report\")" not in source

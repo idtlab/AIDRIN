@@ -436,7 +436,12 @@ function showPanel(panelId, pushHistory) {
   if (panelId === "readiness-report" && !_readinessReportLoaded) {
     _readinessReportLoaded = true;
     _restoreCachedReadinessReport().then((restored) => {
-      if (!restored && activePanel === "readiness-report") {
+      // Navigating away mid-flight must clear the guard so a later visit can load.
+      if (activePanel !== "readiness-report") {
+        _readinessReportLoaded = false;
+        return;
+      }
+      if (!restored) {
         loadReadinessReport();
       }
     });
