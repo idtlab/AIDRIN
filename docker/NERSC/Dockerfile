@@ -22,7 +22,7 @@ RUN uv pip install gunicorn==23.0.0 supervisor==4.2.5 "setuptools<82"
 
 FROM python:3.13.11-slim-bookworm
 
-# libgomp1: OpenMP runtime for scikit-learn/scipy/shap. The rest are
+# libgomp1: OpenMP runtime for scikit-learn/scipy. The rest are
 # WeasyPrint's native dependencies (Pango/HarfBuzz/gdk-pixbuf) plus a base
 # font, needed for PDF export.
 RUN apt-get update \
