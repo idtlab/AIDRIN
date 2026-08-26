@@ -415,3 +415,18 @@ def test_readiness_report_loaded_flag_resets_when_leaving_panel_mid_flight():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "if (activePanel !== \"readiness-report\") {\n        _readinessReportLoaded = false;" in source
     assert "if (!restored && activePanel === \"readiness-report\")" not in source
+
+
+def test_init_workspace_resets_readiness_state_for_dataset_switch():
+    """HDF5 dataset switches call initWorkspace without a reload; stale readiness
+    globals would keep showing the previous dataset's report and charts."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function initWorkspace()")
+    nxt = source.find("\nfunction ", start + 1)
+    body = source[start:nxt if nxt != -1 else None]
+    assert "_readinessReportLoaded = false;" in body
+    assert "Object.keys(_readinessVizCache)" in body
+    assert "delete _readinessVizCache[key]" in body
+    assert "Object.keys(_readinessSectionStatus)" in body
+    assert "delete _readinessSectionStatus[key]" in body
+    assert '_readinessFairCompliance = { status: "idle", data: null }' in body

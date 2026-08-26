@@ -6781,6 +6781,17 @@ function renderReadinessGovernance(container, gov) {
  * Fetches summary statistics and populates feature dropdowns.
  */
 function initWorkspace() {
+  // Dataset switches (e.g. HDF5) re-run init without a page reload. Drop stale
+  // readiness state so the next open fetches the new dataset, not the previous one.
+  _readinessReportLoaded = false;
+  for (const key of Object.keys(_readinessVizCache)) {
+    delete _readinessVizCache[key];
+  }
+  for (const key of Object.keys(_readinessSectionStatus)) {
+    delete _readinessSectionStatus[key];
+  }
+  _readinessFairCompliance = { status: "idle", data: null };
+
   // Restore panel from URL hash, or default to data-overview
   const hash = location.hash.replace("#", "");
   const initialPanel =
