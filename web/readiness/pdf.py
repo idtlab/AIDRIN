@@ -817,7 +817,8 @@ def _make_readiness_pdf_url_fetcher(allowed_roots: list[Path]):
     WeasyPrint's default fetcher would resolve attacker-controlled http(s)/file
     URLs (SSRF / local file read) during rendering.
     """
-    from urllib.parse import unquote, urlparse
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
 
     resolved_roots = [root.resolve() for root in allowed_roots]
 
@@ -840,10 +841,15 @@ def _make_readiness_pdf_url_fetcher(allowed_roots: list[Path]):
         if scheme not in ("data", "file"):
             raise ValueError(f"Blocked URL scheme for readiness PDF: {scheme or 'unknown'}")
         if scheme == "file":
-            # urlparse leaves an empty host and path like /tmp/... on POSIX.
-            file_path = Path(unquote(parsed.path))
+            # Reject remote/UNC hosts before touching the filesystem, so a
+            # //host/share URL cannot trigger a network mount during resolve().
             if parsed.netloc and parsed.netloc not in ("", "localhost"):
                 raise ValueError(f"Blocked non-local file URL: {url}")
+            # url2pathname is platform-dispatched: on POSIX it is just unquote,
+            # on Windows it turns "/C:/x/y" into "C:\\x\\y". Without it the
+            # leading slash leaves the path drive-less, so resolve() anchors it
+            # on the current drive and no allowed root can ever match.
+            file_path = Path(url2pathname(parsed.path))
             if not _is_under_allowed_root(file_path):
                 raise ValueError(f"Blocked file URL outside allowed roots: {url}")
         from weasyprint import default_url_fetcher

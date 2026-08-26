@@ -6037,7 +6037,9 @@ function renderReadinessImpact(container, impact) {
   }
 
   if (det.numerical_visualization) {
-    const method = det.numerical_method ? ` (${escapeHtml(det.numerical_method)})` : "";
+    const method = det.numerical_method
+      ? ` (${escapeHtml(det.numerical_method)})`
+      : "";
     detailsInner += `
       <div class="mb-4">
         <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical correlation${method}</p>
