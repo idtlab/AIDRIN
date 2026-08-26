@@ -967,13 +967,18 @@ def _prune_columns_for_corr(df):
     return kept, dropped
 
 
-def _pairwise_signals(scores):
+def _pairwise_signals(scores, columns=None):
     """Derive readiness signals from a flat ``{"a vs b": score}`` mapping.
 
     Collapses the symmetric/asymmetric directional entries into one record per
     unordered pair (keeping the largest-magnitude score), then classifies pairs
     as redundant or leakage-risk and flags features that are not meaningfully
     related to anything else ("isolated").
+
+    *columns* should be the kept analysis columns. Connectivity is seeded to
+    ``0.0`` for each so columns that never appear in a scored pair (e.g. a lone
+    numeric when ``calc_correlations`` emits no cross-type pairs) still count as
+    isolated rather than informative.
     """
     pair_max = {}
     for key, val in scores.items():
@@ -1007,8 +1012,9 @@ def _pairwise_signals(scores):
     ]
     top = [{"a": p["a"], "b": p["b"], "score": p["score"]} for p in pairs[:8]]
 
-    # Per-feature connectivity: the strongest relationship each feature has
-    connectivity = {}
+    # Per-feature connectivity: the strongest relationship each feature has.
+    # Seed kept columns at 0.0 so unpaired columns are treated as isolated.
+    connectivity = {str(col): 0.0 for col in (columns or [])}
     for p in pairs:
         connectivity[p["a"]] = max(connectivity.get(p["a"], 0.0), p["abs_score"])
         connectivity[p["b"]] = max(connectivity.get(p["b"], 0.0), p["abs_score"])
@@ -1053,7 +1059,7 @@ def _build_impact_on_ai_section(file_info, include_visualizations=False):
         return {"error": corr["Message"], "columns_dropped": dropped_capped}
 
     scores = corr.get("Correlation Scores", {}) if isinstance(corr, dict) else {}
-    signals = _pairwise_signals(scores)
+    signals = _pairwise_signals(scores, columns=kept)
     cat = corr.get("Correlations Analysis Categorical", {}) or {}
     num = corr.get("Correlations Analysis Numerical", {}) or {}
 
