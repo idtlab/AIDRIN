@@ -104,11 +104,11 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True, 
 
     if include_visualization:
         # Adjust the spacing between subplots
-        plt.tight_layout()
+        fig.tight_layout()
 
         # Save the chart as BytesIO
         img_buf = BytesIO()
-        plt.savefig(img_buf, format="png")
+        fig.savefig(img_buf, format="png")
         img_buf.seek(0)
 
         # Encode the combined image as base64

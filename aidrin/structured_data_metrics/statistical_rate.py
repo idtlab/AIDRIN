@@ -119,7 +119,7 @@ def calculate_statistical_rates(
 
             # Save the plot as a base64 string
             buffer = io.BytesIO()
-            plt.savefig(buffer, format="png")
+            fig.savefig(buffer, format="png")
             buffer.seek(0)
             base64_plot = base64.b64encode(buffer.read()).decode("utf-8")
             # Close the figure and BytesIO stream to free memory
