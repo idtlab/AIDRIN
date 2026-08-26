@@ -35,6 +35,9 @@
   <div class="section-card">
     {% set fn = footnotes.section('overview').ref %}
     <h2>Dataset Overview</h2>
+    {% if section_errors.get('dataset-overview') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['dataset-overview'] }}</p>
+    {% else %}
     {% set meta = overview.meta %}
     <div class="box-blue">
       <p class="meta-title"><strong>{{ meta.file_name or file_name }}</strong></p>
@@ -107,12 +110,16 @@
       {% set detail_block = section_details.overview %}
       {% include "readiness_report/_pdf_section_details.html" %}
     {% endif %}
+    {% endif %}
   </div>
 
   {# --- Data Quality --- #}
   <div class="section-card">
     {% set fn = footnotes.section('data_quality').ref %}
     <h2>Data Quality</h2>
+    {% if section_errors.get('data-quality') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['data-quality'] }}</p>
+    {% else %}
     <div class="box-criteria">
       <p class="criteria-title">Auto-selection criteria</p>
       <ul class="criteria-list">
@@ -146,12 +153,16 @@
       {% set detail_block = section_details.data_quality %}
       {% include "readiness_report/_pdf_section_details.html" %}
     {% endif %}
+    {% endif %}
   </div>
 
   {# --- Impact on AI --- #}
   <div class="section-card">
     {% set fn = footnotes.section('impact').ref %}
     <h2>Impact on AI</h2>
+    {% if section_errors.get('impact-on-ai') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['impact-on-ai'] }}</p>
+    {% else %}
     <p class="muted">Automated all-pairs correlation across features to surface redundancy, leakage risk, and uninformative features.</p>
     <div class="box-criteria">
       <p class="criteria-title">Auto-selection criteria</p>
@@ -193,12 +204,16 @@
       {% set detail_block = section_details.impact %}
       {% include "readiness_report/_pdf_section_details.html" %}
     {% endif %}
+    {% endif %}
   </div>
 
   {# --- Fairness & Bias --- #}
   <div class="section-card">
     {% set fn = footnotes.section('fairness').ref %}
     <h2>Fairness &amp; Bias</h2>
+    {% if section_errors.get('fairness-bias') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['fairness-bias'] }}</p>
+    {% else %}
     <div class="box-criteria">
       <p class="criteria-title">Auto-selection criteria</p>
       <ul class="criteria-list">
@@ -251,12 +266,16 @@
       {% set detail_block = section_details.fairness %}
       {% include "readiness_report/_pdf_section_details.html" %}
     {% endif %}
+    {% endif %}
   </div>
 
   {# --- Data Governance --- #}
   <div class="section-card">
     {% set fn = footnotes.section('governance').ref %}
     <h2>Data Governance</h2>
+    {% if section_errors.get('data-governance') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['data-governance'] }}</p>
+    {% else %}
     <div class="box-criteria">
       <p class="criteria-title">Auto-selection criteria</p>
       <ul class="criteria-list">
@@ -314,6 +333,7 @@
     {% if include_details %}
       {% set detail_block = section_details.governance %}
       {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
     {% endif %}
   </div>
 

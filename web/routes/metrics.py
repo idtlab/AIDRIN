@@ -2848,6 +2848,7 @@ def readiness_report_pdf():
     include_details = mode == "full"
     file_name = file_info[1]
     sections = {}
+    section_errors: dict[str, str] = {}
     visualizations: dict[str, dict] = {}
     start_time = time.time()
     try:
@@ -2856,10 +2857,10 @@ def readiness_report_pdf():
                 slug, file_info
             )
             if isinstance(data, dict) and data.get("error"):
-                return jsonify({
-                    "success": False,
-                    "message": f"Could not build {slug}: {data['error']}",
-                }), 500
+                # A section that cannot be computed is a normal outcome for
+                # small or unusual datasets. Record it and keep going so the
+                # export still carries the sections that did compute.
+                section_errors[slug] = data["error"]
             sections[slug] = data
             if include_details:
                 viz_data, viz_elapsed, viz_cached = _get_or_build_readiness_visualizations(
@@ -2887,6 +2888,7 @@ def readiness_report_pdf():
             fair_data=fair_data,
             include_details=include_details,
             visualizations=visualizations,
+            section_errors=section_errors,
         )
         pdf_bytes = render_readiness_report_pdf(current_app, context)
         metric_time_log.info(

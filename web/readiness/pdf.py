@@ -724,6 +724,7 @@ def build_pdf_context(
     fair_data: dict | None = None,
     include_details: bool = False,
     visualizations: dict[str, dict] | None = None,
+    section_errors: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Assemble Jinja context for the readiness report PDF."""
     overview = _prepare_overview(sections.get("dataset-overview") or {})
@@ -760,6 +761,7 @@ def build_pdf_context(
         "governance": governance,
         "fair_compliance": fair_compliance,
         "section_details": section_details,
+        "section_errors": section_errors or {},
         "glossary": glossary,
         "fmt_pct": fmt_pct,
         "fmt_num": fmt_num,
