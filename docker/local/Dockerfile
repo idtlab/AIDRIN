@@ -14,8 +14,17 @@ RUN uv pip install gunicorn==23.0.0
 
 FROM python:3.12-slim-bookworm
 
+# libgomp1: numeric stack. The rest are WeasyPrint's native dependencies
+# (Pango/HarfBuzz/gdk-pixbuf) plus a base font, needed for PDF export.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 \
+    && apt-get install -y --no-install-recommends \
+        libgomp1 \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libharfbuzz0b \
+        libgdk-pixbuf-2.0-0 \
+        shared-mime-info \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1 \

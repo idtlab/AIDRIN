@@ -10,6 +10,33 @@
 let activePanel = "data-overview";
 let codeMirrorEditor = null;
 let lastMetricResult = null; // Store last result for JSON download
+let _readinessReportLoaded = false; // Lazy-load guard for the Readiness Report panel
+
+const _READINESS_REPORT_SECTIONS = [
+  "dataset-overview",
+  "data-quality",
+  "impact-on-ai",
+  "fairness-bias",
+  "data-governance",
+];
+const _readinessSectionStatus = {};
+/** Optional FAIR Compliance state for the readiness report appendix. */
+let _readinessFairCompliance = { status: "idle", data: null };
+const _READINESS_MAX_DETAIL_LIST_ITEMS = 50;
+const _READINESS_MAX_DETAIL_TABLE_ROWS = 500;
+
+/** Render up to *maxItems* list entries plus a “+N more” tail when truncated. */
+function _readinessTruncatedListItems(items, maxItems, renderItem) {
+  const total = items.length;
+  const shown = items.slice(0, maxItems);
+  let html = shown.map(renderItem).join("");
+  const more = total - shown.length;
+  if (more > 0) {
+    html += `<li class="text-xs text-gray-400 dark:text-gray-500">+${more} more not shown</li>`;
+  }
+  return { html, total, shownCount: shown.length };
+}
+
 let customOutlierTargets = [];
 let fileReferenceTargets = [];
 let customOutlierRuleCounter = 0;
@@ -403,6 +430,21 @@ function showPanel(panelId, pushHistory) {
   // Lazy init CodeMirror for custom metrics
   if (panelId === "custom-metrics" && !codeMirrorEditor) {
     initCodeMirror();
+  }
+
+  // Lazy load the readiness report on first open; restore from server cache when available
+  if (panelId === "readiness-report" && !_readinessReportLoaded) {
+    _readinessReportLoaded = true;
+    _restoreCachedReadinessReport().then((restored) => {
+      // Navigating away mid-flight must clear the guard so a later visit can load.
+      if (activePanel !== "readiness-report") {
+        _readinessReportLoaded = false;
+        return;
+      }
+      if (!restored) {
+        loadReadinessReport();
+      }
+    });
   }
 
   // Close mobile sidebar after selection
@@ -1066,7 +1108,7 @@ async function workspaceSubmit(targetUrl) {
         console.error("[inspector] correlationError:", msg);
         const m = document.getElementById("metrics");
         if (m)
-          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${msg}</div>`;
+          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(msg)}</div>`;
         _setSubmitButtonsDisabled(false);
         _endServerProcessing();
         return;
@@ -1095,7 +1137,7 @@ async function workspaceSubmit(targetUrl) {
       console.error("Error:", error);
       const m = document.getElementById("metrics");
       if (m)
-        m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error.message || String(error)}</div>`;
+        m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error.message || String(error))}</div>`;
       _setSubmitButtonsDisabled(false);
       _endServerProcessing();
     });
@@ -1197,7 +1239,7 @@ function renderWorkspaceResults(data, options) {
             const imgStyle = isHeatmap
               ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
               : "";
-            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
+            html += `<img src="${viz.src}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
           }
           html += `</div>`;
         }
@@ -1556,7 +1598,7 @@ function fetchGlobusSummary() {
       if (data.error) {
         const loading = document.getElementById("globus-summary-loading");
         if (loading)
-          loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+          loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
         _endServerProcessing();
         return;
       }
@@ -1575,7 +1617,7 @@ function fetchGlobusSummary() {
     .catch((err) => {
       const loading = document.getElementById("globus-summary-loading");
       if (loading)
-        loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${err.message}</div>`;
+        loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${escapeHtml(err.message)}</div>`;
       _endServerProcessing();
     });
 }
@@ -1588,7 +1630,7 @@ function renderGlobusSummary(data) {
 
   if (data.error) {
     if (content)
-      content.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+      content.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
     _unlockGlobusSidebar();
     return;
   }
@@ -1653,9 +1695,9 @@ function renderGlobusSummary(data) {
             ? "bg-white dark:bg-gray-800"
             : "bg-gray-50 dark:bg-gray-700/50";
         html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${feat}</td>`;
+        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(feat)}</td>`;
         statKeys.forEach((s) => {
-          html += `<td class="px-4 py-2 font-mono text-xs text-right">${data.summary_statistics[feat][s] ?? "—"}</td>`;
+          html += `<td class="px-4 py-2 font-mono text-xs text-right">${escapeHtml(formatValue(data.summary_statistics[feat][s] ?? "—"))}</td>`;
         });
         html += "</tr>";
       });
@@ -1714,7 +1756,7 @@ function pollGlobusSummary(taskId) {
         } else if (response.status === "failed") {
           const loading = document.getElementById("globus-summary-loading");
           if (loading)
-            loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${response.error || "Failed to load summary"}</div>`;
+            loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(response.error || "Failed to load summary")}</div>`;
           _unlockGlobusSidebar();
           _endServerProcessing();
         } else if (attempts < maxAttempts) {
@@ -2001,7 +2043,7 @@ function submitGlobusMetric(metricName, params, displayName) {
         _globusTaskDone();
         const m = document.getElementById("metrics");
         if (m)
-          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${data.error}</div>`;
+          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
         return;
       }
       if (data.task_id && data.is_async) {
@@ -2913,9 +2955,9 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
         } else if (response.status === "failed") {
           _globusTaskDone();
           card.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${metricName}</h3>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${escapeHtml(metricName)}</h3>
             <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">
-              ${response.error || "Task failed"}
+              ${escapeHtml(response.error || "Task failed")}
             </div>`;
         } else if (response.status === "processing") {
           // Update progress bar
@@ -3015,7 +3057,7 @@ function buildResultCard(type, results) {
           const imgStyle = isHeatmap
             ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
             : "";
-          html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
+          html += `<img src="${viz.src}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
         }
         html += `</div>`;
       }
@@ -3096,7 +3138,7 @@ function showToast(message, type, duration) {
     <div class="inline-flex items-center justify-center shrink-0 w-8 h-8 ${c.text} ${c.bg} rounded-lg">
       <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">${c.icon}</svg>
     </div>
-    <div class="ml-3 text-sm font-normal">${message}</div>
+    <div class="ml-3 text-sm font-normal">${escapeHtml(message)}</div>
     <button type="button" class="ml-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex items-center justify-center h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700" onclick="this.parentElement.remove()">
       <svg class="w-3 h-3" fill="none" viewBox="0 0 14 14"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/></svg>
     </button>
@@ -3388,123 +3430,184 @@ function escapeHtml(str) {
 
 // ==================== FAIR Assessment ====================
 
-function submitFairAssessment() {
-  const form = document.getElementById("form-fair-assessment");
-  if (!form) return;
-
-  const formData = new FormData(form);
-  const resultContainer = document.getElementById("fair-result-container");
-  if (resultContainer)
-    resultContainer.innerHTML = '<p class="text-center">Processing...</p>';
-
-  // Return the promise so withSubmitGuard re-enables the button when it settles.
-  return fetch("/fair-assessment", { method: "POST", body: formData })
-    .then((response) => response.json())
-    .then((data) => {
-      if (!resultContainer) return;
-
-      // Check for error response
-      if (data.error) {
-        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${data.error}</div>`;
-        return;
+function _wireFairFileInput(fileInput, labelEl, iconEl) {
+  if (!fileInput || !labelEl) return;
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length) {
+      labelEl.textContent = fileInput.files[0].name;
+      if (iconEl) {
+        iconEl.innerHTML =
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+        iconEl.classList.remove("text-gray-400");
+        iconEl.classList.add("text-green-500");
       }
-
-      let html = "";
-
-      // Compliance summary bar — extract from FAIR Compliance Checks
-      const checks = data["FAIR Compliance Checks"] || {};
-      const totalCheck = checks["Total Checks"] || "";
-      const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
-      const totalPassed = totalMatch ? parseInt(totalMatch[1]) : 0;
-      const totalExpected = totalMatch ? parseInt(totalMatch[2]) : 1;
-      const totalPct = Math.round((totalPassed / totalExpected) * 100);
-
-      html += `<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-base font-semibold text-gray-900 dark:text-white">FAIR Compliance</h3>
-          <span class="text-sm font-medium text-gray-500 dark:text-gray-400">${totalPassed}/${totalExpected} checks passed</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
-          <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
-        </div>
-        <div class="grid grid-cols-4 gap-3">`;
-
-      // Per-principle mini bars
-      const fairKeys = ["Findable", "Accessible", "Interoperable", "Reusable"];
-      fairKeys.forEach((k) => {
-        const checkStr = checks[`${k} Checks`] || "0/0";
-        const m = checkStr.match(/(\d+)\/(\d+)/);
-        const passed = m ? parseInt(m[1]) : 0;
-        const total = m ? parseInt(m[2]) : 1;
-        const pct = Math.round((passed / total) * 100);
-        html += `<div class="text-center">
-          <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
-          <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
-          <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
-            <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
-          </div>
-        </div>`;
-      });
-      html += "</div></div>";
-
-      // FAIR principle details as collapsible accordions
-      html += '<div class="space-y-2 mb-4">';
-      fairKeys.forEach((k) => {
-        let val = "—";
-        let checkStr = checks[`${k} Checks`] || "";
-        if (data[k] !== undefined && typeof data[k] === "object") {
-          val = renderFairValue(data[k]);
-        } else if (data[k] !== undefined) {
-          val = `<div class="py-2 text-sm text-gray-700 dark:text-gray-300">${data[k]}</div>`;
-        }
-        html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <summary class="cursor-pointer flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-            <span>${k}</span>
-            <span class="text-xs text-gray-400 dark:text-gray-500">${checkStr}</span>
-          </summary>
-          <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">${val}</div>
-        </details>`;
-      });
-      html += "</div>";
-
-      // Other data (FAIR Compliance Checks, Other, Original Metadata)
-      const extraKeys = Object.keys(data).filter(
-        (k) => !fairKeys.includes(k) && k !== "Pie chart",
-      );
-      if (extraKeys.length > 0) {
-        html +=
-          '<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4">';
-        html +=
-          '<h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Detailed Results</h3>';
-        extraKeys.forEach((k) => {
-          const val = data[k];
-          if (typeof val === "object" && val !== null) {
-            html += `<details class="mb-2 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-              <summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                ${k}
-                <svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>
-              </summary>
-              <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-                <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
-              </div>
-            </details>`;
-          } else {
-            html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">
-              <span class="font-medium text-gray-900 dark:text-white">${k}</span>
-              <span class="text-gray-500 dark:text-gray-400">${val ?? "—"}</span>
-            </div>`;
-          }
-        });
-        html += "</div>";
+    } else {
+      labelEl.textContent = "JSON metadata file";
+      if (iconEl) {
+        iconEl.innerHTML =
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
+        iconEl.classList.remove("text-green-500");
+        iconEl.classList.add("text-gray-400");
       }
+    }
+  });
+}
 
-      resultContainer.innerHTML = html;
-    })
-    .catch((error) => {
-      console.error("Error:", error);
-      if (resultContainer)
-        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">Error: ${error.message}</div>`;
+const _FAIR_PRINCIPLE_KEYS = [
+  "Findable",
+  "Accessible",
+  "Interoperable",
+  "Reusable",
+];
+
+function _fairCheckFailed(value) {
+  if (value === false) return true;
+  const s = String(value);
+  return s === "Fail" || s === "No" || s.includes("CHECK FAILED");
+}
+
+/** Flatten a FAIR principle detail object into table rows (mirrors PDF _fair_value_rows). */
+function _fairValueRows(obj) {
+  const rows = [];
+  if (!obj || typeof obj !== "object") return rows;
+  for (const [key, val] of Object.entries(obj)) {
+    if (val && typeof val === "object") {
+      rows.push({ label: key, isGroup: true });
+      rows.push(..._fairValueRows(val));
+    } else {
+      const failed = _fairCheckFailed(val);
+      rows.push({
+        label: key,
+        isGroup: false,
+        found: !failed,
+        statusLabel: failed ? "Missing" : "Found",
+      });
+    }
+  }
+  return rows;
+}
+
+function _fairPrincipleStats(data, principle, checks) {
+  const checkStr = checks[`${principle} Checks`] || "0/0";
+  const m = checkStr.match(/(\d+)\/(\d+)/);
+  const passed = m ? parseInt(m[1], 10) : 0;
+  const total = m ? parseInt(m[2], 10) : 1;
+  const pct = Math.round((passed / total) * 100);
+  const detail = data[principle];
+  const rows =
+    typeof detail === "object" && detail !== null ? _fairValueRows(detail) : [];
+  return { name: principle, checkStr, passed, total, pct, rows };
+}
+
+function _renderFairCheckBadge(found) {
+  if (found) {
+    return '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Found</span>';
+  }
+  return '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Missing</span>';
+}
+
+function _renderFairPrincipleCardHtml(principle) {
+  let tableHtml = "";
+  if (principle.rows.length) {
+    tableHtml = '<table class="w-full text-xs"><tbody>';
+    principle.rows.forEach((row) => {
+      if (row.isGroup) {
+        tableHtml += `<tr><td colspan="2" class="px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/40 border-b border-gray-100 dark:border-gray-700">${escapeHtml(row.label)}</td></tr>`;
+      } else {
+        tableHtml += `<tr class="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+          <td class="px-3 py-1.5 text-gray-600 dark:text-gray-400">${escapeHtml(row.label)}</td>
+          <td class="px-3 py-1.5 text-right">${_renderFairCheckBadge(row.found)}</td>
+        </tr>`;
+      }
     });
+    tableHtml += "</tbody></table>";
+  } else {
+    tableHtml =
+      '<p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">No detail available.</p>';
+  }
+
+  return `<div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+      <span class="text-sm font-semibold text-gray-900 dark:text-white">${escapeHtml(principle.name)}</span>
+      <span class="text-xs text-gray-400 dark:text-gray-500">${escapeHtml(principle.checkStr)}</span>
+    </div>
+    ${tableHtml}
+  </div>`;
+}
+
+function _renderFairPrincipleCardsGridHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const cards = _FAIR_PRINCIPLE_KEYS.map((name) =>
+    _renderFairPrincipleCardHtml(_fairPrincipleStats(data, name, checks)),
+  );
+  return `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${cards.join("")}</div>`;
+}
+
+function _fairSupplementaryDetailKeys(data) {
+  const reserved = new Set([..._FAIR_PRINCIPLE_KEYS, "Pie chart"]);
+  return Object.keys(data).filter((k) => !reserved.has(k));
+}
+
+function _renderFairSupplementaryDetailsHtml(data) {
+  const extraKeys = _fairSupplementaryDetailKeys(data);
+  if (!extraKeys.length) return "";
+
+  let html = '<div class="space-y-2">';
+  extraKeys.forEach((k) => {
+    const val = data[k];
+    if (typeof val === "object" && val !== null) {
+      html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <summary class="cursor-pointer flex items-center justify-start px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+          ${escapeHtml(k)}
+        </summary>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+          <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
+        </div>
+      </details>`;
+    } else {
+      html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg">
+        <span class="font-medium text-gray-900 dark:text-white">${escapeHtml(k)}</span>
+        <span class="text-gray-500 dark:text-gray-400">${escapeHtml(val ?? "—")}</span>
+      </div>`;
+    }
+  });
+  html += "</div>";
+  return html;
+}
+
+function _renderFairComplianceSummaryHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const totalCheck = checks["Total Checks"] || "";
+  const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
+  const totalPassed = totalMatch ? parseInt(totalMatch[1], 10) : 0;
+  const totalExpected = totalMatch ? parseInt(totalMatch[2], 10) : 1;
+  const totalPct = Math.round((totalPassed / totalExpected) * 100);
+
+  let html = `<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">${totalPassed}/${totalExpected} checks passed</span>
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-sm font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">${totalPct}%</span>
+  </div>
+  <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+    <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
+  </div>
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">`;
+
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
+    const checkStr = checks[`${k} Checks`] || "0/0";
+    const m = checkStr.match(/(\d+)\/(\d+)/);
+    const passed = m ? parseInt(m[1], 10) : 0;
+    const total = m ? parseInt(m[2], 10) : 1;
+    const pct = Math.round((passed / total) * 100);
+    html += `<div>
+      <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
+      <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
+        <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
+      </div>
+    </div>`;
+  });
+  html += "</div>";
+  return html;
 }
 
 /** Render a FAIR value object as readable HTML with pass/fail badges */
@@ -3513,7 +3616,7 @@ function renderFairValue(obj) {
   let html = "";
   for (const [k, v] of Object.entries(obj)) {
     if (typeof v === "object" && v !== null) {
-      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${k}</span>${renderFairValue(v)}</div>`;
+      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${escapeHtml(k)}</span>${renderFairValue(v)}</div>`;
     } else {
       const strVal = String(v);
       const isFail =
@@ -3526,16 +3629,296 @@ function renderFairValue(obj) {
         badge =
           '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">&#10007; Missing</span>';
       } else {
-        // Truncate long values
-        const display =
-          strVal.length > 60 ? strVal.substring(0, 57) + "..." : strVal;
         badge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" title="${escapeHtml(strVal)}">&#10003; Found</span>`;
       }
       html += `<div class="flex items-center justify-between py-1.5 text-xs border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-        <span class="text-gray-600 dark:text-gray-400 mr-2">${k}</span>${badge}</div>`;
+        <span class="text-gray-600 dark:text-gray-400 mr-2">${escapeHtml(k)}</span>${badge}</div>`;
     }
   }
   return html;
+}
+
+/** Build FAIR assessment result HTML for Understandability / FAIR Assessment. */
+function buildFairAssessmentResultHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const totalCheck = checks["Total Checks"] || "";
+  const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
+  const totalPassed = totalMatch ? parseInt(totalMatch[1], 10) : 0;
+  const totalExpected = totalMatch ? parseInt(totalMatch[2], 10) : 1;
+  const totalPct = Math.round((totalPassed / totalExpected) * 100);
+
+  let html = `<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white">FAIR Compliance</h3>
+      <span class="text-sm font-medium text-gray-500 dark:text-gray-400">${totalPassed}/${totalExpected} checks passed</span>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+      <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
+    </div>
+    <div class="grid grid-cols-4 gap-3">`;
+
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
+    const checkStr = checks[`${k} Checks`] || "0/0";
+    const m = checkStr.match(/(\d+)\/(\d+)/);
+    const passed = m ? parseInt(m[1], 10) : 0;
+    const total = m ? parseInt(m[2], 10) : 1;
+    const pct = Math.round((passed / total) * 100);
+    html += `<div class="text-center">
+      <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
+      <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
+        <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
+      </div>
+    </div>`;
+  });
+  html += "</div></div>";
+
+  html += '<div class="space-y-2 mb-4">';
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
+    let val = "—";
+    const checkStr = checks[`${k} Checks`] || "";
+    if (data[k] !== undefined && typeof data[k] === "object") {
+      val = renderFairValue(data[k]);
+    } else if (data[k] !== undefined) {
+      val = `<div class="py-2 text-sm text-gray-700 dark:text-gray-300">${data[k]}</div>`;
+    }
+    html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <summary class="cursor-pointer flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+        <span>${k}</span>
+        <span class="text-xs text-gray-400 dark:text-gray-500">${checkStr}</span>
+      </summary>
+      <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">${val}</div>
+    </details>`;
+  });
+  html += "</div>";
+
+  const extraKeys = Object.keys(data).filter(
+    (k) => !_FAIR_PRINCIPLE_KEYS.includes(k) && k !== "Pie chart",
+  );
+  if (extraKeys.length > 0) {
+    html +=
+      '<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4">';
+    html +=
+      '<h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Detailed Results</h3>';
+    extraKeys.forEach((k) => {
+      const val = data[k];
+      if (typeof val === "object" && val !== null) {
+        html += `<details class="mb-2 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+            ${k}
+            <svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>
+          </summary>
+          <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+            <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
+          </div>
+        </details>`;
+      } else {
+        html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">
+          <span class="font-medium text-gray-900 dark:text-white">${k}</span>
+          <span class="text-gray-500 dark:text-gray-400">${val ?? "—"}</span>
+        </div>`;
+      }
+    });
+    html += "</div>";
+  }
+
+  return html;
+}
+
+/** Build readiness-report FAIR result HTML (PDF-style cards + on-demand extras). */
+function buildReadinessFairResultHtml(data) {
+  let html = _renderFairComplianceSummaryHtml(data);
+  html += `<div class="mt-4">${_renderFairPrincipleCardsGridHtml(data)}</div>`;
+  if (_fairSupplementaryDetailKeys(data).length) {
+    html += `
+    <details class="group border-t border-gray-200 dark:border-gray-700 pt-3 mt-4" data-fair-details="1">
+      <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+        Show detailed results
+      </summary>
+      <div class="mt-4 fair-compliance-details-content"></div>
+    </details>`;
+  }
+  return html;
+}
+
+function _wireFairComplianceDetails(detailsEl, data) {
+  if (!detailsEl || detailsEl.dataset.fairDetailsWired === "1") return;
+  detailsEl.dataset.fairDetailsWired = "1";
+  detailsEl.addEventListener("toggle", () => {
+    if (!detailsEl.open) return;
+    const target = detailsEl.querySelector(".fair-compliance-details-content");
+    if (!target || target.dataset.rendered === "1") return;
+    target.dataset.rendered = "1";
+    target.innerHTML = _renderFairSupplementaryDetailsHtml(data);
+  });
+}
+
+function renderFairAssessmentResult(data, resultContainer) {
+  if (!resultContainer) return false;
+  if (data.error) {
+    resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
+    return false;
+  }
+  resultContainer.innerHTML = buildFairAssessmentResultHtml(data);
+  return true;
+}
+
+function renderReadinessFairResult(data, resultContainer) {
+  if (!resultContainer) return false;
+  if (data.error) {
+    resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
+    return false;
+  }
+  resultContainer.innerHTML = buildReadinessFairResultHtml(data);
+  const detailsEl = resultContainer.querySelector("[data-fair-details]");
+  if (detailsEl) _wireFairComplianceDetails(detailsEl, data);
+  return true;
+}
+
+function submitFairAssessmentForm(form, resultContainer, callbacks) {
+  if (!form) return Promise.resolve();
+
+  const formData = new FormData(form);
+  if (resultContainer) {
+    resultContainer.classList.remove("hidden");
+    resultContainer.innerHTML =
+      '<p class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">Processing…</p>';
+  }
+
+  return fetch("/fair-assessment", { method: "POST", body: formData })
+    .then((response) => response.json())
+    .then((data) => {
+      const resultData = { ...data };
+      delete resultData.cached;
+      delete resultData.build_time_seconds;
+      const render = callbacks?.render || renderFairAssessmentResult;
+      const ok = render(resultData, resultContainer);
+      if (ok) {
+        callbacks?.onSuccess?.(resultData, data);
+      } else {
+        callbacks?.onError?.(data);
+      }
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      if (resultContainer) {
+        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">Error: ${escapeHtml(error.message)}</div>`;
+      }
+      callbacks?.onError?.(error);
+    });
+}
+
+function submitFairAssessment() {
+  return submitFairAssessmentForm(
+    document.getElementById("form-fair-assessment"),
+    document.getElementById("fair-result-container"),
+  );
+}
+
+function submitReadinessFairAssessment() {
+  _readinessFairCompliance = { status: "computing", data: null };
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  if (resultsEl) resultsEl.classList.remove("hidden");
+
+  return submitFairAssessmentForm(
+    document.getElementById("form-readiness-fair"),
+    resultsEl,
+    {
+      render: renderReadinessFairResult,
+      onSuccess(data) {
+        _readinessFairCompliance = { status: "ok", data };
+        uploadEl?.classList.add("hidden");
+      },
+      onError() {
+        _readinessFairCompliance = { status: "error", data: null };
+      },
+    },
+  );
+}
+
+function _restoreReadinessFairFromCache(fairPayload) {
+  const data = fairPayload?.data;
+  if (!data || data.error) return false;
+
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  if (!resultsEl) return false;
+
+  _readinessFairCompliance = { status: "ok", data };
+  uploadEl?.classList.add("hidden");
+  resultsEl.classList.remove("hidden");
+  renderReadinessFairResult(data, resultsEl);
+
+  const metadataType = fairPayload.metadata_type;
+  if (metadataType) {
+    const select = document.getElementById("readiness-fair-metadata-type");
+    if (select) select.value = metadataType;
+  }
+  const metadataFilename = fairPayload.metadata_filename;
+  if (metadataFilename) {
+    const label = document.getElementById("readinessFairFileLabel");
+    const icon = document.getElementById("readinessFairUploadIcon");
+    if (label) label.textContent = metadataFilename;
+    if (icon) {
+      icon.classList.remove("text-gray-400");
+      icon.classList.add("text-green-500");
+    }
+  }
+  return true;
+}
+
+/** Restore optional FAIR compliance from server cache (separate lightweight fetch). */
+function _tryRestoreCachedReadinessFair() {
+  return fetch("/cached-result/readiness_report_fair")
+    .then((r) => r.json())
+    .then((resp) => {
+      if (
+        !resp.cached ||
+        !resp.fair_compliance ||
+        activePanel !== "readiness-report"
+      ) {
+        return false;
+      }
+      return _restoreReadinessFairFromCache(resp.fair_compliance);
+    })
+    .catch((err) => {
+      debugLog("Readiness FAIR cache restore error:", err);
+      return false;
+    });
+}
+
+function _resetReadinessFairSection() {
+  _readinessFairCompliance = { status: "idle", data: null };
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  const form = document.getElementById("form-readiness-fair");
+  uploadEl?.classList.remove("hidden");
+  if (resultsEl) {
+    resultsEl.classList.add("hidden");
+    resultsEl.innerHTML = "";
+  }
+  form?.reset();
+  const label = document.getElementById("readinessFairFileLabel");
+  const icon = document.getElementById("readinessFairUploadIcon");
+  if (label) label.textContent = "JSON metadata file";
+  if (icon) {
+    icon.innerHTML =
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
+    icon.classList.remove("text-green-500");
+    icon.classList.add("text-gray-400");
+  }
+}
+
+function initReadinessFairSection() {
+  const form = document.getElementById("form-readiness-fair");
+  if (!form || form.dataset.wired === "1") return;
+  form.dataset.wired = "1";
+  _wireFairFileInput(
+    document.getElementById("readiness-fair-file"),
+    document.getElementById("readinessFairFileLabel"),
+    document.getElementById("readinessFairUploadIcon"),
+  );
 }
 
 // ==================== Custom Metrics ====================
@@ -3628,7 +4011,7 @@ function submitCustomMetric() {
     .catch((error) => {
       console.error("Error:", error);
       if (metricsDiv)
-        metricsDiv.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error.message}</div>`;
+        metricsDiv.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error.message)}</div>`;
     });
 }
 
@@ -3686,10 +4069,26 @@ function buildCategoricalSummaryTable(summary) {
 /**
  * Render histogram images in the data overview panel.
  * @param {Object} histograms - Dict of {column_theme: base64_img} from /summary-statistics
+ * @param {string} [containerId]
+ * @param {boolean} [skipHeading]
+ * @param {string} [layout] - "compact" (default) or "large" for readiness report
  */
-function renderWorkspaceHistograms(histograms) {
-  const container = document.getElementById("workspace-histograms");
+function renderWorkspaceHistograms(
+  histograms,
+  containerId,
+  skipHeading,
+  layout,
+) {
+  const container = document.getElementById(
+    containerId || "workspace-histograms",
+  );
   if (!container) return;
+
+  const isLarge = layout === "large";
+  const gridClass = isLarge
+    ? "grid grid-cols-1 sm:grid-cols-2 gap-6"
+    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
+  const imgClass = isLarge ? "w-full h-auto object-contain" : "w-full";
 
   // Always use the light variant — CSS filter handles dark mode
   const columns = {};
@@ -3705,15 +4104,18 @@ function renderWorkspaceHistograms(histograms) {
     return;
   }
 
-  let html =
-    '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Numerical Feature Distributions</h3>';
-  html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">';
+  let html = "";
+  if (!skipHeading) {
+    html +=
+      '<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Numerical Feature Distributions</h3>';
+  }
+  html += `<div class="${gridClass}">`;
 
   for (const [colName, base64] of Object.entries(columns)) {
     html += `
       <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-        <img src="data:image/png;base64,${base64}" alt="Distribution of ${colName}" class="w-full" />
-        <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${colName}</div>
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${escapeHtml(colName)}" class="${imgClass}" />
+        <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${escapeHtml(colName)}</div>
       </div>
     `;
   }
@@ -3722,7 +4124,29 @@ function renderWorkspaceHistograms(histograms) {
   container.innerHTML = html;
 }
 
-// ==================== Workspace Init ====================
+/**
+ * Render categorical distribution pie charts (base64 PNG per column).
+ */
+function renderCategoricalPieCharts(charts, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || !charts) return;
+
+  const entries = Object.entries(charts);
+  if (entries.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  let html = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">';
+  for (const [colName, base64] of entries) {
+    html += `
+      <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden p-2">
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${escapeHtml(colName)}" class="w-full h-auto object-contain mx-auto" style="max-width: 420px;" />
+      </div>`;
+  }
+  html += "</div>";
+  container.innerHTML = html;
+}
 
 /**
  * Show dataset picker for multi-dataset HDF5 files.
@@ -3741,7 +4165,9 @@ function renderHdf5DatasetPicker(container, data) {
     return String(text)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
-      .replace(/"/g, "&quot;");
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function datasetLength(ds) {
@@ -4110,29 +4536,22 @@ function returnToHdf5DatasetPicker() {
 }
 
 /**
- * Initialize the workspace after file upload.
- * Fetches summary statistics and populates feature dropdowns.
+ * Fetch summary statistics from the backend and render the stat cards,
+ * summary table, and feature-distribution histograms into the given
+ * containers. Reused by both the Data Overview panel and the
+ * Readiness Report panel.
+ *
+ * @param {string} summaryContainerId - element ID for the stats/table.
+ * @param {string} histogramsContainerId - element ID for the histograms.
  */
-function initWorkspace() {
-  // Restore panel from URL hash, or default to data-overview
-  const hash = location.hash.replace("#", "");
-  const initialPanel =
-    hash && document.getElementById("panel-" + hash) ? hash : "data-overview";
-  showPanel(initialPanel, false); // false = don't push to history on init
-  // Replace current history entry so back button works from the first panel
-  history.replaceState({ panel: initialPanel }, "", "#" + initialPanel);
+function loadDataOverview(summaryContainerId, histogramsContainerId) {
+  const summaryId = summaryContainerId || "workspace-summary";
+  const histogramsId = histogramsContainerId || "workspace-histograms";
 
-  // Fetch summary statistics and feature list (disable clear session while loading)
-  let initPending = 2;
-  const initTaskDone = () => {
-    if (--initPending === 0) _endServerProcessing();
-  };
-  _beginServerProcessing();
-
-  fetch("/summary-statistics")
+  return fetch("/summary-statistics")
     .then((r) => r.json())
     .then((data) => {
-      const container = document.getElementById("workspace-summary");
+      const container = document.getElementById(summaryId);
       if (!container) return;
 
       if (data.success) {
@@ -4141,13 +4560,8 @@ function initWorkspace() {
           const keys = (data.selected_dataset_keys || []).join(", ");
           const keysDisplay =
             keys.length > 80 ? `${keys.slice(0, 77)}...` : keys;
-          const escapedKeys = keys
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/"/g, "&quot;");
-          const escapedDisplay = keysDisplay
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;");
+          const escapedKeys = escapeHtml(keys);
+          const escapedDisplay = escapeHtml(keysDisplay);
           html += `
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
             <p class="text-sm text-gray-600 dark:text-gray-400">
@@ -4222,9 +4636,9 @@ function initWorkspace() {
                 ? "bg-white dark:bg-gray-800"
                 : "bg-gray-50 dark:bg-gray-700/50";
             html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-            html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${feat}</td>`;
+            html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(feat)}</td>`;
             statKeys.forEach((s) => {
-              html += `<td class="px-4 py-2 font-mono text-xs text-right">${data.summary_statistics[feat][s] ?? "—"}</td>`;
+              html += `<td class="px-4 py-2 font-mono text-xs text-right">${escapeHtml(formatValue(data.summary_statistics[feat][s] ?? "—"))}</td>`;
             });
             html += "</tr>";
           });
@@ -4236,9 +4650,9 @@ function initWorkspace() {
 
         container.innerHTML = html;
 
-        // Render histograms in the data overview panel
+        // Render histograms below the summary table
         if (data.histograms) {
-          renderWorkspaceHistograms(data.histograms);
+          renderWorkspaceHistograms(data.histograms, histogramsId);
         }
       } else if (data.needs_dataset_selection && data.datasets?.length) {
         renderHdf5DatasetPicker(container, data);
@@ -4251,7 +4665,7 @@ function initWorkspace() {
       }
     })
     .catch((err) => {
-      const container = document.getElementById("workspace-summary");
+      const container = document.getElementById(summaryId);
       if (container) {
         const p = document.createElement("p");
         p.className = "text-sm";
@@ -4259,8 +4673,2144 @@ function initWorkspace() {
         p.textContent = "Error loading summary: " + err.message;
         container.replaceChildren(p);
       }
+    });
+}
+
+/**
+ * Map a readiness status string to Tailwind color classes.
+ */
+function _dqStatusClasses(status) {
+  switch (status) {
+    case "good":
+      return {
+        text: "text-green-700 dark:text-green-400",
+        bar: "bg-green-500",
+        badge:
+          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      };
+    case "warning":
+      return {
+        text: "text-amber-700 dark:text-amber-400",
+        bar: "bg-amber-500",
+        badge:
+          "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+      };
+    case "poor":
+      return {
+        text: "text-red-700 dark:text-red-400",
+        bar: "bg-red-500",
+        badge: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      };
+    default:
+      return {
+        text: "text-gray-500 dark:text-gray-400",
+        bar: "bg-gray-400",
+        badge: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+      };
+  }
+}
+
+/** Coerce readiness metric values to finite numbers. */
+function _readinessNums(values) {
+  return (values || [])
+    .map((v) => (typeof v === "number" ? v : parseFloat(v)))
+    .filter((v) => !Number.isNaN(v));
+}
+
+/**
+ * Decimal places for a group: default 2; if every value rounds to 0.00, use more
+ * (up to maxDecimals) so small non-zero values remain visible. Same precision
+ * is used for every value in the group.
+ */
+function _readinessDecimalPlaces(
+  values,
+  { minDecimals = 2, maxDecimals = 6 } = {},
+) {
+  const nums = _readinessNums(values);
+  if (!nums.length) return minDecimals;
+  if (nums.every((v) => v === 0)) return minDecimals;
+
+  for (let d = minDecimals; d <= maxDecimals; d++) {
+    const allRoundedZero = nums.every((v) => Number(v.toFixed(d)) === 0);
+    if (!allRoundedZero) return d;
+  }
+  return maxDecimals;
+}
+
+/** Decimal places for 0–1 ratios shown as percentages (value × 100). */
+function _readinessPctDecimals(values, options) {
+  return _readinessDecimalPlaces(
+    _readinessNums(values).map((v) => v * 100),
+    options,
+  );
+}
+
+/** Format a number with fixed decimals; integers omit the fractional part. */
+function _readinessNum(value, decimals = 2) {
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "N/A";
+  if (typeof value !== "number") return String(value);
+  if (Number.isInteger(value)) return value.toLocaleString();
+  return value.toFixed(decimals);
+}
+
+/** Build a formatter that uses one decimal precision for every value in *values*. */
+function _readinessNumFormatter(values, options) {
+  const nums = _readinessNums(values);
+  if (nums.length && nums.every((v) => Number.isInteger(v))) {
+    return (value) => {
+      if (value === null || value === undefined || Number.isNaN(value))
+        return "N/A";
+      return Number(value).toLocaleString();
+    };
+  }
+  const decimals = _readinessDecimalPlaces(nums, options);
+  return (value) => _readinessNum(value, decimals);
+}
+
+/** Build a percentage formatter (0–1 input) with group-consistent decimals. */
+function _readinessPctFormatter(values, options) {
+  const decimals = _readinessPctDecimals(values, options);
+  return (value) => _pct(value, decimals);
+}
+
+/** Format a 0–1 ratio as a percentage, or "N/A" if missing. */
+function _pct(value, decimals = 2) {
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "N/A";
+  return `${(value * 100).toFixed(decimals)}%`;
+}
+
+/** Show an error message inside one readiness section container. */
+function _readinessSectionError(container, message) {
+  if (!container) return;
+  container.classList.add("text-center", "py-8");
+  container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">${escapeHtml(message)}</p>`;
+}
+
+/** Human-readable section build duration (matches server log precision). */
+function _formatReadinessBuildTime(seconds) {
+  if (
+    seconds === null ||
+    seconds === undefined ||
+    Number.isNaN(Number(seconds))
+  ) {
+    return "";
+  }
+  return `Prepared in ${Number(seconds).toFixed(2)} seconds`;
+}
+
+/** Append build-time footer at the bottom of a readiness section container. */
+function _appendReadinessBuildTimeFooter(container, seconds) {
+  if (!container) return;
+  const label = _formatReadinessBuildTime(seconds);
+  if (!label) return;
+  container.querySelector(".readiness-build-time")?.remove();
+  const el = document.createElement("p");
+  el.className =
+    "readiness-build-time text-xs text-gray-400 dark:text-gray-500 mt-4 pt-3 border-t border-gray-200 dark:border-gray-700 text-right";
+  el.textContent = label;
+  container.appendChild(el);
+}
+
+const _readinessVizCache = {};
+
+/** Placeholder for a chart that loads when the details panel is opened. */
+function _readinessVizSlot(section, vizKey, title) {
+  return `<div class="readiness-viz-slot mb-4" data-readiness-section="${_escapeHtml(section)}" data-readiness-viz="${_escapeHtml(vizKey)}">
+    <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${_escapeHtml(title)}</p>
+    <div class="readiness-viz-content text-sm text-gray-500 dark:text-gray-400 py-4 text-center">Open this section to load chart…</div>
+  </div>`;
+}
+
+function _readinessVizSpinnerHtml() {
+  return `<div class="flex justify-center py-6" role="status">
+    <svg class="w-6 h-6 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+  </div>`;
+}
+
+function _applyReadinessVisualizations(section, root, vizMap) {
+  if (!root || !vizMap) return;
+
+  if (section === "dataset-overview") {
+    if (vizMap.categorical_charts) {
+      const catHost = root.querySelector("#readiness-categorical-charts");
+      if (catHost) {
+        renderCategoricalPieCharts(
+          vizMap.categorical_charts,
+          "readiness-categorical-charts",
+        );
+      }
+    }
+    if (vizMap.histograms) {
+      const histHost = root.querySelector("#readiness-histograms-inner");
+      if (histHost) {
+        renderWorkspaceHistograms(
+          vizMap.histograms,
+          "readiness-histograms-inner",
+          true,
+          "large",
+        );
+      }
+    }
+    return;
+  }
+
+  root.querySelectorAll(".readiness-viz-slot").forEach((slot) => {
+    const key = slot.dataset.readinessViz;
+    const target = slot.querySelector(".readiness-viz-content");
+    if (!target || !key) return;
+    const b64 = vizMap[key];
+    if (b64) {
+      target.innerHTML = `<img src="data:image/png;base64,${b64}" alt="${_escapeHtml(key)}" class="w-full max-w-2xl" />`;
+    } else {
+      target.innerHTML = `<p class="text-sm text-gray-500 dark:text-gray-400">Chart unavailable.</p>`;
+    }
+  });
+}
+
+function _loadReadinessSectionVisualizations(section, root) {
+  if (!root) return Promise.resolve();
+  const slots = root.querySelectorAll(".readiness-viz-slot");
+  if (!section || (!slots.length && section !== "dataset-overview")) {
+    return Promise.resolve();
+  }
+
+  if (_readinessVizCache[section]) {
+    _applyReadinessVisualizations(section, root, _readinessVizCache[section]);
+    return Promise.resolve();
+  }
+
+  slots.forEach((slot) => {
+    const target = slot.querySelector(".readiness-viz-content");
+    if (target) target.innerHTML = _readinessVizSpinnerHtml();
+  });
+  const catHost = root.querySelector("#readiness-categorical-charts");
+  const histHost = root.querySelector("#readiness-histograms-inner");
+  if (catHost && !catHost.childElementCount)
+    catHost.innerHTML = _readinessVizSpinnerHtml();
+  if (histHost && !histHost.childElementCount)
+    histHost.innerHTML = _readinessVizSpinnerHtml();
+
+  return fetch(`/readiness-report/${section}/visualizations`)
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.success) {
+        const msg = resp.message || "Could not load charts";
+        slots.forEach((slot) => {
+          const target = slot.querySelector(".readiness-viz-content");
+          if (target)
+            target.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${_escapeHtml(msg)}</p>`;
+        });
+        return;
+      }
+      _readinessVizCache[section] = resp.visualizations || {};
+      _applyReadinessVisualizations(section, root, _readinessVizCache[section]);
     })
-    .finally(initTaskDone);
+    .catch((err) => {
+      slots.forEach((slot) => {
+        const target = slot.querySelector(".readiness-viz-content");
+        if (target) {
+          target.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${_escapeHtml(err.message)}</p>`;
+        }
+      });
+    });
+}
+
+/** Fetch charts the first time a readiness details panel is expanded. */
+function _wireReadinessDetailsViz(detailsEl, section) {
+  if (!detailsEl || detailsEl.dataset.vizWired === "1") return;
+  detailsEl.dataset.vizWired = "1";
+  detailsEl.addEventListener("toggle", () => {
+    if (!detailsEl.open) return;
+    _loadReadinessSectionVisualizations(section, detailsEl);
+  });
+}
+
+/**
+ * Fetch one readiness-report section and render it when ready.
+ * @param {string} section - URL slug (e.g. "data-quality")
+ * @param {HTMLElement} container
+ * @param {Function} renderFn - (container, data) => void
+ * @returns {Promise<void>}
+ */
+function _getReadinessSectionRenderers() {
+  return [
+    {
+      section: "dataset-overview",
+      container: document.getElementById("readiness-summary"),
+      render: renderReadinessDatasetOverview,
+    },
+    {
+      section: "data-quality",
+      container: document.getElementById("readiness-data-quality"),
+      render: renderReadinessDataQuality,
+    },
+    {
+      section: "impact-on-ai",
+      container: document.getElementById("readiness-impact"),
+      render: renderReadinessImpact,
+    },
+    {
+      section: "fairness-bias",
+      container: document.getElementById("readiness-fairness"),
+      render: renderReadinessFairness,
+    },
+    {
+      section: "data-governance",
+      container: document.getElementById("readiness-governance"),
+      render: renderReadinessGovernance,
+    },
+  ];
+}
+
+function _initReadinessReportShell() {
+  _wireReadinessExportButton();
+  _resetReadinessFairSection();
+  initReadinessFairSection();
+  _READINESS_REPORT_SECTIONS.forEach((section) => {
+    _readinessSectionStatus[section] = "pending";
+  });
+  _updateReadinessExportButton();
+}
+
+function _applyReadinessSection(
+  container,
+  section,
+  data,
+  renderFn,
+  buildTimeSeconds,
+) {
+  if (!container) {
+    _readinessSectionStatus[section] = "error";
+    return false;
+  }
+  if (data.error) {
+    _readinessSectionStatus[section] = "error";
+    _readinessSectionError(container, data.error);
+    return false;
+  }
+  _readinessSectionStatus[section] = "ok";
+  container.classList.remove("text-center", "py-8");
+  renderFn(container, data);
+  _appendReadinessBuildTimeFooter(
+    container,
+    buildTimeSeconds ?? data.build_time_seconds,
+  );
+  return true;
+}
+
+function _fetchReadinessSection(section, container, renderFn) {
+  if (!container) {
+    _readinessSectionStatus[section] = "error";
+    _updateReadinessExportButton();
+    return Promise.resolve();
+  }
+  return fetch(`/readiness-report/${section}`)
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.success) {
+        _readinessSectionStatus[section] = "error";
+        _readinessSectionError(
+          container,
+          `Could not load ${section.replace(/-/g, " ")}: ${resp.message || "unknown error"}`,
+        );
+        return;
+      }
+      const data = resp.data || {};
+      _applyReadinessSection(
+        container,
+        section,
+        data,
+        renderFn,
+        resp.build_time_seconds,
+      );
+    })
+    .catch((err) => {
+      _readinessSectionStatus[section] = "error";
+      _readinessSectionError(
+        container,
+        `Error loading section: ${err.message}`,
+      );
+    })
+    .finally(() => {
+      _updateReadinessExportButton();
+    });
+}
+
+/**
+ * Restore the readiness report from the aggregated server cache (one request).
+ * @returns {Promise<boolean>} true when all sections were restored from cache
+ */
+function _restoreCachedReadinessReport() {
+  return fetch("/cached-result/readiness_report")
+    .then((r) => r.json())
+    .then((resp) => {
+      if (
+        !resp.cached ||
+        !resp.sections ||
+        activePanel !== "readiness-report"
+      ) {
+        return false;
+      }
+      _initReadinessReportShell();
+      let allOk = true;
+      _getReadinessSectionRenderers().forEach(
+        ({ section, container, render }) => {
+          const data = resp.sections[section];
+          if (!data) {
+            _readinessSectionStatus[section] = "error";
+            allOk = false;
+            return;
+          }
+          if (
+            !_applyReadinessSection(
+              container,
+              section,
+              data,
+              render,
+              data.build_time_seconds,
+            )
+          ) {
+            allOk = false;
+          }
+        },
+      );
+      _updateReadinessExportButton();
+      if (resp.fair_compliance) {
+        _restoreReadinessFairFromCache(resp.fair_compliance);
+      }
+      return allOk;
+    })
+    .catch((err) => {
+      debugLog("Readiness cache restore error:", err);
+      return false;
+    });
+}
+
+/**
+ * Load the readiness report with hybrid progressive rendering:
+ * dataset overview first, then remaining sections in parallel.
+ */
+function loadReadinessReport() {
+  _initReadinessReportShell();
+  _tryRestoreCachedReadinessFair();
+
+  const overviewEntry = _getReadinessSectionRenderers().find(
+    ({ section }) => section === "dataset-overview",
+  );
+  const parallelSections = _getReadinessSectionRenderers().filter(
+    ({ section }) => section !== "dataset-overview",
+  );
+
+  const loadParallelSections = () => {
+    Promise.all(
+      parallelSections.map(({ section, container, render }) =>
+        _fetchReadinessSection(section, container, render),
+      ),
+    );
+  };
+
+  if (!overviewEntry?.container) {
+    loadParallelSections();
+    return;
+  }
+
+  // Hybrid: overview first, then parallel for the rest (spinners stay until each resolves).
+  _fetchReadinessSection(
+    overviewEntry.section,
+    overviewEntry.container,
+    overviewEntry.render,
+  ).finally(loadParallelSections);
+}
+
+function _readinessAllSectionsReady() {
+  return _READINESS_REPORT_SECTIONS.every(
+    (section) => _readinessSectionStatus[section] === "ok",
+  );
+}
+
+function _updateReadinessExportButton() {
+  const bar = document.getElementById("readiness-export-bar");
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  if (!bar) return;
+  bar.classList.remove("hidden");
+  [scorecardBtn, fullBtn].forEach((btn) => {
+    if (btn && !btn.hasAttribute("aria-busy")) {
+      btn.disabled = false;
+    }
+  });
+}
+
+function _wireReadinessExportButton() {
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  if (scorecardBtn && scorecardBtn.dataset.wired !== "1") {
+    scorecardBtn.dataset.wired = "1";
+    scorecardBtn.addEventListener("click", () => {
+      exportReadinessReportPdf("scorecard");
+    });
+  }
+  if (fullBtn && fullBtn.dataset.wired !== "1") {
+    fullBtn.dataset.wired = "1";
+    fullBtn.addEventListener("click", () => {
+      exportReadinessReportPdf("full");
+    });
+  }
+}
+
+function _readinessPdfFilename() {
+  const panel = document.getElementById("panel-readiness-report");
+  const raw =
+    panel?.dataset?.datasetName || window.AIDRIN_DATASET_NAME || "dataset";
+  const stem = String(raw)
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^\w.-]+/g, "_");
+  const date = new Date().toISOString().slice(0, 10);
+  return `readiness-report-${stem || "dataset"}-${date}.pdf`;
+}
+
+function _filenameFromContentDisposition(header) {
+  if (!header) return null;
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1].replace(/"/g, ""));
+  } catch (_e) {
+    return match[1].replace(/"/g, "");
+  }
+}
+
+/** Download readiness report PDF from the server (sync build-on-miss). */
+function exportReadinessReportPdf(mode = "scorecard") {
+  const isFull = mode === "full";
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  const scorecardLabel = document.getElementById(
+    "readiness-export-scorecard-pdf-label",
+  );
+  const fullLabel = document.getElementById("readiness-export-full-pdf-label");
+  const buttons = [scorecardBtn, fullBtn].filter(Boolean);
+
+  buttons.forEach((el) => {
+    el.disabled = true;
+    el.setAttribute("aria-busy", "true");
+  });
+  if (isFull && fullLabel) fullLabel.textContent = "Preparing full PDF…";
+  if (!isFull && scorecardLabel) scorecardLabel.textContent = "Preparing PDF…";
+
+  const url = isFull
+    ? "/readiness-report/pdf?mode=full"
+    : "/readiness-report/pdf";
+
+  return fetch(url)
+    .then(async (response) => {
+      if (!response.ok) {
+        let message = `PDF export failed (${response.status})`;
+        try {
+          const data = await response.json();
+          if (data?.message) message = data.message;
+        } catch (_e) {
+          /* ignore */
+        }
+        throw new Error(message);
+      }
+      const filename =
+        _filenameFromContentDisposition(
+          response.headers.get("Content-Disposition"),
+        ) || _readinessPdfFilename();
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    })
+    .catch((err) => {
+      console.error("Readiness PDF export failed:", err);
+      alert(err.message || "Could not generate PDF.");
+    })
+    .finally(() => {
+      buttons.forEach((el) => {
+        el.disabled = false;
+        el.removeAttribute("aria-busy");
+      });
+      if (scorecardLabel) scorecardLabel.textContent = "Scorecard PDF";
+      if (fullLabel) fullLabel.textContent = "Full report PDF";
+    });
+}
+
+function _exportReadinessReportPdf() {
+  return exportReadinessReportPdf("scorecard");
+}
+
+/** Escape text for safe inclusion in HTML (alias of escapeHtml). */
+function _escapeHtml(s) {
+  return escapeHtml(s);
+}
+
+/** Format quasi-identifier key/value pairs for display. */
+function _formatQiValues(qiValues) {
+  if (!qiValues || typeof qiValues !== "object") return "";
+  return Object.entries(qiValues)
+    .map(([k, v]) => `${escapeHtml(k)}=${escapeHtml(v)}`)
+    .join(", ");
+}
+
+/**
+ * One needs-attention list row with optional secondary line (context/detail).
+ * *primary* and *secondary* may contain safe HTML built by callers; user text
+ * must be escaped before passing in.
+ */
+function _readinessNaRow(primary, secondary, value) {
+  const valHtml = value
+    ? `<span class="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">${_escapeHtml(value)}</span>`
+    : "";
+  const sub = secondary
+    ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 pl-0">${secondary}</p>`
+    : "";
+  return `<li>
+    <div class="flex justify-between gap-3 items-start">
+      <span class="text-sm text-gray-700 dark:text-gray-300 min-w-0">${primary}</span>
+      ${valHtml}
+    </div>${sub}
+  </li>`;
+}
+
+/** Needs-attention subsection with title and list body. */
+function _readinessNaBlock(title, infoKey, contextHtml, listHtml, tone) {
+  const titleCls =
+    tone === "red"
+      ? "text-red-700 dark:text-red-400"
+      : tone === "amber"
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-gray-600 dark:text-gray-300";
+  const ctx = contextHtml
+    ? `<p class="text-xs text-gray-500 dark:text-gray-400 mb-1.5">${contextHtml}</p>`
+    : "";
+  return `<div>
+    <p class="text-xs font-semibold ${titleCls} uppercase tracking-wide mb-1.5 inline-flex items-center">${title}${infoKey ? _readinessInfoIcon(infoKey) : ""}</p>
+    ${ctx}
+    <ul class="space-y-2">${listHtml}</ul>
+  </div>`;
+}
+
+/** Wrap needs-attention blocks in the standard amber/green panel. */
+function _renderReadinessNeedsAttentionPanel(naItems, emptyMessage) {
+  if (naItems.length) {
+    return `<div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+      <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
+    </div>`;
+  }
+  return `<div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+    <p class="text-sm text-green-800 dark:text-green-400">${emptyMessage}</p>
+  </div>`;
+}
+
+/** Readiness metric definitions shown in info-icon tooltips. */
+const _READINESS_METRIC_INFO = {
+  feature_profile:
+    "A per-column snapshot of whether each feature is usable for modeling. Combines missingness, cardinality, and value balance into a readiness status (Good / Warning / Poor).",
+  pct_missing:
+    "Share of rows where this feature is missing (null/NaN). High missingness reduces reliability and may require imputation or dropping the column.",
+  n_unique:
+    "Number of distinct non-missing values. Very low values suggest constants; very high values relative to row count may indicate IDs or free text.",
+  pct_dominant:
+    "Share of rows taken by the most frequent value (the mode). Values near 100% mean the column is almost constant and usually carries little signal.",
+  profile_status:
+    "Readiness verdict for this feature. Poor: high missingness, constant, or ID-like. Warning: moderate issues. Good: no major issues detected.",
+  overall_dq_grade:
+    "Average of the data-quality KPIs (completeness, uniqueness, outlier-cleanliness). Higher is better — indicates how clean the dataset is overall.",
+  analysis_scope:
+    "This section evaluates every column automatically; no features or targets are chosen by the user.",
+  completeness:
+    "Overall share of non-missing values across all features. Same measure as the Completeness metric on the Data Quality tab.",
+  uniqueness:
+    "1 minus the proportion of duplicate rows. Low uniqueness means many exact duplicate records, which can bias models and inflate metrics.",
+  outlier_cleanliness:
+    "1 minus the mean outlier proportion across numerical features (IQR method). Lower values mean more extreme values that may need review.",
+  features_analyzed:
+    "Number of columns included in the automated correlation scan after pruning constants, ID-like fields, and high-cardinality categoricals.",
+  leakage_risk_pairs:
+    "Feature pairs with correlation |score| ≥ 0.95 — nearly duplicate or derived from each other. Can inflate model performance or indicate redundant inputs (not necessarily target leakage).",
+  redundant_pairs:
+    "Feature pairs with correlation |score| between 0.8 and 0.95 — strongly related and likely redundant. Consider keeping only one from each pair.",
+  isolated_features:
+    "Features whose strongest correlation to any other feature is below 0.1. May be uninformative noise, identifiers, or weakly related fields worth reviewing.",
+  most_related_pairs:
+    "The feature pairs with the highest absolute correlation scores from the automated scan — quick view of the strongest relationships in the data.",
+  overall_impact_grade:
+    "Average of impact KPIs (leakage safety, redundancy, informativeness). Higher suggests healthier feature structure for modeling.",
+  leakage_safety:
+    "Whether any feature pairs exceed the leakage-risk correlation threshold (|score| ≥ 0.95). Fewer or no pairs is better.",
+  redundancy:
+    "Derived from the count of highly correlated redundant pairs (|score| ≥ 0.8). Lower redundancy is generally preferable.",
+  informativeness:
+    "Share of analyzed features that have at least one meaningful correlation to another feature — flags isolated or uninformative columns.",
+  overall_fairness_grade:
+    "Average of fairness KPIs (representation balance, label balance, outcome parity). Higher suggests more balanced representation and outcomes under the automated checks.",
+  representation_balance:
+    "1 divided by the worst group probability ratio across auto-selected sensitive attributes. Low values mean some groups are much more represented than others.",
+  label_balance:
+    "Derived from the Imbalance Degree of the auto-selected target column. 0 means perfectly balanced classes; higher imbalance degree means a skewed label distribution.",
+  outcome_parity:
+    "1 minus the maximum TSD (standard deviation of class rates across sensitive groups). Flags when outcome rates differ substantially by group.",
+  representation_imbalance:
+    "Sensitive attributes where the largest group probability ratio exceeds the threshold — one category dominates representation.",
+  minority_classes:
+    "Target classes that make up less than 5% of rows. Rare classes are harder to learn and can hurt model fairness and recall.",
+  outcome_disparities:
+    "Target classes whose outcome rates vary most across sensitive groups (high TSD). Suggests uneven outcomes by group.",
+  cdd_disparities:
+    "Sensitive groups flagged by Conditional Demographic Disparity — rejected outcomes outweigh accepted ones disproportionately (positive class is auto-selected as the most frequent target value).",
+  overall_governance_grade:
+    "Average of governance KPIs (anonymity, diversity, distribution leakage, linkage risk, PHI exposure). Higher suggests lower privacy and compliance risk under automated checks.",
+  anonymity_k:
+    "Minimum equivalence-class size (k) on auto-selected quasi-identifiers. Higher k means each QI combination appears in at least k rows — harder to re-identify individuals.",
+  diversity_l:
+    "Minimum l-diversity on the auto-selected sensitive attribute within QI groups. Higher l means more distinct sensitive values per group — harder to infer a specific sensitive value.",
+  distribution_t:
+    "Maximum t-closeness (TVD) between group and global sensitive-attribute distributions. Lower t means groups do not reveal unusually skewed sensitive information.",
+  single_linkage_risk:
+    "Worst mean Marketer/Prosecutor re-identification risk across single quasi-identifiers. Higher risk means one field alone can identify many individuals.",
+  linkage_risk:
+    "Mean MM re-identification risk when all auto-selected quasi-identifiers are combined — the realistic linkage-attack scenario.",
+  phi_exposure:
+    "HIPAA-style pattern scan on auto-selected text columns. Flags potential SSNs, medical IDs, postal codes, emails, etc. Not a full regulatory certification.",
+  low_anonymity:
+    "Privacy metrics (e.g. k-Anonymity) below warning thresholds — small equivalence classes increase re-identification risk.",
+  hipaa_phi:
+    "Columns where HIPAA-like identifier patterns were detected during the automated scan.",
+  high_linkage_risk:
+    "Quasi-identifiers or QI combinations with high Marketer/Prosecutor re-identification risk scores.",
+  attribute_disclosure:
+    "l-Diversity or t-Closeness signals suggesting sensitive-attribute values may be inferable within QI groups.",
+};
+
+/**
+ * Info-icon tooltip matching existing metric panels (see theme.css .info-icon).
+ * @param {string} key - key in _READINESS_METRIC_INFO
+ */
+function _readinessInfoIcon(key) {
+  const text = _READINESS_METRIC_INFO[key];
+  if (!text) return "";
+  return `<span class="info-icon info-icon--below" tabindex="0" role="button" aria-label="More information">i<span class="info-text">${_escapeHtml(text)}</span></span>`;
+}
+
+/** Table header cell with label + info tooltip. */
+function _readinessTh(label, infoKey, alignRight) {
+  const align = alignRight ? " text-right" : "";
+  return `<th class="px-3 py-2 relative whitespace-nowrap${align}"><span class="inline-flex items-center${alignRight ? " justify-end w-full" : ""}">${label}${_readinessInfoIcon(infoKey)}</span></th>`;
+}
+
+/** Format byte count as a human-readable size string. */
+function _formatBytes(bytes) {
+  if (bytes == null || isNaN(bytes)) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Badge HTML for per-feature readiness status. */
+function _profileStatusBadge(status) {
+  const cls = _dqStatusClasses(status);
+  const label =
+    status === "good"
+      ? "Good"
+      : status === "warning"
+        ? "Warning"
+        : status === "poor"
+          ? "Poor"
+          : "—";
+  return `<span class="px-2 py-0.5 rounded text-xs font-medium ${cls.badge}">${label}</span>`;
+}
+
+/**
+ * Render the dataset overview: file metadata, KPI tiles, per-feature readiness
+ * profile, and collapsible detailed statistics / distributions / histograms.
+ */
+function renderReadinessDatasetOverview(container, overview) {
+  if (overview.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Dataset overview unavailable: ${escapeHtml(overview.error)}</p>`;
+    return;
+  }
+
+  const meta = overview.file_metadata || {};
+  const profiles = overview.feature_profiles || [];
+  const profileMeta = overview.feature_profiles_meta || {};
+  const statusCounts = profileMeta.status_counts || {};
+  const poorCount =
+    statusCounts.poor ?? profiles.filter((p) => p.status === "poor").length;
+  const warnCount =
+    statusCounts.warning ??
+    profiles.filter((p) => p.status === "warning").length;
+
+  // --- File metadata ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-sm">
+      <p class="font-semibold text-gray-900 dark:text-white mb-2">${escapeHtml(meta.file_name || "Dataset")}</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-gray-600 dark:text-gray-300">
+        <div><span class="text-gray-500 dark:text-gray-400">Type:</span> ${escapeHtml(meta.file_type || "—")}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Size:</span> ${_formatBytes(meta.file_size_bytes)}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Memory:</span> ${_formatBytes(meta.memory_bytes)}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Rows:</span> ${(meta.rows || 0).toLocaleString()}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Columns:</span> ${meta.columns || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Numerical:</span> ${meta.numerical_count || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Categorical:</span> ${meta.categorical_count || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Other:</span> ${(meta.datetime_count || 0) + (meta.boolean_count || 0)}</div>
+      </div>
+    </div>`;
+
+  // --- KPI tiles ---
+  html += `
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${(meta.rows || 0).toLocaleString()}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Records</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.columns || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Features</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.numerical_count || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Numerical</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.categorical_count || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Categorical</div>
+      </div>
+    </div>`;
+
+  // --- Per-feature readiness profile ---
+  html += `
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-sm font-semibold text-gray-900 dark:text-white inline-flex items-center">Per-feature readiness profile${_readinessInfoIcon("feature_profile")}</p>
+      <span class="text-xs text-gray-500 dark:text-gray-400">
+        ${poorCount ? `<span class="text-red-600 dark:text-red-400">${poorCount} poor</span>` : ""}
+        ${warnCount ? `${poorCount ? " · " : ""}<span class="text-amber-600 dark:text-amber-400">${warnCount} warning</span>` : ""}
+        ${!poorCount && !warnCount ? "all good" : ""}
+      </span>
+    </div>`;
+
+  if (profileMeta.truncated) {
+    html += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing ${profileMeta.shown.toLocaleString()} of ${profileMeta.total.toLocaleString()} features (prioritized: poor → warning → good).</p>`;
+  }
+
+  html += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4">`;
+  html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  html += `<th class="px-3 py-2">Feature</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Dtype</th>`;
+  html += _readinessTh("% missing", "pct_missing", true);
+  html += _readinessTh("# unique", "n_unique", true);
+  html += _readinessTh("% dominant", "pct_dominant", true);
+  html += _readinessTh("Status", "profile_status", false);
+  html += `<th class="px-3 py-2">Summary</th>`;
+  html += `</tr></thead><tbody>`;
+
+  const profilePctValues = profiles.flatMap((p) =>
+    [p.pct_missing, p.pct_dominant].filter((v) => v != null),
+  );
+  const fmtProfilePct = _readinessPctFormatter(profilePctValues);
+
+  profiles.forEach((p, i) => {
+    const stripe =
+      i % 2 === 0
+        ? "bg-white dark:bg-gray-800"
+        : "bg-gray-50 dark:bg-gray-700/50";
+    html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+    html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(p.feature)}</td>`;
+    html += `<td class="px-3 py-2 capitalize">${escapeHtml(p.type)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs">${escapeHtml(p.dtype)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${fmtProfilePct(p.pct_missing)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.n_unique}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.pct_dominant != null ? fmtProfilePct(p.pct_dominant) : "—"}</td>`;
+    html += `<td class="px-3 py-2">${_profileStatusBadge(p.status)}</td>`;
+    html += `<td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title="${escapeHtml(p.summary || "")}">${escapeHtml(p.summary || "—")}</td>`;
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  // --- Collapsible detailed statistics ---
+  let detailsInner = "";
+
+  const numSummary = overview.numerical_summary || {};
+  const numMeta = overview.numerical_summary_meta || {};
+  const allNumFeatures = Object.keys(numSummary);
+  const numFeatures = allNumFeatures.slice(0, _READINESS_MAX_DETAIL_TABLE_ROWS);
+  if (numFeatures.length > 0) {
+    const allStats = Object.keys(numSummary[numFeatures[0]] || {});
+    const preferredOrder = [
+      "count",
+      "min",
+      "25th percentile",
+      "50th percentile",
+      "mean",
+      "75th percentile",
+      "max",
+      "std",
+    ];
+    const statKeys = preferredOrder
+      .filter((s) => allStats.includes(s))
+      .concat(allStats.filter((s) => !preferredOrder.includes(s)));
+
+    const statFormatters = {};
+    statKeys.forEach((s) => {
+      const colVals = numFeatures.map((feat) => numSummary[feat][s]);
+      statFormatters[s] = _readinessNumFormatter(colVals);
+    });
+
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical summary statistics</p>`;
+    detailsInner += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+    detailsInner += `<thead class="text-xs uppercase bg-gray-50 dark:bg-gray-700"><tr><th class="px-3 py-2">Feature</th>`;
+    statKeys.forEach((s) => {
+      detailsInner += `<th class="px-3 py-2 text-right">${s}</th>`;
+    });
+    detailsInner += `</tr></thead><tbody>`;
+    numFeatures.forEach((feat, i) => {
+      const stripe =
+        i % 2 === 0
+          ? "bg-white dark:bg-gray-800"
+          : "bg-gray-50 dark:bg-gray-700/50";
+      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${escapeHtml(feat)}</td>`;
+      statKeys.forEach((s) => {
+        const raw = numSummary[feat][s];
+        const display =
+          raw === null || raw === undefined
+            ? "—"
+            : typeof raw === "number"
+              ? statFormatters[s](raw)
+              : escapeHtml(String(raw));
+        detailsInner += `<td class="px-3 py-2 font-mono text-xs text-right">${display}</td>`;
+      });
+      detailsInner += `</tr>`;
+    });
+    detailsInner += `</tbody></table></div>`;
+    if (numMeta.truncated || allNumFeatures.length > numFeatures.length) {
+      const total = numMeta.total || allNumFeatures.length;
+      const shown = numMeta.shown || numFeatures.length;
+      detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Showing first ${shown} of ${total} numerical features. Profile table lists prioritized features.</p>`;
+    }
+  }
+
+  const catCharts = overview.categorical_charts || {};
+  const catChartCols = Object.keys(catCharts);
+  const hasHistograms =
+    overview.histograms && Object.keys(overview.histograms).length > 0;
+  const vizDeferred = overview.visualizations_deferred;
+  const profileNumericalCount = profiles.filter(
+    (p) => p.type === "numerical",
+  ).length;
+  const profileCategoricalCount = profiles.filter(
+    (p) => p.type === "categorical",
+  ).length;
+  const showCatCharts =
+    catChartCols.length > 0 || (vizDeferred && profileCategoricalCount > 0);
+  const showHistograms =
+    hasHistograms || (vizDeferred && profileNumericalCount > 0);
+
+  if ((showCatCharts || showHistograms) && profileMeta.truncated) {
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Distribution charts use the same ${profileMeta.shown.toLocaleString()} features shown in the profile table above (prioritized: poor → warning → good).</p>`;
+  }
+
+  if (showCatCharts) {
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical value distributions</p>`;
+    detailsInner += `<div id="readiness-categorical-charts" class="mb-4"></div>`;
+  }
+
+  if (showHistograms) {
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 mt-4">Feature distributions (numerical)</p>`;
+    detailsInner += `<div id="readiness-histograms-inner" class="mb-4"></div>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed statistics &amp; distributions
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl && (showCatCharts || showHistograms)) {
+      _wireReadinessDetailsViz(detailsEl, "dataset-overview");
+    }
+  } else {
+    if (catChartCols.length > 0) {
+      renderCategoricalPieCharts(
+        overview.categorical_charts,
+        "readiness-categorical-charts",
+      );
+    }
+    if (hasHistograms) {
+      renderWorkspaceHistograms(
+        overview.histograms,
+        "readiness-histograms-inner",
+        true,
+        "large",
+      );
+    }
+  }
+}
+
+/**
+ * Render the Data Quality scorecard into the given container.
+ */
+function renderReadinessDataQuality(container, dq) {
+  if (dq.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data quality unavailable: ${escapeHtml(dq.error)}</p>`;
+    return;
+  }
+  const kpis = dq.kpis || [];
+  const gradeCls = _dqStatusClasses(dq.grade_status);
+  const scopeCrit =
+    (dq.auto_selection || {}).selection_criteria?.analysis_scope || {};
+  const dqPctValues = [dq.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
+  const fmtDqPct = _readinessPctFormatter(dqPctValues);
+
+  // --- Analysis scope (no column auto-selection required) ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Analysis scope:</span> ${escapeHtml(scopeCrit.selected || "all columns")}${_readinessInfoIcon("analysis_scope")}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(scopeCrit.rule || "All columns are evaluated automatically.")}</span></li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall data quality grade${_readinessInfoIcon("overall_dq_grade")}</span>
+          <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtDqPct(dq.grade)}</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+          <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+            <div class="flex items-baseline justify-between">
+              <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
+              <span class="text-2xl font-bold ${cls.text}">${fmtDqPct(k.value)}</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+              <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+            </div>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
+          </div>`;
+  });
+  html += "</div>";
+
+  // --- Needs attention ---
+  const na = dq.needs_attention || {};
+  const incomplete = na.incomplete_features || [];
+  const outlierFeats = na.outlier_features || [];
+  const dupRows = na.duplicate_rows || 0;
+  const naPctValues = [
+    ...incomplete.map((f) => f.completeness),
+    ...outlierFeats.map((f) => f.outlier_proportion),
+    dupRows > 0 ? dupRows : null,
+  ].filter((v) => v != null);
+  const fmtNaPct = _readinessPctFormatter(naPctValues);
+
+  const naItems = [];
+  if (incomplete.length) {
+    const top = incomplete
+      .slice(0, 6)
+      .map(
+        (f) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(f.feature)}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.completeness)} complete</span></li>`,
+      )
+      .join("");
+    const more =
+      incomplete.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${incomplete.length - 6} more</li>`
+        : "";
+    naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Incomplete features (${incomplete.length})${_readinessInfoIcon("completeness")}</p>
+            <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${top}${more}</ul>
+          </div>`);
+  }
+  if (outlierFeats.length) {
+    const top = outlierFeats
+      .slice(0, 6)
+      .map(
+        (f) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(f.feature)}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.outlier_proportion)} outliers</span></li>`,
+      )
+      .join("");
+    const more =
+      outlierFeats.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${outlierFeats.length - 6} more</li>`
+        : "";
+    naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Features with outliers (${outlierFeats.length})${_readinessInfoIcon("outlier_cleanliness")}</p>
+            <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${top}${more}</ul>
+          </div>`);
+  }
+  if (dupRows && dupRows > 0) {
+    naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Duplicate rows${_readinessInfoIcon("uniqueness")}</p>
+            <p class="text-sm text-gray-700 dark:text-gray-300">${fmtNaPct(dupRows)} of rows are exact duplicates.</p>
+          </div>`);
+  }
+
+  if (naItems.length) {
+    html += `
+          <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+            <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
+          </div>`;
+  } else {
+    html += `
+          <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+            <p class="text-sm text-green-800 dark:text-green-400">No data quality issues detected — all features complete, no duplicates, no outliers.</p>
+          </div>`;
+  }
+
+  // --- Collapsible details (original charts) ---
+  const det = dq.details || {};
+  const vizDeferred = dq.visualizations_deferred;
+  let detailsInner = "";
+  if (det.completeness) {
+    if (det.completeness.visualization) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Completeness by feature</p>
+          <img src="data:image/png;base64,${det.completeness.visualization}" alt="Completeness chart" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (vizDeferred || det.completeness.visualization_deferred) {
+      detailsInner += _readinessVizSlot(
+        "data-quality",
+        "completeness",
+        "Completeness by feature",
+      );
+    }
+  }
+  if (det.outliers) {
+    if (det.outliers.visualization) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Outliers by feature</p>
+          <img src="data:image/png;base64,${det.outliers.visualization}" alt="Outliers chart" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (det.outliers.error) {
+      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Outliers: ${escapeHtml(det.outliers.error)}</p>`;
+    } else if (vizDeferred || det.outliers.visualization_deferred) {
+      detailsInner += _readinessVizSlot(
+        "data-quality",
+        "outliers",
+        "Outliers by feature",
+      );
+    }
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "data-quality");
+  }
+}
+
+/**
+ * Render the Impact on AI scorecard (automated all-pairs correlation signals:
+ * redundancy, leakage risk, isolated features) into the given container.
+ */
+function renderReadinessImpact(container, impact) {
+  if (impact.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Impact on AI unavailable: ${escapeHtml(impact.error)}</p>`;
+    return;
+  }
+
+  const autoSel = impact.auto_selection || {};
+  const crit = autoSel.selection_criteria || {};
+  const colCrit = crit.columns_analyzed || {};
+  const thresholds = crit.thresholds || {};
+  const kpis = impact.kpis || [];
+  const na = impact.needs_attention || {};
+  const gradeCls = _dqStatusClasses(impact.grade_status);
+
+  const leakage = na.leakage_pairs || impact.leakage_pairs || [];
+  const redundant = na.redundant_pairs || impact.redundant_pairs || [];
+  const isolated = na.isolated_features || impact.isolated_features || [];
+  const topPairs = impact.top_pairs || [];
+  const dropped = colCrit.excluded || impact.columns_dropped || [];
+  const analyzed = impact.columns_analyzed || (colCrit.selected || []).length;
+
+  const impactScoreValues = [
+    ...leakage.map((p) => p.score),
+    ...redundant.map((p) => p.score),
+    ...topPairs.map((p) => p.score),
+  ];
+  const fmtScore = _readinessNumFormatter(impactScoreValues);
+  const impactPctValues = [impact.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
+  const fmtImpactPct = _readinessPctFormatter(impactPctValues);
+  const fmtPair = (p) =>
+    _readinessNaRow(
+      `<span class="font-mono">${_escapeHtml(p.a)}</span> ↔ <span class="font-mono">${_escapeHtml(p.b)}</span>`,
+      "Correlated feature pair",
+      `|score| ${fmtScore(p.score)}`,
+    );
+
+  const selectedCols = colCrit.selected || [];
+  const selectedPreview =
+    selectedCols.length > 0
+      ? `${selectedCols.slice(0, 8).map(escapeHtml).join(", ")}${selectedCols.length > 8 ? "…" : ""}`
+      : "none";
+
+  // --- Auto-selection criteria ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Columns analyzed (${analyzed}):</span> ${selectedPreview}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(colCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Excluded columns:</span> ${dropped.length}</li>
+        <li><span class="font-medium">Thresholds:</span>
+          redundant |score| ≥ ${_readinessNum(thresholds.redundant_threshold)},
+          leakage |score| ≥ ${_readinessNum(thresholds.leakage_threshold)},
+          isolated max |score| &lt; ${_readinessNum(thresholds.isolated_threshold)}
+        </li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall impact grade${_readinessInfoIcon("overall_impact_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtImpactPct(impact.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    const displayVal =
+      k.raw_count != null ? `${k.raw_count} flagged` : fmtImpactPct(k.value);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-2xl font-bold ${cls.text} shrink-0">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
+      </div>`;
+  });
+  html += "</div>";
+
+  // --- Needs attention ---
+  const naItems = [];
+  if (leakage.length) {
+    const items = leakage.slice(0, 6).map(fmtPair).join("");
+    const more =
+      leakage.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${leakage.length - 6} more</li>`
+        : "";
+    naItems.push(
+      _readinessNaBlock(
+        `Leakage risk (|score| ≥ 0.95) (${leakage.length})`,
+        "leakage_risk_pairs",
+        null,
+        items + more,
+        "red",
+      ),
+    );
+  }
+  if (redundant.length) {
+    const items = redundant.slice(0, 6).map(fmtPair).join("");
+    const more =
+      redundant.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${redundant.length - 6} more</li>`
+        : "";
+    naItems.push(
+      _readinessNaBlock(
+        `Redundant pairs (|score| ≥ 0.8) (${redundant.length})`,
+        "redundant_pairs",
+        null,
+        items + more,
+        "amber",
+      ),
+    );
+  }
+  if (isolated.length) {
+    const items = isolated
+      .slice(0, 10)
+      .map((f) => {
+        const name = typeof f === "string" ? f : f.feature || f;
+        return _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(name)}</span>`,
+          "No strong correlation to other analyzed features",
+          null,
+        );
+      })
+      .join("");
+    const more =
+      isolated.length > 10
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${isolated.length - 10} more</li>`
+        : "";
+    naItems.push(
+      _readinessNaBlock(
+        `Isolated features (${isolated.length})`,
+        "isolated_features",
+        null,
+        items + more,
+        "amber",
+      ),
+    );
+  }
+
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No redundancy, leakage risk, or isolated features detected.",
+  );
+
+  // --- Collapsible details ---
+  const det = impact.details || {};
+  const vizDeferred =
+    impact.visualizations_deferred || det.visualizations_deferred;
+  let detailsInner = "";
+
+  if (topPairs.length) {
+    detailsInner +=
+      '<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 inline-flex items-center">Most-related feature pairs' +
+      _readinessInfoIcon("most_related_pairs") +
+      "</p>";
+    detailsInner +=
+      '<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
+    detailsInner +=
+      '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr><th class="px-4 py-2">Feature A</th><th class="px-4 py-2">Feature B</th><th class="px-4 py-2 text-right">Score</th></tr></thead><tbody>';
+    topPairs.forEach((p, i) => {
+      const stripe =
+        i % 2 === 0
+          ? "bg-white dark:bg-gray-800"
+          : "bg-gray-50 dark:bg-gray-700/50";
+      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${escapeHtml(p.a)}</td><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${escapeHtml(p.b)}</td><td class="px-4 py-2 font-mono text-xs text-right">${fmtScore(p.score)}</td></tr>`;
+    });
+    detailsInner += "</tbody></table></div>";
+  }
+
+  if (det.numerical_visualization) {
+    const method = det.numerical_method
+      ? ` (${escapeHtml(det.numerical_method)})`
+      : "";
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical correlation${method}</p>
+        <img src="data:image/png;base64,${det.numerical_visualization}" alt="Numerical correlation heatmap" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (vizDeferred && analyzed >= 2) {
+    const method = det.numerical_method ? ` (${det.numerical_method})` : "";
+    detailsInner += _readinessVizSlot(
+      "impact-on-ai",
+      "numerical_correlation",
+      `Numerical correlation${method}`,
+    );
+  }
+  if (det.categorical_visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical correlation (Theil's U)</p>
+        <img src="data:image/png;base64,${det.categorical_visualization}" alt="Categorical correlation heatmap" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (vizDeferred && analyzed >= 2) {
+    detailsInner += _readinessVizSlot(
+      "impact-on-ai",
+      "categorical_correlation",
+      "Categorical correlation (Theil's U)",
+    );
+  }
+  if (dropped.length) {
+    const excludedMeta = colCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || dropped.length;
+    const { html: items } = _readinessTruncatedListItems(
+      dropped,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400 dark:text-gray-500">${escapeHtml(d.reason)}</span></li>`,
+    );
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded columns (${excludedTotal})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts &amp; tables
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "impact-on-ai");
+  }
+}
+
+/**
+ * Render the Fairness & Bias scorecard (auto-selected columns, four metrics,
+ * selection criteria, needs-attention lists, collapsible charts).
+ */
+function renderReadinessFairness(container, fb) {
+  if (fb.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Fairness &amp; Bias unavailable: ${escapeHtml(fb.error)}</p>`;
+    return;
+  }
+
+  const sel = fb.auto_selection || {};
+  const criteria = sel.selection_criteria || {};
+  const sensCrit = criteria.sensitive_attributes || {};
+  const targetCrit = criteria.target_column || {};
+  const posCrit = criteria.positive_class || {};
+  const thresholds = criteria.thresholds || {};
+  const kpis = fb.kpis || [];
+  const na = fb.needs_attention || {};
+  const gradeCls = _dqStatusClasses(fb.grade_status);
+  const fairnessPctValues = [fb.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
+  const fmtFairnessPct = _readinessPctFormatter(fairnessPctValues);
+  const fmtThresholdPct = _readinessPctFormatter(
+    thresholds.minority_class_share != null
+      ? [thresholds.minority_class_share]
+      : [],
+  );
+  const imbalanceVals = kpis
+    .filter((k) => k.id === "label_balance" && k.raw_imbalance_degree != null)
+    .map((k) => k.raw_imbalance_degree);
+  const fmtImbalance = _readinessNumFormatter(imbalanceVals);
+
+  // --- Auto-selection criteria (transparent) ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Sensitive attributes:</span> ${sensCrit.selected?.length ? sensCrit.selected.map(escapeHtml).join(", ") : "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(sensCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Target column:</span> ${escapeHtml(targetCrit.selected || "none")}${targetCrit.reason ? ` (${escapeHtml(targetCrit.reason)})` : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(targetCrit.rule || "")}</span></li>
+        <li><span class="font-medium">CDD positive class:</span> ${escapeHtml(String(posCrit.selected ?? "none"))}${posCrit.reason ? ` (${escapeHtml(posCrit.reason)})` : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(posCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Primary sensitive (statistical rate &amp; CDD):</span> ${escapeHtml(sel.primary_sensitive || "none")}</li>
+        <li><span class="font-medium">Flags:</span>
+          representation ratio ≥ ${_readinessNum(thresholds.representation_ratio_flag)},
+          minority class &lt; ${fmtThresholdPct(thresholds.minority_class_share)},
+          TSD ≥ ${_readinessNum(thresholds.tsd_disparity_flag)},
+          imbalance degree good/warning &lt; ${_readinessNum(thresholds.imbalance_degree_good)} / ${_readinessNum(thresholds.imbalance_degree_warning)}
+        </li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall fairness grade${_readinessInfoIcon("overall_fairness_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtFairnessPct(fb.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    const displayVal =
+      k.id === "label_balance" && k.raw_imbalance_degree != null
+        ? `ID ${fmtImbalance(k.raw_imbalance_degree)}`
+        : fmtFairnessPct(k.value);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-2xl font-bold ${cls.text}">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
+      </div>`;
+  });
+  html += "</div>";
+
+  // --- Needs attention ---
+  const naItems = [];
+  const repImbalance = na.representation_imbalance || [];
+  if (repImbalance.length) {
+    const ratioValues = repImbalance.flatMap((s) => [
+      s.max_ratio,
+      ...(s.flagged_pairs || []).map((p) => p.ratio),
+    ]);
+    const fmtRatio = _readinessNumFormatter(ratioValues);
+    const items = repImbalance
+      .slice(0, 5)
+      .map((s) => {
+        const pairHint =
+          s.flagged_pairs && s.flagged_pairs.length
+            ? `Worst pair: ${escapeHtml(s.flagged_pairs[0].pair)} (ratio ${fmtRatio(s.flagged_pairs[0].ratio)})`
+            : "";
+        return _readinessNaRow(
+          `<span class="font-mono font-medium">${_escapeHtml(s.column)}</span>`,
+          pairHint,
+          `max ratio ${fmtRatio(s.max_ratio)}`,
+        );
+      })
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Representation imbalance (${repImbalance.length})`,
+        "representation_imbalance",
+        "Sensitive attributes with extreme category probability ratios",
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const minorities = na.minority_classes || [];
+  if (minorities.length) {
+    const targetCol =
+      minorities[0].target_column || targetCrit.selected || "target";
+    const fmtMinorityShare = _readinessPctFormatter(
+      minorities.map((m) => m.share),
+    );
+    const items = minorities
+      .map((m) =>
+        _readinessNaRow(
+          `<span class="truncate">${_escapeHtml(m.class)}</span>`,
+          `Class in <span class="font-mono">${_escapeHtml(targetCol)}</span>`,
+          `${fmtMinorityShare(m.share)} share`,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Minority classes (${minorities.length})`,
+        "minority_classes",
+        `Target column: <span class="font-mono font-medium">${_escapeHtml(targetCol)}</span>`,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const outcomeDisp = na.outcome_disparities || [];
+  if (outcomeDisp.length) {
+    const sensCol =
+      outcomeDisp[0].sensitive_column || sel.primary_sensitive || "—";
+    const tgtCol = outcomeDisp[0].target_column || targetCrit.selected || "—";
+    const fmtTsd = _readinessNumFormatter(outcomeDisp.map((d) => d.tsd));
+    const items = outcomeDisp
+      .map((d) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(d.target_column || tgtCol)}</span> = ${_escapeHtml(d.class)}`,
+          `Outcome rates vary by sensitive <span class="font-mono">${_escapeHtml(d.sensitive_column || sensCol)}</span>`,
+          `TSD ${fmtTsd(d.tsd)}`,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Outcome-rate disparities (${outcomeDisp.length})`,
+        "outcome_disparities",
+        `Sensitive <span class="font-mono">${_escapeHtml(sensCol)}</span> × target <span class="font-mono">${_escapeHtml(tgtCol)}</span>`,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const cddDisp = na.cdd_disparities || [];
+  if (cddDisp.length) {
+    const sensCol = cddDisp[0].sensitive_column || sel.primary_sensitive || "—";
+    const tgtCol = cddDisp[0].target_column || targetCrit.selected || "—";
+    const posClass = cddDisp[0].positive_class || posCrit.selected || "—";
+    const items = cddDisp
+      .map((d) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(d.sensitive_column || sensCol)}</span> = ${_escapeHtml(d.group)}`,
+          `CDD vs target <span class="font-mono">${_escapeHtml(d.target_column || tgtCol)}</span> (positive: ${_escapeHtml(String(d.positive_class ?? posClass))})`,
+          null,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `CDD flagged groups (${cddDisp.length})`,
+        "cdd_disparities",
+        `Sensitive <span class="font-mono">${_escapeHtml(sensCol)}</span> × target <span class="font-mono">${_escapeHtml(tgtCol)}</span>`,
+        items,
+        "red",
+      ),
+    );
+  }
+
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No fairness issues detected under the automated thresholds.",
+  );
+
+  // --- Collapsible details (charts) ---
+  const det = fb.details || {};
+  const vizDeferred =
+    fb.visualizations_deferred ||
+    det.representation_rate?.visualizations_deferred;
+  let detailsInner = "";
+
+  const repVis = det.representation_rate?.visualizations || {};
+  const sensCols = sensCrit.selected || [];
+  if (vizDeferred && sensCols.length && !det.representation_rate?.error) {
+    sensCols.forEach((col) => {
+      detailsInner += _readinessVizSlot(
+        "fairness-bias",
+        `representation_rate.${col}`,
+        `Representation rate — ${col}`,
+      );
+    });
+  } else {
+    for (const [col, b64] of Object.entries(repVis)) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Representation rate — ${escapeHtml(col)}</p>
+          <img src="data:image/png;base64,${b64}" alt="Representation ${escapeHtml(col)}" class="w-full max-w-2xl" />
+        </div>`;
+    }
+  }
+  if (det.representation_rate?.error && !Object.keys(repVis).length) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Representation rate: ${escapeHtml(det.representation_rate.error)}</p>`;
+  }
+
+  if (det.class_imbalance?.visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Class imbalance — ${escapeHtml(targetCrit.selected || "target")}</p>
+        <img src="data:image/png;base64,${det.class_imbalance.visualization}" alt="Class imbalance" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (det.class_imbalance?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Class imbalance: ${escapeHtml(det.class_imbalance.error)}</p>`;
+  } else if (
+    (vizDeferred || det.class_imbalance?.visualization_deferred) &&
+    targetCrit.selected
+  ) {
+    detailsInner += _readinessVizSlot(
+      "fairness-bias",
+      "class_imbalance",
+      `Class imbalance — ${targetCrit.selected || "target"}`,
+    );
+  }
+
+  if (det.statistical_rate?.visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Statistical rate — ${escapeHtml(det.statistical_rate.sensitive)} × ${escapeHtml(det.statistical_rate.target)}</p>
+        <img src="data:image/png;base64,${det.statistical_rate.visualization}" alt="Statistical rate" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (det.statistical_rate?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Statistical rate: ${escapeHtml(det.statistical_rate.error)}</p>`;
+  } else if (
+    (vizDeferred || det.statistical_rate?.visualization_deferred) &&
+    sel.primary_sensitive &&
+    targetCrit.selected
+  ) {
+    detailsInner += _readinessVizSlot(
+      "fairness-bias",
+      "statistical_rate",
+      `Statistical rate — ${sel.primary_sensitive} × ${targetCrit.selected}`,
+    );
+  }
+
+  if (det.cdd?.disparities && !det.cdd.error) {
+    const rows = Object.entries(det.cdd.disparities)
+      .map(
+        ([grp, info]) =>
+          `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(grp)}</td><td class="px-3 py-2">${escapeHtml(formatValue(info.disparity))}</td></tr>`,
+      )
+      .join("");
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Conditional demographic disparity (positive: ${escapeHtml(String(det.cdd.positive_class ?? ""))})</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Group</th><th class="px-3 py-2">Disparity</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+  } else if (det.cdd?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">CDD: ${escapeHtml(det.cdd.error)}</p>`;
+  }
+
+  const excluded = sensCrit.excluded || [];
+  if (excluded.length) {
+    const excludedMeta = sensCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || excluded.length;
+    const { html: items } = _readinessTruncatedListItems(
+      excluded,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400">${escapeHtml(d.reason)}</span></li>`,
+    );
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded sensitive candidates (${excludedTotal})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts &amp; CDD table
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "fairness-bias");
+  }
+}
+
+/**
+ * Render the Data Governance scorecard (auto-selected columns, privacy KPIs,
+ * HIPAA flags, needs-attention lists, collapsible charts).
+ */
+function renderReadinessGovernance(container, gov) {
+  if (gov.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data Governance unavailable: ${escapeHtml(gov.error)}</p>`;
+    return;
+  }
+
+  const sel = gov.auto_selection || {};
+  const criteria = sel.selection_criteria || {};
+  const qiCrit = criteria.quasi_identifiers || {};
+  const sensCrit = criteria.sensitive_attribute || {};
+  const idCrit = criteria.id_column || {};
+  const hipaaCrit = criteria.hipaa_scan_columns || {};
+  const dpCrit = criteria.dp_features || {};
+  const thresholds = criteria.thresholds || {};
+  const kpis = gov.kpis || [];
+  const na = gov.needs_attention || {};
+  const det = gov.details || {};
+  const singleRisk = det.single_attribute_risk?.by_quasi_identifier || {};
+  const gradeCls = _dqStatusClasses(gov.grade_status);
+  const lowAnon = na.low_anonymity || [];
+  const linkage = na.high_linkage_risk || [];
+  const attrDisc = na.attribute_disclosure || [];
+  const govPctValues = [gov.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
+  const fmtGovPct = _readinessPctFormatter(govPctValues);
+  const govRiskValues = [
+    ...kpis.map((k) => k.raw_worst_mean ?? k.raw_mean).filter((v) => v != null),
+    ...linkage.map((x) => x.mean_risk),
+    ...lowAnon.flatMap((x) =>
+      x.worst_single_qi ? [x.worst_single_qi.mean_risk] : [],
+    ),
+    ...Object.values(singleRisk)
+      .map((v) => v.mean_risk)
+      .filter((v) => v != null),
+  ];
+  const govMetricValues = [
+    ...kpis
+      .filter((k) => k.id === "distribution_t" && k.raw_t != null)
+      .map((k) => k.raw_t),
+    ...attrDisc.map((x) => x.value),
+  ];
+  const fmtGovRisk = _readinessNumFormatter(govRiskValues);
+  const fmtGovMetric = _readinessNumFormatter(govMetricValues);
+
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Quasi-identifiers:</span> ${qiCrit.selected?.length ? qiCrit.selected.map(escapeHtml).join(", ") : "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(qiCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Sensitive attribute:</span> ${escapeHtml(sensCrit.selected || "none")}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(sensCrit.rule || "")}</span></li>
+        <li><span class="font-medium">ID column:</span> ${escapeHtml(idCrit.selected || "none")}${idCrit.synthetic ? " (synthetic row index)" : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(idCrit.rule || "")}</span></li>
+        <li><span class="font-medium">HIPAA scan columns:</span> ${(hipaaCrit.selected || []).length} column(s)${hipaaCrit.selected?.length ? ` — ${hipaaCrit.selected.slice(0, 5).map(escapeHtml).join(", ")}${hipaaCrit.selected.length > 5 ? "…" : ""}` : ""}</li>
+        <li><span class="font-medium">Thresholds:</span>
+          k ≥ ${thresholds.k_good ?? "—"}/${thresholds.k_warning ?? "—"},
+          l ≥ ${thresholds.l_good ?? "—"}/${thresholds.l_warning ?? "—"},
+          t ≤ ${thresholds.t_good ?? "—"}/${thresholds.t_warning ?? "—"},
+          MM single &lt; ${thresholds.mm_single_good ?? "—"}/${thresholds.mm_single_warning ?? "—"},
+          MM combined &lt; ${thresholds.mm_multi_good ?? "—"}/${thresholds.mm_multi_warning ?? "—"}
+        </li>
+        ${
+          gov.small_sample_warning
+            ? `<li><span class="font-medium text-amber-700 dark:text-amber-400">Note:</span> small dataset (&lt; ${thresholds.small_sample_rows ?? 30} rows) — privacy metrics may be unstable.</li>`
+            : ""
+        }
+      </ul>
+    </div>`;
+
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall governance grade${_readinessInfoIcon("overall_governance_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtGovPct(gov.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    let displayVal = fmtGovPct(k.value);
+    if (k.id === "anonymity_k" && k.raw_k != null) displayVal = `k=${k.raw_k}`;
+    else if (k.id === "diversity_l" && k.raw_l != null)
+      displayVal = `l=${k.raw_l}`;
+    else if (k.id === "distribution_t" && k.raw_t != null)
+      displayVal = `t=${fmtGovMetric(k.raw_t)}`;
+    else if (k.id === "single_linkage_risk" && k.raw_worst_mean != null)
+      displayVal = `${fmtGovRisk(k.raw_worst_mean)} risk`;
+    else if (k.id === "linkage_risk" && k.raw_mean != null)
+      displayVal = `${fmtGovRisk(k.raw_mean)} risk`;
+    else if (k.id === "phi_exposure" && k.columns_flagged != null)
+      displayVal =
+        k.columns_flagged === 0 ? "None" : `${k.columns_flagged} col(s)`;
+
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-xl font-bold ${cls.text} shrink-0">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
+      </div>`;
+  });
+  html += "</div>";
+
+  const naItems = [];
+
+  if (lowAnon.length) {
+    let items = "";
+    lowAnon.forEach((x) => {
+      const qiList = (x.quasi_identifiers || []).map(escapeHtml).join(", ");
+      items += _readinessNaRow(
+        `${_escapeHtml(x.metric)}: k = ${escapeHtml(String(x.value))}`,
+        x.detail
+          ? escapeHtml(x.detail)
+          : qiList
+            ? `Quasi-identifiers: ${qiList}`
+            : null,
+        x.singleton_count != null
+          ? `${x.singleton_count} singleton group(s)`
+          : null,
+      );
+      (x.worst_groups || []).slice(0, 3).forEach((g) => {
+        items += _readinessNaRow(
+          `Smallest group (size ${g.size})`,
+          _formatQiValues(g.qi_values),
+          null,
+        );
+      });
+      if (x.worst_single_qi) {
+        items += _readinessNaRow(
+          `Highest single-QI risk: <span class="font-mono">${_escapeHtml(x.worst_single_qi.feature)}</span>`,
+          "May contribute to low k when combined with other quasi-identifiers",
+          `risk ${fmtGovRisk(x.worst_single_qi.mean_risk)}`,
+        );
+      }
+    });
+    naItems.push(
+      _readinessNaBlock(
+        `Low anonymity (${lowAnon.length})`,
+        "low_anonymity",
+        lowAnon[0].quasi_identifiers?.length
+          ? `Quasi-identifiers: <span class="font-mono">${_escapeHtml(lowAnon[0].quasi_identifiers.join(", "))}</span>`
+          : null,
+        items,
+        "red",
+      ),
+    );
+  }
+
+  const hipaaPhi = na.hipaa_phi || [];
+  if (hipaaPhi.length) {
+    const items = hipaaPhi
+      .slice(0, 6)
+      .map((x) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(x.column)}</span>`,
+          escapeHtml((x.types || []).join(", ") || "Pattern match"),
+          `${x.total_flags} flag(s)`,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `HIPAA pattern matches (${hipaaPhi.length})`,
+        "hipaa_phi",
+        "Scanned text-like columns for HIPAA-style identifier patterns",
+        items,
+        "red",
+      ),
+    );
+  }
+
+  const linkageNa = na.high_linkage_risk || [];
+  if (linkageNa.length) {
+    const items = linkageNa
+      .map((x) => {
+        const qis = x.quasi_identifiers || x.features || [];
+        const featLabel = x.feature
+          ? `<span class="font-mono">${_escapeHtml(x.feature)}</span>`
+          : `<span class="font-mono">${_escapeHtml(qis.join(", "))}</span>`;
+        return _readinessNaRow(
+          `${_escapeHtml(x.metric)}: ${featLabel}`,
+          x.detail
+            ? escapeHtml(x.detail)
+            : qis.length
+              ? `Quasi-identifiers: ${qis.map(escapeHtml).join(", ")}`
+              : null,
+          `risk ${fmtGovRisk(x.mean_risk)}`,
+        );
+      })
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `High linkage risk (${linkageNa.length})`,
+        "high_linkage_risk",
+        null,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const attrDiscNa = na.attribute_disclosure || [];
+  if (attrDiscNa.length) {
+    const items = attrDiscNa
+      .map((x) => {
+        const qiList = (x.quasi_identifiers || []).map(escapeHtml).join(", ");
+        const sens = x.sensitive_attribute || "—";
+        return _readinessNaRow(
+          `${_escapeHtml(x.metric)} = ${fmtGovMetric(x.value)}`,
+          x.detail
+            ? escapeHtml(x.detail)
+            : `Sensitive <span class="font-mono">${_escapeHtml(sens)}</span> within groups of (${qiList})`,
+          null,
+        );
+      })
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Attribute disclosure risk (${attrDiscNa.length})`,
+        "attribute_disclosure",
+        attrDiscNa[0].sensitive_attribute
+          ? `Sensitive: <span class="font-mono">${_escapeHtml(attrDiscNa[0].sensitive_attribute)}</span>`
+          : null,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No governance issues detected under the automated thresholds.",
+  );
+
+  let detailsInner = "";
+  const vizDeferred = gov.visualizations_deferred;
+
+  const chartMetrics = [
+    ["k_anonymity", "k-Anonymity", "visualization"],
+    ["l_diversity", "l-Diversity", "visualization"],
+    ["t_closeness", "t-Closeness", "visualization"],
+    ["entropy_risk", "Entropy risk", "visualization"],
+    [
+      "multiple_attribute_risk",
+      "Multiple-attribute linkage risk",
+      "visualization",
+    ],
+    [
+      "differential_privacy",
+      "Differential privacy (illustrative)",
+      "visualization",
+    ],
+  ];
+  chartMetrics.forEach(([key, title, visKey]) => {
+    const block = det[key];
+    if (block?.[visKey]) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${title}</p>
+          <img src="data:image/png;base64,${block[visKey]}" alt="${escapeHtml(title)}" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (block?.error) {
+      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${escapeHtml(title)}: ${escapeHtml(block.error)}</p>`;
+    } else if (block && (vizDeferred || block.visualization_deferred)) {
+      detailsInner += _readinessVizSlot("data-governance", key, title);
+    }
+  });
+
+  const singleRows = Object.entries(singleRisk)
+    .filter(([, v]) => v.mean_risk != null)
+    .map(
+      ([q, v]) =>
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(q)}</td><td class="px-3 py-2 font-mono text-xs">${fmtGovRisk(v.mean_risk)}</td></tr>`,
+    )
+    .join("");
+  if (singleRows) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Single-attribute MM risk by quasi-identifier</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Quasi-identifier</th><th class="px-3 py-2">Mean risk</th></tr></thead><tbody>${singleRows}</tbody></table>
+      </div>`;
+  }
+
+  const hipaaDet = det.hipaa?.detected || {};
+  const hipaaRows = Object.entries(hipaaDet)
+    .map(
+      ([col, info]) =>
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(col)}</td><td class="px-3 py-2 text-xs">${escapeHtml((info.potential_types_detected || []).join(", "))}</td><td class="px-3 py-2 font-mono text-xs">${escapeHtml(String(info.total_flags ?? ""))}</td></tr>`,
+    )
+    .join("");
+  if (hipaaRows) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">HIPAA scan results</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Column</th><th class="px-3 py-2">Types</th><th class="px-3 py-2">Flags</th></tr></thead><tbody>${hipaaRows}</tbody></table>
+      </div>`;
+  }
+
+  const qiExcluded = qiCrit.excluded || [];
+  if (qiExcluded.length) {
+    const excludedMeta = qiCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || qiExcluded.length;
+    const { html: items } = _readinessTruncatedListItems(
+      qiExcluded,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400">${escapeHtml(d.reason)}</span></li>`,
+    );
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded quasi-identifier candidates (${excludedTotal})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+
+  if (dpCrit.selected?.length) {
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">DP demo features: ${dpCrit.selected.map(escapeHtml).join(", ")} (ε=${escapeHtml(String(dpCrit.epsilon ?? "—"))}, illustrative only).</p>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts &amp; tables
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "data-governance");
+  }
+}
+
+// ==================== Workspace Init ====================
+
+/**
+ * Initialize the workspace after file upload.
+ * Fetches summary statistics and populates feature dropdowns.
+ */
+function initWorkspace() {
+  // Dataset switches (e.g. HDF5) re-run init without a page reload. Drop stale
+  // readiness state so the next open fetches the new dataset, not the previous one.
+  _readinessReportLoaded = false;
+  for (const key of Object.keys(_readinessVizCache)) {
+    delete _readinessVizCache[key];
+  }
+  for (const key of Object.keys(_readinessSectionStatus)) {
+    delete _readinessSectionStatus[key];
+  }
+  _readinessFairCompliance = { status: "idle", data: null };
+
+  // Restore panel from URL hash, or default to data-overview
+  const hash = location.hash.replace("#", "");
+  const initialPanel =
+    hash && document.getElementById("panel-" + hash) ? hash : "data-overview";
+  showPanel(initialPanel, false); // false = don't push to history on init
+  // Replace current history entry so back button works from the first panel
+  history.replaceState({ panel: initialPanel }, "", "#" + initialPanel);
+
+  let initPending = 2;
+  const initTaskDone = () => {
+    if (--initPending === 0) _endServerProcessing();
+  };
+  _beginServerProcessing();
+
+  // Promise.resolve so a missing return from loadDataOverview cannot throw
+  // and skip the rest of init (which would leave Clear file disabled forever).
+  Promise.resolve(loadDataOverview()).finally(initTaskDone);
 
   // Populate feature dropdowns via /feature-set (same as metric.js does)
   fetch("/feature-set", { method: "POST" })
@@ -4304,30 +6854,11 @@ function initWorkspace() {
   }
 
   // Handle FAIR assessment file input UI
-  const fairFile = document.getElementById("fair-file");
-  const fairLabel = document.getElementById("fairFileLabel");
-  const fairIcon = document.getElementById("fairUploadIcon");
-  if (fairFile && fairLabel) {
-    fairFile.addEventListener("change", () => {
-      if (fairFile.files.length) {
-        fairLabel.textContent = fairFile.files[0].name;
-        if (fairIcon) {
-          fairIcon.innerHTML =
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
-          fairIcon.classList.remove("text-gray-400");
-          fairIcon.classList.add("text-green-500");
-        }
-      } else {
-        fairLabel.textContent = "JSON metadata file";
-        if (fairIcon) {
-          fairIcon.innerHTML =
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
-          fairIcon.classList.remove("text-green-500");
-          fairIcon.classList.add("text-gray-400");
-        }
-      }
-    });
-  }
+  _wireFairFileInput(
+    document.getElementById("fair-file"),
+    document.getElementById("fairFileLabel"),
+    document.getElementById("fairUploadIcon"),
+  );
 }
 
 /**
@@ -4589,14 +7120,14 @@ function populateWorkspaceDropdowns(data) {
  */
 function _renderLLMCallout(container, explanation, model) {
   const modelTag = model
-    ? `<span class="ml-2 font-normal normal-case tracking-normal text-purple-400 dark:text-purple-500">(${model})</span>`
+    ? `<span class="ml-2 font-normal normal-case tracking-normal text-purple-400 dark:text-purple-500">(${escapeHtml(model)})</span>`
     : "";
   container.innerHTML = `
     <div class="flex items-start gap-2.5 p-4 text-sm rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
       <svg class="w-5 h-5 shrink-0 mt-0.5 text-purple-400 dark:text-purple-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/></svg>
       <div>
         <div class="text-xs font-semibold uppercase tracking-wide text-purple-500 dark:text-purple-400 mb-1">AI Explanation${modelTag}</div>
-        <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${explanation}</p>
+        <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(explanation)}</p>
       </div>
     </div>`;
 }
@@ -4672,7 +7203,7 @@ function requestLLMExplanation(
         container.innerHTML = `
           <div class="flex items-center gap-2 p-3 text-sm text-yellow-700 dark:text-yellow-400 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-            AI explanation unavailable: ${errMsg}
+            AI explanation unavailable: ${escapeHtml(errMsg)}
           </div>`;
         debugLog("LLM explanation unavailable:", errMsg);
       }
@@ -4681,7 +7212,7 @@ function requestLLMExplanation(
       container.innerHTML = `
         <div class="flex items-center gap-2 p-3 text-sm text-yellow-700 dark:text-yellow-400 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-          AI explanation error: ${err.message || err}
+          AI explanation error: ${escapeHtml(err.message || String(err))}
         </div>`;
       debugLog("LLM explanation error:", err);
     });

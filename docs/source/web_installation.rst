@@ -108,6 +108,48 @@ Verify Redis is running:
 
 Expected output: ``PONG``
 
+Install PDF Export Libraries
+""""""""""""""""""""""""""""
+
+The **Readiness Report** exports PDFs with `WeasyPrint <https://weasyprint.org>`_.
+WeasyPrint is installed with AIDRIN, but it links against system libraries
+(Pango, HarfBuzz and gdk-pixbuf) that ``pip`` and ``uv`` cannot install. Without
+them the report itself still works; only PDF export fails, with
+``WeasyPrint could not be loaded``.
+
+**macOS (Homebrew)**:
+
+.. code-block:: bash
+
+   brew install pango gdk-pixbuf libffi
+
+**Ubuntu/Debian**:
+
+.. code-block:: bash
+
+   sudo apt update
+   sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+       libgdk-pixbuf-2.0-0 shared-mime-info fonts-dejavu-core
+
+**Windows**:
+
+- Use `Windows Subsystem for Linux (WSL) <https://learn.microsoft.com/en-us/windows/wsl/install>`_
+  and follow the Linux instructions, or install the GTK runtime environment.
+
+Verify the libraries are visible to Python:
+
+.. code-block:: bash
+
+   python -c "import weasyprint; print(weasyprint.__version__)"
+
+A version number means PDF export will work. An ``OSError`` naming a missing
+``lib...`` file means the system libraries above are not installed.
+
+.. note::
+
+   The Docker images install these packages already, so no extra setup is
+   needed when running AIDRIN with ``docker compose``.
+
 Step 4: Start the Application
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
