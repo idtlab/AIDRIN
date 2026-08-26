@@ -1,4 +1,5 @@
 import base64
+import threading
 import logging
 from io import BytesIO
 from typing import List
@@ -17,6 +18,12 @@ logger = logging.getLogger(__name__)
 import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+
+# dython's associations() touches the global pyplot state even with plot=False:
+# it calls sns.heatmap(ax=None) and plt.title(None) on gca(), which can wipe a
+# concurrent request's chart. Serialise the call so it cannot reach another
+# thread's figure.
+_ASSOCIATIONS_LOCK = threading.Lock()
 
 NOMINAL_NOMINAL_ASSOC = "theil"
 _NORMALITY_MIN_SAMPLES = 8
@@ -72,9 +79,10 @@ def calc_correlations(self: Task, columns: List[str], file_info, include_visuali
         # Check if there are categorical features
         if not categorical_columns.empty:
             # Categorical-categorical correlations are computed using theil
-            categorical_correlation = associations(
-                df[categorical_columns], nom_nom_assoc=NOMINAL_NOMINAL_ASSOC, plot=False
-            )
+            with _ASSOCIATIONS_LOCK:
+                categorical_correlation = associations(
+                    df[categorical_columns], nom_nom_assoc=NOMINAL_NOMINAL_ASSOC, plot=False
+                )
             logger.debug("Categorical correlation matrix computed:\n%s", categorical_correlation["corr"])
 
             if include_visualization:

@@ -115,7 +115,7 @@ def calculate_statistical_rates(
             ax.legend()
 
             # Adjust the bottom margin to avoid xticks being cropped
-            plt.subplots_adjust(bottom=0.25)
+            fig.subplots_adjust(bottom=0.25)
 
             # Save the plot as a base64 string
             buffer = io.BytesIO()

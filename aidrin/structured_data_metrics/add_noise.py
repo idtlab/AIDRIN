@@ -46,75 +46,81 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True, 
     num_cols = min(num_columns, max_columns_per_row)
 
     # Create subplots for the box plots
+    fig = None
     if include_visualization:
         fig, axes = plt.subplots(num_rows, num_cols, figsize=(8, 8))
 
-    for i, column in enumerate(add_noise_columns):
-        if include_visualization:
-            if num_rows == 1 and num_cols == 1:
-                current_ax = axes
-            elif num_rows == 1:
-                current_ax = axes[i % num_cols]
-            elif num_cols == 1:
-                current_ax = axes[i % num_rows, 0]
-            else:
-                row, col = divmod(i, num_cols)
-                current_ax = axes[row, col]
+    try:
+        for i, column in enumerate(add_noise_columns):
+            if include_visualization:
+                if num_rows == 1 and num_cols == 1:
+                    current_ax = axes
+                elif num_rows == 1:
+                    current_ax = axes[i % num_cols]
+                elif num_cols == 1:
+                    current_ax = axes[i % num_rows, 0]
+                else:
+                    row, col = divmod(i, num_cols)
+                    current_ax = axes[row, col]
 
-        noisy_feature = add_laplace_noise(df_drop_na[column], epsilon)
+            noisy_feature = add_laplace_noise(df_drop_na[column], epsilon)
 
-        # Calculate summary statistics
-        mean_norm = np.mean(df_drop_na[column])
-        variance_norm = np.var(df_drop_na[column])
-        mean_noisy = np.mean(noisy_feature)
-        variance_noisy = np.var(noisy_feature)
+            # Calculate summary statistics
+            mean_norm = np.mean(df_drop_na[column])
+            variance_norm = np.var(df_drop_na[column])
+            mean_noisy = np.mean(noisy_feature)
+            variance_noisy = np.var(noisy_feature)
 
-        stat_dict[f"Mean of feature {column}(before noise)"] = mean_norm
-        stat_dict[f"Variance of feature {column}(before noise)"] = variance_norm
-        stat_dict[f"Mean of feature {column}(after noise)"] = mean_noisy
-        stat_dict[f"Variance of feature {column}(after noise)"] = variance_noisy
-        stat_dict['Description'] = (
-            "The numerical features have been augmented with privacy-preserving "
-            "measures through the addition of random Laplacian noise. This "
-            "intentional introduction of noise ensures differential privacy "
-            "guarantees. The accompanying box plots visually compare the "
-            "distributions of the original and privacy-enhanced data"
-        )
-        stat_dict['Graph interpretation'] = (
-            "The box plots show the distribution of original data (left) versus "
-            "noise-added data (right) for each feature. The spread and position "
-            "of the boxes indicate how much the noise affects the data "
-            "distribution. Wider boxes suggest more variability introduced by "
-            "the noise, while similar box positions indicate the noise preserves "
-            "the central tendency of the data."
-        )
-        df_drop_na[f'noisy_{column}'] = noisy_feature
-
-        if include_visualization:
-            # Box plot for the normal feature
-            current_ax.boxplot(
-                df_drop_na[column], positions=[0], widths=0.6, showfliers=False
+            stat_dict[f"Mean of feature {column}(before noise)"] = mean_norm
+            stat_dict[f"Variance of feature {column}(before noise)"] = variance_norm
+            stat_dict[f"Mean of feature {column}(after noise)"] = mean_noisy
+            stat_dict[f"Variance of feature {column}(after noise)"] = variance_noisy
+            stat_dict['Description'] = (
+                "The numerical features have been augmented with privacy-preserving "
+                "measures through the addition of random Laplacian noise. This "
+                "intentional introduction of noise ensures differential privacy "
+                "guarantees. The accompanying box plots visually compare the "
+                "distributions of the original and privacy-enhanced data"
             )
-            current_ax.set_title(f"Normal vs Noisy representations: Feature {column}")
-            current_ax.set_ylabel("Value")
+            stat_dict['Graph interpretation'] = (
+                "The box plots show the distribution of original data (left) versus "
+                "noise-added data (right) for each feature. The spread and position "
+                "of the boxes indicate how much the noise affects the data "
+                "distribution. Wider boxes suggest more variability introduced by "
+                "the noise, while similar box positions indicate the noise preserves "
+                "the central tendency of the data."
+            )
+            df_drop_na[f'noisy_{column}'] = noisy_feature
 
-            # Box plot for the noisy feature
-            current_ax.boxplot(noisy_feature, positions=[1], widths=0.6, showfliers=False)
-            current_ax.set_ylabel("Value")
+            if include_visualization:
+                # Box plot for the normal feature
+                current_ax.boxplot(
+                    df_drop_na[column], positions=[0], widths=0.6, showfliers=False
+                )
+                current_ax.set_title(f"Normal vs Noisy representations: Feature {column}")
+                current_ax.set_ylabel("Value")
 
-    if include_visualization:
-        # Adjust the spacing between subplots
-        fig.tight_layout()
+                # Box plot for the noisy feature
+                current_ax.boxplot(noisy_feature, positions=[1], widths=0.6, showfliers=False)
+                current_ax.set_ylabel("Value")
 
-        # Save the chart as BytesIO
-        img_buf = BytesIO()
-        fig.savefig(img_buf, format="png")
-        img_buf.seek(0)
+        if include_visualization:
+            # Adjust the spacing between subplots
+            fig.tight_layout()
 
-        # Encode the combined image as base64
-        combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode("utf-8")
-        img_buf.close()
-        stat_dict["DP Statistics Visualization"] = combined_image_base64
+            # Save the chart as BytesIO
+            img_buf = BytesIO()
+            fig.savefig(img_buf, format="png")
+            img_buf.seek(0)
+
+            # Encode the combined image as base64
+            combined_image_base64 = base64.b64encode(img_buf.getvalue()).decode("utf-8")
+            img_buf.close()
+            stat_dict["DP Statistics Visualization"] = combined_image_base64
+    finally:
+        if fig is not None:
+            plt.close(fig)
+
     if save_output:
         try:
             os.makedirs("noisy", exist_ok=True)
