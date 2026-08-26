@@ -2124,34 +2124,40 @@ def _build_data_governance_section(file_info, include_visualizations=False):
         details["entropy_risk"] = {"error": "No eligible quasi-identifier columns found."}
 
     # --- Single-attribute MM risk ----------------------------------------------
+    # One call with all QIs so dropna() is list-wise, matching the Privacy tab.
+    # Charts are deferred; skip visualization here even when include_visualizations is set.
     worst_single_mean = None
     single_by_qi = {}
     if mm_qis:
-        for q in mm_qis:
-            try:
-                s_res = generate_single_attribute_MM_risk_scores_groupby(
-                    work_df, id_col, [q], include_visualization=include_visualizations
-                )
-                if "Error" in s_res:
-                    single_by_qi[q] = {"error": s_res["Error"]}
-                    continue
-                stats = (s_res.get("Descriptive statistics of the risk scores") or {}).get(q, {})
+        try:
+            s_res = generate_single_attribute_MM_risk_scores_groupby(
+                work_df, id_col, mm_qis, include_visualization=False
+            )
+        except Exception as exc:
+            s_res = {"Error": str(exc)}
+        if "Error" in s_res:
+            for q in mm_qis:
+                single_by_qi[q] = {"error": s_res["Error"]}
+        else:
+            stats_by_col = s_res.get("Descriptive statistics of the risk scores") or {}
+            for q in mm_qis:
+                stats = stats_by_col.get(q, {})
                 mean_risk = stats.get("mean")
-                if mean_risk is not None:
-                    mean_risk = float(mean_risk)
-                    single_by_qi[q] = {"mean_risk": round(mean_risk, 4), "stats": stats}
-                    if worst_single_mean is None or mean_risk > worst_single_mean:
-                        worst_single_mean = mean_risk
-                    if mean_risk >= _GOV_MM_SINGLE_WARNING:
-                        needs_attention["high_linkage_risk"].append({
-                            "metric": "Single-attribute risk",
-                            "feature": q,
-                            "quasi_identifiers": [q],
-                            "mean_risk": round(mean_risk, 4),
-                            "detail": f"Quasi-identifier '{q}' — mean MM risk {mean_risk:.2f}",
-                        })
-            except Exception as exc:
-                single_by_qi[q] = {"error": str(exc)}
+                if mean_risk is None:
+                    single_by_qi[q] = {"error": "No risk score for this quasi-identifier."}
+                    continue
+                mean_risk = float(mean_risk)
+                single_by_qi[q] = {"mean_risk": round(mean_risk, 4), "stats": stats}
+                if worst_single_mean is None or mean_risk > worst_single_mean:
+                    worst_single_mean = mean_risk
+                if mean_risk >= _GOV_MM_SINGLE_WARNING:
+                    needs_attention["high_linkage_risk"].append({
+                        "metric": "Single-attribute risk",
+                        "feature": q,
+                        "quasi_identifiers": [q],
+                        "mean_risk": round(mean_risk, 4),
+                        "detail": f"Quasi-identifier '{q}' — mean MM risk {mean_risk:.2f}",
+                    })
         details["single_attribute_risk"] = {
             "id_column": id_col,
             "by_quasi_identifier": single_by_qi,
