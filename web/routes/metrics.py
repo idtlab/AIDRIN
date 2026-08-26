@@ -896,12 +896,26 @@ _CORR_LEAKAGE_THRESHOLD = 0.95  # |score| at/above which a pair is "leakage risk
 _CORR_ISOLATED_THRESHOLD = 0.1  # max |score| below which a feature is "isolated"
 
 
+def _is_integer_like_numeric(series):
+    """True for integer dtypes or float columns whose non-null values are whole numbers."""
+    if pd.api.types.is_integer_dtype(series):
+        return True
+    if not pd.api.types.is_float_dtype(series):
+        return False
+    non_null = series.dropna()
+    if len(non_null) == 0:
+        return False
+    return bool((non_null % 1 == 0).all())
+
+
 def _prune_columns_for_corr(df):
     """Select columns worth feeding into the all-pairs correlation analysis.
 
-    Drops columns that are useless or pathological for correlation:
-    constants, ID-like / high-cardinality categoricals. Numerical columns are
-    always kept (they are cheap to correlate). The result is capped at
+    Drops columns that are useless or pathological for correlation: constants,
+    datetimes, ID-like columns (near-unique integer numerics or categoricals),
+    and high-cardinality categoricals. Continuous floats stay even when nearly
+    unique. Aligns datetime / ID exclusions with
+    ``_auto_select_governance_columns``. The result is capped at
     ``_CORR_MAX_COLUMNS`` (numerical prioritized) to keep the computation and
     heatmaps tractable.
 
@@ -917,8 +931,18 @@ def _prune_columns_for_corr(df):
     dropped = []
 
     for col in numeric_cols:
-        if df[col].nunique(dropna=True) <= 1:
+        series = df[col]
+        if _classify_feature_type(series) == "datetime":
+            dropped.append({"feature": col, "reason": "datetime column"})
+            continue
+        nunique = series.nunique(dropna=True)
+        if nunique <= 1:
             dropped.append({"feature": col, "reason": "constant column"})
+        elif (
+            nunique / n_rows >= _CORR_ID_UNIQUE_RATIO
+            and _is_integer_like_numeric(series)
+        ):
+            dropped.append({"feature": col, "reason": "ID-like (near-unique values)"})
         else:
             kept_numeric.append(col)
 
@@ -1093,10 +1117,12 @@ def _build_impact_on_ai_section(file_info, include_visualizations=False):
             "selection_criteria": {
                 "columns_analyzed": {
                     "rule": (
-                        f"Prune constants, ID-like categoricals (unique ratio ≥ "
-                        f"{_CORR_ID_UNIQUE_RATIO}), and high-cardinality categoricals "
-                        f"(>{_CORR_HIGH_CARD_MAX} categories); cap at {_CORR_MAX_COLUMNS} "
-                        "columns (numerical prioritized)."
+                        f"Prune constants, datetime columns, ID-like integer "
+                        f"numerics and categoricals (unique ratio ≥ "
+                        f"{_CORR_ID_UNIQUE_RATIO}), and high-cardinality "
+                        f"categoricals (>{_CORR_HIGH_CARD_MAX} categories); "
+                        f"cap at {_CORR_MAX_COLUMNS} columns "
+                        "(numerical prioritized)."
                     ),
                     "selected": kept,
                     "excluded": dropped_capped,
