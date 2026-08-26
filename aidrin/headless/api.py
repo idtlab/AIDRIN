@@ -11,8 +11,12 @@ import numpy as np
 import pandas as pd
 from typing import Any, Dict, List, Optional
 
+from aidrin.custom_metrics.template import CUSTOM_DR_TEMPLATE
+from aidrin.file_handling.file_parser import read_file
+
 from .config import HeadlessConfig
 from .runners import (
+    _build_file_info,
     run_class_imbalance,
     run_completeness,
     run_constant_feature_count,
@@ -512,16 +516,24 @@ def run_metric(
     if not metric:
         # Try resolving as a custom metric
         try:
-            _log_progress(f"Running custom metric: {metric_key}...", verbose)
+            _log_progress(f"Running custom metric: {metric_name}...", verbose)
             start_time = time.time()
-            result = run_custom_metric_logic(metric_key, file_path, **kwargs)
+            # Pass the original metric_name, not the lowercased/underscored
+            # metric_key: metric_key is only for METRIC_REGISTRY lookups.
+            # Custom metrics are usually a file path or a case-sensitive
+            # name, and mangling it here corrupts paths containing hyphens
+            # or mixed case (e.g. "/tmp/My-Audit.py" -> "/tmp/my_audit.py",
+            # which then fails to resolve on disk).
+            result = run_custom_metric_logic(
+                metric_name, file_path, file_type=file_type, file_name=file_name, **kwargs
+            )
             result = _maybe_save_images(metric_key, result, save_images, image_dir)
             if strip_visualizations:
                 result = _strip_visualizations(result)
             elapsed = time.time() - start_time
             _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
             return _sanitize(result)
-        except FileNotFoundError:
+        except _CustomScriptNotFound:
             raise ValueError(f"Unknown metric: {metric_name}") from None
 
     _log_progress(f"Running {metric_key}...", verbose)
@@ -852,49 +864,21 @@ def generate_metric_template(metric_name: str, target_dir: str) -> str:
     if os.path.exists(file_path):
         raise FileExistsError(f"A metric file named '{clean_name}.py' already exists in {target_dir}. Edit that file or choose a different name.")
 
-    # 3. The Class Template
-    content = """from aidrin.custom_metrics.base_dr import BaseDRAgent
-from typing import Any
-from typing import Dict, Union, Any
-import pandas as pd
-
-class CustomDR(BaseDRAgent):
-    def __init__(self, dataset: Any, **kwargs):
-        super().__init__(dataset, **kwargs)
-
-    def metric(self, **kwargs):
-        \"\"\"
-        Implement your custom metric logic here.
-        \"\"\"
-
-        # IMPLEMENT YOUR METRIC LOGIC BELOW
-        # Example: Calculating the total number of missing cells in the entire DataFrame
-
-        # df: pd.DataFrame = self.dataset
-        # return {
-        #     "total_missing_cells": df.isna().sum().to_dict()
-        # }
-
-        return {"message": "Placeholder metric. Implement your logic here."}
-
-    def remedy(self, **kwargs) -> pd.DataFrame:
-        \"\"\"
-        Apply remediation steps to the dataset and return a pandas DataFrame.
-        \"\"\"
-
-        # df: pd.DataFrame = self.dataset.copy()
-        # TODO: implement remediation logic and return the modified DataFrame
-        # Example:
-        # df = df.fillna(0)
-        # return df
-
-        return self.dataset
-    """
-
+    # 3. The Class Template — shared with the web Custom Metrics panel
+    # (aidrin/custom_metrics/template.py) so the two never drift apart.
     with open(file_path, "w") as f:
-        f.write(content)
+        f.write(CUSTOM_DR_TEMPLATE)
 
     return file_path
+
+
+class _CustomScriptNotFound(FileNotFoundError):
+    """Raised only when the custom-metric .py script itself can't be resolved.
+
+    Kept distinct from a plain FileNotFoundError (e.g. a missing dataset file)
+    so that run_metric()'s "fall back to Unknown metric" handling below can't
+    accidentally swallow a dataset-not-found error and misreport it.
+    """
 
 
 def _find_script_in_dir(directory: str, stem: str) -> Optional[str]:
@@ -920,7 +904,7 @@ def _resolve_custom_script(metric_name: str) -> str:
     if metric_name.endswith(".py") or os.sep in metric_name or "/" in metric_name:
         path = os.path.abspath(metric_name)
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Custom metric file not found: {metric_name}")
+            raise _CustomScriptNotFound(f"Custom metric file not found: {metric_name}")
         return path
 
     clean_name = _safe_slug(metric_name)
@@ -934,14 +918,21 @@ def _resolve_custom_script(metric_name: str) -> str:
     if path:
         return path
 
-    raise FileNotFoundError(
+    raise _CustomScriptNotFound(
         f"Custom metric '{clean_name}' not found in the current directory or aidrin/custom_metrics/. "
         f"Pass a full path (e.g. aidrin run custom /path/to/{clean_name}.py ...) "
         f"or run from the directory containing {clean_name}.py."
     )
 
 
-def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[str, Any]:
+def run_custom_metric_logic(
+    metric_name: str,
+    file_path: str,
+    *,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    **kwargs,
+) -> Dict[str, Any]:
     """
     Dynamically loads and executes a CustomDR class from any directory.
     """
@@ -949,7 +940,7 @@ def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[
     clean_name = os.path.splitext(os.path.basename(script_path))[0]
 
     if not os.path.exists(script_path):
-        raise FileNotFoundError(f"Custom metric file not found at: {script_path}")
+        raise _CustomScriptNotFound(f"Custom metric file not found at: {script_path}")
 
     # 1. Dynamic Import
     spec = importlib.util.spec_from_file_location(clean_name, script_path)
@@ -959,10 +950,11 @@ def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[
     if not hasattr(module, "CustomDR"):
         raise AttributeError(f"Class 'CustomDR' not found in {script_path}")
 
-    # 2. Load Dataset
-    # You can expand this to support parquet/json as needed
+    # 2. Load Dataset (supports every format in file_handling/readers/)
     _log_progress(f"Loading dataset: {file_path}", kwargs.get("verbose", False))
-    df = pd.read_csv(file_path)
+    df = read_file(_build_file_info(file_path, file_type, file_name))
+    if not isinstance(df, pd.DataFrame):
+        raise FileNotFoundError(df if isinstance(df, str) else f"Could not read dataset: {file_path}")
 
     # 3. Instantiate and Run
     agent = module.CustomDR(dataset=df, **kwargs)
@@ -978,13 +970,27 @@ def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[
     return results
 
 
-def run_custom_metric_remedy(metric_name: str, file_path: str, *, output_dir: Optional[str] = None, **kwargs) -> str:
-    """Execute `remedy` on a custom metric and save the returned DataFrame as CSV."""
+def run_custom_metric_remedy(
+    metric_name: str,
+    file_path: str,
+    *,
+    output_dir: Optional[str] = None,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    **kwargs,
+) -> str:
+    """Execute `remedy` on a custom metric and save the returned DataFrame as CSV.
+
+    The input dataset may be any format supported by file_handling/readers/
+    (CSV, Excel, JSON, NPZ, HDF5, Parquet); the remedied output is always
+    written as CSV, since remediated data doesn't round-trip losslessly back
+    into every original format (e.g. JSON/NPZ/HDF5 are flattened on read).
+    """
     script_path = _resolve_custom_script(metric_name)
     clean_name = os.path.splitext(os.path.basename(script_path))[0]
 
     if not os.path.exists(script_path):
-        raise FileNotFoundError(f"Custom metric file not found at: {script_path}")
+        raise _CustomScriptNotFound(f"Custom metric file not found at: {script_path}")
 
     spec = importlib.util.spec_from_file_location(clean_name, script_path)
     module = importlib.util.module_from_spec(spec)
@@ -994,17 +1000,34 @@ def run_custom_metric_remedy(metric_name: str, file_path: str, *, output_dir: Op
         raise AttributeError(f"Class 'CustomDR' not found in {script_path}")
 
     _log_progress(f"Loading dataset for remedy: {file_path}", kwargs.get("verbose", False))
-    df = pd.read_csv(file_path)
+    df = read_file(_build_file_info(file_path, file_type, file_name))
+    if not isinstance(df, pd.DataFrame):
+        raise FileNotFoundError(df if isinstance(df, str) else f"Could not read dataset: {file_path}")
 
     agent = module.CustomDR(dataset=df, **kwargs)
     if not hasattr(agent, "remedy"):
         raise AttributeError("CustomDR must implement a remedy method returning a pandas DataFrame")
 
+    # Run metric() first so remedy() can access findings via
+    # kwargs.get("metric_results", {}) — the contract documented in the
+    # generated template and honored by the web UI (web/routes/custom.py).
+    # Without this, remedy() invoked via the CLI/MCP always saw an empty
+    # metric_results, unlike the web route.
+    _log_progress(f"Executing metric for custom metric: {metric_name}", kwargs.get("verbose", False))
+    metric_results = agent.metric(**kwargs)
+    if not isinstance(metric_results, dict):
+        raise TypeError(
+            f"metric() in '{script_path}' must return a dict, got {type(metric_results).__name__}"
+        )
+
     _log_progress(f"Executing remedy for custom metric: {metric_name}", kwargs.get("verbose", False))
-    remedied = agent.remedy(**kwargs)
+    remedied = agent.remedy(metric_results=metric_results, **kwargs)
 
     if not isinstance(remedied, pd.DataFrame):
-        raise TypeError("remedy() must return a pandas DataFrame")
+        raise TypeError(
+            f"remedy() in '{script_path}' must return a pandas DataFrame, "
+            f"got {type(remedied).__name__}"
+        )
 
     target_dir = output_dir or os.path.join(os.path.dirname(script_path), "remedy_data")
     os.makedirs(target_dir, exist_ok=True)

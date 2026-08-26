@@ -14,7 +14,9 @@ pytest.importorskip("mcp")
 
 from aidrin.mcp.server import (  # noqa: E402
     run_aidrin_metric,
+    run_custom_metric,
     run_custom_outlier_check,
+    run_custom_remedy,
     verify_file_references,
 )
 
@@ -79,6 +81,58 @@ def test_dedicated_mcp_tool_rejects_multiple_rule_sources():
     finally:
         _remove(csv_path)
         _remove(rules_path)
+
+
+# ---------------------------------------------------------------------------
+# Custom metrics — multi-format support
+# ---------------------------------------------------------------------------
+
+_CUSTOM_SCRIPT = """
+from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+class CustomDR(BaseDRAgent):
+    def metric(self, **kwargs):
+        return {"row_count": len(self.dataset)}
+
+    def remedy(self, **kwargs):
+        return self.dataset.copy()
+"""
+
+
+def _write_script(tmp_path) -> str:
+    path = os.path.join(tmp_path, "my_audit.py")
+    with open(path, "w") as f:
+        f.write(_CUSTOM_SCRIPT)
+    return path
+
+
+def _write_parquet(tmp_path) -> str:
+    path = os.path.join(tmp_path, "data.parquet")
+    pd.DataFrame({"age": [18, 30, 70]}).to_parquet(path)
+    return path
+
+
+def test_run_custom_metric_accepts_non_csv_format(tmp_path):
+    script_path = _write_script(str(tmp_path))
+    parquet_path = _write_parquet(str(tmp_path))
+    result = json.loads(run_custom_metric(script_path, parquet_path, file_type="parquet"))
+    assert result["row_count"] == 3
+
+
+def test_run_custom_remedy_saves_csv_for_non_csv_input(tmp_path):
+    script_path = _write_script(str(tmp_path))
+    parquet_path = _write_parquet(str(tmp_path))
+    output_dir = str(tmp_path / "remedy_out")
+    result = json.loads(
+        run_custom_remedy(script_path, parquet_path, output_dir=output_dir, file_type="parquet")
+    )
+    assert result["remedied_file"].endswith(".csv")
+    assert os.path.exists(result["remedied_file"])
+
+
+# ---------------------------------------------------------------------------
+# File reference validation
+# ---------------------------------------------------------------------------
 
 
 def test_file_reference_tools_return_equivalent_results(tmp_path):
