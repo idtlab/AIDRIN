@@ -37,6 +37,7 @@ dependencies = [
     "pgeocode>=0.5.0",
     "pyyaml>=6.0",
     "pyarrow>=15.0.0",
+    "weasyprint>=62.0",
 ]
 
 [project.urls]
@@ -59,7 +60,7 @@ llm = [
     "openai>=1.6.0",
 ]
 mcp = [
-    "mcp>=1.0,<2.0.0",
+    "mcp>=2.0,<3.0",
     "openai>=1.6.0",
     "langchain>=0.3.0",
     "langchain-openai>=0.3.0",
@@ -152,7 +153,7 @@ agentic = [
     "pymupdf>=1.24.0",
 ]
 mcp = [
-    "mcp>=1.0,<2.0.0",
+    "mcp>=2.0,<3.0",
     "openai>=1.6.0",
     "langchain>=0.3.0",
     "langchain-openai>=0.3.0",
