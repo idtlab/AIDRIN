@@ -1,0 +1,15 @@
+{
+  "Skewness": {
+    "Global_active_power": 1.7862,
+    "Global_reactive_power": 1.2619,
+    "Voltage": -0.3267,
+    "Global_intensity": 1.8491,
+    "Sub_metering_1": 5.9445,
+    "Sub_metering_2": 7.0906,
+    "Sub_metering_3": 0.7247
+  },
+  "Most Skewed Feature": "Sub_metering_2",
+  "Max Absolute Skewness": 7.0906,
+  "Numeric Features Considered": 7,
+  "Description": "Most skewed feature is 'Sub_metering_2' (skewness 7.09); values far from 0 indicate asymmetric distributions."
+}

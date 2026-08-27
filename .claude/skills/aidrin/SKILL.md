@@ -38,15 +38,16 @@ Copy this checklist and work through it in order:
 
 ```
 - [ ] 1. Preflight: confirm AIDRIN is available; read which metrics exist; check for remote endpoints
-- [ ] 2. Elicit intent: how will the user use this dataset?
-- [ ] 3. Inspect: read the AIDRIN-parsed schema + descriptive stats
-- [ ] 4. Plan: map intent + columns → metrics + arguments (with rationale)
-- [ ] 5. Confirm plan with the user (HARD gate on column roles)
-- [ ] 6. Validate planned column names against the schema
-- [ ] 7. Run metrics
-- [ ] 8. Write the report from assets/report-template.md; save raw JSON alongside
-- [ ] 9. Ask if the user wants any custom metrics evaluated
-- [ ] 10. Ask if the user wants any remedies applied to the dataset
+- [ ] 2. Check for domain grounding: ask if the user has domain literature to evaluate against
+- [ ] 3. Elicit intent: how will the user use this dataset?
+- [ ] 4. Inspect: read the AIDRIN-parsed schema + descriptive stats
+- [ ] 5. Plan: map intent + columns → metrics + arguments (with rationale)
+- [ ] 6. Confirm plan with the user (HARD gate on column roles + domain grounding)
+- [ ] 7. Validate planned column names against the schema
+- [ ] 8. Run metrics (+ the agentic pipeline, if domain grounding was requested)
+- [ ] 9. Write the report from assets/report-template.md; save raw JSON alongside
+- [ ] 10. Ask if the user wants any custom metrics evaluated
+- [ ] 11. Ask if the user wants any remedies applied to the dataset
 ```
 
 ### 1. Preflight
@@ -64,7 +65,51 @@ metric using `create_custom_metric` (see the Custom metrics section below).
 `aidrin remote list` (CLI). If any profile is configured, ask once whether this
 dataset is local or on that endpoint, then keep that answer for the session.
 
-### 2. Elicit intent
+### 2. Check for domain grounding
+
+Ask every time, before eliciting general intent:
+
+> "Do you have domain-specific literature (PDFs, standards, regulations, guidelines)
+> this dataset should be evaluated against? If so, share the file or folder path and
+> I'll ground part of the assessment in those documents, in addition to the standard
+> metrics. If not, I'll run the standard assessment only."
+
+**If no path is given**, skip straight to Step 3. Nothing else about the workflow changes.
+
+**If a path is given:**
+- Requires `pip install 'aidrin[agentic]'` and an OpenAI-compatible API key
+  (`OPENAI_API_KEY` or equivalent) available in the environment. If a build-index call
+  reports agentic dependencies are missing, tell the user and fall back to the standard
+  workflow rather than retrying.
+- Ask what specific domain requirements or questions to check against that literature
+  (e.g. "Does more than 80% of the data conform to IEC smart-meter resampling
+  standards?"). The user supplies these — don't invent domain-specific questions
+  yourself, they know the regulation better than you do.
+- Ask which OpenAI model to use (e.g. "Which OpenAI model should I use for the agentic
+  pipeline? Default: `gpt-4o`."). One answer is reused for all four LLM stages
+  (`retrieval.answer_model`, `executor.model`, `complexity_scorer.model`,
+  `remediation.model`) — don't ask per stage. OpenAI-compatible endpoints other than
+  OpenAI itself (e.g. a local/self-hosted `base_url`) are out of scope for this
+  question for now; only ask about the model name. Leave `vector_store.embedding_model`
+  on its default (`text-embedding-ada-002`) unless the user brings it up unprompted.
+- **How the dataset gets loaded for the pipeline** (the agentic profiler is a separate
+  code path from AIDRIN's own file parser — it does not reuse Step 4's reader):
+  - Plain comma-separated CSV → use `paths.data_csv` directly, no extra step.
+  - Any other AIDRIN-supported format (Excel, JSON, NPZ, H5, Parquet) → write a small
+    `data_loader.py` yourself that wraps AIDRIN's own `read_file()`
+    (`aidrin.file_handling.file_parser.read_file`) — the same reader Step 4 already
+    used successfully, so no separator/sheet-name guessing needed. Point
+    `paths.data_loader` at it.
+  - A format AIDRIN doesn't parse at all (e.g. a semicolon-delimited `.txt`) → ask the
+    user for the path to a `.py` file with a function that returns a pandas DataFrame,
+    the same way `examples/agentic/power_consumption/loader.py` does it. Point
+    `paths.data_loader` at `"<path>:<function_name>"`. Don't invent one yourself without
+    seeing the file — a wrong delimiter/encoding guess silently produces bad data.
+- Carry the resource path and questions forward — they get folded into the Step 6 plan
+  confirmation and used to build the config in Step 8. See "Agentic pipeline (advanced)"
+  below for the full config schema and command reference.
+
+### 3. Elicit intent
 
 **If the user already stated a specific dimension** (e.g. "check fairness", "is my data
 private", "check for bias", "assess completeness"), treat that as the intent — do not
@@ -75,6 +120,11 @@ ask again. Only ask for any column information still needed for that dimension (
 change the plan: train a supervised model (and on what target?), ensure fairness across
 groups, publish/share the dataset, general quality check, or "it contains PII". Real
 answers are often blended (train AND publish) — handle the union.
+
+**A blank or skipped answer is not an answer.** If you asked this alongside other
+questions (e.g. via a batched question tool) and this one came back empty, do not
+silently substitute your own inference and move on — ask it again, directly, before
+building the plan in Step 5.
 
 Dimension → metric mapping for focused requests:
 
@@ -88,12 +138,12 @@ Dimension → metric mapping for focused requests:
 | Feature relevance / AI impact | feature-relevance, correlations |
 | Class imbalance | class-imbalance |
 | Data structure / organization | constant-feature-count |
-| Full readiness (no specific dimension) | all applicable metrics per the intent table in Step 4 |
+| Full readiness (no specific dimension) | all applicable metrics per the intent table in Step 5 |
 
 Always add the zero-arg quality baseline (completeness, duplicity, outliers) even for
 dimension-specific requests — it takes no column args and gives essential context.
 
-### 3. Inspect the dataset
+### 4. Inspect the dataset
 
 **MCP:** `summarize_dataset(file_path="...")`
 
@@ -103,7 +153,7 @@ This returns shape, all column names, per-column descriptive stats (numerical: m
 
 Use the output to identify candidate column roles: target, sensitive attributes, quasi-identifiers, id column, categorical vs numerical.
 
-### 4. Build the plan
+### 5. Build the plan
 
 Map intent + columns to metrics using the table below. For each chosen metric,
 note the arguments you will pass. Give a one-line rationale per metric. Always
@@ -119,7 +169,7 @@ include the zero-arg quality baseline.
 
 Always-run baseline (zero-arg): completeness, duplicity, outliers.
 
-### 5. Confirm the plan (HARD gate)
+### 6. Confirm the plan (HARD gate)
 
 Present the plan AND explicitly list every inferred column role — target /
 sensitive / quasi-identifiers / id — each with a one-line reason. Add: "I may
@@ -127,12 +177,31 @@ have missed indirect identifiers (e.g. zip, birthdate, rare categories) — plea
 confirm or correct these." Do not run anything until the user confirms. Wrong
 quasi-identifiers produce a falsely reassuring privacy result.
 
-### 6. Validate column names
+If domain grounding was requested in Step 2, also list the resource path(s) that
+will be indexed, the exact domain questions that will be run against them, and the
+OpenAI model that will be used for all four LLM stages — this is the only checkpoint
+before any LLM API calls happen, so make sure the user sees it before you build the
+index or run the pipeline.
 
-Check every column name in the plan against the schema from Step 3. Fix typos /
+**This confirmation must be its own explicit yes/no request covering the complete
+metric list** — e.g. "Run this plan?" with the full list restated. A narrower question
+asked in the same turn (confirming one column's role, resolving a setup blocker, etc.)
+does not satisfy this gate, even if the user answers it. If the dedicated plan-approval
+question wasn't asked and explicitly answered, the plan is still unconfirmed — do not
+call any run tool or CLI command yet.
+
+### 7. Validate column names
+
+Check every column name in the plan against the schema from Step 4. Fix typos /
 casing / non-existent columns before running.
 
-### 7. Run the metrics
+### 8. Run the metrics
+
+Run only the metrics confirmed in Step 6 — don't add, drop, or substitute any once you
+start, even if you think of a better one mid-run; go back to the user if scope needs to
+change. Don't execute the whole batch silently: give a short progress note between
+groups (e.g. "baseline done — next: correlations") rather than running uninterrupted
+for minutes with no visible checkpoint.
 
 **MCP path (preferred):**
 - Zero-arg baseline: one call — `run_data_quality_check(file_path="...")` runs completeness, duplicity, and outliers together.
@@ -145,16 +214,38 @@ casing / non-existent columns before running.
 - NOTE: `aidrin run` exits 0 even on failure — detect failures by checking the JSON output for an `Error`/`ErrorType` key, not the exit code.
 - Args are positional — see [reference/metrics.md](reference/metrics.md) for order.
 
-### 8. Write the report
+**Domain-grounded pipeline (if requested in Step 2):**
+1. Write a short (1 paragraph) `metadata.txt` describing the dataset — pull from the
+   elicited intent (Step 3) and the schema/stats from Step 4. Save it next to the dataset.
+2. Write `config.yaml` following the schema in "Agentic pipeline (advanced)" below:
+   `paths.metadata_csv` = the file from step 1, `vector_store.sources` = the resource
+   path from Step 2, `retrieval.questions` = the user's domain questions from Step 2.
+   Set `retrieval.answer_model`, `executor.model`, `complexity_scorer.model`, and
+   `remediation.model` to the OpenAI model chosen in Step 2 (all four, the same model).
+   Leave `vector_store.embedding_model` on `text-embedding-ada-002` unless the user
+   said otherwise. For loading the dataset itself, use whichever of the three cases
+   from Step 2 applied: `paths.data_csv` for plain CSV, a `read_file()`-wrapping loader
+   you write for another AIDRIN-supported format, or the user-supplied loader path for
+   a format AIDRIN can't parse.
+3. Build the index (skip if one already exists for this config): MCP
+   `agentic_build_index(config_path="...")` / CLI `aidrin agentic build-index -c <config>`.
+4. Run the pipeline: MCP `agentic_run(config_path="...", output_path="...")` / CLI
+   `aidrin agentic run -c <config> -o <output>`.
+5. Keep the returned JSON (`profile` + `queries` + `token_usage`) alongside the other
+   raw metric JSON for Step 9.
+
+### 9. Write the report
 
 Fill in [assets/report-template.md](assets/report-template.md). Report each
 score with its directional meaning (from [reference/metrics.md](reference/metrics.md)). Flag extremes.
 Keep privacy/fairness findings explicitly conditional on the confirmed roles.
 Do not state a ready/not-ready verdict — give findings + suggested next steps and
 let the user decide. Save each metric's raw JSON next to the report and list the
-calls/commands run.
+calls/commands run. If the domain-grounded pipeline ran, fill in the report's
+"Domain-grounded findings" section too — one entry per question, with its answer,
+complexity/confidence, and suggested remediation from the returned JSON.
 
-### 9. Offer custom metrics
+### 10. Offer custom metrics
 
 After delivering the report, ask:
 
@@ -163,14 +254,14 @@ After delivering the report, ask:
 > your domain or use case."
 
 If the user says yes, follow the Custom metrics workflow below, then append
-the findings to the report (sections 4 and 5) before proceeding to Step 10.
-The remedy offer in Step 10 must be based on the complete picture — built-in
+the findings to the report (sections 4 and 6) before proceeding to Step 11.
+The remedy offer in Step 11 must be based on the complete picture — built-in
 and custom metrics combined.
-If the user says no, proceed to Step 10.
+If the user says no, proceed to Step 11.
 
-### 10. Offer remediation
+### 11. Offer remediation
 
-After Step 9, ask:
+After Step 10, ask:
 
 > "Would you like me to apply any remedies to the dataset based on the findings?
 > For example: [list 1–3 concrete issues found, e.g. 'cap outliers in hours.per.week',
@@ -215,6 +306,11 @@ change — apply it.
 - If the user wants to remediate multiple issues, create a separate custom metric per issue and chain them (output of one becomes input of the next).
 
 ## Agentic pipeline (advanced)
+
+Steps 2 and 8 of the main workflow already offer this automatically once the user
+gives a resource path and domain questions — this section is the schema/command
+reference those steps point to. It's also useful standalone: re-running with a
+different config, or driving the pipeline outside the guided workflow.
 
 For domain-specific dataset evaluation grounded in field literature. Use when the
 user has domain PDFs (research papers, standards, regulations) and wants to evaluate
@@ -313,7 +409,7 @@ the results. The data never moves.
 
 **CLI:** prefix the command with `remote`, for example
 `aidrin remote summarize /scratch/proj/data.csv`. The arguments and the JSON are
-identical to a local run, so steps 3 through 8 of the workflow are unchanged.
+identical to a local run, so steps 4 through 9 of the workflow are unchanged.
 
 What differs:
 

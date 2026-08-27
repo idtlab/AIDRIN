@@ -1,0 +1,15 @@
+{
+  "Kurtosis": {
+    "Global_active_power": 4.2187,
+    "Global_reactive_power": 2.6056,
+    "Voltage": 0.7247,
+    "Global_intensity": 4.6012,
+    "Sub_metering_1": 35.643,
+    "Sub_metering_2": 57.9073,
+    "Sub_metering_3": -1.2822
+  },
+  "Most Extreme Kurtosis Feature": "Sub_metering_2",
+  "Max Absolute Excess Kurtosis": 57.9073,
+  "Numeric Features Considered": 7,
+  "Description": "Most extreme feature is 'Sub_metering_2' (excess kurtosis 57.91); positive values mean heavier tails than normal."
+}

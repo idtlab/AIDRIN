@@ -181,12 +181,21 @@ Point Claude at a dataset and describe your intent:
 Claude follows a structured workflow:
 
 1. Confirms AIDRIN is available and lists the metrics.
-2. Inspects the dataset schema and sample statistics.
-3. Proposes a metric plan matched to your intent and asks you to confirm column roles.
-4. Runs the metrics via MCP tools.
-5. Writes an interpreted markdown report with scores, their directional meaning, and suggested
-   next steps — without declaring a ready/not-ready verdict (that judgment is yours).
-6. Offers to evaluate custom metrics or apply remedies to the dataset.
+2. Asks whether you have domain literature (PDFs, standards, regulations) the dataset
+   should be evaluated against — see :ref:`aidrin_skill_agentic` below. If you say no,
+   this step is a no-op and the rest of the workflow is unchanged. If your dataset
+   isn't a plain CSV, Claude writes a small loader for it automatically (or asks for
+   one, if the format isn't one AIDRIN already parses).
+3. Inspects the dataset schema and sample statistics.
+4. Proposes a metric plan matched to your intent and asks you to confirm column roles —
+   plus, if you gave a literature path, the resource path and domain questions from
+   step 2, before any of it runs.
+5. Runs the metrics via MCP tools, and the agentic pipeline too if domain literature
+   was provided.
+6. Writes an interpreted markdown report with scores, their directional meaning, and
+   suggested next steps — without declaring a ready/not-ready verdict (that judgment
+   is yours).
+7. Offers to evaluate custom metrics or apply remedies to the dataset.
 
 Supported file formats: CSV, Excel (``.xls`` / ``.xlsx`` / ``.xlsb`` / ``.xlsm``), JSON,
 NumPy (``.npz``), HDF5 (``.h5``), Parquet.
@@ -201,13 +210,32 @@ Agentic Pipeline via MCP
 The agentic pipeline is also available through MCP, letting Claude orchestrate the full
 literature-grounded evaluation without you running any commands.
 
-**What it does:** Takes domain-specific questions you define in a YAML config, retrieves
-relevant passages from indexed PDFs (research papers, standards, regulations), generates
-Python analysis code and runs it against your dataset, scores complexity, and produces
-remediation recommendations — all grounded in your domain literature.
+**What it does:** Takes domain-specific questions, retrieves relevant passages from
+indexed PDFs (research papers, standards, regulations), generates Python analysis code
+and runs it against your dataset, scores complexity, and produces remediation
+recommendations — all grounded in your domain literature.
 
 **When to use it:** When you have domain PDFs and want to evaluate the dataset against
 field-specific standards rather than (or in addition to) generic quality metrics.
+
+There are two ways to run it:
+
+**Guided** (recommended for most cases)
+   During a normal assessment (see `Running an Assessment`_ above), Claude asks up
+   front whether you have domain literature. Give it a path and your domain questions,
+   and Claude writes the config itself — dataset path, a short metadata description
+   drawn from your stated intent and the inspected schema, your resource path, and your
+   questions — then builds the index and runs the pipeline as part of the same session.
+   No YAML to hand-write, and nothing runs before you've confirmed the plan.
+
+**Standalone**
+   Run it separately at any time, with full control over the config: point Claude at a
+   config file you've authored yourself, or skip Claude entirely and run
+   ``aidrin agentic build-index`` / ``aidrin agentic run`` from the command line (see
+   :ref:`agentic_integration`). Use this when you want to re-run with a different
+   config, tune settings the guided path doesn't ask about (retrieval ``top_k``, chunk
+   size, per-stage models), or evaluate a dataset outside a full AIDRIN assessment.
+   The rest of this section documents that config format.
 
 Setup
 ~~~~~
@@ -276,8 +304,8 @@ Setup
    (columns, units, provenance) — used to give the LLM structural context. Without it the
    pipeline will not start.
 
-Running
-~~~~~~~
+Running (standalone, with your own config)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Tell Claude to run it:
 
