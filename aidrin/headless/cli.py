@@ -854,7 +854,6 @@ def main() -> None:
         default="metric",
         help="Run metric (default) or remedy; remedy output is always saved as CSV",
     )
-    custom_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override (csv, parquet, xlsx, hdf5, json, npz)")
     _configure_minimal_run_args(custom_parser)
 
     batch_parser = subparsers.add_parser("batch", help="Run metrics from config file (JSON or YAML)")
