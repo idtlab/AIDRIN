@@ -24,9 +24,9 @@ Quick Start
    aidrin run completeness /path/to/store.zarr --selected-keys age,income
    aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
 
-Install Zarr support with ``pip install 'aidrin[zarr]'`` (Python >= 3.11). Local web upload
-does not accept ``.zarr`` directories; use the CLI or library. Multi-dimensional grids are not
-auto-flattened — select 1D (or a single 2D) arrays only.
+Local web upload does not accept ``.zarr`` directories; use the CLI or library. Multi-dimensional
+grids are not auto-flattened — select 1D (or a single 2D) arrays only. See
+:ref:`cli_installation` to install Zarr support.
 
 ----
 
