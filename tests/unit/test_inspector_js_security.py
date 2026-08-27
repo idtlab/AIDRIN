@@ -162,8 +162,8 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
 
 
 def test_globus_workspace_loads_file_reference_options():
-    template = INSPECTOR_TEMPLATE.read_text()
-    source = INSPECTOR_JS.read_text()
+    template = INSPECTOR_TEMPLATE.read_text(encoding="utf-8")
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     block_start = template.index("{% elif globus_mode %}")
     block_end = template.index("{% endif %}", block_start)
     globus_block = template[block_start:block_end]
@@ -175,7 +175,7 @@ def test_globus_workspace_loads_file_reference_options():
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the frontend ordering test")
 def test_globus_workspace_serializes_automatic_submissions():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     start = source.index("async function loadInitialGlobusData()")
     end = source.index("\n}\n", start) + 2
     initializer = source[start:end]
@@ -271,7 +271,7 @@ def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
 
 
 def test_globus_file_reference_discovery_is_shared_and_expires():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "const globusDiscoveryCache = new Map();" in source
     assert "function globusDiscoveryKey()" in source
     assert "function loadGlobusTargetDiscovery()" in source
@@ -285,14 +285,14 @@ def test_globus_file_reference_discovery_is_shared_and_expires():
 
 
 def test_local_file_reference_discovery_failure_keeps_server_error():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "(!data.success && data.message) ||" in source
     assert 'window.AIDRIN_GLOBUS_MODE\n      ? "This Globus Compute worker' in source
     assert ': "File-reference validation is unavailable on this AIDRIN server."' in source
 
 
 def test_globus_file_reference_parameters_are_serialized_without_policy():
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert 'selected.push("file_reference_validation")' in source
     assert "remoteParams.path_targets = pathTargets" in source
     assert "remoteParams.target_match = targetMatch" in source
