@@ -1,6 +1,6 @@
 """Tests for core routes: file operations, filter, retrieve."""
 
-import os
+import re
 
 
 # -------------------------------------------------
@@ -200,3 +200,37 @@ def test_stale_session_missing_type(client, sample_csv, app):
     response = client.get("/inspector")
     html = response.data.decode()
     assert 'id="sidebar"' not in html
+
+
+# -------------------------------------------------
+# Sample data — every file the frontend advertises must actually exist
+# -------------------------------------------------
+
+
+def _sample_files_from_inspector_html(client):
+    """Parse the `sampleFiles` JS array out of the rendered inspector page.
+
+    Reads the list from the live template rather than duplicating it here,
+    so this test catches a file being added to the frontend list (or
+    renamed) without the corresponding file landing in examples/sample_data/.
+    """
+    html = client.get("/inspector").data.decode()
+    match = re.search(r"const sampleFiles = \[(.*?)\];", html, re.DOTALL)
+    assert match, "Could not find sampleFiles array in inspector.html"
+    entries = re.findall(
+        r"name:\s*'([^']+)',\s*type:\s*'([^']+)'", match.group(1)
+    )
+    assert entries, "sampleFiles array parsed but no entries found"
+    return entries
+
+
+def test_all_advertised_sample_files_are_downloadable(client):
+    """Every file listed in the frontend's Sample Data panel must download
+    successfully — a file listed there but missing on disk silently breaks
+    the sample-data feature for that entry."""
+    missing = []
+    for name, file_type in _sample_files_from_inspector_html(client):
+        response = client.get(f"/sample-data/{file_type}/{name}")
+        if response.status_code != 200:
+            missing.append((name, file_type, response.status_code))
+    assert not missing, f"Sample files advertised but not downloadable: {missing}"

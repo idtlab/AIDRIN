@@ -315,15 +315,18 @@ entirely outside the AIDRIN package — you own the file.
    aidrin add-custom-module my_audit --dir /path/to/my_project
 
 This creates ``/path/to/my_project/my_audit.py`` with a ``metric()`` and a ``remedy()`` method.
-Edit those methods to add your logic, then run by passing the file path directly:
+Edit those methods to add your logic, then run by passing the file path directly. The dataset
+may be CSV, Parquet, Excel, HDF5, JSON, or NPZ — the format is detected from the file extension,
+or set explicitly with ``--file-type``:
 
 .. code-block:: bash
 
    aidrin run custom /path/to/my_project/my_audit.py /path/to/sample_dataset.csv metric    # run the metric
    aidrin run custom /path/to/my_project/my_audit.py /path/to/sample_dataset.csv remedy    # run the remedy
+   aidrin run custom /path/to/my_project/my_audit.py /path/to/sample_dataset.parquet metric --file-type parquet
 
-The remedy output CSV is saved to a ``remedy_data/`` folder next to the module file
-(``/path/to/my_project/remedy_data/my_audit_remedy.csv``).
+The remedy output is always saved as a CSV, regardless of the input format, to a ``remedy_data/``
+folder next to the module file (``/path/to/my_project/remedy_data/my_audit_remedy.csv``).
 
 ----
 

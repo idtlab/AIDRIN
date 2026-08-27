@@ -21,7 +21,6 @@ dependencies = [
     "flask>=3.1.3",
     "celery>=5.5.3",
     "redis>=6.4.0",
-    "flower",
     "pandas>=2.2.2",
     "numpy>=1.26.4",
     "scipy>=1.15.3",
@@ -29,14 +28,13 @@ dependencies = [
     "matplotlib>=3.10.5",
     "seaborn>=0.13.2",
     "dython>=0.7.11",  # 0.7.11 dropped pkg_resources, removed in setuptools>=82
-    "shap>=0.48.0",
-    "numba>=0.61",
     "h5py>=3.14.0",
     "tables>=3.10.0",
     "openpyxl>=3.1.5",
     "pgeocode>=0.5.0",
     "pyyaml>=6.0",
     "pyarrow>=15.0.0",
+    "weasyprint>=62.0",
 ]
 
 [project.urls]
@@ -65,17 +63,14 @@ llm = [
 mcp = [
     "mcp>=2.0,<3.0",
     "openai>=1.6.0",
-    "langchain>=0.3.0",
     "langchain-openai>=0.3.0",
     "langchain-community>=0.3.0",
     "langchain-text-splitters>=0.3.0",
     "faiss-cpu>=1.7.0",
-    "python-dotenv>=1.0.0",
     "pymupdf>=1.24.0",
 ]
 agentic = [
     "openai>=1.6.0",
-    "langchain>=0.3.0",
     "langchain-openai>=0.3.0",
     "langchain-community>=0.3.0",
     "langchain-text-splitters>=0.3.0",
@@ -83,20 +78,16 @@ agentic = [
     "numpy>=1.26.4",
     "pandas>=2.0.0",
     "pyyaml>=6.0",
-    "python-dotenv>=1.0.0",
     "pymupdf>=1.24.0",
 ]
 dev = [
     "pytest>=7.0",
-    "pytest-flask",
     "flake8>=6.0",
     "pytest-cov>=4.0",
 ]
 docs = [
     "sphinx==8.1.3",
     "sphinx-rtd-theme==3.1.0",
-    "sphinxemoji",
-    "breathe",
 ]
 
 # ---------------------------------------------------------------------------
@@ -135,19 +126,15 @@ zarr = [
 ]
 dev = [
     "pytest>=7.0",
-    "pytest-flask",
     "flake8>=6.0",
     "pytest-cov>=4.0",
 ]
 docs = [
     "sphinx==8.1.3",
     "sphinx-rtd-theme==3.1.0",
-    "sphinxemoji",
-    "breathe",
 ]
 agentic = [
     "openai>=1.6.0",
-    "langchain>=0.3.0",
     "langchain-openai>=0.3.0",
     "langchain-community>=0.3.0",
     "langchain-text-splitters>=0.3.0",
@@ -155,18 +142,15 @@ agentic = [
     "numpy>=1.26.4",
     "pandas>=2.0.0",
     "pyyaml>=6.0",
-    "python-dotenv>=1.0.0",
     "pymupdf>=1.24.0",
 ]
 mcp = [
     "mcp>=2.0,<3.0",
     "openai>=1.6.0",
-    "langchain>=0.3.0",
     "langchain-openai>=0.3.0",
     "langchain-community>=0.3.0",
     "langchain-text-splitters>=0.3.0",
     "faiss-cpu>=1.7.0",
-    "python-dotenv>=1.0.0",
     "pymupdf>=1.24.0",
 ]
 

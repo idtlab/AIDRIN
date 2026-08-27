@@ -113,3 +113,23 @@ button.is-submitting::after {
     transform: rotate(360deg);
   }
 }
+
+/* Readiness PDF export: html2canvas must not inherit fade-in or dark-mode opacity */
+.readiness-pdf-export,
+.readiness-pdf-export * {
+  animation: none !important;
+  transition: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.readiness-pdf-export {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+html.dark .readiness-pdf-export,
+html.dark .readiness-pdf-export * {
+  --tw-bg-opacity: 1 !important;
+  --tw-text-opacity: 1 !important;
+}

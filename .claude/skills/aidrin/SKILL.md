@@ -191,17 +191,21 @@ Do not apply any remedy without explicit user confirmation — data changes are 
 
 ## Custom metrics
 
-When the user wants a non-standard metric or a data-cleaning step:
+When the user wants a non-standard metric or a data-cleaning step. `file_path` accepts any
+supported format (CSV, Excel, JSON, NPZ, HDF5, Parquet) — pass `file_type` to override
+detection when the extension is ambiguous. Remedy output is always saved as CSV, regardless
+of the input format, since JSON/NPZ/HDF5 don't round-trip losslessly back to their original
+structure.
 
 **MCP:**
 1. `create_custom_metric(name="my_audit", directory="/path/to/dir")` — scaffolds a `CustomDR` class template file.
 2. User edits the file: implement `metric(self, **kwargs)` returning a dict; `remedy(self, metric_results)` returning a DataFrame. Access the dataset via `self.dataset`.
-3. `run_custom_metric(metric_name_or_path="/path/to/my_audit.py", file_path="...")` — runs the metric.
-4. `run_custom_remedy(metric_name_or_path="/path/to/my_audit.py", file_path="...", output_dir="...")` — applies the remedy and saves a new CSV.
+3. `run_custom_metric(metric_name_or_path="/path/to/my_audit.py", file_path="...", file_type="...")` — runs the metric.
+4. `run_custom_remedy(metric_name_or_path="/path/to/my_audit.py", file_path="...", output_dir="...", file_type="...")` — applies the remedy and saves a new CSV.
 
 **CLI:**
 - Scaffold: `aidrin add-custom-module <name> --dir <dir>` — creates the `CustomDR` class template.
-- Run: `aidrin run custom <path> <file> metric` / `aidrin run custom <path> <file> remedy`.
+- Run: `aidrin run custom <path> <file> metric --file-type <type>` / `aidrin run custom <path> <file> remedy --file-type <type>`.
 
 ## Remediation
 
