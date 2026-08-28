@@ -56,6 +56,28 @@ telemetry = [
     "opentelemetry-instrumentation-flask>=0.41b0",
     "opentelemetry-exporter-otlp>=1.20",
 ]
+# Assessment tracking. mlflow-skinny, not mlflow: the full package pulls in
+# Flask, alembic, docker, graphene, gunicorn, sqlalchemy and a pyarrow<18 pin
+# that conflicts with the pyarrow>=15 above. Everything AIDRIN uses --
+# MlflowClient, log_metric, log_artifact, flush_async_logging -- is in skinny.
+# A user running their own local tracking server installs full mlflow themselves.
+# The >=2.18 floor is not a fix for the thread-local active-run stack (2.18 is
+# where that behaviour begins); it pins the supported range to one consistent
+# behaviour. AIDRIN uses MlflowClient throughout, which is unaffected either way.
+mlflow = [
+    # Pinned to the 3.x line, and tested against 3.15.2.
+    #
+    # The upper bound is not caution for its own sake: AIDRIN identifies a
+    # dataset with the digest mlflow.data.from_pandas computes, so that an
+    # assessment and a training run over the same file resolve to one dataset.
+    # If a major release changes that algorithm the lineage link breaks
+    # silently -- runs still log, they just stop matching.
+    #
+    # The floor is 3.x rather than 2.16 because the digest has to agree with
+    # whatever MLflow the surrounding training code uses, and straddling a
+    # major boundary is the case most likely to disagree.
+    "mlflow-skinny>=3.15,<4",
+]
 llm = [
     "openai>=1.6.0",
 ]
@@ -162,6 +184,20 @@ mcp = [
     "faiss-cpu>=1.7.0",
     "python-dotenv>=1.0.0",
     "pymupdf>=1.24.0",
+]
+mlflow = [
+    # Pinned to the 3.x line, and tested against 3.15.2.
+    #
+    # The upper bound is not caution for its own sake: AIDRIN identifies a
+    # dataset with the digest mlflow.data.from_pandas computes, so that an
+    # assessment and a training run over the same file resolve to one dataset.
+    # If a major release changes that algorithm the lineage link breaks
+    # silently -- runs still log, they just stop matching.
+    #
+    # The floor is 3.x rather than 2.16 because the digest has to agree with
+    # whatever MLflow the surrounding training code uses, and straddling a
+    # major boundary is the case most likely to disagree.
+    "mlflow-skinny>=3.15,<4",
 ]
 
 

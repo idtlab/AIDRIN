@@ -17,6 +17,11 @@ from aidrin.headless.api import (
     run_metric,
 )
 from aidrin.headless.config import HeadlessConfig
+from aidrin.telemetry import mlflow_sink
+
+# Importing this module means the process is serving MCP, so sessions opened
+# implicitly inside run_batch_metrics are attributed to the right interface.
+mlflow_sink.set_default_interface("mcp")
 
 mcp_server = MCPServer("aidrin")
 
@@ -89,7 +94,15 @@ def list_metrics(category: str | None = None) -> str:
                   impact-of-data-on-AI, fairness-and-bias, data-governance,
                   custom_metrics. Omit for all.
     """
-    return _dumps(list_available_metrics(category=category))
+    # The catalogue is wrapped rather than extended: the model is told to iterate
+    # the category mapping, so a stray boolean beside the category keys would be
+    # read as a category.
+    return _dumps(
+        {
+            "metrics": list_available_metrics(category=category),
+            "mlflow_enabled": mlflow_sink.is_enabled(),
+        }
+    )
 
 
 @mcp_server.tool()
@@ -152,6 +165,7 @@ def run_aidrin_metric(
     target_match: str = "exact",
     endpoint: str | None = None,
     profile: str | None = None,
+    session_id: str | None = None,
 ) -> str:
     """
     Run a single AIDRIN built-in metric against a dataset.
@@ -232,6 +246,9 @@ def run_aidrin_metric(
         ]
         if v is not None
     }
+    if session_id and not endpoint and not profile:
+        kwargs["session_id"] = session_id
+
     result = _executor(endpoint, profile).run_metric(
         metric,
         file_path,
@@ -546,6 +563,44 @@ def agentic_run(
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Assessment tracking (MLflow)
+# ---------------------------------------------------------------------------
+
+
+@mcp_server.tool()
+def start_assessment(file_path: str) -> str:
+    """
+    Open an MLflow-tracked assessment and return its session_id.
+
+    Only useful when list_metrics reports mlflow_enabled: true. Pass the returned
+    session_id to each run_aidrin_metric call, then call end_assessment. Each
+    metric becomes its own MLflow run nested under one parent run carrying the
+    dataset's aggregated readiness scores.
+
+    Args:
+        file_path: Absolute path to the dataset being assessed.
+    """
+    session = mlflow_sink.start_session(file_path=file_path, interface="mcp")
+    if session is None:
+        return _dumps({"tracking": "disabled", "session_id": None})
+    return _dumps({"tracking": "enabled", "session_id": session.session_id})
+
+
+@mcp_server.tool()
+def end_assessment(session_id: str, report_path: str | None = None) -> str:
+    """
+    Close a tracked assessment, writing its aggregated readiness scores.
+
+    Args:
+        session_id: The id returned by start_assessment.
+        report_path: Optional path to the finished markdown report, attached to
+                     the parent run as an artifact.
+    """
+    mlflow_sink.end_session(session_id, report_path=report_path)
+    return _dumps({"session_id": session_id, "closed": True})
 
 
 def main() -> None:
