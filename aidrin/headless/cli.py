@@ -862,8 +862,18 @@ def main() -> None:
         help="Run a custom metric or remedy from a .py file",
     )
     custom_parser.add_argument("name", help="Path to the custom module file (e.g. /path/to/my_audit.py)")
-    custom_parser.add_argument("file_path", help="Path to the dataset CSV")
-    custom_parser.add_argument("action", nargs="?", choices=["metric", "remedy"], default="metric", help="Run metric (default) or remedy")
+    custom_parser.add_argument(
+        "file_path",
+        help="Path to the dataset (CSV, Parquet, Excel, HDF5, JSON, or NPZ; use --file-type to override detection)",
+    )
+    custom_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["metric", "remedy"],
+        default="metric",
+        help="Run metric (default) or remedy; remedy output is always saved as CSV",
+    )
+    custom_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override (csv, parquet, xlsx, hdf5, json, npz)")
     _configure_minimal_run_args(custom_parser)
 
     batch_parser = subparsers.add_parser("batch", help="Run metrics from config file (JSON or YAML)")

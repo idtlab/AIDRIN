@@ -384,16 +384,21 @@ def list_remote_profiles() -> str:
 
 
 @mcp_server.tool()
-def run_custom_metric(metric_name_or_path: str, file_path: str) -> str:
+def run_custom_metric(
+    metric_name_or_path: str,
+    file_path: str,
+    file_type: str | None = None,
+) -> str:
     """
     Run the metric() method of a CustomDR class defined in a .py file.
 
     Args:
         metric_name_or_path: Full path to the custom .py file, OR a metric name that
                              resolves to aidrin/custom_metrics/<name>.py relative to cwd.
-        file_path: Absolute path to the dataset CSV.
+        file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
+        file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
     """
-    result = run_custom_metric_logic(metric_name_or_path, file_path)
+    result = run_custom_metric_logic(metric_name_or_path, file_path, file_type=file_type)
     return _dumps(result)
 
 
@@ -402,21 +407,26 @@ def run_custom_remedy(
     metric_name_or_path: str,
     file_path: str,
     output_dir: str | None = None,
+    file_type: str | None = None,
 ) -> str:
     """
     Run the remedy() method of a CustomDR class, apply it to the dataset,
-    and save the remedied data as a CSV file.
+    and save the remedied data as a CSV file. The remedied output is always
+    CSV regardless of the input format, since JSON/NPZ/HDF5 are flattened on
+    read and don't round-trip losslessly back into their original structure.
 
     Args:
         metric_name_or_path: Full path to the custom .py file, or metric name.
-        file_path: Absolute path to the dataset CSV.
+        file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
         output_dir: Directory to write the remedied CSV.
                     Defaults to <script_dir>/remedy_data/.
+        file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
     """
     saved_path = run_custom_metric_remedy(
         metric_name_or_path,
         file_path,
         output_dir=output_dir,
+        file_type=file_type,
     )
     return _dumps({
         "remedied_file": saved_path,

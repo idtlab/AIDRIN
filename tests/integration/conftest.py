@@ -65,3 +65,35 @@ def uploaded_client(client, sample_csv, app):
         )
     assert response.status_code == 302
     return client
+
+
+@pytest.fixture
+def sample_json(tmp_path):
+    """Create a temporary JSON file (list of records) for upload tests."""
+    import json
+
+    records = [
+        {"age": 25, "income": 50000, "education": "Bachelor", "gender": "M"},
+        {"age": 30, "income": 60000, "education": "Master", "gender": "F"},
+        {"age": 35, "income": 70000, "education": "PhD", "gender": "M"},
+    ]
+    json_path = tmp_path / "test_data.json"
+    json_path.write_text(json.dumps(records))
+    return json_path
+
+
+@pytest.fixture
+def uploaded_client_json(client, sample_json, app):
+    """A test client with a JSON file already uploaded in session."""
+    with open(sample_json, "rb") as f:
+        response = client.post(
+            "/inspector",
+            data={
+                "file": (f, "test_data.json"),
+                "fileTypeSelector": ".json",
+            },
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+    assert response.status_code == 302
+    return client

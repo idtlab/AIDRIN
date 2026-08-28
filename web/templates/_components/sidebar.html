@@ -122,13 +122,18 @@
       </button>
       <ul id="pillar-structure" class="hidden pl-9 space-y-1 pt-1">
         <li><button onclick="showPanel('data-structure')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Data Structure</button></li>
-        {% if file_type == '.csv' %}
-        <li><button onclick="showPanel('custom-metrics')" class="sidebar-metric-item w-full text-left p-1.5 rounded-md text-sm hover:bg-black/10 dark:hover:bg-white/10 transition-colors" style="color: var(--textColorSecondary);">Custom Metrics</button></li>
-        {% else %}
-        <li><span class="p-1.5 text-sm opacity-50" title="Custom metrics require CSV files">Custom Metrics (CSV only)</span></li>
-        {% endif %}
       </ul>
     </div>
+
+    <hr class="my-2 border-gray-300 dark:border-gray-600" />
+
+    <!-- Custom Metrics: separate top-level tab, not nested in a pillar -->
+    <button onclick="showPanel('custom-metrics')"
+            class="sidebar-item flex items-center w-full p-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+            style="color: var(--textColor);">
+      <svg class="w-5 h-5 mr-2 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
+      Custom Metrics
+    </button>
 
     </div><!-- end sidebar-metrics -->
 

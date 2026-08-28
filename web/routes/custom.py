@@ -2,7 +2,6 @@ import importlib
 import importlib.util
 import logging
 import os
-import runpy
 import sys
 import time
 import uuid
@@ -18,10 +17,11 @@ from flask import (
     session,
     url_for,
 )
-from aidrin.file_handling.file_parser import read_file
+from aidrin.custom_metrics.template import CUSTOM_DR_TEMPLATE
 from web.routes.utils import (
     confine_to_upload_folder,
     ensure_json_serializable,
+    load_dataframe,
     store_result,
     get_result_or_default,
 )
@@ -30,44 +30,7 @@ custom_bp = Blueprint("custom", __name__)
 
 metric_time_log = logging.getLogger("metric")
 
-_STARTER_TEMPLATE = '''from aidrin.custom_metrics.base_dr import BaseDRAgent
-from typing import Any, Dict, Union
-
-class CustomDR(BaseDRAgent):
-    def __init__(self, dataset: Any, **kwargs):
-        super().__init__(dataset, **kwargs)
-
-    def metric(self, **kwargs):
-        """
-        Implement your custom metric logic here.
-        """
-
-        # IMPLEMENT YOUR METRIC LOGIC BELOW
-        # Example: Calculating the total number of missing cells in the entire DataFrame
-
-        # df: pd.DataFrame = self.dataset
-        # return {
-        #     "total_missing_cells": df.isna().sum().to_dict()
-        # }
-
-        return {"message": "Placeholder metric. Implement your logic here."}
-
-    def remedy(self, **kwargs):
-        """
-        Applies custom remediation logic based on the calculated metrics.
-        Access metric results via kwargs.get("metric_results", {}).
-        """
-
-        # IMPLEMENT YOUR REMEDIATION LOGIC BELOW
-        # metric_results = kwargs.get("metric_results", {})
-        # For example, filling null values with a default value
-
-        # df_remedied: pd.DataFrame = self.dataset.copy()
-        # df_remedied.fillna(0, inplace=True)
-        # return df_remedied
-
-        return self.dataset
-'''
+_STARTER_TEMPLATE = CUSTOM_DR_TEMPLATE
 
 
 @custom_bp.route("/custom-metrics", methods=["GET", "POST"])
@@ -85,7 +48,9 @@ def custom_metrics():
         module_name = None
         folder = None
         try:
-            df = read_file(file_info)
+            df, file_error = load_dataframe(file_info)
+            if file_error:
+                return jsonify({"error": file_error}), 400
             final_dict["Custom Metric Evaluation"] = {}
 
             folder = current_app.config.get("CUSTOM_METRICS_FOLDER", "custom_metrics")
@@ -95,53 +60,77 @@ def custom_metrics():
             custom_metric_file_path = os.path.join(folder, filename)
 
             if not os.path.exists(custom_metric_file_path):
-                return jsonify({"error": f"{filename} not found"}), 400
+                return jsonify({"error": f"{filename} not found. Click Save before Submit."}), 400
 
             if folder not in sys.path:
                 sys.path.insert(0, folder)
 
             module_name = f"customDR_{session['session_id']}_module"
-            spec = importlib.util.spec_from_file_location(module_name, custom_metric_file_path)
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = module
-            spec.loader.exec_module(module)
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, custom_metric_file_path)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+            except SyntaxError as e:
+                metric_time_log.error("Custom metric syntax error: %s", e, exc_info=True)
+                location = f", line {e.lineno}" if e.lineno else ""
+                return jsonify(
+                    {"error": f"Syntax error in your custom metric code{location}: {e.msg}"}
+                ), 400
+            except Exception as e:
+                metric_time_log.error("Custom metric failed to load: %s", e, exc_info=True)
+                return jsonify(
+                    {"error": "Error loading your custom metric code. Please check your code and try again."}
+                ), 400
 
             from aidrin.custom_metrics.base_dr import BaseDRAgent
 
             custom_metric_class = getattr(module, "CustomDR", None)
             if not custom_metric_class or not issubclass(custom_metric_class, BaseDRAgent):
-                return jsonify({"error": "CustomDR class not found or invalid"}), 400
+                return jsonify({
+                    "error": "No valid CustomDR class found. Your file must define "
+                             "`class CustomDR(BaseDRAgent):`."
+                }), 400
 
-            custom_metric_instance = custom_metric_class(dataset=df)
-            metric_results = custom_metric_instance.metric()
-            if not isinstance(metric_results, dict):
+            try:
+                custom_metric_instance = custom_metric_class(dataset=df)
+                metric_results = custom_metric_instance.metric()
+            except Exception as e:
+                metric_time_log.error("Custom metric() raised: %s", e, exc_info=True)
                 return jsonify(
-                    {"error": f"{custom_metric_class.__name__}.metric() must return a dictionary"}
+                    {"error": "Error running metric(). Please check your custom metric code and try again."}
                 ), 400
 
-            module_globals = runpy.run_path(custom_metric_file_path)
-
-            custom_metric_class = module_globals.get("CustomDR")
-            if not custom_metric_class or not issubclass(custom_metric_class, BaseDRAgent):
-                return jsonify({"error": "CustomDR class not found or invalid"}), 400
-
-            instance = custom_metric_class(dataset=df)
-            metric_results = instance.metric()
             if not isinstance(metric_results, dict):
-                return jsonify({"error": "metric() must return a dictionary"}), 400
+                return jsonify({
+                    "error": f"{custom_metric_class.__name__}.metric() must return a dictionary, "
+                             f"got {type(metric_results).__name__}."
+                }), 400
 
             final_dict["Custom Metric Evaluation"] = metric_results
 
             if request.form.get("apply_remedy") == "yes":
-                new_data = custom_metric_instance.remedy(metric_results=metric_results)
+                try:
+                    new_data = custom_metric_instance.remedy(metric_results=metric_results)
+                except Exception as e:
+                    metric_time_log.error("Custom remedy() raised: %s", e, exc_info=True)
+                    return jsonify(
+                        {"error": "Error running remedy()."}
+                    ), 400
 
                 if not isinstance(new_data, pd.DataFrame):
-                    return jsonify({"error": "remedy() must return a pandas DataFrame"}), 400
+                    return jsonify({
+                        "error": f"remedy() must return a pandas DataFrame, "
+                                 f"got {type(new_data).__name__}."
+                    }), 400
 
                 remedy_folder = current_app.config["REMEDY_FOLDER"]
                 os.makedirs(remedy_folder, exist_ok=True)
 
-                remedy_filename = f"remedied_{session['session_id']}{data_file_type}"
+                # Remedied output is always saved as CSV, regardless of the
+                # input format: JSON/NPZ/HDF5 are flattened on read and don't
+                # round-trip losslessly back into their original structure.
+                remedy_filename = f"remedied_{session['session_id']}.csv"
                 remedy_filepath = os.path.join(remedy_folder, remedy_filename)
                 new_data.to_csv(remedy_filepath, index=False)
 
@@ -153,7 +142,7 @@ def custom_metrics():
 
         except Exception as e:
             metric_time_log.error("Custom Metric error: %s", e, exc_info=True)
-            return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+            return jsonify({"error": "Unexpected server error."}), 500
 
         finally:
             if module_name and module_name in sys.modules:
