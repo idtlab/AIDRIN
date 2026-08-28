@@ -277,6 +277,7 @@ class TestRunAttribution(unittest.TestCase):
         self.assertEqual(self._user(), getpass.getuser())
 
 
+@unittest.skipUnless(HAS_MLFLOW, "requires the [mlflow] extra")
 class TestGatewayAuthHeader(unittest.TestCase):
     """MLflow behind an API gateway that wants a custom header.
 

@@ -4,6 +4,7 @@ Covers argument parsing, helper utilities, and command dispatch using
 sys.argv patching + stdout capture — no subprocess or network required.
 """
 
+import importlib.util
 import io
 import json
 import os
@@ -764,6 +765,9 @@ class TestTrackingDiscovery(unittest.TestCase):
         self.assertIn("metrics", payload)
         self.assertFalse(payload["mlflow_enabled"])
 
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlflow"), "requires the [mlflow] extra"
+    )
     def test_capabilities_flag_reports_tracking_on(self):
         import tempfile
 
