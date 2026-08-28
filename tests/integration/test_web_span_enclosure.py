@@ -9,7 +9,11 @@ child per metric; those are pinned here too so a refactor cannot flatten them.
 
 import pytest
 
-pytest.importorskip("opentelemetry", reason="requires the [telemetry] extra")
+# Skip on the modules actually used, not on the `opentelemetry` namespace.
+# Other dependencies create that namespace package without the SDK in it, so
+# importorskip("opentelemetry") passes and the imports below then fail.
+pytest.importorskip("opentelemetry.trace", reason="requires the [telemetry] extra")
+pytest.importorskip("opentelemetry.sdk.trace", reason="requires the [telemetry] extra")
 
 from opentelemetry import trace  # noqa: E402
 from opentelemetry.sdk.trace import TracerProvider  # noqa: E402
