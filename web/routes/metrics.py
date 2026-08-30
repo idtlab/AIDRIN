@@ -3278,7 +3278,10 @@ def feature_relevance():
                         ), 200
                 except Exception as e:
                     metric_time_log.error("Feature Relevance — Pearson correlation error: %s", e, exc_info=True)
-                    return jsonify({"trigger": "correlationError", "error": f"{type(e).__name__}: {e}"}), 200
+                    return jsonify({
+                        "trigger": "correlationError",
+                        "error": "Pearson correlation calculation failed. Please try again.",
+                    }), 200
 
                 try:
                     t0 = time.time()
