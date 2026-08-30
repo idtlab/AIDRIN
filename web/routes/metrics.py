@@ -3259,7 +3259,10 @@ def feature_relevance():
                         return jsonify({"trigger": "correlationError", "error": "Data cleaning failed"}), 200
                 except Exception as e:
                     metric_time_log.error("Feature Relevance — data cleaning error: %s", e, exc_info=True)
-                    return jsonify({"trigger": "correlationError", "error": f"{type(e).__name__}: {e}"}), 200
+                    return jsonify({
+                        "trigger": "correlationError",
+                        "error": "An internal error occurred while cleaning data.",
+                    }), 200
 
                 try:
                     t0 = time.time()
