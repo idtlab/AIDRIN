@@ -3291,9 +3291,9 @@ def feature_relevance():
                     if f_plot is None:
                         return jsonify({"trigger": "correlationError", "error": "Visualization generation failed"}), 200
                 except Exception as e:
-                    metric_time_log.error("Feature Relevance — plot generation error: %s", e)
+                    metric_time_log.error("Feature Relevance — plot generation error: %s", e, exc_info=True)
                     return jsonify(
-                        {"trigger": "correlationError", "error": f"Plot generation failed: {str(e)}"}
+                        {"trigger": "correlationError", "error": "Visualization generation failed"}
                     ), 200
 
                 f_dict = {
