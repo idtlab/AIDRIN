@@ -3709,7 +3709,7 @@ def fair_assessment():
 
             try:
                 data_dict = json.loads(json_data.decode("utf-8"))
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 metric_time_log.warning("Invalid metadata JSON payload", exc_info=True)
                 return jsonify({"error": "Invalid JSON payload"}), 400
 
@@ -3718,7 +3718,7 @@ def fair_assessment():
                     result = _run_fair_assessment(data_dict, metadata_type)
                 except ValueError:
                     return jsonify({"error": "Unknown metadata type"}), 400
-                except json.JSONDecodeError as e:
+                except json.JSONDecodeError:
                     metric_time_log.warning(
                         "Invalid JSON structure during FAIR assessment",
                         exc_info=True,
