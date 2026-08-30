@@ -3646,7 +3646,7 @@ def hipaa_compliance():
 
             except Exception as e:
                 metric_time_log.error("HIPAA Compliance error: %s", e, exc_info=True)
-                return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+                return jsonify({"error": "An internal error has occurred."}), 500
 
             duration = time.time() - start_time
             metric_time_log.info("HIPAA Compliance Evaluation completed in %.2f seconds", duration)
