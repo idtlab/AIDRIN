@@ -286,7 +286,7 @@ def test_globus_file_reference_discovery_is_shared_and_expires():
 
 def test_local_file_reference_discovery_failure_keeps_server_error():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
-    assert "(!data.success && data.message) ||" in source
+    assert "(!data.success && (data.message || data.error)) ||" in source
     assert 'window.AIDRIN_GLOBUS_MODE\n      ? "This Globus Compute worker' in source
     assert ': "File-reference validation is unavailable on this AIDRIN server."' in source
 
