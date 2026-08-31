@@ -23,6 +23,9 @@ jobs:
             extras: "[telemetry]"
           - os: ubuntu-latest
             python-version: "3.12"
+            extras: "[mlflow]"
+          - os: ubuntu-latest
+            python-version: "3.12"
             extras: "[globus]"
           - os: ubuntu-latest
             python-version: "3.12"
