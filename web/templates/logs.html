@@ -1,0 +1,156 @@
+{% extends '_base.html' %}
+
+{% block title %}AIDRIN - Logs{% endblock %}
+
+{% block body %}
+  <div class="max-w-5xl mx-auto py-10 px-6">
+
+    <a href="/" class="inline-flex items-center gap-1 text-sm mb-6 text-blue-600 dark:text-blue-400 hover:underline">
+      <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z"/></svg>
+      Back to Infrastructure
+    </a>
+
+    <h1 class="text-3xl font-semibold text-gray-900 dark:text-white mb-6">Application Logs</h1>
+
+    <!-- Tab buttons -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+      <div class="border-b border-gray-200 dark:border-gray-700">
+        <ul class="flex text-sm font-medium text-center" role="tablist">
+          <li class="flex-1">
+            <button id="tab-all" onclick="switchLogTab('all')" class="log-tab inline-flex items-center justify-center gap-2 w-full p-4 border-b-2 border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500" role="tab" aria-selected="true">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+              All Logs
+            </button>
+          </li>
+          <li class="flex-1">
+            <button id="tab-file" onclick="switchLogTab('file')" class="log-tab inline-flex items-center justify-center gap-2 w-full p-4 border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300" role="tab" aria-selected="false">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+              File Upload
+            </button>
+          </li>
+          <li class="flex-1">
+            <button id="tab-metric" onclick="switchLogTab('metric')" class="log-tab inline-flex items-center justify-center gap-2 w-full p-4 border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300" role="tab" aria-selected="false">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              Metric
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Log table -->
+      <div class="p-4">
+        <div id="log-loading" class="text-center py-8">
+          <div role="status" class="inline-block">
+            <svg class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+          </div>
+          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading logs...</p>
+        </div>
+
+        <div id="log-empty" class="hidden text-center py-8">
+          <p class="text-sm text-gray-500 dark:text-gray-400">No log entries found for this filter.</p>
+        </div>
+
+        <div id="log-table-wrapper" class="hidden relative overflow-x-auto rounded-lg" style="max-height: 70vh; overflow-y: auto;">
+          <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0">
+              <tr>
+                <th scope="col" class="px-4 py-3 whitespace-nowrap">Time</th>
+                <th scope="col" class="px-4 py-3 whitespace-nowrap">Logger</th>
+                <th scope="col" class="px-4 py-3 whitespace-nowrap">Level</th>
+                <th scope="col" class="px-4 py-3">Message</th>
+              </tr>
+            </thead>
+            <tbody id="log-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts_extra %}
+  <script>
+    let allLogs = [];
+    let currentFilter = 'all';
+
+    function switchLogTab(filter) {
+      currentFilter = filter;
+
+      // Update tab styles
+      document.querySelectorAll('.log-tab').forEach(tab => {
+        tab.className = 'log-tab inline-flex items-center justify-center gap-2 w-full p-4 border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300';
+        tab.setAttribute('aria-selected', 'false');
+      });
+      const activeTab = document.getElementById('tab-' + filter);
+      if (activeTab) {
+        activeTab.className = 'log-tab inline-flex items-center justify-center gap-2 w-full p-4 border-b-2 border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500';
+        activeTab.setAttribute('aria-selected', 'true');
+      }
+
+      renderLogs();
+    }
+
+    function renderLogs() {
+      const tbody = document.getElementById('log-tbody');
+      const wrapper = document.getElementById('log-table-wrapper');
+      const empty = document.getElementById('log-empty');
+      if (!tbody) return;
+
+      let filtered = allLogs;
+      if (currentFilter === 'file') {
+        filtered = allLogs.filter(r => r.logger === 'file_upload');
+      } else if (currentFilter === 'metric') {
+        filtered = allLogs.filter(r => r.logger === 'metric');
+      }
+
+      if (filtered.length === 0) {
+        wrapper.classList.add('hidden');
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      wrapper.classList.remove('hidden');
+
+      // Show newest first
+      const reversed = [...filtered].reverse();
+
+      tbody.innerHTML = reversed.map((row, i) => {
+        const stripe = i % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700/50';
+        const levelColor = {
+          'INFO': 'text-blue-600 dark:text-blue-400',
+          'WARNING': 'text-yellow-600 dark:text-yellow-400',
+          'ERROR': 'text-red-600 dark:text-red-400',
+          'DEBUG': 'text-gray-400 dark:text-gray-500',
+        }[row.level] || 'text-gray-500';
+
+        return `<tr class="${stripe} border-b dark:border-gray-700">
+          <td class="px-4 py-2 font-mono text-xs whitespace-nowrap text-gray-900 dark:text-white">${row.timestamp || '—'}</td>
+          <td class="px-4 py-2 text-xs whitespace-nowrap">${row.logger || '—'}</td>
+          <td class="px-4 py-2 text-xs whitespace-nowrap ${levelColor} font-medium">${row.level || '—'}</td>
+          <td class="px-4 py-2 text-xs">${row.message || '—'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Fetch logs on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      fetch('/view-logs')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('log-loading').classList.add('hidden');
+          if (Array.isArray(data)) {
+            allLogs = data;
+            renderLogs();
+          } else {
+            document.getElementById('log-empty').classList.remove('hidden');
+          }
+        })
+        .catch(err => {
+          document.getElementById('log-loading').classList.add('hidden');
+          document.getElementById('log-empty').classList.remove('hidden');
+          document.getElementById('log-empty').querySelector('p').textContent = 'Error loading logs: ' + err.message;
+        });
+    });
+  </script>
+{% endblock %}

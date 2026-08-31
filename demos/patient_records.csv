@@ -1,0 +1,1001 @@
+patient_id,age,zip_code,gender,marital_status,diagnosis,medication,blood_pressure_systolic,cholesterol,readmitted
+P00000,88,10003,Female,Single,Arthritis,Sumatriptan,103,212,0
+P00001,32,30302,Male,Divorced,Asthma,Tiotropium,112,217,0
+P00002,62,20001,Female,Divorced,Asthma,Sumatriptan,134,204,0
+P00003,82,20002,Female,Married,Heart Failure,Sertraline,154,257,0
+P00004,37,20002,Male,Married,Diabetes,Metformin,98,148,0
+P00005,70,60602,Female,Married,Arthritis,Sertraline,118,190,1
+P00006,72,10003,Female,Divorced,Migraine,Lisinopril,95,132,0
+P00007,32,10001,Male,Married,Heart Failure,Tiotropium,117,224,0
+P00008,65,10002,Male,Married,Depression,Albuterol,131,222,1
+P00009,50,60602,Female,Single,Asthma,Albuterol,145,333,1
+P00010,54,10003,Male,Single,Arthritis,Lisinopril,90,241,0
+P00011,50,10001,Female,Married,Arthritis,Sumatriptan,141,213,0
+P00012,74,20002,Female,Married,COPD,Sertraline,110,210,0
+P00013,53,60602,Male,Divorced,Hypertension,Furosemide,105,187,0
+P00014,48,60602,Male,Widowed,Arthritis,Ibuprofen,131,205,0
+P00015,48,90210,Female,Married,Hypertension,Tiotropium,142,211,0
+P00016,49,30302,Male,Married,Migraine,Sertraline,127,121,0
+P00017,38,60602,Male,Divorced,Heart Failure,Tiotropium,108,207,0
+P00018,47,60601,Male,Married,COPD,Metformin,127,204,1
+P00019,56,10001,Female,Married,Asthma,Sumatriptan,115,270,0
+P00020,61,20002,Male,Married,COPD,Sertraline,142,194,0
+P00021,73,30301,Male,Single,Depression,Lisinopril,151,169,0
+P00022,58,20002,Female,Married,COPD,Sumatriptan,150,210,0
+P00023,47,60602,Male,Married,Diabetes,Lisinopril,129,202,0
+P00024,39,90210,Female,Married,Depression,Sertraline,152,194,0
+P00025,59,30301,Male,Married,Migraine,Furosemide,109,148,1
+P00026,53,10001,Female,Single,Diabetes,Albuterol,165,193,1
+P00027,53,20001,Male,Single,Depression,Metformin,109,176,1
+P00028,58,10002,Male,Divorced,Asthma,Metformin,90,191,0
+P00029,62,20002,Male,Divorced,Diabetes,Tiotropium,157,229,1
+P00030,59,10003,Female,Widowed,Depression,Ibuprofen,115,173,0
+P00031,52,10001,Female,Divorced,Arthritis,Ibuprofen,132,191,0
+P00032,42,10002,Male,Single,Hypertension,Ibuprofen,109,221,0
+P00033,45,20002,Male,Single,Diabetes,Albuterol,177,189,0
+P00034,67,10002,Male,Married,Heart Failure,Sumatriptan,166,304,0
+P00035,48,10001,Male,Married,Asthma,Metformin,160,209,1
+P00036,34,10003,Male,Divorced,Asthma,Furosemide,131,150,0
+P00037,72,30302,Female,Single,COPD,Furosemide,149,166,1
+P00038,40,30302,Male,Widowed,COPD,Lisinopril,128,162,0
+P00039,55,20001,Female,Married,Migraine,Metformin,152,166,0
+P00040,62,30302,Male,Married,Diabetes,Ibuprofen,121,221,0
+P00041,55,10002,Female,Divorced,Heart Failure,Metformin,161,155,0
+P00042,18,60601,Male,Married,COPD,Furosemide,120,186,1
+P00043,60,10001,Male,Divorced,Hypertension,Sertraline,123,245,0
+P00044,74,10002,Female,Divorced,Migraine,Furosemide,120,179,0
+P00045,66,90210,Male,Divorced,Asthma,Lisinopril,133,226,0
+P00046,23,20002,Female,Divorced,Depression,Lisinopril,122,132,1
+P00047,86,30301,Female,Married,Heart Failure,Tiotropium,139,185,0
+P00048,35,20001,Female,Married,Arthritis,Furosemide,120,164,0
+P00049,38,30302,Female,Divorced,Asthma,Sumatriptan,145,211,0
+P00050,66,60601,Male,Married,Asthma,Furosemide,160,158,0
+P00051,61,60601,Male,Married,COPD,Tiotropium,131,282,0
+P00052,56,10003,Female,Married,Diabetes,Lisinopril,174,134,0
+P00053,46,30302,Male,Single,Depression,Ibuprofen,152,245,0
+P00054,74,60601,Female,Married,COPD,Tiotropium,172,235,0
+P00055,54,20002,Male,Widowed,Migraine,Sertraline,128,212,0
+P00056,31,20001,Female,Married,Heart Failure,Sumatriptan,96,202,0
+P00057,73,30302,Male,Married,Asthma,Sumatriptan,115,274,0
+P00058,58,30301,Male,Single,Diabetes,Furosemide,117,298,0
+P00059,71,10003,Female,Married,Migraine,Sumatriptan,110,191,0
+P00060,63,90210,Female,Married,Arthritis,Ibuprofen,90,206,0
+P00061,90,30301,Male,Married,Depression,Furosemide,150,177,0
+P00062,50,30301,Male,Single,Migraine,Lisinopril,92,153,1
+P00063,55,10003,Female,Single,COPD,Metformin,148,218,1
+P00064,65,30302,Male,Single,Depression,Tiotropium,173,209,0
+P00065,50,90210,Female,Single,Diabetes,Lisinopril,114,135,0
+P00066,67,60601,Female,Divorced,Hypertension,Furosemide,137,218,0
+P00067,18,30301,Male,Widowed,Arthritis,Metformin,122,211,1
+P00068,53,30302,Male,Divorced,Hypertension,Albuterol,146,175,0
+P00069,53,10003,Male,Divorced,Asthma,Albuterol,106,173,1
+P00070,52,10001,Male,Single,COPD,Ibuprofen,127,216,0
+P00071,41,30302,Female,Divorced,Hypertension,Lisinopril,152,264,0
+P00072,68,10002,Male,Married,Migraine,Furosemide,129,215,1
+P00073,47,10001,Female,Divorced,Depression,Sumatriptan,97,231,0
+P00074,58,60601,Female,Married,Heart Failure,Tiotropium,154,166,1
+P00075,54,20002,Male,Married,Diabetes,Metformin,104,183,0
+P00076,62,60602,Female,Married,Depression,Albuterol,131,224,0
+P00077,76,60602,Male,Single,Migraine,Metformin,141,145,0
+P00078,57,10002,Male,Married,COPD,Ibuprofen,132,208,0
+P00079,67,60601,Female,Married,Heart Failure,Sumatriptan,180,219,0
+P00080,57,20001,Male,Widowed,COPD,Sumatriptan,144,198,0
+P00081,47,60601,Male,Single,COPD,Sumatriptan,125,212,0
+P00082,52,10001,Male,Married,Asthma,Tiotropium,142,202,0
+P00083,50,20002,Male,Married,Depression,Metformin,134,175,1
+P00084,63,30302,Female,Single,Hypertension,Sertraline,130,152,1
+P00085,56,20002,Female,Married,Asthma,Albuterol,134,196,0
+P00086,43,30301,Female,Married,Hypertension,Lisinopril,121,252,1
+P00087,51,10001,Female,Married,Asthma,Furosemide,134,240,1
+P00088,32,10001,Female,Single,COPD,Ibuprofen,119,186,0
+P00089,52,30302,Male,Single,Diabetes,Sumatriptan,92,185,1
+P00090,55,20002,Female,Married,Depression,Furosemide,152,182,0
+P00091,82,30301,Male,Divorced,Arthritis,Tiotropium,118,182,1
+P00092,75,20001,Male,Divorced,Diabetes,Lisinopril,132,211,0
+P00093,39,10001,Female,Single,Heart Failure,Sertraline,114,242,1
+P00094,58,60601,Female,Married,Heart Failure,Sertraline,115,290,0
+P00095,58,10002,Female,Widowed,Diabetes,Tiotropium,109,166,0
+P00096,51,60601,Male,Single,Hypertension,Ibuprofen,148,226,1
+P00097,52,10001,Female,Single,Hypertension,Furosemide,153,221,0
+P00098,49,90210,Male,Single,Asthma,Lisinopril,130,186,0
+P00099,83,10003,Male,Single,Diabetes,Lisinopril,119,158,0
+P00100,48,60602,Female,Divorced,Hypertension,Sumatriptan,96,211,0
+P00101,60,10001,Male,Divorced,Depression,Sertraline,145,284,0
+P00102,18,20002,Female,Married,Arthritis,Furosemide,116,210,0
+P00103,67,20002,Female,Married,Hypertension,Furosemide,107,168,0
+P00104,72,10002,Female,Divorced,Arthritis,Lisinopril,130,193,0
+P00105,39,20002,Male,Single,Depression,Tiotropium,123,154,1
+P00106,47,10003,Male,Single,Diabetes,Metformin,99,200,0
+P00107,61,20002,Female,Single,Hypertension,Metformin,102,227,0
+P00108,55,20001,Female,Divorced,Heart Failure,Metformin,136,172,0
+P00109,61,10002,Female,Divorced,Hypertension,Furosemide,116,100,1
+P00110,50,60601,Male,Married,Diabetes,Lisinopril,140,211,0
+P00111,82,30301,Male,Divorced,COPD,Tiotropium,132,179,0
+P00112,44,60602,Female,Single,COPD,Sertraline,150,169,1
+P00113,95,60602,Male,Married,Migraine,Albuterol,113,169,0
+P00114,73,10003,Female,Divorced,Hypertension,Metformin,134,216,1
+P00115,67,10003,Male,Widowed,Diabetes,Albuterol,142,183,0
+P00116,39,90210,Male,Married,COPD,Albuterol,117,237,1
+P00117,68,20001,Female,Single,Diabetes,Albuterol,152,238,0
+P00118,64,10001,Female,Widowed,Depression,Ibuprofen,96,189,0
+P00119,23,30301,Male,Married,Asthma,Sumatriptan,113,179,0
+P00120,33,90210,Male,Married,Heart Failure,Sertraline,95,205,0
+P00121,60,10003,Female,Single,Heart Failure,Metformin,115,194,1
+P00122,53,30302,Male,Single,Heart Failure,Ibuprofen,126,129,0
+P00123,47,20001,Male,Married,Arthritis,Furosemide,146,276,0
+P00124,71,20001,Female,Married,Depression,Ibuprofen,126,228,0
+P00125,41,20002,Male,Single,Arthritis,Ibuprofen,118,181,1
+P00126,48,10002,Female,Single,Hypertension,Tiotropium,99,123,1
+P00127,45,20001,Male,Married,Arthritis,Sumatriptan,105,192,0
+P00128,62,10003,Female,Married,Asthma,Lisinopril,136,176,0
+P00129,29,60602,Female,Married,Migraine,Sumatriptan,147,197,1
+P00130,47,10003,Female,Single,Diabetes,Sumatriptan,121,113,1
+P00131,29,60602,Female,Divorced,Hypertension,Sumatriptan,154,181,0
+P00132,50,10001,Female,Widowed,Migraine,Sertraline,111,183,0
+P00133,65,20002,Male,Married,Diabetes,Furosemide,122,192,1
+P00134,66,10003,Male,Married,Arthritis,Lisinopril,123,190,0
+P00135,44,20002,Male,Divorced,Depression,Sertraline,160,202,1
+P00136,62,60601,Female,Single,Asthma,Sumatriptan,132,260,1
+P00137,52,90210,Male,Widowed,Depression,Albuterol,94,179,1
+P00138,75,60601,Male,Married,COPD,Furosemide,149,163,1
+P00139,53,30301,Female,Married,Hypertension,Albuterol,166,130,1
+P00140,18,30301,Female,Married,COPD,Ibuprofen,125,179,0
+P00141,68,90210,Male,Single,Migraine,Tiotropium,112,143,1
+P00142,48,90210,Male,Divorced,Asthma,Sumatriptan,147,238,0
+P00143,50,60601,Female,Divorced,COPD,Albuterol,169,196,0
+P00144,60,10002,Female,Single,Migraine,Furosemide,146,237,0
+P00145,33,10003,Female,Married,Migraine,Sertraline,97,258,0
+P00146,56,10003,Male,Widowed,COPD,Sertraline,145,165,0
+P00147,63,10003,Female,Divorced,Migraine,Lisinopril,138,186,0
+P00148,60,90210,Male,Married,Heart Failure,Lisinopril,110,253,0
+P00149,46,10002,Male,Single,Arthritis,Furosemide,155,207,0
+P00150,69,60602,Male,Married,Diabetes,Lisinopril,138,220,0
+P00151,40,60602,Male,Single,Heart Failure,Lisinopril,156,241,0
+P00152,45,30301,Female,Divorced,Asthma,Metformin,108,235,0
+P00153,52,20001,Female,Divorced,COPD,Albuterol,137,216,0
+P00154,59,10003,Female,Widowed,COPD,Metformin,112,255,1
+P00155,50,30302,Female,Single,Asthma,Ibuprofen,134,197,0
+P00156,73,30302,Male,Widowed,Heart Failure,Furosemide,159,220,0
+P00157,59,30301,Female,Widowed,COPD,Ibuprofen,101,192,0
+P00158,56,30301,Female,Married,COPD,Tiotropium,102,240,0
+P00159,58,60602,Female,Divorced,Migraine,Sumatriptan,149,171,0
+P00160,65,60601,Male,Married,Asthma,Sumatriptan,129,132,1
+P00161,58,60601,Female,Married,Heart Failure,Tiotropium,153,226,0
+P00162,27,10003,Female,Single,Hypertension,Lisinopril,113,159,1
+P00163,71,10001,Male,Single,COPD,Furosemide,131,155,0
+P00164,56,20002,Female,Single,Diabetes,Furosemide,143,250,0
+P00165,65,20001,Male,Married,Diabetes,Albuterol,134,238,0
+P00166,48,20001,Male,Married,Diabetes,Metformin,94,186,1
+P00167,27,30301,Female,Single,Heart Failure,Metformin,186,100,1
+P00168,20,90210,Female,Single,Asthma,Albuterol,134,221,0
+P00169,40,60602,Female,Married,Depression,Tiotropium,103,226,0
+P00170,62,30302,Male,Widowed,Asthma,Sumatriptan,136,220,0
+P00171,74,60601,Female,Married,Arthritis,Metformin,138,218,0
+P00172,59,20002,Male,Divorced,Migraine,Sertraline,149,192,0
+P00173,39,30301,Male,Widowed,COPD,Furosemide,148,183,1
+P00174,43,20002,Female,Divorced,Hypertension,Lisinopril,125,155,0
+P00175,75,60602,Male,Divorced,Arthritis,Sumatriptan,95,172,0
+P00176,35,90210,Female,Married,Hypertension,Lisinopril,139,212,0
+P00177,86,20002,Female,Widowed,Diabetes,Albuterol,97,213,0
+P00178,83,60601,Male,Married,Diabetes,Lisinopril,154,231,1
+P00179,87,10001,Male,Divorced,COPD,Furosemide,115,143,0
+P00180,60,20002,Male,Married,Migraine,Sertraline,142,133,0
+P00181,49,60602,Female,Single,Diabetes,Sertraline,116,184,0
+P00182,60,30302,Female,Divorced,Migraine,Ibuprofen,120,159,1
+P00183,68,30301,Female,Divorced,Asthma,Albuterol,113,207,0
+P00184,45,10003,Female,Divorced,Asthma,Furosemide,144,147,0
+P00185,38,60602,Female,Widowed,Diabetes,Sertraline,117,247,0
+P00186,50,90210,Male,Divorced,Hypertension,Furosemide,145,167,1
+P00187,43,20001,Male,Married,Arthritis,Tiotropium,118,263,0
+P00188,73,60602,Male,Widowed,Depression,Tiotropium,125,220,1
+P00189,45,30301,Female,Single,Hypertension,Sumatriptan,130,157,1
+P00190,56,20001,Male,Single,Arthritis,Ibuprofen,133,283,0
+P00191,69,20001,Male,Married,Asthma,Albuterol,111,210,0
+P00192,74,30301,Male,Married,Depression,Tiotropium,144,206,1
+P00193,58,20002,Male,Married,Migraine,Tiotropium,124,197,0
+P00194,60,30302,Female,Divorced,Depression,Sertraline,140,218,1
+P00195,39,10002,Female,Single,Depression,Albuterol,129,221,1
+P00196,70,20002,Male,Divorced,COPD,Sumatriptan,141,165,0
+P00197,73,60601,Female,Married,Migraine,Albuterol,121,191,0
+P00198,26,60602,Male,Widowed,COPD,Lisinopril,114,204,0
+P00199,81,10003,Male,Married,Depression,Tiotropium,138,223,0
+P00200,44,30302,Male,Married,Asthma,Lisinopril,120,223,0
+P00201,63,20001,Female,Divorced,Diabetes,Furosemide,159,206,0
+P00202,56,60601,Female,Married,Hypertension,Furosemide,131,177,0
+P00203,54,20001,Female,Single,Heart Failure,Tiotropium,102,175,1
+P00204,51,30302,Female,Single,COPD,Metformin,118,152,0
+P00205,40,20002,Male,Single,Asthma,Sumatriptan,110,223,0
+P00206,62,10003,Female,Married,Migraine,Lisinopril,151,175,0
+P00207,50,30301,Female,Married,Migraine,Lisinopril,145,192,0
+P00208,35,30302,Male,Married,Arthritis,Albuterol,128,209,0
+P00209,39,30302,Male,Divorced,Asthma,Ibuprofen,135,200,1
+P00210,35,60601,Male,Single,Arthritis,Tiotropium,128,199,0
+P00211,47,30302,Male,Single,Heart Failure,Albuterol,147,163,0
+P00212,62,60602,Male,Divorced,Arthritis,Sumatriptan,140,210,0
+P00213,44,20002,Male,Divorced,Depression,Furosemide,143,187,0
+P00214,69,30301,Female,Divorced,Arthritis,Metformin,126,196,0
+P00215,53,20002,Female,Divorced,Heart Failure,Lisinopril,117,246,0
+P00216,50,30301,Female,Widowed,Depression,Tiotropium,143,220,0
+P00217,55,10002,Female,Widowed,Diabetes,Metformin,161,177,0
+P00218,75,60602,Female,Married,Arthritis,Albuterol,152,194,0
+P00219,34,30301,Male,Married,COPD,Furosemide,161,263,0
+P00220,79,30301,Female,Single,Migraine,Metformin,133,187,0
+P00221,69,60602,Female,Married,Hypertension,Albuterol,110,201,1
+P00222,54,20002,Female,Married,Migraine,Sumatriptan,112,226,0
+P00223,72,20002,Female,Single,Heart Failure,Tiotropium,157,208,0
+P00224,50,30301,Male,Single,COPD,Ibuprofen,92,185,1
+P00225,59,90210,Female,Widowed,Diabetes,Sumatriptan,160,170,0
+P00226,46,10003,Male,Single,Diabetes,Furosemide,114,199,0
+P00227,69,10002,Male,Divorced,Depression,Sertraline,168,226,1
+P00228,44,10002,Female,Widowed,Diabetes,Tiotropium,128,252,0
+P00229,54,60601,Female,Married,COPD,Ibuprofen,144,141,0
+P00230,65,10001,Male,Single,Heart Failure,Albuterol,177,270,0
+P00231,70,60601,Male,Divorced,Depression,Sumatriptan,123,188,1
+P00232,42,60602,Female,Married,COPD,Ibuprofen,123,236,0
+P00233,66,30302,Male,Married,Heart Failure,Tiotropium,116,170,0
+P00234,40,10002,Female,Married,Migraine,Sertraline,109,135,0
+P00235,22,30302,Male,Single,COPD,Metformin,123,147,0
+P00236,43,20002,Female,Divorced,Diabetes,Lisinopril,118,186,0
+P00237,67,10001,Male,Widowed,Diabetes,Furosemide,104,220,0
+P00238,54,10002,Female,Married,Migraine,Ibuprofen,125,201,0
+P00239,46,60601,Female,Widowed,Heart Failure,Ibuprofen,138,189,0
+P00240,55,30301,Male,Married,Heart Failure,Lisinopril,112,244,0
+P00241,55,20002,Female,Divorced,Depression,Furosemide,126,200,0
+P00242,64,60601,Female,Divorced,Diabetes,Albuterol,158,211,0
+P00243,30,30301,Male,Single,Arthritis,Ibuprofen,101,324,0
+P00244,53,90210,Female,Widowed,COPD,Albuterol,168,199,0
+P00245,56,10001,Female,Widowed,Diabetes,Metformin,116,172,0
+P00246,34,10003,Female,Married,Depression,Metformin,134,219,1
+P00247,34,10002,Female,Divorced,Depression,Furosemide,155,229,0
+P00248,49,20002,Male,Single,Asthma,Lisinopril,161,212,0
+P00249,55,90210,Female,Single,Heart Failure,Lisinopril,139,206,1
+P00250,55,20002,Female,Single,Depression,Albuterol,116,259,0
+P00251,46,20001,Male,Married,Migraine,Sumatriptan,114,254,0
+P00252,46,10001,Male,Single,Hypertension,Tiotropium,118,195,0
+P00253,49,20001,Female,Single,Migraine,Furosemide,167,174,1
+P00254,59,10003,Female,Widowed,COPD,Metformin,122,217,0
+P00255,73,10002,Male,Married,COPD,Sumatriptan,136,174,0
+P00256,21,10002,Male,Divorced,Asthma,Lisinopril,109,235,0
+P00257,64,30302,Female,Single,Hypertension,Lisinopril,106,216,0
+P00258,53,60601,Male,Single,Diabetes,Sertraline,130,306,0
+P00259,62,60601,Female,Divorced,Depression,Sertraline,123,258,1
+P00260,72,10001,Female,Married,Asthma,Albuterol,124,156,1
+P00261,43,90210,Female,Married,Diabetes,Metformin,100,179,0
+P00262,69,30301,Male,Widowed,Hypertension,Albuterol,128,123,1
+P00263,36,30301,Female,Married,COPD,Albuterol,160,114,1
+P00264,56,60602,Female,Married,COPD,Ibuprofen,112,204,1
+P00265,51,10003,Female,Married,Diabetes,Albuterol,147,152,1
+P00266,55,30301,Male,Single,Heart Failure,Metformin,90,265,1
+P00267,40,10001,Female,Divorced,Migraine,Ibuprofen,113,246,0
+P00268,61,20002,Female,Married,Migraine,Ibuprofen,91,189,0
+P00269,78,10003,Female,Single,Diabetes,Sertraline,154,186,0
+P00270,40,10002,Male,Married,Depression,Lisinopril,147,259,0
+P00271,57,30302,Male,Married,Hypertension,Sumatriptan,109,268,1
+P00272,67,10002,Male,Married,Hypertension,Ibuprofen,135,162,1
+P00273,50,90210,Male,Widowed,Heart Failure,Albuterol,154,157,1
+P00274,75,10003,Female,Divorced,Migraine,Tiotropium,157,187,1
+P00275,48,10001,Female,Married,Diabetes,Sertraline,121,217,0
+P00276,53,20002,Female,Widowed,Depression,Metformin,90,179,0
+P00277,40,20001,Male,Divorced,Hypertension,Tiotropium,112,218,0
+P00278,56,30302,Male,Single,Heart Failure,Lisinopril,145,278,0
+P00279,55,30302,Male,Single,Arthritis,Albuterol,171,143,1
+P00280,64,30301,Male,Single,Asthma,Tiotropium,128,182,0
+P00281,45,30301,Female,Single,Migraine,Tiotropium,117,144,0
+P00282,44,60601,Male,Married,Diabetes,Sumatriptan,177,166,0
+P00283,61,30302,Male,Married,Asthma,Tiotropium,138,188,0
+P00284,75,10002,Female,Widowed,COPD,Metformin,105,170,1
+P00285,64,20002,Male,Married,Depression,Tiotropium,127,220,1
+P00286,82,30302,Male,Single,COPD,Furosemide,149,206,0
+P00287,63,10003,Female,Widowed,Diabetes,Tiotropium,128,211,1
+P00288,62,60602,Male,Married,COPD,Tiotropium,145,187,0
+P00289,65,20002,Female,Single,Arthritis,Furosemide,97,191,0
+P00290,77,20001,Female,Single,Hypertension,Ibuprofen,101,185,0
+P00291,73,20001,Female,Married,Asthma,Sumatriptan,115,190,1
+P00292,38,30302,Male,Married,Asthma,Tiotropium,124,216,1
+P00293,67,60601,Male,Married,Arthritis,Lisinopril,136,123,0
+P00294,58,10003,Female,Divorced,Depression,Metformin,142,211,0
+P00295,52,10002,Male,Married,Depression,Sertraline,179,165,1
+P00296,28,10001,Male,Divorced,Diabetes,Sertraline,115,186,1
+P00297,31,20002,Male,Divorced,Migraine,Furosemide,123,137,0
+P00298,49,90210,Male,Married,COPD,Tiotropium,115,185,0
+P00299,33,90210,Male,Single,COPD,Lisinopril,151,211,0
+P00300,49,30301,Female,Married,Asthma,Sertraline,152,218,1
+P00301,65,30301,Male,Married,COPD,Ibuprofen,121,152,0
+P00302,46,30301,Female,Married,Diabetes,Sumatriptan,171,216,0
+P00303,56,10003,Male,Married,Depression,Tiotropium,115,245,1
+P00304,38,20002,Male,Married,Asthma,Metformin,150,180,0
+P00305,59,90210,Female,Married,Asthma,Metformin,159,200,0
+P00306,62,30302,Female,Married,COPD,Albuterol,102,117,1
+P00307,33,10003,Female,Married,Asthma,Sertraline,141,164,0
+P00308,43,10001,Male,Widowed,COPD,Lisinopril,90,210,0
+P00309,35,60601,Male,Married,Arthritis,Furosemide,146,238,0
+P00310,62,90210,Female,Divorced,Migraine,Lisinopril,107,176,0
+P00311,57,10002,Male,Married,Diabetes,Lisinopril,141,306,0
+P00312,54,20001,Male,Married,Migraine,Metformin,145,212,0
+P00313,53,60602,Male,Divorced,Diabetes,Metformin,152,149,0
+P00314,59,10003,Male,Widowed,Arthritis,Ibuprofen,147,251,0
+P00315,60,10002,Female,Divorced,Asthma,Furosemide,131,149,1
+P00316,47,20001,Female,Widowed,Heart Failure,Sumatriptan,122,213,0
+P00317,45,20001,Female,Married,Diabetes,Furosemide,128,162,1
+P00318,54,20002,Male,Widowed,Asthma,Tiotropium,107,145,1
+P00319,52,90210,Female,Divorced,Diabetes,Ibuprofen,125,238,0
+P00320,85,90210,Female,Divorced,Migraine,Albuterol,124,189,0
+P00321,49,30301,Female,Divorced,Arthritis,Sertraline,114,269,0
+P00322,59,10001,Female,Divorced,Diabetes,Furosemide,95,159,0
+P00323,61,10003,Female,Married,Heart Failure,Lisinopril,104,137,0
+P00324,76,10002,Male,Married,Asthma,Furosemide,90,180,0
+P00325,42,10001,Female,Married,Diabetes,Furosemide,123,315,1
+P00326,75,20001,Female,Married,Depression,Lisinopril,137,233,0
+P00327,52,10001,Female,Married,Heart Failure,Metformin,90,222,0
+P00328,92,30301,Female,Divorced,Heart Failure,Albuterol,134,223,1
+P00329,60,10003,Male,Married,Hypertension,Sumatriptan,127,180,1
+P00330,36,60601,Female,Married,Migraine,Sertraline,106,309,1
+P00331,52,30301,Male,Single,Migraine,Furosemide,121,218,0
+P00332,75,90210,Female,Married,Asthma,Ibuprofen,151,214,0
+P00333,56,20002,Male,Married,Arthritis,Lisinopril,110,239,0
+P00334,54,10002,Male,Married,Depression,Tiotropium,131,149,0
+P00335,65,90210,Female,Single,Depression,Tiotropium,136,164,0
+P00336,49,20001,Female,Married,COPD,Furosemide,113,190,1
+P00337,51,60601,Female,Married,COPD,Sumatriptan,150,239,0
+P00338,40,60601,Male,Single,Depression,Ibuprofen,138,148,1
+P00339,80,90210,Male,Married,Depression,Sumatriptan,124,197,0
+P00340,36,30302,Male,Divorced,Depression,Metformin,177,191,0
+P00341,57,30301,Male,Divorced,Depression,Ibuprofen,150,137,1
+P00342,62,20001,Female,Widowed,Hypertension,Ibuprofen,96,179,0
+P00343,54,20002,Female,Single,Asthma,Metformin,122,221,0
+P00344,36,60601,Male,Married,COPD,Ibuprofen,179,140,0
+P00345,40,30301,Female,Single,Migraine,Tiotropium,110,256,0
+P00346,62,10001,Male,Married,Heart Failure,Sertraline,131,218,0
+P00347,43,20001,Male,Single,Heart Failure,Tiotropium,154,213,1
+P00348,23,90210,Male,Single,Heart Failure,Tiotropium,143,200,0
+P00349,60,10003,Male,Married,Arthritis,Ibuprofen,145,156,1
+P00350,41,20002,Female,Married,COPD,Sertraline,144,174,1
+P00351,64,60602,Female,Married,Heart Failure,Albuterol,130,214,1
+P00352,51,10003,Female,Married,Diabetes,Tiotropium,114,173,1
+P00353,51,30302,Female,Divorced,Diabetes,Sumatriptan,138,207,0
+P00354,55,60601,Female,Married,Asthma,Sertraline,121,164,0
+P00355,37,20001,Female,Married,Arthritis,Ibuprofen,120,218,1
+P00356,42,60602,Female,Married,Heart Failure,Sumatriptan,159,221,0
+P00357,51,20002,Female,Single,Depression,Albuterol,122,134,0
+P00358,37,10003,Female,Single,Migraine,Furosemide,164,202,0
+P00359,65,10003,Male,Married,Asthma,Albuterol,135,139,0
+P00360,50,10003,Male,Single,Depression,Albuterol,126,125,0
+P00361,33,30301,Female,Single,Migraine,Albuterol,93,176,1
+P00362,46,10003,Female,Married,Diabetes,Lisinopril,172,311,0
+P00363,56,20001,Female,Divorced,Heart Failure,Sertraline,129,231,0
+P00364,48,60601,Female,Single,Diabetes,Albuterol,90,255,0
+P00365,60,60602,Female,Married,Migraine,Metformin,149,224,0
+P00366,63,30302,Female,Widowed,Asthma,Furosemide,128,208,0
+P00367,91,30301,Female,Married,COPD,Ibuprofen,111,235,0
+P00368,72,30302,Male,Divorced,COPD,Metformin,148,174,1
+P00369,30,20002,Male,Single,Depression,Metformin,90,218,0
+P00370,49,10003,Male,Widowed,Arthritis,Furosemide,115,247,0
+P00371,51,60601,Male,Single,Heart Failure,Albuterol,124,227,0
+P00372,63,10002,Female,Married,Migraine,Sertraline,147,249,0
+P00373,40,90210,Male,Widowed,Hypertension,Lisinopril,174,207,0
+P00374,47,20002,Female,Married,Depression,Furosemide,125,267,0
+P00375,36,60602,Male,Single,Heart Failure,Albuterol,139,191,0
+P00376,45,10001,Female,Divorced,Arthritis,Tiotropium,184,284,0
+P00377,46,20002,Male,Divorced,Hypertension,Sertraline,130,222,0
+P00378,50,20002,Female,Married,Diabetes,Furosemide,139,184,0
+P00379,37,20001,Male,Single,Heart Failure,Sertraline,105,152,0
+P00380,69,30301,Female,Married,Depression,Sumatriptan,169,167,0
+P00381,62,30302,Female,Widowed,COPD,Tiotropium,115,161,0
+P00382,33,90210,Female,Single,Migraine,Sertraline,135,196,0
+P00383,55,60602,Female,Married,Hypertension,Sertraline,134,149,1
+P00384,31,10003,Female,Single,Depression,Ibuprofen,131,251,0
+P00385,75,90210,Female,Single,Diabetes,Tiotropium,121,204,0
+P00386,79,20002,Male,Married,Heart Failure,Tiotropium,134,202,0
+P00387,54,20002,Female,Married,Depression,Lisinopril,165,153,1
+P00388,42,10001,Male,Single,Migraine,Albuterol,175,169,0
+P00389,45,30302,Male,Single,Asthma,Sertraline,126,111,1
+P00390,48,60602,Male,Single,Diabetes,Ibuprofen,121,264,1
+P00391,53,10003,Male,Single,Heart Failure,Lisinopril,113,143,0
+P00392,75,60602,Male,Single,Arthritis,Metformin,183,146,0
+P00393,69,10001,Female,Divorced,Diabetes,Sertraline,132,256,0
+P00394,69,90210,Female,Single,COPD,Sertraline,152,215,1
+P00395,57,10003,Female,Married,Depression,Ibuprofen,143,204,0
+P00396,37,20002,Male,Married,Hypertension,Lisinopril,174,213,1
+P00397,43,10001,Female,Divorced,Asthma,Furosemide,125,238,0
+P00398,55,60602,Male,Married,Heart Failure,Albuterol,107,203,1
+P00399,36,30301,Male,Widowed,Diabetes,Ibuprofen,167,138,0
+P00400,59,90210,Male,Married,Asthma,Sumatriptan,148,229,0
+P00401,67,20001,Female,Single,Asthma,Sertraline,139,216,0
+P00402,63,10001,Female,Single,COPD,Albuterol,160,246,1
+P00403,62,30302,Male,Single,Heart Failure,Albuterol,140,150,0
+P00404,27,10002,Male,Widowed,Heart Failure,Tiotropium,161,170,0
+P00405,75,30302,Male,Married,COPD,Sumatriptan,134,215,0
+P00406,31,10001,Male,Divorced,Hypertension,Ibuprofen,148,162,0
+P00407,52,10002,Female,Widowed,Migraine,Metformin,140,105,0
+P00408,64,30302,Female,Divorced,Diabetes,Sumatriptan,123,207,1
+P00409,60,30302,Female,Married,Depression,Lisinopril,125,235,0
+P00410,35,10002,Female,Divorced,Heart Failure,Sertraline,122,194,1
+P00411,38,10002,Male,Married,Diabetes,Metformin,135,221,1
+P00412,59,60602,Female,Single,Diabetes,Lisinopril,120,216,1
+P00413,62,10001,Female,Married,Hypertension,Sumatriptan,138,200,0
+P00414,38,10003,Male,Widowed,Asthma,Lisinopril,138,205,0
+P00415,60,90210,Female,Divorced,Depression,Sumatriptan,134,253,0
+P00416,32,30301,Female,Married,Depression,Ibuprofen,134,161,0
+P00417,64,10001,Female,Divorced,Hypertension,Albuterol,118,230,0
+P00418,41,60602,Female,Married,Diabetes,Furosemide,124,152,1
+P00419,56,20001,Female,Married,Hypertension,Lisinopril,96,168,0
+P00420,53,60601,Female,Married,Diabetes,Tiotropium,127,247,0
+P00421,72,30302,Female,Single,Arthritis,Furosemide,110,151,0
+P00422,58,20001,Male,Married,Hypertension,Albuterol,131,190,1
+P00423,46,20001,Female,Divorced,Diabetes,Albuterol,115,294,0
+P00424,60,30301,Female,Widowed,Arthritis,Lisinopril,90,241,1
+P00425,87,20001,Female,Married,Arthritis,Lisinopril,175,170,0
+P00426,66,10002,Female,Single,Migraine,Lisinopril,125,177,0
+P00427,54,60601,Male,Single,Arthritis,Sertraline,158,193,1
+P00428,42,30302,Male,Divorced,Migraine,Ibuprofen,119,252,0
+P00429,45,30302,Female,Married,COPD,Sertraline,163,159,0
+P00430,65,60601,Female,Married,Arthritis,Tiotropium,106,157,1
+P00431,41,30301,Female,Single,Depression,Albuterol,133,228,0
+P00432,55,90210,Female,Single,Hypertension,Furosemide,108,132,0
+P00433,76,60602,Male,Widowed,COPD,Tiotropium,182,163,1
+P00434,57,90210,Female,Married,Migraine,Sumatriptan,125,196,0
+P00435,38,10002,Male,Single,Asthma,Tiotropium,146,198,1
+P00436,87,10002,Female,Single,Asthma,Metformin,139,145,1
+P00437,81,20002,Female,Single,Hypertension,Ibuprofen,129,214,0
+P00438,62,30302,Male,Single,Arthritis,Tiotropium,140,222,0
+P00439,74,10003,Female,Single,Asthma,Lisinopril,157,173,0
+P00440,50,10002,Female,Divorced,Hypertension,Lisinopril,143,266,0
+P00441,65,10001,Female,Married,Hypertension,Lisinopril,133,213,0
+P00442,48,30301,Male,Married,Asthma,Metformin,140,159,1
+P00443,34,90210,Female,Married,Depression,Sumatriptan,168,264,1
+P00444,93,20002,Male,Married,Depression,Metformin,121,179,1
+P00445,33,60601,Male,Married,COPD,Metformin,92,207,1
+P00446,59,10001,Female,Divorced,Arthritis,Sertraline,108,180,0
+P00447,59,10003,Male,Single,Heart Failure,Sertraline,109,224,0
+P00448,62,30302,Female,Divorced,Asthma,Sumatriptan,112,180,0
+P00449,53,20002,Male,Married,Diabetes,Lisinopril,113,183,0
+P00450,53,10001,Male,Single,Arthritis,Furosemide,129,193,1
+P00451,57,10003,Female,Single,Hypertension,Metformin,134,179,1
+P00452,62,60601,Female,Married,Heart Failure,Albuterol,134,242,1
+P00453,54,30302,Male,Married,Diabetes,Sertraline,115,149,0
+P00454,53,60602,Male,Divorced,Migraine,Sumatriptan,149,198,0
+P00455,35,20001,Female,Single,Migraine,Metformin,140,203,0
+P00456,85,90210,Female,Married,Arthritis,Albuterol,161,195,0
+P00457,63,90210,Male,Single,Asthma,Tiotropium,146,238,0
+P00458,58,20001,Male,Single,Asthma,Tiotropium,123,139,1
+P00459,45,10003,Female,Married,Depression,Albuterol,156,222,0
+P00460,39,90210,Male,Single,Depression,Metformin,135,150,0
+P00461,67,20001,Female,Married,Hypertension,Furosemide,145,179,1
+P00462,52,20002,Female,Married,Diabetes,Sumatriptan,144,146,0
+P00463,64,90210,Male,Divorced,Heart Failure,Ibuprofen,127,186,0
+P00464,34,10003,Male,Divorced,Hypertension,Furosemide,132,176,1
+P00465,78,60602,Female,Single,Depression,Albuterol,127,265,1
+P00466,68,10002,Male,Single,Migraine,Furosemide,112,209,0
+P00467,53,10003,Female,Married,Hypertension,Furosemide,90,217,0
+P00468,62,20001,Male,Single,Migraine,Sumatriptan,116,155,0
+P00469,66,20002,Female,Married,Depression,Sumatriptan,133,229,0
+P00470,34,10003,Female,Married,Depression,Albuterol,151,265,0
+P00471,80,60602,Female,Married,COPD,Lisinopril,145,234,0
+P00472,62,30302,Male,Married,Heart Failure,Tiotropium,124,147,0
+P00473,44,30302,Female,Single,Depression,Tiotropium,116,181,0
+P00474,38,60601,Female,Married,Hypertension,Tiotropium,126,204,0
+P00475,69,30302,Male,Married,Migraine,Tiotropium,110,176,0
+P00476,58,30302,Female,Single,Hypertension,Lisinopril,90,301,1
+P00477,62,30302,Female,Divorced,Heart Failure,Tiotropium,99,180,0
+P00478,55,60601,Male,Married,Depression,Sertraline,157,198,0
+P00479,39,90210,Female,Single,Arthritis,Lisinopril,167,175,0
+P00480,62,10002,Male,Divorced,Heart Failure,Furosemide,145,209,0
+P00481,52,30301,Male,Married,Migraine,Lisinopril,128,255,0
+P00482,54,10002,Male,Single,Diabetes,Metformin,102,204,1
+P00483,90,10002,Male,Divorced,Heart Failure,Albuterol,126,191,0
+P00484,68,90210,Male,Married,COPD,Furosemide,142,157,0
+P00485,68,20002,Male,Widowed,Asthma,Lisinopril,146,248,0
+P00486,95,60601,Female,Divorced,Depression,Sertraline,143,194,1
+P00487,60,60601,Female,Married,Heart Failure,Albuterol,154,192,0
+P00488,56,10001,Male,Single,Diabetes,Sertraline,168,106,0
+P00489,44,20002,Female,Married,Arthritis,Furosemide,121,194,0
+P00490,48,10002,Female,Single,COPD,Albuterol,186,183,1
+P00491,24,20001,Female,Married,Arthritis,Albuterol,90,126,0
+P00492,66,10002,Female,Widowed,Depression,Sertraline,114,239,0
+P00493,35,30302,Male,Single,Arthritis,Sertraline,134,178,0
+P00494,68,10002,Male,Divorced,Arthritis,Sumatriptan,140,275,1
+P00495,54,20002,Male,Married,Heart Failure,Albuterol,126,256,0
+P00496,56,20001,Male,Single,Heart Failure,Lisinopril,120,171,0
+P00497,54,90210,Female,Divorced,Migraine,Sertraline,174,254,1
+P00498,75,60601,Male,Married,Hypertension,Lisinopril,119,264,0
+P00499,73,20001,Female,Married,Asthma,Furosemide,109,177,0
+P00500,54,10003,Female,Married,Migraine,Sumatriptan,163,158,0
+P00501,41,60601,Female,Single,COPD,Furosemide,146,113,0
+P00502,68,30302,Female,Single,Depression,Furosemide,151,215,0
+P00503,40,30301,Female,Married,COPD,Sertraline,133,161,0
+P00504,31,10001,Female,Divorced,Depression,Tiotropium,102,216,0
+P00505,62,10001,Female,Married,Migraine,Sertraline,131,177,0
+P00506,73,30302,Male,Divorced,Arthritis,Furosemide,99,168,0
+P00507,48,20002,Male,Divorced,Depression,Metformin,134,177,0
+P00508,61,60602,Male,Single,Arthritis,Metformin,143,148,0
+P00509,48,10001,Female,Divorced,Diabetes,Sumatriptan,151,177,0
+P00510,65,10002,Male,Divorced,Heart Failure,Albuterol,128,170,0
+P00511,71,60601,Male,Married,Diabetes,Albuterol,144,199,0
+P00512,51,90210,Male,Married,Hypertension,Tiotropium,111,204,0
+P00513,39,60601,Female,Divorced,Hypertension,Albuterol,149,157,1
+P00514,33,10001,Male,Widowed,Hypertension,Tiotropium,143,244,0
+P00515,68,10001,Male,Widowed,Hypertension,Sertraline,113,193,0
+P00516,37,60602,Male,Married,Hypertension,Furosemide,140,260,0
+P00517,60,20002,Male,Divorced,Asthma,Lisinopril,151,209,1
+P00518,66,20002,Female,Married,Migraine,Tiotropium,131,202,0
+P00519,47,90210,Male,Divorced,Hypertension,Albuterol,113,180,1
+P00520,52,10003,Male,Married,COPD,Sertraline,133,224,1
+P00521,69,10003,Female,Widowed,Heart Failure,Sumatriptan,141,201,0
+P00522,42,30302,Male,Widowed,Heart Failure,Sertraline,113,234,1
+P00523,41,90210,Female,Married,Asthma,Lisinopril,109,264,0
+P00524,51,20001,Female,Widowed,Hypertension,Sertraline,140,170,0
+P00525,74,10002,Male,Married,Asthma,Metformin,146,224,0
+P00526,79,10001,Male,Single,Arthritis,Sertraline,172,223,0
+P00527,53,10001,Male,Single,Heart Failure,Metformin,143,218,1
+P00528,44,20001,Male,Married,Diabetes,Tiotropium,105,182,0
+P00529,70,30301,Male,Single,Asthma,Metformin,170,183,0
+P00530,29,20002,Female,Single,Arthritis,Sertraline,151,176,0
+P00531,58,10003,Male,Married,COPD,Sumatriptan,90,175,0
+P00532,54,30302,Male,Single,Asthma,Tiotropium,109,166,0
+P00533,74,60602,Female,Married,Heart Failure,Tiotropium,120,195,1
+P00534,75,10003,Male,Divorced,Heart Failure,Furosemide,146,169,1
+P00535,40,30302,Female,Single,Asthma,Sumatriptan,90,217,0
+P00536,57,30301,Male,Married,Arthritis,Sumatriptan,127,202,0
+P00537,46,30302,Female,Single,Depression,Furosemide,145,206,1
+P00538,50,10001,Female,Divorced,COPD,Albuterol,90,189,0
+P00539,64,30302,Female,Married,Asthma,Ibuprofen,144,202,0
+P00540,49,60601,Female,Divorced,Asthma,Furosemide,147,190,1
+P00541,57,30302,Male,Divorced,Depression,Ibuprofen,113,231,1
+P00542,69,60602,Male,Divorced,Diabetes,Metformin,106,182,1
+P00543,77,60601,Male,Married,Arthritis,Ibuprofen,112,215,0
+P00544,59,90210,Male,Married,Migraine,Metformin,90,147,0
+P00545,56,30302,Female,Single,Asthma,Tiotropium,123,228,0
+P00546,38,20002,Male,Married,Heart Failure,Furosemide,134,177,0
+P00547,78,60602,Male,Married,Depression,Tiotropium,105,163,0
+P00548,62,30302,Female,Married,Diabetes,Ibuprofen,149,154,0
+P00549,57,30301,Male,Single,Depression,Ibuprofen,132,151,0
+P00550,56,30301,Female,Married,Depression,Ibuprofen,135,180,0
+P00551,60,20001,Male,Married,Hypertension,Sertraline,121,259,0
+P00552,66,30302,Female,Married,Depression,Metformin,144,174,0
+P00553,68,20002,Male,Married,Diabetes,Tiotropium,155,111,0
+P00554,79,10002,Female,Married,Heart Failure,Albuterol,121,214,0
+P00555,58,20002,Female,Married,Arthritis,Metformin,145,155,1
+P00556,81,90210,Female,Married,Asthma,Furosemide,145,232,0
+P00557,70,20001,Female,Divorced,Hypertension,Ibuprofen,138,183,1
+P00558,54,30302,Female,Divorced,Arthritis,Ibuprofen,163,189,0
+P00559,29,20002,Male,Married,COPD,Ibuprofen,115,247,0
+P00560,56,10003,Male,Married,Depression,Lisinopril,121,224,0
+P00561,78,20001,Female,Married,Migraine,Ibuprofen,114,150,0
+P00562,43,90210,Female,Divorced,Diabetes,Ibuprofen,144,156,0
+P00563,56,10002,Female,Single,Heart Failure,Ibuprofen,124,128,0
+P00564,57,30302,Female,Married,Depression,Lisinopril,116,304,0
+P00565,69,60602,Male,Married,Asthma,Furosemide,163,165,1
+P00566,49,10002,Male,Divorced,Asthma,Ibuprofen,166,246,0
+P00567,41,60601,Male,Single,Depression,Furosemide,123,178,0
+P00568,63,30302,Female,Divorced,Hypertension,Ibuprofen,102,156,1
+P00569,43,20001,Female,Married,COPD,Albuterol,167,200,0
+P00570,27,10002,Male,Divorced,Depression,Furosemide,139,186,0
+P00571,82,90210,Female,Widowed,COPD,Albuterol,138,232,0
+P00572,68,10002,Male,Married,Arthritis,Sertraline,132,232,0
+P00573,83,90210,Male,Married,Migraine,Lisinopril,113,176,0
+P00574,68,30302,Male,Divorced,Hypertension,Metformin,121,142,1
+P00575,65,60602,Female,Divorced,Depression,Lisinopril,143,152,0
+P00576,60,10003,Male,Married,Arthritis,Sertraline,121,108,0
+P00577,52,10001,Female,Single,Diabetes,Albuterol,138,189,1
+P00578,62,30302,Female,Widowed,COPD,Albuterol,130,199,0
+P00579,46,20001,Female,Single,Asthma,Furosemide,108,154,1
+P00580,38,30301,Female,Widowed,Heart Failure,Tiotropium,162,149,1
+P00581,50,20002,Male,Married,Migraine,Furosemide,141,199,0
+P00582,74,20001,Male,Married,Heart Failure,Furosemide,136,174,0
+P00583,36,60601,Male,Widowed,COPD,Metformin,141,191,0
+P00584,36,30301,Female,Married,COPD,Ibuprofen,94,185,0
+P00585,63,30302,Male,Married,Heart Failure,Furosemide,120,209,0
+P00586,48,30302,Female,Married,Migraine,Albuterol,99,177,0
+P00587,62,30302,Female,Married,COPD,Sertraline,132,180,0
+P00588,69,20001,Female,Single,Migraine,Ibuprofen,136,124,0
+P00589,61,60601,Male,Married,Migraine,Furosemide,132,197,1
+P00590,45,10003,Female,Married,Diabetes,Metformin,153,203,0
+P00591,74,90210,Male,Single,Arthritis,Sertraline,100,192,0
+P00592,66,60602,Female,Married,Asthma,Metformin,114,276,0
+P00593,55,30301,Female,Widowed,Migraine,Tiotropium,138,206,0
+P00594,54,10002,Male,Divorced,COPD,Metformin,135,193,0
+P00595,60,90210,Female,Married,Migraine,Albuterol,103,219,0
+P00596,50,30301,Female,Widowed,Asthma,Albuterol,153,284,0
+P00597,30,60602,Female,Married,Heart Failure,Lisinopril,160,210,0
+P00598,66,10001,Male,Married,Hypertension,Tiotropium,138,111,0
+P00599,65,20001,Male,Married,Migraine,Albuterol,99,217,0
+P00600,20,10003,Male,Divorced,Diabetes,Sertraline,133,164,0
+P00601,62,60602,Female,Married,Arthritis,Tiotropium,136,123,1
+P00602,81,20002,Male,Single,COPD,Furosemide,124,267,0
+P00603,38,10002,Female,Widowed,COPD,Sumatriptan,156,259,0
+P00604,53,30302,Female,Divorced,Diabetes,Metformin,127,163,1
+P00605,52,10002,Male,Divorced,Arthritis,Tiotropium,172,164,0
+P00606,79,20002,Female,Divorced,Arthritis,Albuterol,145,206,0
+P00607,71,90210,Male,Married,Heart Failure,Furosemide,135,164,0
+P00608,41,20002,Male,Single,Asthma,Sertraline,148,194,0
+P00609,60,20002,Male,Divorced,Heart Failure,Lisinopril,160,171,0
+P00610,89,10001,Female,Single,Arthritis,Furosemide,147,183,0
+P00611,45,20002,Female,Single,Heart Failure,Furosemide,128,143,1
+P00612,54,90210,Male,Widowed,Migraine,Albuterol,116,233,0
+P00613,62,90210,Male,Single,Depression,Furosemide,107,248,0
+P00614,45,90210,Male,Single,Depression,Sertraline,90,195,1
+P00615,81,20001,Female,Married,Heart Failure,Sertraline,133,198,0
+P00616,47,10001,Male,Divorced,Heart Failure,Albuterol,122,225,1
+P00617,34,10003,Female,Widowed,Migraine,Sertraline,123,200,1
+P00618,47,10003,Female,Single,Arthritis,Sumatriptan,150,269,1
+P00619,64,10001,Male,Married,COPD,Lisinopril,127,147,0
+P00620,43,60601,Female,Divorced,Hypertension,Ibuprofen,167,234,0
+P00621,59,30301,Female,Married,Depression,Metformin,118,195,1
+P00622,63,60601,Female,Single,Diabetes,Lisinopril,110,155,0
+P00623,36,10002,Female,Married,Heart Failure,Lisinopril,104,289,0
+P00624,46,30302,Male,Married,Hypertension,Albuterol,144,295,0
+P00625,60,10001,Female,Single,Heart Failure,Tiotropium,153,191,0
+P00626,65,60601,Male,Divorced,Heart Failure,Tiotropium,118,217,1
+P00627,46,60602,Female,Married,Depression,Furosemide,108,181,1
+P00628,57,10003,Male,Divorced,COPD,Metformin,160,187,0
+P00629,50,20001,Male,Married,Arthritis,Lisinopril,100,154,0
+P00630,65,20002,Male,Married,COPD,Sumatriptan,150,148,0
+P00631,62,30301,Male,Divorced,COPD,Sumatriptan,118,273,0
+P00632,49,30301,Male,Single,Asthma,Tiotropium,137,198,0
+P00633,62,10002,Male,Married,COPD,Furosemide,151,202,0
+P00634,48,20001,Female,Married,Migraine,Furosemide,139,167,0
+P00635,61,30301,Female,Divorced,Asthma,Ibuprofen,124,207,1
+P00636,62,30302,Male,Divorced,Asthma,Sertraline,157,139,0
+P00637,90,30302,Female,Married,Asthma,Sumatriptan,135,169,0
+P00638,49,30302,Female,Divorced,Migraine,Tiotropium,200,152,1
+P00639,52,20002,Male,Single,Migraine,Sumatriptan,95,251,0
+P00640,45,30301,Female,Single,Asthma,Metformin,95,133,0
+P00641,39,20001,Male,Single,Migraine,Metformin,149,152,0
+P00642,48,10003,Female,Widowed,Heart Failure,Tiotropium,129,118,0
+P00643,64,20001,Female,Married,Depression,Sumatriptan,145,164,0
+P00644,66,20002,Male,Married,Heart Failure,Ibuprofen,108,181,1
+P00645,59,10002,Female,Divorced,Migraine,Sertraline,131,239,0
+P00646,50,10003,Male,Single,Heart Failure,Lisinopril,139,191,0
+P00647,47,10002,Female,Single,Depression,Metformin,119,183,0
+P00648,41,20002,Male,Single,Diabetes,Metformin,134,211,0
+P00649,46,20002,Female,Single,Diabetes,Metformin,102,182,0
+P00650,35,10002,Female,Married,Heart Failure,Tiotropium,137,296,1
+P00651,75,10002,Male,Married,COPD,Tiotropium,158,176,0
+P00652,82,30301,Female,Divorced,COPD,Sertraline,105,216,1
+P00653,25,10003,Male,Divorced,Hypertension,Sumatriptan,104,233,1
+P00654,59,60602,Female,Widowed,Migraine,Sertraline,153,175,1
+P00655,59,10002,Female,Single,Hypertension,Sertraline,103,206,0
+P00656,58,20002,Male,Married,Arthritis,Ibuprofen,146,179,0
+P00657,46,60602,Male,Single,Migraine,Ibuprofen,131,210,0
+P00658,70,10002,Male,Single,Diabetes,Metformin,121,204,0
+P00659,61,20002,Female,Married,Arthritis,Albuterol,159,194,0
+P00660,70,20002,Female,Married,Heart Failure,Tiotropium,148,153,0
+P00661,43,30301,Male,Married,Asthma,Furosemide,135,274,0
+P00662,34,60602,Male,Divorced,Hypertension,Sertraline,90,223,0
+P00663,61,30301,Female,Single,Depression,Lisinopril,144,136,1
+P00664,40,20001,Male,Widowed,Heart Failure,Furosemide,108,183,0
+P00665,70,20001,Male,Single,Arthritis,Ibuprofen,125,137,0
+P00666,23,30302,Female,Widowed,Depression,Sertraline,130,230,0
+P00667,47,10003,Male,Married,COPD,Ibuprofen,167,199,0
+P00668,45,30302,Female,Single,Hypertension,Furosemide,124,200,0
+P00669,50,20001,Male,Married,Asthma,Lisinopril,101,166,0
+P00670,58,10001,Female,Married,Migraine,Albuterol,159,187,0
+P00671,60,30301,Male,Divorced,Depression,Sumatriptan,144,231,0
+P00672,64,10003,Male,Single,Migraine,Albuterol,145,242,0
+P00673,66,20001,Male,Divorced,Arthritis,Sumatriptan,159,233,0
+P00674,52,20001,Female,Married,Migraine,Albuterol,164,137,0
+P00675,86,10002,Female,Widowed,COPD,Sertraline,112,192,0
+P00676,75,10003,Male,Married,Depression,Lisinopril,102,210,0
+P00677,50,90210,Female,Married,Migraine,Tiotropium,146,170,1
+P00678,52,20001,Male,Divorced,Asthma,Metformin,124,133,0
+P00679,50,60601,Male,Single,Depression,Furosemide,126,148,0
+P00680,60,20002,Male,Single,COPD,Metformin,107,259,1
+P00681,40,10001,Female,Married,Heart Failure,Lisinopril,141,152,0
+P00682,43,60602,Male,Married,Diabetes,Sertraline,138,201,0
+P00683,22,90210,Male,Divorced,Migraine,Lisinopril,126,193,1
+P00684,49,10003,Female,Married,Depression,Albuterol,102,193,1
+P00685,70,10002,Female,Divorced,Asthma,Tiotropium,154,187,0
+P00686,52,90210,Male,Widowed,Diabetes,Ibuprofen,135,231,0
+P00687,53,10001,Female,Divorced,Hypertension,Ibuprofen,152,201,1
+P00688,59,60602,Male,Single,Arthritis,Lisinopril,90,174,0
+P00689,39,10002,Female,Single,Arthritis,Tiotropium,131,202,0
+P00690,55,60602,Male,Widowed,Hypertension,Lisinopril,115,148,1
+P00691,68,90210,Female,Divorced,Migraine,Ibuprofen,130,219,1
+P00692,59,10003,Female,Married,Arthritis,Furosemide,148,172,0
+P00693,69,10003,Male,Widowed,Hypertension,Tiotropium,137,175,0
+P00694,73,10002,Male,Single,Heart Failure,Albuterol,130,220,0
+P00695,64,60601,Male,Divorced,Diabetes,Metformin,130,183,1
+P00696,44,20001,Female,Married,COPD,Furosemide,98,185,0
+P00697,49,30302,Female,Divorced,COPD,Metformin,111,246,1
+P00698,83,30302,Female,Divorced,Heart Failure,Sertraline,152,161,0
+P00699,59,30301,Female,Married,Heart Failure,Metformin,119,219,1
+P00700,57,10003,Female,Single,Migraine,Lisinopril,152,237,0
+P00701,42,20001,Female,Widowed,Hypertension,Sertraline,146,246,0
+P00702,53,30301,Female,Divorced,Asthma,Ibuprofen,147,287,1
+P00703,65,10001,Male,Married,Asthma,Furosemide,136,174,0
+P00704,55,20002,Female,Widowed,Depression,Tiotropium,121,165,0
+P00705,47,60601,Male,Married,Diabetes,Furosemide,126,232,0
+P00706,50,20002,Male,Married,Diabetes,Furosemide,142,237,1
+P00707,72,20001,Male,Widowed,Migraine,Sertraline,90,168,0
+P00708,65,60602,Male,Married,Migraine,Albuterol,154,219,0
+P00709,63,30301,Female,Divorced,COPD,Ibuprofen,119,308,0
+P00710,61,60601,Male,Divorced,Arthritis,Sertraline,128,204,1
+P00711,37,10001,Male,Married,Depression,Albuterol,128,236,1
+P00712,59,90210,Female,Married,COPD,Lisinopril,129,263,0
+P00713,71,60601,Female,Divorced,Heart Failure,Sertraline,103,300,0
+P00714,51,60602,Male,Married,Depression,Sertraline,133,209,0
+P00715,69,30302,Male,Married,Arthritis,Sumatriptan,141,250,0
+P00716,63,30301,Male,Married,Migraine,Furosemide,90,168,0
+P00717,67,30301,Female,Single,Migraine,Albuterol,103,200,0
+P00718,55,30302,Male,Single,Diabetes,Lisinopril,147,182,0
+P00719,68,20002,Female,Married,Diabetes,Furosemide,144,124,0
+P00720,33,60601,Male,Divorced,Diabetes,Sertraline,135,135,0
+P00721,55,20001,Female,Married,Hypertension,Lisinopril,116,217,1
+P00722,65,60601,Male,Single,COPD,Furosemide,144,217,0
+P00723,59,20001,Female,Married,Depression,Albuterol,105,158,1
+P00724,71,20002,Male,Divorced,Hypertension,Metformin,127,262,1
+P00725,52,10001,Male,Single,Diabetes,Tiotropium,103,155,0
+P00726,46,90210,Female,Married,Arthritis,Furosemide,126,210,0
+P00727,30,30302,Female,Divorced,Heart Failure,Furosemide,109,183,0
+P00728,50,10003,Male,Married,COPD,Albuterol,145,204,0
+P00729,62,10001,Female,Married,Arthritis,Ibuprofen,138,235,0
+P00730,66,60602,Male,Divorced,Diabetes,Sertraline,118,230,0
+P00731,34,10001,Female,Single,Asthma,Furosemide,151,228,0
+P00732,72,20002,Male,Single,Heart Failure,Metformin,110,223,1
+P00733,40,10001,Male,Single,Heart Failure,Furosemide,129,149,0
+P00734,53,30302,Male,Divorced,Heart Failure,Albuterol,117,245,0
+P00735,46,10003,Male,Widowed,Arthritis,Ibuprofen,144,157,0
+P00736,61,20002,Female,Married,Asthma,Ibuprofen,142,195,1
+P00737,56,30301,Male,Widowed,Arthritis,Albuterol,156,185,1
+P00738,65,20001,Male,Divorced,Migraine,Metformin,131,214,0
+P00739,82,30302,Female,Married,Diabetes,Albuterol,90,180,1
+P00740,60,30301,Male,Married,Heart Failure,Ibuprofen,121,193,0
+P00741,46,20002,Male,Married,Migraine,Ibuprofen,161,264,0
+P00742,61,20001,Female,Married,Heart Failure,Ibuprofen,123,148,1
+P00743,84,20002,Male,Married,COPD,Tiotropium,91,199,0
+P00744,64,20001,Female,Married,Depression,Lisinopril,138,155,0
+P00745,69,30301,Female,Married,Heart Failure,Sertraline,140,226,0
+P00746,31,60601,Male,Married,Diabetes,Albuterol,115,170,0
+P00747,60,30301,Male,Married,Heart Failure,Sertraline,125,201,0
+P00748,50,10001,Male,Divorced,Depression,Sertraline,113,147,0
+P00749,44,60602,Female,Divorced,Arthritis,Metformin,140,251,0
+P00750,54,60601,Female,Married,Depression,Sumatriptan,131,202,0
+P00751,56,60602,Female,Divorced,Hypertension,Lisinopril,106,205,0
+P00752,45,10001,Male,Married,Migraine,Ibuprofen,129,233,0
+P00753,57,60602,Female,Married,COPD,Sertraline,115,149,1
+P00754,52,20002,Male,Divorced,Arthritis,Tiotropium,159,175,0
+P00755,65,60602,Female,Widowed,Hypertension,Furosemide,147,206,0
+P00756,58,60601,Male,Widowed,Heart Failure,Tiotropium,127,129,1
+P00757,60,60602,Female,Single,Migraine,Furosemide,131,133,1
+P00758,69,10002,Female,Married,Heart Failure,Albuterol,150,167,0
+P00759,63,30301,Male,Divorced,Diabetes,Sumatriptan,126,154,1
+P00760,54,60601,Male,Divorced,Diabetes,Lisinopril,145,186,0
+P00761,23,30301,Female,Married,Asthma,Tiotropium,159,220,0
+P00762,62,60602,Female,Single,Hypertension,Metformin,120,229,0
+P00763,41,60601,Female,Married,Arthritis,Metformin,162,272,0
+P00764,53,10001,Male,Single,Depression,Furosemide,157,199,0
+P00765,60,10002,Female,Married,Arthritis,Tiotropium,134,206,1
+P00766,74,30302,Male,Married,Migraine,Tiotropium,121,199,0
+P00767,82,20001,Female,Single,COPD,Furosemide,134,212,1
+P00768,41,20001,Male,Divorced,Depression,Albuterol,125,215,0
+P00769,35,90210,Female,Married,Heart Failure,Tiotropium,114,236,0
+P00770,59,10001,Female,Married,Asthma,Metformin,140,236,0
+P00771,58,30301,Male,Married,Heart Failure,Sertraline,109,220,0
+P00772,36,20001,Female,Widowed,Migraine,Sertraline,123,260,0
+P00773,54,10001,Male,Married,Migraine,Ibuprofen,123,201,0
+P00774,63,20001,Male,Divorced,Arthritis,Lisinopril,102,175,1
+P00775,36,20002,Male,Married,Depression,Lisinopril,143,182,0
+P00776,40,20002,Male,Married,Depression,Lisinopril,125,195,0
+P00777,45,10002,Male,Widowed,Arthritis,Albuterol,155,156,0
+P00778,51,60601,Female,Single,Migraine,Ibuprofen,125,175,0
+P00779,65,20001,Female,Married,Heart Failure,Metformin,121,154,0
+P00780,50,30301,Male,Widowed,Arthritis,Sumatriptan,111,213,0
+P00781,55,30301,Female,Married,Asthma,Sertraline,130,214,0
+P00782,88,30301,Female,Married,Depression,Albuterol,130,129,0
+P00783,40,30301,Male,Widowed,Diabetes,Sumatriptan,144,173,0
+P00784,45,20001,Male,Single,Diabetes,Metformin,131,273,0
+P00785,65,20002,Female,Married,Hypertension,Metformin,171,225,0
+P00786,69,30301,Male,Divorced,Heart Failure,Sertraline,139,218,0
+P00787,61,10001,Male,Divorced,COPD,Lisinopril,110,173,0
+P00788,82,60601,Female,Married,Diabetes,Tiotropium,108,211,0
+P00789,59,20002,Female,Single,COPD,Furosemide,140,199,0
+P00790,25,10003,Female,Divorced,Diabetes,Albuterol,109,168,0
+P00791,56,10001,Female,Divorced,Asthma,Furosemide,141,180,1
+P00792,46,20001,Male,Single,Asthma,Lisinopril,147,181,1
+P00793,75,20002,Female,Married,Diabetes,Ibuprofen,148,140,0
+P00794,69,60602,Female,Married,COPD,Tiotropium,112,147,0
+P00795,31,30302,Male,Single,Hypertension,Sertraline,148,192,1
+P00796,75,20002,Male,Divorced,Depression,Sumatriptan,136,166,0
+P00797,69,10002,Male,Widowed,Depression,Sertraline,117,187,1
+P00798,50,10003,Female,Married,Arthritis,Sumatriptan,126,135,0
+P00799,53,90210,Female,Widowed,Diabetes,Tiotropium,139,232,0
+P00800,75,10002,Female,Divorced,Depression,Metformin,116,283,1
+P00801,25,30302,Male,Divorced,Heart Failure,Furosemide,136,241,1
+P00802,61,30301,Female,Widowed,Asthma,Lisinopril,158,245,0
+P00803,71,10003,Male,Married,Migraine,Metformin,149,225,0
+P00804,53,60602,Female,Widowed,Depression,Furosemide,131,210,0
+P00805,64,20001,Female,Single,Heart Failure,Sumatriptan,134,203,0
+P00806,56,30302,Female,Married,Hypertension,Sertraline,119,163,1
+P00807,43,10001,Male,Married,Heart Failure,Tiotropium,119,227,0
+P00808,42,90210,Male,Single,Depression,Tiotropium,99,225,0
+P00809,65,10001,Male,Divorced,Migraine,Tiotropium,135,181,0
+P00810,45,20001,Female,Married,COPD,Sumatriptan,143,221,1
+P00811,32,90210,Male,Married,COPD,Lisinopril,128,172,0
+P00812,56,30302,Female,Married,Diabetes,Metformin,112,174,0
+P00813,47,30302,Male,Single,Arthritis,Sumatriptan,131,231,1
+P00814,37,20001,Female,Single,COPD,Ibuprofen,156,217,1
+P00815,56,60601,Male,Single,Heart Failure,Ibuprofen,147,190,0
+P00816,66,90210,Male,Widowed,Depression,Sertraline,129,186,0
+P00817,55,30302,Female,Divorced,Arthritis,Albuterol,170,206,1
+P00818,39,10003,Male,Married,Diabetes,Metformin,183,126,0
+P00819,62,90210,Male,Married,Depression,Sertraline,120,169,0
+P00820,70,10001,Female,Married,Depression,Lisinopril,125,149,0
+P00821,88,60602,Male,Married,Hypertension,Albuterol,143,200,1
+P00822,76,10001,Female,Single,Migraine,Sumatriptan,111,243,1
+P00823,39,10001,Female,Married,COPD,Metformin,146,219,0
+P00824,67,10001,Male,Married,Diabetes,Tiotropium,132,179,0
+P00825,58,10002,Male,Divorced,Migraine,Lisinopril,137,171,0
+P00826,37,60601,Male,Single,COPD,Tiotropium,118,169,0
+P00827,59,20001,Male,Married,COPD,Albuterol,114,279,1
+P00828,83,10001,Male,Married,Migraine,Tiotropium,90,202,0
+P00829,72,20001,Female,Divorced,Depression,Sertraline,159,207,0
+P00830,39,90210,Male,Widowed,Asthma,Furosemide,148,115,0
+P00831,55,30301,Female,Married,Arthritis,Tiotropium,143,152,0
+P00832,62,60601,Female,Single,Migraine,Ibuprofen,136,198,0
+P00833,29,10003,Male,Married,Heart Failure,Tiotropium,90,180,0
+P00834,29,30301,Female,Single,Heart Failure,Sumatriptan,114,205,0
+P00835,57,60601,Male,Single,Heart Failure,Ibuprofen,124,204,0
+P00836,57,30302,Male,Married,Hypertension,Metformin,108,224,0
+P00837,27,10001,Female,Single,Depression,Lisinopril,96,125,0
+P00838,60,30302,Male,Single,Asthma,Ibuprofen,110,155,0
+P00839,71,60601,Male,Married,Asthma,Sertraline,130,196,0
+P00840,51,10002,Female,Married,Heart Failure,Ibuprofen,130,174,0
+P00841,55,20001,Female,Widowed,Depression,Tiotropium,148,187,1
+P00842,63,30302,Female,Married,Heart Failure,Metformin,171,204,0
+P00843,61,10001,Female,Married,Migraine,Tiotropium,143,170,0
+P00844,29,60601,Female,Divorced,Depression,Sumatriptan,126,207,0
+P00845,41,60602,Female,Divorced,Diabetes,Albuterol,166,221,0
+P00846,49,30301,Female,Married,COPD,Sumatriptan,98,202,0
+P00847,42,20002,Female,Married,Heart Failure,Sumatriptan,90,228,0
+P00848,77,10001,Female,Married,Depression,Sertraline,112,113,0
+P00849,64,60601,Male,Married,Diabetes,Furosemide,146,176,0
+P00850,38,90210,Male,Single,Arthritis,Sumatriptan,133,235,0
+P00851,51,60602,Male,Married,Migraine,Furosemide,107,165,0
+P00852,71,30301,Male,Married,Arthritis,Sertraline,115,159,0
+P00853,45,10001,Male,Married,Depression,Tiotropium,105,194,0
+P00854,67,10003,Male,Married,Depression,Ibuprofen,105,199,0
+P00855,75,10003,Female,Single,COPD,Sertraline,161,178,0
+P00856,73,10001,Male,Single,Asthma,Tiotropium,127,273,1
+P00857,57,10002,Male,Married,COPD,Sumatriptan,165,211,1
+P00858,73,30301,Female,Divorced,Migraine,Lisinopril,112,163,0
+P00859,47,10001,Male,Divorced,Heart Failure,Sumatriptan,139,142,1
+P00860,92,10001,Female,Married,Migraine,Albuterol,134,216,0
+P00861,58,90210,Female,Married,Heart Failure,Furosemide,147,162,0
+P00862,72,30302,Female,Widowed,Heart Failure,Lisinopril,135,286,1
+P00863,49,60602,Male,Married,Hypertension,Sumatriptan,149,217,0
+P00864,62,10003,Male,Married,Asthma,Sertraline,141,222,0
+P00865,63,20001,Female,Single,Asthma,Sumatriptan,108,209,0
+P00866,41,30302,Male,Single,Heart Failure,Sertraline,144,244,1
+P00867,40,30302,Male,Married,Diabetes,Tiotropium,127,104,0
+P00868,51,20001,Male,Divorced,Migraine,Ibuprofen,114,151,0
+P00869,71,90210,Female,Widowed,COPD,Metformin,143,241,0
+P00870,27,60601,Female,Single,Hypertension,Metformin,148,260,1
+P00871,49,10003,Female,Divorced,COPD,Ibuprofen,120,150,0
+P00872,74,10001,Female,Divorced,Asthma,Sertraline,122,127,0
+P00873,36,10001,Male,Divorced,Asthma,Ibuprofen,102,206,0
+P00874,73,60602,Female,Married,Migraine,Furosemide,93,219,0
+P00875,38,60602,Female,Married,Heart Failure,Furosemide,125,205,0
+P00876,41,20002,Male,Widowed,Heart Failure,Lisinopril,145,197,0
+P00877,52,60601,Female,Married,Asthma,Sertraline,118,125,1
+P00878,83,60602,Male,Married,COPD,Metformin,158,184,0
+P00879,45,10002,Female,Single,Asthma,Ibuprofen,125,190,0
+P00880,29,90210,Male,Married,Arthritis,Ibuprofen,125,178,1
+P00881,33,20002,Male,Single,Depression,Sumatriptan,124,123,0
+P00882,68,20002,Female,Married,Arthritis,Sertraline,149,223,0
+P00883,34,10002,Female,Widowed,COPD,Sertraline,110,234,0
+P00884,72,30302,Male,Married,Asthma,Ibuprofen,127,168,0
+P00885,56,30302,Female,Widowed,Hypertension,Metformin,119,192,0
+P00886,54,10001,Female,Widowed,Hypertension,Lisinopril,118,180,0
+P00887,59,30302,Male,Divorced,Migraine,Tiotropium,130,180,0
+P00888,42,10002,Female,Married,Migraine,Albuterol,127,219,0
+P00889,57,10003,Female,Divorced,COPD,Albuterol,151,220,0
+P00890,37,30302,Female,Married,Hypertension,Sumatriptan,129,242,0
+P00891,75,60601,Female,Single,Arthritis,Metformin,141,242,1
+P00892,39,10002,Female,Widowed,Depression,Sumatriptan,133,193,0
+P00893,61,20002,Female,Married,Diabetes,Tiotropium,158,313,1
+P00894,39,10003,Female,Widowed,Depression,Albuterol,123,261,0
+P00895,47,60601,Male,Married,Heart Failure,Sumatriptan,124,173,0
+P00896,49,60602,Male,Married,Migraine,Ibuprofen,144,205,0
+P00897,95,30302,Female,Divorced,Heart Failure,Albuterol,123,120,1
+P00898,54,60601,Female,Married,Diabetes,Sertraline,139,201,1
+P00899,42,20002,Male,Married,Arthritis,Albuterol,176,266,0
+P00900,48,30301,Male,Divorced,Arthritis,Furosemide,110,311,0
+P00901,32,10003,Male,Married,Asthma,Sertraline,160,195,0
+P00902,52,90210,Male,Single,Depression,Lisinopril,120,213,0
+P00903,82,10003,Male,Married,Depression,Tiotropium,156,224,1
+P00904,60,90210,Female,Single,Hypertension,Furosemide,143,279,0
+P00905,68,60601,Male,Married,Depression,Sertraline,142,160,0
+P00906,41,90210,Female,Single,Asthma,Sumatriptan,126,306,0
+P00907,51,30302,Female,Single,Asthma,Sertraline,124,187,1
+P00908,58,20001,Female,Widowed,Arthritis,Albuterol,115,153,0
+P00909,44,10003,Female,Single,COPD,Tiotropium,130,187,0
+P00910,61,10002,Male,Divorced,Hypertension,Metformin,126,167,0
+P00911,64,90210,Female,Married,Asthma,Sumatriptan,133,216,0
+P00912,63,10002,Female,Single,Hypertension,Tiotropium,101,133,0
+P00913,52,60602,Male,Widowed,Heart Failure,Albuterol,130,205,1
+P00914,71,30302,Female,Single,Migraine,Lisinopril,155,226,0
+P00915,51,10002,Female,Married,Depression,Ibuprofen,148,259,1
+P00916,49,90210,Female,Divorced,Migraine,Ibuprofen,130,227,0
+P00917,76,10002,Male,Divorced,COPD,Furosemide,181,256,1
+P00918,38,10002,Male,Married,Heart Failure,Albuterol,118,175,0
+P00919,29,30301,Female,Divorced,Migraine,Metformin,128,215,1
+P00920,41,10002,Male,Widowed,Arthritis,Sertraline,100,110,0
+P00921,60,10002,Male,Married,Depression,Furosemide,121,195,1
+P00922,74,30302,Female,Married,COPD,Sumatriptan,165,215,0
+P00923,45,90210,Female,Married,Diabetes,Albuterol,122,219,0
+P00924,82,10001,Male,Married,Asthma,Lisinopril,99,137,1
+P00925,55,30302,Male,Married,Arthritis,Lisinopril,147,184,0
+P00926,53,30302,Female,Single,Diabetes,Ibuprofen,137,189,0
+P00927,42,10001,Female,Married,Depression,Lisinopril,146,182,0
+P00928,84,10002,Male,Single,Heart Failure,Tiotropium,124,229,0
+P00929,52,20002,Female,Single,Heart Failure,Lisinopril,109,191,1
+P00930,35,30302,Male,Married,Migraine,Sertraline,126,203,1
+P00931,91,10003,Female,Single,Heart Failure,Furosemide,141,180,0
+P00932,60,20002,Female,Married,Asthma,Sertraline,128,242,0
+P00933,66,20002,Female,Married,COPD,Tiotropium,137,245,0
+P00934,80,60601,Female,Single,Asthma,Albuterol,119,187,0
+P00935,64,10003,Male,Single,Migraine,Furosemide,138,314,1
+P00936,69,30302,Male,Single,Diabetes,Sertraline,129,169,0
+P00937,55,60602,Female,Married,Asthma,Furosemide,115,240,0
+P00938,66,30301,Male,Married,Migraine,Sumatriptan,132,161,0
+P00939,54,60601,Female,Divorced,Diabetes,Sertraline,122,230,0
+P00940,54,10002,Male,Married,Arthritis,Metformin,142,227,0
+P00941,56,90210,Male,Married,Asthma,Sumatriptan,147,159,0
+P00942,49,20001,Female,Single,Asthma,Tiotropium,140,194,0
+P00943,62,10002,Female,Married,COPD,Sumatriptan,97,274,1
+P00944,62,30301,Female,Married,Heart Failure,Sertraline,110,167,0
+P00945,67,20001,Male,Married,Diabetes,Albuterol,117,216,1
+P00946,64,20002,Male,Widowed,Migraine,Lisinopril,114,213,0
+P00947,85,60602,Male,Single,Hypertension,Furosemide,119,198,0
+P00948,70,30301,Male,Married,Hypertension,Furosemide,148,130,0
+P00949,51,20001,Female,Divorced,Migraine,Furosemide,143,233,0
+P00950,61,60602,Male,Widowed,Hypertension,Albuterol,121,200,1
+P00951,76,20001,Male,Married,Asthma,Sertraline,141,244,0
+P00952,40,90210,Female,Married,Hypertension,Sertraline,136,209,0
+P00953,85,90210,Male,Single,Diabetes,Lisinopril,129,202,0
+P00954,43,20002,Male,Divorced,Hypertension,Lisinopril,152,214,0
+P00955,68,60601,Female,Married,Asthma,Albuterol,116,160,0
+P00956,55,60601,Female,Married,Asthma,Ibuprofen,131,262,0
+P00957,54,60602,Male,Married,Diabetes,Sumatriptan,108,184,0
+P00958,35,20002,Female,Married,COPD,Furosemide,109,185,0
+P00959,68,20002,Female,Divorced,Hypertension,Tiotropium,102,251,0
+P00960,35,10003,Male,Single,Depression,Sumatriptan,110,209,0
+P00961,33,30301,Male,Married,Asthma,Furosemide,131,190,0
+P00962,72,30302,Female,Single,COPD,Ibuprofen,123,216,0
+P00963,81,20002,Male,Divorced,Asthma,Sumatriptan,124,225,1
+P00964,44,20001,Female,Single,Depression,Sumatriptan,124,195,0
+P00965,70,20002,Male,Widowed,Heart Failure,Metformin,165,236,0
+P00966,66,30301,Male,Married,Diabetes,Albuterol,107,149,0
+P00967,53,10002,Female,Married,Depression,Sumatriptan,105,210,0
+P00968,75,30302,Female,Married,Arthritis,Lisinopril,113,232,0
+P00969,52,60602,Male,Married,COPD,Ibuprofen,128,224,0
+P00970,62,20001,Male,Married,Arthritis,Sertraline,140,110,0
+P00971,36,20001,Female,Married,COPD,Tiotropium,142,194,1
+P00972,36,10001,Female,Single,Heart Failure,Sumatriptan,148,151,1
+P00973,72,30301,Male,Married,Heart Failure,Albuterol,127,251,0
+P00974,63,20002,Male,Divorced,Arthritis,Metformin,122,184,0
+P00975,52,60602,Female,Single,Migraine,Albuterol,162,246,1
+P00976,83,90210,Male,Divorced,Hypertension,Tiotropium,90,151,0
+P00977,83,60601,Male,Divorced,Depression,Albuterol,131,215,1
+P00978,61,10003,Male,Married,Heart Failure,Tiotropium,138,200,0
+P00979,33,10002,Male,Single,Hypertension,Albuterol,167,310,1
+P00980,53,20002,Female,Married,Heart Failure,Tiotropium,96,247,0
+P00981,42,30302,Male,Divorced,Hypertension,Lisinopril,121,244,0
+P00982,56,10001,Female,Married,Heart Failure,Albuterol,102,281,0
+P00983,40,20002,Male,Married,Diabetes,Albuterol,94,211,0
+P00984,37,10001,Male,Married,COPD,Ibuprofen,125,196,0
+P00985,21,10003,Female,Married,Heart Failure,Tiotropium,146,191,0
+P00986,57,20001,Female,Single,Heart Failure,Tiotropium,154,213,0
+P00987,20,10001,Male,Single,Arthritis,Sumatriptan,119,100,1
+P00988,50,10003,Male,Married,Migraine,Furosemide,143,200,1
+P00989,65,30302,Female,Married,Diabetes,Lisinopril,126,209,1
+P00990,44,90210,Female,Single,Diabetes,Tiotropium,141,193,1
+P00991,38,60601,Female,Widowed,Diabetes,Lisinopril,153,138,1
+P00992,53,20001,Female,Married,COPD,Sertraline,126,194,1
+P00993,42,90210,Male,Single,Migraine,Ibuprofen,151,138,0
+P00994,57,20002,Female,Single,Migraine,Albuterol,105,270,0
+P00995,39,20001,Male,Married,Arthritis,Tiotropium,143,189,1
+P00996,53,60602,Male,Married,Diabetes,Furosemide,150,117,0
+P00997,49,20001,Female,Single,Diabetes,Ibuprofen,148,191,0
+P00998,54,60601,Male,Divorced,COPD,Ibuprofen,106,235,0
+P00999,79,10002,Male,Divorced,Migraine,Sumatriptan,125,207,0

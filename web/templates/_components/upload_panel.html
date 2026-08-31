@@ -1,0 +1,144 @@
+<!-- Upload panel: shown before a file is uploaded -->
+<div id="upload-panel" class="flex flex-col items-center pt-12 px-4 min-h-[60vh]">
+  <div class="w-full max-w-lg">
+
+    <!-- Logo + title -->
+    <div class="flex flex-col items-center mb-6">
+      <img src="/images/logoNoBackground.png" class="h-20 mb-4" alt="AIDRIN Logo" />
+      <h2 class="text-2xl font-semibold text-center text-gray-900 dark:text-white">
+        AI Data Readiness Infrastructure
+      </h2>
+      <p class="text-xs mt-1 text-gray-400 dark:text-gray-500">v{{ app_version }}</p>
+      <a href="https://aidrin.readthedocs.io/en/latest/" target="_blank"
+         class="text-sm mt-2 text-blue-600 dark:text-blue-400 hover:underline">
+        aidrin.readthedocs.io
+      </a>
+    </div>
+
+    <!-- Tab switcher: Upload / Globus (conditional) / ADROIT -->
+    <div class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+      <button type="button" onclick="switchUploadTab('local')" id="tab-local"
+              class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' if globus_available and globus_authenticated else 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' }}">
+        Upload File
+      </button>
+      {% if globus_available %}
+      <button type="button" onclick="switchUploadTab('globus')" id="tab-globus"
+              class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' if globus_authenticated else 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' }}">
+        Remote (Globus)
+      </button>
+      {% endif %}
+      <button type="button" onclick="switchUploadTab('cli')" id="tab-cli"
+              class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400">
+        CLI
+      </button>
+    </div>
+
+    <!-- Local upload card -->
+    <div id="local-upload" class="{{ 'hidden' if globus_available and globus_authenticated else '' }}">
+      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+        <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('core.inspector') }}" data-max-upload-bytes="{{ max_upload_bytes }}" data-max-upload-mb="{{ max_upload_mb }}">
+
+          <!-- File type selector -->
+          <label for="fileTypeSelector" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">File type</label>
+          <select id="fileTypeSelector" name="fileTypeSelector" class="w-full mb-4" style="max-width: none;">
+            <option disabled value="" {% if not file_type %}selected{% endif %}>Select a File Type</option>
+            {% for ext, label in supported_file_types %}
+              <option value="{{ ext }}" {% if file_type == ext %}selected{% endif %}>{{ label }} ({{ ext }})</option>
+            {% endfor %}
+          </select>
+
+          <!-- Dropzone -->
+          <label id="fileUploadContainer" for="file"
+                 class="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600 transition-colors">
+            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+              <svg class="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <p class="mb-1 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+              <p id="FileUploadMessage" class="text-xs text-gray-500 dark:text-gray-400">Select a file type first</p>
+            </div>
+            <input id="file" name="file" type="file" class="hidden" required onchange="uploadForm();" />
+          </label>
+
+        </form>
+      </div>
+
+      <!-- Sample data + publications links (inside local tab) -->
+      <div class="flex justify-between mt-5 px-1">
+        <button onclick="toggleSampleData()" class="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+          Sample Data
+        </button>
+        <a href="{{ url_for('admin.publications') }}" class="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
+          Publications
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+        </a>
+      </div>
+
+      <!-- Sample data container (hidden by default) -->
+      <div id="sampleDataContainer" class="sampleDataContainer mt-4">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+          <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Sample Datasets</h3>
+          <div class="flex items-center gap-2 p-3 text-sm text-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 mb-3">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/></svg>
+            <span>Click any file below to download</span>
+          </div>
+          <div class="mb-3">
+            <label for="fileTypeSelect" class="block text-sm font-medium mb-1 text-gray-900 dark:text-white">Filter by type:</label>
+            <select id="fileTypeSelect" class="w-full" style="max-width: none;">
+              <option value="">All Files</option>
+              <option value="csv">CSV</option>
+              <option value="dcat">DCAT</option>
+              <option value="json">JSON</option>
+              <option value="npz">NPZ</option>
+              <option value="xlsx">Excel</option>
+              <option value="h5">HDF5</option>
+              <option value="parquet">Parquet</option>
+            </select>
+          </div>
+          <div class="file-list" id="fileList"></div>
+        </div>
+      </div>
+    </div>
+
+    {% if globus_available %}
+    <!-- Globus remote panel -->
+    <div id="globus-panel" class="{{ '' if globus_authenticated else 'hidden' }}">
+      {% include '_components/globus_panel.html' %}
+    </div>
+    {% endif %}
+
+    <!-- CLI panel -->
+    <div id="cli-panel" class="hidden">
+      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+        <div class="flex items-start gap-3 mb-4">
+          <div class="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--primaryColor, #2563eb)20;">
+            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Command Line Interface</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Use AIDRIN directly from your terminal</p>
+          </div>
+        </div>
+
+        <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
+          AIDRIN can be used from the command line without the web interface, enabling scripted and automated data readiness workflows. Install the package and run evaluations directly against your datasets.
+        </p>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
+          The CLI is installed separately from the web interface — see the documentation for installation instructions and usage examples.
+        </p>
+
+        <a href="https://aidrin.readthedocs.io/en/latest/cli.html" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
+           style="background-color: var(--primaryColor, #2563eb);">
+          View CLI Documentation
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

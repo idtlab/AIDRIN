@@ -1,0 +1,213 @@
+import logging
+import os
+import time
+from celery import Celery, Task
+from flask import Flask
+from aidrin._version import __version__
+from aidrin.logging import setup_logging
+
+startup_log = logging.getLogger("startup")
+
+
+def _configure_matplotlib():
+    """Set matplotlib defaults for clean white-background plots."""
+    import matplotlib
+    matplotlib.use("Agg")  # non-interactive backend
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({
+        "figure.facecolor": "none",
+        "axes.facecolor": "none",
+        "axes.edgecolor": "#6b7280",
+        "axes.labelcolor": "#6b7280",
+        "text.color": "#6b7280",
+        "xtick.color": "#6b7280",
+        "ytick.color": "#6b7280",
+        "figure.figsize": (8, 6),
+        "savefig.facecolor": "none",
+        "savefig.edgecolor": "none",
+        "savefig.transparent": True,
+    })
+
+
+def create_app():
+    _configure_matplotlib()
+    setup_logging()
+    app = Flask(__name__)
+    # Preserve insertion order in JSON responses so result cards render in the
+    # order the routes build them (matching the panel), not alphabetically.
+    app.json.sort_keys = False
+
+    # Optional OpenTelemetry instrumentation
+    from web.telemetry import init_telemetry
+    init_telemetry(app)
+
+    @app.context_processor
+    def inject_version():
+        return dict(app_version=__version__)
+
+    app.secret_key = os.environ.get("AIDRIN_SECRET_KEY", "aidrin")
+
+    # Celery config
+    app.config["CELERY"] = {
+        "broker_url": "redis://localhost:6379/0",
+        "result_backend": "redis://localhost:6379/0",
+        "beat_schedule": {
+            "delete-old-custom-metrics": {
+                "task": "delete_old_custom_metrics",
+                "schedule": 120.0,
+            },
+            "delete-old-uploads": {
+                "task": "delete_old_uploads",
+                "schedule": 600.0,
+            },
+        },
+        "task_ignore_result": False,
+        "task_soft_time_limit": 300,
+        "task_time_limit": 360,
+        "worker_hijack_root_logger": False,
+        "result_expires": 600,
+    }
+    app.config.from_prefixed_env()
+
+    # Maximum upload size (default 1 GB; override per deployment via AIDRIN_MAX_UPLOAD_MB).
+    # Set after from_prefixed_env so AIDRIN_MAX_UPLOAD_MB takes precedence. Flask rejects
+    # larger request bodies with 413 before the file is ever saved.
+    try:
+        max_upload_mb = int(os.environ.get("AIDRIN_MAX_UPLOAD_MB", 1024))
+    except ValueError:
+        max_upload_mb = 1024
+    app.config["MAX_CONTENT_LENGTH"] = max_upload_mb * 1024 * 1024
+
+    @app.context_processor
+    def inject_upload_limit():
+        # expose the upload limit to templates for client-side validation
+        return dict(
+            max_upload_mb=max_upload_mb,
+            max_upload_bytes=app.config["MAX_CONTENT_LENGTH"],
+        )
+
+    @app.errorhandler(413)
+    def file_too_large(error):
+        from flask import jsonify, request, url_for
+        max_mb = app.config.get("MAX_CONTENT_LENGTH", 0) // (1024 * 1024)
+        message = f"File too large. The maximum upload size is {max_mb} MB."
+        logging.getLogger("file_upload").warning(
+            "Upload rejected: file exceeds %d MB limit", max_mb
+        )
+        if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+            return jsonify({"error": message}), 413
+        return (
+            f"<!DOCTYPE html><html><head><meta charset='utf-8'><title>File too large</title></head>"
+            f"<body style='font-family:sans-serif;text-align:center;padding:3em;'>"
+            f"<h2>File too large</h2><p>{message}</p>"
+            f"<p><a href='{url_for('core.inspector')}'>Go back to upload</a></p>"
+            f"</body></html>",
+            413,
+        )
+
+    # Initialize in-memory cache
+    app.TEMP_RESULTS_CACHE = {}
+
+    celery_init_app(app)
+
+    # Register all blueprints
+    from web.routes import register_blueprints
+    register_blueprints(app)
+
+    # Import tasks so Celery discovers them on startup
+    from worker.tasks import (  # noqa: F401
+        delete_old_custom_metrics,
+        delete_old_uploads,
+    )
+
+    # project_root is the parent of web/
+    project_root = os.path.dirname(app.root_path)
+
+    # Upload folder at project root (outside the package)
+    upload_folder = os.path.join(project_root, "data", "uploads")
+    os.makedirs(upload_folder, exist_ok=True)
+    app.config["UPLOAD_FOLDER"] = upload_folder
+
+    # Clean up old uploaded files on startup (older than 1 hour)
+    current_time = time.time()
+    max_age_seconds = 3600
+    files_removed = 0
+
+    for filename in os.listdir(upload_folder):
+        file_path = os.path.join(upload_folder, filename)
+        try:
+            if os.path.isfile(file_path):
+                if current_time - os.path.getmtime(file_path) > max_age_seconds:
+                    os.remove(file_path)
+                    files_removed += 1
+                    startup_log.info("Cleaned up old file on startup: %s", filename)
+        except Exception as e:
+            startup_log.warning("Failed to delete %s: %s", file_path, e)
+
+    # Sample data folder (served via /sample-data/ route)
+    sample_data_folder = os.path.join(project_root, "examples", "sample_data")
+    app.config["SAMPLE_DATA_FOLDER"] = sample_data_folder
+
+    # Custom metrics folder stays inside the aidrin package (dynamic import target)
+    import aidrin as _aidrin_pkg
+    aidrin_root = os.path.dirname(_aidrin_pkg.__file__)
+    custom_metrics_folder = os.path.join(aidrin_root, "custom_metrics")
+    os.makedirs(custom_metrics_folder, exist_ok=True)
+    app.config["CUSTOM_METRICS_FOLDER"] = custom_metrics_folder
+    app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {"py"}
+
+    remedy_folder = os.path.join(custom_metrics_folder, "remedy_data")
+    os.makedirs(remedy_folder, exist_ok=True)
+    app.config["REMEDY_FOLDER"] = remedy_folder
+
+    metrics_removed = 0
+    exclude = {"__init__.py", "base_dr.py"}
+    for filename in os.listdir(custom_metrics_folder):
+        if filename in exclude:
+            continue
+        file_path = os.path.join(custom_metrics_folder, filename)
+        try:
+            if os.path.isfile(file_path):
+                if current_time - os.path.getmtime(file_path) > max_age_seconds:
+                    os.remove(file_path)
+                    metrics_removed += 1
+                    startup_log.info("Deleted old custom metric: %s", filename)
+        except Exception as e:
+            startup_log.warning("Failed to delete %s: %s", file_path, e)
+
+    remedy_removed = 0
+    for filename in os.listdir(remedy_folder):
+        file_path = os.path.join(remedy_folder, filename)
+        try:
+            if os.path.isfile(file_path):
+                if current_time - os.path.getmtime(file_path) > max_age_seconds:
+                    os.remove(file_path)
+                    remedy_removed += 1
+                    startup_log.info("Deleted old remedy file: %s", filename)
+        except Exception as e:
+            startup_log.warning("Failed to delete %s: %s", file_path, e)
+
+    if files_removed > 0 or metrics_removed > 0 or remedy_removed > 0:
+        startup_log.info(
+            "Startup cleanup completed: %d upload(s) + %d custom metric(s) + %d remedy file(s) removed",
+            files_removed, metrics_removed, remedy_removed,
+        )
+
+    return app
+
+
+def celery_init_app(app: Flask) -> Celery:
+    class FlaskTask(Task):
+        def __call__(self, *args: object, **kwargs: object) -> object:
+            with app.app_context():
+                return self.run(*args, **kwargs)
+
+    celery_app = Celery(app.name, task_cls=FlaskTask)
+    celery_app.config_from_object(app.config["CELERY"])
+    celery_app.set_default()
+    app.extensions["celery"] = celery_app
+
+    return celery_app
+
+
+__all__ = ["create_app", "celery_init_app"]

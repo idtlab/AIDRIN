@@ -1,0 +1,82 @@
+<!-- Fairness metric panel -->
+<div id="panel-fairness" class="metric-panel hidden">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Fairness</h2>
+    <form id="form-fairness" method="post" enctype="multipart/form-data">
+      <input type="file" id="file" name="file" style="display: none;" />
+    <div id="checkboxContainer_fairness" class="checkboxContainer">
+      <br />
+      <div class="checkboxContainerIndividual">
+        <label class="material-checkbox">
+          <input type="checkbox" name="representation rate" onchange="toggleValue(this)" />
+          <span class="checkmark"></span>
+          Check representation rate
+          <span class="info-icon">i<span class="info-text">This option checks the representation rate of a sensitive feature in the dataset and displays a pie chart highlighting the representation rate of the sensitive feature.</span></span>
+        </label>
+        <div class="mt-3 space-y-3">
+          <div>
+            <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Sensitive feature:</label>
+            <select name="features for representation rate" id="allFeaturesDropdownRepRate" required class="w-full" style="max-width: none;">
+              <option value="" disabled selected>No features available for this dataset</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="checkboxContainerIndividual">
+        <label class="material-checkbox">
+          <input type="checkbox" name="statistical rate" onchange="toggleValue(this)" />
+          <span class="checkmark"></span>
+          Check statistical rate
+          <span class="info-icon">i<span class="info-text">This option calculates the proportions of each sensitive attribute within each category of the selected target feature and presents the results as a bar chart.</span></span>
+        </label>
+        <div class="mt-3 space-y-3">
+          <div>
+            <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Feature:</label>
+            <select name="features for statistical rate" id="allFeaturesDropdownStatRate1" required class="w-full" style="max-width: none;">
+              <option value="" disabled selected>No features available for this dataset</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Target:</label>
+            <select name="target for statistical rate" id="allFeaturesDropdownStatRate2" required class="w-full" style="max-width: none;">
+              <option value="" disabled selected>No features available for this dataset</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="checkboxContainerIndividual">
+        <label class="material-checkbox">
+          <input type="checkbox" name="conditional demographic disparity" onchange="toggleValue(this)" />
+          <span class="checkmark"></span>
+          Conditional Demographic Disparity
+          <span class="info-icon">i<span class="info-text">The conditional demographic disparity metric evaluates the distribution of positive and negative outcomes across sensitive groups.</span></span>
+        </label>
+        <div class="mt-3 space-y-3">
+          <div>
+            <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Sensitive feature:</label>
+            <select name="sensitive for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis1" required class="w-full" style="max-width: none;">
+              <option value="" disabled selected>No features available for this dataset</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Target feature:</label>
+            <select name="target for conditional demographic disparity" id="allFeaturesDropdownCondDemoDis2" required class="w-full" style="max-width: none;">
+              <option value="" disabled selected>No features available for this dataset</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Target value:</label>
+            <input class="textWrapper w-full" type="text" name="target value for conditional demographic disparity" required style="max-width: none;" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+      <button type="button" onclick="withSubmitGuard(this, () => workspaceSubmit('/fairness'));"
+              class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+        Submit
+      </button>
+    </div>
+    </form>
+  </div>
+</div>

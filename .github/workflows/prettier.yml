@@ -5,6 +5,9 @@ on:
   pull_request:
   push:
 
+permissions:
+  contents: read
+
 jobs:
   prettier:
     name: Prettier
@@ -22,5 +25,11 @@ jobs:
       - name: Install prettier
         run: npm install prettier
 
-      - name: Run prettier
-        run: npx prettier --check aidrin/static/css
+      - name: Check CSS formatting
+        run: npx prettier --check web/static/css
+
+      - name: Check JavaScript formatting and syntax
+        run: |
+          npx prettier --check web/static/js
+          node --check web/static/js/inspector.js
+          node --check web/static/js/main.js

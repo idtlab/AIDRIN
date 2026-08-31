@@ -70,20 +70,20 @@ def categorize_keys_fair(self: Task, json_data):
 
         # Visualization
         fig, (ax1, ax2) = plt.subplots(
-            1, 2, figsize=(15, 4), gridspec_kw={"width_ratios": [3, 3], "wspace": 0.8}
+            1, 2, figsize=(6, 2.5),
+            gridspec_kw={"width_ratios": [1, 2], "wspace": 0.6}
         )
-        plt.rcParams.update({"font.size": 20})
 
         pie_sizes = [sum(fair_scores.values()), 19 - sum(fair_scores.values())]
         ax1.pie(
             pie_sizes,
             labels=["Pass", "Fail"],
-            colors=["green", "lightgray"],
+            colors=["#4485F4", "#e5e7eb"],
             autopct="%1.1f%%",
             startangle=90,
+            textprops={"fontsize": 10, "color": "#6b7280"},
         )
         ax1.axis("equal")
-        ax1.set_title("FAIR compliance")
 
         bar_labels = list(fair_bins.keys())
         bar_passed = [fair_scores[label] for label in bar_labels]
@@ -92,22 +92,28 @@ def categorize_keys_fair(self: Task, json_data):
             p / t * 100 if t else 0 for p, t in zip(bar_passed, bar_totals)
         ]
 
-        bars = ax2.barh(bar_labels, bar_percentages, color="skyblue")
+        bar_colors = ["#3b82f6", "#22c55e", "#eab308", "#f97316"]
+        bars = ax2.barh(bar_labels, bar_percentages, color=bar_colors[:len(bar_labels)], height=0.5)
         for i, bar in enumerate(bars):
             ax2.text(
-                bar.get_width(),
+                bar.get_width() + 1,
                 bar.get_y() + bar.get_height() / 2,
                 f"{bar_passed[i]}/{bar_totals[i]}",
-                va="center",
+                va="center", fontsize=9, color="#6b7280",
             )
-        ax2.set_title("Compliance per Principle")
+        ax2.set_xlim(0, 110)
         ax2.set_xticks([])
+        ax2.tick_params(axis="y", labelsize=9, colors="#6b7280")
         for spine in ax2.spines.values():
             spine.set_visible(False)
+        fig.patch.set_alpha(0)
+        ax1.set_facecolor("none")
+        ax2.set_facecolor("none")
 
+        fig.tight_layout(pad=0.5)
         buffer = io.BytesIO()
-        plt.savefig(buffer, format="png", bbox_inches="tight")
-        plt.close()
+        fig.savefig(buffer, format="png", dpi=200, transparent=True)
+        plt.close(fig)
         encoded_image_combined = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
         categorized_data["FAIR Compliance Checks"] = fair_summary

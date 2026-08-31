@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 
 import matplotlib.pyplot as plt
 from celery import Task, shared_task
@@ -7,10 +8,32 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
 
+logger = logging.getLogger(__name__)
+
 
 @shared_task(bind=True, ignore_result=False)
 def completeness(self: Task, file_info):
+    """Compute per-column and overall completeness (non-missing rate) for a dataset.
+
+    Reads the file, calculates the proportion of non-null values for every
+    column, and also computes an overall completeness score — the mean of the
+    per-column non-missing rates.  A bar-chart visualisation is included in the
+    result.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)`` describing the dataset to read.
+
+    Returns
+    -------
+    dict
+        ``{"Completeness scores": {col: float}, "Overall Completeness": float,
+        "Completeness Visualization": base64_str}``
+        where each score is in ``[0, 1]`` (1 = fully complete).
+    """
     try:
+        logger.info("Completeness task started")
         file = read_file(file_info)
 
         # Ensure DataFrame columns are strings to avoid numpy array issues
@@ -32,82 +55,65 @@ def completeness(self: Task, file_info):
         # Ensure all column names are strings to avoid numpy array issues
         completeness_scores = {str(k): v for k, v in completeness_scores.items()}
 
-        # Calculate overall completeness metric for the dataset
-        overall_completeness = 1 - file.isnull().any(axis=1).mean()
+        # Overall completeness = mean per-column non-missing rate (i.e. the
+        # average of the per-column scores above). This degrades gracefully as
+        # columns are added and matches what the per-column scores describe.
+        # NOTE: this is a semantic change from the historical "Overall
+        # Completeness", which was row-wise (fraction of rows with no missing
+        # value in any column) and collapsed toward 0 on wide datasets. See
+        # CHANGELOG.md.
+        overall_completeness = 1 - file.isnull().mean().mean()
 
         result_dict = {}
 
-        if overall_completeness != 0 and overall_completeness != 1:
-            # Filter out columns with completeness score of 1
-            incomplete_columns = {k: v for k, v in completeness_scores.items() if v < 1}
+        # Always include completeness scores for all features
+        result_dict["Completeness scores"] = completeness_scores
+        result_dict["Overall Completeness"] = overall_completeness
 
-            if incomplete_columns:
-                # Add completeness scores to the dictionary
-                result_dict["Completeness scores"] = incomplete_columns
+        # Horizontal bar chart — grows vertically with feature count
+        labels = list(completeness_scores.keys())
+        values = list(completeness_scores.values())
+        n = len(labels)
+        text_color = "#6b7280"
 
-                # Create a bar chart
-                plt.figure(figsize=(8, 8))
-                plt.bar(
-                    incomplete_columns.keys(), incomplete_columns.values(), color="blue"
-                )
-                plt.title("Completeness Scores", fontsize=16)
-                plt.xlabel("Columns", fontsize=14)
-                plt.ylabel("Completeness Score", fontsize=14)
-                # Setting y-axis limit between 0 and 1 for completeness scores
-                plt.ylim(0, 1)
+        fig_height = max(3, n * 0.3)
+        fig, ax = plt.subplots(figsize=(8, fig_height))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
 
-                # Rotate x-axis tick labels
-                plt.xticks(rotation=45, ha="right", fontsize=12)
+        bars = ax.barh(range(n), values, color="#4485F4", height=0.7)
+        ax.set_xlabel("Completeness Score", fontsize=10, color=text_color)
+        ax.set_yticks(range(n))
+        ax.set_yticklabels(labels, fontsize=9, color=text_color)
+        ax.tick_params(axis="x", colors=text_color, labelsize=8)
+        ax.set_xlim(0, 1.12)
+        ax.invert_yaxis()
+        ax.set_ylim(n - 0.5, -0.5)
 
-                plt.subplots_adjust(bottom=0.5)
-                plt.tight_layout()
+        for spine in ax.spines.values():
+            spine.set_color(text_color)
 
-                # Save the chart to a BytesIO object
-                img_buf = io.BytesIO()
-                plt.savefig(img_buf, format="png")
-                img_buf.seek(0)
+        for bar, val in zip(bars, values):
+            if val > 0.15:
+                ax.text(val - 0.01, bar.get_y() + bar.get_height() / 2,
+                        f'{val:.2f}', ha='right', va='center', fontsize=8, color='white', fontweight='bold')
+            else:
+                ax.text(val + 0.01, bar.get_y() + bar.get_height() / 2,
+                        f'{val:.2f}', ha='left', va='center', fontsize=8, color=text_color)
 
-                # Encode the image as base64
-                img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
+        fig.tight_layout(pad=0.5)
 
-                # Add the base64-encoded image to the dictionary under a separate key
-                result_dict["Completeness Visualization"] = img_base64
+        img_buf = io.BytesIO()
+        fig.savefig(img_buf, format="png", dpi=150, transparent=True)
+        img_buf.seek(0)
 
-                plt.close()  # Close the plot to free up resources
+        img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
+        result_dict["Completeness Visualization"] = img_base64
+        plt.close(fig)
 
-            # Add overall completeness to the dictionary
-            result_dict["Overall Completeness"] = overall_completeness
-
-        elif overall_completeness == 1:
-            # Create a bar chart for 0 completeness
-            plt.figure(figsize=(8, 4))
-            plt.bar(["Overall Missingness"], [0], color="red")
-            plt.title("Missingness of the Dataset")
-            plt.xlabel("Dataset")
-            plt.ylabel("Missingness Score")
-            # Setting y-axis limit between 0 and 1 for completeness scores
-            plt.ylim(0, 1)
-
-            plt.tight_layout()
-
-            # Save the chart to a BytesIO object
-            img_buf = io.BytesIO()
-            plt.savefig(img_buf, format="png")
-            img_buf.seek(0)
-
-            # Encode the image as base64
-            img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
-
-            # Add the base64-encoded image to the dictionary under a separate key
-            result_dict["Completeness Visualization"] = img_base64
-
-            plt.close()  # Close the plot to free up resources
-
-            # Add overall completeness to the dictionary
-            result_dict["Overall Completeness"] = 1
-        else:
-            result_dict["Overall Completeness of Dataset"] = "Error"
-
+        logger.info("Completeness task completed: %d columns, overall=%.4f", len(completeness_scores), overall_completeness)
         return result_dict
+
     except SoftTimeLimitExceeded:
+        logger.error("Completeness task timed out")
         raise Exception("Completeness task timed out.")

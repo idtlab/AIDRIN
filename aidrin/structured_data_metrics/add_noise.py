@@ -24,12 +24,15 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info):
     if epsilon <= 0:
         raise Exception("Epsilon must be greater than 0")
 
+    if not add_noise_columns:
+        raise Exception("No columns selected for noise addition")
+
     if isinstance(file_info, str):
         df = pd.read_json(file_info)
     else:
         df = file_info
     df_drop_na = df.dropna()
-    df_drop_na = df_drop_na.reset_index(inplace=False)
+    df_drop_na = df_drop_na.reset_index(drop=True)
     if df_drop_na.empty:
         raise Exception("Dataset is empty")
 

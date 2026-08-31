@@ -1,0 +1,43 @@
+<!-- Class Imbalance metric panel -->
+<div id="panel-class-imbalance" class="metric-panel hidden">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Class Imbalance</h2>
+    <form id="form-class-imbalance" method="post" enctype="multipart/form-data">
+      <input type="file" id="file" name="file" style="display: none;" />
+      <div id="checkbox-container-class-imbalance" class="checkboxContainer">
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="class imbalance" value="yes" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check class imbalance
+            <span class="info-icon">i<span class="info-text">This option checks the distribution of the target feature and displays a pie chart highlighting the class imbalance in the dataset.
+              <a href="{{ url_for('admin.class_imbalance_docs') }}" target="_blank" style="color: #4a90e2; font-style: italic;">See documentation</a></span></span>
+          </label>
+          <ul class="metric-inputs" style="display: none;">
+            <li>
+              <label class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Target feature:</label>
+              <select name="target features for class imbalance" id="all-features-dropdown-class-imbalance" required class="w-full" style="max-width: none;">
+                <option value="" disabled selected>No features available for this dataset</option>
+              </select>
+            </li>
+            <li style="flex-direction: column; align-items: flex-start;">
+              <label class="text-sm font-medium mb-2" style="color: var(--textColor); min-width: auto;">Select Distance Metrics:</label>
+              <div id="class-imbalance-distance-chips" class="flex flex-wrap gap-2"></div>
+              <div class="flex items-start gap-2 p-3 mt-3 text-sm text-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400" role="alert">
+                <svg class="w-4 h-4 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>
+                <span>By default, <strong>Euclidean Distance (EU)</strong> is used if none selected.</span>
+              </div>
+              <select id="class-imbalance-distance-dropdown" name="distance metric for class imbalance" multiple style="display:none;"></select>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <button type="button" onclick="withSubmitGuard(this, () => workspaceSubmit('/class-imbalance'));"
+                class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+          Submit
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

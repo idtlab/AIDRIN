@@ -1,15 +1,19 @@
 import base64
 import io
+import logging
 import warnings
 from math import sqrt
-from celery.exceptions import SoftTimeLimitExceeded
+
 import numpy as np
-# Configure matplotlib before importing pyplot
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
+import pandas as pd
+from celery.exceptions import SoftTimeLimitExceeded
 
+logger = logging.getLogger(__name__)
+
+# Configure matplotlib before importing pyplot to ensure non-interactive Agg backend
+import matplotlib  # noqa: E402
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
-
 
 plt.ioff()  # Turn off interactive mode
 warnings.filterwarnings('ignore')  # Suppress matplotlib warnings
@@ -265,7 +269,7 @@ def class_distribution_plot(df, column):
             raise ValueError(f"Column '{column}' has too many classes ({len(unique_classes)}). Visualization works best with fewer than 50 classes.")
 
         # Debug: Print some info about the data
-        print(f"Class distribution plot - Column: {column}, Unique values: {len(class_counts)}, Total: {class_counts.sum()}")
+        logger.debug("Class distribution plot — column: %s, unique values: %d, total: %d", column, len(class_counts), class_counts.sum())
 
         # Convert labels to strings and handle truncation safely
         class_labels_modified = []
@@ -359,7 +363,7 @@ def calc_imbalance_degree(df, column, dist_metric='EU'):
             raise ValueError(f"Target feature '{column}' not found in the dataset")
 
         # Check if the column has categorical data
-        if df[column].dtype in ['int64', 'float64'] and df[column].nunique() > 100:
+        if pd.api.types.is_numeric_dtype(df[column]) and df[column].nunique() > 100:
             raise ValueError(
                 f"Column '{column}' appears to be numerical with too many unique values ({df[column].nunique()})."
                 "Class imbalance analysis requires categorical data with fewer unique values."

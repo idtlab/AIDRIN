@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build-docs:
     runs-on: ubuntu-latest
@@ -20,5 +23,12 @@ jobs:
         run: pip install -r docs/requirements.txt
 
       - name: Build Documentation
-        run: make html # Assuming a Makefile in the docs directory
+        run: make html SPHINXOPTS="-W --keep-going"
         working-directory: ./docs
+
+      # Non-blocking: linkcheck reaches out to third-party sites, so an outage
+      # or rate limit elsewhere should not fail an unrelated pull request.
+      - name: Check Links
+        run: make linkcheck
+        working-directory: ./docs
+        continue-on-error: true

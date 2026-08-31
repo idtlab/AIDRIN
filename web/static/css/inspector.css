@@ -1,0 +1,115 @@
+/* inspector.css — Custom styles for the inspector layout */
+
+/* Smooth panel transitions */
+.metric-panel {
+  animation: fadeInPanel 0.2s ease-out;
+}
+
+@keyframes fadeInPanel {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Sidebar active state */
+.sidebar-metric-item.active {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+html.dark .sidebar-metric-item.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Full-width selects inside metric panel cards (override theme.css max-width) */
+.metric-panel select.w-full {
+  max-width: none;
+}
+
+/* Custom-outlier editor: unify control heights. The selects otherwise inherit
+   theme.css's taller global select padding (10px) while the inputs use their
+   Tailwind padding, leaving rows uneven. Match everything to the compact
+   px-3 py-2 (8px) control height. */
+#custom-outlier-editor select:not([multiple]),
+#custom-outlier-editor input[type="text"],
+#custom-outlier-editor input[type="number"] {
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border-radius: 8px;
+  max-width: none;
+}
+
+#custom-outlier-editor select:not([multiple]) {
+  padding-right: 32px; /* room for the chevron */
+}
+
+/* Tables: outer border + header separator */
+.relative.overflow-x-auto {
+  border: 1px solid #e5e7eb;
+}
+
+html.dark .relative.overflow-x-auto {
+  border-color: #374151;
+}
+
+.relative.overflow-x-auto thead {
+  border-bottom: 2px solid #d1d5db;
+}
+
+html.dark .relative.overflow-x-auto thead {
+  border-bottom-color: #4b5563;
+}
+
+/* CodeMirror editor sizing */
+.CodeMirror {
+  font-size: 13px !important;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  line-height: 1.5 !important;
+  min-height: 300px;
+  height: auto;
+}
+
+.CodeMirror-scroll {
+  min-height: 300px;
+}
+
+/* Submit-button loading state — prevents duplicate submissions (issue #108).
+   Applied by withSubmitGuard() in inspector.js for the duration of the
+   in-flight request. The label is made transparent (so the button keeps its
+   original width regardless of label length) and a spinner is overlaid via
+   ::after. The spinner's color is set inline by withSubmitGuard() to whatever
+   the button's text color was at click time, so it stays theme-aware. */
+button.is-submitting {
+  position: relative;
+  cursor: not-allowed !important;
+  pointer-events: none;
+  opacity: 0.75;
+  color: transparent !important;
+}
+
+button.is-submitting::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid var(--aidrin-spinner-color, #ffffff);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: aidrin-submit-spin 0.6s linear infinite;
+}
+
+@keyframes aidrin-submit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,10 +9,34 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
 
+logger = logging.getLogger(__name__)
+
 
 @shared_task(bind=True, ignore_result=False)
 def outliers(self: Task, file_info):
+    """Detect outliers in numerical columns using the IQR method.
+
+    For each numerical column, computes the inter-quartile range (IQR) and
+    flags values below ``Q1 - 1.5*IQR`` or above ``Q3 + 1.5*IQR`` as
+    outliers.  Columns with zero IQR (no variability) receive a score of 0.
+    An overall outlier score is the mean across all column scores.  A bar-chart
+    visualisation of per-column scores is included.
+
+    Parameters
+    ----------
+    file_info : tuple
+        ``(file_path, file_name, file_type)`` describing the dataset to read.
+
+    Returns
+    -------
+    dict
+        ``{"Outlier scores": {col: float, "Overall outlier score": float},
+        "Outliers Visualization": base64_str}``
+        where each per-column score is the proportion of outliers in ``[0, 1]``.
+        Returns ``{"Error": str}`` if no numerical columns are found.
+    """
     try:
+        logger.info("Outliers task started")
         file = read_file(file_info)
 
         # Ensure DataFrame columns are strings to avoid numpy array issues
@@ -22,26 +47,36 @@ def outliers(self: Task, file_info):
             out_dict = {}
             # Select numerical columns for outlier detection
             numerical_columns = file.select_dtypes(include=[np.number])
-            # drop nan
-            numerical_columns_dropna = numerical_columns.dropna()
 
-            print(numerical_columns_dropna)
-            # IQR method
-            q1 = numerical_columns_dropna.quantile(0.25)
-            q3 = numerical_columns_dropna.quantile(0.75)
-            IQR = q3 - q1
-            outliers = numerical_columns_dropna[
-                (
-                    (numerical_columns_dropna < (q1 - 1.5 * IQR))
-                    | (numerical_columns_dropna > (q3 + 1.5 * IQR))
-                )
-            ]
+            if numerical_columns.empty:
+                return {"Error": "No numerical features found in the dataset."}
 
-            # Calculate the proportion outliers in each column
-            proportions = outliers.notna().mean()
+            proportions_dict = {}
 
-            # Convert the proportions Series to a dictionary
-            proportions_dict = proportions.to_dict()
+            # Process each column separately
+            for col in numerical_columns.columns:
+                series = numerical_columns[col].dropna()
+
+                if series.empty:
+                    proportions_dict[col] = np.nan
+                    continue
+
+                q1 = series.quantile(0.25)
+                q3 = series.quantile(0.75)
+                IQR = q3 - q1
+
+                if IQR == 0:
+                    proportions_dict[col] = 0.0  # no variability, no outliers
+                    continue
+
+                # Identify outliers using IQR
+                mask = (series < (q1 - 1.5 * IQR)) | (series > (q3 + 1.5 * IQR))
+                proportions_dict[col] = mask.mean()  # proportion of outliers
+
+            # Calculate overall outlier score
+            valid_values = [v for v in proportions_dict.values() if not np.isnan(v)]
+            overall_score = np.mean(valid_values) if valid_values else 0.0
+            proportions_dict["Overall outlier score"] = overall_score
 
             # Ensure all column names are strings to avoid numpy array issues
             proportions_dict = {str(k): v for k, v in proportions_dict.items()}
@@ -52,34 +87,59 @@ def outliers(self: Task, file_info):
             # add the average to dictionary
             out_dict["Outlier scores"] = proportions_dict
 
-            # Create a bar chart for outlier scores
-            plt.figure(figsize=(8, 8))
-            plt.bar(proportions_dict.keys(), proportions_dict.values(), color="red")
-            plt.title("Proportion of Outliers for Numerical Columns", fontsize=14)
-            plt.xlabel("Columns", fontsize=14)
-            plt.ylabel("Proportion of Outliers", fontsize=14)
-            # plt.ylim(0, 1)  # Setting y-axis limit between 0 and 1
+            # Create bar chart for feature-level outlier proportions only
+            feature_scores = {
+                k: v for k, v in proportions_dict.items() if k != "Overall outlier score"
+            }
 
-            # Rotate x-axis tick labels
-            plt.xticks(rotation=45, ha="right", fontsize=12)
+            if feature_scores:  # only plot if there are valid features
+                labels = list(feature_scores.keys())
+                values = list(feature_scores.values())
+                n = len(labels)
+                text_color = "#6b7280"
 
-            # Increase bottom margin
-            plt.subplots_adjust(bottom=0.5)
-            plt.tight_layout()
+                fig_height = max(3, n * 0.3)
+                fig, ax = plt.subplots(figsize=(8, fig_height))
+                fig.patch.set_alpha(0)
+                ax.set_facecolor("none")
 
-            # Save the chart to BytesIO and encode as base64
-            img_buf = io.BytesIO()
-            plt.savefig(img_buf, format="png")
-            img_buf.seek(0)
-            img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
+                bars = ax.barh(range(n), values, color="#D86470", height=0.7)
+                ax.set_xlabel("Proportion of Outliers", fontsize=10, color=text_color)
+                ax.set_yticks(range(n))
+                ax.set_yticklabels(labels, fontsize=9, color=text_color)
+                ax.tick_params(axis="x", colors=text_color, labelsize=8)
+                ax.set_xlim(0, max(max(values) * 1.15, 0.1))
+                ax.invert_yaxis()
+                ax.set_ylim(n - 0.5, -0.5)
 
-            # Add the base64-encoded image to the dictionary under a separate key
-            out_dict["Outliers Visualization"] = img_base64
+                for spine in ax.spines.values():
+                    spine.set_color(text_color)
 
-            plt.close()  # Close the plot to free up resources
+                for bar, val in zip(bars, values):
+                    if val > max(values) * 0.15:
+                        ax.text(val - 0.005, bar.get_y() + bar.get_height() / 2,
+                                f'{val:.3f}', ha='right', va='center', fontsize=8, color='white', fontweight='bold')
+                    else:
+                        ax.text(val + 0.005, bar.get_y() + bar.get_height() / 2,
+                                f'{val:.3f}', ha='left', va='center', fontsize=8, color=text_color)
 
+                fig.tight_layout(pad=0.5)
+
+                img_buf = io.BytesIO()
+                fig.savefig(img_buf, format="png", dpi=150, transparent=True)
+                img_buf.seek(0)
+                img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
+
+                out_dict["Outliers Visualization"] = img_base64
+                plt.close(fig)
+
+            logger.info("Outliers task completed: %d numerical columns processed", len(numerical_columns.columns))
             return out_dict
-        except Exception:
-            return {"Error": "Check features should be numerical"}
+
+        except Exception as e:
+            logger.error("Outlier detection failed: %s", e)
+            return {"Error": f"Outlier detection failed: {str(e)}"}
+
     except SoftTimeLimitExceeded:
+        logger.error("Outliers task timed out")
         raise Exception("Outliers task timed out.")

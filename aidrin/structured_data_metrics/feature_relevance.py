@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,163 +11,52 @@ from sklearn.preprocessing import LabelEncoder
 
 from aidrin.file_handling.file_parser import read_file
 
-# def calc_shapley(df, cat_cols, num_cols, target_col):
-#     """
-#     Calculate Shapley values and other metrics for a predictive model.
-
-#     Parameters:
-#         - df (pd.DataFrame): The input DataFrame.
-#         - cat_cols (list): List of categorical column names.
-#         - num_cols (list): List of numerical column names.
-#         - target_col (str): The target column name.
-
-#     Returns:
-#         - dict: A dictionary containing RMSE and top 3 features based on Shapley values.
-#     """
-#     final_dict = {}
-
-#     try:
-#         # Drop rows with missing values
-#         df = df.dropna()
-
-#         if df.empty:
-#             raise ValueError("After dropping missing values, the DataFrame is empty.")
-#         # Check if cat_cols or num_cols is an empty list
-#         if cat_cols == [""]:
-#             cat_cols = []
-#         if num_cols == [""]:
-#             num_cols = []
-
-#         # If cat_cols is an empty list, only use num_cols
-#         if not cat_cols and num_cols:
-#             selected_cols = num_cols
-#         # If num_cols is an empty list, only use cat_cols
-#         elif cat_cols and not num_cols:
-#             selected_cols = cat_cols
-#         # If both cat_cols and num_cols are provided, use all specified columns
-#         else:
-#             selected_cols = cat_cols + num_cols
-
-#         # Check if specified columns are present in the DataFrame
-#         if not set(selected_cols).issubset(df.columns):
-#             raise ValueError("Specified columns not found in the DataFrame.")
-
-#         # Convert categorical columns to dummy variables if cat_cols are present
-#         if cat_cols:
-#             data = pd.get_dummies(df[cat_cols], drop_first=False)
-#         else:
-#             data = pd.DataFrame()
-
-#         # Include numerical columns if num_cols are present
-#         if num_cols:
-#             data = pd.concat([data, df[num_cols]], axis=1)
-
-#         # Convert target column to numerical
-#         target = pd.get_dummies(df[target_col]).astype(float)
-
-#         data = data.astype(float)
-
-#         # Split the dataset into train and test sets
-#         X_train, X_test, y_train, y_test = train_test_split(data, target, test_size=0.2, random_state=0)
-
-#         # Create a regressor model
-#         model = RandomForestRegressor(n_estimators=100, random_state=0)
-#         model.fit(X_train, y_train)
-
-#         # Make predictions
-#         y_pred = model.predict(X_test)
-
-#         # Calculate RMSE
-#         rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-
-#         # Create an explainer for the model
-#         explainer = shap.Explainer(model, X_test)
-
-#         # Convert DataFrame to NumPy array for indexing
-#         X_test_np = X_test.values
-
-#         # Calculate Shapley values for all instances in the test set
-#         shap_values = explainer.shap_values(X_test_np)
-
-#         class_names = y_test.columns
-
-#         # Calculate the mean absolute Shapley values for each feature across instances
-#         mean_shap_values = np.abs(shap_values).mean(axis=(0, 1))  # Assuming shap_values is a 3D array
-
-#         # Get feature names
-#         feature_names = X_test.columns
-
-#         # Sort features by mean absolute Shapley values in descending order
-#         sorted_indices = np.argsort(mean_shap_values)[::-1]
-
-#         # Plot the bar chart
-#         plt.figure(figsize=(8, 8))
-#         plt.bar(range(len(mean_shap_values)), mean_shap_values[sorted_indices], align="center")
-#         plt.xticks(range(len(mean_shap_values)), feature_names[sorted_indices], rotation=45, ha="right")
-#         plt.xlabel("Feature")
-#         plt.ylabel("Mean Absolute Shapley Value")
-#         plt.title("Feature Importances")
-#         plt.tight_layout()  # Adjust layout
-
-#         # Save the plot to a file
-#         image_stream = io.BytesIO()
-#         plt.savefig(image_stream, format='png')
-#         plt.close()
-
-#         # Convert the image to a base64-encoded string
-#         base64_image = base64.b64encode(image_stream.getvalue()).decode('utf-8')
-#         # Close the BytesIO stream
-#         image_stream.close()
-
-#         # Convert shap_values to a numpy array
-#         shap_values = np.array(shap_values)
-
-#         # Get feature names
-#         feature_names = X_test.columns.tolist()
-
-#         # Create a summary dictionary
-#         summary_dict = {}
-
-#         # Loop through each class
-#         for class_index, class_name in enumerate(class_names):
-#             class_shap_values = shap_values[class_index]
-
-#             # Compute the mean of the absolute values of SHAP values for each feature
-#             class_summary = {feature: np.mean(np.abs(shap_values[:, feature_index]))
-#                              for feature_index, feature in enumerate(feature_names)}
-
-#             # Add the class dictionary to the summary dictionary
-#             summary_dict["{} {}".format(target_col, class_name)] = class_summary
-
-#         final_dict["RMSE"] = rmse
-#         final_dict['Summary of Shapley Values'] = summary_dict
-#         final_dict['summary plot'] = base64_image
-
-#     except Exception as e:
-#         final_dict["Error"] = f"An error occurred: {str(e)}"
-
-#     return final_dict
+logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, ignore_result=False)
 def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
+    """Prepare a dataset for Pearson correlation analysis.
+
+    Reads the file, filters to the selected columns, imputes missing values
+    (``"Missing"`` sentinel for categorical, column mean for numerical), one-hot
+    encodes categorical columns, and label-encodes a categorical target column.
+    The cleaned
+    DataFrame is returned as a column-oriented dict (``df.to_dict("list")``)
+    so it can be passed safely through the Celery result backend.
+
+    Parameters
+    ----------
+    cat_cols : list of str
+        Categorical feature column names to include.
+    num_cols : list of str
+        Numerical feature column names to include.
+    target_col : str
+        Target column name.  Must not appear in *cat_cols* or *num_cols*.
+    file_info : tuple
+        ``(file_path, file_name, file_type)``
+
+    Returns
+    -------
+    dict
+        Column-oriented data dict suitable for ``pd.DataFrame.from_dict()``,
+        or ``{"Error": str}`` on failure.
+    """
     try:
-        print(f"Starting data_cleaning with cat_cols: {cat_cols}, num_cols: {num_cols}, target_col: {target_col}")
+        logger.info("Data cleaning task started: %d cat cols, %d num cols, target=%r", len(cat_cols), len(num_cols), target_col)
 
         try:
             df = read_file(file_info)
-            print(f"File read successfully. DataFrame shape: {df.shape}")
-            print(f"DataFrame columns: {list(df.columns)}")
-            print(f"DataFrame dtypes: {df.dtypes.to_dict()}")
+            logger.info("File read successfully: shape=%s", df.shape)
         except Exception as e:
-            print(f"Error reading file: {e}")
+            logger.error("Error reading file: %s", e)
             return {
                 "Error": "Failed to read the file. Please check the file path and type."
             }
 
         # Filter DataFrame to include only the specified columns
         selected_columns = [target_col] + cat_cols + num_cols
-        print(f"Selected columns: {selected_columns}")
+        logger.debug("Selected columns: %s", selected_columns)
 
         # Check if all columns exist
         missing_columns = [col for col in selected_columns if col not in df.columns]
@@ -180,133 +70,138 @@ def data_cleaning(self: Task, cat_cols, num_cols, target_col, file_info):
             }
 
         df_filtered = df[selected_columns].copy()
-        print(f"Filtered DataFrame shape: {df_filtered.shape}")
+        logger.debug("Filtered DataFrame shape: %s", df_filtered.shape)
 
         # Fill missing values more robustly
         if cat_cols:  # Only process if there are categorical columns
             for col in cat_cols:
+                logger.debug("Imputing missing values in categorical column %r", col)
                 try:
-                    print(f"Processing categorical column: {col}")
-                    print(f"Column {col} unique values before fillna: {df_filtered[col].nunique()}")
                     df_filtered[col] = df_filtered[col].fillna("Missing")
-                    print(f"Column {col} unique values after fillna: {df_filtered[col].nunique()}")
                 except Exception as e:
-                    print(f"Warning: Error filling missing values in categorical column {col}: {e}")
+                    logger.warning("Error filling missing values in categorical column %r: %s", col, e)
                     # Fallback: replace NaN with a default value
                     df_filtered[col] = df_filtered[col].astype(str).replace('nan', 'Missing')
         else:
-            print("No categorical columns to process")
+            logger.debug("No categorical columns to impute")
 
         if num_cols:  # Only process if there are numerical columns
             for col in num_cols:
+                col_mean = df_filtered[col].mean()
+                if pd.isna(col_mean):
+                    col_mean = 0.0
+                logger.debug("Imputing missing values in numerical column %r with mean=%.4f", col, col_mean)
                 try:
-                    print(f"Processing numerical column: {col}")
-                    print(f"Column {col} data type: {df_filtered[col].dtype}")
-                    # Calculate mean safely
-                    col_mean = df_filtered[col].mean()
-                    if pd.isna(col_mean):
-                        col_mean = 0.0
-                    print(f"Column {col} mean: {col_mean}")
                     df_filtered[col] = df_filtered[col].fillna(col_mean)
                 except Exception as e:
-                    print(f"Warning: Error filling missing values in numerical column {col}: {e}")
+                    logger.warning("Error filling missing values in numerical column %r: %s", col, e)
                     # Fallback: replace NaN with 0
                     df_filtered[col] = df_filtered[col].fillna(0.0)
         else:
-            print("No numerical columns to process")
+            logger.debug("No numerical columns to impute")
 
         # One-hot encode categorical columns only if they exist
         if cat_cols:
+            logger.debug("Starting one-hot encoding for %d categorical columns", len(cat_cols))
             try:
-                print(f"Starting one-hot encoding for {len(cat_cols)} categorical columns...")
                 df_filtered = pd.get_dummies(df_filtered, columns=cat_cols)
-                print(f"One-hot encoding completed. DataFrame now has {df_filtered.shape[1]} columns.")
+                logger.debug("One-hot encoding completed: DataFrame now has %d columns", df_filtered.shape[1])
             except Exception as e:
-                print(f"Error during one-hot encoding: {e}")
+                logger.error("Error during one-hot encoding: %s", e)
                 return {"Error": f"One-hot encoding failed: {str(e)}"}
         else:
-            print("No categorical columns to encode")
+            logger.debug("No categorical columns to one-hot encode")
 
         # Encode target variable if categorical
-        if df_filtered[target_col].dtype == "object":
+        if pd.api.types.is_object_dtype(df_filtered[target_col]) or isinstance(df_filtered[target_col].dtype, pd.StringDtype):
+            logger.debug("Encoding categorical target column %r", target_col)
             try:
-                print(f"Encoding target column {target_col}...")
                 le_target = LabelEncoder()
                 df_filtered[target_col] = le_target.fit_transform(df_filtered[target_col])
-                print(f"Target column {target_col} encoded successfully.")
+                logger.debug("Target column %r encoded successfully", target_col)
             except Exception as e:
-                print(f"Error encoding target column: {e}")
+                logger.error("Error encoding target column: %s", e)
                 return {"Error": f"Target column encoding failed: {str(e)}"}
 
         # Convert to JSON more safely
         try:
-            print("Converting DataFrame to JSON format...")
             result = df_filtered.to_dict(orient="list")
-            print(f"Data cleaning completed successfully. Final data shape: {df_filtered.shape}")
+            logger.info("Data cleaning task completed: final shape=%s", df_filtered.shape)
             return result
         except Exception as e:
-            print(f"Error converting to JSON: {e}")
+            logger.error("Error converting to dict: %s", e)
             return {"Error": f"JSON conversion failed: {str(e)}"}
 
     except SoftTimeLimitExceeded:
-        print("Data Cleaning task timed out.")
+        logger.error("Data cleaning task timed out")
         raise Exception("Data Cleaning task timed out.")
     except Exception as e:
-        print(f"Error occurred during data cleaning: {e}")
+        logger.error("Error occurred during data cleaning: %s", e)
         return {"Error": f"Data cleaning failed: {str(e)}"}
 
 
 @shared_task(bind=True, ignore_result=False)
 def pearson_correlation(self: Task, df_json, target_col) -> dict:
+    """Compute Pearson correlation between each feature and the target column.
+
+    Accepts the column-oriented dict produced by :func:`data_cleaning`,
+    reconstructs a DataFrame, and calculates the Pearson correlation
+    coefficient for every numeric feature against *target_col*.  Columns
+    with zero standard deviation or insufficient data are skipped silently.
+
+    Parameters
+    ----------
+    df_json : dict
+        Column-oriented data dict (output of ``data_cleaning``).
+    target_col : str
+        Name of the target column.
+
+    Returns
+    -------
+    dict
+        ``{feature_name: float}`` mapping feature names to their Pearson
+        correlation with the target, or ``{"Error": str}`` on failure.
+    """
     try:
-        print(f"Starting pearson_correlation with target_col: {target_col}")
-        print(f"Input df_json type: {type(df_json)}")
-        if isinstance(df_json, dict):
-            print(f"Input df_json keys: {list(df_json.keys())}")
+        logger.info("Pearson correlation task started: target=%r", target_col)
 
         # Convert JSON back to DataFrame with proper error handling
         try:
             df = pd.DataFrame.from_dict(df_json)
-            print(f"DataFrame created successfully. Shape: {df.shape}")
-            print(f"DataFrame columns: {list(df.columns)}")
-            print(f"DataFrame dtypes: {df.dtypes.to_dict()}")
+            logger.info("DataFrame reconstructed: shape=%s", df.shape)
         except Exception as e:
-            print(f"Error converting JSON to DataFrame: {e}")
+            logger.error("Error converting dict to DataFrame: %s", e)
             return {"Error": f"Failed to convert data: {str(e)}"}
 
         # Ensure target column exists
         if target_col not in df.columns:
-            print(f"Target column '{target_col}' not found. Available columns: {list(df.columns)}")
+            logger.error("Target column %r not found. Available: %s", target_col, list(df.columns))
             return {"Error": f"Target column '{target_col}' not found in the data"}
 
         # Get columns excluding target column
         cols = df.columns.difference([target_col])
         if len(cols) == 0:
-            print("No feature columns found for correlation analysis")
             return {"Error": "No feature columns found for correlation analysis"}
 
-        print(f"Processing {len(cols)} feature columns: {list(cols)}")
+        logger.info("Computing Pearson correlation for %d feature columns", len(cols))
 
         correlations = {}
+        skipped = 0
         for col in cols:
             if col != target_col:
                 try:
-                    print(f"Processing column: {col}")
-                    print(f"Column {col} dtype: {df[col].dtype}")
-                    print(f"Target column {target_col} dtype: {df[target_col].dtype}")
-
                     # Ensure both columns are numeric
                     if not pd.api.types.is_numeric_dtype(df[col]) or not pd.api.types.is_numeric_dtype(df[target_col]):
-                        print(f"Warning: Skipping column '{col}' - non-numeric data types")
+                        logger.debug("Skipping column %r — non-numeric dtype", col)
+                        skipped += 1
                         continue
 
                     # Remove any NaN values for this specific column pair
                     valid_data = df[[col, target_col]].dropna()
                     if len(valid_data) < 2:
-                        print(f"Warning: Skipping column '{col}' - insufficient valid data after removing NaN values")
+                        logger.debug("Skipping column %r — insufficient valid data (%d rows)", col, len(valid_data))
+                        skipped += 1
                         continue
-
-                    print(f"Column {col} valid data points: {len(valid_data)}")
 
                     # Calculate covariance
                     cov = np.cov(valid_data[col], valid_data[target_col], ddof=0)[0, 1]
@@ -316,7 +211,8 @@ def pearson_correlation(self: Task, df_json, target_col) -> dict:
 
                     # Check for division by zero
                     if std_dev_col == 0 or std_dev_target == 0:
-                        print(f"Warning: Skipping column '{col}' - zero standard deviation")
+                        logger.debug("Skipping column %r — zero standard deviation", col)
+                        skipped += 1
                         continue
 
                     # Calculate Pearson correlation coefficient
@@ -324,32 +220,54 @@ def pearson_correlation(self: Task, df_json, target_col) -> dict:
 
                     # Ensure correlation is a valid number
                     if np.isfinite(corr):
-                        correlations[col] = float(corr)  # Convert to Python float for JSON serialization
-                        print(f"Column {col} correlation: {corr}")
+                        correlations[col] = float(corr)
                     else:
-                        print(f"Warning: Skipping column '{col}' - invalid correlation value: {corr}")
+                        logger.debug("Skipping column %r — invalid correlation value: %s", col, corr)
+                        skipped += 1
 
                 except Exception as e:
-                    print(f"Warning: Error calculating correlation for column '{col}': {e}")
+                    logger.warning("Error calculating correlation for column %r: %s", col, e)
+                    skipped += 1
                     continue
 
         if not correlations:
-            print("No valid correlations could be calculated")
+            logger.error("No valid correlations could be calculated for target=%r (%d features skipped)", target_col, skipped)
             return {"Error": "No valid correlations could be calculated"}
 
-        print(f"Successfully calculated correlations for {len(correlations)} features")
+        logger.info("Pearson correlation task completed: %d features computed, %d skipped", len(correlations), skipped)
         return correlations
 
     except SoftTimeLimitExceeded:
+        logger.error("Pearson correlation task timed out")
         raise Exception("Pearson Correlation task timed out.")
     except Exception as e:
-        print(f"Unexpected error in pearson_correlation: {e}")
+        logger.error("Unexpected error in pearson_correlation: %s", e)
         return {"Error": f"Correlation calculation failed: {str(e)}"}
 
 
 @shared_task(bind=True, ignore_result=False)
 def plot_features(self: Task, correlations, target_col):
+    """Render a bar chart of feature–target Pearson correlations.
+
+    Takes the ``{feature: correlation}`` dict produced by
+    :func:`pearson_correlation` and returns a base64-encoded PNG bar chart
+    suitable for embedding directly in JSON responses or HTML.
+
+    Parameters
+    ----------
+    correlations : dict
+        ``{feature_name: float}`` mapping produced by :func:`pearson_correlation`.
+    target_col : str
+        Target column name (used as the chart title).
+
+    Returns
+    -------
+    str
+        Base64-encoded PNG image, or ``None`` on error.
+    """
     try:
+        logger.info("Plot features task started: %d features, target=%r", len(correlations), target_col)
+
         # Validate input data
         if not correlations or not isinstance(correlations, dict):
             raise ValueError("Invalid correlations data provided")
@@ -391,143 +309,61 @@ def plot_features(self: Task, correlations, target_col):
         if len(clean_features) != len(clean_corr_values):
             raise ValueError("Mismatch between cleaned features and correlation values")
 
-        # Create the plot
-        plt.figure(figsize=(max(8, len(clean_features) * 0.8), 8))
-        bars = plt.bar(range(len(clean_features)), clean_corr_values, color="skyblue")
+        # Create horizontal bar plot — grows vertically with feature count
+        n = len(clean_features)
+        fig_height = max(4, n * 0.35)
+        fig, ax = plt.subplots(figsize=(8, fig_height))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
 
-        # Add a horizontal line at y=0
-        plt.axhline(y=0, color="black", linewidth=0.5)
-        plt.title(f"Correlation of Features with {target_col}")
-        plt.xlabel("Features")
-        plt.ylabel("Correlation")
+        text_color = "#6b7280"
+        y_pos = range(n)
+        colors = ["#4485F4" if v >= 0 else "#D86470" for v in clean_corr_values]
+        bars = ax.barh(y_pos, clean_corr_values, color=colors, height=0.6)
 
-        # Set x-axis labels
-        plt.xticks(range(len(clean_features)), clean_features, rotation=45, ha="right")
+        # Add a vertical line at x=0
+        ax.axvline(x=0, color=text_color, linewidth=0.5)
+        ax.set_xlabel("Correlation", fontsize=10, color=text_color)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(clean_features, fontsize=9, color=text_color)
+        ax.tick_params(axis="x", colors=text_color, labelsize=8)
+        ax.invert_yaxis()  # Top feature first
+        ax.set_ylim(n - 0.5, -0.5)  # Tight vertical margins
 
-        # Add value labels on bars if there are few features
-        if len(clean_features) <= 20:
-            for i, (bar, val) in enumerate(zip(bars, clean_corr_values)):
-                height = bar.get_height()
-                plt.text(
-                    bar.get_x() + bar.get_width()/2., height,
-                    f'{val:.3f}',
-                    ha='center', va='bottom' if height >= 0 else 'top'
-                )
+        # Extend x-axis to fit value labels
+        x_min = min(clean_corr_values) if clean_corr_values else -1
+        x_max = max(clean_corr_values) if clean_corr_values else 1
+        margin = 0.12
+        ax.set_xlim(min(x_min - margin, -margin), max(x_max + margin, margin))
 
-        plt.tight_layout()
+        for spine in ax.spines.values():
+            spine.set_color(text_color)
+
+        # Add value labels on bars
+        for bar, val in zip(bars, clean_corr_values):
+            ax.text(
+                val + (0.01 if val >= 0 else -0.01),
+                bar.get_y() + bar.get_height() / 2,
+                f'{val:.3f}',
+                ha='left' if val >= 0 else 'right',
+                va='center', fontsize=8, color=text_color,
+            )
+
+        fig.tight_layout(pad=0.5)
 
         # Save the plot to a BytesIO object and encode it as base64
         buf = io.BytesIO()
-        plt.savefig(buf, format="png", dpi=100, bbox_inches='tight')
-        plt.close()
+        fig.savefig(buf, format="png", dpi=150, transparent=True)
+        plt.close(fig)
         buf.seek(0)
         image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-        print(f"Successfully created visualization with {len(clean_features)} features")
+        logger.info("Plot features task completed: %d features visualized", len(clean_features))
         return image_base64
 
     except SoftTimeLimitExceeded:
-        print("Plot Features task timed out.")
+        logger.error("Plot features task timed out")
         raise Exception("Plot Features task timed out.")
     except Exception as e:
-        print(f"Error occurred during plotting: {e}")
+        logger.error("Error occurred during plotting: %s", e)
         return None
-
-
-# import io
-# import base64
-# from scipy.stats import chi2_contingency
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-# import pandas as pd
-
-# def plot_to_base64(plt):
-#     buffer = io.BytesIO()
-#     plt.savefig(buffer, format='png')
-#     buffer.seek(0)
-#     image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
-#     plt.close()
-#     return image_base64
-
-# def plot_features(df, cat_cols, num_cols, target_col):
-
-#     # print(calc_shapley(df,cat_cols=cat_cols,num_cols=num_cols,target_col=target_col))
-#     try:
-#         # Check if the DataFrame is empty
-#         if df.empty:
-#             raise ValueError("Input DataFrame is empty.")
-
-#         # Check if the target column is present in the DataFrame
-#         if target_col not in df.columns:
-#             raise ValueError(f"Target column '{target_col}' not found in the DataFrame.")
-
-#         if cat_cols == [""]:
-#             cat_cols = []
-#         if num_cols == [""]:
-#             num_cols = []
-
-#         plt.figure(figsize=(10, 10))
-#         plt.rcParams.update({'font.size': 16})  # Set the font size to 12
-
-#         # Check if the target column is categorical or numerical
-#         if df[target_col].dtype == 'O':  # 'O' stands for Object (categorical)
-#             # Generate box plots for numerical columns vs target column
-#             for i, num_col in enumerate(num_cols, start=1):
-#                 plt.subplot(2, len(num_cols), i)
-#                 sns.boxplot(x=df[target_col], y=df[num_col])
-#                 plt.title(f'{num_col} vs {target_col}')
-#                 plt.xticks(rotation=45)
-#                 plt.legend().remove()  # Remove legend
-
-#             # Generate appropriate plots for categorical columns vs target column
-#             for i, cat_col in enumerate(cat_cols, start=len(num_cols) + 1):
-#                 plt.subplot(2, len(cat_cols), i)
-#                 sns.countplot(x=df[cat_col], hue=df[target_col])
-#                 plt.title(f'{cat_col} vs {target_col}')
-#                 plt.xticks(rotation=45)
-#                 plt.legend().remove()  # Remove legend
-
-#             # Perform chi-squared test for independence
-#             chi2_scores = {}
-#             for cat_col in cat_cols:
-#                 contingency_table = pd.crosstab(df[cat_col], df[target_col])
-#                 _, p_value, _, _ = chi2_contingency(contingency_table)
-#                 chi2_scores[cat_col] = p_value
-
-
-#         else:  # Target column is numerical
-#             # Generate scatter plots for numerical columns vs target column
-#             for i, num_col in enumerate(num_cols, start=1):
-#                 plt.subplot(2, len(num_cols), i)
-#                 sns.scatterplot(x=df[num_col], y=df[target_col])
-#                 plt.title(f'{num_col} vs {target_col}')
-#                 plt.xticks(rotation=45)
-#                 plt.legend().remove()  # Remove legend
-
-#             # Generate appropriate plots for categorical columns vs target column
-#             for i, cat_col in enumerate(cat_cols, start=len(num_cols) + 1):
-#                 plt.subplot(2, len(cat_cols), i)
-#                 sns.boxplot(x=df[cat_col], y=df[target_col])
-#                 plt.title(f'{cat_col} vs {target_col}')
-#                 plt.xticks(rotation=45)
-#                 plt.legend().remove()  # Remove legend
-
-#             # Perform chi-squared test for independence
-#             chi2_scores = {}
-
-#             for cat_col in cat_cols:
-#                 contingency_table = pd.crosstab(df[cat_col], df[target_col])
-#                 _, p_value, _, _ = chi2_contingency(contingency_table)
-#                 chi2_scores[cat_col] = p_value
-
-#         # Adjust layout parameters to avoid overlaps
-#         plt.tight_layout()
-
-#         combined_plot_base64 = plot_to_base64(plt)
-#         return combined_plot_base64
-#     except Exception as e:
-#         return {"Error": f"An error occurred: {str(e)}"}
-
-# Example usage:
-# combined_plot = generate_combined_plot_to_base64(your_dataframe, ['cat_col1', 'cat_col2'], ['num_col1', 'num_col2'], 'target_col')
-# print(combined_plot)
