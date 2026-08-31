@@ -327,7 +327,7 @@ function applyFileReferenceOptions(data, executionLocation) {
     toggleFileReferenceTargetControl(false);
     if (message) {
       message.textContent =
-        (!data.success && data.message) ||
+        (!data.success && (data.message || data.error)) ||
         config.message ||
         "File-reference validation is unavailable.";
     }
