@@ -353,6 +353,19 @@ def submit():
 
     task_id = None
     try:
+        # Check cache for summary_statistics first (avoid redundant remote
+        # calls, including the endpoint negotiation probe, on page reload)
+        if metric_name == "summary_statistics":
+            cache_key = f"globus_summary:{endpoint_id}:{file_path}"
+            cached = current_app.TEMP_RESULTS_CACHE.get(cache_key)
+            if cached and cached.get("data"):
+                logger.info("Globus summary cache hit: %s", cache_key)
+                return jsonify({
+                    "status": "completed",
+                    "result": cached["data"],
+                    "cached": True,
+                })
+
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
         negotiation, report = _fresh_negotiation(client, endpoint_id)
@@ -368,17 +381,6 @@ def submit():
         if requires_file_reference and any(key in params for key in ("allowed_roots", "scan_limit")):
             return jsonify({"error": "Filesystem roots and scan limits are controlled by the Compute worker."}), 400
 
-        # Check cache for summary_statistics (avoid redundant remote calls on page reload)
-        if metric_name == "summary_statistics":
-            cache_key = f"globus_summary:{endpoint_id}:{file_path}"
-            cached = current_app.TEMP_RESULTS_CACHE.get(cache_key)
-            if cached and cached.get("data"):
-                logger.info("Globus summary cache hit: %s", cache_key)
-                return jsonify({
-                    "status": "completed",
-                    "result": cached["data"],
-                    "cached": True,
-                })
         # Store endpoint info in session for subsequent metric submissions
         session["globus_endpoint_id"] = endpoint_id
         session["globus_file_path"] = file_path
