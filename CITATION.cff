@@ -27,7 +27,7 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.21798062
     description: Zenodo archive of AIDRIN
-abstract: AIDRIN is a tool developed to assess the readiness of datasets for artificial intelligence applications. It helps users quickly evaluate the quality, structure, and completeness of their data to ensure it meets the foundational requirements for machine learning and other AI workflows.
+abstract: "AIDRIN (AI Data Readiness Infrastructure) is an open-source tool for assessing and improving whether a dataset is ready for AI and ML work. It evaluates data quality, structure, fairness and bias, privacy and governance risk, and metadata usability, and generates a report across these dimensions with visualizations, machine-readable JSON, and suggested remedies for the issues it finds. Users can extend it with their own metrics and remedies, and incorporate domain-specific knowledge so that assessments reflect the requirements of their field. AIDRIN can be used from a browser dashboard, the command line, a Python library, or an MCP server for agentic clients, and can run remotely on datasets that stay in place."
 keywords:
   - data readiness
   - AI
