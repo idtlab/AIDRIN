@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from aidrin.headless.api import (
     generate_metric_template,
@@ -17,8 +17,13 @@ from aidrin.headless.api import (
     run_metric,
 )
 from aidrin.headless.config import HeadlessConfig
+from aidrin.telemetry import mlflow_sink
 
-mcp_server = FastMCP("aidrin")
+# Importing this module means the process is serving MCP, so sessions opened
+# implicitly inside run_batch_metrics are attributed to the right interface.
+mlflow_sink.set_default_interface("mcp")
+
+mcp_server = MCPServer("aidrin")
 
 
 def _dumps(obj: Any) -> str:
@@ -89,7 +94,15 @@ def list_metrics(category: str | None = None) -> str:
                   impact-of-data-on-AI, fairness-and-bias, data-governance,
                   custom_metrics. Omit for all.
     """
-    return _dumps(list_available_metrics(category=category))
+    # The catalogue is wrapped rather than extended: the model is told to iterate
+    # the category mapping, so a stray boolean beside the category keys would be
+    # read as a category.
+    return _dumps(
+        {
+            "metrics": list_available_metrics(category=category),
+            "mlflow_enabled": mlflow_sink.is_enabled(),
+        }
+    )
 
 
 @mcp_server.tool()
@@ -125,6 +138,7 @@ def run_aidrin_metric(
     rules_file: str | None = None,
     max_outliers: int = 100,
     max_export_rows: int = 10000,
+    max_results: int = 100,
     scan_limit: int | None = None,
     stop_after_outliers: bool = False,
     columns: str | None = None,
@@ -146,8 +160,12 @@ def run_aidrin_metric(
     timestamp_column: str | None = None,
     batch_column: str | None = None,
     target_columns: str | None = None,
+    path_targets: str | list[str] | None = None,
+    base_dir: str | None = None,
+    target_match: str = "exact",
     endpoint: str | None = None,
     profile: str | None = None,
+    session_id: str | None = None,
 ) -> str:
     """
     Run a single AIDRIN built-in metric against a dataset.
@@ -162,7 +180,8 @@ def run_aidrin_metric(
         rules_file: Server-local path to a JSON array of valid-value rules when metric is outliers-custom.
         max_outliers: Preview cap per custom outlier rule; 0 means unlimited.
         max_export_rows: Export row cap per custom outlier rule; 0 means unlimited.
-        scan_limit: Optional maximum values to scan per custom outlier rule.
+        max_results: Maximum detail records for file-reference-validation; 0 means unlimited.
+        scan_limit: Optional maximum values to scan for custom outliers or file-reference-validation.
         stop_after_outliers: Stop scanning after the preview cap is reached.
         columns: Comma-separated columns (required by: correlations, representation_rate, hipaa_compliance).
         target_column: Target/label column (required by: class_imbalance, feature_relevance).
@@ -185,6 +204,9 @@ def run_aidrin_metric(
         timestamp_column: Datetime column (temporal_completeness).
         batch_column: Batch/partition column (null_count_trend).
         target_columns: Comma-separated columns to count nulls in (null_count_trend, optional).
+        path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
+        base_dir: Server-local directory used to resolve relative file references.
+        target_match: Interpret path_targets as exact names or full-match regular expressions.
         endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
@@ -197,6 +219,7 @@ def run_aidrin_metric(
             ("rules_file", rules_file),
             ("max_outliers", max_outliers),
             ("max_export_rows", max_export_rows),
+            ("max_results", max_results),
             ("scan_limit", scan_limit),
             ("stop_after_outliers", stop_after_outliers),
             ("target_column", target_column),
@@ -217,9 +240,15 @@ def run_aidrin_metric(
             ("timestamp_column", timestamp_column),
             ("batch_column", batch_column),
             ("target_columns", target_columns),
+            ("path_targets", path_targets),
+            ("base_dir", base_dir),
+            ("target_match", target_match),
         ]
         if v is not None
     }
+    if session_id and not endpoint and not profile:
+        kwargs["session_id"] = session_id
+
     result = _executor(endpoint, profile).run_metric(
         metric,
         file_path,
@@ -227,6 +256,45 @@ def run_aidrin_metric(
         strip_visualizations=True,
         save_images=False,
         **kwargs,
+    )
+    return _dumps(result)
+
+
+@mcp_server.tool()
+def verify_file_references(
+    file_path: str,
+    path_targets: str | list[str],
+    file_type: str | None = None,
+    base_dir: str | None = None,
+    max_results: int = 100,
+    scan_limit: int | None = None,
+    target_match: str = "exact",
+) -> str:
+    """
+    Validate file references stored in selected dataset targets and return file metadata.
+    Relative references and all filesystem checks are resolved on the MCP server host.
+
+    Args:
+        file_path: Absolute path to the manifest dataset.
+        path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
+        file_type: Optional file-type override.
+        base_dir: Server-local directory used to resolve relative references. Defaults to
+                  the manifest's parent directory.
+        max_results: Maximum invalid and metadata detail records; 0 means unlimited.
+        scan_limit: Optional maximum reference values to scan; omitted or 0 means unlimited.
+        target_match: Interpret path_targets as exact names or full-match regular expressions.
+    """
+    result = run_metric(
+        "file-reference-validation",
+        file_path,
+        file_type=file_type,
+        path_targets=path_targets,
+        base_dir=base_dir,
+        max_results=max_results,
+        scan_limit=scan_limit,
+        target_match=target_match,
+        strip_visualizations=True,
+        save_images=False,
     )
     return _dumps(result)
 
@@ -316,16 +384,21 @@ def list_remote_profiles() -> str:
 
 
 @mcp_server.tool()
-def run_custom_metric(metric_name_or_path: str, file_path: str) -> str:
+def run_custom_metric(
+    metric_name_or_path: str,
+    file_path: str,
+    file_type: str | None = None,
+) -> str:
     """
     Run the metric() method of a CustomDR class defined in a .py file.
 
     Args:
         metric_name_or_path: Full path to the custom .py file, OR a metric name that
                              resolves to aidrin/custom_metrics/<name>.py relative to cwd.
-        file_path: Absolute path to the dataset CSV.
+        file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
+        file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
     """
-    result = run_custom_metric_logic(metric_name_or_path, file_path)
+    result = run_custom_metric_logic(metric_name_or_path, file_path, file_type=file_type)
     return _dumps(result)
 
 
@@ -334,21 +407,26 @@ def run_custom_remedy(
     metric_name_or_path: str,
     file_path: str,
     output_dir: str | None = None,
+    file_type: str | None = None,
 ) -> str:
     """
     Run the remedy() method of a CustomDR class, apply it to the dataset,
-    and save the remedied data as a CSV file.
+    and save the remedied data as a CSV file. The remedied output is always
+    CSV regardless of the input format, since JSON/NPZ/HDF5 are flattened on
+    read and don't round-trip losslessly back into their original structure.
 
     Args:
         metric_name_or_path: Full path to the custom .py file, or metric name.
-        file_path: Absolute path to the dataset CSV.
+        file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
         output_dir: Directory to write the remedied CSV.
                     Defaults to <script_dir>/remedy_data/.
+        file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
     """
     saved_path = run_custom_metric_remedy(
         metric_name_or_path,
         file_path,
         output_dir=output_dir,
+        file_type=file_type,
     )
     return _dumps({
         "remedied_file": saved_path,
@@ -495,6 +573,44 @@ def agentic_run(
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Assessment tracking (MLflow)
+# ---------------------------------------------------------------------------
+
+
+@mcp_server.tool()
+def start_assessment(file_path: str) -> str:
+    """
+    Open an MLflow-tracked assessment and return its session_id.
+
+    Only useful when list_metrics reports mlflow_enabled: true. Pass the returned
+    session_id to each run_aidrin_metric call, then call end_assessment. Each
+    metric becomes its own MLflow run nested under one parent run carrying the
+    dataset's aggregated readiness scores.
+
+    Args:
+        file_path: Absolute path to the dataset being assessed.
+    """
+    session = mlflow_sink.start_session(file_path=file_path, interface="mcp")
+    if session is None:
+        return _dumps({"tracking": "disabled", "session_id": None})
+    return _dumps({"tracking": "enabled", "session_id": session.session_id})
+
+
+@mcp_server.tool()
+def end_assessment(session_id: str, report_path: str | None = None) -> str:
+    """
+    Close a tracked assessment, writing its aggregated readiness scores.
+
+    Args:
+        session_id: The id returned by start_assessment.
+        report_path: Optional path to the finished markdown report, attached to
+                     the parent run as an artifact.
+    """
+    mlflow_sink.end_session(session_id, report_path=report_path)
+    return _dumps({"session_id": session_id, "closed": True})
 
 
 def main() -> None:

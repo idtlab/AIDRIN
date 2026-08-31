@@ -99,7 +99,7 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
 - **Custom Criteria Outliers**:
 
   - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
-  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. In the manual editor, choose **Regular expression** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
+  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. The exact-name picker is searchable. In the manual editor, choose **Regex** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
   - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target.
 
 Impact of Data on AI
@@ -276,9 +276,37 @@ The system returns:
 Data Structure
 ^^^^^^^^^^^^^^
 
-Assesses structural and distributional properties of the feature set. All four
-metrics require no parameters; the latter three operate on the numeric,
-non-constant columns.
+Assesses structural and distributional properties of the dataset. The four
+statistical metrics require no parameters; the latter three operate on the
+numeric, non-constant columns. Referenced-file validation uses selected
+path-bearing targets and filesystem settings.
+
+- **Referenced Files** (local deployments only):
+
+  - **Method**: Resolves paths stored in selected string-valued columns or HDF5 datasets and checks whether they identify regular files on the AIDRIN web server. Valid files include size, owner when available, creation time when the operating system exposes one, and modification time.
+  - **Parameters**: Search for and select exact path-bearing targets, or choose **Regex** to match complete target names. Also select an administrator-configured filesystem root, an optional relative base subdirectory, and a detail-record cap. Suggested target names appear first but are never selected automatically. Both regex workflows preview their matching targets before submission.
+  - **Result**: Complete or partial scan counts, per-target summaries, invalid-reference locations and reasons, and deduplicated file metadata. A warning appears when the administrator scan cap prevents a complete scan.
+
+  This control is disabled until an administrator configures at least one root.
+  Set ``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` to a JSON array of absolute,
+  existing directories and optionally set a positive web scan cap (default
+  ``10000``):
+
+  .. code-block:: bash
+
+     export AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS='["/data/project","/data/shared"]'
+     export AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT=10000
+
+  AIDRIN does not fall back to the process working directory or filesystem root
+  when this allowlist is unset. The local Docker Compose stack uses ``["/app"]``
+  for development testing; production deployments should allow only the
+  directories that contain referenced data.
+
+  The selected base directory must remain inside its configured root, and every
+  referenced file must remain inside one of the configured roots after resolving
+  symbolic links. Paths are checked on the web server, not on the browser's
+  computer. Globus datasets cannot use this local filesystem check; use CLI or
+  MCP on the host that can access the referenced files instead.
 
 - **Constant Feature Count**:
 
@@ -444,23 +472,26 @@ always clear what produced the text.
 Custom Metrics and Remedies
 ----------------------------
 
-This section explains how to define custom metrics and remediation logic for your uploaded CSV files
-using the **CustomDR** class inside the CodeMirror editor. After uploading a dataset, you
-will navigate to a page where you can write Python code that extends the platform's data-review logic.
+This section explains how to define custom metrics and remediation logic for your uploaded dataset
+using the **CustomDR** class inside the CodeMirror editor. Custom metrics work with any file
+format AIDRIN supports (CSV, Excel, JSON, NumPy ``.npz``, HDF5, Parquet). After uploading a
+dataset, you will navigate to a page where you can write Python code that extends the platform's
+data-review logic.
 
 Workflow
 ~~~~~~~~
 
-1. Navigate to the file upload page and upload a CSV file.
-2. After upload, click the **Define Custom Metrics** button. You will be redirected to ``/customMetrics``.
+1. Navigate to the file upload page and upload a dataset.
+2. In the left sidebar, click the **Custom Metrics** tab (a standalone top-level tab, alongside Data Overview and the metric pillars — it is not nested inside another category).
 3. A CodeMirror Python editor appears, preloaded with an editable ``CustomDR`` class that inherits from ``BaseDRAgent`` and contains two methods:
    - ``metric()``: returns a dictionary of metric results.
-   - ``remedy()``: returns a modified dataset based on your remediation logic.
+   - ``remedy()``: returns a modified dataset, as a **pandas DataFrame**, based on your remediation logic.
 4. Write or modify your code inside the editor.
-5. Press **Save** to store your custom logic on the server (temporary, 1-hour expiration).
-6. Press **Submit** to execute your ``metric()`` function, and optionally your ``remedy()`` function if you have checked the **Apply Remedy** box.
+5. Press **Save** to store your custom logic on the server (temporary, 1-hour expiration). **Submit stays disabled — and shows "Unsaved changes" — until you Save**; it always runs the last saved version, not whatever is currently typed in the editor.
+6. If you want a downloadable remedied dataset, check the **Apply Remedy** box *before* clicking Submit — it is unchecked by default on every run, and ``remedy()`` will not run at all if it is left unchecked, even if you implemented it.
+7. Press **Submit** to execute your ``metric()`` function, and (if Apply Remedy was checked) your ``remedy()`` function.
 
-The platform will display your computed metric dictionary, any remediated dataset to download (if remedy is enabled), and any warnings or errors raised by your code.
+The platform will display your computed metric dictionary, any remediated dataset to download (if remedy was applied), and any errors raised by your code — including the specific line number for a syntax error, or which of ``metric()``/``remedy()`` raised an exception.
 
 Understanding the ``CustomDR`` Base Class
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -471,7 +502,7 @@ Below is the template initially shown in CodeMirror:
 
     from aidrin.custom_metrics.base_dr import BaseDRAgent
     from typing import Any
-    from typing import Dict, Union, Any
+    import pandas as pd
 
     class CustomDR(BaseDRAgent):
         def __init__(self, dataset: Any, **kwargs):
@@ -492,12 +523,14 @@ Below is the template initially shown in CodeMirror:
 
             return {"message": "Placeholder metric. Implement your logic here."}
 
-        def remedy(self, **kwargs**):
+        def remedy(self, **kwargs) -> pd.DataFrame:
             """
             Applies custom remediation logic based on the calculated metrics.
+            Access metric results via kwargs.get("metric_results", {}).
             """
 
             # IMPLEMENT YOUR REMEDIATION LOGIC BELOW
+            # metric_results = kwargs.get("metric_results", {})
             # For example, filling null values with a default value
 
             # df_remedied: pd.DataFrame = self.dataset.copy()
@@ -594,6 +627,9 @@ When you click **Submit**:
 3. The system calls your ``metric()`` method to compute metrics.
 4. If **Apply Remedy** is checked, the system calls your ``remedy()`` method to get the modified dataset.
 5. Metrics and (optionally) the remedied data preview are displayed on the results section of the page.
+   The remedied dataset is always saved as CSV for download, regardless of the original file's
+   format, since formats like JSON/NPZ/HDF5 don't round-trip losslessly back to their original
+   structure.
 
 Best Practices for Writing Custom Metrics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

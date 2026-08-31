@@ -133,6 +133,11 @@ server, which dispatches on the same registry as the command line.
      - ``calculate_custom_outliers`` [#unexported]_
      - |no|
      - |yes|
+   * - File Reference Validation
+     - ``file-reference-validation``
+     - |no|
+     - |no|
+     - |yes|
    * - Constant Feature Count
      - ``constant-feature-count``
      - ``calculate_constant_feature_count``
@@ -244,8 +249,8 @@ server, which dispatches on the same registry as the command line.
 Custom Metrics and Remedies
 ----------------------------
 
-AIDRIN supports user-authored metrics and remedies (a ``CustomDR`` class) 
+AIDRIN supports user-authored metrics and remedies (a ``CustomDR`` class)
 and have no fixed catalogue entry,so they are not in the mapping table above. See
-:ref:`web_usage_custom_metrics` for the web interface workflow, 
+:ref:`web_usage_custom_metrics` for the web interface workflow,
 :ref:`cli_add_custom_module` for the CLI scaffold-and-run workflow, and
 :ref:`aidrin_skill_tools` for the MCP equivalents.

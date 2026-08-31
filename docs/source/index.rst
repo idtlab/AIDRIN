@@ -117,6 +117,8 @@ Four Ways to Use AIDRIN
    :caption: Integrations
 
    aidrin_skill
+   mlflow_tracking
+   genesis_mission
    appfl_integration
 
 .. toctree::
