@@ -13,7 +13,7 @@ The metric measures metadata readiness only: it will not infer units from values
 ## Implementation Checklist
 
 - [x] Milestone 0: create the feature branch, audit the current cross-interface architecture, and add this checklist.
-- [ ] Milestone 1: implement logical-variable discovery, unit parsing and normalization, declaration validation and precedence, result aggregation, the public Python function, and focused core tests.
+- [x] Milestone 1: implement logical-variable discovery, unit parsing and normalization, declaration validation and precedence, result aggregation, the public Python function, and focused core tests.
 - [ ] Milestone 2: integrate the headless registry and runner, local and remote CLI arguments, batch configuration, remote dispatch, MCP tools, and interface tests.
 - [ ] Milestone 3: add the local Data Structure web editor, import/export and filtering behavior, result rendering, target-discovery candidates, and web tests.
 - [ ] Milestone 4: add Globus capability negotiation and remote web dispatch, compatibility messaging, serialization, and tests.
