@@ -51,6 +51,10 @@ from aidrin.structured_data_metrics.max_pairwise_correlation import (
     max_pairwise_correlation,
 )
 from aidrin.structured_data_metrics.skewness import skewness
+from aidrin.structured_data_metrics.variable_unit_validation import (
+    calculate_variable_unit_validation,
+    discover_variable_units,
+)
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
     categorize_metadata,
@@ -122,7 +126,9 @@ def custom_outlier_targets():
     if not file_path:
         return jsonify({"success": False, "message": "No file uploaded"}), 200
     try:
-        targets = iter_targets((file_path, file_name, file_type))
+        file_info = (file_path, file_name, file_type)
+        targets = iter_targets(file_info)
+        unit_targets = discover_variable_units(file_info)
         file_reference = discovery_configuration(
             current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS"),
             current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT"),
@@ -130,6 +136,7 @@ def custom_outlier_targets():
         return jsonify({
             "success": True,
             "targets": ensure_json_serializable(targets),
+            "unit_targets": ensure_json_serializable(unit_targets),
             "file_reference": file_reference,
         })
     except Exception as e:
@@ -2851,6 +2858,7 @@ def data_structure():
             m for m in (
                 "constant feature count", "max pairwise correlation", "skewness", "kurtosis",
                 "file_reference_validation",
+                "variable_unit_validation",
             ) if request.form.get(m) == "yes"
         ]
         metric_time_log.info("Data Structure request started: %s", selected)
@@ -2937,6 +2945,30 @@ def data_structure():
                     else:
                         final_dict["File Reference Validation"] = reference_dict
                     metric_time_log.info("File Reference Validation took %.2f seconds", time.time() - t0)
+
+                if "variable_unit_validation" in selected:
+                    t0 = time.time()
+                    try:
+                        raw_declarations = request.form.get("variable_unit_declarations", "{}")
+                        declarations = json.loads(raw_declarations)
+                        with tracer.start_as_current_span("metric.variable_unit_validation"):
+                            unit_result = calculate_variable_unit_validation(file_info, declarations)
+                    except Exception as e:
+                        metric_time_log.error("Variable Unit Validation error: %s", e, exc_info=True)
+                        final_dict["Variable Unit Validation"] = {
+                            "Error": f"{type(e).__name__}: {e}",
+                            "Description": (
+                                "Verifies that every logical variable has a recognized unit, "
+                                "is dimensionless, or is marked not applicable."
+                            ),
+                        }
+                    else:
+                        unit_result["Description"] = (
+                            "Checks unit-metadata coverage and syntax. It does not infer units "
+                            "from values or prove physical correctness."
+                        )
+                        final_dict["Variable Unit Validation"] = unit_result
+                    metric_time_log.info("Variable Unit Validation took %.2f seconds", time.time() - t0)
 
             except Exception as e:
                 metric_time_log.error("Data Structure error: %s", e, exc_info=True)
