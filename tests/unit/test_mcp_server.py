@@ -18,6 +18,7 @@ from aidrin.mcp.server import (  # noqa: E402
     run_custom_outlier_check,
     run_custom_remedy,
     verify_file_references,
+    verify_variable_units,
 )
 
 
@@ -70,6 +71,36 @@ def test_generic_mcp_tool_accepts_rules_file():
         _remove(csv_path)
         _remove(rules_path)
     assert "valid-age" in result["Rule summaries"]
+
+
+def test_variable_unit_mcp_tools_are_equivalent(tmp_path):
+    dataset = tmp_path / "data.csv"
+    pd.DataFrame({"speed": [1.0]}).to_csv(dataset, index=False)
+    mapping = json.dumps({"speed": {"unit": "m/s"}})
+
+    dedicated = json.loads(verify_variable_units(str(dataset), unit_declarations_json=mapping))
+    generic = json.loads(run_aidrin_metric(
+        str(dataset),
+        "variable-unit-validation",
+        unit_declarations_json=mapping,
+    ))
+
+    assert dedicated == generic
+    assert dedicated["all_variables_ready"] is True
+
+
+def test_variable_unit_mcp_rejects_multiple_sources(tmp_path):
+    dataset = tmp_path / "data.csv"
+    units = tmp_path / "units.json"
+    pd.DataFrame({"speed": [1.0]}).to_csv(dataset, index=False)
+    units.write_text(json.dumps({"speed": {"unit": "m/s"}}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="at most one variable-unit mapping source"):
+        verify_variable_units(
+            str(dataset),
+            unit_declarations_json="{}",
+            units_file=str(units),
+        )
 
 
 def test_dedicated_mcp_tool_rejects_multiple_rule_sources():
@@ -271,6 +302,22 @@ class TestMcpRemoteRouting(unittest.TestCase):
         payload = submit.call_args[0][3]
         self.assertEqual(payload["path_targets"], "file_path")
         self.assertEqual(payload["base_dir"], "/data/project")
+
+    def test_variable_unit_tool_routes_mapping_file_to_endpoint(self):
+        from aidrin.mcp import server
+
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.submit", return_value="task-1") as submit, \
+             patch("aidrin.compute.client.poll", return_value={"all_variables_ready": True}):
+            server.verify_variable_units(
+                file_path="/scratch/data.csv",
+                units_file="/scratch/units.json",
+                endpoint="uuid-9",
+            )
+
+        payload = submit.call_args[0][3]
+        self.assertEqual(payload["metric_name"], "variable-unit-validation")
+        self.assertEqual(payload["units_file"], "/scratch/units.json")
 
     def test_list_remote_profiles_returns_json(self):
         from aidrin.mcp import server

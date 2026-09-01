@@ -47,6 +47,7 @@ from .runners import (
     run_statistical_rates,
     run_t_closeness,
     run_temporal_completeness,
+    run_variable_unit_validation,
 )
 
 
@@ -91,6 +92,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "category": "data-structure",
         "description": "Per-feature excess kurtosis (tail heaviness).",
         "runner": run_kurtosis,
+        "required_args": [],
+    },
+    "variable_unit_validation": {
+        "category": "data-structure",
+        "description": "Verify that every logical variable has a recognized unit or an explicit classification.",
+        "runner": run_variable_unit_validation,
         "required_args": [],
     },
     "row_level_completeness": {
@@ -256,6 +263,44 @@ def _resolve_custom_outlier_rules(kwargs: Dict[str, Any]) -> Any:
     if source_name == "rules_file":
         return _load_custom_outlier_rules_file(source_value)
     return source_value
+
+
+def _resolve_unit_declarations(kwargs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Resolve at most one inline, JSON-string, or host-local mapping source."""
+    sources = {
+        "unit_declarations": kwargs.get("unit_declarations"),
+        "unit_declarations_json": kwargs.get("unit_declarations_json"),
+        "units_file": kwargs.get("units_file"),
+    }
+    supplied = [(name, value) for name, value in sources.items() if value is not None and value != ""]
+    if len(supplied) > 1:
+        raise ValueError(
+            "Provide at most one variable-unit mapping source: unit_declarations, "
+            "unit_declarations_json, or units_file"
+        )
+    if not supplied:
+        return None
+
+    source_name, source_value = supplied[0]
+    if source_name == "unit_declarations":
+        return source_value
+    if source_name == "units_file":
+        path = Path(source_value).expanduser()
+        try:
+            raw_mapping = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"Unable to read variable-unit mapping file: {path}") from exc
+    else:
+        raw_mapping = source_value
+
+    try:
+        mapping = json.loads(raw_mapping)
+    except (TypeError, json.JSONDecodeError) as exc:
+        label = "mapping file" if source_name == "units_file" else "unit_declarations_json"
+        raise ValueError(f"Invalid JSON in variable-unit {label}") from exc
+    if not isinstance(mapping, dict):
+        raise ValueError("Variable-unit mapping JSON must contain an object keyed by exact variable name")
+    return mapping
 
 
 def _sanitize(obj: Any) -> Any:
@@ -521,7 +566,8 @@ def _maybe_save_images(
 # params buries the ones that matter.
 _RESULT_AFFECTING_ARGS = frozenset({
     "epsilon", "threshold", "frequency", "distance_metric", "scan_limit",
-    "rules_file", "rules_json",
+    "rules_file", "rules_json", "units_file", "unit_declarations_json",
+    "unit_declarations",
 })
 
 
@@ -745,6 +791,15 @@ def _run_registry_metric(
         )
         return _finalize(result)
 
+    if metric_key == "variable_unit_validation":
+        result = metric["runner"](
+            file_path,
+            file_type,
+            file_name,
+            _resolve_unit_declarations(kwargs),
+        )
+        return _finalize(result)
+
     if metric_key == "feature_relevance":
         cat_columns = _normalize_list(kwargs.get("cat_columns")) or []
         num_columns = _normalize_list(kwargs.get("num_columns")) or []
@@ -883,6 +938,8 @@ def run_batch_metrics(
         "max_results": config_obj.max_results,
         "scan_limit": config_obj.scan_limit,
         "target_match": config_obj.target_match,
+        "unit_declarations": config_obj.unit_declarations,
+        "units_file": config_obj.units_file,
         "save_images": bool(config_obj.save_images) if config_obj.save_images is not None else True,
         "image_dir": config_obj.image_dir,
         "verbose": verbose,
