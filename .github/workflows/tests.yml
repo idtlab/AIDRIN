@@ -23,10 +23,16 @@ jobs:
             extras: "[telemetry]"
           - os: ubuntu-latest
             python-version: "3.12"
+            extras: "[mlflow]"
+          - os: ubuntu-latest
+            python-version: "3.12"
             extras: "[globus]"
           - os: ubuntu-latest
             python-version: "3.12"
             extras: "[agentic]"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: "[mcp]"
 
     steps:
     - uses: actions/checkout@v4

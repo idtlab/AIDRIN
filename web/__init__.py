@@ -5,6 +5,7 @@ from celery import Celery, Task
 from flask import Flask
 from aidrin._version import __version__
 from aidrin.logging import setup_logging
+from worker.tasks import prune_custom_metrics_folder
 
 startup_log = logging.getLogger("startup")
 
@@ -160,20 +161,9 @@ def create_app():
     os.makedirs(remedy_folder, exist_ok=True)
     app.config["REMEDY_FOLDER"] = remedy_folder
 
-    metrics_removed = 0
-    exclude = {"__init__.py", "base_dr.py"}
-    for filename in os.listdir(custom_metrics_folder):
-        if filename in exclude:
-            continue
-        file_path = os.path.join(custom_metrics_folder, filename)
-        try:
-            if os.path.isfile(file_path):
-                if current_time - os.path.getmtime(file_path) > max_age_seconds:
-                    os.remove(file_path)
-                    metrics_removed += 1
-                    startup_log.info("Deleted old custom metric: %s", filename)
-        except Exception as e:
-            startup_log.warning("Failed to delete %s: %s", file_path, e)
+    metrics_removed = prune_custom_metrics_folder(
+        custom_metrics_folder, max_age_seconds=max_age_seconds, now=current_time
+    )
 
     remedy_removed = 0
     for filename in os.listdir(remedy_folder):

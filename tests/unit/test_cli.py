@@ -4,6 +4,7 @@ Covers argument parsing, helper utilities, and command dispatch using
 sys.argv patching + stdout capture — no subprocess or network required.
 """
 
+import importlib.util
 import io
 import json
 import os
@@ -178,6 +179,7 @@ class TestListCommand(unittest.TestCase):
         self.assertIn("duplicity", text)
         self.assertIn("outliers", text)
         self.assertIn("outliers-custom", text)
+        self.assertIn("file-reference-validation", text)
 
     def test_list_category_filter(self):
         stdout, _, _ = _run_cli("list", "--category", "data-quality")
@@ -474,6 +476,97 @@ class TestRunMetricNameResolution(unittest.TestCase):
             run_metric("hipaa-compliance", self.csv, save_images=False)
 
 
+class TestFileReferenceValidationInterfaces(unittest.TestCase):
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.base_dir = self.temp_dir.name
+        self.target_path = os.path.join(self.base_dir, "artifact.bin")
+        with open(self.target_path, "wb") as handle:
+            handle.write(b"aidrin")
+        self.csv = os.path.join(self.base_dir, "manifest.csv")
+        pd.DataFrame({"file_path": ["artifact.bin", "missing.bin"]}).to_csv(self.csv, index=False)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_cli_forwards_targets_base_dir_and_caps(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "file-reference-validation",
+            self.csv,
+            "file_path",
+            "--base-dir",
+            self.base_dir,
+            "--max-results",
+            "1",
+            "--scan-limit",
+            "1",
+        )
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["Summary"]["scanned_values"], 1)
+        self.assertEqual(result["Summary"]["unscanned_values"], 1)
+        self.assertEqual(result["File metadata"][0]["size_bytes"], 6)
+
+    def test_cli_supports_regex_target_matching(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "file-reference-validation",
+            self.csv,
+            r"file_[a-z]{1,4}",
+            "--target-match",
+            "regex",
+            "--base-dir",
+            self.base_dir,
+        )
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(list(result["Target summaries"]), ["file_path"])
+
+    def test_string_api_preserves_regex_target_commas(self):
+        from aidrin.headless.api import run_metric
+
+        result = run_metric(
+            "file-reference-validation",
+            self.csv,
+            path_targets=r"file_[a-z]{1,4}",
+            target_match="regex",
+            base_dir=self.base_dir,
+            save_images=False,
+        )
+
+        self.assertEqual(list(result["Target summaries"]), ["file_path"])
+
+    def test_run_metric_requires_path_targets(self):
+        from aidrin.headless.api import run_metric
+
+        with self.assertRaisesRegex(ValueError, "path_targets is required"):
+            run_metric("file-reference-validation", self.csv, save_images=False)
+
+    def test_batch_normalizes_and_forwards_file_reference_options(self):
+        from aidrin.headless.api import run_batch_metrics
+        from aidrin.headless.config import HeadlessConfig
+
+        config = HeadlessConfig.from_dict({
+            "file-path": self.csv,
+            "metrics": ["file-reference-validation"],
+            "path-targets": r"file_[a-z]{1,4}",
+            "base-dir": self.base_dir,
+            "max-results": 1,
+            "scan-limit": 1,
+            "target-match": "regex",
+            "save-images": False,
+        })
+        self.assertEqual(config.path_targets, [r"file_[a-z]{1,4}"])
+        self.assertEqual(config.target_match, "regex")
+        result = run_batch_metrics(config)
+        metric_result = result["file_reference_validation"]
+        self.assertEqual(metric_result["Summary"]["scanned_values"], 1)
+        self.assertEqual(metric_result["Summary"]["unscanned_values"], 1)
+        self.assertEqual(len(metric_result["File metadata"]), 1)
+
+
 class TestCustomOutlierRulesFile(unittest.TestCase):
 
     def setUp(self):
@@ -574,6 +667,102 @@ class TestAddCustomModuleCommand(unittest.TestCase):
         # Should print a message but not raise — exit 0
         self.assertEqual(code, 0)
 
+    def test_scaffolded_template_matches_web_ui_template(self):
+        """The CLI/MCP scaffold and the web Custom Metrics panel used to keep
+        two independently-hand-written copies of the starter template, which
+        had drifted (the CLI copy's remedy() docstring didn't mention the
+        metric_results kwarg at all). Both now import the same
+        aidrin.custom_metrics.template.CUSTOM_DR_TEMPLATE constant, so this
+        just has to prove the CLI's generated file matches it exactly."""
+        from aidrin.custom_metrics.template import CUSTOM_DR_TEMPLATE
+        from web.routes.custom import _STARTER_TEMPLATE
+
+        self.assertEqual(_STARTER_TEMPLATE, CUSTOM_DR_TEMPLATE)
+
+        _run_cli("add-custom-module", "mymetric", "--dir", self.tmpdir)
+        generated_path = os.path.join(self.tmpdir, "mymetric.py")
+        with open(generated_path) as f:
+            content = f.read()
+        self.assertEqual(content, CUSTOM_DR_TEMPLATE)
+        self.assertIn('kwargs.get("metric_results", {})', content)
+
+
+# ===========================================================================
+# `aidrin run custom` — non-CSV formats
+# ===========================================================================
+
+_CUSTOM_SCRIPT = """
+from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+class CustomDR(BaseDRAgent):
+    def metric(self, **kwargs):
+        return {"row_count": len(self.dataset)}
+
+    def remedy(self, **kwargs):
+        return self.dataset.copy()
+"""
+
+
+class TestCustomMetricMultiFormat(unittest.TestCase):
+    """`run custom` used to call pd.read_csv() unconditionally, so passing a
+    non-CSV dataset would silently misparse it. These tests confirm the CLI's
+    --file-type override is actually threaded through to the reader."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.script = os.path.join(self.tmpdir, "my_audit.py")
+        with open(self.script, "w") as f:
+            f.write(_CUSTOM_SCRIPT)
+        self.parquet = os.path.join(self.tmpdir, "data.parquet")
+        _sample_df(5).to_parquet(self.parquet)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_run_custom_metric_on_parquet_infers_type_from_extension(self):
+        stdout, stderr, code = _run_cli("run", "custom", self.script, self.parquet, "metric")
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["row_count"], 5)
+
+    def test_run_custom_metric_on_parquet_with_explicit_file_type(self):
+        stdout, stderr, code = _run_cli(
+            "run", "custom", self.script, self.parquet, "metric", "--file-type", "parquet"
+        )
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["row_count"], 5)
+
+    def test_run_custom_remedy_on_parquet_saves_csv(self):
+        stdout, stderr, code = _run_cli(
+            "run", "custom", self.script, self.parquet, "remedy", "--file-type", "parquet"
+        )
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("Remedied data saved to:", stdout)
+        saved_path = stdout.split("Remedied data saved to:", 1)[1].strip()
+        self.assertTrue(saved_path.endswith(".csv"))
+        self.assertTrue(os.path.exists(saved_path))
+
+    def test_run_custom_metric_on_hyphenated_path(self):
+        """`metric` used to route through run_metric(), which lowercased and
+        underscored the script path before resolving it — corrupting any
+        path with a hyphen or mixed case and surfacing as a misleading
+        "Unknown metric" error, even though `remedy` (which bypasses that
+        mangling) worked fine for the same path."""
+        project_dir = os.path.join(self.tmpdir, "My-Project")
+        os.makedirs(project_dir)
+        hyphenated_script = os.path.join(project_dir, "My-Audit.py")
+        with open(hyphenated_script, "w") as f:
+            f.write(_CUSTOM_SCRIPT)
+
+        stdout, stderr, code = _run_cli(
+            "run", "custom", hyphenated_script, self.parquet, "metric", "--file-type", "parquet"
+        )
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["row_count"], 5)
+
 
 # ===========================================================================
 # Frame cache cleanup
@@ -635,3 +824,127 @@ class TestCLIErrorHandling(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Tracking discovery and report attachment on the CLI path
+# ---------------------------------------------------------------------------
+
+
+class TestTrackingDiscovery(unittest.TestCase):
+    """The skill needs to know whether this assessment is being recorded.
+
+    On the MCP path that rides on list_metrics; the CLI had no equivalent, so
+    the skill's tracking workflow was unreachable there.
+    """
+
+    def tearDown(self):
+        from aidrin.telemetry import mlflow_sink
+
+        mlflow_sink.reset()
+        for var in ("AIDRIN_MLFLOW_ENABLED", "MLFLOW_TRACKING_URI", "MLFLOW_ALLOW_FILE_STORE"):
+            os.environ.pop(var, None)
+
+    def test_list_output_stays_a_plain_catalogue(self):
+        """Scripts parse this; the capability must not appear among categories."""
+        stdout, _, code = _run_cli("list")
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout)
+        self.assertNotIn("mlflow_enabled", payload)
+        for entries in payload.values():
+            self.assertIsInstance(entries, list)
+
+    def test_capabilities_flag_reports_tracking_off(self):
+        stdout, _, code = _run_cli("list", "--capabilities")
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout)
+        self.assertIn("metrics", payload)
+        self.assertFalse(payload["mlflow_enabled"])
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlflow"), "requires the [mlflow] extra"
+    )
+    def test_capabilities_flag_reports_tracking_on(self):
+        import tempfile
+
+        from aidrin.telemetry import mlflow_sink
+
+        os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+        os.environ["MLFLOW_TRACKING_URI"] = f"file://{tempfile.mkdtemp()}"
+        os.environ["AIDRIN_MLFLOW_ENABLED"] = "1"
+        mlflow_sink.reset()
+
+        stdout, _, code = _run_cli("list", "--capabilities")
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["mlflow_enabled"])
+        self.assertEqual(payload["experiment"], "aidrin")
+
+
+class TestBatchReportAttachment(unittest.TestCase):
+    """`aidrin batch --report` attaches the finished report to the assessment.
+
+    Without it a CLI assessment records its scores but loses the interpretation
+    written alongside them.
+    """
+
+    def setUp(self):
+        import tempfile
+
+        self.csv = _write_csv(_sample_df())
+        self.report = tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w")
+        self.report.write("# Readiness report\n")
+        self.report.close()
+        self.cfg = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+        json.dump({"file_path": self.csv, "metrics": ["completeness"],
+                   "save_images": False}, self.cfg)
+        self.cfg.close()
+
+    def tearDown(self):
+        from aidrin.telemetry import mlflow_sink
+
+        mlflow_sink.reset()
+        for var in ("AIDRIN_MLFLOW_ENABLED", "MLFLOW_TRACKING_URI",
+                    "AIDRIN_MLFLOW_EXPERIMENT", "MLFLOW_ALLOW_FILE_STORE"):
+            os.environ.pop(var, None)
+        for path in (self.csv, self.report.name, self.cfg.name):
+            _clean(path)
+
+    def test_report_flag_is_accepted_when_tracking_is_off(self):
+        """It must not fail just because nothing is recording."""
+        _, _, code = _run_cli("batch", self.cfg.name, "--report", self.report.name)
+        self.assertEqual(code, 0)
+
+    def test_a_missing_report_file_does_not_fail_the_batch(self):
+        _, _, code = _run_cli("batch", self.cfg.name, "--report", "/nonexistent/x.md")
+        self.assertEqual(code, 0)
+
+    @unittest.skipUnless(
+        __import__("importlib").util.find_spec("mlflow"), "requires the [mlflow] extra"
+    )
+    def test_report_is_attached_to_the_assessment_run(self):
+        import tempfile
+
+        from mlflow.tracking import MlflowClient
+
+        from aidrin.telemetry import mlflow_sink
+
+        store = tempfile.mkdtemp()
+        os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+        os.environ["MLFLOW_TRACKING_URI"] = f"file://{store}"
+        os.environ["AIDRIN_MLFLOW_ENABLED"] = "1"
+        os.environ["AIDRIN_MLFLOW_EXPERIMENT"] = "cli-report"
+        mlflow_sink.reset()
+
+        _, _, code = _run_cli("batch", self.cfg.name, "--report", self.report.name)
+        self.assertEqual(code, 0)
+
+        client = MlflowClient(tracking_uri=f"file://{store}")
+        exp = client.get_experiment_by_name("cli-report")
+        self.assertIsNotNone(exp, "no experiment created")
+        parent = [
+            r for r in client.search_runs([exp.experiment_id])
+            if r.data.tags.get("aidrin.run_type") == "assessment"
+        ][0]
+        names = [a.path for a in client.list_artifacts(parent.info.run_id)]
+        self.assertIn(os.path.basename(self.report.name), names)

@@ -1,6 +1,6 @@
 ---
 name: aidrin
-description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
+description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to validate file paths stored in a dataset, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
 ---
 
 # Assessing dataset AI-readiness with AIDRIN
@@ -20,11 +20,14 @@ only when MCP is absent.
 
 | Action | MCP tool | CLI equivalent | Remote |
 |---|---|---|---|
-| Preflight | `list_metrics()` | `aidrin list` | `aidrin remote check` |
+| Preflight | `list_metrics()` | `aidrin list --capabilities` | `aidrin remote check` |
+| Open tracked assessment | `start_assessment(file_path)` | automatic | not tracked |
+| Close tracked assessment | `end_assessment(session_id, report_path)` | `aidrin batch <cfg> --report <path>` | not tracked |
 | List endpoints | `list_remote_profiles()` | `aidrin remote list` | n/a |
 | Summarize dataset | `summarize_dataset(file_path)` | `aidrin summarize <file>` | add `profile=` / `aidrin remote summarize` |
 | Quality baseline | `run_data_quality_check(file_path)` | `aidrin data-quality <file> [--detail]` | add `profile=` / `aidrin remote data-quality` |
 | Single metric | `run_aidrin_metric(file_path, metric, ...)` | `aidrin run <metric> <file> <args...>` | add `profile=` / `aidrin remote run <metric>` |
+| Validate file references | `verify_file_references(file_path, path_targets, ...)` | `aidrin run file-reference-validation <file> <targets> [...]` | use the generic tool with `profile=` / `aidrin remote run file-reference-validation` |
 | Batch | `run_batch(config_path)` | `aidrin batch <config>` | add `profile=` / `aidrin remote batch` |
 | Create custom metric | `create_custom_metric(name, directory)` | `aidrin add-custom-module <name> --dir <dir>` | local-only |
 | Run custom metric | `run_custom_metric(metric_name_or_path, file_path)` | `aidrin run custom <path> <file> metric` | local-only |
@@ -44,8 +47,10 @@ Copy this checklist and work through it in order:
 - [ ] 5. Plan: map intent + columns → metrics + arguments (with rationale)
 - [ ] 6. Confirm plan with the user (HARD gate on column roles + domain grounding)
 - [ ] 7. Validate planned column names against the schema
-- [ ] 8. Run metrics (+ the agentic pipeline, if domain grounding was requested)
+- [ ] 8. Run metrics (+ the agentic pipeline, if domain grounding was requested; if tracking is on, open an assessment first and pass its session_id)
 - [ ] 9. Write the report from assets/report-template.md; save raw JSON alongside
+- [ ] 9b. If tracking is on: close the assessment, attaching the report
+      (MCP: `end_assessment(session_id, report_path=...)`; CLI: `aidrin batch ... --report <path>`)
 - [ ] 10. Ask if the user wants any custom metrics evaluated
 - [ ] 11. Ask if the user wants any remedies applied to the dataset
 ```
@@ -55,15 +60,55 @@ Copy this checklist and work through it in order:
 **MCP:** Call `list_metrics()`. Pass `category=` to filter by group (data-quality,
 data-structure, impact-of-data-on-AI, fairness-and-bias, data-governance).
 
-**CLI:** Run `aidrin list`. If it fails, see [reference/installation.md](reference/installation.md).
+The response is `{"metrics": {<category>: [...]}, "mlflow_enabled": <bool>}`. Read the
+metric catalogue from `metrics`, and note `mlflow_enabled` — it decides whether this
+assessment is recorded (see Assessment tracking below). No extra call is needed for it.
 
-The returned list is the source of truth. If a metric the user requests is
+**CLI:** Run `aidrin list --capabilities`. It returns the same catalogue wrapped as
+`{"metrics": {...}, "mlflow_enabled": <bool>, "experiment": <name|null>}` — the same
+shape the MCP tool returns, so the tracking section below applies to both paths. Plain
+`aidrin list` returns the bare catalogue and is what you want if you only need the
+metric names. If it fails, see [reference/installation.md](reference/installation.md).
+
+The returned catalogue is the source of truth. If a metric the user requests is
 not listed, **do not run it** — instead, offer to implement it as a custom
 metric using `create_custom_metric` (see the Custom metrics section below).
 
 **Remote endpoints:** also call `list_remote_profiles()` (MCP) or run
 `aidrin remote list` (CLI). If any profile is configured, ask once whether this
 dataset is local or on that endpoint, then keep that answer for the session.
+
+### Assessment tracking (only when `mlflow_enabled` is true)
+
+When the preflight reports `mlflow_enabled: true`, AIDRIN records this assessment to
+MLflow so the dataset's readiness can be compared over time.
+
+1. Before running any metric, call `start_assessment(file_path)` and keep the returned
+   `session_id`.
+2. Pass `session_id=` to every `run_aidrin_metric` call in this assessment.
+3. After writing the report, call `end_assessment(session_id, report_path=<path>)`. This
+   writes the dataset's aggregated readiness scores and attaches the report.
+
+Each metric becomes its own MLflow run, nested under one parent run that carries the
+aggregated scores. Mention the tracked run once in your report; do not otherwise change
+how you assess or what you report.
+
+When `mlflow_enabled` is false, skip all of this — do not call the assessment tools and do
+not mention tracking.
+
+**On the CLI path** there is no session to manage: `aidrin batch` and `aidrin data-quality`
+open and close their own assessment. To attach the finished report to it, pass
+`aidrin batch <config> --report <path/to/report.md>` — the equivalent of `end_assessment`'s
+`report_path`. Write the report first, then run the batch with `--report`, or re-run the
+batch once the report exists. The flag is ignored when tracking is off, so it is always
+safe to pass.
+
+Remote batches (`aidrin remote batch`, or `profile=`) execute on the endpoint and are not
+tracked; `--report` has nothing to attach to there.
+
+Only what AIDRIN computes is recorded: readiness scores and runtimes. Column names, cell
+values and file paths are deliberately withheld from the tracking server, so a tracked
+assessment never exports the data it is assessing.
 
 ### 2. Check for domain grounding
 
@@ -91,7 +136,7 @@ Ask every time, before eliciting general intent:
   `remediation.model`) — don't ask per stage. OpenAI-compatible endpoints other than
   OpenAI itself (e.g. a local/self-hosted `base_url`) are out of scope for this
   question for now; only ask about the model name. Leave `vector_store.embedding_model`
-  on its default (`text-embedding-ada-002`) unless the user brings it up unprompted.
+  on its default (`text-embedding-3-small`) unless the user brings it up unprompted.
 - **How the dataset gets loaded for the pipeline** (the agentic profiler is a separate
   code path from AIDRIN's own file parser — it does not reuse Step 4's reader):
   - Plain comma-separated CSV → use `paths.data_csv` directly, no extra step.
@@ -100,11 +145,10 @@ Ask every time, before eliciting general intent:
     (`aidrin.file_handling.file_parser.read_file`) — the same reader Step 4 already
     used successfully, so no separator/sheet-name guessing needed. Point
     `paths.data_loader` at it.
-  - A format AIDRIN doesn't parse at all (e.g. a semicolon-delimited `.txt`) → ask the
-    user for the path to a `.py` file with a function that returns a pandas DataFrame,
-    the same way `examples/agentic/power_consumption/loader.py` does it. Point
-    `paths.data_loader` at `"<path>:<function_name>"`. Don't invent one yourself without
-    seeing the file — a wrong delimiter/encoding guess silently produces bad data.
+  - A format AIDRIN doesn't parse at all (e.g. a semicolon-delimited `.txt`) → this is
+    Step 4's "no built-in reader" case. Once you have a user-supplied loader and have
+    materialized it to CSV (see Step 4), just point `paths.data_csv` at that CSV like
+    the plain-CSV case above — no separate `data_loader` needed.
 - Carry the resource path and questions forward — they get folded into the Step 6 plan
   confirmation and used to build the config in Step 8. See "Agentic pipeline (advanced)"
   below for the full config schema and command reference.
@@ -134,6 +178,7 @@ Dimension → metric mapping for focused requests:
 | Privacy / PII / anonymity | k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk |
 | HIPAA / PHI compliance | hipaa-compliance |
 | Data quality / completeness / duplicates / outliers | completeness, duplicity, outliers |
+| File paths / referenced files / manifest validation | file-reference-validation |
 | Data structure / distribution shape / collinearity / redundant features | max-pairwise-correlation, skewness, kurtosis |
 | Feature relevance / AI impact | feature-relevance, correlations |
 | Class imbalance | class-imbalance |
@@ -142,6 +187,13 @@ Dimension → metric mapping for focused requests:
 
 Always add the zero-arg quality baseline (completeness, duplicity, outliers) even for
 dimension-specific requests — it takes no column args and gives essential context.
+
+For a focused file-reference request, run only `file-reference-validation` unless the
+user also asks for broader readiness analysis. Confirm the path-bearing targets and,
+when relative references do not use the manifest directory, the base directory. MCP
+checks the filesystem of the MCP server host, not the user's client machine.
+Use `target_match="regex"` only when the user wants each target value treated as a
+full-match regular expression; exact names remain the default.
 
 ### 4. Inspect the dataset
 
@@ -152,6 +204,27 @@ dimension-specific requests — it takes no column args and gives essential cont
 This returns shape, all column names, per-column descriptive stats (numerical: mean/std/min/max/quartiles; categorical: unique count/top value/freq), and missing counts per column — using AIDRIN's own file parser, so column sets are accurate for non-CSV formats (JSON/NPZ/H5 reshape data differently than a plain pandas read).
 
 Use the output to identify candidate column roles: target, sensitive attributes, quasi-identifiers, id column, categorical vs numerical.
+
+**If this errors with "Unsupported file type"** (e.g. a semicolon-delimited `.txt`,
+a proprietary format, or anything else AIDRIN's parser doesn't recognize), AIDRIN has
+no built-in reader for it. Don't guess a parser yourself — a wrong delimiter/encoding/
+header guess silently produces bad data that every downstream metric inherits. Instead,
+ask the user for a loader:
+
+> "AIDRIN doesn't have a built-in reader for this file format. Can you provide a small
+> Python file with a function that loads it into a pandas DataFrame? Any function name
+> is fine, no required arguments, returning a `pd.DataFrame` — see
+> `examples/agentic/power_consumption/loader.py` for the pattern. Point me at
+> `<path>:<function_name>`."
+
+Once you have it, run it yourself to materialize the result as a CSV next to the
+original file (e.g. `python -c "import sys; sys.path.insert(0, '<dir>'); from <module>
+import <function>; <function>().to_csv('<out>.csv', index=False)"`). Use that CSV as
+`file_path` for every step from here on — general metrics, custom metrics, and, if
+domain grounding is also requested, `paths.data_csv` in the agentic config (Step 2's
+third case collapses into this — no separate `data_loader` needed once a CSV exists).
+This makes the converted CSV the single source of truth for the rest of the workflow
+instead of re-deriving a DataFrame per tool.
 
 ### 5. Build the plan
 
@@ -176,6 +249,12 @@ sensitive / quasi-identifiers / id — each with a one-line reason. Add: "I may
 have missed indirect identifiers (e.g. zip, birthdate, rare categories) — please
 confirm or correct these." Do not run anything until the user confirms. Wrong
 quasi-identifiers produce a falsely reassuring privacy result.
+
+If Step 4's general inspection was skipped or failed (e.g. `aidrin summarize`
+rejected the format and a custom loader was used instead per Step 2), say so
+explicitly instead of presenting an empty column-role list — e.g. "General
+inspection wasn't available for this format; column roles below come from the
+agentic profiler / your description instead."
 
 If domain grounding was requested in Step 2, also list the resource path(s) that
 will be indexed, the exact domain questions that will be run against them, and the
@@ -205,7 +284,7 @@ for minutes with no visible checkpoint.
 
 **MCP path (preferred):**
 - Zero-arg baseline: one call — `run_data_quality_check(file_path="...")` runs completeness, duplicity, and outliers together.
-- Per metric: `run_aidrin_metric(file_path="...", metric="class-imbalance", target_column="income")`. All column args are named kwargs — no positional ordering to worry about.
+- Per metric: `run_aidrin_metric(file_path="...", metric="class-imbalance", target_column="income")`. All column args are named kwargs — no positional ordering to worry about. If `mlflow_enabled` was true at preflight, also pass `session_id=` (from Step 1's Assessment tracking) to every call.
 - If a metric fails, its returned JSON contains an `Error`/`ErrorType` key. Record it as "Not run: <reason>" and continue with the rest.
 
 **CLI path (fallback):**
@@ -222,11 +301,10 @@ for minutes with no visible checkpoint.
    path from Step 2, `retrieval.questions` = the user's domain questions from Step 2.
    Set `retrieval.answer_model`, `executor.model`, `complexity_scorer.model`, and
    `remediation.model` to the OpenAI model chosen in Step 2 (all four, the same model).
-   Leave `vector_store.embedding_model` on `text-embedding-ada-002` unless the user
-   said otherwise. For loading the dataset itself, use whichever of the three cases
-   from Step 2 applied: `paths.data_csv` for plain CSV, a `read_file()`-wrapping loader
-   you write for another AIDRIN-supported format, or the user-supplied loader path for
-   a format AIDRIN can't parse.
+   Leave `vector_store.embedding_model` on `text-embedding-3-small` unless the user
+   said otherwise. For loading the dataset itself: `paths.data_csv` for plain CSV or
+   for any format materialized to CSV via Step 4's fallback, or a `read_file()`-wrapping
+   loader you write for another AIDRIN-supported format (Step 2's second case).
 3. Build the index (skip if one already exists for this config): MCP
    `agentic_build_index(config_path="...")` / CLI `aidrin agentic build-index -c <config>`.
 4. Run the pipeline: MCP `agentic_run(config_path="...", output_path="...")` / CLI
@@ -273,17 +351,21 @@ Do not apply any remedy without explicit user confirmation — data changes are 
 
 ## Custom metrics
 
-When the user wants a non-standard metric or a data-cleaning step:
+When the user wants a non-standard metric or a data-cleaning step. `file_path` accepts any
+supported format (CSV, Excel, JSON, NPZ, HDF5, Parquet) — pass `file_type` to override
+detection when the extension is ambiguous. Remedy output is always saved as CSV, regardless
+of the input format, since JSON/NPZ/HDF5 don't round-trip losslessly back to their original
+structure.
 
 **MCP:**
 1. `create_custom_metric(name="my_audit", directory="/path/to/dir")` — scaffolds a `CustomDR` class template file.
 2. User edits the file: implement `metric(self, **kwargs)` returning a dict; `remedy(self, metric_results)` returning a DataFrame. Access the dataset via `self.dataset`.
-3. `run_custom_metric(metric_name_or_path="/path/to/my_audit.py", file_path="...")` — runs the metric.
-4. `run_custom_remedy(metric_name_or_path="/path/to/my_audit.py", file_path="...", output_dir="...")` — applies the remedy and saves a new CSV.
+3. `run_custom_metric(metric_name_or_path="/path/to/my_audit.py", file_path="...", file_type="...")` — runs the metric.
+4. `run_custom_remedy(metric_name_or_path="/path/to/my_audit.py", file_path="...", output_dir="...", file_type="...")` — applies the remedy and saves a new CSV.
 
 **CLI:**
 - Scaffold: `aidrin add-custom-module <name> --dir <dir>` — creates the `CustomDR` class template.
-- Run: `aidrin run custom <path> <file> metric` / `aidrin run custom <path> <file> remedy`.
+- Run: `aidrin run custom <path> <file> metric --file-type <type>` / `aidrin run custom <path> <file> remedy --file-type <type>`.
 
 ## Remediation
 
@@ -344,7 +426,7 @@ paths:
 vector_store:
   sources:
     - ./sources                            # directory of domain PDFs
-  embedding_model: text-embedding-ada-002
+  embedding_model: text-embedding-3-small
   vector_store_name: my_index             # output directory name
   chunk_size: 1000
   chunk_overlap: 200
