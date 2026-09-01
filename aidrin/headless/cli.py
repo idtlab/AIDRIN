@@ -342,6 +342,8 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "rules": parsed_rules,
         "rules_json": rules_json,
         "rules_file": rules_file,
+        "unit_declarations_json": getattr(args, "units_json", None),
+        "units_file": getattr(args, "units_file", None),
         "max_outliers": getattr(args, "max_outliers", 100),
         "max_export_rows": getattr(args, "max_export_rows", 10000),
         "scan_limit": getattr(args, "scan_limit", None),
@@ -861,6 +863,16 @@ def main() -> None:
             mparser.add_argument("--base-dir", default=None, help="Directory used to resolve relative file references")
             mparser.add_argument("--max-results", type=int, default=100, help="Maximum invalid and metadata detail records; 0 means unlimited")
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum reference values to scan; 0 means unlimited")
+        if metric_name == "variable_unit_validation":
+            units_group = mparser.add_mutually_exclusive_group()
+            units_group.add_argument(
+                "--units-json",
+                help="Inline JSON object keyed by exact variable name",
+            )
+            units_group.add_argument(
+                "--units-file",
+                help="Path to a UTF-8 JSON mapping resolved on the execution host",
+            )
         _configure_minimal_run_args(mparser)
         mparser.set_defaults(_metric_key=metric_name, _action="metric")
 

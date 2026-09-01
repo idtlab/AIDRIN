@@ -88,6 +88,10 @@ HEADLINE = {
         "aidrin.structure.constant_feature_count": ("Constant feature count",),
         "aidrin.structure.total_features": ("Total features",),
     },
+    "variable_unit_validation": {
+        "aidrin.structure.unit_coverage": ("coverage_score",),
+        "aidrin.structure.unit_validity": ("validity_score",),
+    },
     "feature_coverage_ratio": {
         "aidrin.quality.feature_coverage_ratio": ("Feature Coverage Ratio (%)",),
         "aidrin.quality.covered_features": ("Covered features",),
