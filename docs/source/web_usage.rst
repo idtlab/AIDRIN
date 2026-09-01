@@ -281,6 +281,17 @@ statistical metrics require no parameters; the latter three operate on the
 numeric, non-constant columns. Referenced-file validation uses selected
 path-bearing targets and filesystem settings.
 
+- **Variable Unit Validation**:
+
+  - **Method**: Requires every logical variable to resolve to a Pint-recognized unit, dimensionless ``1``, or ``not_applicable``. Explicit mappings override native HDF5/Parquet metadata and trailing name annotations; unresolved conflicts fail validation.
+  - **Parameters**: Use the searchable, paginated editor or import the shared mapping JSON schema. Embedded units are prefilled, while undeclared variables remain unclassified. Import, export, and edits are browser-local and never modify the dataset.
+  - **Result**: Coverage and validity scores, readiness status, classification counts, filterable per-variable details, override warnings, lower-priority declarations, and stale mapping keys.
+
+  This checks metadata syntax and coverage only. It does not infer units from
+  values, validate expected physical dimensions, convert data, or prove that a
+  syntactically valid unit is correct. See :ref:`variable_unit_validation` for
+  supported metadata, precedence, ``g`` ambiguity, and Globus compatibility.
+
 - **Referenced Files** (local deployments only):
 
   - **Method**: Resolves paths stored in selected string-valued columns or HDF5 datasets and checks whether they identify regular files on the AIDRIN web server. Valid files include size, owner when available, creation time when the operating system exposes one, and modification time.

@@ -446,3 +446,27 @@ Per-feature excess kurtosis (Fisher's definition, where a normal distribution is
    result = calculate_kurtosis(file_info=file_info)
 
 **Returns**: A dictionary with per-column excess kurtosis, the most-extreme feature, and a bar chart.
+
+calculate_variable_unit_validation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Checks whether every logical variable has a recognized unit, dimensionless
+``1``, or an explicit ``not_applicable`` classification. See
+:ref:`variable_unit_validation` for the mapping schema and precedence rules.
+
+**Usage**:
+
+.. code-block:: python
+
+   from aidrin import calculate_variable_unit_validation
+
+   result = calculate_variable_unit_validation(
+       file_info,
+       {
+           "speed": {"unit": "m/s"},
+           "station_id": {"status": "not_applicable"},
+       },
+   )
+
+**Returns**: Coverage and validity scores, readiness status, classification
+counts, and one machine-readable record per variable.

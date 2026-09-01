@@ -31,7 +31,7 @@ Metrics are grouped into categories. ``aidrin list --category`` accepts five:
    * - ``data-quality``
      - Completeness, duplicates, outliers, and custom validity rules
    * - ``data-structure``
-     - Constant features, collinearity, and distribution shape
+     - Constant features, collinearity, distribution shape, and variable-unit metadata
    * - ``impact-of-data-on-AI``
      - Correlation and feature relevance
    * - ``fairness-and-bias``
@@ -156,6 +156,11 @@ server, which dispatches on the same registry as the command line.
    * - Kurtosis
      - ``kurtosis``
      - ``calculate_kurtosis``
+     - |yes|
+     - |yes|
+   * - Variable Unit Validation
+     - ``variable-unit-validation``
+     - ``calculate_variable_unit_validation``
      - |yes|
      - |yes|
    * - Correlation Analysis
