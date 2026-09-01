@@ -94,7 +94,8 @@ Batch configuration accepts either an inline ``unit_declarations`` object or
 tool; ``run_aidrin_metric`` also accepts ``unit_declarations_json`` and
 ``units_file``.
 
-In the web Data Structure panel, **Verify variable units** opens a searchable,
+In the web app, open **Understandability**, select **Variable Unit
+Validation**, and enable **Verify variable units** to use the searchable,
 paginated editor. Embedded and name-based declarations are prefilled; other
 variables remain unclassified until edited. JSON import and export happen in
 the browser, and edits are request-local. Globus workers advertise the

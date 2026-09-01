@@ -18,6 +18,7 @@ The metric measures metadata readiness only: it will not infer units from values
 - [x] Milestone 3: add the local Data Structure web editor, import/export and filtering behavior, result rendering, target-discovery candidates, and web tests.
 - [x] Milestone 4: add Globus capability negotiation and remote web dispatch, compatibility messaging, serialization, and tests.
 - [x] Milestone 5: document the metric and mapping contract, add registry/documentation consistency coverage, run all repository validation gates, and resolve any failures.
+- [x] Milestone 6: relocate the web control and result cache to Understandability while retaining the existing cross-interface ``data-structure`` category.
 
 ## Core Behavior
 
@@ -75,7 +76,7 @@ The metric measures metadata readiness only: it will not infer units from values
   - Extend `run_aidrin_metric` with `unit_declarations_json` and `units_file`.
   - Preserve local and remote routing through the headless registry.
 - Web:
-  - Add **Verify variable units** to Data Structure.
+  - Add **Variable Unit Validation** as a check item under Understandability without changing the headless registry category.
   - Extend the existing shared target-discovery response with discovered unit candidates instead of adding a second page-load request.
   - Provide a searchable, paginated editor showing variable, dtype, source, classification, unit, and validation status.
   - Prefill embedded/name units, but never automatically mark other variables dimensionless or not applicable.

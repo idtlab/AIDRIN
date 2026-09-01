@@ -692,6 +692,7 @@ function showPanel(panelId, pushHistory) {
 const _panelCacheMap = {
   "data-quality": "data_quality",
   "data-structure": "data_structure",
+  "variable-unit-validation": "variable_unit_validation",
   fairness: "fairness",
   "correlation-analysis": "correlation_analysis",
   "feature-relevance": "feature_relevance",
@@ -928,6 +929,7 @@ async function workspaceSubmit(targetUrl) {
         "skewness",
         "kurtosis",
       ],
+      "/variable-unit-validation": ["variable_unit_validation"],
       "/fairness": ["representation_rate", "statistical_rates"],
       "/feature-relevance": ["feature_relevance"],
       "/correlation-analysis": ["correlations"],
@@ -1055,7 +1057,10 @@ async function workspaceSubmit(targetUrl) {
       }
       remoteParams.selected = selected;
       remoteDisplayName = selectedNames.join(", ");
-    } else if (targetUrl === "/data-structure") {
+    } else if (
+      targetUrl === "/data-structure" ||
+      targetUrl === "/variable-unit-validation"
+    ) {
       remoteName = "data_structure";
       const selected = [];
       const selectedNames = [];

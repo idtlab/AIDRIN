@@ -10,6 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
 DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_quality.html"
 DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_structure.html"
+VARIABLE_UNIT_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_variable_unit_validation.html"
+SIDEBAR = REPO_ROOT / "web" / "templates" / "_components" / "sidebar.html"
 
 
 def test_result_renderer_escapes_untrusted_display_values():
@@ -248,7 +250,9 @@ def test_variable_unit_editor_and_results_escape_dataset_metadata():
 
 def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
-    panel = DATA_STRUCTURE_PANEL.read_text(encoding="utf-8")
+    panel = VARIABLE_UNIT_PANEL.read_text(encoding="utf-8")
+    data_structure_panel = DATA_STRUCTURE_PANEL.read_text(encoding="utf-8")
+    sidebar = SIDEBAR.read_text(encoding="utf-8")
 
     for element_id in (
         "variable-unit-search",
@@ -258,6 +262,14 @@ def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
         "variable-unit-declarations",
     ):
         assert f'id="{element_id}"' in panel
+        assert f'id="{element_id}"' not in data_structure_panel
+    understandability_start = sidebar.index('id="pillar-understand"')
+    data_structure_start = sidebar.index("<!-- Pillar: Data Structure & Organization -->")
+    assert (
+        understandability_start
+        < sidebar.index("showPanel('variable-unit-validation')")
+        < data_structure_start
+    )
     assert "const VARIABLE_UNIT_PAGE_SIZE = 10" in source
     assert "function exportVariableUnitDeclarations()" in source
     assert "function importVariableUnitDeclarations(file)" in source

@@ -40,7 +40,7 @@ interface, the command line, and the Python library.
    * - **Data Governance**
      - Re-identification risk: k-anonymity, l-diversity, t-closeness, entropy risk, HIPAA identifiers, and differential privacy
    * - **Understandability and Usability**
-     - FAIR compliance of your metadata, against the DCAT and DataCite schemas
+     - Variable-unit metadata readiness and FAIR compliance against the DCAT and DataCite schemas
    * - **Data Structure**
      - Constant features, collinearity, skewness, and kurtosis
 

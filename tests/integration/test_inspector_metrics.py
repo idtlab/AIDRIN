@@ -193,7 +193,7 @@ def test_data_structure_file_reference_validation_returns_metadata(uploaded_clie
     assert result["File metadata"][0]["size_bytes"] == 6
 
 
-def test_data_structure_variable_unit_validation_uses_request_local_mapping(uploaded_client):
+def test_understandability_variable_unit_validation_uses_request_local_mapping(uploaded_client):
     mapping = {
         "age": {"unit": "year"},
         "income": {"unit": "kilogram"},
@@ -202,7 +202,7 @@ def test_data_structure_variable_unit_validation_uses_request_local_mapping(uplo
     }
 
     response = uploaded_client.post(
-        "/data-structure?return_type=json",
+        "/variable-unit-validation?return_type=json",
         data={
             "variable_unit_validation": "yes",
             "variable_unit_declarations": json.dumps(mapping),
@@ -215,18 +215,16 @@ def test_data_structure_variable_unit_validation_uses_request_local_mapping(uplo
     assert result["counts"]["not_applicable"] == 2
 
 
-def test_data_structure_variable_unit_error_is_metric_scoped(uploaded_client):
+def test_variable_unit_error_is_metric_scoped(uploaded_client):
     response = uploaded_client.post(
-        "/data-structure?return_type=json",
+        "/variable-unit-validation?return_type=json",
         data={
-            "constant feature count": "yes",
             "variable_unit_validation": "yes",
             "variable_unit_declarations": "[]",
         },
     )
     data = response.get_json()
 
-    assert "Constant Feature Count" in data
     assert "unit_declarations must be a JSON object" in data["Variable Unit Validation"]["Error"]
 
 
