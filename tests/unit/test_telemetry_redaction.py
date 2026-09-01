@@ -211,6 +211,7 @@ class TestDeclaredPathsResolveAgainstRealResults(unittest.TestCase):
         "duplicity": {},
         "outliers": {},
         "constant_feature_count": {},
+        "variable_unit_validation": {},
         "max_pairwise_correlation": {},
         "class_imbalance": {"target_column": "approved"},
         "k_anonymity": {"quasi_identifiers": "age,education"},

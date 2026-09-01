@@ -30,6 +30,7 @@ from aidrin.structured_data_metrics.row_level_completeness import row_level_comp
 from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
 from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
+from aidrin.structured_data_metrics.variable_unit_validation import variable_unit_validation
 from aidrin.structured_data_metrics.privacy_measure import (
     compute_entropy_risk,
     compute_k_anonymity,
@@ -130,6 +131,16 @@ def run_duplicity(file_path: str, file_type: Optional[str], file_name: Optional[
 def run_constant_feature_count(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(constant_feature_count, file_info)
+
+
+def run_variable_unit_validation(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    unit_declarations: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(variable_unit_validation, file_info, unit_declarations)
 
 
 def run_max_pairwise_correlation(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
