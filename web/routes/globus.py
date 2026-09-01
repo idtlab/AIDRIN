@@ -282,6 +282,7 @@ def disconnect():
     session.pop("globus_file_path", None)
     session.pop("globus_file_name", None)
     session.pop("globus_file_type", None)
+    session.pop("globus_capabilities", None)
     session.pop("globus_active_tasks", None)
     session.pop("globus_task_contexts", None)
     _clear_negotiation()
@@ -315,6 +316,7 @@ def check_endpoint():
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
         _, report = _fresh_negotiation(client, endpoint_id, force=True)
+        session["globus_capabilities"] = report.get("remote", {}).get("capabilities", [])
         return jsonify(report), (200 if report["compatible"] else 409)
     except Exception as e:
         logger.error("Globus check-endpoint error: %s", e, exc_info=True)

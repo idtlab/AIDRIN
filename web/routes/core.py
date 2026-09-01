@@ -146,6 +146,7 @@ def inspector():
     globus_file_name = session.get("globus_file_name", "")
     globus_file_type = session.get("globus_file_type", "")
     globus_endpoint_id = session.get("globus_endpoint_id", "")
+    globus_capabilities = session.get("globus_capabilities", [])
     globus_mode = bool(globus_file_path and globus_authenticated)
 
     # If Globus mode, use globus file info for template (shows sidebar + panels)
@@ -169,6 +170,7 @@ def inspector():
             globus_authenticated=globus_authenticated,
             globus_mode=globus_mode,
             globus_endpoint_id=globus_endpoint_id,
+            globus_capabilities=globus_capabilities,
             llm_available=llm_available,
             llm_configured=llm_configured,
         )
