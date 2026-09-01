@@ -103,47 +103,6 @@
           </div>
         </div>
 
-        <div class="checkboxContainerIndividual" id="variable-unit-validation-control">
-          <label class="material-checkbox">
-            <input type="checkbox" name="variable_unit_validation" id="toggleButton_variable_unit_validation" onchange="toggleValue(this); toggleVariableUnitEditor(this.checked)" disabled />
-            <span class="checkmark"></span>
-            Verify variable units
-            <span class="info-icon">i<span class="info-text">Require every logical variable to have a recognized unit, use 1 for dimensionless data, or be marked not applicable. This validates metadata syntax, not physical correctness.</span></span>
-          </label>
-          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
-            <input type="hidden" id="variable-unit-declarations" name="variable_unit_declarations" value="{}" />
-            <p id="variable-unit-message" class="text-xs text-gray-600 dark:text-gray-300">Loading variables and embedded unit metadata...</p>
-            <div class="flex flex-wrap items-center gap-2">
-              <label class="sr-only" for="variable-unit-search">Search variables</label>
-              <input type="search" id="variable-unit-search" placeholder="Search variables..." class="min-w-48 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-              <button type="button" onclick="document.getElementById('variable-unit-import-file').click()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 dark:border-gray-600 dark:text-gray-200">Import JSON</button>
-              <input type="file" id="variable-unit-import-file" accept="application/json,.json" class="hidden" />
-              <button type="button" onclick="exportVariableUnitDeclarations()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 dark:border-gray-600 dark:text-gray-200">Export JSON</button>
-            </div>
-            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table class="w-full text-left text-xs text-gray-600 dark:text-gray-300">
-                <thead class="bg-gray-50 uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                  <tr>
-                    <th class="px-2 py-2">Variable</th>
-                    <th class="px-2 py-2">Type</th>
-                    <th class="px-2 py-2">Detected source</th>
-                    <th class="px-2 py-2">Classification</th>
-                    <th class="px-2 py-2">Unit</th>
-                    <th class="px-2 py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody id="variable-unit-editor-body"></tbody>
-              </table>
-            </div>
-            <div class="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span id="variable-unit-page-summary"></span>
-              <div class="flex gap-2">
-                <button type="button" id="variable-unit-prev" class="rounded border border-gray-300 px-2 py-1 disabled:opacity-40 dark:border-gray-600">Previous</button>
-                <button type="button" id="variable-unit-next" class="rounded border border-gray-300 px-2 py-1 disabled:opacity-40 dark:border-gray-600">Next</button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
       <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
         <button type="button" onclick="withSubmitGuard(this, () => workspaceSubmit('/data-structure'));"

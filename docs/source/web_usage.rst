@@ -205,8 +205,21 @@ Focuses on privacy preservation through metrics that assess anonymity and disclo
 Understandability and Usability
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This feature evaluates dataset metadata for compliance with the **FAIR principles** — *Findable*, *Accessible*, *Interoperable*, and *Reusable*.
-It ensures your dataset is well-documented, discoverable, and reusable by others.
+This dimension checks whether dataset variables have usable unit metadata and
+evaluates dataset metadata for compliance with the **FAIR principles** —
+*Findable*, *Accessible*, *Interoperable*, and *Reusable*.
+
+Variable Unit Validation
+''''''''''''''''''''''''
+
+- **Method**: Requires every logical variable to resolve to a Pint-recognized unit, dimensionless ``1``, or ``not_applicable``. Explicit mappings override native HDF5/Parquet metadata and trailing name annotations; unresolved conflicts fail validation.
+- **Parameters**: Open **Variable Unit Validation** under Understandability and use the searchable, paginated editor or import the shared mapping JSON schema. Embedded units are prefilled, while undeclared variables remain unclassified. Import, export, and edits are browser-local and never modify the dataset.
+- **Result**: Coverage and validity scores, readiness status, classification counts, filterable per-variable details, override warnings, lower-priority declarations, and stale mapping keys.
+
+This checks metadata syntax and coverage only. It does not infer units from
+values, validate expected physical dimensions, convert data, or prove that a
+syntactically valid unit is correct. See :ref:`variable_unit_validation` for
+supported metadata, precedence, ``g`` ambiguity, and Globus compatibility.
 
 FAIR Compliance Report
 '''''''''''''''''''''''
@@ -280,17 +293,6 @@ Assesses structural and distributional properties of the dataset. The four
 statistical metrics require no parameters; the latter three operate on the
 numeric, non-constant columns. Referenced-file validation uses selected
 path-bearing targets and filesystem settings.
-
-- **Variable Unit Validation**:
-
-  - **Method**: Requires every logical variable to resolve to a Pint-recognized unit, dimensionless ``1``, or ``not_applicable``. Explicit mappings override native HDF5/Parquet metadata and trailing name annotations; unresolved conflicts fail validation.
-  - **Parameters**: Use the searchable, paginated editor or import the shared mapping JSON schema. Embedded units are prefilled, while undeclared variables remain unclassified. Import, export, and edits are browser-local and never modify the dataset.
-  - **Result**: Coverage and validity scores, readiness status, classification counts, filterable per-variable details, override warnings, lower-priority declarations, and stale mapping keys.
-
-  This checks metadata syntax and coverage only. It does not infer units from
-  values, validate expected physical dimensions, convert data, or prove that a
-  syntactically valid unit is correct. See :ref:`variable_unit_validation` for
-  supported metadata, precedence, ``g`` ambiguity, and Globus compatibility.
 
 - **Referenced Files** (local deployments only):
 
