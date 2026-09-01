@@ -264,6 +264,19 @@ def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
     assert "function filterVariableUnitResults(select)" in source
 
 
+def test_variable_unit_globus_control_is_capability_gated_and_serialized():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    inspector = (REPO_ROOT / "web" / "templates" / "inspector.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'capabilities.includes("variable_unit_validation_v1")' in source
+    assert "Upgrade and restart its AIDRIN worker" in source
+    assert "remoteParams.unit_declarations = variableUnitDeclarations" in source
+    assert "setVariableUnitTargets(result.unit_targets || [])" in source
+    assert "window.AIDRIN_GLOBUS_CAPABILITIES = {{ globus_capabilities | tojson }}" in inspector
+
+
 def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "function serializeCustomOutlierRules()" in source

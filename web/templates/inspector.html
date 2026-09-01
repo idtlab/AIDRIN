@@ -93,6 +93,7 @@
         // Globus mode — flag for workspaceSubmit to route through Globus
         window.AIDRIN_GLOBUS_MODE = true;
         window.AIDRIN_GLOBUS_ENDPOINT = '{{ globus_endpoint_id }}';
+        window.AIDRIN_GLOBUS_CAPABILITIES = {{ globus_capabilities | tojson }};
         window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
         window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};

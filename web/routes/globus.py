@@ -140,6 +140,7 @@ def disconnect():
     session.pop("globus_file_path", None)
     session.pop("globus_file_name", None)
     session.pop("globus_file_type", None)
+    session.pop("globus_capabilities", None)
     session.pop("globus_active_tasks", None)
     return jsonify({"success": True})
 
@@ -171,6 +172,7 @@ def check_endpoint():
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
         report = check_endpoint_compatibility(client, endpoint_id)
+        session["globus_capabilities"] = report.get("remote", {}).get("capabilities", [])
         return jsonify(report), (200 if report["compatible"] else 409)
     except Exception as e:
         logger.error("Globus check-endpoint error: %s", e, exc_info=True)

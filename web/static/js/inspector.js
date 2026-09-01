@@ -315,7 +315,23 @@ function loadFileReferenceOptions() {
     "toggleButton_file_reference_validation",
   );
   const message = document.getElementById("file-reference-message");
-  if (!checkbox || window.AIDRIN_GLOBUS_MODE) return Promise.resolve();
+  if (!checkbox) return Promise.resolve();
+  if (window.AIDRIN_GLOBUS_MODE) {
+    const capabilities = window.AIDRIN_GLOBUS_CAPABILITIES || [];
+    const unitCheckbox = document.getElementById(
+      "toggleButton_variable_unit_validation",
+    );
+    const unitMessage = document.getElementById("variable-unit-message");
+    if (!capabilities.includes("variable_unit_validation_v1")) {
+      if (unitCheckbox) unitCheckbox.disabled = true;
+      if (unitMessage) {
+        unitMessage.textContent =
+          "Variable-unit validation is unavailable on this endpoint. Upgrade and restart its AIDRIN worker.";
+      }
+      return Promise.resolve();
+    }
+    return loadGlobusCustomOutlierTargets(unitMessage);
+  }
 
   return fetch("/custom-outlier-targets", { method: "POST" })
     .then((response) => response.json())
@@ -1058,6 +1074,11 @@ async function workspaceSubmit(targetUrl) {
       if (gFormData.get("kurtosis") === "yes") {
         selected.push("kurtosis");
         selectedNames.push("Kurtosis");
+      }
+      if (gFormData.get("variable_unit_validation") === "yes") {
+        selected.push("variable_unit_validation");
+        selectedNames.push("Variable Unit Validation");
+        remoteParams.unit_declarations = variableUnitDeclarations;
       }
       if (selected.length === 0) {
         if (typeof showToast === "function")
@@ -2485,6 +2506,7 @@ function loadGlobusCustomOutlierTargets(message) {
     .then((result) => {
       if (result && result.success) {
         customOutlierTargets = result.targets || [];
+        setVariableUnitTargets(result.unit_targets || []);
         updateCustomOutlierTargetOptions();
         if (message) message.classList.add("hidden");
       } else if (message) {

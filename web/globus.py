@@ -312,6 +312,7 @@ def check_endpoint_compatibility(client, endpoint_id, timeout=30):
 
     remote_aidrin = remote.get("aidrin_version", "unknown")
     remote_python = remote.get("python_version", "unknown")
+    remote_capabilities = remote.get("capabilities", [])
 
     warnings = []
     compatible = True
@@ -333,7 +334,11 @@ def check_endpoint_compatibility(client, endpoint_id, timeout=30):
     report = {
         "compatible": compatible,
         "local": {"aidrin": local_aidrin, "python": local_python},
-        "remote": {"aidrin": remote_aidrin, "python": remote_python},
+        "remote": {
+            "aidrin": remote_aidrin,
+            "python": remote_python,
+            "capabilities": remote_capabilities,
+        },
         "warnings": warnings,
     }
     logger.info("Endpoint %s compatibility: %s", endpoint_id, report)

@@ -124,12 +124,26 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Skewness"] = aidrin.calculate_skewness(file_info)
         if "kurtosis" in selected:
             result["Kurtosis"] = aidrin.calculate_kurtosis(file_info)
+        if "variable_unit_validation" in selected:
+            result["Variable Unit Validation"] = (
+                aidrin.calculate_variable_unit_validation(
+                    file_info,
+                    params.get("unit_declarations"),
+                )
+            )
         return result
 
     def _custom_outlier_targets():
         """Discover selectable custom-outlier targets on the remote file."""
         from aidrin.file_handling.value_iterators import iter_targets
-        return {"success": True, "targets": iter_targets(file_info)}
+        from aidrin.structured_data_metrics.variable_unit_validation import (
+            discover_variable_units,
+        )
+        return {
+            "success": True,
+            "targets": iter_targets(file_info),
+            "unit_targets": discover_variable_units(file_info),
+        }
 
     def _summary_statistics():
         """Compute summary statistics + histograms on the remote file."""
@@ -393,6 +407,7 @@ def remote_env_probe():
         "aidrin_version": aidrin.__version__,
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "headless_import": headless_import,
+        "capabilities": ["variable_unit_validation_v1"],
     }
 
 
