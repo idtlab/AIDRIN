@@ -42,11 +42,19 @@ ENV PYTHONUNBUFFERED=1 \
     GUNICORN_TIMEOUT=120 \
     HOME=/tmp \
     MPLCONFIGDIR=/tmp/matplotlib \
+    PGEOCODE_DATA_DIR=/app/.cache/pgeocode \
     FLASK_CELERY__broker_url=redis://redis:6379/0 \
     FLASK_CELERY__result_backend=redis://redis:6379/0
 
 WORKDIR /app
 COPY --from=builder /app /app
+
+# Pre-fetch pgeocode's GeoNames data into PGEOCODE_DATA_DIR (under /app) so the HIPAA
+# postal-code check works for the arbitrary non-root UID on Spin: HOME=/tmp/.cache is
+# root-owned and unwritable there, and Spin may block egress. Best-effort at build.
+RUN mkdir -p /app/.cache/pgeocode \
+    && python -c "import pgeocode; pgeocode.Nominatim('us')" \
+    || echo "pgeocode prefetch skipped (offline build); will download at runtime"
 
 # Group-writable (GID 0) so Spin's arbitrary non-root UID can write.
 RUN chgrp -R 0 /app && chmod -R g=u /app
