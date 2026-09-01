@@ -150,6 +150,10 @@ Examples:
    aidrin run skewness /path/to/sample_dataset.csv
    aidrin run kurtosis /path/to/sample_dataset.csv
 
+   # Validate per-variable unit metadata from inline JSON or a reusable file
+   aidrin run variable-unit-validation /path/to/sample_dataset.csv \
+     --units-file /path/to/units.json
+
    # Data quality (completeness family — arguments are passed as named --flags)
    aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
    aidrin run duplicity-by-features /path/to/sample_dataset.csv --duplicate-columns "income,credit_score"
@@ -277,6 +281,23 @@ list or comma-separated targets:
    base-dir: /data/project
    max-results: 100
    scan-limit: 0
+
+Variable-unit validation accepts either an inline mapping or a mapping file
+resolved on the execution host. See :ref:`variable_unit_validation` for the
+schema and precedence rules:
+
+.. code-block:: yaml
+
+   file-path: /path/to/sample_dataset.csv
+   metrics:
+     - variable-unit-validation
+   unit-declarations:
+     acceleration:
+       unit: m/s^2
+     normalized_score:
+       unit: "1"
+     station_id:
+       status: not_applicable
 
 **Example** — fairness analysis on the sample dataset:
 

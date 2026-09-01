@@ -17,7 +17,7 @@ The metric measures metadata readiness only: it will not infer units from values
 - [x] Milestone 2: integrate the headless registry and runner, local and remote CLI arguments, batch configuration, remote dispatch, MCP tools, and interface tests.
 - [x] Milestone 3: add the local Data Structure web editor, import/export and filtering behavior, result rendering, target-discovery candidates, and web tests.
 - [x] Milestone 4: add Globus capability negotiation and remote web dispatch, compatibility messaging, serialization, and tests.
-- [ ] Milestone 5: document the metric and mapping contract, add registry/documentation consistency coverage, run all repository validation gates, and resolve any failures.
+- [x] Milestone 5: document the metric and mapping contract, add registry/documentation consistency coverage, run all repository validation gates, and resolve any failures.
 
 ## Core Behavior
 

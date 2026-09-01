@@ -90,6 +90,7 @@ Four Ways to Use AIDRIN
    :caption: Metrics
 
    metric_names
+   variable_unit_validation
 
 .. toctree::
    :maxdepth: 2

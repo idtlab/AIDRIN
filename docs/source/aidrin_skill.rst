@@ -87,6 +87,13 @@ The local stdio MCP server intentionally does not apply the web interface's
 configured root allowlist. It uses the filesystem permissions of the account
 that started ``aidrin-mcp`` and should be connected only to trusted clients.
 
+Variable units can be checked with ``verify_variable_units`` or with
+``run_aidrin_metric`` using ``variable-unit-validation``. Supply at most one of
+``unit_declarations_json`` and ``units_file``. The latter is resolved on the
+execution host, including a selected remote endpoint. See
+:ref:`variable_unit_validation` for the exact mapping schema and ambiguity
+rules.
+
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -134,7 +141,7 @@ did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mc
 Available Tools
 ---------------
 
-The MCP server exposes eleven tools. You do not normally call these by name;
+The MCP server exposes the following tools. You do not normally call these by name;
 Claude selects them from your request. They are listed here so you know what is
 reachable.
 
@@ -152,6 +159,10 @@ reachable.
      - Runs the three core data quality metrics: completeness, duplicity, outliers
    * - ``run_aidrin_metric``
      - Runs a single built-in metric against a dataset
+   * - ``verify_variable_units``
+     - Validates per-variable unit metadata using inline JSON or a host-local mapping file
+   * - ``verify_file_references``
+     - Validates file references stored in selected dataset targets
    * - ``run_custom_outlier_check``
      - Runs Custom Criteria Outliers against selected targets
    * - ``run_batch``
