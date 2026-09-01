@@ -230,6 +230,40 @@ def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
     assert "!results.Summary.scan_complete" in source
 
 
+def test_variable_unit_editor_and_results_escape_dataset_metadata():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+
+    editor_start = source.index("function renderVariableUnitEditor()")
+    editor_end = source.index("function toggleVariableUnitEditor", editor_start)
+    editor = source[editor_start:editor_end]
+    assert "cell.textContent = text" in editor
+    assert "option.textContent = label" in editor
+
+    result_start = source.index("function renderVariableUnitResultTable(rows)")
+    result_end = source.index("function filterVariableUnitResults", result_start)
+    result_renderer = source[result_start:result_end]
+    assert "escapeHtml(formatValue(value))" in result_renderer
+    assert "escapeHtml(classification)" in result_renderer
+
+
+def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    panel = DATA_STRUCTURE_PANEL.read_text(encoding="utf-8")
+
+    for element_id in (
+        "variable-unit-search",
+        "variable-unit-import-file",
+        "variable-unit-prev",
+        "variable-unit-next",
+        "variable-unit-declarations",
+    ):
+        assert f'id="{element_id}"' in panel
+    assert "const VARIABLE_UNIT_PAGE_SIZE = 10" in source
+    assert "function exportVariableUnitDeclarations()" in source
+    assert "function importVariableUnitDeclarations(file)" in source
+    assert "function filterVariableUnitResults(select)" in source
+
+
 def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert "function serializeCustomOutlierRules()" in source

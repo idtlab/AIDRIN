@@ -117,6 +117,13 @@ def test_custom_outlier_targets_with_file(uploaded_client):
     assert data["success"] is True
     targets = data["targets"]
     assert any(t["name"] == "age" and t["target_type"] == "column" for t in targets)
+    assert [target["name"] for target in data["unit_targets"]] == [
+        "age",
+        "income",
+        "education",
+        "gender",
+    ]
+    assert all("unit_candidates" in target for target in data["unit_targets"])
 
 
 def test_custom_outlier_targets_returns_generic_failure(uploaded_client, monkeypatch):
@@ -184,6 +191,43 @@ def test_data_structure_file_reference_validation_returns_metadata(uploaded_clie
     assert result["Summary"]["all_references_valid"] == 1
     assert result["File metadata"][0]["resolved_path"] == str(artifact)
     assert result["File metadata"][0]["size_bytes"] == 6
+
+
+def test_data_structure_variable_unit_validation_uses_request_local_mapping(uploaded_client):
+    mapping = {
+        "age": {"unit": "year"},
+        "income": {"unit": "kilogram"},
+        "education": {"status": "not_applicable"},
+        "gender": {"status": "not_applicable"},
+    }
+
+    response = uploaded_client.post(
+        "/data-structure?return_type=json",
+        data={
+            "variable_unit_validation": "yes",
+            "variable_unit_declarations": json.dumps(mapping),
+        },
+    )
+    result = response.get_json()["Variable Unit Validation"]
+
+    assert result["all_variables_ready"] == 1
+    assert result["counts"]["valid"] == 2
+    assert result["counts"]["not_applicable"] == 2
+
+
+def test_data_structure_variable_unit_error_is_metric_scoped(uploaded_client):
+    response = uploaded_client.post(
+        "/data-structure?return_type=json",
+        data={
+            "constant feature count": "yes",
+            "variable_unit_validation": "yes",
+            "variable_unit_declarations": "[]",
+        },
+    )
+    data = response.get_json()
+
+    assert "Constant Feature Count" in data
+    assert "unit_declarations must be a JSON object" in data["Variable Unit Validation"]["Error"]
 
 
 def test_data_structure_file_reference_validation_preserves_comma_target_names(uploaded_client, app):

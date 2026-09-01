@@ -39,6 +39,10 @@ function _readinessTruncatedListItems(items, maxItems, renderItem) {
 
 let customOutlierTargets = [];
 let fileReferenceTargets = [];
+let variableUnitTargets = [];
+let variableUnitDeclarations = {};
+let variableUnitPage = 0;
+const VARIABLE_UNIT_PAGE_SIZE = 10;
 let customOutlierRuleCounter = 0;
 let targetPickerDocumentHandlerRegistered = false;
 
@@ -316,6 +320,7 @@ function loadFileReferenceOptions() {
   return fetch("/custom-outlier-targets", { method: "POST" })
     .then((response) => response.json())
     .then((data) => {
+      setVariableUnitTargets(data.unit_targets || []);
       const config = data.file_reference || {};
       if (!data.success || !config.enabled) {
         if (message) {
@@ -378,6 +383,219 @@ function loadFileReferenceOptions() {
       if (message)
         message.textContent =
           "Unable to load file-reference options: " + error.message;
+    });
+}
+
+function preferredVariableUnitCandidate(target) {
+  const candidates = target?.unit_candidates || [];
+  return (
+    candidates.find((candidate) =>
+      String(candidate.source || "").startsWith("native"),
+    ) ||
+    candidates[0] ||
+    null
+  );
+}
+
+function setVariableUnitTargets(targets) {
+  variableUnitTargets = Array.isArray(targets) ? targets : [];
+  variableUnitDeclarations = {};
+  variableUnitTargets.forEach((target) => {
+    const candidate = preferredVariableUnitCandidate(target);
+    if (candidate?.unit) {
+      variableUnitDeclarations[target.name] = { unit: candidate.unit };
+    }
+  });
+  variableUnitPage = 0;
+  syncVariableUnitDeclarations();
+  renderVariableUnitEditor();
+  const checkbox = document.getElementById(
+    "toggleButton_variable_unit_validation",
+  );
+  if (checkbox) checkbox.disabled = false;
+  const message = document.getElementById("variable-unit-message");
+  if (message) {
+    message.textContent = variableUnitTargets.length
+      ? "Embedded and name-based declarations are prefilled. Classify every remaining variable before submitting."
+      : "No logical variables were discovered; validation will return null scores.";
+  }
+}
+
+function syncVariableUnitDeclarations() {
+  const input = document.getElementById("variable-unit-declarations");
+  if (input) input.value = JSON.stringify(variableUnitDeclarations);
+}
+
+function variableUnitClassification(name) {
+  const declaration = variableUnitDeclarations[name];
+  if (!declaration) return "unclassified";
+  if (declaration.status === "not_applicable") return "not_applicable";
+  if (declaration.unit === "1") return "dimensionless";
+  return "unit";
+}
+
+function variableUnitStatus(name) {
+  const declaration = variableUnitDeclarations[name];
+  if (!declaration) return "Missing";
+  if (declaration.status === "not_applicable" || declaration.unit === "1")
+    return "Ready";
+  if (String(declaration.unit || "").trim() === "g") return "Ambiguous";
+  return declaration.unit ? "Will validate" : "Missing";
+}
+
+function updateVariableUnitDeclaration(name, classification, unit) {
+  if (classification === "not_applicable") {
+    variableUnitDeclarations[name] = { status: "not_applicable" };
+  } else if (classification === "dimensionless") {
+    variableUnitDeclarations[name] = { unit: "1" };
+  } else if (classification === "unit" && String(unit || "").trim()) {
+    variableUnitDeclarations[name] = { unit: String(unit).trim() };
+  } else {
+    delete variableUnitDeclarations[name];
+  }
+  syncVariableUnitDeclarations();
+  renderVariableUnitEditor();
+}
+
+function renderVariableUnitEditor() {
+  const body = document.getElementById("variable-unit-editor-body");
+  if (!body) return;
+  const query = String(
+    document.getElementById("variable-unit-search")?.value || "",
+  )
+    .trim()
+    .toLowerCase();
+  const filtered = variableUnitTargets.filter((target) =>
+    `${target.name} ${target.dtype || ""}`.toLowerCase().includes(query),
+  );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filtered.length / VARIABLE_UNIT_PAGE_SIZE),
+  );
+  variableUnitPage = Math.min(variableUnitPage, pageCount - 1);
+  const pageTargets = filtered.slice(
+    variableUnitPage * VARIABLE_UNIT_PAGE_SIZE,
+    (variableUnitPage + 1) * VARIABLE_UNIT_PAGE_SIZE,
+  );
+  body.replaceChildren();
+
+  pageTargets.forEach((target) => {
+    const row = document.createElement("tr");
+    row.className = "border-t border-gray-200 dark:border-gray-700";
+    const candidate = preferredVariableUnitCandidate(target);
+    const classification = variableUnitClassification(target.name);
+    const declaration = variableUnitDeclarations[target.name] || {};
+
+    const addCell = (text, className) => {
+      const cell = document.createElement("td");
+      cell.className = className || "px-2 py-2";
+      cell.textContent = text;
+      row.appendChild(cell);
+      return cell;
+    };
+    addCell(target.name, "px-2 py-2 font-medium text-gray-900 dark:text-white");
+    addCell(target.dtype || "unknown");
+    addCell(candidate?.source || "None");
+
+    const classificationCell = addCell("");
+    const select = document.createElement("select");
+    select.className =
+      "rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800";
+    [
+      ["unclassified", "Unclassified"],
+      ["unit", "Physical unit"],
+      ["dimensionless", "Dimensionless"],
+      ["not_applicable", "Not applicable"],
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === classification;
+      select.appendChild(option);
+    });
+    classificationCell.appendChild(select);
+
+    const unitCell = addCell("");
+    const unitInput = document.createElement("input");
+    unitInput.type = "text";
+    unitInput.value = declaration.unit || "";
+    unitInput.placeholder = "e.g. m/s^2";
+    unitInput.disabled = classification !== "unit";
+    unitInput.className =
+      "w-32 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-xs disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800";
+    unitCell.appendChild(unitInput);
+    addCell(variableUnitStatus(target.name));
+
+    select.addEventListener("change", () =>
+      updateVariableUnitDeclaration(target.name, select.value, unitInput.value),
+    );
+    unitInput.addEventListener("change", () =>
+      updateVariableUnitDeclaration(target.name, "unit", unitInput.value),
+    );
+    body.appendChild(row);
+  });
+
+  const summary = document.getElementById("variable-unit-page-summary");
+  if (summary) {
+    const start = filtered.length
+      ? variableUnitPage * VARIABLE_UNIT_PAGE_SIZE + 1
+      : 0;
+    const end = Math.min(
+      filtered.length,
+      (variableUnitPage + 1) * VARIABLE_UNIT_PAGE_SIZE,
+    );
+    summary.textContent = `${start}-${end} of ${filtered.length} variables`;
+  }
+  const previous = document.getElementById("variable-unit-prev");
+  const next = document.getElementById("variable-unit-next");
+  if (previous) previous.disabled = variableUnitPage === 0;
+  if (next) next.disabled = variableUnitPage >= pageCount - 1;
+}
+
+function toggleVariableUnitEditor(enabled) {
+  renderVariableUnitEditor();
+  document
+    .querySelectorAll(
+      "#variable-unit-validation-control input, #variable-unit-validation-control select, #variable-unit-validation-control button",
+    )
+    .forEach((element) => {
+      if (element.id !== "toggleButton_variable_unit_validation") {
+        element.disabled = !enabled;
+      }
+    });
+}
+
+function exportVariableUnitDeclarations() {
+  const blob = new Blob([JSON.stringify(variableUnitDeclarations, null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "variable-units.json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
+function importVariableUnitDeclarations(file) {
+  if (!file) return;
+  file
+    .text()
+    .then((text) => {
+      const parsed = JSON.parse(text);
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+        throw new Error(
+          "Mapping JSON must be an object keyed by exact variable name.",
+        );
+      }
+      variableUnitDeclarations = parsed;
+      variableUnitPage = 0;
+      syncVariableUnitDeclarations();
+      renderVariableUnitEditor();
+    })
+    .catch((error) => {
+      if (typeof showToast === "function") showToast(error.message, "error");
     });
 }
 
@@ -1404,6 +1622,70 @@ function renderFileReferenceMetadataTable(rows) {
   return html + `</tbody></table></div></div>`;
 }
 
+function renderVariableUnitResultTable(rows) {
+  let html = `<div class="mb-4">`;
+  html += `<div class="mb-2 flex flex-wrap items-center justify-between gap-2">`;
+  html += `<h4 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Variables (${rows.length})</h4>`;
+  html += `<label class="text-xs text-gray-600 dark:text-gray-300">Filter `;
+  html += `<select onchange="filterVariableUnitResults(this)" class="ml-1 rounded border border-gray-300 bg-white px-2 py-1 dark:border-gray-600 dark:bg-gray-800">`;
+  [
+    "all",
+    "missing",
+    "invalid",
+    "ambiguous",
+    "conflicting",
+    "overrides",
+  ].forEach((status) => {
+    html += `<option value="${status}">${status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)}</option>`;
+  });
+  html += `</select></label></div>`;
+  html += `<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"><table class="w-full text-left text-xs text-gray-600 dark:text-gray-300">`;
+  html += `<thead class="bg-gray-50 uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-300"><tr>`;
+  [
+    "Variable",
+    "Type",
+    "Source",
+    "Classification",
+    "Unit",
+    "Dimensionality",
+    "Message",
+  ].forEach((heading) => {
+    html += `<th class="px-2 py-2">${escapeHtml(heading)}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+  rows.forEach((row) => {
+    const classification = String(row.classification || "");
+    const hasOverride = Array.isArray(row.warnings) && row.warnings.length > 0;
+    html += `<tr data-variable-unit-result data-status="${escapeHtml(classification)}" data-override="${hasOverride ? "true" : "false"}" class="border-t border-gray-200 dark:border-gray-700">`;
+    [
+      row.name,
+      row.dtype,
+      row.chosen_source || "None",
+      classification,
+      row.original_unit || "—",
+      row.dimensionality || "—",
+      [row.message, ...(row.warnings || [])].filter(Boolean).join(" "),
+    ].forEach((value) => {
+      html += `<td class="px-2 py-2 align-top break-all">${escapeHtml(formatValue(value))}</td>`;
+    });
+    html += `</tr>`;
+  });
+  return html + `</tbody></table></div></div>`;
+}
+
+function filterVariableUnitResults(select) {
+  const filter = select?.value || "all";
+  const container = select?.closest(".mb-4");
+  container?.querySelectorAll("[data-variable-unit-result]").forEach((row) => {
+    const visible =
+      filter === "all" ||
+      (filter === "overrides"
+        ? row.dataset.override === "true"
+        : row.dataset.status === filter);
+    row.classList.toggle("hidden", !visible);
+  });
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
@@ -1478,7 +1760,9 @@ function renderScoresSection(scores, depth) {
       }
     }
     // Array
-    else if (key === "Invalid references" && Array.isArray(value)) {
+    else if (key === "variables" && Array.isArray(value)) {
+      html += renderVariableUnitResultTable(value);
+    } else if (key === "Invalid references" && Array.isArray(value)) {
       html += renderFileReferenceInvalidTable(value);
     } else if (key === "File metadata" && Array.isArray(value)) {
       html += renderFileReferenceMetadataTable(value);
@@ -6864,6 +7148,30 @@ function initWorkspace() {
 
   initFileReferenceTargetPicker();
   loadFileReferenceOptions();
+  document
+    .getElementById("variable-unit-search")
+    ?.addEventListener("input", () => {
+      variableUnitPage = 0;
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-prev")
+    ?.addEventListener("click", () => {
+      variableUnitPage = Math.max(0, variableUnitPage - 1);
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-next")
+    ?.addEventListener("click", () => {
+      variableUnitPage += 1;
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-import-file")
+    ?.addEventListener("change", (event) => {
+      importVariableUnitDeclarations(event.target.files?.[0]);
+      event.target.value = "";
+    });
 
   // Feature relevance: disable target feature in checkbox lists
   const targetDropdown = document.getElementById(
