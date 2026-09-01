@@ -145,10 +145,13 @@ Ask every time, before eliciting general intent:
     (`aidrin.file_handling.file_parser.read_file`) — the same reader Step 4 already
     used successfully, so no separator/sheet-name guessing needed. Point
     `paths.data_loader` at it.
-  - A format AIDRIN doesn't parse at all (e.g. a semicolon-delimited `.txt`) → this is
-    Step 4's "no built-in reader" case. Once you have a user-supplied loader and have
-    materialized it to CSV (see Step 4), just point `paths.data_csv` at that CSV like
-    the plain-CSV case above — no separate `data_loader` needed.
+  - A format AIDRIN doesn't parse at all (e.g. a semicolon-delimited `.txt`) → ask the
+    user for the path to a `.py` file with a function that returns a pandas DataFrame,
+    the same way `examples/agentic/power_consumption/loader.py` does it. Point
+    `paths.data_loader` at `"<path>:<function_name>"` and use it as-is. Don't invent
+    one yourself without seeing the file — a wrong delimiter/encoding guess silently
+    produces bad data — and don't materialize it to CSV first; that doubles storage
+    for no benefit when only the agentic pipeline needs it.
 - Carry the resource path and questions forward — they get folded into the Step 6 plan
   confirmation and used to build the config in Step 8. See "Agentic pipeline (advanced)"
   below for the full config schema and command reference.
@@ -207,24 +210,16 @@ Use the output to identify candidate column roles: target, sensitive attributes,
 
 **If this errors with "Unsupported file type"** (e.g. a semicolon-delimited `.txt`,
 a proprietary format, or anything else AIDRIN's parser doesn't recognize), AIDRIN has
-no built-in reader for it. Don't guess a parser yourself — a wrong delimiter/encoding/
-header guess silently produces bad data that every downstream metric inherits. Instead,
-ask the user for a loader:
+no built-in reader for it, and general inspection/metrics can't run on this file as-is.
+Don't treat it as a blocker on its own:
 
-> "AIDRIN doesn't have a built-in reader for this file format. Can you provide a small
-> Python file with a function that loads it into a pandas DataFrame? Any function name
-> is fine, no required arguments, returning a `pd.DataFrame` — see
-> `examples/agentic/power_consumption/loader.py` for the pattern. Point me at
-> `<path>:<function_name>`."
-
-Once you have it, run it yourself to materialize the result as a CSV next to the
-original file (e.g. `python -c "import sys; sys.path.insert(0, '<dir>'); from <module>
-import <function>; <function>().to_csv('<out>.csv', index=False)"`). Use that CSV as
-`file_path` for every step from here on — general metrics, custom metrics, and, if
-domain grounding is also requested, `paths.data_csv` in the agentic config (Step 2's
-third case collapses into this — no separate `data_loader` needed once a CSV exists).
-This makes the converted CSV the single source of truth for the rest of the workflow
-instead of re-deriving a DataFrame per tool.
+- If domain grounding was requested in Step 2, its third loader case covers exactly
+  this — get a user-supplied `.py` loader and point `paths.data_loader` at it for the
+  agentic pipeline. That pipeline never needed the general reader in the first place.
+- If domain grounding was not requested, tell the user plainly that AIDRIN has no
+  built-in reader for this format, so the standard metric catalogue can't run on it —
+  ask if they want to reconsider domain grounding (to use a custom loader via the
+  agentic path) or provide the data in a supported format instead.
 
 ### 5. Build the plan
 
@@ -302,9 +297,10 @@ for minutes with no visible checkpoint.
    Set `retrieval.answer_model`, `executor.model`, `complexity_scorer.model`, and
    `remediation.model` to the OpenAI model chosen in Step 2 (all four, the same model).
    Leave `vector_store.embedding_model` on `text-embedding-3-small` unless the user
-   said otherwise. For loading the dataset itself: `paths.data_csv` for plain CSV or
-   for any format materialized to CSV via Step 4's fallback, or a `read_file()`-wrapping
-   loader you write for another AIDRIN-supported format (Step 2's second case).
+   said otherwise. For loading the dataset itself, use whichever of the three cases
+   from Step 2 applied: `paths.data_csv` for plain CSV, a `read_file()`-wrapping loader
+   you write for another AIDRIN-supported format, or the user-supplied loader path for
+   a format AIDRIN can't parse.
 3. Build the index (skip if one already exists for this config): MCP
    `agentic_build_index(config_path="...")` / CLI `aidrin agentic build-index -c <config>`.
 4. Run the pipeline: MCP `agentic_run(config_path="...", output_path="...")` / CLI

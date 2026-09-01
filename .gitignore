@@ -181,6 +181,8 @@ aidrin/custom_metrics/customDR_*.py
 examples/agentic/power_consumption/data/household_power_consumption.txt
 examples/agentic/power_consumption/results.json
 examples/agentic/power_consumption/results*.json
+examples/agentic/power_consumption/data/aidrin_raw/
+examples/agentic/power_consumption/data/*_readiness_report.md
 examples/agentic/**/*_vector_store/
 examples/agentic/**/*_index/
 examples/*_index/
