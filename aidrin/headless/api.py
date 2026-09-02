@@ -564,6 +564,7 @@ def run_metric(
             image_dir=image_dir,
             verbose=verbose,
             strip_visualizations=strip_visualizations,
+            session_id=session_id,
             **kwargs,
         )
 
@@ -577,6 +578,7 @@ def _run_metric_impl(
     image_dir: Optional[str] = None,
     verbose: bool = False,
     strip_visualizations: bool = False,
+    session_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     metric_key = metric_name.strip().lower().replace("-", "_")
