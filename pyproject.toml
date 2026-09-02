@@ -47,6 +47,10 @@ globus = [
     "globus-compute-sdk>=2.3.0",
     "globus-sdk>=3.20.0",
 ]
+# Zarr 3.x needs Python >=3.11 (3.2+ needs >=3.12). Pin <3.2 so 3.11 stays resolvable.
+zarr = [
+    "zarr>=3.0.8,<3.2; python_version >= '3.11'",
+]
 telemetry = [
     "opentelemetry-api>=1.20",
     "opentelemetry-sdk>=1.20",
@@ -139,6 +143,9 @@ version = {attr = "aidrin._version.__version__"}
 # ---------------------------------------------------------------------------
 
 [dependency-groups]
+zarr = [
+    "zarr>=3.0.8,<3.2; python_version >= '3.11'",
+]
 dev = [
     "pytest>=7.0",
     "flake8>=6.0",
