@@ -1,22 +1,9 @@
 """Unit tests for structured reader scaffold and Zarr reader."""
 
 import logging
-import sys
-import types
 
 import numpy as np
 import pytest
-
-# Compatibility shim: pkg_resources for clean Python 3.12+ environments.
-if "pkg_resources" not in sys.modules:
-    _pkg_resources = types.ModuleType("pkg_resources")
-
-    class _Dist:
-        def __init__(self):
-            self.version = "0.0.0"
-
-    _pkg_resources.get_distribution = lambda _name: _Dist()
-    sys.modules["pkg_resources"] = _pkg_resources
 
 from aidrin.file_handling.file_parser import (
     GLOBUS_FILE_TYPES,
@@ -212,3 +199,129 @@ def test_zarr_read_file_selected_keys(tmp_path):
     assert df is not None
     assert list(df.columns) == ["S1/X", "S1/Y"]
     assert len(df) == 10
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for review findings
+# ---------------------------------------------------------------------------
+
+
+def test_zarr_missing_dependency_surfaces_install_hint(tmp_path, logger, monkeypatch):
+    """A missing 'zarr' package must not be reported as an empty store."""
+    import aidrin.file_handling.readers.zarr_reader as zr
+
+    def _no_zarr():
+        raise ImportError("Zarr support requires the 'zarr' package on Python >=3.11.")
+
+    monkeypatch.setattr(zr, "_require_zarr", _no_zarr)
+
+    store = tmp_path / "any.zarr"
+    store.mkdir()
+    with pytest.raises(ImportError, match="requires the 'zarr' package"):
+        zr.zarrReader(str(store), logger).inventory()
+    with pytest.raises(ImportError, match="requires the 'zarr' package"):
+        zr.zarrReader(str(store), logger).read()
+
+
+def test_zarr_multidim_refused_without_loading_data(tmp_path, logger):
+    """The ndim guard must read metadata only — a real grid would not fit in RAM."""
+    store = tmp_path / "grid.zarr"
+    _write_multidim_store(store)
+
+    reader = zarrReader(str(store), logger, selected_keys=["tmax_grid"])
+    root = reader._open_store()
+    arr = root["tmax_grid"]
+
+    class _NoRead:
+        """Proxy exposing metadata but exploding on any element access."""
+
+        ndim = arr.ndim
+        shape = arr.shape
+
+        def __getitem__(self, item):
+            raise AssertionError("array data was materialized before the ndim check")
+
+    assert reader._prepare_array_data(_NoRead()) is None
+
+
+def test_zarr_column_order_is_deterministic(tmp_path, logger):
+    """Store iteration order varies between runs; column order must not."""
+    store = tmp_path / "order.zarr"
+    root = zarr.open_group(str(store), mode="w")
+    for name in ("score", "age", "income", "bmi"):
+        root.create_array(name, shape=(6,), dtype="f8")[:] = np.arange(6, dtype="f8")
+
+    columns = list(zarrReader(str(store), logger).read().columns)
+    assert columns == sorted(columns)
+    for _ in range(3):
+        assert list(zarrReader(str(store), logger).read().columns) == columns
+    assert [ds["path"] for ds in zarrReader(str(store), logger).inventory()["datasets"]] == columns
+
+
+def test_zarr_mixed_dimension_root_needs_selection(tmp_path, logger):
+    """A layout read() cannot auto-merge must not be labelled auto-readable."""
+    store = tmp_path / "mixed.zarr"
+    root = zarr.open_group(str(store), mode="w")
+    root.create_array("x", shape=(100,), dtype="f8")[:] = np.arange(100, dtype="f8")
+    root.create_array("img", shape=(10, 10), dtype="f8")[:] = np.zeros((10, 10))
+
+    inv = zarrReader(str(store), logger).inventory()
+    assert inv["type"] == INVENTORY_MULTI
+    assert zarrReader(str(store), logger).read() is None
+
+    df = zarrReader(str(store), logger, selected_keys=["x"]).read()
+    assert list(df.columns) == ["x"]
+
+
+def test_zarr_scalar_array_reads_as_single_row(tmp_path, logger):
+    """0D arrays are documented as supported; arr[:] raises IndexError on them."""
+    store = tmp_path / "scalar.zarr"
+    root = zarr.open_group(str(store), mode="w")
+    root.create_array("s", shape=(), dtype="f8")[...] = 3.5
+
+    df = zarrReader(str(store), logger).read()
+    assert df is not None
+    assert len(df) == 1
+    assert df.iloc[0, 0] == 3.5
+
+
+def test_zarr_ignores_unrelated_flask_session_keys(tmp_path, logger):
+    """There is no Zarr key picker, so session keys can only come from another file."""
+    import flask
+
+    store = tmp_path / "flat.zarr"
+    root = zarr.open_group(str(store), mode="w")
+    for name in ("a", "b"):
+        root.create_array(name, shape=(5,), dtype="f8")[:] = np.arange(5, dtype="f8")
+
+    app = flask.Flask(__name__)
+    app.secret_key = "test"
+    with app.test_request_context("/"):
+        flask.session["selected_keys"] = ["group/from_a_previous_hdf5_file"]
+        reader = zarrReader(str(store), logger)
+        assert reader._get_selected_dataset_keys() == []
+        # Falls through to the compatible-layout auto-read, not a failed lookup.
+        assert list(reader.read().columns) == ["a", "b"]
+
+
+def test_read_file_returns_none_for_non_zarr_empty_read(tmp_path):
+    """Only Zarr raises; other formats keep returning None, not a message string."""
+    h5py = pytest.importorskip("h5py")
+    path = tmp_path / "ragged.h5"
+    with h5py.File(str(path), "w") as handle:
+        handle.create_dataset("a", data=np.arange(10))
+        handle.create_dataset("b", data=np.arange(7))
+
+    assert read_file((str(path), "ragged.h5", ".h5")) is None
+
+
+def test_read_file_raises_for_zarr_needing_selection(tmp_path):
+    from aidrin.file_handling.file_parser import ReaderReturnedNone
+
+    store = tmp_path / "ragged.zarr"
+    root = zarr.open_group(str(store), mode="w")
+    root.create_array("a", shape=(10,), dtype="i4")[:] = np.arange(10)
+    root.create_array("b", shape=(7,), dtype="i4")[:] = np.arange(7)
+
+    with pytest.raises(ReaderReturnedNone):
+        read_file((str(store), "ragged.zarr", ".zarr"))

@@ -52,6 +52,20 @@ GLOBUS_FILE_TYPES = SUPPORTED_FILE_TYPES + [
 # File types that accept selected_keys for multi-array / multi-dataset selection.
 _SELECTION_FILE_TYPES = {".h5", ".zarr"}
 
+
+class ReaderReturnedNone(RuntimeError):
+    """A reader parsed the source but produced no DataFrame.
+
+    Raised only for formats where returning ``None`` would be misread as
+    "unsupported file type" (see ``_RAISE_ON_EMPTY_FILE_TYPES``).
+    """
+
+
+# Formats whose readers legitimately refuse ambiguous inputs (a multi-array
+# Zarr store needing selected_keys). Returning None there is indistinguishable
+# from "unsupported type", so raise instead and let the CLI print one error.
+_RAISE_ON_EMPTY_FILE_TYPES = {".zarr"}
+
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
 
@@ -223,8 +237,14 @@ def read_file(file_info, columns=None):
     Returns
     ----------
     pd.Dataframe, None, or str
-    Parsed data as a DataFrame, None if file is unsupported,
-    or error message string if an exception occurs.
+    Parsed data as a DataFrame, None if the file is unsupported or the reader
+    produced no frame, or an error message string if an exception occurs.
+
+    Raises
+    ----------
+    ReaderReturnedNone
+        For formats in ``_RAISE_ON_EMPTY_FILE_TYPES`` (Zarr), where an empty
+        read means the caller must supply ``selected_keys``.
     """
     file_upload_time_log.info("File parsing initiated...")
 
@@ -282,11 +302,13 @@ def read_file(file_info, columns=None):
             )
             file_upload_time_log.error(msg)
             # For Zarr stores, prefer raising so the CLI/runner prints a single
-            # clear error and exits non-zero. Leave other formats unchanged to
-            # preserve existing behavior.
-            if file_type == ".zarr":
-                raise RuntimeError(msg)
-            return msg
+            # clear error and exits non-zero.
+            if file_type in _RAISE_ON_EMPTY_FILE_TYPES:
+                raise ReaderReturnedNone(msg)
+            # Every other format keeps returning None, which callers already
+            # treat as unreadable. Returning the message string instead would
+            # silently satisfy len()/truthiness checks at the call sites.
+            return None
 
         # Best-effort cache for future calls. Failure is non-fatal: we still
         # return the freshly parsed frame below, so a read-only directory or an
@@ -298,12 +320,15 @@ def read_file(file_info, columns=None):
             df = df[columns]
         return df
 
+    except ReaderReturnedNone:
+        # Raised above on purpose: re-raise so the top-level CLI/runner prints
+        # a single clear error and exits non-zero.
+        raise
+    except ImportError:
+        # A missing optional reader dependency (e.g. aidrin[zarr]) is a setup
+        # problem, not an unreadable file. Its message carries the install
+        # command, so let it through rather than flattening it.
+        raise
     except Exception as e:
-        # If we intentionally raised a RuntimeError for Zarr (reader returned
-        # no DataFrame), re-raise so the top-level CLI/runner prints a single
-        # clear error and exits non-zero. Preserve existing behavior for
-        # other exceptions/types.
-        if isinstance(e, RuntimeError) and file_type == ".zarr":
-            raise
         file_upload_time_log.error(f"Error while Reading File: {e}", exc_info=True)
         return "Unable to read the uploaded file."

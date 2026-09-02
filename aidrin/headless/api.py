@@ -993,7 +993,16 @@ def run_custom_metric_logic(
 
     # 2. Load Dataset (supports every format in file_handling/readers/)
     _log_progress(f"Loading dataset: {file_path}", kwargs.get("verbose", False))
-    df = read_file(_build_file_info(file_path, file_type, file_name))
+    df = read_file(
+        _build_file_info(
+            file_path,
+            file_type,
+            file_name,
+            # Explicit keys, since these run outside run_metric's
+            # using_selected_keys context when called from the CLI.
+            _normalize_list(kwargs.get("selected_keys")) or None,
+        )
+    )
     if not isinstance(df, pd.DataFrame):
         raise FileNotFoundError(df if isinstance(df, str) else f"Could not read dataset: {file_path}")
 
@@ -1041,7 +1050,16 @@ def run_custom_metric_remedy(
         raise AttributeError(f"Class 'CustomDR' not found in {script_path}")
 
     _log_progress(f"Loading dataset for remedy: {file_path}", kwargs.get("verbose", False))
-    df = read_file(_build_file_info(file_path, file_type, file_name))
+    df = read_file(
+        _build_file_info(
+            file_path,
+            file_type,
+            file_name,
+            # Explicit keys, since these run outside run_metric's
+            # using_selected_keys context when called from the CLI.
+            _normalize_list(kwargs.get("selected_keys")) or None,
+        )
+    )
     if not isinstance(df, pd.DataFrame):
         raise FileNotFoundError(df if isinstance(df, str) else f"Could not read dataset: {file_path}")
 

@@ -330,12 +330,6 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
 
 def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
-    parser.add_argument(
-        "--selected-keys",
-        dest="selected_keys",
-        default=None,
-        help="Comma-separated HDF5/Zarr array paths to read (same idea as web selected_keys)",
-    )
     parser.add_argument("--save-images", dest="save_images", action="store_true", help="Save visualizations to disk")
     parser.add_argument("--no-save-images", dest="save_images", action="store_false", help="Do not save visualizations")
     parser.set_defaults(save_images=True)

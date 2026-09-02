@@ -30,6 +30,11 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.12"
             extras: "[mcp]"
+          # Zarr needs Python >=3.11; without this the Zarr reader tests
+          # importorskip on every other matrix entry and never run.
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: "[zarr]"
 
     steps:
     - uses: actions/checkout@v4

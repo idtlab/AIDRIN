@@ -46,9 +46,10 @@ class DatasetEntry(TypedDict):
 
 
 class PickerGroup(TypedDict, total=False):
-    name: str
-    paths: list[str]
-    prefix: str
+    id: str
+    label: str
+    type: str
+    dataset_paths: list[str]
 
 
 class InventoryResult(TypedDict):

@@ -59,7 +59,10 @@ class zarrReader(StructuredFileReader):
         groups = []
 
         def walk(group, prefix=""):
-            for key in group.keys():
+            # sorted(): zarr group keys come back in store order, which varies
+            # between runs. Walk in name order so paths, and therefore
+            # DataFrame column order, are stable (h5py.visititems already is).
+            for key in sorted(group.keys()):
                 child = group[key]
                 path = f"{prefix}/{key}" if prefix else key
                 if isinstance(child, zarr.Group):
@@ -86,7 +89,7 @@ class zarrReader(StructuredFileReader):
             ]
 
         def walk(group, prefix=""):
-            for key in group.keys():
+            for key in sorted(group.keys()):
                 child = group[key]
                 path = f"{prefix}/{key}" if prefix else key
                 if isinstance(child, zarr.Array):
@@ -124,41 +127,33 @@ class zarrReader(StructuredFileReader):
 
         return sorted(groups.values(), key=lambda group: group["label"].lower())
 
-    def _is_incompatible_root_layout(self, datasets: list[DatasetEntry]):
-        root = [ds for ds in datasets if "/" not in ds["path"] and ds["path"] != ""]
-        # Root-store single array uses path ""
-        if any(ds["path"] == "" for ds in datasets):
-            return False
-        if len(root) < 2:
-            return False
-        if not all(ds["ndim"] == 1 for ds in root):
-            return False
-        lengths = {ds["shape"][0] for ds in root if ds["shape"]}
-        return len(lengths) > 1
+    def _can_auto_read(self, datasets: list[DatasetEntry]):
+        """Whether ``read()`` can build a frame without an explicit selection.
 
-    def _is_grouped_hierarchical_layout(self, datasets: list[DatasetEntry]):
-        nested = [ds for ds in datasets if "/" in ds["path"]]
-        if len(nested) < 4:
-            return False
+        This mirrors ``_auto_read_all`` exactly so that a layout is never
+        labelled auto-readable in ``inventory()`` and then refused at read time
+        — e.g. a root store holding one 1D array alongside one 2D array, which
+        no shape heuristic flags as "incompatible" but which cannot be merged.
+        """
+        if len(datasets) == 1:
+            return datasets[0]["ndim"] <= 2
 
-        groups = self._build_picker_groups(datasets)
-        if len(groups) < 2:
+        ones = [ds for ds in datasets if ds["ndim"] == 1]
+        if len(ones) != len(datasets):
             return False
-
-        lengths = set()
-        for ds in nested:
-            if ds["ndim"] == 1 and ds["shape"]:
-                lengths.add(ds["shape"][0])
-        return len(lengths) > 1
+        lengths = {ds["shape"][0] for ds in ones if ds["shape"]}
+        return len(lengths) == 1
 
     def _needs_dataset_selection(self, datasets: list[DatasetEntry]):
-        return self._is_incompatible_root_layout(datasets) or self._is_grouped_hierarchical_layout(
-            datasets
-        )
+        return not self._can_auto_read(datasets)
 
     def inventory(self) -> InventoryResult:
         try:
             datasets = self._list_datasets()
+        except ImportError:
+            # A missing 'zarr' package must reach the caller with its install
+            # hint; swallowing it here would report the store as empty.
+            raise
         except Exception as e:
             self.logger.error("Failed to inventory Zarr store: %s", e, exc_info=True)
             return make_inventory(INVENTORY_EMPTY)
@@ -196,7 +191,7 @@ class zarrReader(StructuredFileReader):
         metadata["(root)"] = attrs_to_dict(root.attrs)
 
         def walk(group, prefix=""):
-            for key in group.keys():
+            for key in sorted(group.keys()):
                 child = group[key]
                 path = f"{prefix}/{key}" if prefix else key
                 child_attrs = attrs_to_dict(child.attrs)
@@ -214,15 +209,12 @@ class zarrReader(StructuredFileReader):
         return [str(key) for key in keys if key]
 
     def _get_selected_dataset_keys(self):
-        if self._explicit_selected_keys is not None:
-            return self._normalize_selected_keys(self._explicit_selected_keys)
-        try:
-            from flask import session
-
-            keys = session.get("selected_keys") or []
-            return self._normalize_selected_keys(keys)
-        except RuntimeError:
+        # Explicit keys only. Unlike HDF5 there is no Zarr key picker, so
+        # session["selected_keys"] can only hold paths from some other file —
+        # reading it here would apply a previous HDF5 selection to this store.
+        if self._explicit_selected_keys is None:
             return []
+        return self._normalize_selected_keys(self._explicit_selected_keys)
 
     def _resolve_array(self, root, path: str):
         zarr = _require_zarr()
@@ -242,16 +234,23 @@ class zarrReader(StructuredFileReader):
         return obj
 
     def _prepare_array_data(self, arr):
-        """Load array data; refuse ndim >= 3 (no averaging / reshape for metrics)."""
-        data = np.asarray(arr[:])
-        if getattr(data, "ndim", 0) >= 3:
+        """Load array data; refuse ndim >= 3 (no averaging / reshape for metrics).
+
+        The dimensionality check reads ``arr.ndim`` (store metadata) rather than
+        the loaded data: multi-dimensional grids are exactly the arrays this
+        refuses, and they are also the largest, so materializing one only to
+        reject it would exhaust memory on a real (time, lat, lon) store.
+        """
+        ndim = int(getattr(arr, "ndim", 0))
+        if ndim >= 3:
             self.logger.warning(
                 "Zarr array has ndim=%s; refusing to aggregate or flatten. "
                 "Select 1D (or a single 2D) arrays via selected_keys.",
-                data.ndim,
+                ndim,
             )
             return None
-        return data
+        # Ellipsis, not [:]: a 0D array rejects a slice with IndexError.
+        return np.asarray(arr[...])
 
     def _column_name_from_path(self, path: str, used_names):
         full = path.strip("/") if path not in ("", "(root)") else "value"
