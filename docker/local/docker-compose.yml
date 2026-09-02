@@ -5,13 +5,21 @@
 
 name: aidrin-local
 
+# Uploads are handed to Celery tasks by path, so web (writes), worker (reads)
+# and beat (prunes) must all see the same directory.
+volumes:
+  uploads:
+
 # Only `web` builds/tags aidrin:local; worker/beat reuse the tag.
 x-aidrin-app: &aidrin-app
   image: aidrin:local
+  volumes:
+    - uploads:/app/data/uploads
   environment:
     FLASK_CELERY__broker_url: redis://redis:6379/0
     FLASK_CELERY__result_backend: redis://redis:6379/0
     AIDRIN_SECRET_KEY: dev-secret-change-me
+    AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS: '["/app"]'
     OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     OTEL_SERVICE_NAME: aidrin
   depends_on:

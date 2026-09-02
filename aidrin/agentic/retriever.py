@@ -304,7 +304,7 @@ class VectorRetriever:
             context_texts = [item.get("full_text", "") for item in retrieved]
 
         prompt_context = "\n\n".join(
-            f"[Source: {item.get('source','unknown')}]\n{self._sanitize(text)}"
+            f"[Source: {item.get('source', 'unknown')}]\n{self._sanitize(text)}"
             for item, text in zip(retrieved, context_texts)
         )
 

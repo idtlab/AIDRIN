@@ -56,6 +56,7 @@
         <!-- Metric configuration panels (only one visible at a time) -->
         <div id="panels-container">
           {% include '_panels/_data_overview.html' %}
+          {% include '_panels/_readiness_report.html' %}
           {% include '_panels/_data_quality.html' %}
           {% include '_panels/_data_structure.html' %}
           {% include '_panels/_feature_relevance.html' %}
@@ -86,6 +87,7 @@
       {% endif %}
 
       {% if uploaded_file_path and not globus_mode %}
+        window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};
         initWorkspace();
       {% elif globus_mode %}
         // Globus mode — flag for workspaceSubmit to route through Globus
@@ -93,6 +95,7 @@
         window.AIDRIN_GLOBUS_ENDPOINT = '{{ globus_endpoint_id }}';
         window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
+        window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};
         window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
         showPanel('data-overview');
         // Show Globus info banner + loading spinner for summary stats

@@ -16,13 +16,24 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev $AIDRIN_EXTRAS
 COPY . .
 RUN uv sync --frozen --no-dev $AIDRIN_EXTRAS
-RUN uv pip install gunicorn==23.0.0 supervisor==4.2.5
+# supervisor 4.2.5 imports pkg_resources at startup; setuptools>=82 removed it,
+# so pin setuptools below 82 for the runtime tooling.
+RUN uv pip install gunicorn==23.0.0 supervisor==4.2.5 "setuptools<82"
 
 FROM python:3.13.11-slim-bookworm
 
-# libgomp1: OpenMP runtime for scikit-learn/scipy/shap.
+# libgomp1: OpenMP runtime for scikit-learn/scipy. The rest are
+# WeasyPrint's native dependencies (Pango/HarfBuzz/gdk-pixbuf) plus a base
+# font, needed for PDF export.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 \
+    && apt-get install -y --no-install-recommends \
+        libgomp1 \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libharfbuzz0b \
+        libgdk-pixbuf-2.0-0 \
+        shared-mime-info \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1 \

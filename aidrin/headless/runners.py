@@ -16,6 +16,7 @@ from aidrin.structured_data_metrics.max_pairwise_correlation import (
 )
 from aidrin.structured_data_metrics.skewness import skewness
 from aidrin.structured_data_metrics.feature_coverage_ratio import feature_coverage_ratio
+from aidrin.structured_data_metrics.file_reference_validation import file_reference_validation
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
     pearson_correlation,
@@ -64,6 +65,8 @@ def _normalize_file_type(file_type: Optional[str], file_path: str) -> Optional[s
 
     if candidate in _EXCEL_TYPES:
         return _EXCEL_KEY
+    if candidate == ".hdf5":
+        return ".h5"
     return candidate
 
 
@@ -175,6 +178,29 @@ def run_null_count_trend(
 ) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(null_count_trend, batch_column, target_columns, file_info)
+
+
+def run_file_reference_validation(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    path_targets: List[str],
+    base_dir: Optional[str] = None,
+    max_results: int = 100,
+    scan_limit: Optional[int] = None,
+    target_match: str = "exact",
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(
+        file_reference_validation,
+        path_targets,
+        file_info,
+        base_dir,
+        max_results,
+        scan_limit,
+        None,
+        target_match,
+    )
 
 
 def run_outliers_custom(
