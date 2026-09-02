@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 
 from aidrin.custom_metrics.template import CUSTOM_DR_TEMPLATE
 from aidrin.file_handling.file_parser import read_file
+from aidrin.telemetry import metric_span
+from aidrin.telemetry import mlflow_sink
 
 from .config import HeadlessConfig
 from .runners import (
@@ -513,6 +515,33 @@ def _maybe_save_images(
     return updated
 
 
+# Arguments that change what a metric measures, beyond its declared required
+# args. Everything else reaching run_metric is an output-shaping default (page
+# sizes and caps) that the MCP tools pass on every call, and logging those as
+# params buries the ones that matter.
+_RESULT_AFFECTING_ARGS = frozenset({
+    "epsilon", "threshold", "frequency", "distance_metric", "scan_limit",
+    "rules_file", "rules_json",
+})
+
+
+def _tracking_params(metric_key, file_type, kwargs):
+    """The arguments that define this measurement, for MLflow params.
+
+    A readiness score is not interpretable without them: k-anonymity over two
+    quasi-identifiers and over five both land in the same metric key.
+    """
+    metric = METRIC_REGISTRY.get(metric_key) or {}
+    required = {a.replace("-", "_") for a in metric.get("required_args", [])}
+    relevant = required | _RESULT_AFFECTING_ARGS
+    if "path_targets" in required:
+        relevant = relevant | {"target_match", "base_dir", "max_results"}
+
+    params = {"file_type": file_type}
+    params.update({k: v for k, v in kwargs.items() if k in relevant})
+    return params
+
+
 def run_metric(
     metric_name: str,
     file_path: str,
@@ -522,6 +551,7 @@ def run_metric(
     image_dir: Optional[str] = None,
     verbose: bool = False,
     strip_visualizations: bool = False,
+    session_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     with using_selected_keys(_normalize_list(kwargs.get("selected_keys"))):
@@ -550,54 +580,91 @@ def _run_metric_impl(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     metric_key = metric_name.strip().lower().replace("-", "_")
-    metric = METRIC_REGISTRY.get(metric_key)
-    if not metric:
-        # Try resolving as a custom metric
-        try:
-            _log_progress(f"Running custom metric: {metric_name}...", verbose)
-            start_time = time.time()
-            # Pass the original metric_name, not the lowercased/underscored
-            # metric_key: metric_key is only for METRIC_REGISTRY lookups.
-            # Custom metrics are usually a file path or a case-sensitive
-            # name, and mangling it here corrupts paths containing hyphens
-            # or mixed case (e.g. "/tmp/My-Audit.py" -> "/tmp/my_audit.py",
-            # which then fails to resolve on disk).
-            result = run_custom_metric_logic(
-                metric_name, file_path, file_type=file_type, file_name=file_name, **kwargs
-            )
-            result = _maybe_save_images(metric_key, result, save_images, image_dir)
-            if strip_visualizations:
-                result = _strip_visualizations(result)
-            elapsed = time.time() - start_time
-            _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-            return _sanitize(result)
-        except _CustomScriptNotFound:
-            raise ValueError(f"Unknown metric: {metric_name}") from None
 
-    _log_progress(f"Running {metric_key}...", verbose)
-    start_time = time.time()
-
-    if metric_key in {
-        "completeness", "duplicity", "outliers", "constant_feature_count",
-        "max_pairwise_correlation", "skewness", "kurtosis",
-    }:
-        result = metric["runner"](file_path, file_type, file_name)
-        result = _maybe_save_images(metric_key, result, save_images, image_dir)
-        if strip_visualizations:
-            result = _strip_visualizations(result)
-        elapsed = time.time() - start_time
-        _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-        return _sanitize(result)
-
+    # Defined before the METRIC_REGISTRY lookup because the custom-metric branch
+    # below runs first and calls it. ``span`` and ``start_time`` are bound later
+    # in either branch; closures bind late, so both resolve at call time.
     def _finalize(result: Dict[str, Any]) -> Dict[str, Any]:
         """Apply post-processing: save images, strip visualizations, sanitize types."""
         result = _maybe_save_images(metric_key, result, save_images, image_dir)
         if strip_visualizations:
             result = _strip_visualizations(result)
         elapsed = time.time() - start_time
+        span.set_attribute("metric.duration_ms", elapsed * 1000)
         _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-        return _sanitize(result)
+        sanitized = _sanitize(result)
+        if session_id is not None:
+            try:
+                mlflow_sink.log_metric_result(
+                    session_id,
+                    metric_key,
+                    sanitized,
+                    elapsed,
+                    file_path,
+                    params=_tracking_params(metric_key, file_type, kwargs),
+                )
+            except Exception:
+                # Telemetry never changes a result and never raises: this
+                # function is the chokepoint for every AIDRIN interface.
+                pass
+        return sanitized
 
+    metric = METRIC_REGISTRY.get(metric_key)
+
+    with metric_span(
+        metric_key,
+        category=(metric or {}).get("category"),
+        file_path=file_path,
+        file_type=file_type,
+    ) as span:
+        if not metric:
+            # Try resolving as a custom metric
+            try:
+                _log_progress(f"Running custom metric: {metric_name}...", verbose)
+                start_time = time.time()
+                # Pass the original metric_name, not the lowercased/underscored
+                # metric_key: metric_key is only for METRIC_REGISTRY lookups.
+                # Custom metrics are usually a file path or a case-sensitive
+                # name, and mangling it here corrupts paths containing hyphens
+                # or mixed case (e.g. "/tmp/My-Audit.py" -> "/tmp/my_audit.py",
+                # which then fails to resolve on disk).
+                result = run_custom_metric_logic(
+                    metric_name, file_path, file_type=file_type,
+                    file_name=file_name, **kwargs
+                )
+                return _finalize(result)
+            except _CustomScriptNotFound:
+                raise ValueError(f"Unknown metric: {metric_name}") from None
+
+        _log_progress(f"Running {metric_key}...", verbose)
+        start_time = time.time()
+
+        if metric_key in {
+            "completeness", "duplicity", "outliers", "constant_feature_count",
+            "max_pairwise_correlation", "skewness", "kurtosis",
+        }:
+            result = metric["runner"](file_path, file_type, file_name)
+            return _finalize(result)
+
+        return _run_registry_metric(
+            metric_key, metric, file_path, file_type, file_name, _finalize, kwargs
+        )
+
+
+def _run_registry_metric(
+    metric_key: str,
+    metric: Dict[str, Any],
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    _finalize: Any,
+    kwargs: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Argument validation and dispatch for the registry metrics.
+
+    Split out of ``run_metric`` so the instrumented body stays readable; the
+    branches below are unchanged.
+    """
     if metric_key == "row_level_completeness":
         required_columns = _normalize_list(kwargs.get("required_columns"))
         if not required_columns:
@@ -766,13 +833,14 @@ def _run_metric_impl(
         result = metric["runner"](file_path, file_type, file_name, columns)
         return _finalize(result)
 
-    raise ValueError(f"Unsupported metric: {metric_name}")
+    raise ValueError(f"Unsupported metric: {metric_key}")
 
 
 def run_batch_metrics(
     config: Any,
     verbose: bool = False,
     strip_visualizations: bool = False,
+    report_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     if isinstance(config, dict):
         config_obj = HeadlessConfig.from_dict(config)
@@ -819,15 +887,24 @@ def run_batch_metrics(
         "strip_visualizations": strip_visualizations,
     }
 
+    session = mlflow_sink.start_session(file_path=config_obj.file_path)
+    session_id = session.session_id if session else None
+
     results: Dict[str, Any] = {}
-    for metric_name in metrics:
-        results[metric_name] = run_metric(
-            metric_name,
-            config_obj.file_path,
-            file_type=config_obj.file_type,
-            file_name=config_obj.file_name,
-            **payload,
-        )
+    try:
+        for metric_name in metrics:
+            results[metric_name] = run_metric(
+                metric_name,
+                config_obj.file_path,
+                file_type=config_obj.file_type,
+                file_name=config_obj.file_name,
+                session_id=session_id,
+                **payload,
+            )
+    finally:
+        # report_path is optional and ignored when tracking is off; a missing
+        # file is a warning inside the sink, never a failed batch.
+        mlflow_sink.end_session(session, report_path=report_path)
     return results
 
 
