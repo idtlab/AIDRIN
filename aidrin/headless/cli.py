@@ -335,6 +335,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "timestamp_column": getattr(args, "timestamp_column", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
+        "selected_keys": _parse_list(getattr(args, "selected_keys", None)),
         "path_targets": _parse_path_targets(getattr(args, "path_targets", None), target_match),
         "base_dir": getattr(args, "base_dir", None),
         "max_results": getattr(args, "max_results", 100),
@@ -368,6 +369,13 @@ def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
 
 def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
     """Lightweight args for top-level metric shortcuts."""
+    parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
 
 
@@ -873,7 +881,6 @@ def main() -> None:
         default="metric",
         help="Run metric (default) or remedy; remedy output is always saved as CSV",
     )
-    custom_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override (csv, parquet, xlsx, hdf5, json, npz)")
     _configure_minimal_run_args(custom_parser)
 
     batch_parser = subparsers.add_parser("batch", help="Run metrics from config file (JSON or YAML)")
@@ -900,13 +907,30 @@ def main() -> None:
     dq_parser = subparsers.add_parser("data-quality", help="Run fast data quality metrics (completeness, duplicity, outliers)")
     dq_parser.add_argument("file_path")
     dq_parser.add_argument("--file-type", dest="file_type", default=None)
+    dq_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
 
     # Dataset summary command
     summarize_parser = subparsers.add_parser("summarize", help="Describe numerical and categorical features of a dataset")
     summarize_parser.add_argument("file_path", help="Path to the dataset")
-    summarize_parser.add_argument("--file-type", dest="file_type", default=None, help="File type override (csv, parquet, xlsx, hdf5, json, npz)")
+    summarize_parser.add_argument(
+        "--file-type",
+        dest="file_type",
+        default=None,
+        help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
+    )
+    summarize_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     summarize_parser.add_argument(
         "--max-features", dest="max_features", type=int, default=None,
         help="Limit stats to N features (split evenly between numerical and categorical)"
@@ -1080,6 +1104,7 @@ def main() -> None:
                 args.file_path,
                 file_type=args.file_type,
                 max_features=args.max_features,
+                selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
             if args.human_readable:
@@ -1094,6 +1119,7 @@ def main() -> None:
                 file_type=args.file_type,
                 verbose=args.verbose,
                 strip_visualizations=True,
+                selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
             if args.detail:

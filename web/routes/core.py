@@ -17,7 +17,11 @@ from flask import (
     url_for,
 )
 from werkzeug.utils import secure_filename
-from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP
+from aidrin.file_handling.file_parser import (
+    GLOBUS_FILE_TYPES,
+    READER_MAP,
+    SUPPORTED_FILE_TYPES,
+)
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
@@ -156,6 +160,7 @@ def inspector():
             uploaded_file_name=effective_file_name or "",
             file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
+            globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],
             current_checked_keys=current_checked_keys
             if current_checked_keys is not None

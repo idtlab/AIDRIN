@@ -15,7 +15,7 @@ base64 PNGs.
 """
 
 from dataclasses import asdict, is_dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from aidrin.compute import client
 from aidrin.compute.profiles import RemoteTarget
@@ -138,11 +138,16 @@ class RemoteExecutor:
         file_path: str,
         file_type: Optional[str] = None,
         max_features: Optional[int] = None,
+        selected_keys: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        return self._call(
-            "summarize",
-            {"file_path": file_path, "file_type": file_type, "max_features": max_features},
-        )
+        payload: Dict[str, Any] = {
+            "file_path": file_path,
+            "file_type": file_type,
+            "max_features": max_features,
+        }
+        if selected_keys:
+            payload["selected_keys"] = selected_keys
+        return self._call("summarize", payload)
 
     def run_data_quality(
         self,
@@ -151,17 +156,18 @@ class RemoteExecutor:
         file_name: Optional[str] = None,
         verbose: bool = False,
         strip_visualizations: bool = True,
+        selected_keys: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        return self._call(
-            "data_quality",
-            {
-                "file_path": file_path,
-                "file_type": file_type,
-                "file_name": file_name,
-                "verbose": verbose,
-                "strip_visualizations": strip_visualizations,
-            },
-        )
+        payload: Dict[str, Any] = {
+            "file_path": file_path,
+            "file_type": file_type,
+            "file_name": file_name,
+            "verbose": verbose,
+            "strip_visualizations": strip_visualizations,
+        }
+        if selected_keys:
+            payload["selected_keys"] = selected_keys
+        return self._call("data_quality", payload)
 
     def run_batch_metrics(
         self,
