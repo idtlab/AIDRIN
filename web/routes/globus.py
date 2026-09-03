@@ -5,6 +5,8 @@ registered when ``globus-compute-sdk`` is installed.
 """
 
 import logging
+import os
+import time
 
 from flask import (
     Blueprint,
@@ -29,6 +31,135 @@ logger = logging.getLogger(__name__)
 
 globus_bp = Blueprint("globus", __name__, url_prefix="/globus")
 
+NEGOTIATION_TTL_SECONDS = 300
+DEFAULT_ENDPOINT_PROBE_TIMEOUT = 30.0
+FILE_REFERENCE_CAPABILITY = "file_reference_validation_v1"
+FILE_REFERENCE_UPGRADE_MESSAGE = (
+    "File-reference validation is unavailable on this endpoint. Upgrade AIDRIN "
+    "in every Globus Compute worker environment and restart the endpoint."
+)
+
+
+def _negotiation_fingerprint(record):
+    return "|".join([
+        str(record.get("remote_aidrin_version", "unknown")),
+        str(record.get("capability_schema_version", "")),
+        ",".join(record.get("capabilities", [])),
+        str(record.get("checked_at", "")),
+    ])
+
+
+def _store_negotiation(endpoint_id, report, checked_at=None):
+    remote = report.get("remote", {})
+    record = {
+        "endpoint_id": endpoint_id,
+        "remote_aidrin_version": remote.get("aidrin", "unknown"),
+        "capability_schema_version": remote.get("capability_schema_version"),
+        "capabilities": sorted(remote.get("capabilities", [])),
+        "checked_at": time.time() if checked_at is None else checked_at,
+    }
+    record["fingerprint"] = _negotiation_fingerprint(record)
+    session["globus_endpoint_negotiation"] = record
+    return record
+
+
+def _clear_negotiation():
+    session.pop("globus_endpoint_negotiation", None)
+
+
+def _endpoint_probe_timeout():
+    """Return the administrator-configured endpoint probe timeout."""
+    value = current_app.config.get(
+        "GLOBUS_ENDPOINT_PROBE_TIMEOUT",
+        os.environ.get(
+            "AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT",
+            DEFAULT_ENDPOINT_PROBE_TIMEOUT,
+        ),
+    )
+    try:
+        timeout = float(value)
+        if timeout <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid GLOBUS_ENDPOINT_PROBE_TIMEOUT %r; using %.0fs",
+            value,
+            DEFAULT_ENDPOINT_PROBE_TIMEOUT,
+        )
+        return DEFAULT_ENDPOINT_PROBE_TIMEOUT
+    return timeout
+
+
+def _fresh_negotiation(client, endpoint_id, force=False):
+    record = session.get("globus_endpoint_negotiation", {})
+    fresh = (
+        not force
+        and record.get("endpoint_id") == endpoint_id
+        and time.time() - record.get("checked_at", 0) < NEGOTIATION_TTL_SECONDS
+    )
+    if fresh:
+        return record, None
+
+    report = check_endpoint_compatibility(
+        client,
+        endpoint_id,
+        _endpoint_probe_timeout(),
+    )
+    if not report["compatible"]:
+        _clear_negotiation()
+        return None, report
+    return _store_negotiation(endpoint_id, report), report
+
+
+def _requires_file_reference_capability(metric_name, params):
+    return metric_name == "file_reference_validation" or (
+        metric_name == "data_structure"
+        and "file_reference_validation" in params.get("selected", [])
+    )
+
+
+def _valid_file_reference_discovery(value):
+    if not isinstance(value, dict) or not isinstance(value.get("enabled"), bool):
+        return False
+    if not isinstance(value.get("roots"), list):
+        return False
+    if not isinstance(value.get("scan_limit"), int) or value["scan_limit"] <= 0:
+        return False
+    return all(
+        isinstance(root, dict)
+        and isinstance(root.get("id"), str)
+        and isinstance(root.get("label"), str)
+        for root in value["roots"]
+    )
+
+
+def _remove_file_reference_capability(context):
+    record = session.get("globus_endpoint_negotiation", {})
+    if (
+        record.get("endpoint_id") != context.get("endpoint_id")
+        or record.get("fingerprint") != context.get("negotiation_fingerprint")
+    ):
+        return False
+    capabilities = list(record.get("capabilities", []))
+    if FILE_REFERENCE_CAPABILITY not in capabilities:
+        return False
+    capabilities.remove(FILE_REFERENCE_CAPABILITY)
+    record["capabilities"] = capabilities
+    record["fingerprint"] = _negotiation_fingerprint(record)
+    session["globus_endpoint_negotiation"] = record
+    return True
+
+
+def _remove_task_tracking(task_id):
+    active = session.get("globus_active_tasks", [])
+    if task_id in active:
+        active.remove(task_id)
+        session["globus_active_tasks"] = active
+    contexts = session.get("globus_task_contexts", {})
+    if task_id in contexts:
+        contexts.pop(task_id)
+        session["globus_task_contexts"] = contexts
+
 
 def _cancel_active_globus_tasks():
     """Cancel any active Globus Compute tasks tracked in the session."""
@@ -46,6 +177,9 @@ def _cancel_active_globus_tasks():
                 logger.warning("Failed to cancel Globus task %s: %s", task_id, e)
     except Exception as e:
         logger.warning("Could not create Globus client for task cancellation: %s", e)
+    finally:
+        session.pop("globus_active_tasks", None)
+        session.pop("globus_task_contexts", None)
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +275,8 @@ def disconnect():
     session.pop("globus_file_name", None)
     session.pop("globus_file_type", None)
     session.pop("globus_active_tasks", None)
+    session.pop("globus_task_contexts", None)
+    _clear_negotiation()
     return jsonify({"success": True})
 
 
@@ -170,7 +306,7 @@ def check_endpoint():
     try:
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
-        report = check_endpoint_compatibility(client, endpoint_id)
+        _, report = _fresh_negotiation(client, endpoint_id, force=True)
         return jsonify(report), (200 if report["compatible"] else 409)
     except Exception as e:
         logger.error("Globus check-endpoint error: %s", e, exc_info=True)
@@ -212,9 +348,13 @@ def submit():
 
     if not all([endpoint_id, file_path, file_type, metric_name]):
         return jsonify({"error": "Missing required fields: endpoint_id, file_path, file_type, metric_name"}), 400
+    if not isinstance(params, dict):
+        return jsonify({"error": "params must be a JSON object"}), 400
 
+    task_id = None
     try:
-        # Check cache for summary_statistics (avoid redundant remote calls on page reload)
+        # Check cache for summary_statistics first (avoid redundant remote
+        # calls, including the endpoint negotiation probe, on page reload)
         if metric_name == "summary_statistics":
             cache_key = f"globus_summary:{endpoint_id}:{file_path}"
             cached = current_app.TEMP_RESULTS_CACHE.get(cache_key)
@@ -225,8 +365,21 @@ def submit():
                     "result": cached["data"],
                     "cached": True,
                 })
+
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
+        negotiation, report = _fresh_negotiation(client, endpoint_id)
+        if negotiation is None:
+            return jsonify({
+                "error": "The Globus Compute endpoint is incompatible with this AIDRIN server.",
+                "compatibility": report,
+            }), 409
+
+        requires_file_reference = _requires_file_reference_capability(metric_name, params)
+        if requires_file_reference and FILE_REFERENCE_CAPABILITY not in negotiation["capabilities"]:
+            return jsonify({"error": FILE_REFERENCE_UPGRADE_MESSAGE}), 409
+        if requires_file_reference and any(key in params for key in ("allowed_roots", "scan_limit")):
+            return jsonify({"error": "Filesystem roots and scan limits are controlled by the Compute worker."}), 400
 
         # Store endpoint info in session for subsequent metric submissions
         session["globus_endpoint_id"] = endpoint_id
@@ -245,15 +398,40 @@ def submit():
         active.append(task_id)
         session["globus_active_tasks"] = active
 
-        return jsonify({
+        operation = "target_discovery" if metric_name == "custom_outlier_targets" else "metric_execution"
+        expected_capability = (
+            FILE_REFERENCE_CAPABILITY
+            if operation == "target_discovery" and FILE_REFERENCE_CAPABILITY in negotiation["capabilities"]
+            else None
+        )
+        contexts = session.get("globus_task_contexts", {})
+        contexts[task_id] = {
+            "endpoint_id": endpoint_id,
+            "metric_name": metric_name,
+            "operation": operation,
+            "expected_capability": expected_capability,
+            "negotiation_fingerprint": negotiation["fingerprint"],
+        }
+        session["globus_task_contexts"] = contexts
+
+        response = {
             "task_id": task_id,
             "is_async": True,
             "status": "processing",
             "message": f"Task submitted to Globus Compute endpoint {endpoint_id}",
             "backend": "globus",
-        })
+        }
+        if operation == "target_discovery":
+            response["negotiation_expires_at"] = negotiation["checked_at"] + NEGOTIATION_TTL_SECONDS
+        return jsonify(response)
 
     except Exception as e:
+        if task_id is not None:
+            try:
+                client.stop(task_id)
+            except Exception as cancel_error:
+                logger.warning("Failed to cancel rolled-back Globus task %s: %s", task_id, cancel_error)
+            _remove_task_tracking(task_id)
         logger.error("Globus submit error: %s", e, exc_info=True)
         return jsonify({"error": "Failed to submit task"}), 500
 
@@ -293,13 +471,28 @@ def check_task_status(task_id):
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
         result = check_task(client, task_id)
+        context = session.get("globus_task_contexts", {}).get(task_id, {})
+
+        if (
+            result.get("status") == "completed"
+            and context.get("operation") == "target_discovery"
+            and context.get("expected_capability") == FILE_REFERENCE_CAPABILITY
+            and isinstance(result.get("result"), dict)
+            and result["result"].get("success") is True
+            and not _valid_file_reference_discovery(result["result"].get("file_reference"))
+        ):
+            invalidated = _remove_file_reference_capability(context)
+            result["result"]["file_reference"] = {
+                "enabled": False,
+                "roots": [],
+                "scan_limit": 10000,
+                "message": FILE_REFERENCE_UPGRADE_MESSAGE,
+            }
+            result["capability_invalidated"] = invalidated
 
         # Remove from active tasks if done
         if result.get("status") in ("completed", "failed"):
-            active = session.get("globus_active_tasks", [])
-            if task_id in active:
-                active.remove(task_id)
-                session["globus_active_tasks"] = active
+            _remove_task_tracking(task_id)
 
         return jsonify(result)
 

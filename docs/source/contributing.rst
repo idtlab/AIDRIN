@@ -77,6 +77,38 @@ Installation and use of the optional extras are documented in
 Reads ``GLOBUS_CLIENT_ID``, and ``GLOBUS_CLIENT_SECRET`` for the confidential
 client flow.
 
+Globus worker file-reference policy
+-----------------------------------
+
+The endpoint process environment and worker environment are distinct. Put the
+AIDRIN environment activation and file-reference policy in ``worker_init`` so
+they run in each worker process. Configure
+``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` as a JSON array of existing absolute
+directories and set the positive scan cap with
+``AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT``. The example provider configuration
+is in ``examples/globus/aidrin-local-provider.yaml``.
+
+Scheduler-backed providers must activate the same AIDRIN environment and
+expose the configured paths on every allocated worker node. For containerized
+workers, mount every allowed root at exactly the configured path using
+``container_cmd_options`` (for example,
+``-v /data/project:/data/project:ro``).
+
+The web compatibility probe waits 30 seconds by default. Set
+``AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT`` to a positive number of seconds when
+a scheduler-backed provider can take longer to start its first worker.
+
+For a file-reference validation demo, place a manifest and its referenced
+files below a configured worker root, load the manifest by its worker-visible
+path, and use the **Data Structure** panel to enable validation. Select exact
+targets or a full-match regular expression, the worker root, and an optional
+relative base subdirectory. Globus Connect and Globus Transfer are not part of
+this workflow: Compute reads paths already visible to its workers. Direct
+Python API calls and local CLI or MCP runs validate paths on their own host.
+``aidrin remote`` commands and MCP calls that pass ``endpoint`` or ``profile``
+instead validate paths on the selected Compute endpoint; those headless remote
+runs do not use the web worker-root policy described above.
+
 **LLM explanations** (``pip install -e ".[llm]"``)
 
 - ``web/llm.py``: optional-dependency detection and ``explain_metric()``

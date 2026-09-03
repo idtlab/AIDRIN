@@ -1,6 +1,7 @@
 """Tests for Globus Compute integration (mocked — no real endpoint needed)."""
 
 import os
+import json
 import sys
 import tempfile
 
@@ -8,6 +9,7 @@ import pandas as pd
 import pytest
 
 import aidrin
+import web.routes.globus as globus_routes
 from web.globus import (
     is_globus_available,
     remote_metric_runner,
@@ -125,6 +127,73 @@ def test_remote_runner_custom_outlier_targets():
 
     assert result["success"] is True
     assert any(target["name"] == "age" for target in result["targets"])
+    assert result["file_reference"]["enabled"] is False
+
+
+def test_remote_runner_file_reference_discovery_uses_worker_environment(monkeypatch, tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("path\nartifact.bin\n", encoding="utf-8")
+    monkeypatch.setenv("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", json.dumps([str(tmp_path)]))
+    monkeypatch.setenv("AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT", "17")
+
+    result = remote_metric_runner("custom_outlier_targets", str(manifest), manifest.name, ".csv")
+
+    assert result["file_reference"] == {
+        "enabled": True,
+        "roots": [{"id": "root-0", "label": str(tmp_path)}],
+        "scan_limit": 17,
+    }
+
+
+def test_remote_runner_file_reference_standalone_and_bundled(monkeypatch, tmp_path):
+    artifact = tmp_path / "artifact.bin"
+    artifact.write_bytes(b"aidrin")
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("path\nartifact.bin\n", encoding="utf-8")
+    monkeypatch.setenv("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", json.dumps([str(tmp_path)]))
+    params = {
+        "path_targets": ["path"],
+        "root_id": "root-0",
+        "base_subdirectory": "",
+        "max_results": 5,
+        "target_match": "exact",
+    }
+
+    standalone = remote_metric_runner(
+        "file_reference_validation", str(manifest), manifest.name, ".csv", **params
+    )
+    bundled = remote_metric_runner(
+        "data_structure",
+        str(manifest),
+        manifest.name,
+        ".csv",
+        selected=["constant_feature_count", "file_reference_validation"],
+        **params,
+    )
+
+    assert standalone["Summary"]["all_references_valid"] is True
+    assert "File Reference Validation" not in standalone
+    assert bundled["File Reference Validation"]["Summary"] == standalone["Summary"]
+    assert "Constant Feature Count" in bundled
+
+
+def test_remote_runner_file_reference_failure_is_metric_scoped(monkeypatch, tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("path\nmissing.bin\n", encoding="utf-8")
+    monkeypatch.delenv("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", raising=False)
+
+    result = remote_metric_runner(
+        "data_structure",
+        str(manifest),
+        manifest.name,
+        ".csv",
+        selected=["constant_feature_count", "file_reference_validation"],
+        path_targets=["path"],
+        root_id="root-0",
+    )
+
+    assert "Constant Feature Count" in result
+    assert "Select an allowed filesystem root" in result["File Reference Validation"]["Error"]
 
 
 def test_remote_runner_data_quality_custom_outliers():
@@ -198,6 +267,8 @@ def test_remote_env_probe_reports_versions():
     info = remote_env_probe()
     assert info["aidrin_version"] == aidrin.__version__
     assert info["python_version"] == ".".join(map(str, sys.version_info[:3]))
+    assert info["capability_schema_version"] == 1
+    assert info["capabilities"] == ["file_reference_validation_v1"]
 
 
 # -------------------------------------------------
@@ -232,6 +303,39 @@ def test_check_endpoint_compatibility_matching():
     assert report["compatible"] is True
     assert report["warnings"] == []
     assert report["remote"]["aidrin"] == aidrin.__version__
+    assert report["remote"]["capabilities"] == []
+
+
+def test_check_endpoint_compatibility_reports_optional_capabilities():
+    local_py = ".".join(map(str, sys.version_info[:3]))
+    client = _FakeClient({
+        "aidrin_version": aidrin.__version__,
+        "python_version": local_py,
+        "capability_schema_version": 1,
+        "capabilities": ["file_reference_validation_v1"],
+    })
+
+    report = check_endpoint_compatibility(client, "endpoint-uuid")
+
+    assert report["compatible"] is True
+    assert report["remote"]["capability_schema_version"] == 1
+    assert report["remote"]["capabilities"] == ["file_reference_validation_v1"]
+
+
+def test_check_endpoint_compatibility_ignores_unknown_capability_schema():
+    local_py = ".".join(map(str, sys.version_info[:3]))
+    client = _FakeClient({
+        "aidrin_version": aidrin.__version__,
+        "python_version": local_py,
+        "capability_schema_version": 99,
+        "capabilities": ["file_reference_validation_v1"],
+    })
+
+    report = check_endpoint_compatibility(client, "endpoint-uuid")
+
+    assert report["compatible"] is True
+    assert report["remote"]["capabilities"] == []
+    assert any("unsupported schema" in warning for warning in report["warnings"])
 
 
 def test_check_endpoint_compatibility_aidrin_mismatch():
@@ -269,6 +373,52 @@ def test_globus_check_endpoint_without_auth(client):
 
     response = client.post("/globus/check-endpoint", json={"endpoint_id": "x"})
     assert response.status_code == 401
+
+
+def test_globus_check_endpoint_uses_configured_probe_timeout(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    captured = {}
+    client.application.config["GLOBUS_ENDPOINT_PROBE_TIMEOUT"] = 900
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+
+    def capture_compatibility(_client, _endpoint_id, timeout):
+        captured["timeout"] = timeout
+        return _compatibility_report()
+
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        capture_compatibility,
+    )
+
+    response = client.post(
+        "/globus/check-endpoint",
+        json={"endpoint_id": "endpoint-uuid"},
+    )
+
+    assert response.status_code == 200
+    assert captured["timeout"] == 900
+
+
+def test_globus_probe_timeout_reads_aidrin_environment(app, monkeypatch):
+    app.config.pop("GLOBUS_ENDPOINT_PROBE_TIMEOUT", None)
+    monkeypatch.setenv("AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT", "321.5")
+
+    with app.app_context():
+        assert globus_routes._endpoint_probe_timeout() == 321.5
+
+
+@pytest.mark.parametrize("value", [0, -1, "invalid", None])
+def test_invalid_globus_probe_timeout_uses_default(app, value):
+    app.config["GLOBUS_ENDPOINT_PROBE_TIMEOUT"] = value
+
+    with app.app_context():
+        assert (
+            globus_routes._endpoint_probe_timeout()
+            == globus_routes.DEFAULT_ENDPOINT_PROBE_TIMEOUT
+        )
 
 
 class _FailingProbeClient:
@@ -348,3 +498,306 @@ def test_remote_probe_reports_headless_import():
     env = compute_client.probe(compute_client.get_client(), AIDRIN_TEST_ENDPOINT)
     assert env["headless_import"] is True
     assert env["aidrin_version"]
+
+# Negotiation and asynchronous task context routes
+# -------------------------------------------------
+
+
+def _compatibility_report(capabilities=(), compatible=True):
+    return {
+        "compatible": compatible,
+        "local": {"aidrin": aidrin.__version__, "python": "3.12.0"},
+        "remote": {
+            "aidrin": aidrin.__version__ if compatible else "1999.01.0",
+            "python": "3.12.0",
+            "capability_schema_version": 1 if capabilities else None,
+            "capabilities": list(capabilities),
+        },
+        "warnings": [],
+    }
+
+
+def _authenticate(client):
+    with client.session_transaction() as flask_session:
+        flask_session["globus_authenticated"] = True
+        flask_session["globus_tokens"] = {"compute.api.globus.org": {"access_token": "test"}}
+
+
+def _submission(metric_name="completeness", params=None):
+    return {
+        "endpoint_id": "endpoint-uuid",
+        "file_path": "/remote/manifest.csv",
+        "file_name": "manifest.csv",
+        "file_type": ".csv",
+        "metric_name": metric_name,
+        "params": params or {},
+    }
+
+
+def test_capability_absent_worker_runs_existing_metrics_but_not_file_reference(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(globus_routes, "check_endpoint_compatibility", lambda *_args: _compatibility_report())
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "existing-task")
+
+    existing = client.post("/globus/submit", json=_submission())
+    blocked = client.post(
+        "/globus/submit",
+        json=_submission("file_reference_validation", {"path_targets": ["path"], "root_id": "root-0"}),
+    )
+
+    assert existing.status_code == 200
+    assert existing.get_json()["task_id"] == "existing-task"
+    assert blocked.status_code == 409
+    assert "Upgrade AIDRIN" in blocked.get_json()["error"]
+
+
+def test_worker_policy_cannot_be_overridden_in_file_reference_submission(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["file_reference_validation_v1"]),
+    )
+
+    response = client.post(
+        "/globus/submit",
+        json=_submission(
+            "file_reference_validation",
+            {"path_targets": ["path"], "root_id": "root-0", "scan_limit": 0},
+        ),
+    )
+
+    assert response.status_code == 400
+    assert "controlled by the Compute worker" in response.get_json()["error"]
+
+
+def test_bundled_file_reference_submission_forwards_browser_choices(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    captured = {}
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["file_reference_validation_v1"]),
+    )
+
+    def capture_submission(_client, _endpoint_id, _metric_name, _path, _name, _type, **params):
+        captured.update(params)
+        return "file-reference-task"
+
+    monkeypatch.setattr(globus_routes, "submit_metric", capture_submission)
+    params = {
+        "selected": ["constant_feature_count", "file_reference_validation"],
+        "path_targets": ["primary_path", "secondary_path"],
+        "target_match": "exact",
+        "root_id": "root-0",
+        "base_subdirectory": "artifacts",
+        "max_results": 25,
+    }
+
+    response = client.post("/globus/submit", json=_submission("data_structure", params))
+
+    assert response.status_code == 200
+    assert captured == params
+
+
+def test_baseline_incompatible_worker_is_rejected_even_with_capability(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["file_reference_validation_v1"], compatible=False),
+    )
+
+    response = client.post("/globus/submit", json=_submission())
+
+    assert response.status_code == 409
+    assert "incompatible" in response.get_json()["error"]
+
+
+def test_expired_negotiation_is_reprobed(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    calls = []
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: calls.append("probe") or _compatibility_report(),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "task-id")
+    with client.session_transaction() as flask_session:
+        flask_session["globus_endpoint_negotiation"] = {
+            "endpoint_id": "endpoint-uuid",
+            "remote_aidrin_version": aidrin.__version__,
+            "capability_schema_version": None,
+            "capabilities": [],
+            "checked_at": 0,
+            "fingerprint": "old",
+        }
+
+    assert client.post("/globus/submit", json=_submission()).status_code == 200
+    assert calls == ["probe"]
+
+
+def test_switching_endpoint_reuses_fresh_preflight_negotiation(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    calls = []
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda _client, endpoint_id, _timeout: (
+            calls.append(endpoint_id) or _compatibility_report()
+        ),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "task-id")
+    with client.session_transaction() as flask_session:
+        flask_session["globus_endpoint_id"] = "previous-endpoint"
+
+    checked = client.post(
+        "/globus/check-endpoint",
+        json={"endpoint_id": "endpoint-uuid"},
+    )
+    submitted = client.post("/globus/submit", json=_submission())
+
+    assert checked.status_code == 200
+    assert submitted.status_code == 200
+    assert calls == ["endpoint-uuid"]
+
+
+def test_discovery_context_is_retained_pending_and_cleaned_on_completion(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["file_reference_validation_v1"]),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "discovery-task")
+    monkeypatch.setattr(
+        globus_routes,
+        "check_task",
+        lambda *_args: {"status": "processing", "progress": {"status": "running"}},
+    )
+
+    submitted = client.post("/globus/submit", json=_submission("custom_outlier_targets"))
+    assert submitted.get_json()["negotiation_expires_at"] > 0
+    assert client.get("/globus/check-task/discovery-task").get_json()["status"] == "processing"
+    with client.session_transaction() as flask_session:
+        context = flask_session["globus_task_contexts"]["discovery-task"]
+        assert context["operation"] == "target_discovery"
+        assert context["expected_capability"] == "file_reference_validation_v1"
+
+    monkeypatch.setattr(
+        globus_routes,
+        "check_task",
+        lambda *_args: {
+            "status": "completed",
+            "result": {
+                "success": True,
+                "targets": [],
+                "file_reference": {"enabled": False, "roots": [], "scan_limit": 10},
+            },
+        },
+    )
+    assert client.get("/globus/check-task/discovery-task").status_code == 200
+    with client.session_transaction() as flask_session:
+        assert "discovery-task" not in flask_session["globus_active_tasks"]
+        assert "discovery-task" not in flask_session["globus_task_contexts"]
+
+
+def test_malformed_discovery_invalidates_only_matching_capability(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["file_reference_validation_v1", "another_capability"]),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "malformed-task")
+    client.post("/globus/submit", json=_submission("custom_outlier_targets"))
+    monkeypatch.setattr(
+        globus_routes,
+        "check_task",
+        lambda *_args: {"status": "completed", "result": {"success": True, "targets": []}},
+    )
+
+    result = client.get("/globus/check-task/malformed-task").get_json()
+
+    assert result["capability_invalidated"] is True
+    assert result["result"]["file_reference"]["enabled"] is False
+    with client.session_transaction() as flask_session:
+        assert flask_session["globus_endpoint_negotiation"]["capabilities"] == ["another_capability"]
+
+
+def test_late_malformed_discovery_cannot_change_refreshed_negotiation(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["file_reference_validation_v1"]),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "late-task")
+    client.post("/globus/submit", json=_submission("custom_outlier_targets"))
+    with client.session_transaction() as flask_session:
+        record = flask_session["globus_endpoint_negotiation"]
+        record["checked_at"] += 1
+        record["fingerprint"] = "refreshed-fingerprint"
+        flask_session["globus_endpoint_negotiation"] = record
+    monkeypatch.setattr(
+        globus_routes,
+        "check_task",
+        lambda *_args: {"status": "completed", "result": {"success": True, "targets": []}},
+    )
+
+    result = client.get("/globus/check-task/late-task").get_json()
+
+    assert result["capability_invalidated"] is False
+    with client.session_transaction() as flask_session:
+        assert "file_reference_validation_v1" in flask_session["globus_endpoint_negotiation"]["capabilities"]
+
+
+def test_disconnect_clears_negotiation_and_task_context(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    stopped = []
+
+    class CancelClient:
+        def stop(self, task_id):
+            stopped.append(task_id)
+
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: CancelClient())
+    with client.session_transaction() as flask_session:
+        flask_session["globus_active_tasks"] = ["task-id"]
+        flask_session["globus_task_contexts"] = {"task-id": {"operation": "metric_execution"}}
+        flask_session["globus_endpoint_negotiation"] = {"endpoint_id": "endpoint-uuid"}
+
+    assert client.post("/globus/disconnect").status_code == 200
+    assert stopped == ["task-id"]
+    with client.session_transaction() as flask_session:
+        assert "globus_active_tasks" not in flask_session
+        assert "globus_task_contexts" not in flask_session
+        assert "globus_endpoint_negotiation" not in flask_session

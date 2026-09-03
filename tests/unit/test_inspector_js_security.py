@@ -8,6 +8,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
+INSPECTOR_TEMPLATE = REPO_ROOT / "web" / "templates" / "inspector.html"
 DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_quality.html"
 DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_structure.html"
 
@@ -151,13 +152,52 @@ def test_file_reference_ui_keeps_custom_outlier_loading_independent():
     quality_panel = DATA_QUALITY_PANEL.read_text(encoding="utf-8")
     assert "function loadFileReferenceOptions()" in source
     assert "loadFileReferenceOptions();" in source
-    assert "window.AIDRIN_GLOBUS_MODE" in source
+    assert "loadGlobusTargetDiscovery()" in source
     assert 'id="toggleButton_file_reference_validation"' in panel
     assert 'id="toggleButton_file_reference_validation"' not in quality_panel
     assert 'inputName: "file_reference_targets"' in source
     assert 'name="file_reference_root_id"' in panel
     assert 'name="file_reference_base_subdirectory"' in panel
     assert 'name="file_reference_max_results"' in panel
+
+
+def test_globus_workspace_loads_file_reference_options():
+    template = INSPECTOR_TEMPLATE.read_text(encoding="utf-8")
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    block_start = template.index("{% elif globus_mode %}")
+    block_end = template.index("{% endif %}", block_start)
+    globus_block = template[block_start:block_end]
+    assert "window.AIDRIN_GLOBUS_MODE = true;" in globus_block
+    assert "initFileReferenceTargetPicker();" in globus_block
+    assert "loadInitialGlobusData();" in globus_block
+    assert "async function loadInitialGlobusData()" in source
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the frontend ordering test")
+def test_globus_workspace_serializes_automatic_submissions():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("async function loadInitialGlobusData()")
+    end = source.index("\n}\n", start) + 2
+    initializer = source[start:end]
+    script = f"""
+{initializer}
+let finishDiscovery;
+const calls = [];
+function loadFileReferenceOptions() {{
+  calls.push("discovery");
+  return new Promise((resolve) => {{ finishDiscovery = resolve; }});
+}}
+function fetchGlobusSummary() {{ calls.push("summary"); }}
+(async () => {{
+  const loading = loadInitialGlobusData();
+  await Promise.resolve();
+  if (calls.join(",") !== "discovery") process.exit(1);
+  finishDiscovery();
+  await loading;
+  if (calls.join(",") !== "discovery,summary") process.exit(2);
+}})();
+"""
+    subprocess.run(["node", "-e", script], check=True)
 
 
 def test_file_reference_targets_use_searchable_collapsed_multi_select():
@@ -228,6 +268,41 @@ def test_file_reference_tables_escape_values_and_warn_on_partial_scans():
     assert "escapeHtml(formatValue(value))" in source
     assert "Partial scan:" in source
     assert "!results.Summary.scan_complete" in source
+
+
+def test_globus_file_reference_discovery_is_shared_and_expires():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert "const globusDiscoveryCache = new Map();" in source
+    assert "function globusDiscoveryKey()" in source
+    assert "function loadGlobusTargetDiscovery()" in source
+    assert "negotiation_expires_at" in source
+    assert "Date.now() < cached.expiresAt" in source
+    assert "Date.now() >= entry.expiresAt" in source
+    assert "if (data.capability_invalidated) clearGlobusDiscoveryCache();" in source
+    assert "checkbox.disabled = true;" in source
+    assert "if (window.AIDRIN_GLOBUS_MODE) clearGlobusDiscoveryCache();" in source
+    assert source.count('metric_name: "custom_outlier_targets"') == 1
+
+
+def test_local_file_reference_discovery_failure_keeps_server_error():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert "(!data.success && (data.message || data.error)) ||" in source
+    assert 'window.AIDRIN_GLOBUS_MODE\n      ? "This Globus Compute worker' in source
+    assert ': "File-reference validation is unavailable on this AIDRIN server."' in source
+
+
+def test_globus_file_reference_parameters_are_serialized_without_policy():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert 'selected.push("file_reference_validation")' in source
+    assert "remoteParams.path_targets = pathTargets" in source
+    assert "remoteParams.target_match = targetMatch" in source
+    assert "remoteParams.root_id = rootId" in source
+    assert "remoteParams.base_subdirectory" in source
+    assert "remoteParams.max_results" in source
+    globus_block = source[source.index('if (window.AIDRIN_GLOBUS_MODE)') : source.index("// Local mode:")]
+    assert "allowed_roots" not in globus_block
+    assert "file_reference_scan_limit" not in globus_block
+    assert "Execution location: Globus Compute worker" in source
 
 
 def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
