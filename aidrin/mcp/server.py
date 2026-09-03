@@ -408,6 +408,7 @@ def run_custom_remedy(
     file_path: str,
     output_dir: str | None = None,
     file_type: str | None = None,
+    diff: bool = False,
 ) -> str:
     """
     Run the remedy() method of a CustomDR class, apply it to the dataset,
@@ -421,13 +422,24 @@ def run_custom_remedy(
         output_dir: Directory to write the remedied CSV.
                     Defaults to <script_dir>/remedy_data/.
         file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
+        diff: If true, also re-run metric() on the remedied data and include
+              "before"/"after" results in the response.
     """
-    saved_path = run_custom_metric_remedy(
+    result = run_custom_metric_remedy(
         metric_name_or_path,
         file_path,
         output_dir=output_dir,
         file_type=file_type,
+        diff=diff,
     )
+    if diff:
+        saved_path = result.pop("_saved_to")
+        return _dumps({
+            **result,
+            "remedied_file": saved_path,
+            "message": f"Remedied dataset saved to {saved_path}",
+        })
+    saved_path = result
     return _dumps({
         "remedied_file": saved_path,
         "message": f"Remedied dataset saved to {saved_path}",

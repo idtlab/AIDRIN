@@ -130,6 +130,48 @@ def test_run_custom_remedy_saves_csv_for_non_csv_input(tmp_path):
     assert os.path.exists(result["remedied_file"])
 
 
+_NULL_COUNT_SCRIPT = """
+from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+class CustomDR(BaseDRAgent):
+    def metric(self, **kwargs):
+        return {"null_count": int(self.dataset.isna().sum().sum())}
+
+    def remedy(self, **kwargs):
+        return self.dataset.fillna(0)
+"""
+
+
+def test_run_custom_remedy_with_diff_returns_before_and_after(tmp_path):
+    script_path = os.path.join(str(tmp_path), "null_count_audit.py")
+    with open(script_path, "w") as f:
+        f.write(_NULL_COUNT_SCRIPT)
+    csv_path = os.path.join(str(tmp_path), "data.csv")
+    pd.DataFrame({"age": [18, None, 70]}).to_csv(csv_path, index=False)
+    output_dir = str(tmp_path / "remedy_out")
+
+    result = json.loads(
+        run_custom_remedy(script_path, csv_path, output_dir=output_dir, diff=True)
+    )
+
+    assert result["before"] == {"null_count": 1}
+    assert result["after"] == {"null_count": 0}
+    assert result["remedied_file"].endswith(".csv")
+    assert os.path.exists(result["remedied_file"])
+
+
+def test_run_custom_remedy_without_diff_keeps_original_response_shape(tmp_path):
+    script_path = _write_script(str(tmp_path))
+    parquet_path = _write_parquet(str(tmp_path))
+    output_dir = str(tmp_path / "remedy_out")
+
+    result = json.loads(
+        run_custom_remedy(script_path, parquet_path, output_dir=output_dir, file_type="parquet")
+    )
+
+    assert set(result.keys()) == {"remedied_file", "message"}
+
+
 # ---------------------------------------------------------------------------
 # File reference validation
 # ---------------------------------------------------------------------------

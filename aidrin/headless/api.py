@@ -1054,14 +1054,19 @@ def run_custom_metric_remedy(
     output_dir: Optional[str] = None,
     file_type: Optional[str] = None,
     file_name: Optional[str] = None,
+    diff: bool = False,
     **kwargs,
-) -> str:
+) -> Any:
     """Execute `remedy` on a custom metric and save the returned DataFrame as CSV.
 
     The input dataset may be any format supported by file_handling/readers/
     (CSV, Excel, JSON, NPZ, HDF5, Parquet); the remedied output is always
     written as CSV, since remediated data doesn't round-trip losslessly back
     into every original format (e.g. JSON/NPZ/HDF5 are flattened on read).
+
+    Returns the saved CSV path (str) by default. When `diff` is true, instead
+    re-runs `metric()` on the remedied data and returns
+    `{"before": ..., "after": ..., "_saved_to": <path>}`.
     """
     script_path = _resolve_custom_script(metric_name)
     clean_name = os.path.splitext(os.path.basename(script_path))[0]
@@ -1112,4 +1117,15 @@ def run_custom_metric_remedy(
     output_path = os.path.join(target_dir, filename)
     remedied.to_csv(output_path, index=False)
 
-    return output_path
+    if not diff:
+        return output_path
+
+    after_agent = module.CustomDR(dataset=remedied, **kwargs)
+    _log_progress(f"Re-running metric on remedied data for: {metric_name}", kwargs.get("verbose", False))
+    after_results = after_agent.metric(**kwargs)
+    if not isinstance(after_results, dict):
+        raise TypeError(
+            f"metric() in '{script_path}' must return a dict, got {type(after_results).__name__}"
+        )
+
+    return {"before": metric_results, "after": after_results, "_saved_to": output_path}
