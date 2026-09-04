@@ -389,6 +389,15 @@ def summarize_dataset(
         )
         raise ValueError(detail)
 
+    if df is None:
+        raise ValueError(
+            f"Unsupported file type: {ext!r}. AIDRIN's file parser does not "
+            "recognize this extension — pass file_type to override, or use a "
+            "custom data loader if this format needs special handling."
+        )
+    if isinstance(df, str):
+        raise ValueError(f"Failed to parse {file_path}: {df}")
+
     num_cols = df.select_dtypes(include="number").columns.tolist()
     cat_cols = df.select_dtypes(include="object").columns.tolist()
     missing = df.isnull().sum()
@@ -965,6 +974,103 @@ def run_privacy_assessment(
         if hasattr(config, key):
             setattr(config, key, value)
     return run_batch_metrics(config)
+
+
+def run_agentic_index(config_path: str) -> Dict[str, Any]:
+    """Build the FAISS vector index from domain-literature PDFs declared in an
+    agentic YAML config. Requires `pip install 'aidrin[agentic]'`."""
+    from aidrin.agentic.vector_db_builder import VectorDBBuilder
+
+    return VectorDBBuilder(Path(config_path).resolve()).build()
+
+
+def run_agentic_pipeline(
+    config_path: str,
+    output_path: Optional[str] = None,
+    skip_vector: bool = False,
+    verbose: bool = False,
+    **profiler_opts: Any,
+) -> Dict[str, Any]:
+    """Run the agentic evaluation pipeline: profile the dataset, build/reuse the
+    FAISS vector index, then for every question in the config retrieve context,
+    generate + self-heal analysis code, score complexity, and recommend
+    remediation. Requires `pip install 'aidrin[agentic]'`.
+
+    Writes the combined result to `output_path` when given; otherwise, when the
+    config's `output.save_log` is true (the default), auto-saves it under
+    `aidrin/agentic/outputs/`. Either way, the saved path (if any) is returned
+    under the `_saved_to` key.
+    """
+    import yaml
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    import aidrin.agentic as _agentic_pkg
+    from aidrin.agentic.data_profiler import DataProfiler
+    from aidrin.agentic.run import _json_safe, _run_query, _write_run_log
+    from aidrin.agentic.token_tracker import get_tracker
+    from aidrin.agentic.vector_db_builder import VectorDBBuilder
+
+    resolved = Path(config_path).resolve()
+    get_tracker().reset()
+
+    profiler = DataProfiler(config_path=resolved, **profiler_opts)
+    profile_result = profiler.profile()
+
+    cfg = yaml.safe_load(resolved.read_text()) if resolved.exists() else {}
+    cfg = cfg or {}
+    output_cfg = cfg.get("output", {}) or {}
+    save_log = bool(output_cfg.get("save_log", True))
+
+    vector_result = None
+    if not skip_vector and cfg.get("vector_store"):
+        builder = VectorDBBuilder(resolved)
+        if not builder.exists():
+            vector_result = builder.build()
+            _log_progress(json.dumps(vector_result), verbose)
+
+    retrieval_cfg = cfg.get("retrieval", {}) or {}
+    questions_raw = retrieval_cfg.get("questions") or []
+    if not questions_raw:
+        single = retrieval_cfg.get("question", "")
+        questions_raw = single if isinstance(single, list) else ([single] if single else [])
+
+    def _parse_q(q: Any) -> Any:
+        return (q["text"], q.get("loader")) if isinstance(q, dict) else (q, None)
+
+    parsed_questions = [_parse_q(q) for q in questions_raw]
+
+    max_workers = int(retrieval_cfg.get("max_workers", 4))
+    query_results: List[Dict[str, Any]] = []
+    if parsed_questions:
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
+            futures = {
+                pool.submit(_run_query, resolved, text, profile_result, loader): text
+                for text, loader in parsed_questions
+            }
+            for future in as_completed(futures):
+                try:
+                    query_results.append(future.result())
+                except Exception as exc:
+                    query_results.append({"question": futures[future], "error": str(exc)})
+
+    combined = _json_safe({
+        "profile": profile_result,
+        "vector_store": vector_result,
+        "queries": query_results,
+        "token_usage": get_tracker().to_dict(),
+    })
+
+    if output_path:
+        out = Path(output_path).resolve()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
+        combined["_saved_to"] = str(out)
+    elif save_log:
+        out_dir = Path(_agentic_pkg.__file__).resolve().parent / "outputs"
+        log_path = _write_run_log(combined, out_dir)
+        combined["_saved_to"] = str(log_path)
+
+    return combined
 
 
 def generate_metric_template(metric_name: str, target_dir: str) -> str:

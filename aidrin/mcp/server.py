@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +11,8 @@ from mcp.server import MCPServer
 from aidrin.headless.api import (
     generate_metric_template,
     list_available_metrics,
+    run_agentic_index,
+    run_agentic_pipeline,
     run_custom_metric_logic,
     run_custom_metric_remedy,
     run_metric,
@@ -476,11 +477,9 @@ def agentic_build_index(config_path: str) -> str:
         config_path: Absolute path to the agentic YAML config file.
     """
     try:
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
+        result = run_agentic_index(config_path)
     except ImportError:
         return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
-
-    result = VectorDBBuilder(Path(config_path).resolve()).build()
     return _dumps(result)
 
 
@@ -506,66 +505,18 @@ def agentic_run(
         output_path: Optional path to also write the full JSON results to disk.
         skip_vector: If true, skip rebuilding the vector index and use the existing one.
     """
-    try:
-        import yaml
-        from aidrin.agentic.data_profiler import DataProfiler
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
-        from aidrin.agentic.run import _run_query, _json_safe
-        from aidrin.agentic.token_tracker import get_tracker
-    except ImportError:
-        return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
-
     resolved = Path(config_path).resolve()
     if not resolved.exists():
         return _dumps({"error": f"Config file not found: {resolved}"})
 
-    get_tracker().reset()
-    profiler = DataProfiler(config_path=resolved)
-    profile_result = profiler.profile()
-
-    cfg = yaml.safe_load(resolved.read_text()) or {}
-
-    if not skip_vector and cfg.get("vector_store"):
-        builder = VectorDBBuilder(resolved)
-        if not builder.exists():
-            builder.build()
-
-    retrieval_cfg = cfg.get("retrieval", {}) or {}
-    questions_raw = retrieval_cfg.get("questions") or []
-    if not questions_raw:
-        single = retrieval_cfg.get("question", "")
-        questions_raw = single if isinstance(single, list) else ([single] if single else [])
-
-    def _parse_q(q):
-        return (q["text"], q.get("loader")) if isinstance(q, dict) else (q, None)
-
-    parsed_questions = [_parse_q(q) for q in questions_raw]
-    max_workers = int(retrieval_cfg.get("max_workers", 4))
-    query_results = []
-
-    if parsed_questions:
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
-            futures = {
-                pool.submit(_run_query, resolved, text, profile_result, loader): text
-                for text, loader in parsed_questions
-            }
-            for future in as_completed(futures):
-                try:
-                    query_results.append(future.result())
-                except Exception as exc:
-                    query_results.append({"question": futures[future], "error": str(exc)})
-
-    combined = _json_safe({
-        "profile": profile_result,
-        "queries": query_results,
-        "token_usage": get_tracker().to_dict(),
-    })
-
-    if output_path:
-        out = Path(output_path).resolve()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
-        combined["_saved_to"] = str(out)
+    try:
+        combined = run_agentic_pipeline(
+            str(resolved),
+            output_path=output_path,
+            skip_vector=skip_vector,
+        )
+    except ImportError:
+        return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
 
     return _dumps(combined)
 

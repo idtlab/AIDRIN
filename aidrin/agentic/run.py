@@ -13,18 +13,13 @@ from __future__ import annotations
 import argparse
 import json
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-
-from aidrin.agentic.data_profiler import DataProfiler
 from aidrin.agentic.retriever import VectorRetriever
 from aidrin.agentic.executor import CodeExecutor
 from aidrin.agentic.complexity_scorer import QueryComplexityScorer
 from aidrin.agentic.remediation_generator import RemediationGenerator
-from aidrin.agentic.token_tracker import get_tracker
 
 try:
     import pandas as pd  # type: ignore
@@ -142,80 +137,24 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    get_tracker().reset()
     args = parse_args()
 
-    profiler = DataProfiler(
-        config_path=args.config,
+    from aidrin.headless.api import run_agentic_pipeline
+
+    result = run_agentic_pipeline(
+        str(args.config),
+        output_path=str(args.output) if args.output else None,
+        skip_vector=args.skip_vector,
         compact=False if args.full else None,
         max_columns=args.max_columns,
         max_metadata_rows=args.max_metadata_rows,
         max_metadata_bytes=args.max_metadata_bytes,
     )
-    profile_result = profiler.profile()
 
-    cfg = yaml.safe_load(args.config.read_text()) if args.config.exists() else {}
-    output_cfg = cfg.get("output", {}) or {}
-    save_log = bool(output_cfg.get("save_log", True))
-
-    vector_result = None
-    if not args.skip_vector and cfg.get("vector_store"):
-        try:
-            from aidrin.agentic.vector_db_builder import VectorDBBuilder
-            builder = VectorDBBuilder(args.config)
-            vector_result = builder.build()
-        except Exception as exc:
-            vector_result = {"error": str(exc)}
-
-    retrieval_cfg = cfg.get("retrieval", {}) or {}
-    questions = retrieval_cfg.get("questions") or []
-    if not questions:
-        single = retrieval_cfg.get("question", "")
-        questions = single if isinstance(single, list) else ([single] if single else [])
-
-    def _parse_question(q):
-        if isinstance(q, dict):
-            return q["text"], q.get("loader")
-        return q, None
-
-    parsed_questions = [_parse_question(q) for q in questions]
-
-    max_workers = int(retrieval_cfg.get("max_workers", 4))
-    query_results = []
-    if parsed_questions:
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
-            futures = {
-                pool.submit(_run_query, args.config, text, profile_result, loader): text
-                for text, loader in parsed_questions
-            }
-            for future in as_completed(futures):
-                try:
-                    query_results.append(future.result())
-                except Exception as exc:
-                    query_results.append({"question": futures[future], "error": str(exc)})
-
-    combined = {
-        "profile": profile_result,
-        "vector_store": vector_result,
-        "queries": query_results,
-        "token_usage": get_tracker().to_dict(),
-    }
-
-    safe = _json_safe(combined)
-    agentic_root = Path(__file__).resolve().parent
-
-    log_path = None
-    if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        profiler.save(safe, args.output)
-        log_path = args.output
-    elif save_log:
-        out_dir = agentic_root / "outputs"
-        log_path = _write_run_log(safe, out_dir)
-
-    print(json.dumps(safe, indent=2, ensure_ascii=False))
-    if log_path:
-        print(f"\n[run log] {log_path}")
+    saved_to = result.pop("_saved_to", None)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    if saved_to:
+        print(f"\n[run log] {saved_to}")
 
 
 if __name__ == "__main__":
