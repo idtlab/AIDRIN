@@ -1,4 +1,4 @@
-# How to contribute to AIDRIN development (last updated on Sep 5th, 2026)
+# How to contribute to AIDRIN development
 
 Welcome! AIDRIN, the AI Data Readiness Infrastructure, measures how ready a dataset is for AI and
 machine learning work and helps fix the problems it finds. It is developed in the The Ohio State University with collaborators at Lawrence Berkeley National
