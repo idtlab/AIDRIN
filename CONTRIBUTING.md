@@ -108,7 +108,6 @@ pip install -e ".[agentic]"
 | `telemetry` | OpenTelemetry instrumentation for the Flask app |
 | `mlflow` | Assessment tracking through `mlflow-skinny` |
 | `llm` | Natural language explanations of metric results in the web interface |
-| `zarr` | Zarr reader, Python 3.11 and newer |
 | `docs` | Sphinx and the Read the Docs theme for building documentation |
 
 ---
