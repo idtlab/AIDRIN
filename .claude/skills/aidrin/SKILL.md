@@ -20,7 +20,9 @@ only when MCP is absent.
 
 | Action | MCP tool | CLI equivalent | Remote |
 |---|---|---|---|
-| Preflight | `list_metrics()` | `aidrin list` | `aidrin remote check` |
+| Preflight | `list_metrics()` | `aidrin list --capabilities` | `aidrin remote check` |
+| Open tracked assessment | `start_assessment(file_path)` | automatic | not tracked |
+| Close tracked assessment | `end_assessment(session_id, report_path)` | `aidrin batch <cfg> --report <path>` | not tracked |
 | List endpoints | `list_remote_profiles()` | `aidrin remote list` | n/a |
 | Summarize dataset | `summarize_dataset(file_path)` | `aidrin summarize <file>` | add `profile=` / `aidrin remote summarize` |
 | Quality baseline | `run_data_quality_check(file_path)` | `aidrin data-quality <file> [--detail]` | add `profile=` / `aidrin remote data-quality` |
@@ -44,8 +46,10 @@ Copy this checklist and work through it in order:
 - [ ] 4. Plan: map intent + columns → metrics + arguments (with rationale)
 - [ ] 5. Confirm plan with the user (HARD gate on column roles)
 - [ ] 6. Validate planned column names against the schema
-- [ ] 7. Run metrics
+- [ ] 7. Run metrics (if tracking is on: open an assessment first, and pass its session_id)
 - [ ] 8. Write the report from assets/report-template.md; save raw JSON alongside
+- [ ] 8b. If tracking is on: close the assessment, attaching the report
+      (MCP: `end_assessment(session_id, report_path=...)`; CLI: `aidrin batch ... --report <path>`)
 - [ ] 9. Ask if the user wants any custom metrics evaluated
 - [ ] 10. Ask if the user wants any remedies applied to the dataset
 ```
@@ -55,15 +59,55 @@ Copy this checklist and work through it in order:
 **MCP:** Call `list_metrics()`. Pass `category=` to filter by group (data-quality,
 data-structure, impact-of-data-on-AI, fairness-and-bias, data-governance).
 
-**CLI:** Run `aidrin list`. If it fails, see [reference/installation.md](reference/installation.md).
+The response is `{"metrics": {<category>: [...]}, "mlflow_enabled": <bool>}`. Read the
+metric catalogue from `metrics`, and note `mlflow_enabled` — it decides whether this
+assessment is recorded (see Assessment tracking below). No extra call is needed for it.
 
-The returned list is the source of truth. If a metric the user requests is
+**CLI:** Run `aidrin list --capabilities`. It returns the same catalogue wrapped as
+`{"metrics": {...}, "mlflow_enabled": <bool>, "experiment": <name|null>}` — the same
+shape the MCP tool returns, so the tracking section below applies to both paths. Plain
+`aidrin list` returns the bare catalogue and is what you want if you only need the
+metric names. If it fails, see [reference/installation.md](reference/installation.md).
+
+The returned catalogue is the source of truth. If a metric the user requests is
 not listed, **do not run it** — instead, offer to implement it as a custom
 metric using `create_custom_metric` (see the Custom metrics section below).
 
 **Remote endpoints:** also call `list_remote_profiles()` (MCP) or run
 `aidrin remote list` (CLI). If any profile is configured, ask once whether this
 dataset is local or on that endpoint, then keep that answer for the session.
+
+### Assessment tracking (only when `mlflow_enabled` is true)
+
+When the preflight reports `mlflow_enabled: true`, AIDRIN records this assessment to
+MLflow so the dataset's readiness can be compared over time.
+
+1. Before running any metric, call `start_assessment(file_path)` and keep the returned
+   `session_id`.
+2. Pass `session_id=` to every `run_aidrin_metric` call in this assessment.
+3. After writing the report, call `end_assessment(session_id, report_path=<path>)`. This
+   writes the dataset's aggregated readiness scores and attaches the report.
+
+Each metric becomes its own MLflow run, nested under one parent run that carries the
+aggregated scores. Mention the tracked run once in your report; do not otherwise change
+how you assess or what you report.
+
+When `mlflow_enabled` is false, skip all of this — do not call the assessment tools and do
+not mention tracking.
+
+**On the CLI path** there is no session to manage: `aidrin batch` and `aidrin data-quality`
+open and close their own assessment. To attach the finished report to it, pass
+`aidrin batch <config> --report <path/to/report.md>` — the equivalent of `end_assessment`'s
+`report_path`. Write the report first, then run the batch with `--report`, or re-run the
+batch once the report exists. The flag is ignored when tracking is off, so it is always
+safe to pass.
+
+Remote batches (`aidrin remote batch`, or `profile=`) execute on the endpoint and are not
+tracked; `--report` has nothing to attach to there.
+
+Only what AIDRIN computes is recorded: readiness scores and runtimes. Column names, cell
+values and file paths are deliberately withheld from the tracking server, so a tracked
+assessment never exports the data it is assessing.
 
 ### 2. Elicit intent
 

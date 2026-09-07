@@ -4,6 +4,7 @@ Covers argument parsing, helper utilities, and command dispatch using
 sys.argv patching + stdout capture — no subprocess or network required.
 """
 
+import importlib.util
 import io
 import json
 import os
@@ -821,5 +822,189 @@ class TestCLIErrorHandling(unittest.TestCase):
         self.assertNotEqual(code, 0)
 
 
+# ===========================================================================
+# selected-keys (HDF5 / Zarr)
+# ===========================================================================
+
+
+class TestSelectedKeysCLI(unittest.TestCase):
+    """CLI --selected-keys for multi-array Zarr stores."""
+
+    @classmethod
+    def setUpClass(cls):
+        pytest = __import__("pytest")
+        zarr = pytest.importorskip("zarr")
+        cls._tmpdir = tempfile.TemporaryDirectory()
+        store = os.path.join(cls._tmpdir.name, "pick.zarr")
+        root = zarr.open_group(store, mode="w")
+        for name, length in (("age", 20), ("income", 20), ("meta", 1)):
+            arr = root.create_array(name, shape=(length,), dtype="f8")
+            arr[:] = np.arange(length, dtype=np.float64)
+        cls.store = store
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmpdir.cleanup()
+
+    def test_run_completeness_with_selected_keys(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "completeness",
+            self.store,
+            "--selected-keys",
+            "age,income",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        scores = payload.get("Completeness scores", {})
+        self.assertIn("age", scores)
+        self.assertIn("income", scores)
+        self.assertNotIn("meta", scores)
+
+    def test_summarize_with_selected_keys(self):
+        stdout, stderr, code = _run_cli(
+            "summarize",
+            self.store,
+            "--selected-keys",
+            "age",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["shape"]["columns"], 1)
+        self.assertIn("age", payload.get("numerical", {}))
+
+    def test_build_file_info_includes_selected_keys(self):
+        from aidrin.headless.runners import _build_file_info, using_selected_keys
+
+        with using_selected_keys(["S1/X", "S1/Y"]):
+            info = _build_file_info(self.store, None, None)
+        self.assertEqual(info[2], ".zarr")
+        self.assertEqual(info[3], ["S1/X", "S1/Y"])
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Tracking discovery and report attachment on the CLI path
+# ---------------------------------------------------------------------------
+
+
+class TestTrackingDiscovery(unittest.TestCase):
+    """The skill needs to know whether this assessment is being recorded.
+
+    On the MCP path that rides on list_metrics; the CLI had no equivalent, so
+    the skill's tracking workflow was unreachable there.
+    """
+
+    def tearDown(self):
+        from aidrin.telemetry import mlflow_sink
+
+        mlflow_sink.reset()
+        for var in ("AIDRIN_MLFLOW_ENABLED", "MLFLOW_TRACKING_URI", "MLFLOW_ALLOW_FILE_STORE"):
+            os.environ.pop(var, None)
+
+    def test_list_output_stays_a_plain_catalogue(self):
+        """Scripts parse this; the capability must not appear among categories."""
+        stdout, _, code = _run_cli("list")
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout)
+        self.assertNotIn("mlflow_enabled", payload)
+        for entries in payload.values():
+            self.assertIsInstance(entries, list)
+
+    def test_capabilities_flag_reports_tracking_off(self):
+        stdout, _, code = _run_cli("list", "--capabilities")
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout)
+        self.assertIn("metrics", payload)
+        self.assertFalse(payload["mlflow_enabled"])
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlflow"), "requires the [mlflow] extra"
+    )
+    def test_capabilities_flag_reports_tracking_on(self):
+        import tempfile
+
+        from aidrin.telemetry import mlflow_sink
+
+        os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+        os.environ["MLFLOW_TRACKING_URI"] = f"file://{tempfile.mkdtemp()}"
+        os.environ["AIDRIN_MLFLOW_ENABLED"] = "1"
+        mlflow_sink.reset()
+
+        stdout, _, code = _run_cli("list", "--capabilities")
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["mlflow_enabled"])
+        self.assertEqual(payload["experiment"], "aidrin")
+
+
+class TestBatchReportAttachment(unittest.TestCase):
+    """`aidrin batch --report` attaches the finished report to the assessment.
+
+    Without it a CLI assessment records its scores but loses the interpretation
+    written alongside them.
+    """
+
+    def setUp(self):
+        import tempfile
+
+        self.csv = _write_csv(_sample_df())
+        self.report = tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w")
+        self.report.write("# Readiness report\n")
+        self.report.close()
+        self.cfg = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+        json.dump({"file_path": self.csv, "metrics": ["completeness"],
+                   "save_images": False}, self.cfg)
+        self.cfg.close()
+
+    def tearDown(self):
+        from aidrin.telemetry import mlflow_sink
+
+        mlflow_sink.reset()
+        for var in ("AIDRIN_MLFLOW_ENABLED", "MLFLOW_TRACKING_URI",
+                    "AIDRIN_MLFLOW_EXPERIMENT", "MLFLOW_ALLOW_FILE_STORE"):
+            os.environ.pop(var, None)
+        for path in (self.csv, self.report.name, self.cfg.name):
+            _clean(path)
+
+    def test_report_flag_is_accepted_when_tracking_is_off(self):
+        """It must not fail just because nothing is recording."""
+        _, _, code = _run_cli("batch", self.cfg.name, "--report", self.report.name)
+        self.assertEqual(code, 0)
+
+    def test_a_missing_report_file_does_not_fail_the_batch(self):
+        _, _, code = _run_cli("batch", self.cfg.name, "--report", "/nonexistent/x.md")
+        self.assertEqual(code, 0)
+
+    @unittest.skipUnless(
+        __import__("importlib").util.find_spec("mlflow"), "requires the [mlflow] extra"
+    )
+    def test_report_is_attached_to_the_assessment_run(self):
+        import tempfile
+
+        from mlflow.tracking import MlflowClient
+
+        from aidrin.telemetry import mlflow_sink
+
+        store = tempfile.mkdtemp()
+        os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+        os.environ["MLFLOW_TRACKING_URI"] = f"file://{store}"
+        os.environ["AIDRIN_MLFLOW_ENABLED"] = "1"
+        os.environ["AIDRIN_MLFLOW_EXPERIMENT"] = "cli-report"
+        mlflow_sink.reset()
+
+        _, _, code = _run_cli("batch", self.cfg.name, "--report", self.report.name)
+        self.assertEqual(code, 0)
+
+        client = MlflowClient(tracking_uri=f"file://{store}")
+        exp = client.get_experiment_by_name("cli-report")
+        self.assertIsNotNone(exp, "no experiment created")
+        parent = [
+            r for r in client.search_runs([exp.experiment_id])
+            if r.data.tags.get("aidrin.run_type") == "assessment"
+        ][0]
+        names = [a.path for a in client.list_artifacts(parent.info.run_id)]
+        self.assertIn(os.path.basename(self.report.name), names)

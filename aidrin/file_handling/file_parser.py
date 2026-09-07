@@ -8,6 +8,7 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
 from aidrin.file_handling.readers.parquet_reader import parquetReader
+from aidrin.file_handling.readers.zarr_reader import zarrReader
 
 # Notes:
 # To add support for new file types:
@@ -15,6 +16,8 @@ from aidrin.file_handling.readers.parquet_reader import parquetReader
 #       (and optionally .parse(), .filter()) to 'file_readers'.
 # - Register the class in READER_MAP.
 # - Add a display name and extension to SUPPORTED_FILE_TYPES for the front end.
+# - Formats that are CLI/library/Globus-only (e.g. Zarr directories) go in
+#   GLOBUS_FILE_TYPES but not SUPPORTED_FILE_TYPES (local upload dropdown).
 
 # Reader Map. Used to create file type specific parsing
 READER_MAP = {
@@ -24,10 +27,11 @@ READER_MAP = {
     ".json": jsonReader,
     ".h5": hdf5Reader,
     ".parquet": parquetReader,
+    ".zarr": zarrReader,
     # Add additional file types here
 }
 
-# Supported file types. Read on front end to create select features.
+# Supported file types. Read on front end to create local upload select features.
 SUPPORTED_FILE_TYPES = [
     (".csv", "CSV"),
     (".xls, .xlsb, .xlsx, .xlsm", "Excel"),
@@ -38,6 +42,29 @@ SUPPORTED_FILE_TYPES = [
     # Add additional file types here using the format:
     # (file_type,file_type_name)
 ]
+
+# Globus (and other path-based surfaces) may include directory-shaped formats
+# that are not offered in the local browser upload dropdown.
+GLOBUS_FILE_TYPES = SUPPORTED_FILE_TYPES + [
+    (".zarr", "Zarr"),
+]
+
+# File types that accept selected_keys for multi-array / multi-dataset selection.
+_SELECTION_FILE_TYPES = {".h5", ".zarr"}
+
+
+class ReaderReturnedNone(RuntimeError):
+    """A reader parsed the source but produced no DataFrame.
+
+    Raised only for formats where returning ``None`` would be misread as
+    "unsupported file type" (see ``_RAISE_ON_EMPTY_FILE_TYPES``).
+    """
+
+
+# Formats whose readers legitimately refuse ambiguous inputs (a multi-array
+# Zarr store needing selected_keys). Returning None there is indistinguishable
+# from "unsupported type", so raise instead and let the CLI print one error.
+_RAISE_ON_EMPTY_FILE_TYPES = {".zarr"}
 
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
@@ -204,13 +231,20 @@ def read_file(file_info, columns=None):
             -file_path: str, relative or absolute path of the file.
             -file_name: str, file name.
             -file_type: str, file format. Passed from front end select value.
+            - optional selected_keys (4th element) for HDF5/Zarr path selection.
     columns: list of str, optional
         When given, only these columns are returned.
     Returns
     ----------
     pd.Dataframe, None, or str
-    Parsed data as a DataFrame, None if file is unsupported,
-    or error message string if an exception occurs.
+    Parsed data as a DataFrame, None if the file is unsupported or the reader
+    produced no frame, or an error message string if an exception occurs.
+
+    Raises
+    ----------
+    ReaderReturnedNone
+        For formats in ``_RAISE_ON_EMPTY_FILE_TYPES`` (Zarr), where an empty
+        read means the caller must supply ``selected_keys``.
     """
     file_upload_time_log.info("File parsing initiated...")
 
@@ -250,13 +284,31 @@ def read_file(file_info, columns=None):
 
         # Slow path: parse the source once.
         reader_cls = READER_MAP[file_type]
-        if file_type == ".h5":
+        if file_type in _SELECTION_FILE_TYPES:
             df = reader_cls(
                 file_path, file_upload_time_log, selected_keys=selected_keys
             ).read()
         else:
             df = reader_cls(file_path, file_upload_time_log).read()
         file_upload_time_log.info("File successfully parsed!")
+
+        # If a reader returns None (for example an invalid Zarr store/path or
+        # incompatible arrays), surface a clear error instead of allowing
+        # downstream code to raise ``AttributeError: 'NoneType'``.
+        if df is None:
+            msg = (
+                f"Reader returned no DataFrame for {file_path}. "
+                "Check the store/path or selected keys; reader returned None."
+            )
+            file_upload_time_log.error(msg)
+            # For Zarr stores, prefer raising so the CLI/runner prints a single
+            # clear error and exits non-zero.
+            if file_type in _RAISE_ON_EMPTY_FILE_TYPES:
+                raise ReaderReturnedNone(msg)
+            # Every other format keeps returning None, which callers already
+            # treat as unreadable. Returning the message string instead would
+            # silently satisfy len()/truthiness checks at the call sites.
+            return None
 
         # Best-effort cache for future calls. Failure is non-fatal: we still
         # return the freshly parsed frame below, so a read-only directory or an
@@ -268,6 +320,15 @@ def read_file(file_info, columns=None):
             df = df[columns]
         return df
 
+    except ReaderReturnedNone:
+        # Raised above on purpose: re-raise so the top-level CLI/runner prints
+        # a single clear error and exits non-zero.
+        raise
+    except ImportError:
+        # A missing optional reader dependency (e.g. aidrin[zarr]) is a setup
+        # problem, not an unreadable file. Its message carries the install
+        # command, so let it through rather than flattening it.
+        raise
     except Exception as e:
         file_upload_time_log.error(f"Error while Reading File: {e}", exc_info=True)
         return "Unable to read the uploaded file."

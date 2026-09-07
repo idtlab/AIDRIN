@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import json
 import re
 import sys
@@ -9,6 +10,7 @@ import os
 from aidrin.file_handling.file_parser import clear_frame_cache
 
 from aidrin.headless import api as _local_api
+from aidrin.telemetry import mlflow_sink
 from aidrin.compute.executor import AsyncSubmitted
 
 from .api import (
@@ -274,6 +276,32 @@ def _print_summary_table(result: dict, file_path: str) -> None:
         print(f"\n[truncated to {result['max_features']} features — pass --max-features to adjust]")
 
 
+@contextlib.contextmanager
+def _implicit_session(executor, file_path):
+    """Wrap a single-metric run in a one-off tracked session.
+
+    ``aidrin batch`` and ``aidrin data-quality`` get their session from
+    ``run_batch_metrics``; a bare ``aidrin run <metric>`` would otherwise be the
+    one local path that produced no MLflow run at all.
+
+    Remote execution is skipped: ``run_metric`` executes on the Globus endpoint,
+    so there is nothing for a client-side session to record.
+    """
+    if executor is not _local_api:
+        yield None
+        return
+
+    session = mlflow_sink.start_session(file_path=file_path, interface="cli")
+    try:
+        yield session
+    finally:
+        mlflow_sink.end_session(session)
+
+
+def _session_kwargs(session):
+    return {"session_id": session.session_id} if session is not None else {}
+
+
 def _build_run_kwargs(args: argparse.Namespace) -> dict:
     rule_texts = getattr(args, "rule_texts", None)
     parsed_rules = _parse_custom_outlier_rule_texts(rule_texts)
@@ -307,6 +335,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "timestamp_column": getattr(args, "timestamp_column", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
+        "selected_keys": _parse_list(getattr(args, "selected_keys", None)),
         "path_targets": _parse_path_targets(getattr(args, "path_targets", None), target_match),
         "base_dir": getattr(args, "base_dir", None),
         "max_results": getattr(args, "max_results", 100),
@@ -340,6 +369,13 @@ def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
 
 def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
     """Lightweight args for top-level metric shortcuts."""
+    parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
 
 
@@ -778,6 +814,11 @@ def main() -> None:
 
     list_parser = subparsers.add_parser("list", help="List available metrics")
     list_parser.add_argument("--category", default=None)
+    list_parser.add_argument(
+        "--capabilities",
+        action="store_true",
+        help="Wrap the catalogue as {metrics, mlflow_enabled, experiment}",
+    )
 
     run_parser = subparsers.add_parser("run", help="Run a metric (per-metric help via: aidrin run <metric> -h)")
     run_subparsers = run_parser.add_subparsers(dest="metric", required=True)
@@ -840,12 +881,20 @@ def main() -> None:
         default="metric",
         help="Run metric (default) or remedy; remedy output is always saved as CSV",
     )
-    custom_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override (csv, parquet, xlsx, hdf5, json, npz)")
     _configure_minimal_run_args(custom_parser)
 
     batch_parser = subparsers.add_parser("batch", help="Run metrics from config file (JSON or YAML)")
     batch_parser.add_argument("config_path")
     batch_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
+    batch_parser.add_argument(
+        "--report",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Attach a finished report to the tracked assessment. Ignored when "
+            "MLflow tracking is not enabled."
+        ),
+    )
     batch_parser.add_argument(
         "--viz",
         dest="no_viz",
@@ -858,13 +907,30 @@ def main() -> None:
     dq_parser = subparsers.add_parser("data-quality", help="Run fast data quality metrics (completeness, duplicity, outliers)")
     dq_parser.add_argument("file_path")
     dq_parser.add_argument("--file-type", dest="file_type", default=None)
+    dq_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
 
     # Dataset summary command
     summarize_parser = subparsers.add_parser("summarize", help="Describe numerical and categorical features of a dataset")
     summarize_parser.add_argument("file_path", help="Path to the dataset")
-    summarize_parser.add_argument("--file-type", dest="file_type", default=None, help="File type override (csv, parquet, xlsx, hdf5, json, npz)")
+    summarize_parser.add_argument(
+        "--file-type",
+        dest="file_type",
+        default=None,
+        help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
+    )
+    summarize_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     summarize_parser.add_argument(
         "--max-features", dest="max_features", type=int, default=None,
         help="Limit stats to N features (split evenly between numerical and categorical)"
@@ -935,7 +1001,14 @@ def main() -> None:
                 print(f"{e}")
             return
         if args.command == "list":
-            _dump_result(_round_floats(list_available_metrics(category=args.category)))
+            catalogue = _round_floats(list_available_metrics(category=args.category))
+            if getattr(args, "capabilities", False):
+                # Wrapped, not merged: the bare catalogue is a mapping of
+                # category -> metrics, and a sibling key would read as a
+                # category. Off by default so existing scripts parsing this
+                # output are unaffected.
+                catalogue = {"metrics": catalogue, **mlflow_sink.capabilities()}
+            _dump_result(catalogue)
             return
 
         if args.command == "run":
@@ -947,12 +1020,14 @@ def main() -> None:
                         "Error: provide at least one of categorical-columns or numerical-columns\n"
                     )
                     sys.exit(2)
-                result = executor.run_metric(
-                    metric_key,
-                    args.file_path,
-                    file_type=getattr(args, "file_type", None),
-                    **_build_run_kwargs(args),
-                )
+                with _implicit_session(executor, args.file_path) as session:
+                    result = executor.run_metric(
+                        metric_key,
+                        args.file_path,
+                        file_type=getattr(args, "file_type", None),
+                        **_session_kwargs(session),
+                        **_build_run_kwargs(args),
+                    )
                 _fail_on_remote_error(result, remote_opts)
                 if getattr(args, "detail", True):
                     _dump_result(_round_floats(result))
@@ -991,12 +1066,14 @@ def main() -> None:
                     "Error: provide at least one of categorical-columns or numerical-columns\n"
                 )
                 sys.exit(2)
-            result = executor.run_metric(
-                args.command,
-                args.file_path,
-                file_type=getattr(args, "file_type", None),
-                **_build_run_kwargs(args),
-            )
+            with _implicit_session(executor, args.file_path) as session:
+                result = executor.run_metric(
+                    args.command,
+                    args.file_path,
+                    file_type=getattr(args, "file_type", None),
+                    **_session_kwargs(session),
+                    **_build_run_kwargs(args),
+                )
             _fail_on_remote_error(result, remote_opts)
             if getattr(args, "detail", True):
                 _dump_result(_round_floats(result))
@@ -1007,10 +1084,16 @@ def main() -> None:
         if args.command == "batch":
             config = HeadlessConfig.from_file(args.config_path)
             cleanup_path = config.file_path
+            # Remote batches execute on the endpoint and are not tracked, so
+            # the report flag has nothing to attach to there.
+            batch_kwargs = {}
+            if executor is _local_api and getattr(args, "report", None):
+                batch_kwargs["report_path"] = args.report
             result = executor.run_batch_metrics(
                 config,
                 verbose=args.verbose,
                 strip_visualizations=args.no_viz,
+                **batch_kwargs,
             )
             _fail_on_remote_error(result, remote_opts)
             _dump_result(_round_floats(result))
@@ -1021,6 +1104,7 @@ def main() -> None:
                 args.file_path,
                 file_type=args.file_type,
                 max_features=args.max_features,
+                selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
             if args.human_readable:
@@ -1035,6 +1119,7 @@ def main() -> None:
                 file_type=args.file_type,
                 verbose=args.verbose,
                 strip_visualizations=True,
+                selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
             if args.detail:
