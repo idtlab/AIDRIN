@@ -16,6 +16,7 @@ from aidrin.structured_data_metrics.variable_unit_validation import (
     _parse_unit,
     calculate_variable_unit_validation,
     discover_variable_units,
+    unit_suggestion_catalog,
 )
 
 
@@ -56,6 +57,67 @@ def test_bare_g_message_gives_both_remedies():
     message = _parse_unit("g")["message"]
     assert "gram" in message
     assert "standard_gravity" in message
+
+
+@pytest.mark.parametrize(
+    ("alias", "canonical", "normalized"),
+    [
+        ("Celsius degree", "degree_Celsius", "°C"),
+        ("degrees Celsius", "degree_Celsius", "°C"),
+        ("Fahrenheit degree", "degree_Fahrenheit", "°F"),
+        ("% RH", "percent", "%"),
+        ("relative humidity percent", "percent", "%"),
+    ],
+)
+def test_curated_aliases_are_stored_as_canonical_pint_units(
+    tmp_path,
+    alias,
+    canonical,
+    normalized,
+):
+    file_info = _csv(tmp_path, ["measurement"])
+    sidecar = _with_resolutions(
+        file_info,
+        {"measurement": {"kind": "unit", "unit": alias, "source": "user"}},
+    )
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["variables"][0]["resolution"]["unit"] == canonical
+    assert result["variables"][0]["finding"]["normalized_unit"] == normalized
+    assert result["variables"][0]["finding"]["status"] == "valid"
+
+
+def test_every_curated_suggestion_is_unique_and_recognized_by_pint():
+    catalog = unit_suggestion_catalog()
+    units = [item for group in catalog for item in group["units"]]
+    canonical_units = [item["unit"] for item in units]
+
+    assert len(canonical_units) == len(set(canonical_units))
+    assert all(_parse_unit(unit)["status"] == "valid" for unit in canonical_units)
+    assert next(group for group in catalog if group["quantity"] == "temperature") == {
+        "quantity": "temperature",
+        "variable_terms": ["temperature", "temp"],
+        "units": [
+            {"label": "Celsius (°C)", "unit": "degree_Celsius"},
+            {"label": "Fahrenheit (°F)", "unit": "degree_Fahrenheit"},
+            {"label": "Kelvin (K)", "unit": "kelvin"},
+        ],
+    }
+
+
+def test_detected_human_alias_is_canonical_and_round_trips(tmp_path):
+    file_info = _csv(tmp_path, ["temperature (degrees Celsius)"])
+
+    first = calculate_variable_unit_validation(file_info)
+    second = calculate_variable_unit_validation(file_info, first)
+
+    assert first["variables"][0]["resolution"] == {
+        "kind": "unit",
+        "unit": "degree_Celsius",
+        "source": "detected",
+    }
+    assert second == first
 
 
 @pytest.mark.parametrize(
