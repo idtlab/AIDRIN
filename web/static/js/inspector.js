@@ -443,8 +443,7 @@ function updateVariableUnitAuditSummary() {
   const message = document.getElementById("variable-unit-message");
   if (message) {
     if (variableUnitMetadataDirty) {
-      message.textContent =
-        "Unit metadata changes are pending deterministic validation.";
+      message.textContent = "Unit metadata changes are pending validation.";
     } else if (!total) {
       message.textContent = "No logical variables were discovered.";
     } else if (summary.all_variables_ready) {
@@ -456,13 +455,11 @@ function updateVariableUnitAuditSummary() {
   const progress = document.getElementById("variable-unit-progress");
   if (progress && variableUnitMetadataDirty) {
     progress.textContent =
-      "Validate the changes to refresh findings and enable the JSON download.";
+      "Validate to refresh findings and enable Download JSON.";
   } else if (progress && total) {
     const accounted = total - unresolved;
     progress.textContent = `${accounted} of ${total} variables accounted for. Source data has not been changed.`;
   }
-  const dirty = document.getElementById("variable-unit-dirty-message");
-  dirty?.classList.toggle("hidden", !variableUnitMetadataDirty);
   const download = document.getElementById("variable-unit-download");
   if (download) download.disabled = variableUnitMetadataDirty;
 }
