@@ -368,24 +368,32 @@ def summarize_dataset(
     file_path: str,
     file_type: Optional[str] = None,
     max_features: Optional[int] = None,
+    loader: Optional[str] = None,
     selected_keys: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Return shape, per-column descriptive stats, and missing counts for a dataset."""
+    from pathlib import Path
+    from aidrin.file_handling.custom_loader import using_custom_loader
     from aidrin.file_handling.file_parser import read_file
     from .runners import _build_file_info
 
+    path = Path(file_path)
+    if file_type and str(file_type).startswith("."):
+        ext = file_type
+    elif file_type:
+        ext = f".{file_type}"
+    else:
+        ext = path.suffix.lower()
     file_info = _build_file_info(
-        file_path,
-        file_type,
-        None,
-        selected_keys=_normalize_list(selected_keys),
+        file_path, ext, path.name, selected_keys=_normalize_list(selected_keys)
     )
-    df = read_file(file_info)
+    with using_custom_loader(loader):
+        df = read_file(file_info, loader=loader)
 
     if df is None or isinstance(df, str):
         detail = df if isinstance(df, str) else (
-            "Unable to build a table from this file. For multi-array Zarr/HDF5 stores, "
-            "pass selected_keys with compatible 1D paths."
+            "Unable to build a table from this file. For unsupported formats or "
+            "multi-array Zarr/HDF5 stores, pass a loader or selected_keys."
         )
         raise ValueError(detail)
 
@@ -554,19 +562,22 @@ def run_metric(
     session_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    with using_selected_keys(_normalize_list(kwargs.get("selected_keys"))):
-        return _run_metric_impl(
-            metric_name,
-            file_path,
-            file_type=file_type,
-            file_name=file_name,
-            save_images=save_images,
-            image_dir=image_dir,
-            verbose=verbose,
-            strip_visualizations=strip_visualizations,
-            session_id=session_id,
-            **kwargs,
-        )
+    from aidrin.file_handling.custom_loader import using_custom_loader
+
+    with using_custom_loader(kwargs.get("loader") or kwargs.get("data_loader")):
+        with using_selected_keys(_normalize_list(kwargs.get("selected_keys"))):
+            return _run_metric_impl(
+                metric_name,
+                file_path,
+                file_type=file_type,
+                file_name=file_name,
+                save_images=save_images,
+                image_dir=image_dir,
+                verbose=verbose,
+                strip_visualizations=strip_visualizations,
+                session_id=session_id,
+                **kwargs,
+            )
 
 
 def _run_metric_impl(
@@ -877,6 +888,7 @@ def run_batch_metrics(
         "timestamp_column": config_obj.timestamp_column,
         "batch_column": config_obj.batch_column,
         "target_columns": config_obj.target_columns,
+        "loader": getattr(config_obj, "loader", None),
         "selected_keys": config_obj.selected_keys,
         "path_targets": config_obj.path_targets,
         "base_dir": config_obj.base_dir,
@@ -916,6 +928,7 @@ def run_data_quality(
     file_name: Optional[str] = None,
     verbose: bool = False,
     strip_visualizations: bool = True,
+    loader: Optional[str] = None,
     selected_keys: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Run fast data quality metrics (completeness, duplicity, outliers).
@@ -929,6 +942,7 @@ def run_data_quality(
             file_type=file_type,
             file_name=file_name,
             metrics=["completeness", "duplicity", "outliers"],
+            loader=loader,
             selected_keys=selected_keys or [],
             save_images=False,
         ),
@@ -989,6 +1003,61 @@ def generate_metric_template(metric_name: str, target_dir: str) -> str:
     with open(file_path, "w") as f:
         f.write(CUSTOM_DR_TEMPLATE)
 
+    return file_path
+
+
+_LOADER_TEMPLATE = '''"""Custom AIDRIN data loader.
+
+Return a pandas DataFrame from any format your environment can read.
+AIDRIN does not install domain libraries for you (e.g. uproot, xarray).
+
+Trusted scripts only: this code runs in-process with full Python access.
+"""
+
+from __future__ import annotations
+
+import pandas as pd
+
+
+def load(path: str, **kwargs) -> pd.DataFrame:
+    """Load ``path`` into a tabular DataFrame for AIDRIN metrics.
+
+    ``kwargs`` may include ``selected_keys`` when the caller passes them.
+    Multi-dimensional arrays must be reshaped here; AIDRIN will not average
+    or flatten them for you.
+    """
+    # Example (CSV):
+    # return pd.read_csv(path)
+
+    # Example (ROOT via uproot — install uproot yourself):
+    # import uproot
+    # with uproot.open(path) as f:
+    #     tree = f[kwargs.get("tree", "tree")]
+    #     return tree.arrays(library="pd")
+
+    raise NotImplementedError("Implement load() to return a pandas DataFrame")
+'''
+
+
+def generate_loader_template(loader_name: str, target_dir: str) -> str:
+    """Create a custom data-loader template ``load(path, **kwargs) -> DataFrame``."""
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+
+    clean_name = loader_name.strip().lower().replace(" ", "_")
+    clean_name = re.sub(r"[^a-z0-9_]+", "", clean_name)
+    if not clean_name:
+        raise ValueError("loader name must contain at least one alphanumeric character")
+    file_path = os.path.join(target_dir, f"{clean_name}.py")
+
+    if os.path.exists(file_path):
+        raise FileExistsError(
+            f"A loader file named '{clean_name}.py' already exists in {target_dir}. "
+            "Edit that file or choose a different name."
+        )
+
+    with open(file_path, "w", encoding="utf-8") as handle:
+        handle.write(_LOADER_TEMPLATE)
     return file_path
 
 

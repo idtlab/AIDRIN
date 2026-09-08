@@ -138,12 +138,14 @@ class RemoteExecutor:
         file_path: str,
         file_type: Optional[str] = None,
         max_features: Optional[int] = None,
+        loader: Optional[str] = None,
         selected_keys: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "file_path": file_path,
             "file_type": file_type,
             "max_features": max_features,
+            "loader": loader,
         }
         if selected_keys:
             payload["selected_keys"] = selected_keys
@@ -156,6 +158,7 @@ class RemoteExecutor:
         file_name: Optional[str] = None,
         verbose: bool = False,
         strip_visualizations: bool = True,
+        loader: Optional[str] = None,
         selected_keys: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -164,6 +167,7 @@ class RemoteExecutor:
             "file_name": file_name,
             "verbose": verbose,
             "strip_visualizations": strip_visualizations,
+            "loader": loader,
         }
         if selected_keys:
             payload["selected_keys"] = selected_keys
