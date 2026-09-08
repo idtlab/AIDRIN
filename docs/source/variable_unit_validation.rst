@@ -138,9 +138,13 @@ variable name (for example, temperature or pressure). These are suggestions only
 does not silently assign a unit or infer one from the observed values. Users can select a
 suggestion or enter any Pint-compatible unit expression.
 
-Common human-readable aliases such as ``Celsius degree``, ``degrees Celsius``, and
-``% RH`` are accepted and stored using a canonical Pint-compatible spelling. This keeps
-the sidecar interoperable while making manual entry less exacting.
+Typed and imported unit strings are passed directly to Pint; AIDRIN does not maintain a
+second vocabulary of human-readable aliases. Selecting a curated web suggestion stores
+its Pint-compatible value in the sidecar and should cover most routine entry. Free-form
+entry is intended for less common Pint expressions. A genuinely dataset-specific unit
+that Pint does not define is preserved but flagged as unrecognized. The special ``[g]``
+name annotation is treated as standard gravity so it remains distinct from the
+deliberately ambiguous bare ``g``.
 
 Pint parses and normalizes unit expressions. AIDRIN accepts forms such as
 m/s^2, m/s², standard_gravity, g_0, and 1. Bare g is rejected as ambiguous:

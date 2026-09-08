@@ -32,32 +32,6 @@ _READY_STATUSES = {"valid", "dimensionless", "not_applicable"}
 _RESOLUTION_KINDS = {"unit", "dimensionless", "not_applicable", "unresolved"}
 _RESOLUTION_SOURCES = {"detected", "user", "none"}
 
-_UNIT_ALIASES = {
-    "%": "percent",
-    "% rh": "percent",
-    "celsius": "degree_Celsius",
-    "celsius degree": "degree_Celsius",
-    "celsius degrees": "degree_Celsius",
-    "centigrade": "degree_Celsius",
-    "degree celsius": "degree_Celsius",
-    "degrees celsius": "degree_Celsius",
-    "degc": "degree_Celsius",
-    "°c": "degree_Celsius",
-    "fahrenheit": "degree_Fahrenheit",
-    "fahrenheit degree": "degree_Fahrenheit",
-    "fahrenheit degrees": "degree_Fahrenheit",
-    "degree fahrenheit": "degree_Fahrenheit",
-    "degrees fahrenheit": "degree_Fahrenheit",
-    "degf": "degree_Fahrenheit",
-    "°f": "degree_Fahrenheit",
-    "percent relative humidity": "percent",
-    "percent rh": "percent",
-    "relative humidity percent": "percent",
-    "rh %": "percent",
-    "rh percent": "percent",
-    "[g]": "standard_gravity",
-}
-
 _UNIT_SUGGESTION_GROUPS = (
     {
         "quantity": "temperature",
@@ -206,12 +180,6 @@ def unit_suggestion_catalog() -> List[Dict[str, Any]]:
         }
         for group in _UNIT_SUGGESTION_GROUPS
     ]
-
-
-def _canonicalize_unit(unit: str) -> str:
-    stripped = unit.strip()
-    key = re.sub(r"\s+", " ", stripped).casefold()
-    return _UNIT_ALIASES.get(key, stripped)
 
 
 def _decode_metadata(value: Any) -> str:
@@ -364,7 +332,9 @@ def _parse_unit(unit: str) -> Dict[str, Any]:
             "message": "Unit contains the unsupported floor-division operator '//'. Use '/' for division.",
         }
 
-    parse_value = _canonicalize_unit(stripped)
+    # A trailing ``[g]`` name annotation explicitly means acceleration rather
+    # than the ambiguous bare symbol ``g``. All other input goes directly to Pint.
+    parse_value = "standard_gravity" if stripped == "[g]" else stripped
     try:
         parsed = _UNIT_REGISTRY.Unit(parse_value)
     except Exception as exc:
@@ -429,7 +399,9 @@ def _validate_resolution(name: str, resolution: Any) -> Dict[str, Any]:
     if kind == "unit":
         if not isinstance(unit, str) or not unit.strip():
             raise ValueError(f"Unit resolution for {name!r} must contain a non-empty unit")
-        return {"kind": kind, "unit": _canonicalize_unit(unit), "source": source}
+        stripped = unit.strip()
+        parsed = _parse_unit(stripped)
+        return {"kind": kind, "unit": parsed.get("_canonical_unit", stripped), "source": source}
     if kind == "dimensionless":
         if unit != "1":
             raise ValueError(f"Dimensionless resolution for {name!r} must use unit '1'")
@@ -499,7 +471,10 @@ def _is_current_detected_resolution(
 ) -> bool:
     if resolution.get("source") != "detected" or resolution.get("kind") not in {"unit", "dimensionless"}:
         return False
-    return any(resolution["unit"] == _canonicalize_unit(candidate["unit"]) for candidate in candidates)
+    return any(
+        resolution["unit"] == _parse_unit(candidate["unit"]).get("_canonical_unit", candidate["unit"].strip())
+        for candidate in candidates
+    )
 
 
 def _record_for_target(

@@ -635,7 +635,7 @@ function renderVariableUnitEditor() {
     unitInput.value = kind === "unit" ? resolution.unit || "" : "";
     unitInput.placeholder = "Choose or type a unit";
     unitInput.title =
-      "Choose a common unit or type any Pint-compatible unit expression.";
+      "Choose a common unit. If needed, type a Pint-compatible unit expression; units unknown to Pint are flagged.";
     unitInput.disabled = kind !== "unit";
     unitInput.dataset.variableUnitName = variable.name;
     unitInput.className =

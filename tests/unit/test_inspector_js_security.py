@@ -279,6 +279,8 @@ def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
     assert 'title="Import an AIDRIN unit metadata JSON file' in panel
     assert 'title="Download the validated unit metadata' in panel
     assert "the source dataset is never modified" in panel
+    assert "use a Pint-compatible spelling" in panel
+    assert "units unknown to Pint are flagged as unrecognized" in panel
 
 
 def test_variable_unit_editor_preserves_physical_unit_draft_until_entry():
