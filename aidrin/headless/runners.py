@@ -137,10 +137,10 @@ def run_variable_unit_validation(
     file_path: str,
     file_type: Optional[str],
     file_name: Optional[str],
-    unit_declarations: Optional[Dict[str, Any]],
+    unit_metadata: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
-    return _call_task(variable_unit_validation, file_info, unit_declarations)
+    return _call_task(variable_unit_validation, file_info, unit_metadata)
 
 
 def run_max_pairwise_correlation(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:

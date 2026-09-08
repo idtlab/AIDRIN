@@ -96,7 +96,7 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
     "variable_unit_validation": {
         "category": "data-structure",
-        "description": "Verify that every logical variable has a recognized unit or an explicit classification.",
+        "description": "Audit unit metadata for every logical variable and apply an optional canonical sidecar.",
         "runner": run_variable_unit_validation,
         "required_args": [],
     },
@@ -265,42 +265,42 @@ def _resolve_custom_outlier_rules(kwargs: Dict[str, Any]) -> Any:
     return source_value
 
 
-def _resolve_unit_declarations(kwargs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Resolve at most one inline, JSON-string, or host-local mapping source."""
+def _resolve_unit_metadata(kwargs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Resolve at most one inline, JSON-string, or host-local sidecar source."""
     sources = {
-        "unit_declarations": kwargs.get("unit_declarations"),
-        "unit_declarations_json": kwargs.get("unit_declarations_json"),
-        "units_file": kwargs.get("units_file"),
+        "unit_metadata": kwargs.get("unit_metadata"),
+        "unit_metadata_json": kwargs.get("unit_metadata_json"),
+        "unit_metadata_file": kwargs.get("unit_metadata_file"),
     }
     supplied = [(name, value) for name, value in sources.items() if value is not None and value != ""]
     if len(supplied) > 1:
         raise ValueError(
-            "Provide at most one variable-unit mapping source: unit_declarations, "
-            "unit_declarations_json, or units_file"
+            "Provide at most one variable-unit metadata source: unit_metadata, "
+            "unit_metadata_json, or unit_metadata_file"
         )
     if not supplied:
         return None
 
     source_name, source_value = supplied[0]
-    if source_name == "unit_declarations":
+    if source_name == "unit_metadata":
         return source_value
-    if source_name == "units_file":
+    if source_name == "unit_metadata_file":
         path = Path(source_value).expanduser()
         try:
-            raw_mapping = path.read_text(encoding="utf-8")
+            raw_sidecar = path.read_text(encoding="utf-8")
         except OSError as exc:
-            raise ValueError(f"Unable to read variable-unit mapping file: {path}") from exc
+            raise ValueError(f"Unable to read variable-unit metadata file: {path}") from exc
     else:
-        raw_mapping = source_value
+        raw_sidecar = source_value
 
     try:
-        mapping = json.loads(raw_mapping)
+        sidecar = json.loads(raw_sidecar)
     except (TypeError, json.JSONDecodeError) as exc:
-        label = "mapping file" if source_name == "units_file" else "unit_declarations_json"
+        label = "metadata file" if source_name == "unit_metadata_file" else "unit_metadata_json"
         raise ValueError(f"Invalid JSON in variable-unit {label}") from exc
-    if not isinstance(mapping, dict):
-        raise ValueError("Variable-unit mapping JSON must contain an object keyed by exact variable name")
-    return mapping
+    if not isinstance(sidecar, dict):
+        raise ValueError("Variable-unit metadata JSON must contain an object")
+    return sidecar
 
 
 def _sanitize(obj: Any) -> Any:
@@ -566,8 +566,8 @@ def _maybe_save_images(
 # params buries the ones that matter.
 _RESULT_AFFECTING_ARGS = frozenset({
     "epsilon", "threshold", "frequency", "distance_metric", "scan_limit",
-    "rules_file", "rules_json", "units_file", "unit_declarations_json",
-    "unit_declarations",
+    "rules_file", "rules_json", "unit_metadata_file", "unit_metadata_json",
+    "unit_metadata",
 })
 
 
@@ -796,7 +796,7 @@ def _run_registry_metric(
             file_path,
             file_type,
             file_name,
-            _resolve_unit_declarations(kwargs),
+            _resolve_unit_metadata(kwargs),
         )
         return _finalize(result)
 
@@ -938,8 +938,8 @@ def run_batch_metrics(
         "max_results": config_obj.max_results,
         "scan_limit": config_obj.scan_limit,
         "target_match": config_obj.target_match,
-        "unit_declarations": config_obj.unit_declarations,
-        "units_file": config_obj.units_file,
+        "unit_metadata": config_obj.unit_metadata,
+        "unit_metadata_file": config_obj.unit_metadata_file,
         "save_images": bool(config_obj.save_images) if config_obj.save_images is not None else True,
         "image_dir": config_obj.image_dir,
         "verbose": verbose,

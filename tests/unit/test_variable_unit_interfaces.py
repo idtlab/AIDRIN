@@ -10,6 +10,9 @@ import pytest
 from aidrin.compute.remote import remote_headless_runner
 from aidrin.headless.api import METRIC_REGISTRY, run_batch_metrics, run_metric
 from aidrin.headless.config import HeadlessConfig
+from aidrin.structured_data_metrics.variable_unit_validation import (
+    calculate_variable_unit_validation,
+)
 
 
 def _dataset(tmp_path):
@@ -18,11 +21,16 @@ def _dataset(tmp_path):
     return path
 
 
-def _mapping():
-    return {
-        "speed": {"unit": "m/s"},
-        "station": {"status": "not_applicable"},
+def _sidecar(dataset):
+    file_info = (str(dataset), dataset.name, ".csv")
+    sidecar = calculate_variable_unit_validation(file_info)
+    resolutions = {
+        "speed": {"kind": "unit", "unit": "m/s", "source": "user"},
+        "station": {"kind": "not_applicable", "source": "user"},
     }
+    for variable in sidecar["variables"]:
+        variable["resolution"] = resolutions[variable["name"]]
+    return sidecar
 
 
 def _run_cli(*argv):
@@ -43,65 +51,82 @@ def test_metric_is_registered_as_data_structure():
     assert METRIC_REGISTRY["variable_unit_validation"]["category"] == "data-structure"
 
 
-def test_headless_api_accepts_inline_json_and_host_local_file(tmp_path):
+def test_headless_api_without_sidecar_returns_read_only_audit(tmp_path):
+    result = run_metric(
+        "variable-unit-validation",
+        str(_dataset(tmp_path)),
+        save_images=False,
+    )
+
+    assert result["format"] == "aidrin.variable-unit-metadata"
+    assert result["summary"]["counts"]["missing"] == 2
+
+
+def test_headless_api_accepts_inline_sidecar_json_and_host_local_file(tmp_path):
     dataset = _dataset(tmp_path)
-    mapping_path = tmp_path / "units.json"
-    mapping_path.write_text(json.dumps(_mapping()), encoding="utf-8")
+    sidecar = _sidecar(dataset)
+    sidecar_path = tmp_path / "data.units.json"
+    sidecar_path.write_text(json.dumps(sidecar), encoding="utf-8")
 
     inline = run_metric(
         "variable-unit-validation",
         str(dataset),
-        unit_declarations_json=json.dumps(_mapping()),
+        unit_metadata_json=json.dumps(sidecar),
         save_images=False,
     )
     from_file = run_metric(
         "variable-unit-validation",
         str(dataset),
-        units_file=str(mapping_path),
+        unit_metadata_file=str(sidecar_path),
         save_images=False,
     )
 
     assert inline == from_file
-    assert inline["all_variables_ready"] is True
+    assert inline["summary"]["all_variables_ready"] is True
 
 
-def test_headless_api_rejects_multiple_mapping_sources(tmp_path):
-    with pytest.raises(ValueError, match="at most one variable-unit mapping source"):
+def test_headless_api_rejects_multiple_sidecar_sources(tmp_path):
+    dataset = _dataset(tmp_path)
+    sidecar = _sidecar(dataset)
+    with pytest.raises(ValueError, match="at most one variable-unit metadata source"):
         run_metric(
             "variable-unit-validation",
-            str(_dataset(tmp_path)),
-            unit_declarations=_mapping(),
-            unit_declarations_json=json.dumps(_mapping()),
+            str(dataset),
+            unit_metadata=sidecar,
+            unit_metadata_json=json.dumps(sidecar),
             save_images=False,
         )
 
 
-def test_cli_accepts_units_json_and_units_file(tmp_path):
+def test_cli_accepts_unit_metadata_json_and_file(tmp_path):
     dataset = _dataset(tmp_path)
-    mapping_path = tmp_path / "units.json"
-    mapping_path.write_text(json.dumps(_mapping()), encoding="utf-8")
+    sidecar = _sidecar(dataset)
+    sidecar_path = tmp_path / "data.units.json"
+    sidecar_path.write_text(json.dumps(sidecar), encoding="utf-8")
 
     inline_out, inline_err, inline_code = _run_cli(
-        "run", "variable-unit-validation", str(dataset), "--units-json", json.dumps(_mapping())
+        "run", "variable-unit-validation", str(dataset),
+        "--unit-metadata-json", json.dumps(sidecar),
     )
     file_out, file_err, file_code = _run_cli(
-        "variable-unit-validation", str(dataset), "--units-file", str(mapping_path)
+        "variable-unit-validation", str(dataset),
+        "--unit-metadata-file", str(sidecar_path),
     )
 
     assert inline_code == 0, inline_err
     assert file_code == 0, file_err
-    assert json.loads(inline_out)["all_variables_ready"] is True
-    assert json.loads(file_out)["all_variables_ready"] is True
+    assert json.loads(inline_out)["summary"]["all_variables_ready"] is True
+    assert json.loads(file_out)["summary"]["all_variables_ready"] is True
 
 
-def test_cli_mapping_options_are_mutually_exclusive(tmp_path):
+def test_cli_sidecar_options_are_mutually_exclusive(tmp_path):
     _out, error, code = _run_cli(
         "run",
         "variable-unit-validation",
         str(_dataset(tmp_path)),
-        "--units-json",
+        "--unit-metadata-json",
         "{}",
-        "--units-file",
+        "--unit-metadata-file",
         "/tmp/units.json",
     )
 
@@ -118,28 +143,28 @@ def test_batch_normalizes_and_forwards_mapping_sources(tmp_path, source):
         "save-images": False,
     }
     if source == "inline":
-        payload["unit-declarations"] = _mapping()
+        payload["unit-metadata"] = _sidecar(dataset)
     else:
-        mapping_path = tmp_path / "units.json"
-        mapping_path.write_text(json.dumps(_mapping()), encoding="utf-8")
-        payload["units-file"] = str(mapping_path)
+        sidecar_path = tmp_path / "data.units.json"
+        sidecar_path.write_text(json.dumps(_sidecar(dataset)), encoding="utf-8")
+        payload["unit-metadata-file"] = str(sidecar_path)
 
     config = HeadlessConfig.from_dict(payload)
     result = run_batch_metrics(config)["variable_unit_validation"]
 
-    assert result["all_variables_ready"] is True
+    assert result["summary"]["all_variables_ready"] is True
 
 
-def test_remote_headless_dispatch_resolves_units_file_on_execution_host(tmp_path):
+def test_remote_headless_dispatch_resolves_sidecar_file_on_execution_host(tmp_path):
     dataset = _dataset(tmp_path)
-    mapping_path = tmp_path / "remote-units.json"
-    mapping_path.write_text(json.dumps(_mapping()), encoding="utf-8")
+    sidecar_path = tmp_path / "remote.units.json"
+    sidecar_path.write_text(json.dumps(_sidecar(dataset)), encoding="utf-8")
 
     result = remote_headless_runner("run_metric", {
         "metric_name": "variable-unit-validation",
         "file_path": str(dataset),
-        "units_file": str(mapping_path),
+        "unit_metadata_file": str(sidecar_path),
         "save_images": False,
     })
 
-    assert result["all_variables_ready"] is True
+    assert result["summary"]["all_variables_ready"] is True

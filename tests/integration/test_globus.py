@@ -127,7 +127,7 @@ def test_remote_runner_custom_outlier_targets():
 
     assert result["success"] is True
     assert any(target["name"] == "age" for target in result["targets"])
-    assert [target["name"] for target in result["unit_targets"]] == ["age", "label"]
+    assert [variable["name"] for variable in result["unit_metadata"]["variables"]] == ["age", "label"]
     assert result["file_reference"]["enabled"] is False
 
 
@@ -200,21 +200,25 @@ def test_remote_runner_file_reference_failure_is_metric_scoped(monkeypatch, tmp_
 def test_remote_runner_data_structure_variable_unit_validation():
     path, name, file_type = _write_csv(pd.DataFrame({"speed": [1.0], "station": ["A"]}))
     try:
+        sidecar = aidrin.calculate_variable_unit_validation((path, name, file_type))
+        resolutions = {
+            "speed": {"kind": "unit", "unit": "m/s", "source": "user"},
+            "station": {"kind": "not_applicable", "source": "user"},
+        }
+        for variable in sidecar["variables"]:
+            variable["resolution"] = resolutions[variable["name"]]
         result = remote_metric_runner(
             "data_structure",
             path,
             name,
             file_type,
             selected=["variable_unit_validation"],
-            unit_declarations={
-                "speed": {"unit": "m/s"},
-                "station": {"status": "not_applicable"},
-            },
+            unit_metadata=sidecar,
         )
     finally:
         os.unlink(path)
 
-    assert result["Variable Unit Validation"]["all_variables_ready"] is True
+    assert result["Variable Unit Validation"]["summary"]["all_variables_ready"] is True
 
 
 def test_remote_runner_data_quality_custom_outliers():
@@ -291,7 +295,7 @@ def test_remote_env_probe_reports_versions():
     assert info["capability_schema_version"] == 1
     assert info["capabilities"] == [
         "file_reference_validation_v1",
-        "variable_unit_validation_v1",
+        "variable_unit_metadata_v1",
     ]
 
 
@@ -338,7 +342,7 @@ def test_check_endpoint_compatibility_preserves_worker_capabilities():
         "capability_schema_version": 1,
         "capabilities": [
             "file_reference_validation_v1",
-            "variable_unit_validation_v1",
+            "variable_unit_metadata_v1",
         ],
     })
 
@@ -348,7 +352,7 @@ def test_check_endpoint_compatibility_preserves_worker_capabilities():
     assert report["remote"]["capability_schema_version"] == 1
     assert report["remote"]["capabilities"] == [
         "file_reference_validation_v1",
-        "variable_unit_validation_v1",
+        "variable_unit_metadata_v1",
     ]
 
 

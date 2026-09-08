@@ -135,7 +135,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Variable Unit Validation"] = (
                 aidrin.calculate_variable_unit_validation(
                     file_info,
-                    params.get("unit_declarations"),
+                    params.get("unit_metadata"),
                 )
             )
         return result
@@ -144,13 +144,10 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         """Discover selectable custom-outlier targets on the remote file."""
         from aidrin.file_handling.file_reference_policy import discovery_configuration
         from aidrin.file_handling.value_iterators import iter_targets
-        from aidrin.structured_data_metrics.variable_unit_validation import (
-            discover_variable_units,
-        )
         return {
             "success": True,
             "targets": iter_targets(file_info),
-            "unit_targets": discover_variable_units(file_info),
+            "unit_metadata": aidrin.calculate_variable_unit_validation(file_info),
             "file_reference": discovery_configuration(),
         }
 
@@ -441,7 +438,7 @@ def remote_env_probe():
         "capability_schema_version": 1,
         "capabilities": [
             "file_reference_validation_v1",
-            "variable_unit_validation_v1",
+            "variable_unit_metadata_v1",
         ],
     }
 

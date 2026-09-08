@@ -579,17 +579,16 @@ def calculate_kurtosis(file_info):
     return kurtosis.apply(args=(file_info,)).get()
 
 
-def calculate_variable_unit_validation(file_info, unit_declarations=None):
-    """Validate that every logical variable has unit-readiness metadata.
+def calculate_variable_unit_validation(file_info, unit_metadata=None):
+    """Audit every logical variable and return a canonical unit-metadata sidecar.
 
-    ``unit_declarations`` is an optional mapping keyed by exact variable name.
-    Each value contains either ``{"unit": "m/s"}`` or
-    ``{"status": "not_applicable"}``.
+    ``unit_metadata`` may be a sidecar previously returned by this function.
+    The source dataset is never modified.
     """
     from aidrin.structured_data_metrics.variable_unit_validation import (
         calculate_variable_unit_validation as _calculate,
     )
-    return _calculate(file_info, unit_declarations)
+    return _calculate(file_info, unit_metadata)
 
 
 __all__ = [

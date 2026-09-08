@@ -163,8 +163,8 @@ def run_aidrin_metric(
     path_targets: str | list[str] | None = None,
     base_dir: str | None = None,
     target_match: str = "exact",
-    unit_declarations_json: str | None = None,
-    units_file: str | None = None,
+    unit_metadata_json: str | None = None,
+    unit_metadata_file: str | None = None,
     endpoint: str | None = None,
     profile: str | None = None,
     session_id: str | None = None,
@@ -209,8 +209,8 @@ def run_aidrin_metric(
         path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
         base_dir: Server-local directory used to resolve relative file references.
         target_match: Interpret path_targets as exact names or full-match regular expressions.
-        unit_declarations_json: Inline variable-unit mapping JSON for variable-unit-validation.
-        units_file: Execution-host path to a variable-unit mapping JSON file.
+        unit_metadata_json: Inline canonical sidecar JSON for variable-unit-validation.
+        unit_metadata_file: Execution-host path to a canonical sidecar JSON file.
         endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
@@ -247,8 +247,8 @@ def run_aidrin_metric(
             ("path_targets", path_targets),
             ("base_dir", base_dir),
             ("target_match", target_match),
-            ("unit_declarations_json", unit_declarations_json),
-            ("units_file", units_file),
+            ("unit_metadata_json", unit_metadata_json),
+            ("unit_metadata_file", unit_metadata_file),
         ]
         if v is not None
     }
@@ -270,22 +270,23 @@ def run_aidrin_metric(
 def verify_variable_units(
     file_path: str,
     file_type: str | None = None,
-    unit_declarations_json: str | None = None,
-    units_file: str | None = None,
+    unit_metadata_json: str | None = None,
+    unit_metadata_file: str | None = None,
     endpoint: str | None = None,
     profile: str | None = None,
 ) -> str:
-    """Verify unit-readiness metadata for every logical dataset variable.
+    """Audit or resolve unit metadata and return the canonical sidecar.
 
-    Provide at most one mapping source. ``units_file`` is resolved on the host
-    where the metric executes, including a selected Globus endpoint.
+    Provide at most one sidecar source. ``unit_metadata_file`` is resolved on
+    the execution host, including a selected Globus endpoint. With no sidecar,
+    this performs a read-only audit of metadata already associated with the data.
     """
     result = _executor(endpoint, profile).run_metric(
         "variable-unit-validation",
         file_path,
         file_type=file_type,
-        unit_declarations_json=unit_declarations_json,
-        units_file=units_file,
+        unit_metadata_json=unit_metadata_json,
+        unit_metadata_file=unit_metadata_file,
         strip_visualizations=True,
         save_images=False,
     )

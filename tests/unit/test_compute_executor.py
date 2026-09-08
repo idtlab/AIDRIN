@@ -72,18 +72,18 @@ class TestCommandShaping(unittest.TestCase):
         self.assertEqual(kwargs["metric_name"], "completeness")
         self.assertEqual(kwargs["columns"], ["a", "b"])
 
-    def test_run_metric_preserves_execution_host_units_file(self):
+    def test_run_metric_preserves_execution_host_unit_metadata_file(self):
         rec = _Recorder()
         with patch("aidrin.compute.executor.client", rec):
             ex = _executor(rec)
             ex.run_metric(
                 "variable-unit-validation",
                 "/scratch/data.csv",
-                units_file="/scratch/units.json",
+                unit_metadata_file="/scratch/data.units.json",
             )
         _endpoint, command, kwargs = rec.submitted[0]
         self.assertEqual(command, "run_metric")
-        self.assertEqual(kwargs["units_file"], "/scratch/units.json")
+        self.assertEqual(kwargs["unit_metadata_file"], "/scratch/data.units.json")
 
     def test_data_quality_command(self):
         rec = _Recorder()
