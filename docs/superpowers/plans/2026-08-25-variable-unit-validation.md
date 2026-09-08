@@ -28,7 +28,7 @@ user confirmation rather than silently changing metadata.
 - [x] Preserve a Physical Unit draft while the user enters its unit.
 - [x] Require deterministic revalidation before downloading edited metadata.
 - [x] Publish and test a normative JSON Schema.
-- [ ] Complete full repository validation and final diff audit.
+- [x] Complete full repository validation and final diff audit.
 
 ## Deterministic behavior
 

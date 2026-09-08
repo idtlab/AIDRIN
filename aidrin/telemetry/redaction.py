@@ -89,8 +89,18 @@ HEADLINE = {
         "aidrin.structure.total_features": ("Total features",),
     },
     "variable_unit_validation": {
-        "aidrin.structure.unit_coverage": ("coverage_score",),
-        "aidrin.structure.unit_validity": ("validity_score",),
+        "aidrin.structure.unit_classification_coverage": (
+            "summary",
+            "classification_coverage",
+        ),
+        "aidrin.structure.applicable_unit_coverage": (
+            "summary",
+            "applicable_unit_coverage",
+        ),
+        "aidrin.structure.unit_metadata_validity": (
+            "summary",
+            "metadata_validity",
+        ),
     },
     "feature_coverage_ratio": {
         "aidrin.quality.feature_coverage_ratio": ("Feature Coverage Ratio (%)",),
