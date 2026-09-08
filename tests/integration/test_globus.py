@@ -125,27 +125,31 @@ def test_remote_runner_custom_outlier_targets():
 
     assert result["success"] is True
     assert any(target["name"] == "age" for target in result["targets"])
-    assert [target["name"] for target in result["unit_targets"]] == ["age", "label"]
+    assert [variable["name"] for variable in result["unit_metadata"]["variables"]] == ["age", "label"]
 
 
 def test_remote_runner_data_structure_variable_unit_validation():
     path, name, file_type = _write_csv(pd.DataFrame({"speed": [1.0], "station": ["A"]}))
     try:
+        sidecar = aidrin.calculate_variable_unit_validation((path, name, file_type))
+        resolutions = {
+            "speed": {"kind": "unit", "unit": "m/s", "source": "user"},
+            "station": {"kind": "not_applicable", "source": "user"},
+        }
+        for variable in sidecar["variables"]:
+            variable["resolution"] = resolutions[variable["name"]]
         result = remote_metric_runner(
             "data_structure",
             path,
             name,
             file_type,
             selected=["variable_unit_validation"],
-            unit_declarations={
-                "speed": {"unit": "m/s"},
-                "station": {"status": "not_applicable"},
-            },
+            unit_metadata=sidecar,
         )
     finally:
         os.unlink(path)
 
-    assert result["Variable Unit Validation"]["all_variables_ready"] is True
+    assert result["Variable Unit Validation"]["summary"]["all_variables_ready"] is True
 
 
 def test_remote_runner_data_quality_custom_outliers():
@@ -219,7 +223,7 @@ def test_remote_env_probe_reports_versions():
     info = remote_env_probe()
     assert info["aidrin_version"] == aidrin.__version__
     assert info["python_version"] == ".".join(map(str, sys.version_info[:3]))
-    assert "variable_unit_validation_v1" in info["capabilities"]
+    assert "variable_unit_metadata_v1" in info["capabilities"]
 
 
 # -------------------------------------------------
@@ -262,12 +266,12 @@ def test_check_endpoint_compatibility_preserves_worker_capabilities():
     client = _FakeClient({
         "aidrin_version": aidrin.__version__,
         "python_version": local_py,
-        "capabilities": ["variable_unit_validation_v1"],
+        "capabilities": ["variable_unit_metadata_v1"],
     })
 
     report = check_endpoint_compatibility(client, "endpoint-uuid")
 
-    assert report["remote"]["capabilities"] == ["variable_unit_validation_v1"]
+    assert report["remote"]["capabilities"] == ["variable_unit_metadata_v1"]
 
 
 def test_check_endpoint_compatibility_aidrin_mismatch():

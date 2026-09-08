@@ -128,7 +128,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Variable Unit Validation"] = (
                 aidrin.calculate_variable_unit_validation(
                     file_info,
-                    params.get("unit_declarations"),
+                    params.get("unit_metadata"),
                 )
             )
         return result
@@ -136,13 +136,10 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     def _custom_outlier_targets():
         """Discover selectable custom-outlier targets on the remote file."""
         from aidrin.file_handling.value_iterators import iter_targets
-        from aidrin.structured_data_metrics.variable_unit_validation import (
-            discover_variable_units,
-        )
         return {
             "success": True,
             "targets": iter_targets(file_info),
-            "unit_targets": discover_variable_units(file_info),
+            "unit_metadata": aidrin.calculate_variable_unit_validation(file_info),
         }
 
     def _summary_statistics():
@@ -407,7 +404,7 @@ def remote_env_probe():
         "aidrin_version": aidrin.__version__,
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "headless_import": headless_import,
-        "capabilities": ["variable_unit_validation_v1"],
+        "capabilities": ["variable_unit_metadata_v1"],
     }
 
 

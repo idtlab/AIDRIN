@@ -20,6 +20,9 @@ from aidrin.mcp.server import (  # noqa: E402
     verify_file_references,
     verify_variable_units,
 )
+from aidrin.structured_data_metrics.variable_unit_validation import (  # noqa: E402
+    calculate_variable_unit_validation,
+)
 
 
 def _write_csv() -> str:
@@ -76,30 +79,39 @@ def test_generic_mcp_tool_accepts_rules_file():
 def test_variable_unit_mcp_tools_are_equivalent(tmp_path):
     dataset = tmp_path / "data.csv"
     pd.DataFrame({"speed": [1.0]}).to_csv(dataset, index=False)
-    mapping = json.dumps({"speed": {"unit": "m/s"}})
+    sidecar = calculate_variable_unit_validation((str(dataset), dataset.name, ".csv"))
+    sidecar["variables"][0]["resolution"] = {
+        "kind": "unit",
+        "unit": "m/s",
+        "source": "user",
+    }
+    metadata_json = json.dumps(sidecar)
 
-    dedicated = json.loads(verify_variable_units(str(dataset), unit_declarations_json=mapping))
+    dedicated = json.loads(verify_variable_units(str(dataset), unit_metadata_json=metadata_json))
     generic = json.loads(run_aidrin_metric(
         str(dataset),
         "variable-unit-validation",
-        unit_declarations_json=mapping,
+        unit_metadata_json=metadata_json,
     ))
 
     assert dedicated == generic
-    assert dedicated["all_variables_ready"] is True
+    assert dedicated["summary"]["all_variables_ready"] is True
 
 
 def test_variable_unit_mcp_rejects_multiple_sources(tmp_path):
     dataset = tmp_path / "data.csv"
-    units = tmp_path / "units.json"
+    metadata = tmp_path / "data.units.json"
     pd.DataFrame({"speed": [1.0]}).to_csv(dataset, index=False)
-    units.write_text(json.dumps({"speed": {"unit": "m/s"}}), encoding="utf-8")
+    metadata.write_text(
+        json.dumps(calculate_variable_unit_validation((str(dataset), dataset.name, ".csv"))),
+        encoding="utf-8",
+    )
 
-    with pytest.raises(ValueError, match="at most one variable-unit mapping source"):
+    with pytest.raises(ValueError, match="at most one variable-unit metadata source"):
         verify_variable_units(
             str(dataset),
-            unit_declarations_json="{}",
-            units_file=str(units),
+            unit_metadata_json="{}",
+            unit_metadata_file=str(metadata),
         )
 
 
@@ -303,21 +315,21 @@ class TestMcpRemoteRouting(unittest.TestCase):
         self.assertEqual(payload["path_targets"], "file_path")
         self.assertEqual(payload["base_dir"], "/data/project")
 
-    def test_variable_unit_tool_routes_mapping_file_to_endpoint(self):
+    def test_variable_unit_tool_routes_metadata_file_to_endpoint(self):
         from aidrin.mcp import server
 
         with patch("aidrin.compute.client.get_client", return_value="stub"), \
              patch("aidrin.compute.client.submit", return_value="task-1") as submit, \
-             patch("aidrin.compute.client.poll", return_value={"all_variables_ready": True}):
+             patch("aidrin.compute.client.poll", return_value={"summary": {"all_variables_ready": True}}):
             server.verify_variable_units(
                 file_path="/scratch/data.csv",
-                units_file="/scratch/units.json",
+                unit_metadata_file="/scratch/data.units.json",
                 endpoint="uuid-9",
             )
 
         payload = submit.call_args[0][3]
         self.assertEqual(payload["metric_name"], "variable-unit-validation")
-        self.assertEqual(payload["units_file"], "/scratch/units.json")
+        self.assertEqual(payload["unit_metadata_file"], "/scratch/data.units.json")
 
     def test_list_remote_profiles_returns_json(self):
         from aidrin.mcp import server
