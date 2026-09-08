@@ -3,7 +3,7 @@
   <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Unit Metadata Audit and Repair</h2>
     <p class="text-sm text-gray-500 dark:text-gray-400">
-      Audit every variable, resolve missing or incorrect unit metadata, and download a sidecar JSON without changing the source dataset.
+      Audit every variable and resolve missing or incorrect unit metadata. Units are stored in a separate JSON file; the source dataset is never modified.
     </p>
     <form id="form-variable-unit-validation" method="post" enctype="multipart/form-data">
       <input type="hidden" name="variable_unit_validation" value="yes" />
@@ -16,12 +16,12 @@
         <div class="flex flex-wrap items-center gap-2">
           <label class="sr-only" for="variable-unit-search">Search variables</label>
           <input type="search" id="variable-unit-search" placeholder="Search variables..." class="min-w-48 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-          <button type="button" id="variable-unit-import-button" onclick="document.getElementById('variable-unit-import-file').click()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 dark:border-gray-600 dark:text-gray-200">Import sidecar</button>
-          <input type="file" id="variable-unit-import-file" accept="application/json,.json" class="hidden" />
-          <button type="button" id="variable-unit-download" onclick="downloadVariableUnitMetadata()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-200" disabled>Download sidecar</button>
+          <button type="button" id="variable-unit-import-button" onclick="document.getElementById('variable-unit-import-file').click()" title="Import an AIDRIN unit metadata JSON file for this dataset. Validate it before downloading." aria-label="Import an AIDRIN unit metadata JSON file for this dataset" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 dark:border-gray-600 dark:text-gray-200">Import JSON</button>
+          <input type="file" id="variable-unit-import-file" accept="application/json,.json" aria-label="Choose a unit metadata JSON file" class="hidden" />
+          <button type="button" id="variable-unit-download" onclick="downloadVariableUnitMetadata()" title="Download the validated unit metadata as a .units.json file. The source dataset is not modified." aria-label="Download the validated unit metadata JSON file" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-200" disabled>Download JSON</button>
         </div>
         <p id="variable-unit-dirty-message" class="hidden text-xs text-amber-700 dark:text-amber-300">
-          Changes have not been validated. Validate them before downloading the updated sidecar.
+          Changes have not been validated. Validate them before downloading the updated JSON.
         </p>
         <p class="text-xs text-gray-500 dark:text-gray-400">
           For each variable needing review, choose <strong>Has a physical unit</strong> and enter it,

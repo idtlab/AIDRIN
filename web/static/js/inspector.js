@@ -456,7 +456,7 @@ function updateVariableUnitAuditSummary() {
   const progress = document.getElementById("variable-unit-progress");
   if (progress && variableUnitMetadataDirty) {
     progress.textContent =
-      "Validate the changes to refresh findings and enable the sidecar download.";
+      "Validate the changes to refresh findings and enable the JSON download.";
   } else if (progress && total) {
     const accounted = total - unresolved;
     progress.textContent = `${accounted} of ${total} variables accounted for. Source data has not been changed.`;
@@ -687,7 +687,7 @@ function importVariableUnitMetadata(file) {
         !Array.isArray(parsed.variables)
       ) {
         throw new Error(
-          "Select an AIDRIN variable-unit metadata sidecar version 1.",
+          "Select an AIDRIN unit metadata JSON file (version 1).",
         );
       }
       setVariableUnitMetadata(parsed);
