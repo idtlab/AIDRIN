@@ -32,6 +32,177 @@ _READY_STATUSES = {"valid", "dimensionless", "not_applicable"}
 _RESOLUTION_KINDS = {"unit", "dimensionless", "not_applicable", "unresolved"}
 _RESOLUTION_SOURCES = {"detected", "user", "none"}
 
+_UNIT_ALIASES = {
+    "%": "percent",
+    "% rh": "percent",
+    "celsius": "degree_Celsius",
+    "celsius degree": "degree_Celsius",
+    "celsius degrees": "degree_Celsius",
+    "centigrade": "degree_Celsius",
+    "degree celsius": "degree_Celsius",
+    "degrees celsius": "degree_Celsius",
+    "degc": "degree_Celsius",
+    "°c": "degree_Celsius",
+    "fahrenheit": "degree_Fahrenheit",
+    "fahrenheit degree": "degree_Fahrenheit",
+    "fahrenheit degrees": "degree_Fahrenheit",
+    "degree fahrenheit": "degree_Fahrenheit",
+    "degrees fahrenheit": "degree_Fahrenheit",
+    "degf": "degree_Fahrenheit",
+    "°f": "degree_Fahrenheit",
+    "percent relative humidity": "percent",
+    "percent rh": "percent",
+    "relative humidity percent": "percent",
+    "rh %": "percent",
+    "rh percent": "percent",
+    "[g]": "standard_gravity",
+}
+
+_UNIT_SUGGESTION_GROUPS = (
+    {
+        "quantity": "temperature",
+        "variable_terms": ("temperature", "temp"),
+        "units": (
+            ("Celsius (°C)", "degree_Celsius"),
+            ("Fahrenheit (°F)", "degree_Fahrenheit"),
+            ("Kelvin (K)", "kelvin"),
+        ),
+    },
+    {
+        "quantity": "humidity",
+        "variable_terms": ("humidity", "humid", "rh"),
+        "units": (("Percent (%)", "percent"),),
+    },
+    {
+        "quantity": "pressure",
+        "variable_terms": ("pressure", "press", "barometric", "barometer"),
+        "units": (
+            ("Pascal (Pa)", "pascal"),
+            ("Kilopascal (kPa)", "kilopascal"),
+            ("Hectopascal (hPa)", "hectopascal"),
+            ("Bar (bar)", "bar"),
+            ("Pounds per square inch (psi)", "psi"),
+            ("Atmosphere (atm)", "atmosphere"),
+        ),
+    },
+    {
+        "quantity": "length",
+        "variable_terms": ("length", "distance", "height", "width", "depth", "radius", "diameter", "altitude", "elevation"),
+        "units": (
+            ("Meter (m)", "meter"),
+            ("Kilometer (km)", "kilometer"),
+            ("Centimeter (cm)", "centimeter"),
+            ("Millimeter (mm)", "millimeter"),
+            ("Inch (in)", "inch"),
+            ("Foot (ft)", "foot"),
+            ("Mile (mi)", "mile"),
+        ),
+    },
+    {
+        "quantity": "time",
+        "variable_terms": ("duration", "elapsed", "latency", "interval", "time"),
+        "units": (
+            ("Second (s)", "second"),
+            ("Millisecond (ms)", "millisecond"),
+            ("Microsecond (µs)", "microsecond"),
+            ("Minute (min)", "minute"),
+            ("Hour (h)", "hour"),
+            ("Day (d)", "day"),
+        ),
+    },
+    {
+        "quantity": "mass",
+        "variable_terms": ("mass", "weight"),
+        "units": (
+            ("Kilogram (kg)", "kilogram"),
+            ("Gram (g)", "gram"),
+            ("Milligram (mg)", "milligram"),
+            ("Pound (lb)", "pound"),
+        ),
+    },
+    {
+        "quantity": "speed",
+        "variable_terms": ("speed", "velocity"),
+        "units": (
+            ("Meters per second (m/s)", "meter/second"),
+            ("Kilometers per hour (km/h)", "kilometer/hour"),
+            ("Miles per hour (mph)", "mile/hour"),
+        ),
+    },
+    {
+        "quantity": "acceleration",
+        "variable_terms": ("acceleration", "accel"),
+        "units": (
+            ("Meters per second squared (m/s²)", "meter/second**2"),
+            ("Standard gravity (g₀)", "standard_gravity"),
+        ),
+    },
+    {
+        "quantity": "volume",
+        "variable_terms": ("volume", "capacity"),
+        "units": (
+            ("Liter (L)", "liter"),
+            ("Milliliter (mL)", "milliliter"),
+            ("Cubic meter (m³)", "meter**3"),
+        ),
+    },
+    {
+        "quantity": "energy",
+        "variable_terms": ("energy",),
+        "units": (
+            ("Joule (J)", "joule"),
+            ("Kilojoule (kJ)", "kilojoule"),
+            ("Kilowatt-hour (kWh)", "kilowatt_hour"),
+        ),
+    },
+    {
+        "quantity": "power",
+        "variable_terms": ("power",),
+        "units": (("Watt (W)", "watt"), ("Kilowatt (kW)", "kilowatt")),
+    },
+    {
+        "quantity": "frequency",
+        "variable_terms": ("frequency", "freq"),
+        "units": (("Hertz (Hz)", "hertz"),),
+    },
+    {
+        "quantity": "voltage",
+        "variable_terms": ("voltage",),
+        "units": (("Volt (V)", "volt"),),
+    },
+    {
+        "quantity": "current",
+        "variable_terms": ("current", "amperage"),
+        "units": (("Ampere (A)", "ampere"),),
+    },
+    {
+        "quantity": "angle",
+        "variable_terms": ("angle", "rotation", "bearing"),
+        "units": (("Degree (°)", "degree"), ("Radian (rad)", "radian")),
+    },
+)
+
+
+def unit_suggestion_catalog() -> List[Dict[str, Any]]:
+    """Return curated, Pint-validated unit choices for editable clients."""
+    return [
+        {
+            "quantity": group["quantity"],
+            "variable_terms": list(group["variable_terms"]),
+            "units": [
+                {"label": label, "unit": unit}
+                for label, unit in group["units"]
+            ],
+        }
+        for group in _UNIT_SUGGESTION_GROUPS
+    ]
+
+
+def _canonicalize_unit(unit: str) -> str:
+    stripped = unit.strip()
+    key = re.sub(r"\s+", " ", stripped).casefold()
+    return _UNIT_ALIASES.get(key, stripped)
+
 
 def _decode_metadata(value: Any) -> str:
     if isinstance(value, bytes):
@@ -165,7 +336,8 @@ def _schema_fingerprint(targets: List[Dict[str, Any]]) -> str:
 
 def _parse_unit(unit: str) -> Dict[str, Any]:
     original = unit
-    if unit.strip() == "g":
+    stripped = unit.strip()
+    if stripped == "g":
         return {
             "status": "ambiguous",
             "original_unit": original,
@@ -173,7 +345,7 @@ def _parse_unit(unit: str) -> Dict[str, Any]:
             "dimensionality": None,
             "message": "Bare 'g' is ambiguous. Use 'gram' for mass or '[g]', 'g_0', or 'standard_gravity' for acceleration.",
         }
-    if "//" in unit:
+    if "//" in stripped:
         return {
             "status": "invalid",
             "original_unit": original,
@@ -182,7 +354,7 @@ def _parse_unit(unit: str) -> Dict[str, Any]:
             "message": "Unit contains the unsupported floor-division operator '//'. Use '/' for division.",
         }
 
-    parse_value = "standard_gravity" if unit.strip() == "[g]" else unit.strip()
+    parse_value = _canonicalize_unit(stripped)
     try:
         parsed = _UNIT_REGISTRY.Unit(parse_value)
     except Exception as exc:
@@ -201,6 +373,7 @@ def _parse_unit(unit: str) -> Dict[str, Any]:
         "normalized_unit": format(parsed, "~"),
         "dimensionality": str(parsed.dimensionality),
         "message": "Dimensionless variable is explicitly declared with '1'." if status == "dimensionless" else "Unit is recognized by Pint.",
+        "_canonical_unit": parse_value,
         "_parsed": parsed,
     }
 
@@ -246,7 +419,7 @@ def _validate_resolution(name: str, resolution: Any) -> Dict[str, Any]:
     if kind == "unit":
         if not isinstance(unit, str) or not unit.strip():
             raise ValueError(f"Unit resolution for {name!r} must contain a non-empty unit")
-        return {"kind": kind, "unit": unit.strip(), "source": source}
+        return {"kind": kind, "unit": _canonicalize_unit(unit), "source": source}
     if kind == "dimensionless":
         if unit != "1":
             raise ValueError(f"Dimensionless resolution for {name!r} must use unit '1'")
@@ -306,7 +479,8 @@ def _validate_sidecar(
 
 def _detected_resolution(candidate: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[str, Any]:
     kind = "dimensionless" if parsed["status"] == "dimensionless" else "unit"
-    return {"kind": kind, "unit": candidate["unit"], "source": "detected"}
+    unit = parsed.get("_canonical_unit", candidate["unit"])
+    return {"kind": kind, "unit": unit, "source": "detected"}
 
 
 def _is_current_detected_resolution(
@@ -315,7 +489,7 @@ def _is_current_detected_resolution(
 ) -> bool:
     if resolution.get("source") != "detected" or resolution.get("kind") not in {"unit", "dimensionless"}:
         return False
-    return any(resolution["unit"] == candidate["unit"] for candidate in candidates)
+    return any(resolution["unit"] == _canonicalize_unit(candidate["unit"]) for candidate in candidates)
 
 
 def _record_for_target(
@@ -454,5 +628,6 @@ __all__ = [
     "UNIT_VOCABULARY",
     "calculate_variable_unit_validation",
     "discover_variable_units",
+    "unit_suggestion_catalog",
     "variable_unit_validation",
 ]
