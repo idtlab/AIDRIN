@@ -136,10 +136,15 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     def _custom_outlier_targets():
         """Discover selectable custom-outlier targets on the remote file."""
         from aidrin.file_handling.value_iterators import iter_targets
+        from aidrin.structured_data_metrics.variable_unit_validation import (
+            unit_suggestion_catalog,
+        )
+
         return {
             "success": True,
             "targets": iter_targets(file_info),
             "unit_metadata": aidrin.calculate_variable_unit_validation(file_info),
+            "unit_catalog": unit_suggestion_catalog(),
         }
 
     def _summary_statistics():

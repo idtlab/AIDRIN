@@ -292,6 +292,23 @@ def test_variable_unit_editor_preserves_physical_unit_draft_until_entry():
     assert "input.dataset.variableUnitName === name" in update
 
 
+def test_variable_unit_editor_builds_editable_ranked_unit_combobox():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    choices_start = source.index("function variableUnitChoices(variableName)")
+    choices_end = source.index("function syncVariableUnitMetadata()", choices_start)
+    choices = source[choices_start:choices_end]
+    editor_start = source.index("function renderVariableUnitEditor()")
+    editor_end = source.index("function setVariableUnitEditorEnabled", editor_start)
+    editor = source[editor_start:editor_end]
+
+    assert "matchedQuantities" in choices
+    assert "...matched" in choices
+    assert 'document.createElement("datalist")' in editor
+    assert 'unitInput.setAttribute("list", list.id)' in editor
+    assert 'unitInput.setAttribute("aria-autocomplete", "list")' in editor
+    assert 'unitInput.placeholder = "Choose or type a unit"' in editor
+
+
 def test_variable_unit_globus_control_is_capability_gated_and_serialized():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     inspector = (REPO_ROOT / "web" / "templates" / "inspector.html").read_text(

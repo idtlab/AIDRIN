@@ -126,6 +126,7 @@ def test_remote_runner_custom_outlier_targets():
     assert result["success"] is True
     assert any(target["name"] == "age" for target in result["targets"])
     assert [variable["name"] for variable in result["unit_metadata"]["variables"]] == ["age", "label"]
+    assert any(group["quantity"] == "temperature" for group in result["unit_catalog"])
 
 
 def test_remote_runner_data_structure_variable_unit_validation():

@@ -48,6 +48,7 @@ from aidrin.structured_data_metrics.max_pairwise_correlation import (
 from aidrin.structured_data_metrics.skewness import skewness
 from aidrin.structured_data_metrics.variable_unit_validation import (
     calculate_variable_unit_validation,
+    unit_suggestion_catalog,
 )
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
@@ -213,6 +214,7 @@ def custom_outlier_targets():
             "success": True,
             "targets": ensure_json_serializable(targets),
             "unit_metadata": ensure_json_serializable(unit_metadata),
+            "unit_catalog": unit_suggestion_catalog(),
             "file_reference": file_reference,
         })
     except Exception as e:

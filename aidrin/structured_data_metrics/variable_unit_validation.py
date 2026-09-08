@@ -87,7 +87,17 @@ _UNIT_SUGGESTION_GROUPS = (
     },
     {
         "quantity": "length",
-        "variable_terms": ("length", "distance", "height", "width", "depth", "radius", "diameter", "altitude", "elevation"),
+        "variable_terms": (
+            "length",
+            "distance",
+            "height",
+            "width",
+            "depth",
+            "radius",
+            "diameter",
+            "altitude",
+            "elevation",
+        ),
         "units": (
             ("Meter (m)", "meter"),
             ("Kilometer (km)", "kilometer"),

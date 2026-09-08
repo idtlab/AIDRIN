@@ -133,6 +133,15 @@ all_variables_ready
 Unit parsing
 ------------
 
+The web editor offers a curated list of common units, ranked using simple terms in the
+variable name (for example, temperature or pressure). These are suggestions only: AIDRIN
+does not silently assign a unit or infer one from the observed values. Users can select a
+suggestion or enter any Pint-compatible unit expression.
+
+Common human-readable aliases such as ``Celsius degree``, ``degrees Celsius``, and
+``% RH`` are accepted and stored using a canonical Pint-compatible spelling. This keeps
+the sidecar interoperable while making manual entry less exacting.
+
 Pint parses and normalizes unit expressions. AIDRIN accepts forms such as
 m/s^2, m/s², standard_gravity, g_0, and 1. Bare g is rejected as ambiguous:
 use gram for mass or [g], g_0, or standard_gravity for acceleration. AIDRIN

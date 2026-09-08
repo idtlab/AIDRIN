@@ -40,6 +40,7 @@ function _readinessTruncatedListItems(items, maxItems, renderItem) {
 let customOutlierTargets = [];
 let fileReferenceTargets = [];
 let variableUnitMetadata = null;
+let variableUnitCatalog = [];
 let variableUnitDraftKinds = {};
 let variableUnitMetadataDirty = false;
 let variableUnitPage = 0;
@@ -334,6 +335,7 @@ function loadFileReferenceOptions() {
   return fetch("/custom-outlier-targets", { method: "POST" })
     .then((response) => response.json())
     .then((data) => {
+      setVariableUnitCatalog(data.unit_catalog || []);
       setVariableUnitMetadata(data.unit_metadata || null);
       const config = data.file_reference || {};
       if (!data.success || !config.enabled) {
@@ -421,6 +423,49 @@ function setVariableUnitMetadata(metadata) {
   renderVariableUnitEditor();
   setVariableUnitEditorEnabled(true);
   updateVariableUnitAuditSummary();
+}
+
+function setVariableUnitCatalog(catalog) {
+  variableUnitCatalog = Array.isArray(catalog)
+    ? catalog.filter(
+        (group) =>
+          group &&
+          typeof group.quantity === "string" &&
+          Array.isArray(group.variable_terms) &&
+          Array.isArray(group.units),
+      )
+    : [];
+}
+
+function variableUnitChoices(variableName) {
+  const normalizedName = String(variableName || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+  const tokens = new Set(normalizedName.split(/[^a-z0-9]+/).filter(Boolean));
+  const matched = variableUnitCatalog.filter((group) =>
+    group.variable_terms.some((term) => tokens.has(String(term).toLowerCase())),
+  );
+  const matchedQuantities = new Set(matched.map((group) => group.quantity));
+  const orderedGroups = [
+    ...matched,
+    ...variableUnitCatalog.filter(
+      (group) => !matchedQuantities.has(group.quantity),
+    ),
+  ];
+  const seen = new Set();
+  const choices = [];
+  orderedGroups.forEach((group) => {
+    const suggested = matchedQuantities.has(group.quantity);
+    group.units.forEach((item) => {
+      if (!item || typeof item.unit !== "string" || seen.has(item.unit)) return;
+      seen.add(item.unit);
+      choices.push({
+        unit: item.unit,
+        label: `${suggested ? "Suggested" : group.quantity}: ${item.label || item.unit}`,
+      });
+    });
+  });
+  return choices;
 }
 
 function syncVariableUnitMetadata() {
@@ -536,7 +581,7 @@ function renderVariableUnitEditor() {
   );
   body.replaceChildren();
 
-  pageTargets.forEach((variable) => {
+  pageTargets.forEach((variable, rowIndex) => {
     const row = document.createElement("tr");
     row.className = "border-t border-gray-200 dark:border-gray-700";
     const kind = variableUnitResolutionKind(variable);
@@ -585,12 +630,29 @@ function renderVariableUnitEditor() {
     const unitInput = document.createElement("input");
     unitInput.type = "text";
     unitInput.setAttribute("aria-label", `Unit for ${variable.name}`);
+    unitInput.setAttribute("aria-autocomplete", "list");
+    unitInput.autocomplete = "off";
     unitInput.value = kind === "unit" ? resolution.unit || "" : "";
-    unitInput.placeholder = "e.g. m/s^2";
+    unitInput.placeholder = "Choose or type a unit";
+    unitInput.title =
+      "Choose a common unit or type any Pint-compatible unit expression.";
     unitInput.disabled = kind !== "unit";
     unitInput.dataset.variableUnitName = variable.name;
     unitInput.className =
-      "w-32 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-xs disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800";
+      "w-48 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-xs disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800";
+    const choices = variableUnitChoices(variable.name);
+    if (choices.length) {
+      const list = document.createElement("datalist");
+      list.id = `variable-unit-choices-${variableUnitPage}-${rowIndex}`;
+      choices.forEach((choice) => {
+        const option = document.createElement("option");
+        option.value = choice.unit;
+        option.label = choice.label;
+        list.appendChild(option);
+      });
+      unitInput.setAttribute("list", list.id);
+      unitCell.appendChild(list);
+    }
     unitCell.appendChild(unitInput);
     const finding =
       kind === "unit" && !String(unitInput.value).trim()
@@ -2623,6 +2685,7 @@ function loadGlobusCustomOutlierTargets(message) {
     .then((result) => {
       if (result && result.success) {
         customOutlierTargets = result.targets || [];
+        setVariableUnitCatalog(result.unit_catalog || []);
         setVariableUnitMetadata(result.unit_metadata);
         updateCustomOutlierTargetOptions();
         if (message) message.classList.add("hidden");
