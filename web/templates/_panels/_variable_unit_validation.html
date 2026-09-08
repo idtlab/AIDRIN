@@ -20,9 +20,6 @@
           <input type="file" id="variable-unit-import-file" accept="application/json,.json" aria-label="Choose a unit metadata JSON file" class="hidden" />
           <button type="button" id="variable-unit-download" onclick="downloadVariableUnitMetadata()" title="Download the validated unit metadata as a .units.json file. The source dataset is not modified." aria-label="Download the validated unit metadata JSON file" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-200" disabled>Download JSON</button>
         </div>
-        <p id="variable-unit-dirty-message" class="hidden text-xs text-amber-700 dark:text-amber-300">
-          Changes have not been validated. Validate them before downloading the updated JSON.
-        </p>
         <p class="text-xs text-gray-500 dark:text-gray-400">
           For each variable needing review, choose <strong>Has a physical unit</strong> and enter it,
           choose <strong>Dimensionless</strong> for unitless quantities, or choose
