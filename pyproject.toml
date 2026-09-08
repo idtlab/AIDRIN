@@ -151,6 +151,7 @@ dev = [
     "pytest>=7.0",
     "flake8>=6.0",
     "pytest-cov>=4.0",
+    "jsonschema>=4.0",
 ]
 docs = [
     "sphinx==8.1.3",

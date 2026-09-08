@@ -87,12 +87,13 @@ The local stdio MCP server intentionally does not apply the web interface's
 configured root allowlist. It uses the filesystem permissions of the account
 that started ``aidrin-mcp`` and should be connected only to trusted clients.
 
-Variable units can be checked with ``verify_variable_units`` or with
-``run_aidrin_metric`` using ``variable-unit-validation``. Supply at most one of
-``unit_declarations_json`` and ``units_file``. The latter is resolved on the
-execution host, including a selected remote endpoint. See
-:ref:`variable_unit_validation` for the exact mapping schema and ambiguity
-rules.
+Variable units can be audited with ``verify_variable_units`` or with
+``run_aidrin_metric`` using ``variable-unit-validation``. With no sidecar,
+the tools return an audit of existing metadata. Supply at most one of
+``unit_metadata_json`` and ``unit_metadata_file`` to apply resolutions and
+revalidate the complete sidecar. File paths resolve on the execution host,
+including a selected remote endpoint. See :ref:`variable_unit_validation`
+for the canonical sidecar schema and deterministic validation rules.
 
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

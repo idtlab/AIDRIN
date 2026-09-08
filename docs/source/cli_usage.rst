@@ -150,9 +150,12 @@ Examples:
    aidrin run skewness /path/to/sample_dataset.csv
    aidrin run kurtosis /path/to/sample_dataset.csv
 
-   # Validate per-variable unit metadata from inline JSON or a reusable file
+   # Audit existing unit metadata and emit the canonical sidecar on stdout
+   aidrin run variable-unit-validation /path/to/sample_dataset.csv
+
+   # Apply resolutions from a sidecar and revalidate it
    aidrin run variable-unit-validation /path/to/sample_dataset.csv \
-     --units-file /path/to/units.json
+     --unit-metadata-file /path/to/sample_dataset.units.json
 
    # Data quality (completeness family — arguments are passed as named --flags)
    aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"

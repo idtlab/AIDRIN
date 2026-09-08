@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aidrin.readthedocs.io/en/latest/_static/variable-unit-metadata.schema.json",
+  "title": "AIDRIN Variable Unit Metadata",
+  "description": "A complete audit and repair artifact for unit metadata associated with a dataset.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "format",
+    "version",
+    "unit_vocabulary",
+    "dataset",
+    "variables",
+    "summary"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://aidrin.readthedocs.io/en/latest/_static/variable-unit-metadata.schema.json"
+    },
+    "format": {
+      "const": "aidrin.variable-unit-metadata"
+    },
+    "version": {
+      "const": 1
+    },
+    "unit_vocabulary": {
+      "const": "pint"
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "file_type", "schema_fingerprint"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "file_type": {
+          "type": "string"
+        },
+        "schema_fingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/variable"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    }
+  },
+  "$defs": {
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "unit",
+        "normalized_unit",
+        "dimensionality",
+        "status",
+        "message"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "normalized_unit": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "dimensionality": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "status": {
+          "enum": ["valid", "invalid", "ambiguous", "dimensionless"]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "resolution": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "unit", "source"],
+          "properties": {
+            "kind": {
+              "const": "unit"
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "enum": ["detected", "user"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "unit", "source"],
+          "properties": {
+            "kind": {
+              "const": "dimensionless"
+            },
+            "unit": {
+              "const": "1"
+            },
+            "source": {
+              "enum": ["detected", "user"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "source"],
+          "properties": {
+            "kind": {
+              "const": "not_applicable"
+            },
+            "source": {
+              "const": "user"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "source"],
+          "properties": {
+            "kind": {
+              "const": "unresolved"
+            },
+            "source": {
+              "const": "none"
+            }
+          }
+        }
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "readiness",
+        "normalized_unit",
+        "dimensionality",
+        "message",
+        "warnings"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "valid",
+            "missing",
+            "invalid",
+            "ambiguous",
+            "conflicting",
+            "dimensionless",
+            "not_applicable"
+          ]
+        },
+        "readiness": {
+          "enum": ["ready", "not_ready"]
+        },
+        "normalized_unit": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "dimensionality": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "message": {
+          "type": "string"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "variable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "target_type",
+        "dtype",
+        "observed",
+        "resolution",
+        "finding"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dtype": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/observation"
+          }
+        },
+        "resolution": {
+          "$ref": "#/$defs/resolution"
+        },
+        "finding": {
+          "$ref": "#/$defs/finding"
+        }
+      }
+    },
+    "score": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "counts",
+        "classification_coverage",
+        "applicable_unit_coverage",
+        "metadata_validity",
+        "all_variables_ready"
+      ],
+      "properties": {
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "total",
+            "valid",
+            "missing",
+            "invalid",
+            "ambiguous",
+            "conflicting",
+            "dimensionless",
+            "not_applicable"
+          ],
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "valid": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "missing": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "invalid": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ambiguous": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "conflicting": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dimensionless": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "not_applicable": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "classification_coverage": {
+          "$ref": "#/$defs/score"
+        },
+        "applicable_unit_coverage": {
+          "$ref": "#/$defs/score"
+        },
+        "metadata_validity": {
+          "$ref": "#/$defs/score"
+        },
+        "all_variables_ready": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -119,6 +119,7 @@ agentic = [
 ]
 dev = [
     { name = "flake8" },
+    { name = "jsonschema" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -209,6 +210,7 @@ agentic = [
 ]
 dev = [
     { name = "flake8", specifier = ">=6.0" },
+    { name = "jsonschema", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=7.0" },
     { name = "pytest-cov", specifier = ">=4.0" },
 ]
