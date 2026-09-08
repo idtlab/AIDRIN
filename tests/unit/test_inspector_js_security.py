@@ -236,7 +236,7 @@ def test_variable_unit_editor_and_results_escape_dataset_metadata():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
 
     editor_start = source.index("function renderVariableUnitEditor()")
-    editor_end = source.index("function toggleVariableUnitEditor", editor_start)
+    editor_end = source.index("function setVariableUnitEditorEnabled", editor_start)
     editor = source[editor_start:editor_end]
     assert "cell.textContent = text" in editor
     assert "option.textContent = label" in editor
@@ -245,7 +245,7 @@ def test_variable_unit_editor_and_results_escape_dataset_metadata():
     result_end = source.index("function filterVariableUnitResults", result_start)
     result_renderer = source[result_start:result_end]
     assert "escapeHtml(formatValue(value))" in result_renderer
-    assert "escapeHtml(classification)" in result_renderer
+    assert "escapeHtml(status)" in result_renderer
 
 
 def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
@@ -259,7 +259,7 @@ def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
         "variable-unit-import-file",
         "variable-unit-prev",
         "variable-unit-next",
-        "variable-unit-declarations",
+        "variable-unit-metadata",
     ):
         assert f'id="{element_id}"' in panel
         assert f'id="{element_id}"' not in data_structure_panel
@@ -271,9 +271,20 @@ def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
         < data_structure_start
     )
     assert "const VARIABLE_UNIT_PAGE_SIZE = 10" in source
-    assert "function exportVariableUnitDeclarations()" in source
-    assert "function importVariableUnitDeclarations(file)" in source
+    assert "function downloadVariableUnitMetadata()" in source
+    assert "function importVariableUnitMetadata(file)" in source
     assert "function filterVariableUnitResults(select)" in source
+
+
+def test_variable_unit_editor_preserves_physical_unit_draft_until_entry():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    update_start = source.index("function updateVariableUnitResolution(")
+    update_end = source.index("function renderVariableUnitEditor()", update_start)
+    update = source[update_start:update_end]
+
+    assert 'variableUnitDraftKinds[name] = "unit"' in update
+    assert 'variable.resolution = { kind: "unresolved", source: "none" }' in update
+    assert "input.dataset.variableUnitName === name" in update
 
 
 def test_variable_unit_globus_control_is_capability_gated_and_serialized():
@@ -282,10 +293,10 @@ def test_variable_unit_globus_control_is_capability_gated_and_serialized():
         encoding="utf-8"
     )
 
-    assert 'capabilities.includes("variable_unit_validation_v1")' in source
+    assert 'capabilities.includes("variable_unit_metadata_v1")' in source
     assert "Upgrade and restart its AIDRIN worker" in source
-    assert "remoteParams.unit_declarations = variableUnitDeclarations" in source
-    assert "setVariableUnitTargets(result.unit_targets || [])" in source
+    assert "remoteParams.unit_metadata = variableUnitMetadata" in source
+    assert "setVariableUnitMetadata(result.unit_metadata)" in source
     assert "window.AIDRIN_GLOBUS_CAPABILITIES = {{ globus_capabilities | tojson }}" in inspector
 
 

@@ -39,8 +39,9 @@ function _readinessTruncatedListItems(items, maxItems, renderItem) {
 
 let customOutlierTargets = [];
 let fileReferenceTargets = [];
-let variableUnitTargets = [];
-let variableUnitDeclarations = {};
+let variableUnitMetadata = null;
+let variableUnitDraftKinds = {};
+let variableUnitMetadataDirty = false;
 let variableUnitPage = 0;
 const VARIABLE_UNIT_PAGE_SIZE = 10;
 let customOutlierRuleCounter = 0;
@@ -318,15 +319,12 @@ function loadFileReferenceOptions() {
   if (!checkbox) return Promise.resolve();
   if (window.AIDRIN_GLOBUS_MODE) {
     const capabilities = window.AIDRIN_GLOBUS_CAPABILITIES || [];
-    const unitCheckbox = document.getElementById(
-      "toggleButton_variable_unit_validation",
-    );
     const unitMessage = document.getElementById("variable-unit-message");
-    if (!capabilities.includes("variable_unit_validation_v1")) {
-      if (unitCheckbox) unitCheckbox.disabled = true;
+    if (!capabilities.includes("variable_unit_metadata_v1")) {
+      setVariableUnitEditorEnabled(false);
       if (unitMessage) {
         unitMessage.textContent =
-          "Variable-unit validation is unavailable on this endpoint. Upgrade and restart its AIDRIN worker.";
+          "Unit metadata audit is unavailable on this endpoint. Upgrade and restart its AIDRIN worker.";
       }
       return Promise.resolve();
     }
@@ -336,7 +334,7 @@ function loadFileReferenceOptions() {
   return fetch("/custom-outlier-targets", { method: "POST" })
     .then((response) => response.json())
     .then((data) => {
-      setVariableUnitTargets(data.unit_targets || []);
+      setVariableUnitMetadata(data.unit_metadata || null);
       const config = data.file_reference || {};
       if (!data.success || !config.enabled) {
         if (message) {
@@ -402,75 +400,120 @@ function loadFileReferenceOptions() {
     });
 }
 
-function preferredVariableUnitCandidate(target) {
-  const candidates = target?.unit_candidates || [];
-  return (
-    candidates.find((candidate) =>
-      String(candidate.source || "").startsWith("native"),
-    ) ||
-    candidates[0] ||
-    null
-  );
+function setVariableUnitMetadata(metadata) {
+  if (
+    !metadata ||
+    metadata.format !== "aidrin.variable-unit-metadata" ||
+    metadata.version !== 1 ||
+    !Array.isArray(metadata.variables)
+  ) {
+    setVariableUnitEditorEnabled(false);
+    const message = document.getElementById("variable-unit-message");
+    if (message)
+      message.textContent = "Unable to load the unit metadata audit.";
+    return;
+  }
+  variableUnitMetadata = metadata;
+  variableUnitDraftKinds = {};
+  variableUnitMetadataDirty = false;
+  variableUnitPage = 0;
+  syncVariableUnitMetadata();
+  renderVariableUnitEditor();
+  setVariableUnitEditorEnabled(true);
+  updateVariableUnitAuditSummary();
 }
 
-function setVariableUnitTargets(targets) {
-  variableUnitTargets = Array.isArray(targets) ? targets : [];
-  variableUnitDeclarations = {};
-  variableUnitTargets.forEach((target) => {
-    const candidate = preferredVariableUnitCandidate(target);
-    if (candidate?.unit) {
-      variableUnitDeclarations[target.name] = { unit: candidate.unit };
-    }
-  });
-  variableUnitPage = 0;
-  syncVariableUnitDeclarations();
-  renderVariableUnitEditor();
-  const checkbox = document.getElementById(
-    "toggleButton_variable_unit_validation",
-  );
-  if (checkbox) checkbox.disabled = false;
+function syncVariableUnitMetadata() {
+  const input = document.getElementById("variable-unit-metadata");
+  if (input)
+    input.value = variableUnitMetadata
+      ? JSON.stringify(variableUnitMetadata)
+      : "";
+}
+
+function updateVariableUnitAuditSummary() {
+  const summary = variableUnitMetadata?.summary || {};
+  const counts = summary.counts || {};
+  const total = Number(counts.total || 0);
+  const unresolved = Number(counts.missing || 0);
+  const problems =
+    Number(counts.invalid || 0) +
+    Number(counts.ambiguous || 0) +
+    Number(counts.conflicting || 0);
   const message = document.getElementById("variable-unit-message");
   if (message) {
-    message.textContent = variableUnitTargets.length
-      ? "Embedded and name-based declarations are prefilled. Classify every remaining variable before submitting."
-      : "No logical variables were discovered; validation will return null scores.";
+    if (variableUnitMetadataDirty) {
+      message.textContent =
+        "Unit metadata changes are pending deterministic validation.";
+    } else if (!total) {
+      message.textContent = "No logical variables were discovered.";
+    } else if (summary.all_variables_ready) {
+      message.textContent = `All ${total} variables have ready unit metadata.`;
+    } else {
+      message.textContent = `Audit found ${unresolved} unresolved and ${problems} problematic variable${unresolved + problems === 1 ? "" : "s"}.`;
+    }
   }
+  const progress = document.getElementById("variable-unit-progress");
+  if (progress && variableUnitMetadataDirty) {
+    progress.textContent =
+      "Validate the changes to refresh findings and enable the sidecar download.";
+  } else if (progress && total) {
+    const accounted = total - unresolved;
+    progress.textContent = `${accounted} of ${total} variables accounted for. Source data has not been changed.`;
+  }
+  const dirty = document.getElementById("variable-unit-dirty-message");
+  dirty?.classList.toggle("hidden", !variableUnitMetadataDirty);
+  const download = document.getElementById("variable-unit-download");
+  if (download) download.disabled = variableUnitMetadataDirty;
 }
 
-function syncVariableUnitDeclarations() {
-  const input = document.getElementById("variable-unit-declarations");
-  if (input) input.value = JSON.stringify(variableUnitDeclarations);
+function variableUnitResolutionKind(variable) {
+  return (
+    variableUnitDraftKinds[variable.name] ||
+    variable.resolution?.kind ||
+    "unresolved"
+  );
 }
 
-function variableUnitClassification(name) {
-  const declaration = variableUnitDeclarations[name];
-  if (!declaration) return "unclassified";
-  if (declaration.status === "not_applicable") return "not_applicable";
-  if (declaration.unit === "1") return "dimensionless";
-  return "unit";
-}
-
-function variableUnitStatus(name) {
-  const declaration = variableUnitDeclarations[name];
-  if (!declaration) return "Missing";
-  if (declaration.status === "not_applicable" || declaration.unit === "1")
-    return "Ready";
-  if (String(declaration.unit || "").trim() === "g") return "Ambiguous";
-  return declaration.unit ? "Will validate" : "Missing";
-}
-
-function updateVariableUnitDeclaration(name, classification, unit) {
-  if (classification === "not_applicable") {
-    variableUnitDeclarations[name] = { status: "not_applicable" };
-  } else if (classification === "dimensionless") {
-    variableUnitDeclarations[name] = { unit: "1" };
-  } else if (classification === "unit" && String(unit || "").trim()) {
-    variableUnitDeclarations[name] = { unit: String(unit).trim() };
+function updateVariableUnitResolution(name, kind, unit) {
+  const variable = variableUnitMetadata?.variables?.find(
+    (candidate) => candidate.name === name,
+  );
+  if (!variable) return;
+  const normalizedUnit = String(unit || "").trim();
+  if (kind === "unit" && !normalizedUnit) {
+    variableUnitDraftKinds[name] = "unit";
+    variable.resolution = { kind: "unresolved", source: "none" };
+  } else if (kind === "unit") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = {
+      kind: "unit",
+      unit: normalizedUnit,
+      source: "user",
+    };
+  } else if (kind === "dimensionless") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = {
+      kind: "dimensionless",
+      unit: "1",
+      source: "user",
+    };
+  } else if (kind === "not_applicable") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = { kind: "not_applicable", source: "user" };
   } else {
-    delete variableUnitDeclarations[name];
+    delete variableUnitDraftKinds[name];
+    variable.resolution = { kind: "unresolved", source: "none" };
   }
-  syncVariableUnitDeclarations();
+  variableUnitMetadataDirty = true;
+  syncVariableUnitMetadata();
   renderVariableUnitEditor();
+  updateVariableUnitAuditSummary();
+  if (kind === "unit" && !normalizedUnit) {
+    Array.from(document.querySelectorAll("input[data-variable-unit-name]"))
+      .find((input) => input.dataset.variableUnitName === name)
+      ?.focus();
+  }
 }
 
 function renderVariableUnitEditor() {
@@ -481,8 +524,9 @@ function renderVariableUnitEditor() {
   )
     .trim()
     .toLowerCase();
-  const filtered = variableUnitTargets.filter((target) =>
-    `${target.name} ${target.dtype || ""}`.toLowerCase().includes(query),
+  const variables = variableUnitMetadata?.variables || [];
+  const filtered = variables.filter((variable) =>
+    `${variable.name} ${variable.dtype || ""}`.toLowerCase().includes(query),
   );
   const pageCount = Math.max(
     1,
@@ -495,12 +539,14 @@ function renderVariableUnitEditor() {
   );
   body.replaceChildren();
 
-  pageTargets.forEach((target) => {
+  pageTargets.forEach((variable) => {
     const row = document.createElement("tr");
     row.className = "border-t border-gray-200 dark:border-gray-700";
-    const candidate = preferredVariableUnitCandidate(target);
-    const classification = variableUnitClassification(target.name);
-    const declaration = variableUnitDeclarations[target.name] || {};
+    const kind = variableUnitResolutionKind(variable);
+    const resolution = variable.resolution || {};
+    const observed = (variable.observed || [])
+      .map((item) => `${item.unit} (${item.source})`)
+      .join(", ");
 
     const addCell = (text, className) => {
       const cell = document.createElement("td");
@@ -509,44 +555,63 @@ function renderVariableUnitEditor() {
       row.appendChild(cell);
       return cell;
     };
-    addCell(target.name, "px-2 py-2 font-medium text-gray-900 dark:text-white");
-    addCell(target.dtype || "unknown");
-    addCell(candidate?.source || "None");
+    addCell(
+      variable.name,
+      "px-2 py-2 font-medium text-gray-900 dark:text-white",
+    );
+    addCell(variable.dtype || "unknown");
+    addCell(observed || "None");
 
-    const classificationCell = addCell("");
+    const resolutionCell = addCell("");
     const select = document.createElement("select");
+    select.setAttribute(
+      "aria-label",
+      `Unit metadata resolution for ${variable.name}`,
+    );
     select.className =
       "rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800";
     [
-      ["unclassified", "Unclassified"],
-      ["unit", "Physical unit"],
-      ["dimensionless", "Dimensionless"],
-      ["not_applicable", "Not applicable"],
+      ["unresolved", "Needs review"],
+      ["unit", "Has a physical unit"],
+      ["dimensionless", "Dimensionless (1)"],
+      ["not_applicable", "No unit applies"],
     ].forEach(([value, label]) => {
       const option = document.createElement("option");
       option.value = value;
       option.textContent = label;
-      option.selected = value === classification;
+      option.selected = value === kind;
       select.appendChild(option);
     });
-    classificationCell.appendChild(select);
+    resolutionCell.appendChild(select);
 
     const unitCell = addCell("");
     const unitInput = document.createElement("input");
     unitInput.type = "text";
-    unitInput.value = declaration.unit || "";
+    unitInput.setAttribute("aria-label", `Unit for ${variable.name}`);
+    unitInput.value = kind === "unit" ? resolution.unit || "" : "";
     unitInput.placeholder = "e.g. m/s^2";
-    unitInput.disabled = classification !== "unit";
+    unitInput.disabled = kind !== "unit";
+    unitInput.dataset.variableUnitName = variable.name;
     unitInput.className =
       "w-32 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-xs disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800";
     unitCell.appendChild(unitInput);
-    addCell(variableUnitStatus(target.name));
+    const finding =
+      kind === "unit" && !String(unitInput.value).trim()
+        ? "Enter a unit"
+        : variableUnitMetadataDirty
+          ? "Pending validation"
+          : variable.finding?.message || "Needs review";
+    addCell(finding);
 
     select.addEventListener("change", () =>
-      updateVariableUnitDeclaration(target.name, select.value, unitInput.value),
+      updateVariableUnitResolution(
+        variable.name,
+        select.value,
+        unitInput.value,
+      ),
     );
     unitInput.addEventListener("change", () =>
-      updateVariableUnitDeclaration(target.name, "unit", unitInput.value),
+      updateVariableUnitResolution(variable.name, "unit", unitInput.value),
     );
     body.appendChild(row);
   });
@@ -568,51 +633,82 @@ function renderVariableUnitEditor() {
   if (next) next.disabled = variableUnitPage >= pageCount - 1;
 }
 
-function toggleVariableUnitEditor(enabled) {
-  renderVariableUnitEditor();
+function setVariableUnitEditorEnabled(enabled) {
   document
     .querySelectorAll(
       "#variable-unit-validation-control input, #variable-unit-validation-control select, #variable-unit-validation-control button",
     )
     .forEach((element) => {
-      if (element.id !== "toggleButton_variable_unit_validation") {
-        element.disabled = !enabled;
+      if (!enabled) {
+        element.disabled = true;
+      } else if (element.dataset.variableUnitName) {
+        const variable = variableUnitMetadata?.variables?.find(
+          (candidate) => candidate.name === element.dataset.variableUnitName,
+        );
+        element.disabled =
+          !variable || variableUnitResolutionKind(variable) !== "unit";
+      } else {
+        element.disabled = false;
       }
     });
+  const submit = document.getElementById("variable-unit-validate");
+  if (submit) submit.disabled = !enabled;
 }
 
-function exportVariableUnitDeclarations() {
-  const blob = new Blob([JSON.stringify(variableUnitDeclarations, null, 2)], {
+function downloadVariableUnitMetadata() {
+  if (!variableUnitMetadata || variableUnitMetadataDirty) return;
+  const blob = new Blob([JSON.stringify(variableUnitMetadata, null, 2)], {
     type: "application/json",
   });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "variable-units.json";
+  const datasetName =
+    String(variableUnitMetadata.dataset?.name || "dataset").replace(
+      /\.[^.]+$/,
+      "",
+    ) || "dataset";
+  link.download = `${datasetName}.units.json`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(link.href);
 }
 
-function importVariableUnitDeclarations(file) {
+function importVariableUnitMetadata(file) {
   if (!file) return;
   file
     .text()
     .then((text) => {
       const parsed = JSON.parse(text);
-      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+      if (
+        !parsed ||
+        parsed.format !== "aidrin.variable-unit-metadata" ||
+        parsed.version !== 1 ||
+        !Array.isArray(parsed.variables)
+      ) {
         throw new Error(
-          "Mapping JSON must be an object keyed by exact variable name.",
+          "Select an AIDRIN variable-unit metadata sidecar version 1.",
         );
       }
-      variableUnitDeclarations = parsed;
-      variableUnitPage = 0;
-      syncVariableUnitDeclarations();
-      renderVariableUnitEditor();
+      setVariableUnitMetadata(parsed);
+      variableUnitMetadataDirty = true;
+      syncVariableUnitMetadata();
+      updateVariableUnitAuditSummary();
     })
     .catch((error) => {
       if (typeof showToast === "function") showToast(error.message, "error");
     });
+}
+
+function adoptValidatedVariableUnitMetadata(result) {
+  const metadata =
+    result?.["Variable Unit Validation"]?.format ===
+    "aidrin.variable-unit-metadata"
+      ? result["Variable Unit Validation"]
+      : result?.format === "aidrin.variable-unit-metadata"
+        ? result
+        : null;
+  if (metadata) setVariableUnitMetadata(metadata);
 }
 
 /**
@@ -723,6 +819,9 @@ function _restoreCachedResult(panelId) {
     .then((resp) => {
       if (resp.cached && resp.data && activePanel === panelId) {
         lastMetricResult = resp.data;
+        if (panelId === "variable-unit-validation") {
+          adoptValidatedVariableUnitMetadata(resp.data);
+        }
         const resultsSection = document.getElementById("results-section");
         if (resultsSection) resultsSection.style.display = "block";
         const hasLLMCache =
@@ -775,6 +874,11 @@ function _restoreFormState(panelId, state) {
 
   for (const [key, value] of Object.entries(state)) {
     if (!value) continue;
+    if (
+      panelId === "variable-unit-validation" &&
+      key === "variable_unit_metadata"
+    )
+      continue;
 
     // Checkboxes with name matching the key
     const checkboxes = panel.querySelectorAll(
@@ -1082,8 +1186,8 @@ async function workspaceSubmit(targetUrl) {
       }
       if (gFormData.get("variable_unit_validation") === "yes") {
         selected.push("variable_unit_validation");
-        selectedNames.push("Variable Unit Validation");
-        remoteParams.unit_declarations = variableUnitDeclarations;
+        selectedNames.push("Unit Metadata Audit");
+        remoteParams.unit_metadata = variableUnitMetadata;
       }
       if (selected.length === 0) {
         if (typeof showToast === "function")
@@ -1345,6 +1449,9 @@ async function workspaceSubmit(targetUrl) {
     .then((data) => {
       // Store for download
       lastMetricResult = data;
+      if (targetUrl === "/variable-unit-validation") {
+        adoptValidatedVariableUnitMetadata(data);
+      }
 
       // Handle special error formats from some endpoints (feature relevance, correlation)
       if (data.trigger === "correlationError") {
@@ -1670,27 +1777,35 @@ function renderVariableUnitResultTable(rows) {
   [
     "Variable",
     "Type",
-    "Source",
-    "Classification",
+    "Observed",
+    "Resolution",
     "Unit",
+    "Normalized unit",
     "Dimensionality",
-    "Message",
+    "Finding",
   ].forEach((heading) => {
     html += `<th class="px-2 py-2">${escapeHtml(heading)}</th>`;
   });
   html += `</tr></thead><tbody>`;
   rows.forEach((row) => {
-    const classification = String(row.classification || "");
-    const hasOverride = Array.isArray(row.warnings) && row.warnings.length > 0;
-    html += `<tr data-variable-unit-result data-status="${escapeHtml(classification)}" data-override="${hasOverride ? "true" : "false"}" class="border-t border-gray-200 dark:border-gray-700">`;
+    const finding = row.finding || {};
+    const resolution = row.resolution || {};
+    const status = String(finding.status || "");
+    const warnings = Array.isArray(finding.warnings) ? finding.warnings : [];
+    const hasOverride = warnings.length > 0;
+    const observed = (row.observed || [])
+      .map((item) => `${item.unit} (${item.source})`)
+      .join(", ");
+    html += `<tr data-variable-unit-result data-status="${escapeHtml(status)}" data-override="${hasOverride ? "true" : "false"}" class="border-t border-gray-200 dark:border-gray-700">`;
     [
       row.name,
       row.dtype,
-      row.chosen_source || "None",
-      classification,
-      row.original_unit || "—",
-      row.dimensionality || "—",
-      [row.message, ...(row.warnings || [])].filter(Boolean).join(" "),
+      observed || "None",
+      resolution.kind || "unresolved",
+      resolution.unit || "—",
+      finding.normalized_unit || "—",
+      finding.dimensionality || "—",
+      [finding.message, ...warnings].filter(Boolean).join(" "),
     ].forEach((value) => {
       html += `<td class="px-2 py-2 align-top break-all">${escapeHtml(formatValue(value))}</td>`;
     });
@@ -2511,7 +2626,7 @@ function loadGlobusCustomOutlierTargets(message) {
     .then((result) => {
       if (result && result.success) {
         customOutlierTargets = result.targets || [];
-        setVariableUnitTargets(result.unit_targets || []);
+        setVariableUnitMetadata(result.unit_metadata);
         updateCustomOutlierTargetOptions();
         if (message) message.classList.add("hidden");
       } else if (message) {
@@ -3232,6 +3347,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
           // {Completeness: {...}, Outliers: {...}, Duplicity: {...}})
           // vs a single metric result (has Description/Visualization at top level)
           const result = response.result;
+          adoptValidatedVariableUnitMetadata(result);
           const isBundle =
             typeof result === "object" &&
             result !== null &&
@@ -7196,7 +7312,7 @@ function initWorkspace() {
   document
     .getElementById("variable-unit-import-file")
     ?.addEventListener("change", (event) => {
-      importVariableUnitDeclarations(event.target.files?.[0]);
+      importVariableUnitMetadata(event.target.files?.[0]);
       event.target.value = "";
     });
 
