@@ -59,33 +59,24 @@ def test_bare_g_message_gives_both_remedies():
     assert "standard_gravity" in message
 
 
-@pytest.mark.parametrize(
-    ("alias", "canonical", "normalized"),
-    [
-        ("Celsius degree", "degree_Celsius", "°C"),
-        ("degrees Celsius", "degree_Celsius", "°C"),
-        ("Fahrenheit degree", "degree_Fahrenheit", "°F"),
-        ("% RH", "percent", "%"),
-        ("relative humidity percent", "percent", "%"),
-    ],
-)
-def test_curated_aliases_are_stored_as_canonical_pint_units(
-    tmp_path,
-    alias,
-    canonical,
-    normalized,
-):
+def test_free_form_unit_input_uses_pint_without_custom_aliases(tmp_path):
     file_info = _csv(tmp_path, ["measurement"])
     sidecar = _with_resolutions(
         file_info,
-        {"measurement": {"kind": "unit", "unit": alias, "source": "user"}},
+        {
+            "measurement": {
+                "kind": "unit",
+                "unit": "Celsius degree",
+                "source": "user",
+            }
+        },
     )
 
     result = calculate_variable_unit_validation(file_info, sidecar)
 
-    assert result["variables"][0]["resolution"]["unit"] == canonical
-    assert result["variables"][0]["finding"]["normalized_unit"] == normalized
-    assert result["variables"][0]["finding"]["status"] == "valid"
+    assert result["variables"][0]["resolution"]["unit"] == "Celsius degree"
+    assert result["variables"][0]["finding"]["normalized_unit"] is None
+    assert result["variables"][0]["finding"]["status"] == "invalid"
 
 
 def test_every_curated_suggestion_is_unique_and_recognized_by_pint():
@@ -106,7 +97,7 @@ def test_every_curated_suggestion_is_unique_and_recognized_by_pint():
     }
 
 
-def test_detected_human_alias_is_canonical_and_round_trips(tmp_path):
+def test_detected_non_pint_unit_is_invalid_and_round_trips(tmp_path):
     file_info = _csv(tmp_path, ["temperature (degrees Celsius)"])
 
     first = calculate_variable_unit_validation(file_info)
@@ -114,9 +105,10 @@ def test_detected_human_alias_is_canonical_and_round_trips(tmp_path):
 
     assert first["variables"][0]["resolution"] == {
         "kind": "unit",
-        "unit": "degree_Celsius",
+        "unit": "degrees Celsius",
         "source": "detected",
     }
+    assert first["variables"][0]["finding"]["status"] == "invalid"
     assert second == first
 
 
