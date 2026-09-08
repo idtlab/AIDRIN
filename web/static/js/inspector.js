@@ -1404,18 +1404,90 @@ function renderFileReferenceMetadataTable(rows) {
   return html + `</tbody></table></div></div>`;
 }
 
+// Flattens a nested metric dict into {"outer / inner": value} so before/after
+// dicts with matching shapes can be compared row-by-row in one table.
+function flattenMetricDict(obj, prefix) {
+  const result = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    const label = prefix ? `${prefix} | ${k}` : k;
+    if (isObject(v) && Object.keys(v).length > 0) {
+      Object.assign(result, flattenMetricDict(v, label));
+    } else {
+      result[label] = v;
+    }
+  }
+  return result;
+}
+
+// Renders the custom-metric remedy "before" and "after" dicts as a single
+// Metric | Before | After comparison table instead of two stacked sections.
+function renderBeforeAfterTable(before, after) {
+  const beforeFlat = flattenMetricDict(before);
+  const afterFlat = flattenMetricDict(after);
+
+  const keys = [];
+  const seen = new Set();
+  for (const k of [...Object.keys(beforeFlat), ...Object.keys(afterFlat)]) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      keys.push(k);
+    }
+  }
+
+  let html = `<div class="mb-4">`;
+  html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">Before / After Remedy</h4>`;
+  html += `<div class="relative overflow-x-auto rounded-lg shadow-sm">`;
+  html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  html += `<th scope="col" class="px-4 py-2.5">Metric</th>`;
+  html += `<th scope="col" class="px-4 py-2.5 text-right">Before</th>`;
+  html += `<th scope="col" class="px-4 py-2.5 text-right">After</th>`;
+  html += `</tr></thead><tbody>`;
+  keys.forEach((key, idx) => {
+    const stripe =
+      idx % 2 === 0
+        ? "bg-white dark:bg-gray-800"
+        : "bg-gray-50 dark:bg-gray-700/50";
+    const hasBefore = Object.prototype.hasOwnProperty.call(beforeFlat, key);
+    const hasAfter = Object.prototype.hasOwnProperty.call(afterFlat, key);
+    const changed =
+      hasBefore && hasAfter && beforeFlat[key] !== afterFlat[key];
+    html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+    html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(key)}</td>`;
+    html += `<td class="px-4 py-2 text-right font-mono text-xs">${hasBefore ? escapeHtml(formatValue(beforeFlat[key])) : "—"}</td>`;
+    html += `<td class="px-4 py-2 text-right font-mono text-xs${changed ? " text-green-600 dark:text-green-400 font-semibold" : ""}">${hasAfter ? escapeHtml(formatValue(afterFlat[key])) : "—"}</td>`;
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  return html;
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
  * - Nested dict → collapsible tree with indented sections
  * - Array → numbered list
  * - Scalar → inline value
+ * - Sibling "before"/"after" dicts (custom-metric remedy comparison) → one
+ *   side-by-side comparison table instead of two stacked sections
  */
 function renderScoresSection(scores, depth) {
   depth = depth || 0;
   let html = "";
 
+  const hasBeforeAfter =
+    isObject(scores.before) &&
+    isObject(scores.after) &&
+    Object.keys(scores.before).length > 0;
+
   for (const [key, value] of Object.entries(scores)) {
+    if (hasBeforeAfter && key === "before") {
+      html += renderBeforeAfterTable(scores.before, scores.after);
+      continue;
+    }
+    if (hasBeforeAfter && key === "after") {
+      continue; // merged into the before/after table above
+    }
     // Flat dict of {feature: number} → Flowbite striped table
     if (isObject(value) && isFlatDict(value) && Object.keys(value).length > 0) {
       const count = Object.keys(value).length;
