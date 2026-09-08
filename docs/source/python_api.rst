@@ -450,9 +450,10 @@ Per-feature excess kurtosis (Fisher's definition, where a normal distribution is
 calculate_variable_unit_validation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Checks whether every logical variable has a recognized unit, dimensionless
-``1``, or an explicit ``not_applicable`` classification. See
-:ref:`variable_unit_validation` for the mapping schema and precedence rules.
+Audits unit metadata for every logical variable and returns a complete JSON
+sidecar. Edit the sidecar's ``resolution`` entries and pass the full document
+back to validate the repaired metadata. See :ref:`variable_unit_validation`
+for the sidecar schema and workflow.
 
 **Usage**:
 
@@ -460,13 +461,13 @@ Checks whether every logical variable has a recognized unit, dimensionless
 
    from aidrin import calculate_variable_unit_validation
 
-   result = calculate_variable_unit_validation(
-       file_info,
-       {
-           "speed": {"unit": "m/s"},
-           "station_id": {"status": "not_applicable"},
-       },
-   )
+   audit = calculate_variable_unit_validation(file_info)
+   audit["variables"][0]["resolution"] = {
+       "kind": "unit",
+       "source": "user",
+       "unit": "m/s",
+   }
+   result = calculate_variable_unit_validation(file_info, audit)
 
 **Returns**: Coverage and validity scores, readiness status, classification
 counts, and one machine-readable record per variable.

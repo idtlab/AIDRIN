@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 SIDECAR_FORMAT = "aidrin.variable-unit-metadata"
 SIDECAR_VERSION = 1
+SIDECAR_SCHEMA = "https://aidrin.readthedocs.io/en/latest/_static/variable-unit-metadata.schema.json"
 UNIT_VOCABULARY = "pint"
 
 _UNIT_REGISTRY = UnitRegistry()
@@ -235,6 +236,12 @@ def _validate_resolution(name: str, resolution: Any) -> Dict[str, Any]:
         raise ValueError(f"Resolution kind for {name!r} must be one of {sorted(_RESOLUTION_KINDS)}")
     if source not in _RESOLUTION_SOURCES:
         raise ValueError(f"Resolution source for {name!r} must be one of {sorted(_RESOLUTION_SOURCES)}")
+    if kind == "unresolved" and source != "none":
+        raise ValueError(f"Unresolved resolution for {name!r} must use source 'none'")
+    if kind != "unresolved" and source == "none":
+        raise ValueError(f"Resolved metadata for {name!r} must use source 'detected' or 'user'")
+    if kind == "not_applicable" and source != "user":
+        raise ValueError(f"Not-applicable resolution for {name!r} must use source 'user'")
     unit = resolution.get("unit")
     if kind == "unit":
         if not isinstance(unit, str) or not unit.strip():
@@ -257,11 +264,13 @@ def _validate_sidecar(
         return {}
     if not isinstance(sidecar, dict):
         raise ValueError("Variable-unit metadata must be a JSON object")
-    required = {"format", "version", "unit_vocabulary", "dataset", "variables", "summary"}
+    required = {"$schema", "format", "version", "unit_vocabulary", "dataset", "variables", "summary"}
     if set(sidecar) != required:
         raise ValueError(f"Variable-unit metadata fields must be exactly {sorted(required)}")
     if sidecar["format"] != SIDECAR_FORMAT or sidecar["version"] != SIDECAR_VERSION:
         raise ValueError(f"Variable-unit metadata must use {SIDECAR_FORMAT!r} version {SIDECAR_VERSION}")
+    if sidecar["$schema"] != SIDECAR_SCHEMA:
+        raise ValueError(f"Variable-unit metadata must declare schema {SIDECAR_SCHEMA!r}")
     if sidecar["unit_vocabulary"] != UNIT_VOCABULARY:
         raise ValueError(f"unit_vocabulary must be {UNIT_VOCABULARY!r}")
     dataset = sidecar["dataset"]
@@ -418,6 +427,7 @@ def calculate_variable_unit_validation(
     resolutions = _validate_sidecar(unit_metadata, targets)
     records = [_record_for_target(target, resolutions.get(target["name"])) for target in targets]
     return {
+        "$schema": SIDECAR_SCHEMA,
         "format": SIDECAR_FORMAT,
         "version": SIDECAR_VERSION,
         "unit_vocabulary": UNIT_VOCABULARY,
@@ -439,6 +449,7 @@ def variable_unit_validation(file_info: tuple, unit_metadata: Optional[Dict[str,
 
 __all__ = [
     "SIDECAR_FORMAT",
+    "SIDECAR_SCHEMA",
     "SIDECAR_VERSION",
     "UNIT_VOCABULARY",
     "calculate_variable_unit_validation",
