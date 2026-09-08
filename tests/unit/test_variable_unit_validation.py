@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import h5py
+from jsonschema import Draft202012Validator
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -83,6 +84,7 @@ def test_sidecar_accounts_for_every_resolution_form_and_reports_separate_scores(
 
     assert result["format"] == "aidrin.variable-unit-metadata"
     assert result["version"] == 1
+    assert result["$schema"].endswith("/variable-unit-metadata.schema.json")
     assert result["unit_vocabulary"] == "pint"
     assert result["summary"]["classification_coverage"] == 0.75
     assert result["summary"]["applicable_unit_coverage"] == pytest.approx(2 / 3)
@@ -134,6 +136,9 @@ def test_public_python_api_runs_same_validator(tmp_path):
     lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "dimensionless", "unit": "m", "source": "user"}}),
     lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "not_applicable", "unit": "m", "source": "user"}}),
     lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unit", "unit": "m", "source": "agent"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unresolved", "source": "user"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unit", "unit": "m", "source": "none"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "not_applicable", "source": "detected"}}),
 ])
 def test_malformed_sidecar_is_rejected(tmp_path, mutation):
     file_info = _csv(tmp_path, ["speed"])
@@ -218,6 +223,21 @@ def test_sidecar_round_trip_is_deterministic_and_does_not_change_dataset(tmp_pat
 
     assert second == first
     assert Path(file_info[0]).read_bytes() == before
+
+
+def test_generated_sidecar_conforms_to_published_json_schema(tmp_path):
+    file_info = _csv(tmp_path, ["speed (m/s)", "station"])
+    sidecar = calculate_variable_unit_validation(file_info)
+    schema_path = (
+        Path(__file__).parents[2]
+        / "docs"
+        / "source"
+        / "_static"
+        / "variable-unit-metadata.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    Draft202012Validator(schema).validate(sidecar)
 
 
 def test_native_hdf5_discovery_reads_units_without_values(tmp_path):

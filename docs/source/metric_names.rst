@@ -159,7 +159,7 @@ server, which dispatches on the same registry as the command line.
      - ``calculate_kurtosis``
      - |yes|
      - |yes|
-   * - Variable Unit Validation
+   * - Unit Metadata Audit and Repair
      - ``variable-unit-validation``
      - ``calculate_variable_unit_validation``
      - |yes|
