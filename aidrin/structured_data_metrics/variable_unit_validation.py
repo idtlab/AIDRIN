@@ -1,7 +1,10 @@
-"""Validate per-variable measurement-unit metadata without inspecting values."""
+"""Audit and resolve per-variable measurement-unit metadata without changing data."""
 
+import hashlib
+import json
 import logging
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import h5py
@@ -16,11 +19,17 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 
 logger = logging.getLogger(__name__)
 
+SIDECAR_FORMAT = "aidrin.variable-unit-metadata"
+SIDECAR_VERSION = 1
+UNIT_VOCABULARY = "pint"
+
 _UNIT_REGISTRY = UnitRegistry()
 _NAME_ANNOTATION = re.compile(
     r"^.+?\s*(?:\((?P<parenthesized>[^()]*)\)|\[(?P<bracketed>[^\[\]]*)\])\s*$"
 )
 _READY_STATUSES = {"valid", "dimensionless", "not_applicable"}
+_RESOLUTION_KINDS = {"unit", "dimensionless", "not_applicable", "unresolved"}
+_RESOLUTION_SOURCES = {"detected", "user", "none"}
 
 
 def _decode_metadata(value: Any) -> str:
@@ -76,15 +85,12 @@ def _pandas_hdf_columns(file_path: str) -> List[Dict[str, Any]]:
                 columns.extend(str(label) for label in labels)
             for column in dict.fromkeys(columns):
                 name = column if len(keys) == 1 else f"{key.lstrip('/')}:{column}"
-                candidates = []
                 annotation = _name_unit(column)
-                if annotation is not None:
-                    candidates.append(_candidate("name", annotation))
                 targets.append({
                     "name": name,
                     "dtype": "unknown",
                     "target_type": "column",
-                    "unit_candidates": candidates,
+                    "unit_candidates": [] if annotation is None else [_candidate("name", annotation)],
                 })
     return targets
 
@@ -133,42 +139,27 @@ def discover_variable_units(file_info: tuple) -> List[Dict[str, Any]]:
 
     targets = []
     for target in iter_targets(file_info):
-        candidate = _name_unit(target["name"])
-        normalized = dict(target)
-        normalized["unit_candidates"] = [] if candidate is None else [_candidate("name", candidate)]
-        targets.append(normalized)
+        annotation = _name_unit(target["name"])
+        targets.append({
+            "name": target["name"],
+            "dtype": target.get("dtype", "unknown"),
+            "target_type": target.get("target_type", "column"),
+            "unit_candidates": [] if annotation is None else [_candidate("name", annotation)],
+        })
     return targets
 
 
-def _validate_mapping(unit_declarations: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
-    if unit_declarations is None:
-        return {}
-    if not isinstance(unit_declarations, dict):
-        raise ValueError("unit_declarations must be a JSON object keyed by exact variable name")
-
-    validated = {}
-    for raw_name, declaration in unit_declarations.items():
-        if not isinstance(raw_name, str) or not raw_name:
-            raise ValueError("unit_declarations keys must be non-empty strings")
-        if not isinstance(declaration, dict):
-            raise ValueError(f"Declaration for {raw_name!r} must be an object")
-        extra = set(declaration) - {"unit", "status"}
-        if extra:
-            raise ValueError(f"Declaration for {raw_name!r} has unknown fields: {sorted(extra)}")
-        has_unit = "unit" in declaration
-        has_status = "status" in declaration
-        if has_unit == has_status:
-            raise ValueError(f"Declaration for {raw_name!r} must contain exactly one of unit or status")
-        if has_unit:
-            unit = declaration["unit"]
-            if not isinstance(unit, str) or not unit.strip():
-                raise ValueError(f"Unit for {raw_name!r} must be a non-empty string")
-            validated[raw_name] = {"unit": unit.strip()}
-        elif declaration["status"] != "not_applicable":
-            raise ValueError(f"Status for {raw_name!r} must be not_applicable")
-        else:
-            validated[raw_name] = {"status": "not_applicable"}
-    return validated
+def _schema_fingerprint(targets: List[Dict[str, Any]]) -> str:
+    schema = [
+        {
+            "name": target["name"],
+            "target_type": target.get("target_type", "column"),
+            "dtype": target.get("dtype", "unknown"),
+        }
+        for target in targets
+    ]
+    encoded = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 def _parse_unit(unit: str) -> Dict[str, Any]:
@@ -181,7 +172,6 @@ def _parse_unit(unit: str) -> Dict[str, Any]:
             "dimensionality": None,
             "message": "Bare 'g' is ambiguous. Use 'gram' for mass or '[g]', 'g_0', or 'standard_gravity' for acceleration.",
         }
-
     if "//" in unit:
         return {
             "status": "invalid",
@@ -222,35 +212,133 @@ def _units_equivalent(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
     return left.get("_parsed") == right.get("_parsed")
 
 
-def _public_declaration(candidate: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[str, Any]:
+def _public_observation(candidate: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "source": candidate["source"],
-        "original_unit": parsed.get("original_unit"),
+        "unit": candidate["unit"],
         "normalized_unit": parsed.get("normalized_unit"),
+        "dimensionality": parsed.get("dimensionality"),
         "status": parsed["status"],
+        "message": parsed["message"],
     }
 
 
-def _record_for_target(target: Dict[str, Any], explicit: Optional[Dict[str, str]]) -> Dict[str, Any]:
+def _validate_resolution(name: str, resolution: Any) -> Dict[str, Any]:
+    if not isinstance(resolution, dict):
+        raise ValueError(f"Resolution for {name!r} must be an object")
+    extra = set(resolution) - {"kind", "unit", "source"}
+    if extra:
+        raise ValueError(f"Resolution for {name!r} has unknown fields: {sorted(extra)}")
+    kind = resolution.get("kind")
+    source = resolution.get("source")
+    if kind not in _RESOLUTION_KINDS:
+        raise ValueError(f"Resolution kind for {name!r} must be one of {sorted(_RESOLUTION_KINDS)}")
+    if source not in _RESOLUTION_SOURCES:
+        raise ValueError(f"Resolution source for {name!r} must be one of {sorted(_RESOLUTION_SOURCES)}")
+    unit = resolution.get("unit")
+    if kind == "unit":
+        if not isinstance(unit, str) or not unit.strip():
+            raise ValueError(f"Unit resolution for {name!r} must contain a non-empty unit")
+        return {"kind": kind, "unit": unit.strip(), "source": source}
+    if kind == "dimensionless":
+        if unit != "1":
+            raise ValueError(f"Dimensionless resolution for {name!r} must use unit '1'")
+        return {"kind": kind, "unit": "1", "source": source}
+    if unit is not None:
+        raise ValueError(f"Resolution kind {kind!r} for {name!r} must not contain a unit")
+    return {"kind": kind, "source": source}
+
+
+def _validate_sidecar(
+    sidecar: Optional[Dict[str, Any]],
+    targets: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    if sidecar is None:
+        return {}
+    if not isinstance(sidecar, dict):
+        raise ValueError("Variable-unit metadata must be a JSON object")
+    required = {"format", "version", "unit_vocabulary", "dataset", "variables", "summary"}
+    if set(sidecar) != required:
+        raise ValueError(f"Variable-unit metadata fields must be exactly {sorted(required)}")
+    if sidecar["format"] != SIDECAR_FORMAT or sidecar["version"] != SIDECAR_VERSION:
+        raise ValueError(f"Variable-unit metadata must use {SIDECAR_FORMAT!r} version {SIDECAR_VERSION}")
+    if sidecar["unit_vocabulary"] != UNIT_VOCABULARY:
+        raise ValueError(f"unit_vocabulary must be {UNIT_VOCABULARY!r}")
+    dataset = sidecar["dataset"]
+    if not isinstance(dataset, dict) or set(dataset) != {"name", "file_type", "schema_fingerprint"}:
+        raise ValueError("Variable-unit metadata dataset must contain name, file_type, and schema_fingerprint")
+    if dataset["schema_fingerprint"] != _schema_fingerprint(targets):
+        raise ValueError("Variable-unit metadata schema fingerprint does not match the dataset")
+    if not isinstance(sidecar["variables"], list):
+        raise ValueError("Variable-unit metadata variables must be an array")
+
+    resolutions = {}
+    for variable in sidecar["variables"]:
+        if not isinstance(variable, dict):
+            raise ValueError("Each variable-unit metadata entry must be an object")
+        fields = {"name", "target_type", "dtype", "observed", "resolution", "finding"}
+        if set(variable) != fields:
+            raise ValueError(f"Variable-unit metadata entries must contain exactly {sorted(fields)}")
+        name = variable.get("name")
+        if not isinstance(name, str) or not name:
+            raise ValueError("Variable-unit metadata names must be non-empty strings")
+        if name in resolutions:
+            raise ValueError(f"Duplicate variable-unit metadata entry: {name!r}")
+        resolutions[name] = _validate_resolution(name, variable.get("resolution"))
+
+    target_names = {target["name"] for target in targets}
+    supplied_names = set(resolutions)
+    if supplied_names != target_names:
+        missing = sorted(target_names - supplied_names)
+        unknown = sorted(supplied_names - target_names)
+        raise ValueError(f"Variable-unit metadata variables do not match the dataset; missing={missing}, unknown={unknown}")
+    return resolutions
+
+
+def _detected_resolution(candidate: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[str, Any]:
+    kind = "dimensionless" if parsed["status"] == "dimensionless" else "unit"
+    return {"kind": kind, "unit": candidate["unit"], "source": "detected"}
+
+
+def _is_current_detected_resolution(
+    resolution: Dict[str, Any],
+    candidates: List[Dict[str, Any]],
+) -> bool:
+    if resolution.get("source") != "detected" or resolution.get("kind") not in {"unit", "dimensionless"}:
+        return False
+    return any(resolution["unit"] == candidate["unit"] for candidate in candidates)
+
+
+def _record_for_target(
+    target: Dict[str, Any],
+    supplied_resolution: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
     candidates = list(target.get("unit_candidates", []))
     parsed_candidates = [(candidate, _parse_unit(candidate["unit"])) for candidate in candidates]
+    observed = [_public_observation(candidate, parsed) for candidate, parsed in parsed_candidates]
     warnings = []
+    explicit = supplied_resolution
+    if explicit and explicit["kind"] == "unresolved":
+        explicit = None
+    if explicit and _is_current_detected_resolution(explicit, candidates):
+        explicit = None
 
     if explicit is not None:
-        if "status" in explicit:
-            chosen_candidate = {"source": "mapping"}
+        if explicit["kind"] == "not_applicable":
             chosen = {
                 "status": "not_applicable",
-                "original_unit": None,
                 "normalized_unit": None,
                 "dimensionality": None,
                 "message": "Variable is explicitly classified as not applicable.",
             }
+            resolution = {"kind": "not_applicable", "source": "user"}
         else:
-            chosen_candidate = {"source": "mapping", "unit": explicit["unit"]}
-            chosen = _parse_unit(explicit["unit"])
+            unit = "1" if explicit["kind"] == "dimensionless" else explicit["unit"]
+            chosen = _parse_unit(unit)
+            kind = "dimensionless" if chosen["status"] == "dimensionless" else "unit"
+            resolution = {"kind": kind, "unit": unit, "source": "user"}
         if candidates:
-            warnings.append("Explicit mapping overrides lower-priority embedded or name declarations.")
+            warnings.append("User resolution overrides detected unit metadata.")
     elif parsed_candidates:
         chosen_index = next(
             (index for index, item in enumerate(parsed_candidates) if item[0]["source"].startswith("native")),
@@ -261,53 +349,39 @@ def _record_for_target(target: Dict[str, Any], explicit: Optional[Dict[str, str]
         if any(not _units_equivalent(chosen, other) for _candidate_item, other in comparisons):
             chosen = {
                 "status": "conflicting",
-                "original_unit": chosen.get("original_unit"),
                 "normalized_unit": chosen.get("normalized_unit"),
                 "dimensionality": chosen.get("dimensionality"),
-                "message": "Embedded metadata and variable-name declarations conflict; add an explicit mapping to resolve them.",
+                "message": "Detected unit declarations conflict; add a user resolution.",
             }
+        resolution = _detected_resolution(chosen_candidate, chosen)
     else:
-        chosen_candidate = {"source": None}
         chosen = {
             "status": "missing",
-            "original_unit": None,
             "normalized_unit": None,
             "dimensionality": None,
-            "message": "Add a recognized unit, '1' for dimensionless, or status 'not_applicable'.",
+            "message": "No unit metadata was detected. Add a unit, mark the variable dimensionless, or mark units not applicable.",
         }
+        resolution = {"kind": "unresolved", "source": "none"}
 
-    lower = [
-        _public_declaration(candidate, parsed)
-        for candidate, parsed in parsed_candidates
-        if candidate is not chosen_candidate
-    ]
     status = chosen["status"]
     return {
         "name": target["name"],
+        "target_type": target.get("target_type", "column"),
         "dtype": target.get("dtype", "unknown"),
-        "chosen_source": chosen_candidate.get("source"),
-        "classification": status,
-        "original_unit": chosen.get("original_unit"),
-        "normalized_unit": chosen.get("normalized_unit"),
-        "dimensionality": chosen.get("dimensionality"),
-        "status": "ready" if status in _READY_STATUSES else "not_ready",
-        "message": chosen["message"],
-        "lower_priority_declarations": lower,
-        "warnings": warnings,
+        "observed": observed,
+        "resolution": resolution,
+        "finding": {
+            "status": status,
+            "readiness": "ready" if status in _READY_STATUSES else "not_ready",
+            "normalized_unit": chosen.get("normalized_unit"),
+            "dimensionality": chosen.get("dimensionality"),
+            "message": chosen["message"],
+            "warnings": warnings,
+        },
     }
 
 
-def calculate_variable_unit_validation(
-    file_info: tuple,
-    unit_declarations: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Validate that every logical variable has usable unit metadata."""
-    mapping = _validate_mapping(unit_declarations)
-    targets = discover_variable_units(file_info)
-    target_names = {target["name"] for target in targets}
-    unknown = sorted(set(mapping) - target_names)
-    records = [_record_for_target(target, mapping.get(target["name"])) for target in targets]
-
+def _summarize(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     counts = {
         "total": len(records),
         "valid": 0,
@@ -319,35 +393,54 @@ def calculate_variable_unit_validation(
         "not_applicable": 0,
     }
     for record in records:
-        counts[record["classification"]] += 1
+        counts[record["finding"]["status"]] += 1
 
     total = counts["total"]
+    accounted = total - counts["missing"]
     ready = counts["valid"] + counts["dimensionless"] + counts["not_applicable"]
-    coverage = None if total == 0 else (total - counts["missing"]) / total
-    validity = None if total == 0 else ready / total
-    warnings = [
-        {"variable": record["name"], "message": warning}
-        for record in records
-        for warning in record["warnings"]
-    ]
+    applicable = total - counts["not_applicable"]
+    valid_applicable = counts["valid"] + counts["dimensionless"]
     return {
-        "coverage_score": coverage,
-        "validity_score": validity,
-        "all_variables_ready": bool(total and ready == total and not unknown),
         "counts": counts,
+        "classification_coverage": None if total == 0 else accounted / total,
+        "applicable_unit_coverage": None if total == 0 else (1.0 if applicable == 0 else valid_applicable / applicable),
+        "metadata_validity": None if accounted == 0 else ready / accounted,
+        "all_variables_ready": bool(total and ready == total),
+    }
+
+
+def calculate_variable_unit_validation(
+    file_info: tuple,
+    unit_metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Return a complete, validated unit-metadata sidecar for a dataset."""
+    targets = discover_variable_units(file_info)
+    resolutions = _validate_sidecar(unit_metadata, targets)
+    records = [_record_for_target(target, resolutions.get(target["name"])) for target in targets]
+    return {
+        "format": SIDECAR_FORMAT,
+        "version": SIDECAR_VERSION,
+        "unit_vocabulary": UNIT_VOCABULARY,
+        "dataset": {
+            "name": str(file_info[1] or Path(file_info[0]).name),
+            "file_type": str(file_info[2] or "").lower(),
+            "schema_fingerprint": _schema_fingerprint(targets),
+        },
         "variables": records,
-        "override_warnings": warnings,
-        "unknown_mapping_variables": unknown,
+        "summary": _summarize(records),
     }
 
 
 @shared_task(ignore_result=False)
-def variable_unit_validation(file_info: tuple, unit_declarations: Optional[Dict[str, Any]] = None):
-    """Celery task wrapper for the variable-unit validation metric."""
-    return calculate_variable_unit_validation(file_info, unit_declarations)
+def variable_unit_validation(file_info: tuple, unit_metadata: Optional[Dict[str, Any]] = None):
+    """Celery task wrapper for the variable-unit metadata audit."""
+    return calculate_variable_unit_validation(file_info, unit_metadata)
 
 
 __all__ = [
+    "SIDECAR_FORMAT",
+    "SIDECAR_VERSION",
+    "UNIT_VOCABULARY",
     "calculate_variable_unit_validation",
     "discover_variable_units",
     "variable_unit_validation",
