@@ -592,35 +592,6 @@ def _run_metric_impl(
     session_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    from aidrin.file_handling.custom_loader import using_custom_loader
-
-    loader = kwargs.get("loader") or kwargs.get("data_loader")
-    with using_custom_loader(loader):
-        return _run_metric_impl(
-            metric_name,
-            file_path,
-            file_type=file_type,
-            file_name=file_name,
-            save_images=save_images,
-            image_dir=image_dir,
-            verbose=verbose,
-            strip_visualizations=strip_visualizations,
-            **kwargs,
-        )
-
-
-def _run_metric_impl(
-    metric_name: str,
-    file_path: str,
-    file_type: Optional[str] = None,
-    file_name: Optional[str] = None,
-    save_images: bool = True,
-    image_dir: Optional[str] = None,
-    verbose: bool = False,
-    strip_visualizations: bool = False,
-    session_id: Optional[str] = None,
-    **kwargs: Any,
-) -> Dict[str, Any]:
     metric_key = metric_name.strip().lower().replace("-", "_")
 
     # Defined before the METRIC_REGISTRY lookup because the custom-metric branch
