@@ -79,9 +79,10 @@ def calc_correlations(self: Task, columns: List[str], file_info, include_visuali
         # Check if there are categorical features
         if not categorical_columns.empty:
             # Categorical-categorical correlations are computed using theil
+            cat_df = df[categorical_columns].astype(object)
             with _ASSOCIATIONS_LOCK:
                 categorical_correlation = associations(
-                    df[categorical_columns], nom_nom_assoc=NOMINAL_NOMINAL_ASSOC, plot=False
+                    cat_df, nom_nom_assoc=NOMINAL_NOMINAL_ASSOC, plot=False
                 )
             logger.debug("Categorical correlation matrix computed:\n%s", categorical_correlation["corr"])
 

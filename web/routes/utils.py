@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from flask import current_app, jsonify, redirect, request, session, url_for
 
-from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.file_parser import _SELECTION_FILE_TYPES, read_file
 
 logger = logging.getLogger(__name__)
 
@@ -60,19 +60,23 @@ def confine_to_upload_folder(file_path):
 # ---------------------------------------------------------------------------
 
 def build_file_info(file_path, file_name, file_type, selected_keys=None):
-    """Build a file_info tuple, embedding HDF5 dataset keys when needed.
+    """Build a file_info tuple, embedding dataset keys when needed.
 
     Celery workers do not have Flask session context, so multi-dataset HDF5
-    files must carry ``selected_keys`` in the tuple for background tasks.
+    and multi-array Zarr sources must carry ``selected_keys`` in the tuple for
+    background tasks.
 
     The path is confined to the upload folder here so every ``read_file`` fed
     from a session value passes through the path-traversal barrier.
     """
     file_path = confine_to_upload_folder(file_path)
-    if file_type == ".h5":
+    if file_type in _SELECTION_FILE_TYPES:
         if selected_keys is None:
+            # Only HDF5 has a key picker writing session["selected_keys"];
+            # reading it for another format would apply a stale HDF5
+            # selection to this source.
             try:
-                selected_keys = session.get("selected_keys") or []
+                selected_keys = session.get("selected_keys") or [] if file_type == ".h5" else []
             except RuntimeError:
                 selected_keys = []
         if isinstance(selected_keys, str):
