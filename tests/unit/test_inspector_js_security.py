@@ -294,7 +294,7 @@ def test_variable_unit_editor_preserves_physical_unit_draft_until_entry():
     assert "input.dataset.variableUnitName === name" in update
 
 
-def test_variable_unit_editor_builds_editable_ranked_unit_combobox():
+def test_variable_unit_editor_limits_recognized_names_and_keeps_fallback():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     choices_start = source.index("function variableUnitChoices(variableName)")
     choices_end = source.index("function syncVariableUnitMetadata()", choices_start)
@@ -303,8 +303,8 @@ def test_variable_unit_editor_builds_editable_ranked_unit_combobox():
     editor_end = source.index("function setVariableUnitEditorEnabled", editor_start)
     editor = source[editor_start:editor_end]
 
-    assert "matchedQuantities" in choices
-    assert "...matched" in choices
+    assert "const recognized = matched.length > 0" in choices
+    assert "const visibleGroups = recognized ? matched : variableUnitCatalog" in choices
     assert 'document.createElement("datalist")' in editor
     assert 'unitInput.setAttribute("list", list.id)' in editor
     assert 'unitInput.setAttribute("aria-autocomplete", "list")' in editor

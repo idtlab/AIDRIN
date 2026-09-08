@@ -445,23 +445,17 @@ function variableUnitChoices(variableName) {
   const matched = variableUnitCatalog.filter((group) =>
     group.variable_terms.some((term) => tokens.has(String(term).toLowerCase())),
   );
-  const matchedQuantities = new Set(matched.map((group) => group.quantity));
-  const orderedGroups = [
-    ...matched,
-    ...variableUnitCatalog.filter(
-      (group) => !matchedQuantities.has(group.quantity),
-    ),
-  ];
+  const recognized = matched.length > 0;
+  const visibleGroups = recognized ? matched : variableUnitCatalog;
   const seen = new Set();
   const choices = [];
-  orderedGroups.forEach((group) => {
-    const suggested = matchedQuantities.has(group.quantity);
+  visibleGroups.forEach((group) => {
     group.units.forEach((item) => {
       if (!item || typeof item.unit !== "string" || seen.has(item.unit)) return;
       seen.add(item.unit);
       choices.push({
         unit: item.unit,
-        label: `${suggested ? "Suggested" : group.quantity}: ${item.label || item.unit}`,
+        label: `${recognized ? "Suggested" : group.quantity}: ${item.label || item.unit}`,
       });
     });
   });
