@@ -133,10 +133,11 @@ all_variables_ready
 Unit parsing
 ------------
 
-The web editor offers a curated list of common units, ranked using simple terms in the
-variable name (for example, temperature or pressure). These are suggestions only: AIDRIN
-does not silently assign a unit or infer one from the observed values. Users can select a
-suggestion or enter any Pint-compatible unit expression.
+The web editor uses simple terms in the variable name (for example, temperature or
+pressure) to show only the matching curated units. If no quantity is recognized, it
+shows the full common-unit list. These are suggestions only: AIDRIN does not silently
+assign a unit or infer one from the observed values. Users can select a suggestion or
+enter any Pint-compatible unit expression.
 
 Typed and imported unit strings are passed directly to Pint; AIDRIN does not maintain a
 second vocabulary of human-readable aliases. Selecting a curated web suggestion stores
