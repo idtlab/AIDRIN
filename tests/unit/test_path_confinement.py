@@ -10,8 +10,9 @@ import shutil
 import tempfile
 import unittest
 
-from flask import Flask
+from flask import Flask, session
 
+from web.routes.metrics import _readiness_file_info
 from web.routes.utils import build_file_info, confine_to_upload_folder
 
 
@@ -20,6 +21,7 @@ class ConfineToUploadFolderTests(unittest.TestCase):
         self.upload_dir = tempfile.mkdtemp()
         self.app = Flask(__name__)
         self.app.config["UPLOAD_FOLDER"] = self.upload_dir
+        self.app.secret_key = "test"
         self.ctx = self.app.app_context()
         self.ctx.push()
 
@@ -50,6 +52,45 @@ class ConfineToUploadFolderTests(unittest.TestCase):
         inside = os.path.join(self.upload_dir, "abc123_data.csv")
         info = build_file_info(inside, "data.csv", ".csv")
         self.assertEqual(info[0], os.path.realpath(inside))
+
+
+class ReadinessFileInfoBarrierTests(unittest.TestCase):
+    def setUp(self):
+        self.upload_dir = tempfile.mkdtemp()
+        self.app = Flask(__name__)
+        self.app.config["UPLOAD_FOLDER"] = self.upload_dir
+        self.app.secret_key = "test"
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        self.request_ctx = self.app.test_request_context()
+        self.request_ctx.push()
+
+    def tearDown(self):
+        self.request_ctx.pop()
+        self.ctx.pop()
+        shutil.rmtree(self.upload_dir, ignore_errors=True)
+
+    def test_outside_upload_path_returns_none(self):
+        session["uploaded_file_path"] = "/etc/passwd"
+        session["uploaded_file_name"] = "passwd"
+        session["uploaded_file_type"] = ".csv"
+        self.assertIsNone(_readiness_file_info())
+
+    def test_valid_upload_path_is_confined(self):
+        inside = os.path.join(self.upload_dir, "abc123_data.csv")
+        session["uploaded_file_path"] = inside
+        session["uploaded_file_name"] = "data.csv"
+        session["uploaded_file_type"] = ".csv"
+        info = _readiness_file_info()
+        self.assertIsNotNone(info)
+        self.assertEqual(len(info), 3)
+        self.assertEqual(info[0], os.path.realpath(inside))
+        self.assertEqual(info[1], "data.csv")
+        self.assertEqual(info[2], ".csv")
+
+    def test_missing_session_path_returns_none(self):
+        session.pop("uploaded_file_path", None)
+        self.assertIsNone(_readiness_file_info())
 
 
 if __name__ == "__main__":

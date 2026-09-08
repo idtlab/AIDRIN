@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, ignore_result=False)
-def outliers(self: Task, file_info):
+def outliers(self: Task, file_info, include_visualization=True):
     """Detect outliers in numerical columns using the IQR method.
 
     For each numerical column, computes the inter-quartile range (IQR) and
@@ -92,7 +92,7 @@ def outliers(self: Task, file_info):
                 k: v for k, v in proportions_dict.items() if k != "Overall outlier score"
             }
 
-            if feature_scores:  # only plot if there are valid features
+            if feature_scores and include_visualization:  # only plot if there are valid features
                 labels = list(feature_scores.keys())
                 values = list(feature_scores.values())
                 n = len(labels)

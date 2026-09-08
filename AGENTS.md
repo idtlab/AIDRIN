@@ -143,7 +143,7 @@ npx --yes prettier@3 --check web/static/css web/static/js   # only if you touche
 ## Gotchas
 
 - Correlations use `dython.associations` (pandas-only, O(cols^2)); `dython` needs `pkg_resources`,
-  hence the `setuptools` build pin in `pyproject.toml`. `shap` can be slow to resolve on some Python versions.
+  hence the `setuptools` build pin in `pyproject.toml`.
 - Matplotlib uses the non-interactive `Agg` backend and is **not thread-safe**: do not generate plots
   from concurrent threads (e.g. several metric calls at once in one process will serialize/contend).
 - Boolean columns are treated as **categorical** in the Data Overview summary.

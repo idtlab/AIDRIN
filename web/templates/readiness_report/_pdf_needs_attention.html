@@ -1,0 +1,35 @@
+{% if needs_attention and needs_attention|length > 0 %}
+<div class="box-amber">
+  <p class="na-panel-title">Needs attention</p>
+  <div class="na-grid">
+    {% for block in needs_attention %}
+    <div class="na-block">
+      <p class="na-block-title{% if block.tone == 'red' %} tone-red{% elif block.tone == 'amber' %} tone-amber{% endif %}">
+        {{ block.title }}{% if block.glossary_key %}{{ fn(block.glossary_key) }}{% endif %}
+      </p>
+      {% if block.context %}<p class="na-context">{{ block.context }}</p>{% endif %}
+      {% if block.message %}
+      <p class="na-message">{{ block.message }}</p>
+      {% else %}
+      <ul class="na-list">
+        {% for row in block.rows %}
+        <li>
+          <div class="na-row">
+            <span class="na-row-primary">{{ row.primary }}</span>
+            {% if row.value %}<span class="na-row-value">{{ row.value }}</span>{% endif %}
+          </div>
+          {% if row.secondary %}<p class="na-row-secondary">{{ row.secondary }}</p>{% endif %}
+        </li>
+        {% endfor %}
+        {% if block.more_count > 0 %}
+        <li class="na-more">+{{ block.more_count }} more not shown</li>
+        {% endif %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="box-green"><p class="na-empty">{{ empty_message }}</p></div>
+{% endif %}

@@ -1,0 +1,35 @@
+<table class="fair-detail-grid">
+  <tr>
+    {% for p in fair_compliance.principles %}
+    <td>
+      <div class="fair-principle-card">
+        <div class="fair-principle-header">
+          <span class="fair-principle-name">{{ p.name }}</span>
+          <span class="fair-principle-checks">{{ p.check_str }}</span>
+        </div>
+        {% if p.rows %}
+        <table class="fair-check-table">
+          <tbody>
+            {% for row in p.rows %}
+            {% if row.is_group %}
+            <tr class="fair-check-group"><td colspan="2">{{ row.label }}</td></tr>
+            {% else %}
+            <tr>
+              <td class="fair-check-key">{{ row.label }}</td>
+              <td class="fair-check-status">
+                <span class="fair-badge fair-badge-{{ 'found' if row.found else 'missing' }}">{{ row.status_label }}</span>
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No detail available.</p>
+        {% endif %}
+      </div>
+    </td>
+    {% if loop.index % 2 == 0 and not loop.last %}</tr><tr>{% endif %}
+    {% endfor %}
+  </tr>
+</table>
