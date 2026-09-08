@@ -202,7 +202,7 @@ class TestExecution(_RemoteCliTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(submit.call_args[0][2], "run_metric")
 
-    def test_variable_units_options_are_forwarded_to_endpoint(self):
+    def test_variable_unit_metadata_option_is_forwarded_to_endpoint(self):
         with patch("aidrin.compute.client.get_client", return_value="stub"), \
              patch("aidrin.compute.client.submit", return_value="task-1") as submit, \
              patch("aidrin.compute.client.poll", return_value={"all_variables_ready": True}):
@@ -211,12 +211,12 @@ class TestExecution(_RemoteCliTestCase):
                 "run",
                 "variable-unit-validation",
                 "/scratch/data.csv",
-                "--units-file",
-                "/scratch/units.json",
+                "--unit-metadata-file",
+                "/scratch/data.units.json",
             )
         self.assertEqual(code, 0)
         payload = submit.call_args[0][3]
-        self.assertEqual(payload["units_file"], "/scratch/units.json")
+        self.assertEqual(payload["unit_metadata_file"], "/scratch/data.units.json")
 
     def test_endpoint_flag_overrides_profile(self):
         with patch("aidrin.compute.client.get_client", return_value="stub"), \
