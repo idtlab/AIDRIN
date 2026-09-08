@@ -1,6 +1,8 @@
 """Tests for variable-unit discovery, parsing, precedence, and aggregation."""
 
 import json
+from copy import deepcopy
+from pathlib import Path
 
 import h5py
 import pandas as pd
@@ -20,6 +22,14 @@ def _csv(tmp_path, columns):
     path = tmp_path / "data.csv"
     pd.DataFrame({column: [1, 2] for column in columns}).to_csv(path, index=False)
     return (str(path), path.name, ".csv")
+
+
+def _with_resolutions(file_info, resolutions):
+    sidecar = deepcopy(calculate_variable_unit_validation(file_info))
+    by_name = {variable["name"]: variable for variable in sidecar["variables"]}
+    for name, resolution in resolutions.items():
+        by_name[name]["resolution"] = resolution
+    return sidecar
 
 
 @pytest.mark.parametrize(
@@ -62,18 +72,23 @@ def test_name_annotations_are_trailing_only(name, unit):
     assert _name_unit(name) == unit
 
 
-def test_classifies_every_mapping_form_and_reports_scores(tmp_path):
+def test_sidecar_accounts_for_every_resolution_form_and_reports_separate_scores(tmp_path):
     file_info = _csv(tmp_path, ["speed", "score", "station", "missing"])
-    result = calculate_variable_unit_validation(file_info, {
-        "speed": {"unit": "m/s"},
-        "score": {"unit": "1"},
-        "station": {"status": "not_applicable"},
+    sidecar = _with_resolutions(file_info, {
+        "speed": {"kind": "unit", "unit": "m/s", "source": "user"},
+        "score": {"kind": "dimensionless", "unit": "1", "source": "user"},
+        "station": {"kind": "not_applicable", "source": "user"},
     })
+    result = calculate_variable_unit_validation(file_info, sidecar)
 
-    assert result["coverage_score"] == 0.75
-    assert result["validity_score"] == 0.75
-    assert result["all_variables_ready"] is False
-    assert result["counts"] == {
+    assert result["format"] == "aidrin.variable-unit-metadata"
+    assert result["version"] == 1
+    assert result["unit_vocabulary"] == "pint"
+    assert result["summary"]["classification_coverage"] == 0.75
+    assert result["summary"]["applicable_unit_coverage"] == pytest.approx(2 / 3)
+    assert result["summary"]["metadata_validity"] == 1.0
+    assert result["summary"]["all_variables_ready"] is False
+    assert result["summary"]["counts"] == {
         "total": 4,
         "valid": 1,
         "missing": 1,
@@ -89,71 +104,79 @@ def test_name_units_can_make_all_variables_ready(tmp_path):
     file_info = _csv(tmp_path, ["velocity (meter/second)", "acceleration [g]"])
     result = calculate_variable_unit_validation(file_info)
 
-    assert result["all_variables_ready"] is True
+    assert result["summary"]["all_variables_ready"] is True
     assert [record["name"] for record in result["variables"]] == [
         "velocity (meter/second)",
         "acceleration [g]",
     ]
-    assert result["counts"]["valid"] == 2
+    assert result["summary"]["counts"]["valid"] == 2
 
 
 def test_public_python_api_runs_same_validator(tmp_path):
     import aidrin
 
-    result = aidrin.calculate_variable_unit_validation(
-        _csv(tmp_path, ["speed"]),
-        {"speed": {"unit": "m/s"}},
+    file_info = _csv(tmp_path, ["speed"])
+    sidecar = _with_resolutions(
+        file_info,
+        {"speed": {"kind": "unit", "unit": "m/s", "source": "user"}},
     )
+    result = aidrin.calculate_variable_unit_validation(file_info, sidecar)
 
-    assert result["all_variables_ready"] is True
-    assert result["variables"][0]["normalized_unit"] == "m / s"
+    assert result["summary"]["all_variables_ready"] is True
+    assert result["variables"][0]["finding"]["normalized_unit"] == "m / s"
 
 
-@pytest.mark.parametrize(
-    "mapping",
-    [
-        [],
-        {"speed": "m/s"},
-        {"speed": {}},
-        {"speed": {"unit": "m/s", "status": "not_applicable"}},
-        {"speed": {"status": "ignored"}},
-        {"speed": {"unit": ""}},
-        {"speed": {"unit": "m/s", "reason": "known"}},
-    ],
-)
-def test_malformed_mapping_is_rejected(tmp_path, mapping):
+@pytest.mark.parametrize("mutation", [
+    lambda sidecar: sidecar.update({"format": "wrong"}),
+    lambda sidecar: sidecar.update({"version": 2}),
+    lambda sidecar: sidecar.update({"unit_vocabulary": "unknown"}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unit", "unit": "", "source": "user"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "dimensionless", "unit": "m", "source": "user"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "not_applicable", "unit": "m", "source": "user"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unit", "unit": "m", "source": "agent"}}),
+])
+def test_malformed_sidecar_is_rejected(tmp_path, mutation):
+    file_info = _csv(tmp_path, ["speed"])
+    sidecar = calculate_variable_unit_validation(file_info)
+    mutation(sidecar)
     with pytest.raises(ValueError):
-        calculate_variable_unit_validation(_csv(tmp_path, ["speed"]), mapping)
+        calculate_variable_unit_validation(file_info, sidecar)
 
 
-def test_mapping_keys_are_exact_and_stale_keys_fail_readiness(tmp_path):
-    result = calculate_variable_unit_validation(_csv(tmp_path, ["Speed"]), {
-        "speed": {"unit": "m/s"},
-        "Speed": {"unit": "m/s"},
-    })
+def test_sidecar_must_match_dataset_schema_exactly(tmp_path):
+    first = _csv(tmp_path, ["Speed"])
+    sidecar = calculate_variable_unit_validation(first)
+    second_path = tmp_path / "other.csv"
+    pd.DataFrame({"speed": [1]}).to_csv(second_path, index=False)
 
-    assert result["unknown_mapping_variables"] == ["speed"]
-    assert result["validity_score"] == 1.0
-    assert result["all_variables_ready"] is False
+    with pytest.raises(ValueError, match="schema fingerprint does not match"):
+        calculate_variable_unit_validation((str(second_path), second_path.name, ".csv"), sidecar)
 
 
-def test_explicit_mapping_overrides_conflict_and_retains_warning(tmp_path):
+def test_user_resolution_overrides_conflict_and_retains_observations(tmp_path):
     path = tmp_path / "units.h5"
     with h5py.File(path, "w") as h5:
         dataset = h5.create_dataset("velocity (km/h)", data=[1.0])
         dataset.attrs["units"] = "m/s"
 
-    result = calculate_variable_unit_validation(
-        (str(path), path.name, ".h5"),
-        {"/velocity (km/h)": {"unit": "meter/second"}},
-    )
+    file_info = (str(path), path.name, ".h5")
+    sidecar = _with_resolutions(file_info, {
+        "/velocity (km/h)": {
+            "kind": "unit",
+            "unit": "meter/second",
+            "source": "user",
+        },
+    })
+    result = calculate_variable_unit_validation(file_info, sidecar)
 
     record = result["variables"][0]
-    assert record["classification"] == "valid"
-    assert record["chosen_source"] == "mapping"
-    assert len(record["lower_priority_declarations"]) == 2
-    assert result["override_warnings"][0]["variable"] == "/velocity (km/h)"
-    assert result["all_variables_ready"] is True
+    assert record["finding"]["status"] == "valid"
+    assert record["resolution"]["source"] == "user"
+    assert len(record["observed"]) == 2
+    assert record["finding"]["warnings"] == [
+        "User resolution overrides detected unit metadata."
+    ]
+    assert result["summary"]["all_variables_ready"] is True
 
 
 def test_unresolved_native_name_conflict_fails(tmp_path):
@@ -164,9 +187,9 @@ def test_unresolved_native_name_conflict_fails(tmp_path):
 
     result = calculate_variable_unit_validation((str(path), path.name, ".h5"))
 
-    assert result["variables"][0]["classification"] == "conflicting"
-    assert result["counts"]["conflicting"] == 1
-    assert result["all_variables_ready"] is False
+    assert result["variables"][0]["finding"]["status"] == "conflicting"
+    assert result["summary"]["counts"]["conflicting"] == 1
+    assert result["summary"]["all_variables_ready"] is False
 
 
 def test_equivalent_native_and_name_declarations_do_not_conflict(tmp_path):
@@ -177,8 +200,24 @@ def test_equivalent_native_and_name_declarations_do_not_conflict(tmp_path):
 
     result = calculate_variable_unit_validation((str(path), path.name, ".h5"))
 
-    assert result["variables"][0]["classification"] == "valid"
-    assert result["all_variables_ready"] is True
+    assert result["variables"][0]["finding"]["status"] == "valid"
+    assert result["variables"][0]["resolution"]["source"] == "detected"
+    assert result["summary"]["all_variables_ready"] is True
+
+
+def test_sidecar_round_trip_is_deterministic_and_does_not_change_dataset(tmp_path):
+    file_info = _csv(tmp_path, ["speed", "station"])
+    before = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        "speed": {"kind": "unit", "unit": "m/s", "source": "user"},
+        "station": {"kind": "not_applicable", "source": "user"},
+    })
+
+    first = calculate_variable_unit_validation(file_info, sidecar)
+    second = calculate_variable_unit_validation(file_info, first)
+
+    assert second == first
+    assert Path(file_info[0]).read_bytes() == before
 
 
 def test_native_hdf5_discovery_reads_units_without_values(tmp_path):
@@ -237,7 +276,8 @@ def test_empty_logical_schema_has_null_scores(tmp_path):
 
     result = calculate_variable_unit_validation((str(path), path.name, ".json"))
 
-    assert result["coverage_score"] is None
-    assert result["validity_score"] is None
-    assert result["all_variables_ready"] is False
-    assert result["counts"]["total"] == 0
+    assert result["summary"]["classification_coverage"] is None
+    assert result["summary"]["applicable_unit_coverage"] is None
+    assert result["summary"]["metadata_validity"] is None
+    assert result["summary"]["all_variables_ready"] is False
+    assert result["summary"]["counts"]["total"] == 0
