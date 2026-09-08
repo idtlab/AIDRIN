@@ -626,7 +626,7 @@ def test_baseline_incompatible_worker_is_rejected_even_with_capability(client, m
     assert "incompatible" in response.get_json()["error"]
 
 
-def test_expired_negotiation_is_reprobed(client, monkeypatch):
+def test_expired_negotiation_is_reused_for_standard_metric(client, monkeypatch):
     if not is_globus_available():
         return
     _authenticate(client)
@@ -649,6 +649,51 @@ def test_expired_negotiation_is_reprobed(client, monkeypatch):
         }
 
     assert client.post("/globus/submit", json=_submission()).status_code == 200
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("metric_name", "params"),
+    [
+        (
+            "file_reference_validation",
+            {"path_targets": ["path"], "root_id": "root-0"},
+        ),
+        ("custom_outlier_targets", {}),
+    ],
+)
+def test_expired_negotiation_is_reprobed_for_capability_submission(
+    client,
+    monkeypatch,
+    metric_name,
+    params,
+):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    calls = []
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: calls.append("probe")
+        or _compatibility_report(["file_reference_validation_v1"]),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "task-id")
+    with client.session_transaction() as flask_session:
+        flask_session["globus_endpoint_negotiation"] = {
+            "endpoint_id": "endpoint-uuid",
+            "remote_aidrin_version": aidrin.__version__,
+            "capability_schema_version": 1,
+            "capabilities": ["file_reference_validation_v1"],
+            "checked_at": 0,
+            "fingerprint": "old",
+        }
+
+    assert client.post(
+        "/globus/submit",
+        json=_submission(metric_name, params),
+    ).status_code == 200
     assert calls == ["probe"]
 
 

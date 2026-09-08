@@ -118,6 +118,14 @@ def _requires_file_reference_capability(metric_name, params):
     )
 
 
+def _submission_negotiation(client, endpoint_id, refresh_capabilities):
+    """Return negotiation state without re-probing ordinary metric submissions."""
+    record = session.get("globus_endpoint_negotiation", {})
+    if not refresh_capabilities and record.get("endpoint_id") == endpoint_id:
+        return record, None
+    return _fresh_negotiation(client, endpoint_id)
+
+
 def _valid_file_reference_discovery(value):
     if not isinstance(value, dict) or not isinstance(value.get("enabled"), bool):
         return False
@@ -368,14 +376,15 @@ def submit():
 
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
-        negotiation, report = _fresh_negotiation(client, endpoint_id)
+        requires_file_reference = _requires_file_reference_capability(metric_name, params)
+        refresh_capabilities = requires_file_reference or metric_name == "custom_outlier_targets"
+        negotiation, report = _submission_negotiation(client, endpoint_id, refresh_capabilities)
         if negotiation is None:
             return jsonify({
                 "error": "The Globus Compute endpoint is incompatible with this AIDRIN server.",
                 "compatibility": report,
             }), 409
 
-        requires_file_reference = _requires_file_reference_capability(metric_name, params)
         if requires_file_reference and FILE_REFERENCE_CAPABILITY not in negotiation["capabilities"]:
             return jsonify({"error": FILE_REFERENCE_UPGRADE_MESSAGE}), 409
         if requires_file_reference and any(key in params for key in ("allowed_roots", "scan_limit")):
