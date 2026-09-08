@@ -19,8 +19,13 @@ from flask import (
     session,
     url_for,
 )
-from werkzeug.utils import safe_join
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.file_reference_policy import (
+    allowed_roots,
+    discovery_configuration,
+    resolve_base_dir,
+    scan_limit,
+)
 from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import (
@@ -91,96 +96,18 @@ metrics_bp = Blueprint("metrics", __name__)
 
 metric_time_log = logging.getLogger("metric")
 METRIC_CELERY_TIMEOUT = 120
-FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT = 10000
 
 
 def _file_reference_allowed_roots():
-    configured = current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS")
-    if configured is None:
-        raw = os.environ.get("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", "")
-        if raw:
-            try:
-                configured = json.loads(raw)
-            except json.JSONDecodeError:
-                metric_time_log.warning("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS must be a JSON array")
-                configured = []
-    if not isinstance(configured, (list, tuple)):
-        if configured is not None:
-            metric_time_log.warning("FILE_REFERENCE_ALLOWED_ROOTS must be a list of absolute directories")
-        return []
-
-    roots = []
-    seen = set()
-    for value in configured:
-        try:
-            path = os.fspath(value)
-            if not os.path.isabs(path):
-                raise ValueError("not absolute")
-            canonical = os.path.realpath(path)
-            if not os.path.isdir(canonical):
-                raise ValueError("not an existing directory")
-        except (TypeError, ValueError, OSError) as exc:
-            metric_time_log.warning("Ignoring invalid file-reference root %r: %s", value, exc)
-            continue
-        key = os.path.normcase(canonical)
-        if key not in seen:
-            seen.add(key)
-            roots.append(canonical)
-    return roots
-
-
-def _file_reference_root_choices(roots):
-    return [
-        {"id": f"root-{index}", "label": root}
-        for index, root in enumerate(roots)
-    ]
+    return allowed_roots(current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS"))
 
 
 def _file_reference_web_scan_limit():
-    value = current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT")
-    if value is None:
-        value = os.environ.get(
-            "AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT",
-            FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT,
-        )
-    try:
-        limit = int(value)
-        if limit <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        metric_time_log.warning(
-            "Invalid file-reference web scan limit %r; using %d",
-            value,
-            FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT,
-        )
-        return FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT
-    return limit
+    return scan_limit(current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT"))
 
 
 def _file_reference_base_dir(roots, root_id, subdirectory):
-    choices = {f"root-{index}": root for index, root in enumerate(roots)}
-    if root_id not in choices:
-        raise ValueError("Select an allowed filesystem root.")
-    root = choices[root_id]
-    relative = (subdirectory or "").strip()
-    if os.path.isabs(relative):
-        raise ValueError("Base subdirectory must be relative to the selected root.")
-    candidate = safe_join(root, relative)
-    if candidate is None:
-        raise ValueError("Base subdirectory must stay inside the selected root.")
-    candidate = os.path.realpath(candidate)
-    try:
-        inside_root = (
-            os.path.commonpath([os.path.normcase(candidate), os.path.normcase(root)])
-            == os.path.normcase(root)
-        )
-    except ValueError:
-        inside_root = False
-    if not inside_root:
-        raise ValueError("Base subdirectory must stay inside the selected root.")
-    if not os.path.isdir(candidate):
-        raise ValueError("Base subdirectory must identify an existing directory.")
-    return candidate
+    return resolve_base_dir(roots, root_id, subdirectory)
 
 
 # ---------------------------------------------------------------------------
@@ -196,14 +123,10 @@ def custom_outlier_targets():
         return jsonify({"success": False, "message": "No file uploaded"}), 200
     try:
         targets = iter_targets((file_path, file_name, file_type))
-        roots = _file_reference_allowed_roots()
-        file_reference = {
-            "enabled": bool(roots),
-            "roots": _file_reference_root_choices(roots),
-            "scan_limit": _file_reference_web_scan_limit(),
-        }
-        if not roots:
-            file_reference["message"] = "File-reference validation is not configured by the server administrator."
+        file_reference = discovery_configuration(
+            current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS"),
+            current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT"),
+        )
         return jsonify({
             "success": True,
             "targets": ensure_json_serializable(targets),
