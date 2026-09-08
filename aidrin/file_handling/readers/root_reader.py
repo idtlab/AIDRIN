@@ -11,6 +11,11 @@ from typing import List
 import pandas as pd
 
 from aidrin.file_handling.readers.base_reader import BaseFileReader
+from aidrin.file_handling.readers.structured import (
+    INVENTORY_UNSUPPORTED,
+    InventoryResult,
+    make_inventory,
+)
 
 
 def _require_uproot():
@@ -36,6 +41,9 @@ class rootReader(BaseFileReader):
         super().__init__(file_path, logger)
         # Tree path(s). None = auto (single tree) or require selection when many.
         self._explicit_selected_keys = selected_keys
+
+    def inventory(self) -> InventoryResult:
+        return make_inventory(INVENTORY_UNSUPPORTED)
 
     def _list_trees(self) -> List[str]:
         uproot = _require_uproot()
