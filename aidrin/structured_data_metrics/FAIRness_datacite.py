@@ -61,10 +61,10 @@ def categorize_keys_fair(self: Task, json_data):
                     categorized_data[category][field] = "CHECK FAILED ❌"
 
         fair_summary = {
-            "Findability Checks": f"{fair_scores['Findable']}/10",
-            "Accessibility Checks": f"{fair_scores['Accessible']}/1",
-            "Interoperability Checks": f"{fair_scores['Interoperable']}/1",
-            "Reusability Checks": f"{fair_scores['Reusable']}/7",
+            "Findable Checks": f"{fair_scores['Findable']}/10",
+            "Accessible Checks": f"{fair_scores['Accessible']}/1",
+            "Interoperable Checks": f"{fair_scores['Interoperable']}/1",
+            "Reusable Checks": f"{fair_scores['Reusable']}/7",
             "Total Checks": f"{sum(fair_scores.values())}/19",
         }
 

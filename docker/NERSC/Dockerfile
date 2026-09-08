@@ -22,9 +22,18 @@ RUN uv pip install gunicorn==23.0.0 supervisor==4.2.5 "setuptools<82"
 
 FROM python:3.13.11-slim-bookworm
 
-# libgomp1: OpenMP runtime for scikit-learn/scipy/shap.
+# libgomp1: OpenMP runtime for scikit-learn/scipy. The rest are
+# WeasyPrint's native dependencies (Pango/HarfBuzz/gdk-pixbuf) plus a base
+# font, needed for PDF export.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 \
+    && apt-get install -y --no-install-recommends \
+        libgomp1 \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libharfbuzz0b \
+        libgdk-pixbuf-2.0-0 \
+        shared-mime-info \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1 \
@@ -33,11 +42,19 @@ ENV PYTHONUNBUFFERED=1 \
     GUNICORN_TIMEOUT=120 \
     HOME=/tmp \
     MPLCONFIGDIR=/tmp/matplotlib \
+    PGEOCODE_DATA_DIR=/app/.cache/pgeocode \
     FLASK_CELERY__broker_url=redis://redis:6379/0 \
     FLASK_CELERY__result_backend=redis://redis:6379/0
 
 WORKDIR /app
 COPY --from=builder /app /app
+
+# Pre-fetch pgeocode's GeoNames data into PGEOCODE_DATA_DIR (under /app) so the HIPAA
+# postal-code check works for the arbitrary non-root UID on Spin: HOME=/tmp/.cache is
+# root-owned and unwritable there, and Spin may block egress. Best-effort at build.
+RUN mkdir -p /app/.cache/pgeocode \
+    && python -c "import pgeocode; pgeocode.Nominatim('us')" \
+    || echo "pgeocode prefetch skipped (offline build); will download at runtime"
 
 # Group-writable (GID 0) so Spin's arbitrary non-root UID can write.
 RUN chgrp -R 0 /app && chmod -R g=u /app

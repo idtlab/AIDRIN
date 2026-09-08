@@ -11,8 +11,14 @@ import numpy as np
 import pandas as pd
 from typing import Any, Dict, List, Optional
 
+from aidrin.custom_metrics.template import CUSTOM_DR_TEMPLATE
+from aidrin.file_handling.file_parser import read_file
+from aidrin.telemetry import metric_span
+from aidrin.telemetry import mlflow_sink
+
 from .config import HeadlessConfig
 from .runners import (
+    _build_file_info,
     run_class_imbalance,
     run_completeness,
     run_constant_feature_count,
@@ -29,6 +35,7 @@ from .runners import (
     run_feature_relevance,
     run_hipaa_compliance,
     run_k_anonymity,
+    using_selected_keys,
     run_l_diversity,
     run_multiple_attribute_risk,
     run_null_count_trend,
@@ -362,11 +369,13 @@ def summarize_dataset(
     file_type: Optional[str] = None,
     max_features: Optional[int] = None,
     loader: Optional[str] = None,
+    selected_keys: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Return shape, per-column descriptive stats, and missing counts for a dataset."""
     from pathlib import Path
     from aidrin.file_handling.custom_loader import using_custom_loader
     from aidrin.file_handling.file_parser import read_file
+    from .runners import _build_file_info
 
     path = Path(file_path)
     if file_type and str(file_type).startswith("."):
@@ -375,13 +384,16 @@ def summarize_dataset(
         ext = f".{file_type}"
     else:
         ext = path.suffix.lower()
+    file_info = _build_file_info(
+        file_path, ext, path.name, selected_keys=_normalize_list(selected_keys)
+    )
     with using_custom_loader(loader):
-        df = read_file((file_path, path.name, ext), loader=loader)
+        df = read_file(file_info, loader=loader)
 
     if df is None or isinstance(df, str):
         detail = df if isinstance(df, str) else (
-            "Unable to build a table from this file. For unsupported formats, "
-            "pass a custom loader (path.py:function) that returns a DataFrame."
+            "Unable to build a table from this file. For unsupported formats or "
+            "multi-array Zarr/HDF5 stores, pass a loader or selected_keys."
         )
         raise ValueError(detail)
 
@@ -511,6 +523,33 @@ def _maybe_save_images(
     return updated
 
 
+# Arguments that change what a metric measures, beyond its declared required
+# args. Everything else reaching run_metric is an output-shaping default (page
+# sizes and caps) that the MCP tools pass on every call, and logging those as
+# params buries the ones that matter.
+_RESULT_AFFECTING_ARGS = frozenset({
+    "epsilon", "threshold", "frequency", "distance_metric", "scan_limit",
+    "rules_file", "rules_json",
+})
+
+
+def _tracking_params(metric_key, file_type, kwargs):
+    """The arguments that define this measurement, for MLflow params.
+
+    A readiness score is not interpretable without them: k-anonymity over two
+    quasi-identifiers and over five both land in the same metric key.
+    """
+    metric = METRIC_REGISTRY.get(metric_key) or {}
+    required = {a.replace("-", "_") for a in metric.get("required_args", [])}
+    relevant = required | _RESULT_AFFECTING_ARGS
+    if "path_targets" in required:
+        relevant = relevant | {"target_match", "base_dir", "max_results"}
+
+    params = {"file_type": file_type}
+    params.update({k: v for k, v in kwargs.items() if k in relevant})
+    return params
+
+
 def run_metric(
     metric_name: str,
     file_path: str,
@@ -520,6 +559,37 @@ def run_metric(
     image_dir: Optional[str] = None,
     verbose: bool = False,
     strip_visualizations: bool = False,
+    session_id: Optional[str] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    from aidrin.file_handling.custom_loader import using_custom_loader
+
+    with using_custom_loader(kwargs.get("loader") or kwargs.get("data_loader")):
+        with using_selected_keys(_normalize_list(kwargs.get("selected_keys"))):
+            return _run_metric_impl(
+                metric_name,
+                file_path,
+                file_type=file_type,
+                file_name=file_name,
+                save_images=save_images,
+                image_dir=image_dir,
+                verbose=verbose,
+                strip_visualizations=strip_visualizations,
+                session_id=session_id,
+                **kwargs,
+            )
+
+
+def _run_metric_impl(
+    metric_name: str,
+    file_path: str,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    save_images: bool = True,
+    image_dir: Optional[str] = None,
+    verbose: bool = False,
+    strip_visualizations: bool = False,
+    session_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     from aidrin.file_handling.custom_loader import using_custom_loader
@@ -548,49 +618,95 @@ def _run_metric_impl(
     image_dir: Optional[str] = None,
     verbose: bool = False,
     strip_visualizations: bool = False,
+    session_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     metric_key = metric_name.strip().lower().replace("-", "_")
-    metric = METRIC_REGISTRY.get(metric_key)
-    if not metric:
-        # Try resolving as a custom metric
-        try:
-            _log_progress(f"Running custom metric: {metric_key}...", verbose)
-            start_time = time.time()
-            result = run_custom_metric_logic(metric_key, file_path, **kwargs)
-            result = _maybe_save_images(metric_key, result, save_images, image_dir)
-            if strip_visualizations:
-                result = _strip_visualizations(result)
-            elapsed = time.time() - start_time
-            _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-            return _sanitize(result)
-        except FileNotFoundError:
-            raise ValueError(f"Unknown metric: {metric_name}") from None
 
-    _log_progress(f"Running {metric_key}...", verbose)
-    start_time = time.time()
-
-    if metric_key in {
-        "completeness", "duplicity", "outliers", "constant_feature_count",
-        "max_pairwise_correlation", "skewness", "kurtosis",
-    }:
-        result = metric["runner"](file_path, file_type, file_name)
-        result = _maybe_save_images(metric_key, result, save_images, image_dir)
-        if strip_visualizations:
-            result = _strip_visualizations(result)
-        elapsed = time.time() - start_time
-        _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-        return _sanitize(result)
-
+    # Defined before the METRIC_REGISTRY lookup because the custom-metric branch
+    # below runs first and calls it. ``span`` and ``start_time`` are bound later
+    # in either branch; closures bind late, so both resolve at call time.
     def _finalize(result: Dict[str, Any]) -> Dict[str, Any]:
         """Apply post-processing: save images, strip visualizations, sanitize types."""
         result = _maybe_save_images(metric_key, result, save_images, image_dir)
         if strip_visualizations:
             result = _strip_visualizations(result)
         elapsed = time.time() - start_time
+        span.set_attribute("metric.duration_ms", elapsed * 1000)
         _log_progress(f"  {metric_key} completed in {elapsed:.2f}s", verbose)
-        return _sanitize(result)
+        sanitized = _sanitize(result)
+        if session_id is not None:
+            try:
+                mlflow_sink.log_metric_result(
+                    session_id,
+                    metric_key,
+                    sanitized,
+                    elapsed,
+                    file_path,
+                    params=_tracking_params(metric_key, file_type, kwargs),
+                )
+            except Exception:
+                # Telemetry never changes a result and never raises: this
+                # function is the chokepoint for every AIDRIN interface.
+                pass
+        return sanitized
 
+    metric = METRIC_REGISTRY.get(metric_key)
+
+    with metric_span(
+        metric_key,
+        category=(metric or {}).get("category"),
+        file_path=file_path,
+        file_type=file_type,
+    ) as span:
+        if not metric:
+            # Try resolving as a custom metric
+            try:
+                _log_progress(f"Running custom metric: {metric_name}...", verbose)
+                start_time = time.time()
+                # Pass the original metric_name, not the lowercased/underscored
+                # metric_key: metric_key is only for METRIC_REGISTRY lookups.
+                # Custom metrics are usually a file path or a case-sensitive
+                # name, and mangling it here corrupts paths containing hyphens
+                # or mixed case (e.g. "/tmp/My-Audit.py" -> "/tmp/my_audit.py",
+                # which then fails to resolve on disk).
+                result = run_custom_metric_logic(
+                    metric_name, file_path, file_type=file_type,
+                    file_name=file_name, **kwargs
+                )
+                return _finalize(result)
+            except _CustomScriptNotFound:
+                raise ValueError(f"Unknown metric: {metric_name}") from None
+
+        _log_progress(f"Running {metric_key}...", verbose)
+        start_time = time.time()
+
+        if metric_key in {
+            "completeness", "duplicity", "outliers", "constant_feature_count",
+            "max_pairwise_correlation", "skewness", "kurtosis",
+        }:
+            result = metric["runner"](file_path, file_type, file_name)
+            return _finalize(result)
+
+        return _run_registry_metric(
+            metric_key, metric, file_path, file_type, file_name, _finalize, kwargs
+        )
+
+
+def _run_registry_metric(
+    metric_key: str,
+    metric: Dict[str, Any],
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    _finalize: Any,
+    kwargs: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Argument validation and dispatch for the registry metrics.
+
+    Split out of ``run_metric`` so the instrumented body stays readable; the
+    branches below are unchanged.
+    """
     if metric_key == "row_level_completeness":
         required_columns = _normalize_list(kwargs.get("required_columns"))
         if not required_columns:
@@ -759,13 +875,14 @@ def _run_metric_impl(
         result = metric["runner"](file_path, file_type, file_name, columns)
         return _finalize(result)
 
-    raise ValueError(f"Unsupported metric: {metric_name}")
+    raise ValueError(f"Unsupported metric: {metric_key}")
 
 
 def run_batch_metrics(
     config: Any,
     verbose: bool = False,
     strip_visualizations: bool = False,
+    report_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     if isinstance(config, dict):
         config_obj = HeadlessConfig.from_dict(config)
@@ -801,6 +918,7 @@ def run_batch_metrics(
         "batch_column": config_obj.batch_column,
         "target_columns": config_obj.target_columns,
         "loader": getattr(config_obj, "loader", None),
+        "selected_keys": config_obj.selected_keys,
         "path_targets": config_obj.path_targets,
         "base_dir": config_obj.base_dir,
         "max_results": config_obj.max_results,
@@ -812,15 +930,24 @@ def run_batch_metrics(
         "strip_visualizations": strip_visualizations,
     }
 
+    session = mlflow_sink.start_session(file_path=config_obj.file_path)
+    session_id = session.session_id if session else None
+
     results: Dict[str, Any] = {}
-    for metric_name in metrics:
-        results[metric_name] = run_metric(
-            metric_name,
-            config_obj.file_path,
-            file_type=config_obj.file_type,
-            file_name=config_obj.file_name,
-            **payload,
-        )
+    try:
+        for metric_name in metrics:
+            results[metric_name] = run_metric(
+                metric_name,
+                config_obj.file_path,
+                file_type=config_obj.file_type,
+                file_name=config_obj.file_name,
+                session_id=session_id,
+                **payload,
+            )
+    finally:
+        # report_path is optional and ignored when tracking is off; a missing
+        # file is a warning inside the sink, never a failed batch.
+        mlflow_sink.end_session(session, report_path=report_path)
     return results
 
 
@@ -831,6 +958,7 @@ def run_data_quality(
     verbose: bool = False,
     strip_visualizations: bool = True,
     loader: Optional[str] = None,
+    selected_keys: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Run fast data quality metrics (completeness, duplicity, outliers).
 
@@ -844,6 +972,7 @@ def run_data_quality(
             file_name=file_name,
             metrics=["completeness", "duplicity", "outliers"],
             loader=loader,
+            selected_keys=selected_keys or [],
             save_images=False,
         ),
         verbose=verbose,
@@ -898,47 +1027,10 @@ def generate_metric_template(metric_name: str, target_dir: str) -> str:
     if os.path.exists(file_path):
         raise FileExistsError(f"A metric file named '{clean_name}.py' already exists in {target_dir}. Edit that file or choose a different name.")
 
-    # 3. The Class Template
-    content = """from aidrin.custom_metrics.base_dr import BaseDRAgent
-from typing import Any
-from typing import Dict, Union, Any
-import pandas as pd
-
-class CustomDR(BaseDRAgent):
-    def __init__(self, dataset: Any, **kwargs):
-        super().__init__(dataset, **kwargs)
-
-    def metric(self, **kwargs):
-        \"\"\"
-        Implement your custom metric logic here.
-        \"\"\"
-
-        # IMPLEMENT YOUR METRIC LOGIC BELOW
-        # Example: Calculating the total number of missing cells in the entire DataFrame
-
-        # df: pd.DataFrame = self.dataset
-        # return {
-        #     "total_missing_cells": df.isna().sum().to_dict()
-        # }
-
-        return {"message": "Placeholder metric. Implement your logic here."}
-
-    def remedy(self, **kwargs) -> pd.DataFrame:
-        \"\"\"
-        Apply remediation steps to the dataset and return a pandas DataFrame.
-        \"\"\"
-
-        # df: pd.DataFrame = self.dataset.copy()
-        # TODO: implement remediation logic and return the modified DataFrame
-        # Example:
-        # df = df.fillna(0)
-        # return df
-
-        return self.dataset
-    """
-
+    # 3. The Class Template — shared with the web Custom Metrics panel
+    # (aidrin/custom_metrics/template.py) so the two never drift apart.
     with open(file_path, "w") as f:
-        f.write(content)
+        f.write(CUSTOM_DR_TEMPLATE)
 
     return file_path
 
@@ -998,6 +1090,15 @@ def generate_loader_template(loader_name: str, target_dir: str) -> str:
     return file_path
 
 
+class _CustomScriptNotFound(FileNotFoundError):
+    """Raised only when the custom-metric .py script itself can't be resolved.
+
+    Kept distinct from a plain FileNotFoundError (e.g. a missing dataset file)
+    so that run_metric()'s "fall back to Unknown metric" handling below can't
+    accidentally swallow a dataset-not-found error and misreport it.
+    """
+
+
 def _find_script_in_dir(directory: str, stem: str) -> Optional[str]:
     """Return the path to <stem>.py in directory, case-insensitively."""
     target = f"{stem}.py".lower()
@@ -1021,7 +1122,7 @@ def _resolve_custom_script(metric_name: str) -> str:
     if metric_name.endswith(".py") or os.sep in metric_name or "/" in metric_name:
         path = os.path.abspath(metric_name)
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Custom metric file not found: {metric_name}")
+            raise _CustomScriptNotFound(f"Custom metric file not found: {metric_name}")
         return path
 
     clean_name = _safe_slug(metric_name)
@@ -1035,14 +1136,21 @@ def _resolve_custom_script(metric_name: str) -> str:
     if path:
         return path
 
-    raise FileNotFoundError(
+    raise _CustomScriptNotFound(
         f"Custom metric '{clean_name}' not found in the current directory or aidrin/custom_metrics/. "
         f"Pass a full path (e.g. aidrin run custom /path/to/{clean_name}.py ...) "
         f"or run from the directory containing {clean_name}.py."
     )
 
 
-def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[str, Any]:
+def run_custom_metric_logic(
+    metric_name: str,
+    file_path: str,
+    *,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    **kwargs,
+) -> Dict[str, Any]:
     """
     Dynamically loads and executes a CustomDR class from any directory.
     """
@@ -1050,7 +1158,7 @@ def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[
     clean_name = os.path.splitext(os.path.basename(script_path))[0]
 
     if not os.path.exists(script_path):
-        raise FileNotFoundError(f"Custom metric file not found at: {script_path}")
+        raise _CustomScriptNotFound(f"Custom metric file not found at: {script_path}")
 
     # 1. Dynamic Import
     spec = importlib.util.spec_from_file_location(clean_name, script_path)
@@ -1060,10 +1168,20 @@ def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[
     if not hasattr(module, "CustomDR"):
         raise AttributeError(f"Class 'CustomDR' not found in {script_path}")
 
-    # 2. Load Dataset
-    # You can expand this to support parquet/json as needed
+    # 2. Load Dataset (supports every format in file_handling/readers/)
     _log_progress(f"Loading dataset: {file_path}", kwargs.get("verbose", False))
-    df = pd.read_csv(file_path)
+    df = read_file(
+        _build_file_info(
+            file_path,
+            file_type,
+            file_name,
+            # Explicit keys, since these run outside run_metric's
+            # using_selected_keys context when called from the CLI.
+            _normalize_list(kwargs.get("selected_keys")) or None,
+        )
+    )
+    if not isinstance(df, pd.DataFrame):
+        raise FileNotFoundError(df if isinstance(df, str) else f"Could not read dataset: {file_path}")
 
     # 3. Instantiate and Run
     agent = module.CustomDR(dataset=df, **kwargs)
@@ -1079,13 +1197,27 @@ def run_custom_metric_logic(metric_name: str, file_path: str, **kwargs) -> Dict[
     return results
 
 
-def run_custom_metric_remedy(metric_name: str, file_path: str, *, output_dir: Optional[str] = None, **kwargs) -> str:
-    """Execute `remedy` on a custom metric and save the returned DataFrame as CSV."""
+def run_custom_metric_remedy(
+    metric_name: str,
+    file_path: str,
+    *,
+    output_dir: Optional[str] = None,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    **kwargs,
+) -> str:
+    """Execute `remedy` on a custom metric and save the returned DataFrame as CSV.
+
+    The input dataset may be any format supported by file_handling/readers/
+    (CSV, Excel, JSON, NPZ, HDF5, Parquet); the remedied output is always
+    written as CSV, since remediated data doesn't round-trip losslessly back
+    into every original format (e.g. JSON/NPZ/HDF5 are flattened on read).
+    """
     script_path = _resolve_custom_script(metric_name)
     clean_name = os.path.splitext(os.path.basename(script_path))[0]
 
     if not os.path.exists(script_path):
-        raise FileNotFoundError(f"Custom metric file not found at: {script_path}")
+        raise _CustomScriptNotFound(f"Custom metric file not found at: {script_path}")
 
     spec = importlib.util.spec_from_file_location(clean_name, script_path)
     module = importlib.util.module_from_spec(spec)
@@ -1095,17 +1227,43 @@ def run_custom_metric_remedy(metric_name: str, file_path: str, *, output_dir: Op
         raise AttributeError(f"Class 'CustomDR' not found in {script_path}")
 
     _log_progress(f"Loading dataset for remedy: {file_path}", kwargs.get("verbose", False))
-    df = pd.read_csv(file_path)
+    df = read_file(
+        _build_file_info(
+            file_path,
+            file_type,
+            file_name,
+            # Explicit keys, since these run outside run_metric's
+            # using_selected_keys context when called from the CLI.
+            _normalize_list(kwargs.get("selected_keys")) or None,
+        )
+    )
+    if not isinstance(df, pd.DataFrame):
+        raise FileNotFoundError(df if isinstance(df, str) else f"Could not read dataset: {file_path}")
 
     agent = module.CustomDR(dataset=df, **kwargs)
     if not hasattr(agent, "remedy"):
         raise AttributeError("CustomDR must implement a remedy method returning a pandas DataFrame")
 
+    # Run metric() first so remedy() can access findings via
+    # kwargs.get("metric_results", {}) — the contract documented in the
+    # generated template and honored by the web UI (web/routes/custom.py).
+    # Without this, remedy() invoked via the CLI/MCP always saw an empty
+    # metric_results, unlike the web route.
+    _log_progress(f"Executing metric for custom metric: {metric_name}", kwargs.get("verbose", False))
+    metric_results = agent.metric(**kwargs)
+    if not isinstance(metric_results, dict):
+        raise TypeError(
+            f"metric() in '{script_path}' must return a dict, got {type(metric_results).__name__}"
+        )
+
     _log_progress(f"Executing remedy for custom metric: {metric_name}", kwargs.get("verbose", False))
-    remedied = agent.remedy(**kwargs)
+    remedied = agent.remedy(metric_results=metric_results, **kwargs)
 
     if not isinstance(remedied, pd.DataFrame):
-        raise TypeError("remedy() must return a pandas DataFrame")
+        raise TypeError(
+            f"remedy() in '{script_path}' must return a pandas DataFrame, "
+            f"got {type(remedied).__name__}"
+        )
 
     target_dir = output_dir or os.path.join(os.path.dirname(script_path), "remedy_data")
     os.makedirs(target_dir, exist_ok=True)

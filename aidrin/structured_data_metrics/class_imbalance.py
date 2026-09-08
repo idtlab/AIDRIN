@@ -288,14 +288,14 @@ def class_distribution_plot(df, column):
 
         # Ensure we have valid data for pie chart
         if len(class_counts) == 0 or class_counts.sum() == 0:
-            plt.close()
+            plt.close(fig)
             raise ValueError("No valid data available for plotting")
 
         # Plotting a pie chart without labels
         try:
             wedges, _ = ax.pie(class_counts.values, startangle=90)
         except Exception as e:
-            plt.close()
+            plt.close(fig)
             raise Exception(f"Failed to create pie chart: {str(e)}")
 
         # Create legend labels with class name and percentage only
@@ -307,32 +307,32 @@ def class_distribution_plot(df, column):
 
         ax.legend(wedges, legend_labels, title="Classes", loc="center left", bbox_to_anchor=(1, 0.5), fontsize=12)
 
-        plt.title(f'Distribution of Each Class in {column}')
-        plt.axis('equal')
+        ax.set_title(f'Distribution of Each Class in {column}')
+        ax.axis('equal')
 
         # Add total records as a text box below the chart
-        plt.figtext(0.5, 0.01, f'Total records: {total}', ha='center', fontsize=12)
+        fig.text(0.5, 0.01, f'Total records: {total}', ha='center', fontsize=12)
 
         # Save the plot to a BytesIO buffer
         buf = io.BytesIO()
-        plt.tight_layout()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=300)
+        fig.tight_layout()
+        fig.savefig(buf, format='png', bbox_inches='tight', dpi=300)
         buf.seek(0)
 
         # Encode the buffer to base64
         try:
             plot_base64 = base64.b64encode(buf.read()).decode('utf-8')
             if not plot_base64:
-                plt.close()
+                plt.close(fig)
                 buf.close()
                 raise ValueError("Failed to encode plot image")
         except Exception as e:
-            plt.close()
+            plt.close(fig)
             buf.close()
             raise Exception(f"Failed to encode plot image: {str(e)}")
 
         # Close the plot and buffer to free up resources
-        plt.close()
+        plt.close(fig)
         buf.close()
 
         return plot_base64

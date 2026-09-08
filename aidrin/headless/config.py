@@ -47,6 +47,7 @@ class HeadlessConfig:
     batch_column: Optional[str] = None
     target_columns: Optional[List[str]] = field(default_factory=list)
     loader: Optional[str] = None
+    selected_keys: Optional[List[str]] = field(default_factory=list)
     path_targets: Optional[List[str]] = field(default_factory=list)
     base_dir: Optional[str] = None
     max_results: Optional[int] = 100
@@ -88,6 +89,7 @@ class HeadlessConfig:
             "save-images": "save_images",
             "data-loader": "loader",
             "loader": "loader",
+            "selected-keys": "selected_keys",
         }
 
         normalized: Dict[str, Any] = {}
@@ -110,6 +112,7 @@ class HeadlessConfig:
             "required_columns",
             "duplicate_columns",
             "target_columns",
+            "selected_keys",
         ):
             if key in normalized:
                 normalized[key] = _normalize_list(normalized[key])

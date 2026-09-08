@@ -20,6 +20,14 @@ Quick Start
    # Run a batch of metrics from a YAML config
    aidrin batch /path/to/my_project/batch_config.yaml
 
+   # HDF5 / Zarr: pick compatible 1D arrays (comma-separated paths)
+   aidrin run completeness /path/to/store.zarr --selected-keys age,income
+   aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
+
+Local web upload does not accept ``.zarr`` directories; use the CLI or library. Multi-dimensional
+grids are not auto-flattened — select 1D (or a single 2D) arrays only. See
+:ref:`cli_installation` to install Zarr support.
+
 ----
 
 Sample Dataset
@@ -252,6 +260,9 @@ Results are printed as JSON to stdout. Redirect to a file to save:
 
    target-column: approved
 
+For HDF5/Zarr multi-array stores, add ``selected-keys`` (list or comma-separated string)
+with compatible 1D paths, for example ``selected-keys: [age, income]``.
+
 For a file manifest, batch configuration accepts dashed or underscored forms and
 list or comma-separated targets:
 
@@ -304,15 +315,18 @@ entirely outside the AIDRIN package — you own the file.
    aidrin add-custom-module my_audit --dir /path/to/my_project
 
 This creates ``/path/to/my_project/my_audit.py`` with a ``metric()`` and a ``remedy()`` method.
-Edit those methods to add your logic, then run by passing the file path directly:
+Edit those methods to add your logic, then run by passing the file path directly. The dataset
+may be CSV, Parquet, Excel, HDF5, JSON, or NPZ — the format is detected from the file extension,
+or set explicitly with ``--file-type``:
 
 .. code-block:: bash
 
    aidrin run custom /path/to/my_project/my_audit.py /path/to/sample_dataset.csv metric    # run the metric
    aidrin run custom /path/to/my_project/my_audit.py /path/to/sample_dataset.csv remedy    # run the remedy
+   aidrin run custom /path/to/my_project/my_audit.py /path/to/sample_dataset.parquet metric --file-type parquet
 
-The remedy output CSV is saved to a ``remedy_data/`` folder next to the module file
-(``/path/to/my_project/remedy_data/my_audit_remedy.csv``).
+The remedy output is always saved as a CSV, regardless of the input format, to a ``remedy_data/``
+folder next to the module file (``/path/to/my_project/remedy_data/my_audit_remedy.csv``).
 
 ``aidrin add-custom-loader``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

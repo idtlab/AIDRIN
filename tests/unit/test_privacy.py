@@ -31,7 +31,9 @@ if "pkg_resources" not in sys.modules:
 
 from aidrin.structured_data_metrics.privacy_measure import (  # noqa: E402
     generate_single_attribute_MM_risk_scores,
+    generate_single_attribute_MM_risk_scores_groupby,
     generate_multiple_attribute_MM_risk_scores,
+    generate_multiple_attribute_MM_risk_scores_groupby,
     compute_k_anonymity,
     compute_l_diversity,
     compute_t_closeness,
@@ -49,6 +51,29 @@ def _make_df(n_rows=20, n_categories=4):
     ids = np.arange(n_rows)
     qi = rng.choice([f"cat_{i}" for i in range(n_categories)], size=n_rows)
     return pd.DataFrame({"id": ids, "qi": qi})
+
+
+def _make_multi_qi_df(n_rows=500, seed=42):
+    """Larger frame with three quasi-identifiers for parity checks."""
+    rng = np.random.default_rng(seed)
+    return pd.DataFrame({
+        "id": np.arange(n_rows),
+        "qi1": rng.choice(["A", "B", "C", "D"], size=n_rows),
+        "qi2": rng.choice(["X", "Y", "Z"], size=n_rows),
+        "qi3": rng.choice(["P", "Q"], size=n_rows),
+    })
+
+
+def _assert_stats_equal(test_case, original_stats, groupby_stats, context):
+    """Assert descriptive-stat dicts from legacy vs groupby MM paths match."""
+    test_case.assertEqual(set(original_stats.keys()), set(groupby_stats.keys()), context)
+    for key in original_stats:
+        test_case.assertAlmostEqual(
+            original_stats[key],
+            groupby_stats[key],
+            places=9,
+            msg=f"{context}: stat {key}",
+        )
 
 
 # ===========================================================================
@@ -240,6 +265,127 @@ class TestMultipleAttributeMMRiskScores(unittest.TestCase):
         vis = result.get("Multiple attribute risk scoring Visualization", "")
         if vis:
             base64.b64decode(vis)
+
+
+# ===========================================================================
+# groupby MM risk parity (readiness-report fast path vs legacy)
+# ===========================================================================
+
+
+class TestMMRiskGroupbyParity(unittest.TestCase):
+    """Groupby implementations must match legacy MM risk outputs."""
+
+    def test_single_attribute_matches_legacy_one_qi(self):
+        df = _make_df(n_rows=80, n_categories=5)
+        cols = ["qi"]
+        self._assert_single_parity(df, cols)
+
+    def test_single_attribute_matches_legacy_multiple_qis(self):
+        df = _make_multi_qi_df()
+        for cols in (["qi1"], ["qi1", "qi2"], ["qi1", "qi2", "qi3"]):
+            with self.subTest(cols=cols):
+                self._assert_single_parity(df, cols)
+
+    def test_single_attribute_string_eval_cols_parity(self):
+        df = _make_multi_qi_df(n_rows=120, seed=7)
+        legacy = generate_single_attribute_MM_risk_scores(
+            df, "id", "qi1, qi2", include_visualization=False
+        )
+        groupby = generate_single_attribute_MM_risk_scores_groupby(
+            df, "id", "qi1, qi2", include_visualization=False
+        )
+        self.assertNotIn("Error", legacy)
+        self.assertNotIn("Error", groupby)
+        for col in ("qi1", "qi2"):
+            _assert_stats_equal(
+                self,
+                legacy["Descriptive statistics of the risk scores"][col],
+                groupby["Descriptive statistics of the risk scores"][col],
+                f"single {col}",
+            )
+
+    def test_multiple_attribute_matches_legacy(self):
+        df = _make_multi_qi_df()
+        for cols in (["qi1"], ["qi1", "qi2"], ["qi1", "qi2", "qi3"]):
+            with self.subTest(cols=cols):
+                self._assert_multi_parity(df, cols)
+
+    def test_multiple_attribute_string_eval_cols_parity(self):
+        df = _make_multi_qi_df(n_rows=200, seed=11)
+        legacy = generate_multiple_attribute_MM_risk_scores(
+            df, "id", "qi1,qi2", include_visualization=False
+        )
+        groupby = generate_multiple_attribute_MM_risk_scores_groupby(
+            df, "id", "qi1,qi2", include_visualization=False
+        )
+        self.assertNotIn("Error", legacy)
+        self.assertNotIn("Error", groupby)
+        _assert_stats_equal(
+            self,
+            legacy["Descriptive statistics of the risk scores"],
+            groupby["Descriptive statistics of the risk scores"],
+            "multi qi1,qi2",
+        )
+        self.assertAlmostEqual(
+            legacy["Dataset Risk Score"],
+            groupby["Dataset Risk Score"],
+            places=9,
+        )
+
+    def test_error_parity_non_unique_id(self):
+        df = pd.DataFrame({
+            "id": [1, 1, 2, 3],
+            "qi1": ["A", "B", "A", "C"],
+            "qi2": ["X", "Y", "X", "Z"],
+        })
+        legacy = generate_multiple_attribute_MM_risk_scores(
+            df, "id", ["qi1", "qi2"], include_visualization=False
+        )
+        groupby = generate_multiple_attribute_MM_risk_scores_groupby(
+            df, "id", ["qi1", "qi2"], include_visualization=False
+        )
+        self.assertIn("Error", legacy)
+        self.assertIn("Error", groupby)
+        self.assertEqual(legacy["Error"], groupby["Error"])
+
+    def _assert_single_parity(self, df, cols):
+        legacy = generate_single_attribute_MM_risk_scores(
+            df, "id", cols, include_visualization=False
+        )
+        groupby = generate_single_attribute_MM_risk_scores_groupby(
+            df, "id", cols, include_visualization=False
+        )
+        self.assertNotIn("Error", legacy, legacy)
+        self.assertNotIn("Error", groupby, groupby)
+        for col in cols:
+            _assert_stats_equal(
+                self,
+                legacy["Descriptive statistics of the risk scores"][col],
+                groupby["Descriptive statistics of the risk scores"][col],
+                f"single {col}",
+            )
+
+    def _assert_multi_parity(self, df, cols):
+        legacy = generate_multiple_attribute_MM_risk_scores(
+            df, "id", cols, include_visualization=False
+        )
+        groupby = generate_multiple_attribute_MM_risk_scores_groupby(
+            df, "id", cols, include_visualization=False
+        )
+        self.assertNotIn("Error", legacy, legacy)
+        self.assertNotIn("Error", groupby, groupby)
+        _assert_stats_equal(
+            self,
+            legacy["Descriptive statistics of the risk scores"],
+            groupby["Descriptive statistics of the risk scores"],
+            f"multi {cols}",
+        )
+        self.assertAlmostEqual(
+            legacy["Dataset Risk Score"],
+            groupby["Dataset Risk Score"],
+            places=9,
+            msg=f"Dataset Risk Score for {cols}",
+        )
 
 
 # ===========================================================================

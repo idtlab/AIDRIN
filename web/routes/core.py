@@ -17,7 +17,11 @@ from flask import (
     url_for,
 )
 from werkzeug.utils import secure_filename
-from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP
+from aidrin.file_handling.file_parser import (
+    GLOBUS_FILE_TYPES,
+    READER_MAP,
+    SUPPORTED_FILE_TYPES,
+)
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
@@ -228,6 +232,7 @@ def inspector():
             supported_file_types=SUPPORTED_FILE_TYPES,
             upload_file_types=list(SUPPORTED_FILE_TYPES),
             upload_error=upload_error,
+            globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],
             current_checked_keys=current_checked_keys
             if current_checked_keys is not None
@@ -475,6 +480,22 @@ def cached_result(metric_name):
         or ""
     )
     if not file_name:
+        return jsonify({"cached": False})
+
+    if metric_name == "readiness_report":
+        from web.routes.metrics import get_cached_readiness_report
+
+        cached_report = get_cached_readiness_report(file_name)
+        if cached_report:
+            return jsonify(ensure_json_serializable(cached_report))
+        return jsonify({"cached": False})
+
+    if metric_name == "readiness_report_fair":
+        from web.routes.metrics import get_cached_readiness_fair_report
+
+        cached_fair = get_cached_readiness_fair_report(file_name)
+        if cached_fair:
+            return jsonify(ensure_json_serializable(cached_fair))
         return jsonify({"cached": False})
 
     cache_key = f"user:{user_id}:file:{file_name}:{metric_name}"
