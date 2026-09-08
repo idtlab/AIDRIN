@@ -209,17 +209,17 @@ This dimension checks whether dataset variables have usable unit metadata and
 evaluates dataset metadata for compliance with the **FAIR principles** —
 *Findable*, *Accessible*, *Interoperable*, and *Reusable*.
 
-Variable Unit Validation
-''''''''''''''''''''''''
+Unit Metadata Audit and Repair
+''''''''''''''''''''''''''''''
 
-- **Method**: Requires every logical variable to resolve to a Pint-recognized unit, dimensionless ``1``, or ``not_applicable``. Explicit mappings override native HDF5/Parquet metadata and trailing name annotations; unresolved conflicts fail validation.
-- **Parameters**: Open **Variable Unit Validation** under Understandability and use the searchable, paginated editor or import the shared mapping JSON schema. Embedded units are prefilled, while undeclared variables remain unclassified. Import, export, and edits are browser-local and never modify the dataset.
-- **Result**: Coverage and validity scores, readiness status, classification counts, filterable per-variable details, override warnings, lower-priority declarations, and stale mapping keys.
+- **Method**: Audits every logical variable for a Pint-recognized unit, dimensionless ``1``, or an explicit not-applicable resolution. Native HDF5/Parquet metadata and trailing name annotations are preserved as observations; user resolutions can correct them without changing the dataset.
+- **Parameters**: Open **Unit Metadata Audit** under Understandability. Review every unresolved, invalid, ambiguous, or conflicting variable; select **Has a physical unit**, **Dimensionless**, or **No unit applies**; and validate the edited sidecar. A complete canonical sidecar can also be imported.
+- **Result**: Separate classification coverage, applicable-unit coverage, and metadata-validity scores; deterministic per-variable findings; and a complete downloadable ``.units.json`` sidecar, including unresolved variables.
 
 This checks metadata syntax and coverage only. It does not infer units from
 values, validate expected physical dimensions, convert data, or prove that a
 syntactically valid unit is correct. See :ref:`variable_unit_validation` for
-supported metadata, precedence, ``g`` ambiguity, and Globus compatibility.
+supported metadata, resolution behavior, ``g`` ambiguity, and Globus compatibility.
 
 FAIR Compliance Report
 '''''''''''''''''''''''
