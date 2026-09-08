@@ -53,7 +53,6 @@ from aidrin.structured_data_metrics.max_pairwise_correlation import (
 from aidrin.structured_data_metrics.skewness import skewness
 from aidrin.structured_data_metrics.variable_unit_validation import (
     calculate_variable_unit_validation,
-    discover_variable_units,
 )
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
@@ -128,7 +127,7 @@ def custom_outlier_targets():
     try:
         file_info = (file_path, file_name, file_type)
         targets = iter_targets(file_info)
-        unit_targets = discover_variable_units(file_info)
+        unit_metadata = calculate_variable_unit_validation(file_info)
         file_reference = discovery_configuration(
             current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS"),
             current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT"),
@@ -136,7 +135,7 @@ def custom_outlier_targets():
         return jsonify({
             "success": True,
             "targets": ensure_json_serializable(targets),
-            "unit_targets": ensure_json_serializable(unit_targets),
+            "unit_metadata": ensure_json_serializable(unit_metadata),
             "file_reference": file_reference,
         })
     except Exception as e:
@@ -2979,9 +2978,9 @@ def variable_unit_validation():
             file_type=file_type,
         ):
             try:
-                raw_declarations = request.form.get("variable_unit_declarations", "{}")
-                declarations = json.loads(raw_declarations)
-                unit_result = calculate_variable_unit_validation(file_info, declarations)
+                raw_metadata = request.form.get("variable_unit_metadata")
+                metadata = json.loads(raw_metadata) if raw_metadata else None
+                unit_result = calculate_variable_unit_validation(file_info, metadata)
             except Exception as e:
                 metric_time_log.error("Variable Unit Validation error: %s", e, exc_info=True)
                 final_dict["Variable Unit Validation"] = {
@@ -2992,10 +2991,6 @@ def variable_unit_validation():
                     ),
                 }
             else:
-                unit_result["Description"] = (
-                    "Checks unit-metadata coverage and syntax. It does not infer units "
-                    "from values or prove physical correctness."
-                )
                 final_dict["Variable Unit Validation"] = unit_result
 
         metric_time_log.info(
