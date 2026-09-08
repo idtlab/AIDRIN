@@ -67,6 +67,7 @@ agentic = [
 ]
 dev = [
     { name = "flake8" },
+    { name = "jsonschema" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -154,6 +155,7 @@ requires-dist = [
     { name = "globus-compute-sdk", marker = "extra == 'globus'", specifier = ">=2.3.0" },
     { name = "globus-sdk", marker = "extra == 'globus'", specifier = ">=3.20.0" },
     { name = "h5py", specifier = ">=3.14.0" },
+    { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "langchain-community", marker = "extra == 'agentic'", specifier = ">=0.3.0" },
     { name = "langchain-community", marker = "extra == 'mcp'", specifier = ">=0.3.0" },
     { name = "langchain-openai", marker = "extra == 'agentic'", specifier = ">=0.3.0" },
