@@ -1450,8 +1450,7 @@ function renderBeforeAfterTable(before, after) {
         : "bg-gray-50 dark:bg-gray-700/50";
     const hasBefore = Object.prototype.hasOwnProperty.call(beforeFlat, key);
     const hasAfter = Object.prototype.hasOwnProperty.call(afterFlat, key);
-    const changed =
-      hasBefore && hasAfter && beforeFlat[key] !== afterFlat[key];
+    const changed = hasBefore && hasAfter && beforeFlat[key] !== afterFlat[key];
     html += `<tr class="${stripe} border-b dark:border-gray-700">`;
     html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(key)}</td>`;
     html += `<td class="px-4 py-2 text-right font-mono text-xs">${hasBefore ? escapeHtml(formatValue(beforeFlat[key])) : "—"}</td>`;
