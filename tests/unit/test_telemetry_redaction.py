@@ -196,6 +196,22 @@ class TestNonFiniteValuesAreSkipped(unittest.TestCase):
         result = {"Duplicity scores": {"Overall duplicity of the dataset": 0.25}}
         self.assertEqual(project("duplicity", result), {"aidrin.quality.duplicity": 0.25})
 
+    def test_variable_unit_sidecar_projects_its_three_summary_scores(self):
+        result = {
+            "summary": {
+                "classification_coverage": 0.75,
+                "applicable_unit_coverage": 2 / 3,
+                "metadata_validity": 1.0,
+            }
+        }
+        self.assertEqual(
+            project("variable_unit_validation", result),
+            {
+                "aidrin.structure.unit_classification_coverage": 0.75,
+                "aidrin.structure.applicable_unit_coverage": 2 / 3,
+                "aidrin.structure.unit_metadata_validity": 1.0,
+            },
+        )
 
 
 class TestDeclaredPathsResolveAgainstRealResults(unittest.TestCase):

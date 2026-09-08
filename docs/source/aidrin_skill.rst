@@ -161,7 +161,7 @@ reachable.
    * - ``run_aidrin_metric``
      - Runs a single built-in metric against a dataset
    * - ``verify_variable_units``
-     - Validates per-variable unit metadata using inline JSON or a host-local mapping file
+     - Audits unit metadata or revalidates a complete inline or host-local sidecar
    * - ``verify_file_references``
      - Validates file references stored in selected dataset targets
    * - ``run_custom_outlier_check``

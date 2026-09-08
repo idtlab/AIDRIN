@@ -285,22 +285,16 @@ list or comma-separated targets:
    max-results: 100
    scan-limit: 0
 
-Variable-unit validation accepts either an inline mapping or a mapping file
-resolved on the execution host. See :ref:`variable_unit_validation` for the
-schema and precedence rules:
+Variable-unit validation accepts either a complete inline sidecar or a sidecar
+file resolved on the execution host. See :ref:`variable_unit_validation` for
+the canonical schema and audit-and-repair workflow:
 
 .. code-block:: yaml
 
    file-path: /path/to/sample_dataset.csv
    metrics:
      - variable-unit-validation
-   unit-declarations:
-     acceleration:
-       unit: m/s^2
-     normalized_score:
-       unit: "1"
-     station_id:
-       status: not_applicable
+   unit-metadata-file: /path/to/sample_dataset.units.json
 
 **Example** — fairness analysis on the sample dataset:
 
