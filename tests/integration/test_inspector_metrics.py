@@ -196,7 +196,17 @@ def test_data_structure_file_reference_validation_returns_metadata(uploaded_clie
 
 
 def test_understandability_variable_unit_validation_uses_request_local_sidecar(uploaded_client):
-    metadata = uploaded_client.post("/custom-outlier-targets").get_json()["unit_metadata"]
+    discovery = uploaded_client.post("/custom-outlier-targets").get_json()
+    metadata = discovery["unit_metadata"]
+    temperature = next(
+        group
+        for group in discovery["unit_catalog"]
+        if group["quantity"] == "temperature"
+    )
+    assert temperature["units"][0] == {
+        "label": "Celsius (°C)",
+        "unit": "degree_Celsius",
+    }
     resolutions = {
         "age": {"kind": "unit", "unit": "year", "source": "user"},
         "income": {"kind": "unit", "unit": "kilogram", "source": "user"},
