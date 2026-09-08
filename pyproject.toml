@@ -110,6 +110,7 @@ dev = [
     # Inspects the rendered readiness PDF (pages, text, embedded images) in
     # tests/integration/test_readiness_pdf_render.py.
     "pypdf>=4.0",
+    "jsonschema>=4.0",
 ]
 docs = [
     "sphinx==8.1.3",
