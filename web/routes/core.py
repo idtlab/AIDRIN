@@ -230,11 +230,18 @@ def clear_file():
     # Capture this session's own files before clearing the session.
     owned_files = session.get("owned_files", [])
 
+    # Settings that belong to the user, not to the dataset being cleared, so
+    # they survive starting a new configuration (e.g. the LLM API key).
+    llm_config = session.get("llm_config")
+
     session.pop("uploaded_file_path", None)
     session.pop("uploaded_file_name", None)
     session.pop("uploaded_file_type", None)
     session.pop("minimize_preview", None)
     session.clear()
+
+    if llm_config:
+        session["llm_config"] = llm_config
 
     try:
         for file_path in owned_files:
