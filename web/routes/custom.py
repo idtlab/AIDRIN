@@ -134,9 +134,30 @@ def custom_metrics():
                 remedy_filepath = os.path.join(remedy_folder, remedy_filename)
                 new_data.to_csv(remedy_filepath, index=False)
 
-                final_dict["Custom Metric Evaluation"]["apply_remedy"] = url_for(
-                    "custom.download_remedy", filename=remedy_filename
-                )
+                # Re-run metric() on the remedied data so the panel shows the
+                # effect of the remedy, not just the pre-remedy result.
+                try:
+                    after_instance = custom_metric_class(dataset=new_data)
+                    after_results = after_instance.metric()
+                except Exception as e:
+                    metric_time_log.error(
+                        "Custom metric() raised on remedied data: %s", e, exc_info=True
+                    )
+                    return jsonify(
+                        {"error": "Error running metric() on the remedied data."}
+                    ), 400
+
+                if not isinstance(after_results, dict):
+                    return jsonify({
+                        "error": f"{custom_metric_class.__name__}.metric() must return a "
+                                 f"dictionary, got {type(after_results).__name__}."
+                    }), 400
+
+                final_dict["Custom Metric Evaluation"] = {
+                    "before": metric_results,
+                    "after": after_results,
+                    "apply_remedy": url_for("custom.download_remedy", filename=remedy_filename),
+                }
 
             final_dict = ensure_json_serializable(final_dict)
 
