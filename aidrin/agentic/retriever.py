@@ -137,7 +137,11 @@ class VectorRetriever:
         )
         base = config_path.parent
         default_dir = (base.parent / store_name).resolve()
-        vector_dir_raw = retrieval_cfg.get("vector_store_dir", default_dir)
+        vector_dir_raw = (
+            retrieval_cfg.get("vector_store_dir")
+            or vector_store_cfg.get("vector_store_dir")
+            or default_dir
+        )
         if Path(vector_dir_raw).is_absolute():
             vector_dir = Path(vector_dir_raw)
         else:

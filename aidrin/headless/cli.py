@@ -3,7 +3,6 @@ import contextlib
 import json
 import re
 import sys
-from pathlib import Path
 from typing import List, Optional
 import os
 
@@ -458,79 +457,30 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
 
 def _agentic_build_index(args: argparse.Namespace) -> None:
     try:
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
+        result = _local_api.run_agentic_index(args.config)
     except ImportError:
         sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
         sys.exit(1)
-    result = VectorDBBuilder(Path(args.config).resolve()).build()
     print(json.dumps(result, indent=2))
 
 
 def _agentic_run(args: argparse.Namespace) -> None:
     try:
-        import yaml
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        from aidrin.agentic.data_profiler import DataProfiler
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
-        from aidrin.agentic.run import _run_query, _json_safe
-        from aidrin.agentic.token_tracker import get_tracker
+        result = _local_api.run_agentic_pipeline(
+            args.config,
+            output_path=args.output,
+            skip_vector=args.skip_vector,
+            verbose=getattr(args, "verbose", False),
+        )
     except ImportError:
         sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
         sys.exit(1)
 
-    config_path = Path(args.config).resolve()
-    get_tracker().reset()
+    saved_to = result.pop("_saved_to", None)
+    if saved_to:
+        sys.stderr.write(f"Results written to: {saved_to}\n")
 
-    profiler = DataProfiler(config_path=config_path)
-    profile_result = profiler.profile()
-
-    cfg = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
-
-    if not args.skip_vector and cfg.get("vector_store"):
-        builder = VectorDBBuilder(config_path)
-        if not builder.exists():
-            vector_result = builder.build()
-            if getattr(args, "verbose", False):
-                sys.stderr.write(json.dumps(vector_result, indent=2) + "\n")
-
-    retrieval_cfg = cfg.get("retrieval", {}) or {}
-    questions_raw = retrieval_cfg.get("questions") or []
-    if not questions_raw:
-        single = retrieval_cfg.get("question", "")
-        questions_raw = single if isinstance(single, list) else ([single] if single else [])
-
-    def _parse_q(q):
-        return (q["text"], q.get("loader")) if isinstance(q, dict) else (q, None)
-
-    parsed_questions = [_parse_q(q) for q in questions_raw]
-
-    max_workers = int(retrieval_cfg.get("max_workers", 4))
-    query_results = []
-    if parsed_questions:
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
-            futures = {
-                pool.submit(_run_query, config_path, text, profile_result, loader): text
-                for text, loader in parsed_questions
-            }
-            for future in as_completed(futures):
-                try:
-                    query_results.append(future.result())
-                except Exception as exc:
-                    query_results.append({"question": futures[future], "error": str(exc)})
-
-    combined = _json_safe({
-        "profile": profile_result,
-        "queries": query_results,
-        "token_usage": get_tracker().to_dict(),
-    })
-
-    if args.output:
-        out = Path(args.output).resolve()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
-        sys.stderr.write(f"Results written to: {out}\n")
-
-    print(json.dumps(combined, indent=2, ensure_ascii=False))
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------------------
