@@ -60,15 +60,21 @@ def test_every_recommendation_carries_a_panel_and_display_name(uploaded_client):
         assert rec["why"]
 
 
-def test_llm_enhancement_is_merged_when_available(uploaded_client, monkeypatch):
+def test_llm_selection_replaces_the_curated_list_entirely(uploaded_client, monkeypatch):
+    """The LLM is the primary recommender: its selection IS the recommendation
+    list, not an overlay on the curated baseline. A selection that omits a
+    metric the curated map would have included for this goal (hipaa_compliance
+    and completeness are both curated "critical" for training) must make that
+    metric genuinely absent from the response, not merely deprioritised."""
     monkeypatch.setattr(intent_routes, "_llm_config", lambda: {"model": "test-model"})
     monkeypatch.setattr(
         intent_routes,
         "_call_llm",
         lambda *a, **kw: {
-            "summary": "Tailored summary.",
-            "rationales": {"completeness": "Six columns have nulls."},
-            "extras": [{"metric": "t_closeness", "why": "Because you said EU."}],
+            "summary": "Only this matters for your stated goal.",
+            "selection": [
+                {"metric": "t_closeness", "priority": "critical", "why": "Because you said EU."},
+            ],
         },
     )
     response = uploaded_client.post("/intent/recommend", json={"intents": ["training"]})
@@ -76,22 +82,33 @@ def test_llm_enhancement_is_merged_when_available(uploaded_client, monkeypatch):
 
     assert data["llm_used"] is True
     assert data["model"] == "test-model"
-    assert data["summary"] == "Tailored summary."
+    assert data["summary"] == "Only this matters for your stated goal."
 
-    by_key = {r["metric"]: r for r in data["recommendations"]}
-    assert by_key["completeness"]["why"] == "Six columns have nulls."
-    assert by_key["completeness"]["source"] == "curated"
-    assert by_key["t_closeness"]["source"] == "ai"
-    assert by_key["t_closeness"]["priority"] == "recommended"
+    metrics = [r["metric"] for r in data["recommendations"]]
+    assert metrics == ["t_closeness"]
+    assert "hipaa_compliance" not in metrics
+    assert "completeness" not in metrics
+
+    rec = data["recommendations"][0]
+    assert rec["source"] == "ai"
+    assert rec["priority"] == "critical"
+    assert rec["reason_intents"] == []
+    assert rec["why"] == "Because you said EU."
 
 
 def test_llm_failure_degrades_to_the_curated_list(uploaded_client, monkeypatch):
+    """_call_llm returns None both when the LLM is unreachable/errors and when
+    its reply validates to nothing (web.llm.validate_selection's own garbage-
+    input handling is exercised directly in test_intent_llm_parsing.py) --
+    either way the route must fall back to the full curated list."""
     monkeypatch.setattr(intent_routes, "_llm_config", lambda: {"model": "test-model"})
     monkeypatch.setattr(intent_routes, "_call_llm", lambda *a, **kw: None)
     response = uploaded_client.post("/intent/recommend", json={"intents": ["training"]})
     data = response.get_json()
     assert data["llm_used"] is False
+    assert data["model"] == ""
     assert any(r["metric"] == "completeness" for r in data["recommendations"])
+    assert all(r["source"] == "curated" for r in data["recommendations"])
 
 
 def test_result_is_cached_and_llm_not_called_twice(uploaded_client, monkeypatch):
@@ -99,7 +116,10 @@ def test_result_is_cached_and_llm_not_called_twice(uploaded_client, monkeypatch)
 
     def _fake(*args, **kwargs):
         calls.append(1)
-        return {"summary": "once", "rationales": {}, "extras": []}
+        return {
+            "summary": "once",
+            "selection": [{"metric": "completeness", "priority": "critical", "why": "x"}],
+        }
 
     monkeypatch.setattr(intent_routes, "_llm_config", lambda: {"model": "test-model"})
     monkeypatch.setattr(intent_routes, "_call_llm", _fake)

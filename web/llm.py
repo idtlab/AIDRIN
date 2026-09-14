@@ -130,7 +130,6 @@ def explain_metric(description, base64_image, config):
 # Intent-based metric recommendation
 # ---------------------------------------------------------------------------
 
-MAX_EXTRAS = 5
 MAX_TEXT = 400
 MAX_COLUMNS_IN_PROMPT = 50
 MAX_COLUMN_NAME_LEN = 64
@@ -141,18 +140,27 @@ RECOMMEND_SYSTEM_PROMPT = (
     "Nothing has been evaluated, verified, quantified, passed, or failed. "
     "The user will tell you what they plan to do with a dataset, and you will be "
     "given a catalog of available checks, a short profile of the dataset's "
-    "structure (not its quality), and the checks the user has already put on "
-    "their to-do list to run next (also not yet run, also with no results). "
-    "Your job is only to help the user decide what to check NEXT, and why it "
-    "matters for their stated goal.\n"
+    "structure (not its quality), and a rule-based starting point -- a fixed "
+    "mapping of goals to checks -- that also has no results and has not been run. "
+    "Your job is to select the full list of checks the user should run NEXT, and "
+    "to explain why each one matters for their stated goal.\n"
+    "You are not limited to the rule-based starting point: you have more context "
+    "than that fixed mapping does (the user's stated goals, their free-text notes, "
+    "and the dataset's structure), so use it. Add checks the starting point omits "
+    "if they matter here, drop checks it includes if they genuinely do not matter "
+    "for this goal and this dataset, and set your own priority for each one you "
+    "keep. Your selection replaces the starting point entirely -- whatever you "
+    "return is what the user will see, so make it complete for their stated goals.\n"
     "Reply with a single JSON object and nothing else, in this exact shape:\n"
-    '{"summary": "...", "rationales": {"<metric_key>": "..."}, '
-    '"extras": [{"metric": "<metric_key>", "why": "..."}]}\n'
-    "Rules: use only metric keys from the catalog; write one or two sentences per "
-    "rationale explaining why that check matters for THIS dataset and THIS goal; "
-    "propose at most five extras, and only checks not already on the to-do list; "
-    "if a check needs the user to nominate a column or supply rules, say so in "
-    "its rationale. Do not invent metric names. Do not suggest column names.\n"
+    '{"summary": "...", "selection": [{"metric": "<metric_key>", '
+    '"priority": "critical"|"recommended", "why": "..."}]}\n'
+    "Rules: use only metric keys from the catalog; select the checks that matter "
+    "for the stated goals and omit those that do not; every entry in \"selection\" "
+    "must carry a \"why\" of one or two sentences explaining why that check "
+    "matters for THIS dataset and THIS goal -- you must explain every check you "
+    "keep, not only the ones the starting point did not already suggest; if a "
+    "check needs the user to nominate a column or supply rules, say so in its "
+    "rationale. Do not invent metric names. Do not suggest column names.\n"
     "Strict prohibitions: never state or imply that the dataset passes, fails, "
     "is clean, is high quality, or has been evaluated, verified, or quantified "
     "in any way. You have no metric results — do not describe outcomes, scores, "
@@ -202,61 +210,54 @@ def _clean_text(value):
     return trimmed[:MAX_TEXT] if trimmed else None
 
 
-def validate_recommendation(raw, baseline, profile=None):
-    """Drop anything the model made up.
+def validate_selection(raw, profile=None):
+    """Drop anything the model made up, keep the rest as-is.
 
-    Metric keys must be real, extras must not duplicate the baseline, extras
-    must pass the same applicability filter the curated list did, and every
-    string is length-capped. Returns None when nothing survives.
+    The LLM is the primary recommender: its selection is not overlaid onto a
+    baseline and is not required to cover it. Metric keys must be real,
+    priority is coerced to a valid value, every entry needs a non-empty
+    ``why``, duplicates collapse to their first occurrence, and each pick
+    still has to pass the same applicability filter the curated list uses --
+    a metric the dataset provably cannot support (aidrin.intent.is_applicable)
+    is dropped regardless of what the model says, since that is a data-truth
+    constraint rather than an editorial one. Returns None when nothing in the
+    selection survives.
     """
-    from aidrin.intent import all_metric_keys, is_applicable
+    from aidrin.intent import CRITICAL, RECOMMENDED, all_metric_keys, is_applicable
 
     if not isinstance(raw, dict):
         return None
 
     valid_keys = all_metric_keys()
-    baseline_set = set(baseline or [])
+    valid_priorities = (CRITICAL, RECOMMENDED)
 
     summary = _clean_text(raw.get("summary")) or ""
 
-    raw_rationales = raw.get("rationales")
-    if not isinstance(raw_rationales, dict):
-        raw_rationales = {}
+    raw_selection = raw.get("selection")
+    if not isinstance(raw_selection, list):
+        raw_selection = []
 
-    rationales = {}
-    for key, value in raw_rationales.items():
-        if key not in valid_keys:
-            continue
-        text = _clean_text(value)
-        if text:
-            rationales[key] = text
-
-    raw_extras = raw.get("extras")
-    if not isinstance(raw_extras, list):
-        raw_extras = []
-
-    extras = []
+    selection = []
     seen = set()
-    for entry in raw_extras:
-        if len(extras) >= MAX_EXTRAS:
-            break
+    for entry in raw_selection:
         if not isinstance(entry, dict):
             continue
         metric = entry.get("metric")
         why = _clean_text(entry.get("why"))
-        if not why or metric not in valid_keys:
-            continue
-        if metric in baseline_set or metric in seen:
+        if not why or metric not in valid_keys or metric in seen:
             continue
         if not is_applicable(metric, profile):
             continue
+        priority = entry.get("priority")
+        if priority not in valid_priorities:
+            priority = RECOMMENDED
         seen.add(metric)
-        extras.append({"metric": metric, "why": why})
+        selection.append({"metric": metric, "priority": priority, "why": why})
 
-    if not summary and not rationales and not extras:
+    if not selection:
         return None
 
-    return {"summary": summary, "rationales": rationales, "extras": extras}
+    return {"summary": summary, "selection": selection}
 
 
 def _format_profile(profile):
@@ -289,6 +290,11 @@ def _format_profile(profile):
 def _build_user_content(intents, notes, profile, baseline):
     """Build the user-message content for the recommendation request.
 
+    ``baseline`` is the curated, rule-based recommendation the user would get
+    with no LLM connected -- sent purely as grounding the model may agree
+    with, extend, trim, or reprioritise. It is not a floor: the model's own
+    selection is what ships (see recommend_for_intent).
+
     Pure string assembly, kept separate from the network call so the exact
     wording sent to the model can be unit-tested without an API key.
     """
@@ -303,17 +309,22 @@ def _build_user_content(intents, notes, profile, baseline):
         f"Dataset profile:\n{_format_profile(profile)}\n\n"
         f"User goals: {goals}\n"
         f"User notes: {notes or '(none)'}\n\n"
-        f"Checks already on the user's to-do list to run next (NOT yet run, "
-        f"no results exist for them): {', '.join(baseline) or '(none)'}"
+        f"Rule-based starting point (NOT yet run, no results exist for any of "
+        f"these -- only a fixed mapping of goals to checks, not run and not a "
+        f"requirement; you may add to it, remove from it, or reprioritise it): "
+        f"{', '.join(baseline) or '(none)'}"
     )
 
 
 def recommend_for_intent(intents, notes, profile, baseline, config):
-    """Ask the LLM to tailor and extend a curated recommendation list.
+    """Ask the LLM to select which checks the user should run next.
 
-    Returns the validated ``{"summary", "rationales", "extras"}`` dict, or
-    None on any failure. Callers must treat None as "use the curated list
-    unchanged" — this is an enhancement, never a dependency.
+    The LLM is the primary recommender here: ``baseline`` (the curated,
+    rule-based list) is sent only as grounding, never as a floor. Returns the
+    validated ``{"summary", "selection"}`` dict, or None on any failure.
+    Callers must treat None as "use the curated list instead" and must not
+    merge a valid selection with the curated baseline -- the selection IS the
+    recommendation list.
     """
     if not _llm_available:
         return None
@@ -338,4 +349,4 @@ def recommend_for_intent(intents, notes, profile, baseline, config):
         logger.info("LLM recommendation failed: %s", e)
         return None
 
-    return validate_recommendation(parse_recommendation(reply), baseline, profile)
+    return validate_selection(parse_recommendation(reply), profile)
