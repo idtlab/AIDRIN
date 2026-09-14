@@ -46,11 +46,11 @@
             <input type="checkbox" name="file_reference_validation" id="toggleButton_file_reference_validation" onchange="toggleValue(this); toggleFileReferenceTargetControl(this.checked)" disabled />
             <span class="checkmark"></span>
             Validate referenced files
-            <span class="info-icon">i<span class="info-text">Check whether paths stored in selected targets identify regular files available to this AIDRIN server, and report file metadata.</span></span>
+            <span class="info-icon">i<span class="info-text">Check whether paths stored in selected targets identify regular files available to the execution host, and report file metadata.</span></span>
           </label>
           <div class="metric-inputs mt-3 space-y-3" style="display: none;">
             <p id="file-reference-message" class="text-xs text-gray-600 dark:text-gray-300">
-              {% if globus_mode %}File-reference validation is available only for files uploaded to the local AIDRIN server.{% else %}Loading server filesystem options...{% endif %}
+              {% if globus_mode %}Loading Globus Compute worker filesystem options...{% else %}Loading server filesystem options...{% endif %}
             </p>
             <div>
               <span class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Path-bearing targets:</span>
