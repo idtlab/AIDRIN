@@ -456,6 +456,10 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
                                 help="Comma-separated columns to count nulls in (optional)")
 
 
+# Where agents look for project skills; Claude Code uses the first, most others the second.
+SKILL_DIRS = (Path(".claude/skills"), Path(".agents/skills"))
+
+
 def _skill_install(args: argparse.Namespace) -> None:
     """Copy the bundled agent skill into ``<dir>/aidrin``, overwriting what is there.
 
@@ -468,18 +472,31 @@ def _skill_install(args: argparse.Namespace) -> None:
     from importlib.resources import files
 
     source = Path(str(files("aidrin") / "skill"))
-    target = Path(args.skills_dir) / "aidrin"
-    if target.is_symlink():
-        # Installed by the `skills` CLI (or a repo checkout); overwriting through
-        # the link would clobber the link target, not this project's copy.
-        sys.stderr.write(
-            f"Error: {target} is a symlink. Remove it first, or update the skill "
-            "with: npx skills update aidrin\n"
-        )
-        sys.exit(2)
-    # ponytail: dirs_exist_ok leaves files the new version no longer ships; rmtree first if that bites
-    shutil.copytree(source, target, dirs_exist_ok=True)
-    print(f"Skill installed at: {target}")
+    if args.skills_dir:
+        skills_dirs = [Path(args.skills_dir)]
+    else:
+        # No --dir: install wherever an agent already keeps skills here.
+        skills_dirs = [d for d in SKILL_DIRS if d.is_dir()]
+        if not skills_dirs:
+            sys.stderr.write(
+                "Error: no skills folder found in the current directory "
+                f"(looked for {', '.join(str(d) for d in SKILL_DIRS)}). "
+                "Pass --dir <skills-folder> to choose one.\n"
+            )
+            sys.exit(2)
+    for skills_dir in skills_dirs:
+        target = skills_dir / "aidrin"
+        if target.is_symlink():
+            # Installed by the `skills` CLI (or a repo checkout); overwriting through
+            # the link would clobber the link target, not this project's copy.
+            sys.stderr.write(
+                f"Error: {target} is a symlink. Remove it first, or update the skill "
+                "with: npx skills update aidrin\n"
+            )
+            sys.exit(2)
+        # ponytail: dirs_exist_ok leaves files the new version no longer ships; rmtree first if that bites
+        shutil.copytree(source, target, dirs_exist_ok=True)
+        print(f"Skill installed at: {target}")
 
 
 def _agentic_build_index(args: argparse.Namespace) -> None:
@@ -987,8 +1004,8 @@ def main() -> None:
     skill_install_parser.add_argument(
         "--dir",
         dest="skills_dir",
-        default=".claude/skills",
-        help="Skills folder to install into (default: .claude/skills; e.g. .agents/skills)",
+        default=None,
+        help="Skills folder to install into (default: every existing .claude/skills and .agents/skills)",
     )
 
     # argv was computed at the top of main() so the `remote` prefix could be

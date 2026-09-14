@@ -1042,6 +1042,30 @@ class TestSkillInstallCommand(unittest.TestCase):
         with open(skill_md) as fh:
             self.assertTrue(fh.read().startswith("---"))
 
+    def test_default_installs_into_existing_skill_dirs(self):
+        os.makedirs(os.path.join(self.tmpdir, ".claude", "skills"))
+        os.makedirs(os.path.join(self.tmpdir, ".agents", "skills"))
+        cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        try:
+            _, _, code = _run_cli("skill", "install")
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 0)
+        for d in (".claude", ".agents"):
+            self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, d, "skills", "aidrin", "SKILL.md")))
+
+    def test_default_errors_when_no_skill_dir(self):
+        cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        try:
+            _, err, code = _run_cli("skill", "install")
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 2)
+        self.assertIn("--dir", err)
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, ".claude")))
+
     def test_refuses_symlink_target(self):
         real = os.path.join(self.tmpdir, "real")
         os.makedirs(real)
