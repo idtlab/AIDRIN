@@ -33,7 +33,10 @@ To use the AIDRIN web application:
    - A JSON report summarizing the results is available for download.
    - Return to the homepage to select another dimension or upload a new dataset.
 
-5. **AI Explanations (Optional)**:
+5. **Tell AIDRIN What You Plan to Do (Optional)**:
+   - After a dataset loads, a modal asks what you are preparing it for and suggests which checks matter most. See `Intent & Recommendations`_ below.
+
+6. **AI Explanations (Optional)**:
    - With the ``llm`` extra installed, each metric result can carry a short AI-generated interpretation. See `AI Explanations`_ below.
 
 Data Readiness Dimensions and Metrics
@@ -412,6 +415,89 @@ authenticate with Globus, and the dataset reachable at the path you enter.
 5. Choose the file type and click **Load Remote Dataset**.
 6. Run metrics as usual. Computation happens on the endpoint; only results
    come back.
+
+Intent & Recommendations
+-------------------------
+
+After a dataset loads, AIDRIN asks what you plan to do with it — train or
+fine-tune a model, run inference, publish or archive the dataset, and so on
+— and suggests which readiness checks are worth running for that goal.
+
+This runs nothing. It computes no metric, reads no additional data, and
+scores nothing; it is advisory only. Its entire output is a prioritised list
+of which checks to look at and why, each with a link that jumps straight to
+the relevant panel and highlights the specific checkbox.
+
+**Setup**
+
+1. When the modal opens, select one or more goals (e.g. *Training or
+   fine-tuning a model*, *Publishing, sharing, or archiving*) and optionally
+   describe your plan in a few words. Alternatively, tick *Other / load a
+   custom profile* to skip the goals and load a profile file you saved
+   earlier (see **Custom profiles** below) instead.
+2. Click **Get recommendations**, or **Skip** to dismiss it for this session.
+3. Recommendations appear grouped into **Check these first** (critical) and
+   **Worth checking** (recommended), each with a short rationale and a link
+   to its panel.
+4. Revisit your goal any time from the **Intent & Recommendations** panel's
+   **Change goal** card, which repeats the same goal checklist and notes box
+   inline and updates the recommendations above without reopening the modal.
+   The same card's action row also has a **Build profile** button, next to
+   **Update recommendations**, that opens the profile-builder page described
+   below.
+
+**Custom profiles**
+
+A profile is an explicit list of checks (with a critical/recommended
+priority each) saved to a JSON file, for cases the curated goal list does
+not cover, or to reuse the same check list across datasets.
+
+- **Build one** on the profile-builder page: click **Build profile** in the
+  Intent & Recommendations panel's **Change goal** card, tick any of the 29
+  readiness checks (grouped by pillar) with a priority for each, and click
+  **Download profile JSON** to save the file. Metrics already recommended
+  for your current goal start pre-ticked. This page has no sidebar entry —
+  it is reached only from that button, and its own **Back to Intent &
+  Recommendations** control returns you to the panel above.
+- **Load one** from the intent modal: tick *Other / load a custom profile*
+  and choose the file. It is read in your browser and never uploaded; the
+  resulting recommendations show *From: Custom profile – <name>* on each
+  card. Loading a profile is only available from this modal — not from the
+  profile-builder page.
+
+The file itself is a small JSON object::
+
+    {
+      "profile_version": 1,
+      "aidrin_version": "2026.08.2",
+      "name": "Lab intake QC",
+      "critical": ["completeness", "row_level_completeness"],
+      "recommended": ["outliers"]
+    }
+
+``profile_version`` is the file-format compatibility gate: AIDRIN rejects a
+file whose ``profile_version`` it does not recognise. ``aidrin_version`` is
+informational only — which AIDRIN release produced the file — and never
+blocks a load; if it differs from the version you are running, AIDRIN loads
+the profile anyway and shows a small note about the difference.
+
+**Works without an LLM**
+
+The recommendations come from a hand-curated mapping of goals to metrics
+built into AIDRIN, so this feature needs no API key and no network access.
+It works the same whether or not the ``llm`` extra is installed.
+
+**What improves with an LLM configured**
+
+With the same OpenAI-compatible connection used for `AI Explanations`_
+(configured via the sparkle icon), the curated list is enhanced rather than
+replaced: rationales are tailored to your stated goal and dataset profile,
+and up to five extra checks may be suggested that the curated map would not
+have anticipated. If the model is unavailable or its reply cannot be used,
+AIDRIN silently falls back to the curated list — the feature never depends
+on the LLM being reachable.
+
+----
 
 AI Explanations
 ---------------
