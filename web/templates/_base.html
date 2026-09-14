@@ -77,10 +77,24 @@
       See the <a href="https://aidrin.readthedocs.io/en/latest/" target="_blank" rel="noopener" class="underline font-medium">documentation</a>.
     </span>
   </div>
+  <div id="demo-footer" role="contentinfo"
+       class="fixed bottom-0 z-[60] w-full min-h-10 py-2 flex items-center justify-center gap-x-3 flex-wrap px-4 text-xs leading-6 text-white bg-black border-t-4 border-transparent [border-image:linear-gradient(to_right,#d86470,#4485f4)_1]">
+    <span class="whitespace-nowrap">
+      Found an error or issue?
+      <a href="https://github.com/idtlab/AIDRIN/issues/new?template=bug_report.md" target="_blank" rel="noopener" class="underline font-medium">Report a bug</a>
+    </span>
+    <span aria-hidden="true" class="text-gray-500">|</span>
+    <span class="whitespace-nowrap">
+      Missing something?
+      <a href="https://github.com/idtlab/AIDRIN/issues/new?template=feature_request.md" target="_blank" rel="noopener" class="underline font-medium">Request a feature</a>
+    </span>
+    <span aria-hidden="true" class="text-gray-500">|</span>
+    <a href="mailto:contact@aidrin.org" class="underline font-medium whitespace-nowrap">contact@aidrin.org</a>
+  </div>
   <style>
-    body { padding-top: 2.5rem; }
+    body { padding-top: 2.5rem; padding-bottom: 2.5rem; }
     nav.fixed, #sidebar { top: 2.5rem; }
-    #sidebar { height: calc(100vh - 2.5rem); }
+    #sidebar { height: calc(100vh - 5rem); }
   </style>
   {% endif %}
 

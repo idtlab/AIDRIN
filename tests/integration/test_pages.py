@@ -115,6 +115,7 @@ def test_version_in_cache_page(client):
 def test_demo_banner_hidden_by_default(client):
     response = client.get("/inspector")
     assert b'id="demo-banner"' not in response.data
+    assert b'id="demo-footer"' not in response.data
 
 
 def test_demo_banner_shown_when_enabled(monkeypatch):
@@ -125,3 +126,5 @@ def test_demo_banner_shown_when_enabled(monkeypatch):
     response = demo_client.get("/inspector")
     assert b'id="demo-banner"' in response.data
     assert b"aidrin.readthedocs.io/en/latest/aidrin_skill.html" in response.data
+    assert b'id="demo-footer"' in response.data
+    assert b"mailto:contact@aidrin.org" in response.data
