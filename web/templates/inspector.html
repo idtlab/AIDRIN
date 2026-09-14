@@ -10,6 +10,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"
           integrity="sha512-78KH17QLT5e55GJqP76vutp1D2iAoy06WcYBXB6iBCsmO6wWzx0Qdg8EDpm8mKXv68BcvHOyeeP4wxAL0twJGQ=="
           crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/codemirror.min.css"
+        integrity="sha512-uf06llspW44/LZpHzHT6qBOIVODjWtv4MxCricRxkzvopAlSWnTf6hpZTFxuuZcuNE9CBQhqE0Seu1CoRk84nQ=="
+        crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/theme/eclipse.min.css"
+        integrity="sha512-Gv0sGKOVrQcQjUHL+xd9Bpq5AvLKbcQMb8s4J1//caCLxqvj00CLJMzJlqnTHTCQbKFRpPHqzXteq6dSMs7PEw=="
+        crossorigin="anonymous" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/codemirror.min.js"
+          integrity="sha512-Kpi2Sp2KpXM2S7aM0p+CwWhm8NuogI15GFPXCmgqAnFr5c86VBXuLEZu0IGBwGSdhhTW6148hP9KTcRMmrjuFQ=="
+          crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/mode/python/python.min.js"
+          integrity="sha512-RT0AjIFvx/vuD2Ih9pmIOhlU+HNTpTHGMJ7TORv4oTT0yHqbz9BicxiBohrq84kjvpHnXtWg/wjG0kisHh4EOA=="
+          crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   <script>
     var retrieveFileUrl = "{{ url_for('core.retrieve_uploaded_file') }}";
@@ -97,6 +109,7 @@
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
         window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};
         window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
+        initFileReferenceTargetPicker();
         showPanel('data-overview');
         // Show Globus info banner + loading spinner for summary stats
         var ws = document.getElementById('workspace-summary');
@@ -113,8 +126,8 @@
         var wh = document.getElementById('workspace-histograms');
         if (wh) wh.style.display = 'none';
 
-        // Fetch summary stats via Globus Compute
-        fetchGlobusSummary();
+        // Serialize the automatic submissions so their session updates cannot conflict.
+        loadInitialGlobusData();
       {% endif %}
     });
   </script>

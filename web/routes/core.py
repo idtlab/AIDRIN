@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 import time
 import uuid
 
@@ -96,8 +97,7 @@ def inspector():
                 loaders_folder = current_app.config.get("CUSTOM_LOADERS_FOLDER")
                 if not loaders_folder:
                     loaders_folder = os.path.join(
-                        current_app.config.get("CUSTOM_METRICS_FOLDER", "custom_metrics"),
-                        "loaders",
+                        tempfile.gettempdir(), "aidrin_custom_loaders",
                     )
                 os.makedirs(loaders_folder, exist_ok=True)
                 if "session_id" not in session:

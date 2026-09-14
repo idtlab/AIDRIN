@@ -164,7 +164,9 @@ def create_app():
 
     # Session loaders live outside the repo tree so the Flask debug reloader
     # does not restart mid-request when Apply writes the script file.
-    custom_loaders_folder = os.path.join(tempfile.gettempdir(), "aidrin_custom_loaders")
+    custom_loaders_folder = app.config.get("CUSTOM_LOADERS_FOLDER") or os.path.join(
+        tempfile.gettempdir(), "aidrin_custom_loaders"
+    )
     os.makedirs(custom_loaders_folder, exist_ok=True)
     app.config["CUSTOM_LOADERS_FOLDER"] = custom_loaders_folder
 

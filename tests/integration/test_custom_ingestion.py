@@ -74,3 +74,57 @@ def test_inspector_has_no_custom_ingestion_panel(uploaded_client):
     html = response.data.decode()
     assert "panel-custom-ingestion" not in html
     assert "Custom Ingestion" not in html
+
+
+def test_custom_loader_storage_is_separate_from_metrics(client, app, tmp_path):
+    from pathlib import Path
+
+    test_upload_with_custom_loader_success(client, tmp_path)
+    with client.session_transaction() as sess:
+        loader_path = Path(sess['custom_loader_spec'].rsplit(':', 1)[0])
+    assert loader_path.parent == Path(app.config['CUSTOM_LOADERS_FOLDER'])
+    assert not loader_path.is_relative_to(Path(app.config['CUSTOM_METRICS_FOLDER']))
+    assert loader_path.read_text() == GOOD_LOADER.strip()
+
+
+def test_custom_loader_fallback_storage_is_separate(client, app, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    app.config.pop('CUSTOM_LOADERS_FOLDER')
+    monkeypatch.setattr('web.routes.core.tempfile.gettempdir', lambda: str(tmp_path))
+    test_upload_with_custom_loader_success(client, tmp_path)
+    with client.session_transaction() as sess:
+        loader_path = Path(sess['custom_loader_spec'].rsplit(':', 1)[0])
+    assert loader_path.parent == tmp_path / 'aidrin_custom_loaders'
+    assert not loader_path.is_relative_to(Path(app.config['CUSTOM_METRICS_FOLDER']))
+
+
+def test_custom_loader_directory_can_be_configured(tmp_path, monkeypatch):
+    from web import create_app
+
+    loader_dir = tmp_path / 'dedicated_loaders'
+    monkeypatch.setenv('FLASK_CUSTOM_LOADERS_FOLDER', str(loader_dir))
+    app = create_app()
+    assert app.config['CUSTOM_LOADERS_FOLDER'] == str(loader_dir)
+    assert loader_dir.is_dir()
+
+
+def test_custom_loader_format_mismatch_shows_actionable_error(client):
+    import io
+
+    response = client.post(
+        "/inspector",
+        data={
+            "file": (io.BytesIO(b"value\n1\n2\n"), "data.csv"),
+            "fileTypeSelector": ".custom",
+            "loader_code": "import pandas as pd\ndef load(path, **kwargs):\n    return pd.read_json(path)\n",
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Check that the file format matches what this loader expects" in html
+    assert "Original error: ValueError:" in html
+    with client.session_transaction() as sess:
+        assert not sess.get("custom_loader_spec")

@@ -185,7 +185,9 @@ def load_dataframe(
             _format_loader_failure(
                 spec,
                 display_path,
-                f"raised {type(exc).__name__}: {exc}",
+                "could not read the input file. Check that the file format matches "
+                "what this loader expects and that the file is valid. "
+                f"Original error: {type(exc).__name__}: {exc}",
             )
         ) from exc
 

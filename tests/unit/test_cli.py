@@ -811,6 +811,30 @@ class TestCustomLoaderCLI(unittest.TestCase):
         blob = json.dumps(payload)
         self.assertIn("loader_col", blob)
 
+    def test_loader_format_mismatch_reports_input_and_original_error(self):
+        loader = os.path.join(self.tmpdir, "json_loader.py")
+        with open(loader, "w", encoding="utf-8") as handle:
+            handle.write(
+                "import pandas as pd\n"
+                "def load(path, **kwargs):\n"
+                "    return pd.read_json(path)\n"
+            )
+        matching = os.path.join(self.tmpdir, "data.json")
+        with open(matching, "w", encoding="utf-8") as handle:
+            json.dump([{"value": 1}, {"value": 2}], handle)
+        out, err, code = _run_cli(
+            "run", "completeness", matching, "--loader", f"{loader}:load"
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        out, err, code = _run_cli(
+            "run", "completeness", self.csv_path, "--loader", f"{loader}:load"
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn(self.csv_path, err)
+        self.assertIn(f"{loader}:load", err)
+        self.assertIn("Check that the file format matches what this loader expects", err)
+        self.assertIn("Original error: ValueError:", err)
+
     def test_failed_loader_exits_nonzero(self):
         bad = os.path.join(self.tmpdir, "bad_loader.py")
         with open(bad, "w", encoding="utf-8") as handle:

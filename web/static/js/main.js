@@ -22,6 +22,30 @@ function togglePillarDropdown(id) {
 }
 
 //for uploads
+let customLoaderEditor = null;
+
+function initCustomLoaderEditor() {
+  const textarea = document.getElementById("uploadLoaderCode");
+  if (!textarea || customLoaderEditor || typeof CodeMirror === "undefined")
+    return;
+
+  customLoaderEditor = CodeMirror.fromTextArea(textarea, {
+    mode: "python",
+    lineNumbers: true,
+    theme: "eclipse",
+    indentUnit: 4,
+    tabSize: 4,
+    indentWithTabs: false,
+    lineWrapping: false,
+    matchBrackets: true,
+    autofocus: false,
+  });
+  customLoaderEditor.setOption("extraKeys", {
+    Tab: (editor) => editor.execCommand("indentMore"),
+    "Shift-Tab": (editor) => editor.execCommand("indentLess"),
+  });
+}
+
 function uploadForm() {
   const form = document.getElementById("uploadForm");
   const fileTypeSelector = document.getElementById("fileTypeSelector");
@@ -63,6 +87,8 @@ function uploadCustomForm() {
   const form = document.getElementById("uploadCustomForm");
   const fileInput = document.getElementById("file-custom");
   const loaderCode = document.getElementById("uploadLoaderCode");
+
+  customLoaderEditor?.save();
 
   if (!loaderCode || !loaderCode.value.trim()) {
     if (typeof showToast === "function")
