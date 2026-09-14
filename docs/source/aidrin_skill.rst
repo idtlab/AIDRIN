@@ -110,9 +110,17 @@ tools become available to Claude for that session.
 
 .. note::
 
-   **Using a different project directory?** Copy ``.mcp.json`` and the
-   ``.claude/skills/aidrin/`` folder into your project root. Claude Code
-   will pick both up on next launch.
+   **Using a different project directory?** The skill ships inside the
+   ``aidrin`` package, so from your project root run:
+
+   .. code-block:: bash
+
+      aidrin skill install            # → .claude/skills/aidrin
+      aidrin skill install --dir .agents/skills   # other agents
+
+   then copy ``.mcp.json`` alongside it. Claude Code picks both up on next
+   launch. After ``pip install -U aidrin``, re-run ``aidrin skill install``
+   to refresh the skill to the version that matches the package.
 
 Step 3 — Verify the connection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
