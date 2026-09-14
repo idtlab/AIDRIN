@@ -141,6 +141,7 @@ def disconnect():
     session.pop("globus_file_name", None)
     session.pop("globus_file_type", None)
     session.pop("globus_active_tasks", None)
+    session.pop("intent", None)
     return jsonify({"success": True})
 
 
@@ -229,6 +230,13 @@ def submit():
         client = get_compute_client(tokens)
 
         # Store endpoint info in session for subsequent metric submissions
+        # /globus/submit runs once per metric, so only a genuinely different remote
+        # file invalidates the recommendations. Popping unconditionally would discard
+        # the user's intent every time they ran a check.
+        if (session.get("globus_file_name") != file_name
+                or session.get("globus_file_path") != file_path):
+            session.pop("intent", None)
+
         session["globus_endpoint_id"] = endpoint_id
         session["globus_file_path"] = file_path
         session["globus_file_name"] = file_name

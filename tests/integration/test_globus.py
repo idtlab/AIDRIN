@@ -348,3 +348,148 @@ def test_remote_probe_reports_headless_import():
     env = compute_client.probe(compute_client.get_client(), AIDRIN_TEST_ENDPOINT)
     assert env["headless_import"] is True
     assert env["aidrin_version"]
+
+
+# -------------------------------------------------
+# Intent state management in /globus/submit
+# -------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not is_globus_available(),
+    reason="globus SDK not installed",
+)
+def test_globus_submit_same_file_preserves_intent(client, monkeypatch):
+    """A second POST /globus/submit for the SAME file must preserve session["intent"]."""
+    monkeypatch.setattr("web.routes.globus.get_compute_client", lambda x: None)
+    monkeypatch.setattr("web.routes.globus.submit_metric", lambda *a, **kw: "task-id-1")
+
+    with client.session_transaction() as sess:
+        sess["globus_authenticated"] = True
+
+    # Establish the file identity FIRST (setup, not the assertion).
+    setup_response = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/remote/data.csv",
+            "file_name": "data.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert setup_response.status_code == 200
+
+    # Now that the identity is set, stamp the intent to guard.
+    with client.session_transaction() as sess:
+        sess["intent"] = {"intents": ["training"], "notes": "", "dismissed": False}
+
+    # Submit again for the SAME file (same endpoint_id, file_path, file_name).
+    monkeypatch.setattr("web.routes.globus.submit_metric", lambda *a, **kw: "task-id-2")
+    response = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/remote/data.csv",
+            "file_name": "data.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert response.status_code == 200
+
+    # Intent should STILL be present (not cleared) because the file didn't change.
+    with client.session_transaction() as sess:
+        assert "intent" in sess
+        assert sess["intent"]["intents"] == ["training"]
+
+
+@pytest.mark.skipif(
+    not is_globus_available(),
+    reason="globus SDK not installed",
+)
+def test_globus_submit_different_file_clears_intent(client, monkeypatch):
+    """POST /globus/submit for a different file must clear session["intent"]."""
+    monkeypatch.setattr("web.routes.globus.get_compute_client", lambda x: None)
+    monkeypatch.setattr("web.routes.globus.submit_metric", lambda *a, **kw: "task-id-1")
+
+    with client.session_transaction() as sess:
+        sess["globus_authenticated"] = True
+
+    # Establish the file identity FIRST (setup, not the assertion).
+    setup_response = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/remote/data.csv",
+            "file_name": "data.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert setup_response.status_code == 200
+
+    with client.session_transaction() as sess:
+        sess["intent"] = {"intents": ["training"], "notes": "", "dismissed": False}
+
+    # Submit for a DIFFERENT file (different name)
+    monkeypatch.setattr("web.routes.globus.submit_metric", lambda *a, **kw: "task-id-2")
+    response2 = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/remote/other.csv",
+            "file_name": "other.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert response2.status_code == 200
+
+    # Intent should be CLEARED because file name changed
+    with client.session_transaction() as sess:
+        assert "intent" not in sess
+
+    # Also test with different path but same basename.
+    # Re-establish identity for "other.csv" first, then stamp intent again.
+    monkeypatch.setattr("web.routes.globus.submit_metric", lambda *a, **kw: "task-id-3")
+    with client.session_transaction() as sess:
+        sess["intent"] = {"intents": ["publishing"], "notes": "", "dismissed": False}
+
+    response3 = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/other/remote/other.csv",
+            "file_name": "other.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert response3.status_code == 200
+
+    # Intent should be CLEARED because file path changed (even though name is same)
+    with client.session_transaction() as sess:
+        assert "intent" not in sess
+
+
+@pytest.mark.skipif(
+    not is_globus_available(),
+    reason="globus SDK not installed",
+)
+def test_globus_disconnect_clears_intent(client):
+    """POST /globus/disconnect must clear session["intent"]."""
+    # Set up authenticated Globus session with intent
+    with client.session_transaction() as sess:
+        sess["globus_authenticated"] = True
+        sess["globus_file_name"] = "data.csv"
+        sess["globus_file_path"] = "/remote/data.csv"
+        sess["intent"] = {"intents": ["training"], "notes": "", "dismissed": False}
+
+    # Call disconnect
+    response = client.post("/globus/disconnect")
+    assert response.status_code == 200
+
+    # Intent should be CLEARED
+    with client.session_transaction() as sess:
+        assert "intent" not in sess
