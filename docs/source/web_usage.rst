@@ -481,21 +481,35 @@ informational only — which AIDRIN release produced the file — and never
 blocks a load; if it differs from the version you are running, AIDRIN loads
 the profile anyway and shows a small note about the difference.
 
-**Works without an LLM**
+**Without an LLM**
 
-The recommendations come from a hand-curated mapping of goals to metrics
+Recommendations come from a fixed, hand-curated mapping of goals to metrics
 built into AIDRIN, so this feature needs no API key and no network access.
 It works the same whether or not the ``llm`` extra is installed.
 
-**What improves with an LLM configured**
+**With an LLM connected**
 
 With the same OpenAI-compatible connection used for `AI Explanations`_
-(configured via the sparkle icon), the curated list is enhanced rather than
-replaced: rationales are tailored to your stated goal and dataset profile,
-and up to five extra checks may be suggested that the curated map would not
-have anticipated. If the model is unavailable or its reply cannot be used,
-AIDRIN silently falls back to the curated list — the feature never depends
-on the LLM being reachable.
+(configured via the sparkle icon), the model — not the curated map — decides
+the checks: it is given the same catalog of available checks, your stated
+goal and notes, the dataset's structure, and the curated mapping as a
+starting point it may agree with, extend, trim, or reprioritise. Its own
+selection is what you see, with a short explanation of why each check
+matters for your stated goal.
+
+Because the model has more context than a fixed mapping — your goals, your
+free-text notes, and the dataset's actual shape — it may leave out checks
+the curated map would have included, including compliance-flavoured checks
+such as HIPAA Compliance or k-Anonymity for a publishing goal, if it judges
+them unnecessary for your situation. A check it omits simply does not
+appear; there is no guaranteed-minimum set layered underneath its choice.
+The dataset's structure can still veto a pick the model makes (for example,
+a categorical-only check is dropped for a dataset with no categorical
+columns), but that is the only floor.
+
+If the model is unavailable, unreachable, or its reply cannot be used at
+all, AIDRIN silently falls back to the curated list described above — the
+feature never depends on the LLM being reachable.
 
 ----
 

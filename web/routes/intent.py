@@ -24,6 +24,7 @@ from aidrin.intent import (
     PANEL_BY_METRIC,
     PANEL_LABELS,
     PROFILE_VERSION,
+    _recommendation_sort_key,
     all_metric_keys,
     recommend_metrics,
     recommendations_from_profile,
@@ -153,33 +154,31 @@ def _call_llm(intents, notes, profile, baseline, config):
     return recommend_for_intent(intents, notes, profile, baseline, config)
 
 
-def _merge(baseline, enhancement):
-    """Overlay LLM rationales on the curated list and append AI extras."""
-    recommendations = [dict(entry) for entry in baseline]
-    if not enhancement:
-        return recommendations, ""
+def _build_ai_recommendations(selection):
+    """Build recommendation cards from the LLM's own selection.
 
-    rationales = enhancement.get("rationales") or {}
-    for entry in recommendations:
-        tailored = rationales.get(entry["metric"])
-        if tailored:
-            entry["why"] = tailored
-
-    for extra in enhancement.get("extras") or []:
-        metric = extra["metric"]
-        recommendations.append({
-            "metric": metric,
-            "display_name": DISPLAY_NAMES[metric],
-            "panel": PANEL_BY_METRIC[metric],
-            "panel_label": PANEL_LABELS[PANEL_BY_METRIC[metric]],
-            "priority": "recommended",
+    The LLM is the primary recommender: this is the full recommendation
+    list, not an overlay on the curated baseline, so a metric the curated
+    map would have included but the model left out simply does not appear.
+    Sorted with the same shared ordering recommend_metrics and
+    recommendations_from_profile use, for a consistent critical-first layout.
+    """
+    recommendations = [
+        {
+            "metric": entry["metric"],
+            "display_name": DISPLAY_NAMES[entry["metric"]],
+            "panel": PANEL_BY_METRIC[entry["metric"]],
+            "panel_label": PANEL_LABELS[PANEL_BY_METRIC[entry["metric"]]],
+            "priority": entry["priority"],
             "source": "ai",
             "reason_intents": [],
-            "why": extra["why"],
-            "input_name": CHECKBOX_BY_METRIC[metric],
-        })
-
-    return recommendations, enhancement.get("summary") or ""
+            "why": entry["why"],
+            "input_name": CHECKBOX_BY_METRIC[entry["metric"]],
+        }
+        for entry in selection
+    ]
+    recommendations.sort(key=_recommendation_sort_key)
+    return recommendations
 
 
 def _store(payload):
@@ -215,21 +214,35 @@ def recommend():
     profile = _build_profile()
     baseline = recommend_metrics(intents, profile)
 
-    enhancement = None
-    model = ""
+    # The LLM, when connected, is the primary recommender: its selection
+    # replaces the curated baseline entirely rather than extending it, so a
+    # metric the curated map would have included but the model left out is
+    # genuinely absent from the response. `baseline` is still sent to the
+    # model as grounding (see recommend_for_intent / _build_user_content).
+    # Any LLM failure -- unavailable, unreachable, or a reply that validates
+    # to nothing -- falls back to the curated baseline unchanged.
+    result = None
     config = _llm_config()
     if config:
-        model = config.get("model", "")
-        enhancement = _call_llm(intents, notes, profile, [r["metric"] for r in baseline], config)
+        result = _call_llm(intents, notes, profile, [r["metric"] for r in baseline], config)
 
-    recommendations, summary = _merge(baseline, enhancement)
+    if result:
+        recommendations = _build_ai_recommendations(result["selection"])
+        summary = result.get("summary") or ""
+        llm_used = True
+        model = config.get("model", "")
+    else:
+        recommendations = baseline
+        summary = ""
+        llm_used = False
+        model = ""
 
     payload = {
         "intents": intents,
         "notes": notes,
         "summary": summary,
-        "llm_used": bool(enhancement),
-        "model": model if enhancement else "",
+        "llm_used": llm_used,
+        "model": model,
         "recommendations": recommendations,
     }
 

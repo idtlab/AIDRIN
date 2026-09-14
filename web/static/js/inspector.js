@@ -7669,9 +7669,15 @@ function _intentPriorityBadge(priority) {
   return `<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${classes}">${label}</span>`;
 }
 
-function _intentCardHtml(rec, profileName) {
+function _intentCardHtml(rec, profileName, allAiSourced) {
+  // When the LLM is the primary recommender, every card is source "ai" --
+  // badging every row is noise once the page-level AI banner already says
+  // the whole list may be AI-generated, so the per-card badge only earns
+  // its place when some other-sourced cards are mixed in (never true today,
+  // since a run is either fully curated, fully AI, or fully profile-based,
+  // but this keeps the badge meaningful if that ever changes).
   const aiBadge =
-    rec.source === "ai"
+    rec.source === "ai" && !allAiSourced
       ? '<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">AI suggested</span>'
       : "";
   // Goal-derived cards say which goals asked for it ("For: training,
@@ -7761,6 +7767,13 @@ function renderIntentRecommendations(data) {
 
   const recs = data.recommendations || [];
   const profileName = data.profile_name || "";
+  // Today the LLM is the primary recommender: when it produced this list,
+  // every card is source "ai" (see web/routes/intent.py's
+  // _build_ai_recommendations), so the per-card badge would just repeat
+  // what the page-level AI banner already says. Derive this from the
+  // recommendations themselves, not data.llm_used, so it still degrades
+  // correctly if that ever stops being an all-or-nothing split.
+  const allAiSourced = recs.length > 0 && recs.every((r) => r.source === "ai");
 
   if (recs.length === 0) {
     cardsEl.innerHTML =
@@ -7781,14 +7794,16 @@ function renderIntentRecommendations(data) {
     html +=
       '<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Check these first</h3>';
     html += criticalShown
-      .map((rec) => _intentCardHtml(rec, profileName))
+      .map((rec) => _intentCardHtml(rec, profileName, allAiSourced))
       .join("");
     html += _intentCollapsedCriticalHtml(criticalOverflow, profileName);
   }
   if (rest.length) {
     html +=
       '<h3 class="text-sm font-semibold text-gray-900 dark:text-white pt-2">Worth checking</h3>';
-    html += rest.map((rec) => _intentCardHtml(rec, profileName)).join("");
+    html += rest
+      .map((rec) => _intentCardHtml(rec, profileName, allAiSourced))
+      .join("");
   }
   cardsEl.innerHTML = html;
 }
