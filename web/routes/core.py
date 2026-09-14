@@ -74,6 +74,8 @@ def inspector():
             session["uploaded_file_path"] = file_path
             session["uploaded_file_type"] = request.form.get("fileTypeSelector")
             session.pop("selected_keys", None)
+            # This feature owns session["intent"], so a new dataset drops it.
+            session.pop("intent", None)
 
             # Track files this session created so /clear removes only these,
             # never files belonging to other concurrent sessions.
@@ -139,6 +141,9 @@ def inspector():
     from web.llm import is_llm_available
     llm_available = is_llm_available()
     llm_configured = bool(session.get("llm_config", {}).get("api_key"))
+
+    # Intent-based metric recommendations (needs no LLM)
+    from aidrin.intent import CUSTOM_PROFILE_OPTION_VALUE, INTENTS
     globus_authenticated = session.get("globus_authenticated", False)
 
     # Globus remote file — treat as "uploaded" for sidebar/panels visibility
@@ -171,6 +176,9 @@ def inspector():
             globus_endpoint_id=globus_endpoint_id,
             llm_available=llm_available,
             llm_configured=llm_configured,
+            intent_options=INTENTS,
+            custom_profile_option_value=CUSTOM_PROFILE_OPTION_VALUE,
+            intent_asked=bool(session.get("intent")),
         )
     except Exception as e:
         file_upload_time_log.error("Error rendering workspace: %s", e, exc_info=True)
@@ -300,6 +308,16 @@ def filter_file():
 
         session["selected_keys"] = keys_list
         session["minimize_preview"] = True
+        # Recommendations were computed for the previous column selection.
+        session.pop("intent", None)
+        # The file name is unchanged across an HDF5 key switch, so the cached
+        # recommendation payload (keyed on file name, not selected_keys) would
+        # otherwise survive and be served back on the next panel restore.
+        file_name = session.get("uploaded_file_name")
+        if file_name:
+            current_app.TEMP_RESULTS_CACHE.pop(
+                f"user:{get_current_user_id()}:file:{file_name}:intent", None
+            )
 
         return jsonify({"success": True, "message": "File filtered successfully"})
     except Exception as e:
@@ -321,6 +339,7 @@ def clear_dataset_selection():
             previous = [key.strip() for key in previous.split(",") if key.strip()]
         session.pop("selected_keys", None)
         session.pop("minimize_preview", None)
+        session.pop("intent", None)
 
         cleared_count = clear_all_user_cache()
         file_upload_time_log.info(
