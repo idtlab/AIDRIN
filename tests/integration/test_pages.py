@@ -107,3 +107,21 @@ def test_version_in_cache_page(client):
     response = client.get("/my-cache")
     html = response.data.decode()
     assert "AIDRIN" in html
+
+
+# ---------- Demo banner ----------
+
+
+def test_demo_banner_hidden_by_default(client):
+    response = client.get("/inspector")
+    assert b'id="demo-banner"' not in response.data
+
+
+def test_demo_banner_shown_when_enabled(monkeypatch):
+    monkeypatch.setenv("AIDRIN_DEMO", "1")
+    from web import create_app
+
+    demo_client = create_app().test_client()
+    response = demo_client.get("/inspector")
+    assert b'id="demo-banner"' in response.data
+    assert b"aidrin.readthedocs.io/en/latest/aidrin_skill.html" in response.data
