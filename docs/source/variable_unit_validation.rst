@@ -101,13 +101,13 @@ Every audit and repair result uses one format:
          "ambiguous": 0,
          "conflicting": 0,
          "dimensionless": 0,
-         "not_applicable": 0
+         "not_applicable": 0,
+         "unit_mismatches": 0
        },
        "classification_coverage": 1.0,
        "applicable_unit_coverage": 1.0,
        "metadata_validity": 1.0,
-       "all_variables_ready": true,
-       "unit_mismatches": 0
+       "all_variables_ready": true
      }
    }
 
@@ -139,10 +139,11 @@ all_variables_ready
    True only when every variable has a valid unit, is dimensionless, or is
    explicitly not applicable.
 
-unit_mismatches
+counts.unit_mismatches
    Number of variables whose user resolution differs from detected unit
    metadata. A resolved mismatch remains ready but is retained prominently in
-   the sidecar and web results.
+   the sidecar and web results. This count can overlap the mutually exclusive
+   readiness-status counts above it.
 
 Unit parsing
 ------------

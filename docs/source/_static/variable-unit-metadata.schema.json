@@ -291,8 +291,7 @@
         "classification_coverage",
         "applicable_unit_coverage",
         "metadata_validity",
-        "all_variables_ready",
-        "unit_mismatches"
+        "all_variables_ready"
       ],
       "properties": {
         "counts": {
@@ -306,7 +305,8 @@
             "ambiguous",
             "conflicting",
             "dimensionless",
-            "not_applicable"
+            "not_applicable",
+            "unit_mismatches"
           ],
           "properties": {
             "total": {
@@ -340,6 +340,10 @@
             "not_applicable": {
               "type": "integer",
               "minimum": 0
+            },
+            "unit_mismatches": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         },
@@ -354,10 +358,6 @@
         },
         "all_variables_ready": {
           "type": "boolean"
-        },
-        "unit_mismatches": {
-          "type": "integer",
-          "minimum": 0
         }
       }
     }

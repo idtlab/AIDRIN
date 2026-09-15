@@ -175,6 +175,7 @@ def test_sidecar_accounts_for_every_resolution_form_and_reports_separate_scores(
         "conflicting": 0,
         "dimensionless": 1,
         "not_applicable": 1,
+        "unit_mismatches": 0,
     }
 
 
@@ -272,7 +273,7 @@ def test_user_resolution_overrides_conflict_and_retains_observations(tmp_path):
         "User resolution overrides detected unit metadata."
     ]
     assert len(record["finding"]["override_mismatches"]) == 1
-    assert result["summary"]["unit_mismatches"] == 1
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
     assert result["summary"]["all_variables_ready"] is True
 
 
@@ -297,7 +298,7 @@ def test_scale_mismatch_override_is_explicit_and_does_not_convert_values(tmp_pat
         "conversion_factor": 1000.0,
         "message": "Unit mismatch: detected kg/m³, overridden with g/m³ (1000× scale difference). Values were not converted.",
     }
-    assert result["summary"]["unit_mismatches"] == 1
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
     assert result["summary"]["all_variables_ready"] is True
 
     schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
@@ -318,7 +319,7 @@ def test_equivalent_user_unit_has_no_override_mismatch(tmp_path):
     result = calculate_variable_unit_validation(file_info, sidecar)
 
     assert result["variables"][0]["finding"]["override_mismatches"] == []
-    assert result["summary"]["unit_mismatches"] == 0
+    assert result["summary"]["counts"]["unit_mismatches"] == 0
 
 
 def test_dimension_mismatch_override_is_distinguished_from_scale(tmp_path):

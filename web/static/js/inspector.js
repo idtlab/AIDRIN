@@ -2005,6 +2005,16 @@ function filterVariableUnitResults(select) {
   });
 }
 
+function resultScoreName(groupName, itemName) {
+  if (groupName !== "counts") return itemName;
+  return (
+    {
+      conflicting: "Unresolved conflicts",
+      unit_mismatches: "Override mismatches",
+    }[itemName] || itemName
+  );
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
@@ -2032,12 +2042,18 @@ function renderScoresSection(scores, depth) {
       html += `</tr></thead><tbody>`;
       let rowIdx = 0;
       for (const [k, v] of Object.entries(value)) {
-        const stripe =
-          rowIdx % 2 === 0
-            ? "bg-white dark:bg-gray-800"
-            : "bg-gray-50 dark:bg-gray-700/50";
-        html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(k)}</td>`;
+        const needsAttention =
+          key === "counts" &&
+          ["conflicting", "unit_mismatches"].includes(k) &&
+          Number(v) > 0;
+        const rowClasses = needsAttention
+          ? "border-b border-red-300 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-900/20 dark:text-red-200"
+          : `${rowIdx % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50"} border-b dark:border-gray-700`;
+        const labelClasses = needsAttention
+          ? ""
+          : "text-gray-900 dark:text-white";
+        html += `<tr class="${rowClasses}">`;
+        html += `<td class="px-4 py-2 font-medium whitespace-nowrap ${labelClasses}">${escapeHtml(resultScoreName(key, k))}</td>`;
         html += `<td class="px-4 py-2 text-right font-mono text-xs">${escapeHtml(formatValue(v))}</td>`;
         html += `</tr>`;
         rowIdx++;

@@ -677,6 +677,7 @@ def _summarize(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         "conflicting": 0,
         "dimensionless": 0,
         "not_applicable": 0,
+        "unit_mismatches": 0,
     }
     for record in records:
         counts[record["finding"]["status"]] += 1
@@ -686,14 +687,13 @@ def _summarize(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     ready = counts["valid"] + counts["dimensionless"] + counts["not_applicable"]
     applicable = total - counts["not_applicable"]
     valid_applicable = counts["valid"] + counts["dimensionless"]
-    unit_mismatches = sum(bool(record["finding"]["override_mismatches"]) for record in records)
+    counts["unit_mismatches"] = sum(bool(record["finding"]["override_mismatches"]) for record in records)
     return {
         "counts": counts,
         "classification_coverage": None if total == 0 else accounted / total,
         "applicable_unit_coverage": None if total == 0 else (1.0 if applicable == 0 else valid_applicable / applicable),
         "metadata_validity": None if accounted == 0 else ready / accounted,
         "all_variables_ready": bool(total and ready == total),
-        "unit_mismatches": unit_mismatches,
     }
 
 
