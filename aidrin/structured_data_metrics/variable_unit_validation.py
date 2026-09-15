@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +29,7 @@ _UNIT_REGISTRY = UnitRegistry()
 _NAME_ANNOTATION = re.compile(
     r"^.+?\s*(?:\((?P<parenthesized>[^()]*)\)|\[(?P<bracketed>[^\[\]]*)\])\s*$"
 )
+_UNDERSCORE_EXPONENT = re.compile(r"^(?P<unit>.+?)(?P<exponent>\d+)$")
 _READY_STATUSES = {"valid", "dimensionless", "not_applicable"}
 _RESOLUTION_KINDS = {"unit", "dimensionless", "not_applicable", "unresolved"}
 _RESOLUTION_SOURCES = {"detected", "user", "none"}
@@ -102,6 +104,16 @@ _UNIT_SUGGESTION_GROUPS = (
             ("Gram (g)", "gram"),
             ("Milligram (mg)", "milligram"),
             ("Pound (lb)", "pound"),
+        ),
+    },
+    {
+        "quantity": "density",
+        "variable_terms": ("density",),
+        "units": (
+            ("Kilograms per cubic meter (kg/m³)", "kilogram/meter**3"),
+            ("Grams per cubic meter (g/m³)", "gram/meter**3"),
+            ("Grams per cubic centimeter (g/cm³)", "gram/centimeter**3"),
+            ("Kilograms per liter (kg/L)", "kilogram/liter"),
         ),
     },
     {
@@ -188,16 +200,69 @@ def _decode_metadata(value: Any) -> str:
     return str(value).strip()
 
 
+def _decode_underscore_unit(encoded: str) -> List[str]:
+    """Return Pint expressions represented by a trailing underscore suffix."""
+    candidates = [encoded]
+    if encoded.count("_per_") == 1:
+        numerator, denominator = encoded.split("_per_", 1)
+        parts = []
+        for value in (numerator, denominator):
+            match = _UNDERSCORE_EXPONENT.fullmatch(value)
+            parts.append(f"{match.group('unit')}^{match.group('exponent')}" if match else value)
+        candidates.append(f"{parts[0]}/{parts[1]}")
+    else:
+        match = _UNDERSCORE_EXPONENT.fullmatch(encoded)
+        if match:
+            candidates.append(f"{match.group('unit')}^{match.group('exponent')}")
+    return list(dict.fromkeys(candidates))
+
+
+@lru_cache(maxsize=1)
+def _curated_underscore_units() -> Dict[str, frozenset]:
+    """Map simple unit spellings to matching variable-name terms."""
+    spellings = {}
+    for group in _UNIT_SUGGESTION_GROUPS:
+        for _label, unit in group["units"]:
+            normalized = _parse_unit(unit).get("normalized_unit")
+            for spelling in (unit, normalized):
+                if spelling:
+                    spellings.setdefault(spelling, set()).update(group["variable_terms"])
+    spellings.setdefault("g", set()).update(("acceleration", "accel"))
+    return {spelling: frozenset(terms) for spelling, terms in spellings.items()}
+
+
+def _matches_simple_underscore_unit(name: str, unit: str) -> bool:
+    terms = _curated_underscore_units().get(unit, ())
+    normalized_name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name).lower()
+    tokens = set(filter(None, re.split(r"[^a-z0-9]+", normalized_name)))
+    return any(term.lower() in tokens for term in terms)
+
+
+def _underscore_name_unit(name: str) -> Optional[str]:
+    parts = name.split("_")
+    for index in range(1, len(parts)):
+        variable_name = "_".join(parts[:index])
+        encoded = "_".join(parts[index:])
+        for candidate in _decode_underscore_unit(encoded):
+            is_explicit_expression = candidate != encoded
+            if (
+                _parse_unit(candidate)["status"] != "invalid"
+                and (is_explicit_expression or _matches_simple_underscore_unit(variable_name, candidate))
+            ):
+                return candidate
+    return None
+
+
 def _name_unit(name: str) -> Optional[str]:
     match = _NAME_ANNOTATION.fullmatch(name)
-    if not match:
-        return None
-    unit = (match.group("parenthesized") or match.group("bracketed") or "").strip()
-    if not unit:
-        return None
-    if match.group("bracketed") is not None and unit == "g":
-        return "[g]"
-    return unit
+    if match:
+        unit = (match.group("parenthesized") or match.group("bracketed") or "").strip()
+        if not unit:
+            return None
+        if match.group("bracketed") is not None and unit == "g":
+            return "[g]"
+        return unit
+    return _underscore_name_unit(name)
 
 
 def _candidate(source: str, unit: str) -> Dict[str, str]:
