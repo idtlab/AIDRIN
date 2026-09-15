@@ -325,11 +325,14 @@ def test_variable_unit_editor_and_results_escape_dataset_metadata():
     assert "variableUnitResultPresentation(status, hasMismatch)" in result_renderer
     assert ">Unit mismatch</span>" in result_renderer
     assert "escapeHtml(mismatchMessage)" in result_renderer
-    assert 'style="min-width: 72rem"' in result_renderer
-    assert '<col style="width: 16%">' in result_renderer
-    assert '<col style="width: 14%"></colgroup>' in result_renderer
-    assert 'class="block truncate whitespace-nowrap"' in result_renderer
-    assert 'class="min-w-0 truncate whitespace-nowrap"' in result_renderer
+    assert "w-full table-auto" in result_renderer
+    assert "min-width: 72rem" not in result_renderer
+    assert "<colgroup>" not in result_renderer
+    assert 'heading === "Finding" ? "w-1/6 "' in result_renderer
+    assert 'class="whitespace-nowrap"' in result_renderer
+    assert 'class="max-w-48 whitespace-normal"' in result_renderer
+    assert 'class="break-words"' in result_renderer
+    assert "truncate whitespace-nowrap" not in result_renderer
     assert "align-top break-all" not in result_renderer
     assert 'filter === "mismatches"' in source
 
