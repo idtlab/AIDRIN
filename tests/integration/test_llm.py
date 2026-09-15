@@ -108,3 +108,24 @@ def test_explain_metric_without_openai():
             "api_key": "key",
             "model": "m",
         })
+
+
+def test_llm_config_survives_clear(client):
+    """Clearing the session to start a new configuration keeps the API key.
+
+    Regression test for issue #155: /clear used to wipe the whole session,
+    so users had to re-enter their API key for every dataset.
+    """
+    if not _HAS_OPENAI:
+        return
+    client.post("/llm/configure", json={
+        "api_base": "https://api.openai.com/v1",
+        "api_key": "sk-test-key",
+        "model": "gpt-4o-mini",
+    })
+
+    response = client.post("/clear")
+    assert response.status_code in (200, 302)
+
+    data = client.get("/llm/status").get_json()
+    assert data["configured"] is True
