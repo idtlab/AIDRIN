@@ -344,6 +344,18 @@ def test_variable_unit_results_use_accessible_status_colors():
     assert 'badge: "font-semibold text-gray-700 dark:text-gray-300"' in styles
 
 
+def test_variable_unit_mismatch_count_shares_status_count_table():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    scores_start = source.index("function resultScoreName(")
+    scores_end = source.index("// Custom outlier preview", scores_start)
+    scores = source[scores_start:scores_end]
+
+    assert 'conflicting: "Unresolved conflicts"' in scores
+    assert 'unit_mismatches: "Override mismatches"' in scores
+    assert '["conflicting", "unit_mismatches"].includes(k)' in scores
+    assert "border-red-300 bg-red-50" in scores
+
+
 def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     panel = VARIABLE_UNIT_PANEL.read_text(encoding="utf-8")
