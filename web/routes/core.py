@@ -24,8 +24,10 @@ from aidrin.file_handling.file_parser import (
 )
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
+from aidrin.file_handling.readers.root_reader import rootReader
 from web.routes.utils import (
     clear_all_user_cache,
+    build_file_info,
     confine_to_upload_folder,
     ensure_json_serializable,
     generate_metric_cache_key,
@@ -107,7 +109,7 @@ def inspector():
     file_preview = None
     current_checked_keys = None
 
-    if uploaded_file_path and file_type in [".h5", ".json", ".npz"]:
+    if uploaded_file_path and file_type in [".h5", ".json", ".npz", ".root"]:
         try:
             if file_type in READER_MAP:
                 reader = READER_MAP[file_type](uploaded_file_path, file_upload_time_log)
@@ -177,7 +179,7 @@ def inspector():
         return "<h1>Workspace render error</h1>", 500
 
 
-_SAMPLE_DATA_TYPES = {"csv", "json", "h5", "parquet", "xlsx", "npz", "dcat"}
+_SAMPLE_DATA_TYPES = {"csv", "json", "h5", "parquet", "xlsx", "npz", "dcat", "root"}
 
 
 @core_bp.route("/sample-data/<file_type>/<path:filename>")
@@ -261,6 +263,20 @@ def clear_file():
     return redirect(url_for("core.inspector"))
 
 
+def _selection_inventory(file_path, file_type):
+    reader = rootReader if file_type == ".root" else hdf5Reader
+    return reader(file_path, file_upload_time_log).inventory()
+
+
+def _selection_message(file_type):
+    if file_type == ".root":
+        return "This ROOT file contains multiple trees. Select one tree to analyze."
+    return (
+        "This HDF5 file contains multiple datasets with different shapes. "
+        "Select one or more compatible datasets (same length) to analyze."
+    )
+
+
 @core_bp.route("/filter-file", methods=["POST"])
 def filter_file():
     try:
@@ -279,8 +295,18 @@ def filter_file():
 
         file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_type = session.get("uploaded_file_type")
+        if file_type == ".root":
+            if not file_path or not os.path.isfile(file_path):
+                return jsonify({"success": False, "error": "No ROOT file in session"}), 400
+            if len(keys_list) != 1:
+                return jsonify({"success": False, "error": "Select exactly one ROOT tree."}), 400
+            inv = _selection_inventory(file_path, file_type)
+            if keys_list[0] not in {ds["path"] for ds in inv["datasets"]}:
+                return jsonify({"success": False, "error": "The selected ROOT tree was not found."}), 400
+            clear_all_user_cache()
+
         if file_path and file_type == ".h5" and len(keys_list) > 1:
-            inv = hdf5Reader(file_path, file_upload_time_log).inventory()
+            inv = _selection_inventory(file_path, file_type)
             if inv["type"] == "multi_dataset":
                 ds_by_path = {ds["path"]: ds for ds in inv["datasets"]}
                 lengths = set()
@@ -323,12 +349,12 @@ def filter_file():
 
 @core_bp.route("/clear-dataset-selection", methods=["POST"])
 def clear_dataset_selection():
-    """Clear HDF5 dataset selection so the user can pick different arrays."""
+    """Clear dataset selection so the user can pick different arrays or trees."""
     try:
-        file_path = session.get("uploaded_file_path")
+        file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_type = session.get("uploaded_file_type")
-        if not file_path or file_type != ".h5":
-            return jsonify({"success": False, "message": "No HDF5 file in session"}), 400
+        if not file_path or file_type not in {".h5", ".root"}:
+            return jsonify({"success": False, "message": "No HDF5 or ROOT file in session"}), 400
 
         previous = session.get("selected_keys") or []
         if isinstance(previous, str):
@@ -338,10 +364,10 @@ def clear_dataset_selection():
 
         cleared_count = clear_all_user_cache()
         file_upload_time_log.info(
-            "HDF5 dataset selection cleared (%d cache entries removed)", cleared_count
+            "Dataset selection cleared (%d cache entries removed)", cleared_count
         )
 
-        inv = hdf5Reader(file_path, file_upload_time_log).inventory()
+        inv = _selection_inventory(file_path, file_type)
         if inv["type"] != "multi_dataset":
             return jsonify(
                 {"success": False, "message": "This file does not require dataset selection"}
@@ -354,10 +380,8 @@ def clear_dataset_selection():
                 "datasets": inv["datasets"],
                 "groups": inv.get("groups", []),
                 "current_checked_keys": previous,
-                "message": (
-                    "This HDF5 file contains multiple datasets with different shapes. "
-                    "Select one or more compatible datasets (same length) to analyze."
-                ),
+                "file_type": file_type,
+                "message": _selection_message(file_type),
             })
         )
     except Exception as e:
@@ -473,7 +497,7 @@ def summary_statistics():
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
         selected = []
-        if file_type == ".h5":
+        if file_type in {".h5", ".root"}:
             selected = session.get("selected_keys") or []
             if isinstance(selected, str):
                 selected = [key.strip() for key in selected.split(",") if key.strip()]
@@ -490,8 +514,8 @@ def summary_statistics():
         if cached_entry:
             current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
 
-        if file_type == ".h5":
-            inv = hdf5Reader(file_path, file_upload_time_log).inventory()
+        if file_type in {".h5", ".root"}:
+            inv = _selection_inventory(file_path, file_type)
             if inv["type"] == "multi_dataset" and not selected:
                 return jsonify(
                     ensure_json_serializable({
@@ -500,15 +524,12 @@ def summary_statistics():
                         "datasets": inv["datasets"],
                         "groups": inv.get("groups", []),
                         "current_checked_keys": selected,
-                        "message": (
-                            "This HDF5 file contains multiple datasets with "
-                            "different shapes. Select one or more compatible "
-                            "datasets (same length) to analyze."
-                        ),
+                        "file_type": file_type,
+                        "message": _selection_message(file_type),
                     })
                 ), 200
 
-        file_info = (file_path, file_name, file_type)
+        file_info = build_file_info(file_path, file_name, file_type, selected)
         df, load_error = load_dataframe(file_info)
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200
@@ -546,7 +567,7 @@ def summary_statistics():
                     new_key = old_key.replace("%", "th percentile")
                     v[new_key] = v.pop(old_key)
 
-        hdf5_multi_dataset = bool(selected)
+        hdf5_multi_dataset = file_type == ".h5" and bool(selected)
         selected_dataset_keys = selected
 
         categorical_summary = {}
@@ -581,6 +602,7 @@ def summary_statistics():
             "categorical_summary": categorical_summary,
             "histograms": histograms,
             "hdf5_multi_dataset": hdf5_multi_dataset,
+            "root_tree_selected": file_type == ".root" and bool(selected),
             "selected_dataset_keys": selected_dataset_keys,
         })
         current_app.TEMP_RESULTS_CACHE[cache_key] = {
@@ -606,7 +628,7 @@ def extract_features():
         if not file_type:
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
-        file_info = (file_path, file_name, file_type)
+        file_info = build_file_info(file_path, file_name, file_type)
         df, load_error = load_dataframe(file_info)
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200

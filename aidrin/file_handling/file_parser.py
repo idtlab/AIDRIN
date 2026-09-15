@@ -8,6 +8,7 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
 from aidrin.file_handling.readers.parquet_reader import parquetReader
+from aidrin.file_handling.readers.root_reader import rootReader
 from aidrin.file_handling.readers.zarr_reader import zarrReader
 
 # Notes:
@@ -27,6 +28,7 @@ READER_MAP = {
     ".json": jsonReader,
     ".h5": hdf5Reader,
     ".parquet": parquetReader,
+    ".root": rootReader,
     ".zarr": zarrReader,
     # Add additional file types here
 }
@@ -39,6 +41,7 @@ SUPPORTED_FILE_TYPES = [
     (".npz", "NumPy"),
     (".h5", "HDF5"),
     (".parquet", "Parquet"),
+    (".root", "ROOT"),
     # Add additional file types here using the format:
     # (file_type,file_type_name)
 ]
@@ -50,7 +53,7 @@ GLOBUS_FILE_TYPES = SUPPORTED_FILE_TYPES + [
 ]
 
 # File types that accept selected_keys for multi-array / multi-dataset selection.
-_SELECTION_FILE_TYPES = {".h5", ".zarr"}
+_SELECTION_FILE_TYPES = {".h5", ".root", ".zarr"}
 
 
 class ReaderReturnedNone(RuntimeError):
