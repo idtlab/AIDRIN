@@ -276,10 +276,17 @@ class TestReadinessPdfLogo(unittest.TestCase):
 
 
 class TestReadinessPdfRender(unittest.TestCase):
+    # Pin to the legacy (pre-70) url_fetcher shape so this test's assertions
+    # are deterministic regardless of which WeasyPrint major is actually
+    # installed in the environment running the suite; the modern shape is
+    # covered separately in TestReadinessPdfUrlFetcherModernApi.
+    @patch("web.readiness.pdf._weasyprint_url_fetcher_base", return_value=None)
     @patch("web.readiness.pdf._weasyprint")
     @patch("web.readiness.pdf.render_template", return_value="<html></html>")
     @patch("web.readiness.pdf.readiness_pdf_logo_uri", return_value="file:///tmp/logo.png")
-    def test_render_readiness_report_pdf(self, _mock_logo, _mock_template, mock_weasyprint):
+    def test_render_readiness_report_pdf(
+        self, _mock_logo, _mock_template, mock_weasyprint, _mock_url_fetcher_base
+    ):
         mock_instance = MagicMock()
         mock_instance.write_pdf.return_value = b"%PDF-1.4"
         mock_html = MagicMock(return_value=mock_instance)
@@ -367,12 +374,23 @@ class TestReadinessPdfEscaping(unittest.TestCase):
                 self.assertIn("&lt;img", text, msg=block["title"])
 
 
-class TestReadinessPdfUrlFetcher(unittest.TestCase):
+class TestReadinessPdfUrlFetcherLegacyApi(unittest.TestCase):
+    """WeasyPrint <70: url_fetcher is a plain callable delegating to
+    weasyprint.default_url_fetcher.
+
+    Each test pins the detection hook to force this branch, so the outcome
+    does not depend on which WeasyPrint major happens to be installed in the
+    environment running the suite (see TestReadinessPdfUrlFetcherModernApi
+    for the WeasyPrint 70+ branch).
+    """
+
     def test_blocks_remote_http_urls(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "static").mkdir()
-            fetcher = _make_readiness_pdf_url_fetcher([root / "static"])
+            with patch("web.readiness.pdf._weasyprint_url_fetcher_base", return_value=None):
+                fetcher = _make_readiness_pdf_url_fetcher([root / "static"])
+            self.assertTrue(callable(fetcher))
             with self.assertRaises(ValueError):
                 fetcher("http://attacker.example/x.png")
 
@@ -383,9 +401,11 @@ class TestReadinessPdfUrlFetcher(unittest.TestCase):
             allowed.mkdir()
             outside = root / "secret.txt"
             outside.write_text("nope", encoding="utf-8")
-            fetcher = _make_readiness_pdf_url_fetcher([allowed])
-            with self.assertRaises(ValueError):
+            with patch("web.readiness.pdf._weasyprint_url_fetcher_base", return_value=None):
+                fetcher = _make_readiness_pdf_url_fetcher([allowed])
+            with self.assertRaises(ValueError) as ctx:
                 fetcher(outside.as_uri())
+            self.assertIn("Blocked file URL outside allowed roots", str(ctx.exception))
 
     def test_allows_file_under_allowed_root(self):
         import sys
@@ -401,11 +421,90 @@ class TestReadinessPdfUrlFetcher(unittest.TestCase):
             allowed.mkdir()
             asset = allowed / "logo.png"
             asset.write_bytes(b"png")
-            with patch.dict(sys.modules, {"weasyprint": fake_weasy}):
+            with (
+                patch("web.readiness.pdf._weasyprint_url_fetcher_base", return_value=None),
+                patch.dict(sys.modules, {"weasyprint": fake_weasy}),
+            ):
                 fetcher = _make_readiness_pdf_url_fetcher([allowed])
                 result = fetcher(asset.as_uri())
             self.assertEqual(result["mime_type"], "image/png")
             fake_weasy.default_url_fetcher.assert_called_once()
+
+
+class TestReadinessPdfUrlFetcherModernApi(unittest.TestCase):
+    """WeasyPrint 70+: url_fetcher must be a weasyprint.urls.URLFetcher
+    instance whose fetch() method WeasyPrint calls directly.
+
+    A minimal stand-in base class plays the role of weasyprint.urls.URLFetcher
+    so these tests don't require WeasyPrint 70 (or its native libraries) to be
+    installed; the detection hook is monkeypatched to force this branch.
+    """
+
+    class _FakeURLFetcherBase:
+        def __init__(self, *args, **kwargs):
+            self.init_args = args
+            self.init_kwargs = kwargs
+
+        def fetch(self, url):
+            return {"delegated": url}
+
+    def _make_fetcher(self, allowed_roots):
+        with patch(
+            "web.readiness.pdf._weasyprint_url_fetcher_base",
+            return_value=self._FakeURLFetcherBase,
+        ):
+            return _make_readiness_pdf_url_fetcher(allowed_roots)
+
+    def test_returns_url_fetcher_subclass_instance_with_fetch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "static").mkdir()
+            fetcher = self._make_fetcher([root / "static"])
+        self.assertIsInstance(fetcher, self._FakeURLFetcherBase)
+        self.assertTrue(hasattr(fetcher, "fetch"))
+
+    def test_blocks_remote_http_urls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "static").mkdir()
+            fetcher = self._make_fetcher([root / "static"])
+            with self.assertRaises(ValueError):
+                fetcher.fetch("http://attacker.example/x.png")
+
+    def test_blocks_file_urls_outside_allowed_roots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            allowed = root / "static"
+            allowed.mkdir()
+            outside = root / "secret.txt"
+            outside.write_text("nope", encoding="utf-8")
+            fetcher = self._make_fetcher([allowed])
+            with self.assertRaises(ValueError) as ctx:
+                fetcher.fetch(outside.as_uri())
+            self.assertIn("Blocked file URL outside allowed roots", str(ctx.exception))
+
+    def test_blocks_non_local_file_netloc(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            allowed = root / "static"
+            allowed.mkdir()
+            fetcher = self._make_fetcher([allowed])
+            with self.assertRaises(ValueError) as ctx:
+                fetcher.fetch("file://attacker-host/static/x.png")
+            self.assertIn("Blocked non-local file URL", str(ctx.exception))
+
+    def test_allows_file_under_allowed_root_and_delegates_to_super_fetch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            allowed = root / "static"
+            allowed.mkdir()
+            asset = allowed / "logo.png"
+            asset.write_bytes(b"png")
+            fetcher = self._make_fetcher([allowed])
+            result = fetcher.fetch(asset.as_uri())
+        # The fake base's fetch() ran, proving the subclass delegated via
+        # super().fetch() after the policy check passed.
+        self.assertEqual(result, {"delegated": asset.as_uri()})
 
 
 if __name__ == "__main__":
