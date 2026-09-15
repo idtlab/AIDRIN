@@ -321,6 +321,27 @@ def test_variable_unit_editor_and_results_escape_dataset_metadata():
     result_renderer = source[result_start:result_end]
     assert "escapeHtml(formatValue(value))" in result_renderer
     assert "escapeHtml(status)" in result_renderer
+    assert 'data-mismatch="${hasMismatch ? "true" : "false"}"' in result_renderer
+    assert "variableUnitResultPresentation(status, hasMismatch)" in result_renderer
+    assert ">Unit mismatch</span>" in result_renderer
+    assert "escapeHtml(mismatchMessage)" in result_renderer
+    assert 'filter === "mismatches"' in source
+
+
+def test_variable_unit_results_use_accessible_status_colors():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    style_start = source.index("function variableUnitResultPresentation(")
+    style_end = source.index("function renderVariableUnitResultTable(rows)", style_start)
+    styles = source[style_start:style_end]
+
+    assert '["invalid", "conflicting"]' in styles
+    assert "border-red-300 bg-red-50" in styles
+    assert '["missing", "ambiguous"]' in styles
+    assert "border-amber-300 bg-amber-50" in styles
+    assert '["valid", "dimensionless"]' in styles
+    assert "border-green-200 bg-green-50" in styles
+    assert 'row: "border-t border-gray-200 dark:border-gray-700"' in styles
+    assert 'badge: "font-semibold text-gray-700 dark:text-gray-300"' in styles
 
 
 def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():

@@ -431,6 +431,56 @@ def _units_equivalent(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
     return left.get("_parsed") == right.get("_parsed")
 
 
+def _display_unit(parsed: Dict[str, Any], fallback: str) -> str:
+    unit = parsed.get("_parsed")
+    return format(unit, "~P") if unit is not None else fallback
+
+
+def _override_mismatches(
+    parsed_candidates: List[Any],
+    chosen: Dict[str, Any],
+    resolution: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    if resolution["kind"] != "not_applicable" and chosen["status"] not in _READY_STATUSES:
+        return []
+    mismatches = []
+    for candidate, observed in parsed_candidates:
+        if observed["status"] not in _READY_STATUSES or _units_equivalent(observed, chosen):
+            continue
+        observed_unit = _display_unit(observed, candidate["unit"])
+        if resolution["kind"] == "not_applicable":
+            mismatches.append({
+                "kind": "classification",
+                "source": candidate["source"],
+                "observed_unit": observed_unit,
+                "resolved_unit": None,
+                "conversion_factor": None,
+                "message": f"Unit mismatch: detected {observed_unit}, overridden as not applicable.",
+            })
+            continue
+        resolved_unit = _display_unit(chosen, resolution.get("unit", "1"))
+        if observed.get("dimensionality") != chosen.get("dimensionality"):
+            kind = "dimension"
+            conversion_factor = None
+            detail = "different dimensions"
+        else:
+            kind = "scale"
+            conversion_factor = float((1 * observed["_parsed"]).to(chosen["_parsed"]).magnitude)
+            detail = f"{conversion_factor:g}× scale difference"
+        mismatches.append({
+            "kind": kind,
+            "source": candidate["source"],
+            "observed_unit": observed_unit,
+            "resolved_unit": resolved_unit,
+            "conversion_factor": conversion_factor,
+            "message": (
+                f"Unit mismatch: detected {observed_unit}, overridden with {resolved_unit} "
+                f"({detail}). Values were not converted."
+            ),
+        })
+    return mismatches
+
+
 def _public_observation(candidate: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "source": candidate["source"],
@@ -550,6 +600,7 @@ def _record_for_target(
     parsed_candidates = [(candidate, _parse_unit(candidate["unit"])) for candidate in candidates]
     observed = [_public_observation(candidate, parsed) for candidate, parsed in parsed_candidates]
     warnings = []
+    override_mismatches = []
     explicit = supplied_resolution
     if explicit and explicit["kind"] == "unresolved":
         explicit = None
@@ -572,6 +623,7 @@ def _record_for_target(
             resolution = {"kind": kind, "unit": unit, "source": "user"}
         if candidates:
             warnings.append("User resolution overrides detected unit metadata.")
+            override_mismatches = _override_mismatches(parsed_candidates, chosen, resolution)
     elif parsed_candidates:
         chosen_index = next(
             (index for index, item in enumerate(parsed_candidates) if item[0]["source"].startswith("native")),
@@ -610,6 +662,7 @@ def _record_for_target(
             "dimensionality": chosen.get("dimensionality"),
             "message": chosen["message"],
             "warnings": warnings,
+            "override_mismatches": override_mismatches,
         },
     }
 
@@ -633,12 +686,14 @@ def _summarize(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     ready = counts["valid"] + counts["dimensionless"] + counts["not_applicable"]
     applicable = total - counts["not_applicable"]
     valid_applicable = counts["valid"] + counts["dimensionless"]
+    unit_mismatches = sum(bool(record["finding"]["override_mismatches"]) for record in records)
     return {
         "counts": counts,
         "classification_coverage": None if total == 0 else accounted / total,
         "applicable_unit_coverage": None if total == 0 else (1.0 if applicable == 0 else valid_applicable / applicable),
         "metadata_validity": None if accounted == 0 else ready / accounted,
         "all_variables_ready": bool(total and ready == total),
+        "unit_mismatches": unit_mismatches,
     }
 
 
