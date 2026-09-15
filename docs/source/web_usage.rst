@@ -349,7 +349,10 @@ Notes
   DCAT/DataCite JSON for metadata
   in the Understandability and Usability dimension. ROOT files use ``uproot``
   (installed with AIDRIN). Files with
-  a single TTree load automatically; multi-tree files use the same key picker as HDF5/JSON.
+  a single TTree load automatically. For multi-tree files, Data Overview shows a
+  tree picker: select one tree and click **Load selected tree**. Metrics run on
+  that tree. Use **Change dataset selection** to choose a different tree
+  without uploading the file again.
   For HDF5 files, fill-value
   sentinels (``_FillValue``, ``missing_value``, and the HDF5 native fill value) are
   automatically converted to ``NaN`` so that all metrics — completeness, outliers,

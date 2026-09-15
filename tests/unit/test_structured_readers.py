@@ -31,17 +31,18 @@ def logger():
     return logging.getLogger("test_structured_readers")
 
 
-@pytest.mark.parametrize("reader_cls", [rootReader])
-def test_root_stub_inventory_contract(tmp_path, logger, reader_cls):
-    path = tmp_path / "placeholder"
-    path.write_text("not used", encoding="utf-8")
-    inv = reader_cls(str(path), logger).inventory()
+def test_root_inventory_contract(tmp_path, logger):
+    uproot = pytest.importorskip("uproot")
+    path = tmp_path / "empty.root"
+    with uproot.recreate(path):
+        pass
+    inv = rootReader(str(path), logger).inventory()
 
     assert set(inv.keys()) == {"type", "datasets", "groups"}
-    assert inv["type"] == INVENTORY_UNSUPPORTED
+    assert inv["type"] == "empty"
     assert inv["datasets"] == []
     assert inv["groups"] == []
-    assert inv["type"] not in USER_FACING_INVENTORY_TYPES
+    assert inv["type"] in USER_FACING_INVENTORY_TYPES
 
 
 def test_make_inventory_helper():

@@ -12,7 +12,9 @@ import pandas as pd
 
 from aidrin.file_handling.readers.base_reader import BaseFileReader
 from aidrin.file_handling.readers.structured import (
-    INVENTORY_UNSUPPORTED,
+    INVENTORY_EMPTY,
+    INVENTORY_SINGLE,
+    INVENTORY_MULTI,
     InventoryResult,
     make_inventory,
 )
@@ -43,7 +45,21 @@ class rootReader(BaseFileReader):
         self._explicit_selected_keys = selected_keys
 
     def inventory(self) -> InventoryResult:
-        return make_inventory(INVENTORY_UNSUPPORTED)
+        uproot = _require_uproot()
+        datasets = []
+        with uproot.open(self.file_path) as handle:
+            for name in self._list_trees():
+                tree = handle[name]
+                rows, columns = int(tree.num_entries), len(tree.keys())
+                datasets.append({
+                    "path": name,
+                    "shape": (rows, columns),
+                    "ndim": 2,
+                    "dtype": "ROOT tree",
+                    "size": rows * columns,
+                })
+        kind = INVENTORY_EMPTY if not datasets else INVENTORY_SINGLE if len(datasets) == 1 else INVENTORY_MULTI
+        return make_inventory(kind, datasets)
 
     def _list_trees(self) -> List[str]:
         uproot = _require_uproot()

@@ -4307,10 +4307,47 @@ function renderCategoricalPieCharts(charts, containerId) {
   container.innerHTML = html;
 }
 
+/** Show a single-tree selector for ROOT files. */
+function renderRootTreePicker(container, data) {
+  const checked = new Set(data.current_checked_keys || []);
+  container.innerHTML = `
+    <h3 class="text-lg font-semibold mb-2">Select a ROOT tree</h3>
+    <p class="text-sm mb-4">${escapeHtml(data.message)}</p>
+    <div class="space-y-2 mb-4">
+      ${(data.datasets || [])
+        .map(
+          (ds) => `
+        <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
+          <input type="radio" name="root-tree" value="${escapeHtml(ds.path)}" ${checked.has(ds.path) ? "checked" : ""} />
+          <span>${escapeHtml(ds.path)} (${escapeHtml(ds.shape[0])} entries)</span>
+        </label>`,
+        )
+        .join("")}
+    </div>
+    <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50" data-load-root-tree disabled>Load selected tree</button>`;
+  const button = container.querySelector("[data-load-root-tree]");
+  const selection = () =>
+    container.querySelector('input[name="root-tree"]:checked');
+  container.querySelectorAll('input[name="root-tree"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      button.disabled = !selection();
+    });
+  });
+  button.disabled = !selection();
+  button.addEventListener("click", () => {
+    const selected = selection();
+    if (selected) selectHdf5Datasets([selected.value]);
+  });
+}
+
 /**
  * Show dataset picker for multi-dataset HDF5 files.
  */
 function renderHdf5DatasetPicker(container, data) {
+  if (data.file_type === ".root") {
+    renderRootTreePicker(container, data);
+    return;
+  }
   const datasets = data.datasets || [];
   const groups = data.groups || [];
   const checked = new Set(data.current_checked_keys || []);
@@ -4653,7 +4690,7 @@ function clearWorkspaceFeatureDropdowns() {
 }
 
 /**
- * Return to the HDF5 dataset picker without re-uploading the file.
+ * Return to the dataset or tree picker without re-uploading the file.
  */
 function returnToHdf5DatasetPicker() {
   const container = document.getElementById("workspace-summary");
@@ -4715,7 +4752,7 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
 
       if (data.success) {
         let html = "";
-        if (data.hdf5_multi_dataset) {
+        if (data.hdf5_multi_dataset || data.root_tree_selected) {
           const keys = (data.selected_dataset_keys || []).join(", ");
           const keysDisplay =
             keys.length > 80 ? `${keys.slice(0, 77)}...` : keys;
@@ -4724,7 +4761,7 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
           html += `
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
             <p class="text-sm text-gray-600 dark:text-gray-400">
-              HDF5 datasets:
+              ${data.root_tree_selected ? "ROOT tree:" : "HDF5 datasets:"}
               <span class="font-mono text-xs text-gray-800 dark:text-gray-200" title="${escapedKeys}">${escapedDisplay || "selected"}</span>
             </p>
             <button type="button" onclick="returnToHdf5DatasetPicker()" class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
