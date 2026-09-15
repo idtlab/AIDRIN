@@ -208,6 +208,11 @@ def retrieve_uploaded_file():
     return jsonify({"error": "No file path found"}), 404
 
 
+# Session keys /clear keeps: user-level settings and credentials that are not
+# tied to the dataset being cleared.
+PRESERVED_ON_CLEAR = ("llm_config", "globus_tokens", "globus_authenticated")
+
+
 @core_bp.route("/clear", methods=["GET", "POST"])
 def clear_file():
     file_upload_time_log.info("Clearing File")
@@ -230,11 +235,20 @@ def clear_file():
     # Capture this session's own files before clearing the session.
     owned_files = session.get("owned_files", [])
 
+    # State that belongs to the user rather than to the dataset being cleared,
+    # so it survives starting a new configuration. Globus sign-out has its own
+    # explicit action (/globus/disconnect), as does the LLM key (/llm/disconnect).
+    preserved = {
+        key: session[key] for key in PRESERVED_ON_CLEAR if key in session
+    }
+
     session.pop("uploaded_file_path", None)
     session.pop("uploaded_file_name", None)
     session.pop("uploaded_file_type", None)
     session.pop("minimize_preview", None)
     session.clear()
+
+    session.update(preserved)
 
     try:
         for file_path in owned_files:

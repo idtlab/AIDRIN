@@ -846,3 +846,42 @@ def test_disconnect_clears_negotiation_and_task_context(client, monkeypatch):
         assert "globus_active_tasks" not in flask_session
         assert "globus_task_contexts" not in flask_session
         assert "globus_endpoint_negotiation" not in flask_session
+
+
+def test_globus_auth_survives_clear(client):
+    """Clearing the loaded dataset must not sign the user out of Globus.
+
+    /clear ends one dataset configuration; /globus/disconnect is the explicit
+    sign-out. Wiping the tokens on /clear forced a full OAuth round trip just
+    to load a second remote dataset.
+    """
+    if not is_globus_available():
+        return
+
+    _authenticate(client)
+    with client.session_transaction() as flask_session:
+        flask_session["globus_endpoint_id"] = "endpoint-uuid"
+        flask_session["globus_file_path"] = "/remote/manifest.csv"
+        flask_session["globus_file_name"] = "manifest.csv"
+
+    response = client.post("/clear")
+    assert response.status_code in (200, 302)
+
+    assert client.get("/globus/status").get_json()["authenticated"] is True
+
+    # The dataset itself is still cleared.
+    with client.session_transaction() as flask_session:
+        assert "globus_file_path" not in flask_session
+        assert "globus_file_name" not in flask_session
+
+
+def test_globus_disconnect_clears_auth_after_clear(client):
+    """/globus/disconnect remains the way to actually sign out."""
+    if not is_globus_available():
+        return
+
+    _authenticate(client)
+    client.post("/clear")
+    client.post("/globus/disconnect")
+
+    assert client.get("/globus/status").get_json()["authenticated"] is False
