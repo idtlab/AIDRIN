@@ -356,6 +356,50 @@ def test_variable_unit_mismatch_count_shares_status_count_table():
     assert "border-red-300 bg-red-50" in scores
 
 
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the Results projection test")
+def test_variable_unit_results_hide_sidecar_plumbing_without_mutating_output():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function isVariableUnitResult(")
+    end = source.index("function renderWorkspaceResults(", start)
+    projection = source[start:end]
+    script = f"""
+function isObject(value) {{ return value !== null && typeof value === "object" && !Array.isArray(value); }}
+{projection}
+const raw = {{
+  $schema: "schema-url",
+  format: "aidrin.variable-unit-metadata",
+  version: 1,
+  unit_vocabulary: "pint",
+  dataset: {{ name: "parkfield.csv", file_type: ".csv", schema_fingerprint: "sha256:secret" }},
+  summary: {{ all_variables_ready: true }},
+  variables: [],
+}};
+const shown = variableUnitResultsForDisplay("Variable Unit Validation", raw);
+if ("schema_fingerprint" in shown.dataset) process.exit(1);
+if (["$schema", "format", "version", "unit_vocabulary"].some((key) => key in shown)) process.exit(2);
+if (shown.dataset.name !== "parkfield.csv" || shown.dataset.file_type !== ".csv") process.exit(3);
+if (shown.summary !== raw.summary || shown.variables !== raw.variables) process.exit(4);
+if (raw.dataset.schema_fingerprint !== "sha256:secret" || raw.format !== "aidrin.variable-unit-metadata") process.exit(5);
+if (variableUnitResultsForDisplay("Other Metric", raw) !== raw) process.exit(6);
+if (
+  variableUnitErrorForDisplay(
+    "Variable Unit Validation",
+    "Variable-unit metadata schema fingerprint does not match the dataset",
+  ) !== "Imported unit metadata does not match this dataset."
+) process.exit(7);
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+    workspace_start = source.index("function renderWorkspaceResults(")
+    workspace_end = source.index("function renderFileReferenceInvalidTable", workspace_start)
+    workspace = source[workspace_start:workspace_end]
+    card_start = source.index("function buildResultCard(")
+    card_end = source.index("// ==================== Toast Notifications", card_start)
+    card = source[card_start:card_end]
+    assert "Object.entries(displayResults)" in workspace
+    assert "Object.entries(displayResults)" in card
+
+
 def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     panel = VARIABLE_UNIT_PANEL.read_text(encoding="utf-8")
