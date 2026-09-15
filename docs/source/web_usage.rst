@@ -212,7 +212,7 @@ evaluates dataset metadata for compliance with the **FAIR principles** —
 Unit Metadata Audit and Repair
 ''''''''''''''''''''''''''''''
 
-- **Method**: Audits every logical variable for a Pint-recognized unit, dimensionless ``1``, or an explicit not-applicable resolution. Native HDF5/Parquet metadata and trailing name annotations are preserved as observations; user resolutions can correct them without changing the dataset.
+- **Method**: Audits every logical variable for a Pint-recognized unit, dimensionless ``1``, or an explicit not-applicable resolution. Native HDF5/Parquet metadata and trailing name annotations, including compact suffixes such as ``vp_m_per_s``, are preserved as observations; user resolutions can correct them without changing the dataset.
 - **Parameters**: Open **Unit Metadata Audit** under Understandability. Review every unresolved, invalid, ambiguous, or conflicting variable; select **Has a physical unit**, **Dimensionless**, or **No unit applies**; and validate the edited sidecar. For a recognized physical quantity, choose from the matching common units; unrecognized variable names show the full common-unit list. Free-form entry accepts Pint-compatible expressions. Suggestions do not assign units automatically. A complete canonical sidecar can also be imported.
 - **Result**: Separate classification coverage, applicable-unit coverage, and metadata-validity scores; deterministic per-variable findings; and a complete downloadable ``.units.json`` sidecar, including unresolved variables.
 

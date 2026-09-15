@@ -95,6 +95,16 @@ def test_every_curated_suggestion_is_unique_and_recognized_by_pint():
             {"label": "Kelvin (K)", "unit": "kelvin"},
         ],
     }
+    assert next(group for group in catalog if group["quantity"] == "density") == {
+        "quantity": "density",
+        "variable_terms": ["density"],
+        "units": [
+            {"label": "Kilograms per cubic meter (kg/m³)", "unit": "kilogram/meter**3"},
+            {"label": "Grams per cubic meter (g/m³)", "unit": "gram/meter**3"},
+            {"label": "Grams per cubic centimeter (g/cm³)", "unit": "gram/centimeter**3"},
+            {"label": "Kilograms per liter (kg/L)", "unit": "kilogram/liter"},
+        ],
+    }
 
 
 def test_detected_non_pint_unit_is_invalid_and_round_trips(tmp_path):
@@ -118,8 +128,20 @@ def test_detected_non_pint_unit_is_invalid_and_round_trips(tmp_path):
         ("velocity (m/s)", "m/s"),
         ("velocity [m/s]", "m/s"),
         ("acceleration [g]", "[g]"),
+        ("depth_m", "m"),
+        ("vp_m_per_s", "m/s"),
+        ("density_kg_per_m3", "kg/m^3"),
+        ("area_m2", "m^2"),
+        ("acceleration_g", "g"),
+        ("pressure_bar", "bar"),
         ("velocity (m/s) estimate", None),
         ("velocity [m/s] estimate", None),
+        ("velocity_m_per_s_estimate", None),
+        ("created_at", None),
+        ("sample_count", None),
+        ("logged_in", None),
+        ("foo_bar", None),
+        ("user_id", None),
         ("velocity", None),
     ],
 )
@@ -166,6 +188,20 @@ def test_name_units_can_make_all_variables_ready(tmp_path):
         "acceleration [g]",
     ]
     assert result["summary"]["counts"]["valid"] == 2
+
+
+def test_underscore_unit_suffixes_from_parkfield_columns_are_audited(tmp_path):
+    file_info = _csv(tmp_path, ["depth_m", "vp_m_per_s", "vs_m_per_s", "density_kg_per_m3", "qp", "qs"])
+
+    result = calculate_variable_unit_validation(file_info)
+    by_name = {variable["name"]: variable for variable in result["variables"]}
+
+    assert result["summary"]["counts"]["valid"] == 4
+    assert result["summary"]["counts"]["missing"] == 2
+    assert by_name["depth_m"]["observed"][0]["unit"] == "m"
+    assert by_name["vp_m_per_s"]["observed"][0]["unit"] == "m/s"
+    assert by_name["density_kg_per_m3"]["observed"][0]["unit"] == "kg/m^3"
+    assert by_name["qp"]["observed"] == []
 
 
 def test_public_python_api_runs_same_validator(tmp_path):

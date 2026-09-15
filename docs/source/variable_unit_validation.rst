@@ -26,7 +26,13 @@ It recognizes:
 
 - HDF5 unit and units attributes;
 - Parquet field metadata using those keys; and
-- trailing name annotations such as velocity (m/s) and acceleration [g].
+- trailing name annotations such as velocity (m/s) and acceleration [g]; and
+- trailing underscore unit suffixes such as depth_m, vp_m_per_s, and
+  density_kg_per_m3. In this compact form, ``per`` denotes division and a
+  trailing integer denotes an exponent. A simple one-token suffix must also
+  agree with a recognized quantity term, such as ``depth_m`` or
+  ``pressure_bar``, so ordinary names such as ``created_at`` and ``logged_in``
+  are not mistaken for unit declarations.
 
 The audit reports missing metadata, units that Pint cannot parse, ambiguous
 bare g, and conflicting detected declarations. It does not inspect data values
@@ -151,6 +157,7 @@ Pint parses and normalizes unit expressions. AIDRIN accepts forms such as
 m/s^2, m/s², standard_gravity, g_0, and 1. Bare g is rejected as ambiguous:
 use gram for mass or [g], g_0, or standard_gravity for acceleration. AIDRIN
 also rejects m//s rather than accepting Pint's floor-division interpretation.
+The same ambiguity rule applies to a column ending in ``_g``.
 
 Interfaces
 ----------
