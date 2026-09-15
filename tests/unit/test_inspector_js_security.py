@@ -319,12 +319,18 @@ def test_variable_unit_editor_and_results_escape_dataset_metadata():
     result_start = source.index("function renderVariableUnitResultTable(rows)")
     result_end = source.index("function filterVariableUnitResults", result_start)
     result_renderer = source[result_start:result_end]
-    assert "escapeHtml(formatValue(value))" in result_renderer
+    assert "escapeHtml(displayValue)" in result_renderer
     assert "escapeHtml(status)" in result_renderer
     assert 'data-mismatch="${hasMismatch ? "true" : "false"}"' in result_renderer
     assert "variableUnitResultPresentation(status, hasMismatch)" in result_renderer
     assert ">Unit mismatch</span>" in result_renderer
     assert "escapeHtml(mismatchMessage)" in result_renderer
+    assert 'style="min-width: 72rem"' in result_renderer
+    assert '<col style="width: 16%">' in result_renderer
+    assert '<col style="width: 14%"></colgroup>' in result_renderer
+    assert 'class="block truncate whitespace-nowrap"' in result_renderer
+    assert 'class="min-w-0 truncate whitespace-nowrap"' in result_renderer
+    assert "align-top break-all" not in result_renderer
     assert 'filter === "mismatches"' in source
 
 
