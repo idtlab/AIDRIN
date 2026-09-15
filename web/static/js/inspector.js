@@ -1638,6 +1638,39 @@ function prettyResultTitle(key) {
   return RESULT_TITLE_OVERRIDES[key] || key;
 }
 
+function isVariableUnitResult(type) {
+  return (
+    String(type || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, "_") === "variable_unit_validation"
+  );
+}
+
+function variableUnitResultsForDisplay(type, results) {
+  if (!isVariableUnitResult(type) || !isObject(results)) return results;
+  const displayResults = { ...results };
+  delete displayResults.$schema;
+  delete displayResults.format;
+  delete displayResults.version;
+  delete displayResults.unit_vocabulary;
+  if (isObject(results.dataset)) {
+    displayResults.dataset = { ...results.dataset };
+    delete displayResults.dataset.schema_fingerprint;
+  }
+  return displayResults;
+}
+
+function variableUnitErrorForDisplay(type, error) {
+  if (
+    isVariableUnitResult(type) &&
+    String(error).includes("schema fingerprint does not match")
+  ) {
+    return "Imported unit metadata does not match this dataset.";
+  }
+  return error;
+}
+
 function renderWorkspaceResults(data, options) {
   const skipLLM = options && options.skipLLM;
   const metrics = document.getElementById("metrics");
@@ -1652,12 +1685,13 @@ function renderWorkspaceResults(data, options) {
     if (results.is_async && results.task_id) continue;
 
     // Extract parts
+    const displayResults = variableUnitResultsForDisplay(type, results);
     const description = results.Description || "";
-    const error = results.Error || "";
+    const error = variableUnitErrorForDisplay(type, results.Error || "");
     const visualizations = [];
     const scores = {};
 
-    for (const [key, value] of Object.entries(results)) {
+    for (const [key, value] of Object.entries(displayResults)) {
       if (
         key === "Description" ||
         key === "Error" ||
@@ -1776,7 +1810,7 @@ function renderWorkspaceResults(data, options) {
 
       // Raw JSON toggle
       const rawJson = {};
-      for (const [k, v] of Object.entries(results)) {
+      for (const [k, v] of Object.entries(displayResults)) {
         if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
       }
       html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
@@ -3672,13 +3706,14 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
 function buildResultCard(type, results) {
   if (typeof results !== "object" || results === null) return "";
 
+  const displayResults = variableUnitResultsForDisplay(type, results);
   const description = results.Description || "";
-  const error = results.Error || "";
+  const error = variableUnitErrorForDisplay(type, results.Error || "");
   const interpretation = results["Graph interpretation"];
   const visualizations = [];
   const scores = {};
 
-  for (const [key, value] of Object.entries(results)) {
+  for (const [key, value] of Object.entries(displayResults)) {
     if (
       key === "Description" ||
       key === "Error" ||
