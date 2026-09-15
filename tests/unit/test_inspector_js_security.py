@@ -470,6 +470,7 @@ def test_variable_unit_editor_limits_recognized_names_and_keeps_fallback():
     assert 'unitInput.setAttribute("list", list.id)' in editor
     assert 'unitInput.setAttribute("aria-autocomplete", "list")' in editor
     assert 'unitInput.placeholder = "Choose or type a unit"' in editor
+    assert '"w-44 rounded border border-gray-300' in editor
 
 
 def test_variable_unit_globus_control_is_capability_gated_and_serialized():
