@@ -48,9 +48,10 @@ Every variable has one resolution:
 - not_applicable for identifiers, timestamps, labels, and free text; or
 - unresolved when review remains necessary.
 
-A user resolution overrides detected metadata while preserving the observations
-and recording a warning. The editor never embeds a correction in the source
-file.
+A user resolution overrides detected metadata while preserving the observations.
+When the units differ, the result records whether their scale or physical
+dimension differs and states that values were not converted. The editor never
+embeds a correction in the source file.
 
 Canonical sidecar
 -----------------
@@ -86,7 +87,8 @@ Every audit and repair result uses one format:
            "normalized_unit": "°C",
            "dimensionality": "[temperature]",
            "message": "Unit is recognized by Pint.",
-           "warnings": []
+           "warnings": [],
+           "override_mismatches": []
          }
        }
      ],
@@ -104,7 +106,8 @@ Every audit and repair result uses one format:
        "classification_coverage": 1.0,
        "applicable_unit_coverage": 1.0,
        "metadata_validity": 1.0,
-       "all_variables_ready": true
+       "all_variables_ready": true,
+       "unit_mismatches": 0
      }
    }
 
@@ -136,6 +139,11 @@ all_variables_ready
    True only when every variable has a valid unit, is dimensionless, or is
    explicitly not applicable.
 
+unit_mismatches
+   Number of variables whose user resolution differs from detected unit
+   metadata. A resolved mismatch remains ready but is retained prominently in
+   the sidecar and web results.
+
 Unit parsing
 ------------
 
@@ -158,6 +166,11 @@ m/s^2, m/s², standard_gravity, g_0, and 1. Bare g is rejected as ambiguous:
 use gram for mass or [g], g_0, or standard_gravity for acceleration. AIDRIN
 also rejects m//s rather than accepting Pint's floor-division interpretation.
 The same ambiguity rule applies to a column ending in ``_g``.
+
+For an override, equivalent spellings remain neutral. Convertible units with a
+different scale and units with different dimensions are recorded separately.
+For example, changing detected ``kg/m³`` to ``g/m³`` reports a 1000-fold scale
+difference and does not convert dataset values.
 
 Interfaces
 ----------

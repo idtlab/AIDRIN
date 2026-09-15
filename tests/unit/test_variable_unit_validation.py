@@ -271,7 +271,74 @@ def test_user_resolution_overrides_conflict_and_retains_observations(tmp_path):
     assert record["finding"]["warnings"] == [
         "User resolution overrides detected unit metadata."
     ]
+    assert len(record["finding"]["override_mismatches"]) == 1
+    assert result["summary"]["unit_mismatches"] == 1
     assert result["summary"]["all_variables_ready"] is True
+
+
+def test_scale_mismatch_override_is_explicit_and_does_not_convert_values(tmp_path):
+    file_info = _csv(tmp_path, ["density_kg_per_m3"])
+    sidecar = _with_resolutions(file_info, {
+        "density_kg_per_m3": {
+            "kind": "unit",
+            "unit": "gram/meter**3",
+            "source": "user",
+        },
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch == {
+        "kind": "scale",
+        "source": "name",
+        "observed_unit": "kg/m³",
+        "resolved_unit": "g/m³",
+        "conversion_factor": 1000.0,
+        "message": "Unit mismatch: detected kg/m³, overridden with g/m³ (1000× scale difference). Values were not converted.",
+    }
+    assert result["summary"]["unit_mismatches"] == 1
+    assert result["summary"]["all_variables_ready"] is True
+
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(result)
+
+
+def test_equivalent_user_unit_has_no_override_mismatch(tmp_path):
+    file_info = _csv(tmp_path, ["density_kg_per_m3"])
+    sidecar = _with_resolutions(file_info, {
+        "density_kg_per_m3": {
+            "kind": "unit",
+            "unit": "kilogram/meter**3",
+            "source": "user",
+        },
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["variables"][0]["finding"]["override_mismatches"] == []
+    assert result["summary"]["unit_mismatches"] == 0
+
+
+def test_dimension_mismatch_override_is_distinguished_from_scale(tmp_path):
+    file_info = _csv(tmp_path, ["density_kg_per_m3"])
+    sidecar = _with_resolutions(file_info, {
+        "density_kg_per_m3": {
+            "kind": "unit",
+            "unit": "meter/second",
+            "source": "user",
+        },
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "dimension"
+    assert mismatch["conversion_factor"] is None
+    assert mismatch["message"] == (
+        "Unit mismatch: detected kg/m³, overridden with m/s (different dimensions). Values were not converted."
+    )
 
 
 def test_unresolved_native_name_conflict_fails(tmp_path):

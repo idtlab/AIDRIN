@@ -1887,6 +1887,33 @@ function renderFileReferenceMetadataTable(rows) {
   return html + `</tbody></table></div></div>`;
 }
 
+function variableUnitResultPresentation(status, hasMismatch) {
+  if (hasMismatch || ["invalid", "conflicting"].includes(status)) {
+    return {
+      row: "border-t border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20",
+      badge: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+    };
+  }
+  if (["missing", "ambiguous"].includes(status)) {
+    return {
+      row: "border-t border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20",
+      badge:
+        "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    };
+  }
+  if (["valid", "dimensionless"].includes(status)) {
+    return {
+      row: "border-t border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20",
+      badge:
+        "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+    };
+  }
+  return {
+    row: "border-t border-gray-200 dark:border-gray-700",
+    badge: "font-semibold text-gray-700 dark:text-gray-300",
+  };
+}
+
 function renderVariableUnitResultTable(rows) {
   let html = `<div class="mb-4">`;
   html += `<div class="mb-2 flex flex-wrap items-center justify-between gap-2">`;
@@ -1899,6 +1926,7 @@ function renderVariableUnitResultTable(rows) {
     "invalid",
     "ambiguous",
     "conflicting",
+    "mismatches",
     "overrides",
   ].forEach((status) => {
     html += `<option value="${status}">${status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)}</option>`;
@@ -1924,11 +1952,17 @@ function renderVariableUnitResultTable(rows) {
     const resolution = row.resolution || {};
     const status = String(finding.status || "");
     const warnings = Array.isArray(finding.warnings) ? finding.warnings : [];
-    const hasOverride = warnings.length > 0;
+    const mismatches = Array.isArray(finding.override_mismatches)
+      ? finding.override_mismatches
+      : [];
+    const hasOverride =
+      resolution.source === "user" && (row.observed || []).length > 0;
+    const hasMismatch = mismatches.length > 0;
     const observed = (row.observed || [])
       .map((item) => `${item.unit} (${item.source})`)
       .join(", ");
-    html += `<tr data-variable-unit-result data-status="${escapeHtml(status)}" data-override="${hasOverride ? "true" : "false"}" class="border-t border-gray-200 dark:border-gray-700">`;
+    const presentation = variableUnitResultPresentation(status, hasMismatch);
+    html += `<tr data-variable-unit-result data-status="${escapeHtml(status)}" data-override="${hasOverride ? "true" : "false"}" data-mismatch="${hasMismatch ? "true" : "false"}" class="${presentation.row}">`;
     [
       row.name,
       row.dtype,
@@ -1937,10 +1971,22 @@ function renderVariableUnitResultTable(rows) {
       resolution.unit || "—",
       finding.normalized_unit || "—",
       finding.dimensionality || "—",
-      [finding.message, ...warnings].filter(Boolean).join(" "),
     ].forEach((value) => {
       html += `<td class="px-2 py-2 align-top break-all">${escapeHtml(formatValue(value))}</td>`;
     });
+    if (hasMismatch) {
+      const mismatchMessage = mismatches
+        .map((mismatch) => mismatch.message)
+        .filter(Boolean)
+        .join(" ");
+      html += `<td class="px-2 py-2 align-top break-all"><span class="mr-1 inline-flex rounded px-1.5 py-0.5 font-semibold ${presentation.badge}">Unit mismatch</span>${escapeHtml(mismatchMessage)}</td>`;
+    } else {
+      const findingText = [finding.message, ...warnings]
+        .filter(Boolean)
+        .join(" ");
+      const statusLabel = (status || "unknown").replaceAll("_", " ");
+      html += `<td class="px-2 py-2 align-top break-all"><span class="mr-1 inline-flex rounded px-1.5 py-0.5 capitalize ${presentation.badge}">${escapeHtml(statusLabel)}</span>${escapeHtml(formatValue(findingText))}</td>`;
+    }
     html += `</tr>`;
   });
   return html + `</tbody></table></div></div>`;
@@ -1952,9 +1998,9 @@ function filterVariableUnitResults(select) {
   container?.querySelectorAll("[data-variable-unit-result]").forEach((row) => {
     const visible =
       filter === "all" ||
-      (filter === "overrides"
-        ? row.dataset.override === "true"
-        : row.dataset.status === filter);
+      (filter === "overrides" && row.dataset.override === "true") ||
+      (filter === "mismatches" && row.dataset.mismatch === "true") ||
+      row.dataset.status === filter;
     row.classList.toggle("hidden", !visible);
   });
 }

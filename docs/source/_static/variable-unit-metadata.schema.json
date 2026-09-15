@@ -165,7 +165,8 @@
         "normalized_unit",
         "dimensionality",
         "message",
-        "warnings"
+        "warnings",
+        "override_mismatches"
       ],
       "properties": {
         "status": {
@@ -196,6 +197,46 @@
           "items": {
             "type": "string"
           }
+        },
+        "override_mismatches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/overrideMismatch"
+          }
+        }
+      }
+    },
+    "overrideMismatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source",
+        "observed_unit",
+        "resolved_unit",
+        "conversion_factor",
+        "message"
+      ],
+      "properties": {
+        "kind": {
+          "enum": ["scale", "dimension", "classification"]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed_unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolved_unit": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "conversion_factor": {
+          "type": ["number", "null"]
+        },
+        "message": {
+          "type": "string"
         }
       }
     },
@@ -250,7 +291,8 @@
         "classification_coverage",
         "applicable_unit_coverage",
         "metadata_validity",
-        "all_variables_ready"
+        "all_variables_ready",
+        "unit_mismatches"
       ],
       "properties": {
         "counts": {
@@ -312,6 +354,10 @@
         },
         "all_variables_ready": {
           "type": "boolean"
+        },
+        "unit_mismatches": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     }
