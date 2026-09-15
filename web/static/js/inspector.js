@@ -1966,7 +1966,8 @@ function renderVariableUnitResultTable(rows) {
     html += `<option value="${status}">${status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)}</option>`;
   });
   html += `</select></label></div>`;
-  html += `<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"><table class="w-full text-left text-xs text-gray-600 dark:text-gray-300">`;
+  html += `<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"><table class="w-full table-fixed text-left text-xs text-gray-600 dark:text-gray-300" style="min-width: 72rem">`;
+  html += `<colgroup><col style="width: 16%"><col style="width: 8%"><col style="width: 14%"><col style="width: 10%"><col style="width: 10%"><col style="width: 12%"><col style="width: 16%"><col style="width: 14%"></colgroup>`;
   html += `<thead class="bg-gray-50 uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-300"><tr>`;
   [
     "Variable",
@@ -1997,7 +1998,7 @@ function renderVariableUnitResultTable(rows) {
       .join(", ");
     const presentation = variableUnitResultPresentation(status, hasMismatch);
     html += `<tr data-variable-unit-result data-status="${escapeHtml(status)}" data-override="${hasOverride ? "true" : "false"}" data-mismatch="${hasMismatch ? "true" : "false"}" class="${presentation.row}">`;
-    [
+    const values = [
       row.name,
       row.dtype,
       observed || "None",
@@ -2005,21 +2006,23 @@ function renderVariableUnitResultTable(rows) {
       resolution.unit || "—",
       finding.normalized_unit || "—",
       finding.dimensionality || "—",
-    ].forEach((value) => {
-      html += `<td class="px-2 py-2 align-top break-all">${escapeHtml(formatValue(value))}</td>`;
+    ];
+    values.forEach((value) => {
+      const displayValue = formatValue(value);
+      html += `<td class="px-2 py-2 align-top"><span class="block truncate whitespace-nowrap" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span></td>`;
     });
     if (hasMismatch) {
       const mismatchMessage = mismatches
         .map((mismatch) => mismatch.message)
         .filter(Boolean)
         .join(" ");
-      html += `<td class="px-2 py-2 align-top break-all"><span class="mr-1 inline-flex rounded px-1.5 py-0.5 font-semibold ${presentation.badge}">Unit mismatch</span>${escapeHtml(mismatchMessage)}</td>`;
+      html += `<td class="px-2 py-2 align-top"><div class="flex min-w-0 items-center"><span class="mr-1 inline-flex shrink-0 rounded px-1.5 py-0.5 font-semibold ${presentation.badge}">Unit mismatch</span><span class="min-w-0 truncate whitespace-nowrap" title="${escapeHtml(mismatchMessage)}">${escapeHtml(mismatchMessage)}</span></div></td>`;
     } else {
       const findingText = [finding.message, ...warnings]
         .filter(Boolean)
         .join(" ");
       const statusLabel = (status || "unknown").replaceAll("_", " ");
-      html += `<td class="px-2 py-2 align-top break-all"><span class="mr-1 inline-flex rounded px-1.5 py-0.5 capitalize ${presentation.badge}">${escapeHtml(statusLabel)}</span>${escapeHtml(formatValue(findingText))}</td>`;
+      html += `<td class="px-2 py-2 align-top"><div class="flex min-w-0 items-center"><span class="mr-1 inline-flex shrink-0 rounded px-1.5 py-0.5 capitalize ${presentation.badge}">${escapeHtml(statusLabel)}</span><span class="min-w-0 truncate whitespace-nowrap" title="${escapeHtml(findingText)}">${escapeHtml(formatValue(findingText))}</span></div></td>`;
     }
     html += `</tr>`;
   });
