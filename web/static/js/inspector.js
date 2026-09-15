@@ -650,7 +650,7 @@ function renderVariableUnitEditor() {
       `Unit metadata resolution for ${variable.name}`,
     );
     select.className =
-      "w-44 rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800";
+      "w-full min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800";
     [
       ["unresolved", "Needs review"],
       ["unit", "Has a physical unit"],
@@ -678,7 +678,7 @@ function renderVariableUnitEditor() {
     unitInput.disabled = kind !== "unit";
     unitInput.dataset.variableUnitName = variable.name;
     unitInput.className =
-      "w-48 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-xs disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800";
+      "w-full min-w-0 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-xs disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800";
     const choices = variableUnitChoices(variable.name);
     if (choices.length) {
       const list = document.createElement("datalist");
