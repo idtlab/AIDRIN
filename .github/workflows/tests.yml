@@ -38,6 +38,13 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.12"
             extras: "[zarr]"
+          # WeasyPrint's native libraries are installed only here, so the
+          # real PDF render tests actually execute. Every other job skips
+          # them, and the rest of the suite keeps mocking WeasyPrint.
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: ""
+            render: "true"
 
     steps:
     - uses: actions/checkout@v4
@@ -60,6 +67,12 @@ jobs:
       shell: bash -l {0}
       run: |
         conda install -n aidrin -c conda-forge pip -y
+
+    - name: Install WeasyPrint native libraries
+      if: matrix.render == 'true'
+      shell: bash -l {0}
+      run: |
+        conda install -n aidrin -c conda-forge pango cairo glib -y
 
     - name: Install Dependencies
       shell: bash -l {0}
