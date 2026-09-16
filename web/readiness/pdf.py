@@ -812,12 +812,43 @@ def _pdf_allowed_file_roots(app) -> list[Path]:
     ]
 
 
+def _weasyprint_url_fetcher_base():
+    """Return WeasyPrint's ``URLFetcher`` base class, if this WeasyPrint build
+    requires ``url_fetcher`` to be an instance of it, else ``None``.
+
+    WeasyPrint 70 removed the ``default_url_fetcher`` function and instead
+    expects ``url_fetcher`` to be an object deriving from
+    ``weasyprint.urls.URLFetcher``; WeasyPrint <70 expects a plain callable.
+    A guarded import - not a version-string comparison - is used because the
+    capability (does this class exist) is what matters. Kept as its own
+    module-level hook (rather than inlined) so tests can force either branch
+    by monkeypatching this function, without needing both WeasyPrint majors
+    installed.
+
+    OSError is also treated as "no modern API": like ``_weasyprint()`` above,
+    importing WeasyPrint at all fails with OSError (not ImportError) when its
+    native libraries (pango/cairo) are missing, and that case is already
+    handled by ``_weasyprint()`` before this hook is ever reached in the real
+    render path.
+    """
+    try:
+        from weasyprint.urls import URLFetcher
+    except (ImportError, OSError):
+        return None
+    return URLFetcher
+
+
 def _make_readiness_pdf_url_fetcher(allowed_roots: list[Path]):
     """Build a WeasyPrint URL fetcher that blocks remote and arbitrary file access.
 
     Uploaded dataset values can become HTML in the PDF; without this guard,
     WeasyPrint's default fetcher would resolve attacker-controlled http(s)/file
     URLs (SSRF / local file read) during rendering.
+
+    Supports both the pre-70 callable ``url_fetcher`` API and the WeasyPrint
+    70+ API, where ``url_fetcher`` must be a ``weasyprint.urls.URLFetcher``
+    instance. The allow/deny policy below runs identically on both paths,
+    before any delegation to WeasyPrint's own fetching.
     """
     from urllib.parse import urlparse
     from urllib.request import url2pathname
@@ -837,7 +868,7 @@ def _make_readiness_pdf_url_fetcher(allowed_roots: list[Path]):
                 continue
         return False
 
-    def url_fetcher(url, timeout=10, ssl_context=None):
+    def _check_policy(url) -> None:
         parsed = urlparse(url)
         scheme = (parsed.scheme or "").lower()
         if scheme not in ("data", "file"):
@@ -854,6 +885,21 @@ def _make_readiness_pdf_url_fetcher(allowed_roots: list[Path]):
             file_path = Path(url2pathname(parsed.path))
             if not _is_under_allowed_root(file_path):
                 raise ValueError(f"Blocked file URL outside allowed roots: {url}")
+
+    url_fetcher_base = _weasyprint_url_fetcher_base()
+    if url_fetcher_base is not None:
+        # WeasyPrint 70+: url_fetcher must be an URLFetcher instance -
+        # WeasyPrint reads attributes (e.g. _fail_on_errors) directly off it.
+        class _ReadinessPdfURLFetcher(url_fetcher_base):
+            def fetch(self, url):
+                _check_policy(url)
+                return super().fetch(url)
+
+        return _ReadinessPdfURLFetcher()
+
+    # WeasyPrint <70: url_fetcher is a plain callable.
+    def url_fetcher(url, timeout=10, ssl_context=None):
+        _check_policy(url)
         from weasyprint import default_url_fetcher
 
         return default_url_fetcher(url, timeout=timeout, ssl_context=ssl_context)

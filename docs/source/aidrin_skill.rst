@@ -137,6 +137,30 @@ Claude should call the ``list_metrics`` tool and return the full metric catalogu
 category. If it falls back to running ``aidrin list`` in the terminal instead, the MCP server
 did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mcp``).
 
+Alternative — Install via skills.sh
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The skill is also published on `skills.sh <https://www.skills.sh/idtlab/aidrin/aidrin>`_
+and can be installed into any project, for any agent that supports the skills format
+(Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, and others), without cloning
+the repository:
+
+.. code-block:: bash
+
+   npx skills add idtlab/aidrin
+
+This installs only the skill. It drives AIDRIN through the ``aidrin`` command-line
+interface, so AIDRIN must be installed and on your PATH (:ref:`cli_installation`).
+To use the MCP server instead, complete Steps 1–2 above as well.
+
+Installing this way also keeps the skill easy to update: the CLI records the source
+repository in a ``skills-lock.json`` next to the skill, and a single command pulls the
+latest version from ``main`` — no release or manual copy needed:
+
+.. code-block:: bash
+
+   npx skills update aidrin
+
 ----
 
 .. _aidrin_skill_tools:
