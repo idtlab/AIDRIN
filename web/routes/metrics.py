@@ -3121,7 +3121,12 @@ def correlation_analysis():
                 return jsonify({"message": "No correlation analysis selected"}), 200
         except Exception as e:
             metric_time_log.error("Correlation Analysis error: %s", e, exc_info=True)
-            return jsonify({"trigger": "correlationError", "error": f"{type(e).__name__}: {e}"}), 200
+            return jsonify(
+                {
+                    "trigger": "correlationError",
+                    "error": "An internal error occurred while running correlation analysis.",
+                }
+            ), 200
 
     return get_result_or_default("metrics.correlation_analysis", file_path, file_name)
 
