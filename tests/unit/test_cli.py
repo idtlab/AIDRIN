@@ -1008,3 +1008,68 @@ class TestBatchReportAttachment(unittest.TestCase):
         ][0]
         names = [a.path for a in client.list_artifacts(parent.info.run_id)]
         self.assertIn(os.path.basename(self.report.name), names)
+
+
+# ===========================================================================
+# skill install command
+# ===========================================================================
+
+
+class TestSkillInstallCommand(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_copies_bundled_skill(self):
+        out, _, code = _run_cli("skill", "install", "--dir", self.tmpdir)
+        self.assertEqual(code, 0)
+        target = os.path.join(self.tmpdir, "aidrin")
+        self.assertIn(target, out)
+        self.assertTrue(os.path.isfile(os.path.join(target, "SKILL.md")))
+        self.assertTrue(os.path.isfile(os.path.join(target, "reference", "metrics.md")))
+
+    def test_rerun_overwrites_in_place(self):
+        _run_cli("skill", "install", "--dir", self.tmpdir)
+        skill_md = os.path.join(self.tmpdir, "aidrin", "SKILL.md")
+        with open(skill_md, "w") as fh:
+            fh.write("stale")
+        _, _, code = _run_cli("skill", "install", "--dir", self.tmpdir)
+        self.assertEqual(code, 0)
+        with open(skill_md) as fh:
+            self.assertTrue(fh.read().startswith("---"))
+
+    def test_default_installs_into_existing_skill_dirs(self):
+        os.makedirs(os.path.join(self.tmpdir, ".claude", "skills"))
+        os.makedirs(os.path.join(self.tmpdir, ".agents", "skills"))
+        cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        try:
+            _, _, code = _run_cli("skill", "install")
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 0)
+        for d in (".claude", ".agents"):
+            self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, d, "skills", "aidrin", "SKILL.md")))
+
+    def test_default_errors_when_no_skill_dir(self):
+        cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        try:
+            _, err, code = _run_cli("skill", "install")
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 2)
+        self.assertIn("--dir", err)
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, ".claude")))
+
+    def test_refuses_symlink_target(self):
+        real = os.path.join(self.tmpdir, "real")
+        os.makedirs(real)
+        os.symlink(real, os.path.join(self.tmpdir, "aidrin"))
+        _, err, code = _run_cli("skill", "install", "--dir", self.tmpdir)
+        self.assertEqual(code, 2)
+        self.assertIn("symlink", err)
