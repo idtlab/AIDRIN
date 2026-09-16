@@ -135,6 +135,7 @@ aidrin-mcp = "aidrin.mcp.server:main"
 include = ["aidrin*"]
 
 [tool.setuptools.package-data]
+"aidrin" = ["skill/**/*.md"]
 "aidrin.agentic" = []
 
 [tool.setuptools.dynamic]
