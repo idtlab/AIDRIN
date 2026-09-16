@@ -3105,14 +3105,13 @@ def correlation_analysis():
                     corr_dict = correlations_result.get(timeout=METRIC_CELERY_TIMEOUT)
                     if "Message" in corr_dict:
                         metric_time_log.warning("Correlation analysis failed: %s", corr_dict["Message"])
-                        final_dict["Error"] = corr_dict["Message"]
-                    else:
-                        final_dict["Correlations Analysis Categorical"] = corr_dict[
-                            "Correlations Analysis Categorical"
-                        ]
-                        final_dict["Correlations Analysis Numerical"] = corr_dict[
-                            "Correlations Analysis Numerical"
-                        ]
+                        return jsonify({"trigger": "correlationError", "error": corr_dict["Message"]}), 200
+                    final_dict["Correlations Analysis Categorical"] = corr_dict[
+                        "Correlations Analysis Categorical"
+                    ]
+                    final_dict["Correlations Analysis Numerical"] = corr_dict[
+                        "Correlations Analysis Numerical"
+                    ]
                     metric_time_log.info("Correlations took %.2f seconds", time.time() - t0)
                     duration = time.time() - start_time
                     metric_time_log.info("Correlation Analysis completed in %.2f seconds", duration)
@@ -3122,7 +3121,7 @@ def correlation_analysis():
                 return jsonify({"message": "No correlation analysis selected"}), 200
         except Exception as e:
             metric_time_log.error("Correlation Analysis error: %s", e, exc_info=True)
-            return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
+            return jsonify({"trigger": "correlationError", "error": f"{type(e).__name__}: {e}"}), 200
 
     return get_result_or_default("metrics.correlation_analysis", file_path, file_name)
 
