@@ -42,9 +42,12 @@ def create_app():
     from web.telemetry import init_telemetry
     init_telemetry(app)
 
+    # AIDRIN_DEMO=1 shows the demo banner (set at build time in docker/NERSC/Dockerfile).
+    demo_mode = os.environ.get("AIDRIN_DEMO", "0").lower() in ("1", "true", "yes")
+
     @app.context_processor
     def inject_version():
-        return dict(app_version=__version__)
+        return dict(app_version=__version__, demo_mode=demo_mode)
 
     app.secret_key = os.environ.get("AIDRIN_SECRET_KEY", "aidrin")
 
