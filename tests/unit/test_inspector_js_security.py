@@ -9,7 +9,6 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
 INSPECTOR_TEMPLATE = REPO_ROOT / "web" / "templates" / "inspector.html"
-BASE_TEMPLATE = REPO_ROOT / "web" / "templates" / "_base.html"
 DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_quality.html"
 DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_structure.html"
 VARIABLE_UNIT_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_variable_unit_validation.html"
@@ -476,15 +475,17 @@ def test_variable_unit_editor_limits_recognized_names_and_keeps_fallback():
 def test_variable_unit_editor_columns_are_stable_across_rerenders():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     panel = VARIABLE_UNIT_PANEL.read_text(encoding="utf-8")
-    base = BASE_TEMPLATE.read_text(encoding="utf-8")
+    inspector = INSPECTOR_TEMPLATE.read_text(encoding="utf-8")
     editor_start = source.index("function renderVariableUnitEditor()")
     editor_end = source.index("function setVariableUnitEditorEnabled", editor_start)
     editor = source[editor_start:editor_end]
 
     assert '"w-full min-w-0 rounded border border-gray-300' in editor
+    assert '"min-w-0 break-words px-2 py-2 font-medium' in editor
     assert 'class="w-full table-fixed' in panel
     assert panel.count('<col style="width:') == 6
-    assert 'style="scrollbar-gutter: stable"' in base
+    assert "html:has(#panel-variable-unit-validation:not(.hidden))" in inspector
+    assert "scrollbar-gutter: stable" in inspector
 
 
 def test_variable_unit_globus_control_is_capability_gated_and_serialized():

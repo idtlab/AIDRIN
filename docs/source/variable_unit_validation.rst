@@ -216,6 +216,13 @@ The initial audit runs automatically. Edits remain pending until
 complete or incomplete sidecar can then be downloaded using a
 dataset-name.units.json filename.
 
+To exercise the full audit workflow with native HDF5 metadata, upload
+``examples/sample_data/h5/unit_audit_demo.h5`` as an HDF5 file and select all
+eight datasets. The sample includes valid native and name-derived units,
+dimensionless and missing metadata, invalid and ambiguous declarations, and a
+native/name conflict. It is intentionally not ready until the flagged
+variables are resolved.
+
 Globus workers advertise the variable_unit_metadata_v1 capability. Workers
 without that capability leave the audit editor disabled and show an upgrade
 message.

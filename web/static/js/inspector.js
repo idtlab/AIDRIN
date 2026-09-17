@@ -638,7 +638,7 @@ function renderVariableUnitEditor() {
     };
     addCell(
       variable.name,
-      "px-2 py-2 font-medium text-gray-900 dark:text-white",
+      "min-w-0 break-words px-2 py-2 font-medium text-gray-900 dark:text-white",
     );
     addCell(variable.dtype || "unknown");
     addCell(observed || "None");
