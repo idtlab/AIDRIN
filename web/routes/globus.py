@@ -60,11 +60,13 @@ def _store_negotiation(endpoint_id, report, checked_at=None):
     }
     record["fingerprint"] = _negotiation_fingerprint(record)
     session["globus_endpoint_negotiation"] = record
+    session["globus_capabilities"] = record["capabilities"]
     return record
 
 
 def _clear_negotiation():
     session.pop("globus_endpoint_negotiation", None)
+    session.pop("globus_capabilities", None)
 
 
 def _endpoint_probe_timeout():
@@ -155,6 +157,7 @@ def _remove_file_reference_capability(context):
     record["capabilities"] = capabilities
     record["fingerprint"] = _negotiation_fingerprint(record)
     session["globus_endpoint_negotiation"] = record
+    session["globus_capabilities"] = capabilities
     return True
 
 
@@ -316,7 +319,6 @@ def check_endpoint():
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
         _, report = _fresh_negotiation(client, endpoint_id, force=True)
-        session["globus_capabilities"] = report.get("remote", {}).get("capabilities", [])
         return jsonify(report), (200 if report["compatible"] else 409)
     except Exception as e:
         logger.error("Globus check-endpoint error: %s", e, exc_info=True)

@@ -132,12 +132,21 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
                     "Error": f"{type(e).__name__}: {e}",
                 }
         if "variable_unit_validation" in selected:
-            result["Variable Unit Validation"] = (
-                aidrin.calculate_variable_unit_validation(
-                    file_info,
-                    params.get("unit_metadata"),
+            try:
+                result["Variable Unit Validation"] = (
+                    aidrin.calculate_variable_unit_validation(
+                        file_info,
+                        params.get("unit_metadata"),
+                    )
                 )
-            )
+            except Exception as e:
+                result["Variable Unit Validation"] = {
+                    "Error": f"{type(e).__name__}: {e}",
+                    "Description": (
+                        "Verifies that every logical variable has a recognized unit, "
+                        "is dimensionless, or is marked not applicable."
+                    ),
+                }
         return result
 
     def _custom_outlier_targets():
@@ -436,15 +445,16 @@ def remote_env_probe():
     except Exception as exc:
         headless_import = f"{type(exc).__name__}: {exc}"
 
+    capabilities = ["file_reference_validation_v1"]
+    if hasattr(aidrin, "calculate_variable_unit_validation"):
+        capabilities.append("variable_unit_metadata_v1")
+
     return {
         "aidrin_version": aidrin.__version__,
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "headless_import": headless_import,
         "capability_schema_version": 1,
-        "capabilities": [
-            "file_reference_validation_v1",
-            "variable_unit_metadata_v1",
-        ],
+        "capabilities": capabilities,
     }
 
 

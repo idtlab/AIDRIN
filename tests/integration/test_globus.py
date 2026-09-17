@@ -222,6 +222,26 @@ def test_remote_runner_data_structure_variable_unit_validation():
     assert result["Variable Unit Validation"]["summary"]["all_variables_ready"] is True
 
 
+def test_remote_runner_variable_unit_failure_is_metric_scoped():
+    path, name, file_type = _write_csv(pd.DataFrame({"speed": [1.0]}))
+    try:
+        sidecar = aidrin.calculate_variable_unit_validation((path, name, file_type))
+        sidecar["dataset"]["schema_fingerprint"] = "sha256:wrong-dataset"
+        result = remote_metric_runner(
+            "data_structure",
+            path,
+            name,
+            file_type,
+            selected=["constant_feature_count", "variable_unit_validation"],
+            unit_metadata=sidecar,
+        )
+    finally:
+        os.unlink(path)
+
+    assert "Constant Feature Count" in result
+    assert "schema fingerprint does not match" in result["Variable Unit Validation"]["Error"]
+
+
 def test_remote_runner_data_quality_custom_outliers():
     path, name, file_type = _write_csv(pd.DataFrame({"age": [25, 30, 45]}))
     rules = [{
@@ -298,6 +318,14 @@ def test_remote_env_probe_reports_versions():
         "file_reference_validation_v1",
         "variable_unit_metadata_v1",
     ]
+
+
+def test_remote_env_probe_omits_unavailable_variable_unit_capability(monkeypatch):
+    monkeypatch.delattr(aidrin, "calculate_variable_unit_validation")
+
+    info = remote_env_probe()
+
+    assert info["capabilities"] == ["file_reference_validation_v1"]
 
 
 # -------------------------------------------------
@@ -758,6 +786,25 @@ def test_switching_endpoint_reuses_fresh_preflight_negotiation(client, monkeypat
     assert checked.status_code == 200
     assert submitted.status_code == 200
     assert calls == ["endpoint-uuid"]
+
+
+def test_submission_negotiation_synchronizes_template_capabilities(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["variable_unit_metadata_v1"]),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "task-id")
+
+    response = client.post("/globus/submit", json=_submission("custom_outlier_targets"))
+
+    assert response.status_code == 200
+    with client.session_transaction() as flask_session:
+        assert flask_session["globus_capabilities"] == ["variable_unit_metadata_v1"]
 
 
 def test_discovery_context_is_retained_pending_and_cleaned_on_completion(client, monkeypatch):
