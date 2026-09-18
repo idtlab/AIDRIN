@@ -456,6 +456,49 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
                                 help="Comma-separated columns to count nulls in (optional)")
 
 
+# Where agents look for project skills; Claude Code uses the first, most others the second.
+SKILL_DIRS = (Path(".claude/skills"), Path(".agents/skills"))
+
+
+def _skill_install(args: argparse.Namespace) -> None:
+    """Copy the bundled agent skill into ``<dir>/aidrin``, overwriting what is there.
+
+    The skill ships inside the package so ``pip install -U aidrin`` is also
+    the skill update channel: re-running this command after an upgrade
+    refreshes the copy in place. ``--dir`` is the agent's skills folder
+    (``.claude/skills`` for Claude Code, ``.agents/skills`` for most others).
+    """
+    import shutil
+    from importlib.resources import files
+
+    source = Path(str(files("aidrin") / "skill"))
+    if args.skills_dir:
+        skills_dirs = [Path(args.skills_dir)]
+    else:
+        # No --dir: install wherever an agent already keeps skills here.
+        skills_dirs = [d for d in SKILL_DIRS if d.is_dir()]
+        if not skills_dirs:
+            sys.stderr.write(
+                "Error: no skills folder found in the current directory "
+                f"(looked for {', '.join(str(d) for d in SKILL_DIRS)}). "
+                "Pass --dir <skills-folder> to choose one.\n"
+            )
+            sys.exit(2)
+    for skills_dir in skills_dirs:
+        target = skills_dir / "aidrin"
+        if target.is_symlink():
+            # Installed by the `skills` CLI (or a repo checkout); overwriting through
+            # the link would clobber the link target, not this project's copy.
+            sys.stderr.write(
+                f"Error: {target} is a symlink. Remove it first, or update the skill "
+                "with: npx skills update aidrin\n"
+            )
+            sys.exit(2)
+        # ponytail: dirs_exist_ok leaves files the new version no longer ships; rmtree first if that bites
+        shutil.copytree(source, target, dirs_exist_ok=True)
+        print(f"Skill installed at: {target}")
+
+
 def _agentic_build_index(args: argparse.Namespace) -> None:
     try:
         from aidrin.agentic.vector_db_builder import VectorDBBuilder
@@ -543,7 +586,7 @@ REMOTE_MANAGEMENT = {
 
 # Commands that cannot run on an endpoint: they need files or credentials that
 # live on the client machine.
-REMOTE_FORBIDDEN = {"add-custom-module", "agentic"}
+REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill"}
 
 
 REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
@@ -952,6 +995,19 @@ def main() -> None:
                                     help="Skip rebuilding the vector index; use existing one")
     agentic_run_parser.add_argument("-v", "--verbose", action="store_true", help="Print vector build info to stderr")
 
+    skill_parser = subparsers.add_parser("skill", help="Manage the bundled agent skill")
+    skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
+    skill_install_parser = skill_sub.add_parser(
+        "install",
+        help="Copy the skill into an agent's skills folder (re-run after pip upgrade to update)",
+    )
+    skill_install_parser.add_argument(
+        "--dir",
+        dest="skills_dir",
+        default=None,
+        help="Skills folder to install into (default: every existing .claude/skills and .agents/skills)",
+    )
+
     # argv was computed at the top of main() so the `remote` prefix could be
     # stripped before the local parser ever sees it.
     # Shortcut: allow `aidrin <metric> ...` (dash or underscore) to map to `aidrin run <metric> ...`
@@ -1133,6 +1189,9 @@ def main() -> None:
                 _agentic_build_index(args)
             elif args.agentic_command == "run":
                 _agentic_run(args)
+            return
+        if args.command == "skill":
+            _skill_install(args)
             return
     except AsyncSubmitted as submitted:
         _dump_result({"task_id": submitted.task_id})
