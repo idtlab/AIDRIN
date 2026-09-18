@@ -297,6 +297,11 @@ class TestGuards(_RemoteCliTestCase):
         self.assertEqual(code, 2)
         self.assertIn("local", err.lower())
 
+    def test_inventory_is_rejected(self):
+        _out, err, code = _run_cli("remote", "inventory", "/x.h5")
+        self.assertEqual(code, 2)
+        self.assertIn("local", err.lower())
+
     def test_bare_remote_exits_2(self):
         _out, err, code = _run_cli("remote")
         self.assertEqual(code, 2)

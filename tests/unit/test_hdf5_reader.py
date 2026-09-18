@@ -601,3 +601,82 @@ class TestPandasHDFStoreMultipleFrames:
         assert df is not None
         assert list(df.columns) == ["alpha"]
         assert "second" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# read_file() refuses an ambiguous multi_dataset layout instead of returning
+# an empty table silently (see zarr's matching contract in
+# test_structured_readers.py::test_read_file_raises_for_zarr_needing_selection)
+# ---------------------------------------------------------------------------
+
+class TestReadFileRefusesAmbiguousLayout:
+
+    def test_raises_for_incompatible_root_layout(self, tmp_path):
+        from aidrin.file_handling.file_parser import ReaderReturnedNone, read_file
+
+        fpath = str(tmp_path / "ragged.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("a", data=np.arange(10, dtype=np.int32))
+            f.create_dataset("b", data=np.arange(7, dtype=np.int32))
+
+        with pytest.raises(ReaderReturnedNone) as excinfo:
+            read_file((fpath, "ragged.h5", ".h5"))
+
+        message = str(excinfo.value)
+        assert "multi_dataset" in message
+        assert "aidrin inventory" in message
+
+    def test_raises_for_empty_store(self, tmp_path):
+        from aidrin.file_handling.file_parser import ReaderReturnedNone, read_file
+
+        fpath = str(tmp_path / "empty.h5")
+        with h5py.File(fpath, "w"):
+            pass
+
+        with pytest.raises(ReaderReturnedNone):
+            read_file((fpath, "empty.h5", ".h5"))
+
+    def test_does_not_raise_when_selection_resolves_it(self, tmp_path):
+        from aidrin.file_handling.file_parser import read_file
+
+        fpath = str(tmp_path / "ragged.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("a", data=np.arange(10, dtype=np.int32))
+            f.create_dataset("b", data=np.arange(7, dtype=np.int32))
+
+        df = read_file((fpath, "ragged.h5", ".h5", ["a"]))
+        assert df is not None
+        assert list(df.columns) == ["a"]
+
+
+# ---------------------------------------------------------------------------
+# aidrin.headless.api.inventory() -- the library/CLI entry point that exposes
+# hdf5Reader.inventory() without going through read().
+# ---------------------------------------------------------------------------
+
+class TestApiInventory:
+
+    def test_classifies_multi_dataset_hdf5_layout(self, tmp_path):
+        from aidrin.headless.api import inventory
+
+        fpath = str(tmp_path / "ragged.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("a", data=np.arange(10, dtype=np.int32))
+            f.create_dataset("b", data=np.arange(7, dtype=np.int32))
+
+        result = inventory(fpath)
+
+        assert result["type"] == "multi_dataset"
+        paths = {ds["path"] for ds in result["datasets"]}
+        assert paths == {"a", "b"}
+
+    def test_rejects_a_format_with_no_ambiguous_layout(self, tmp_path):
+        from aidrin.headless.api import inventory
+
+        fpath_obj = tmp_path / "plain.csv"
+        fpath_obj.write_text("a,b\n1,2\n")
+
+        with pytest.raises(ValueError) as excinfo:
+            inventory(str(fpath_obj))
+
+        assert "csv" in str(excinfo.value).lower()

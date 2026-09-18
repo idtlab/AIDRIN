@@ -507,10 +507,16 @@ def run_differential_privacy(
     file_name: Optional[str],
     columns: List[str],
     epsilon: float,
+    noisy_output: Optional[str] = None,
+    save_noisy_output: bool = True,
 ) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     data = read_file(file_info)
     try:
-        return return_noisy_stats(columns, float(epsilon), data)
+        return return_noisy_stats(
+            columns, float(epsilon), data,
+            save_output=save_noisy_output,
+            output_path=noisy_output,
+        )
     except Exception as exc:
         return _dp_error_payload(str(exc))
