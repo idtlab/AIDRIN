@@ -1122,7 +1122,11 @@ class TestOutputFlag(unittest.TestCase):
             "run", "completeness", self.csv, "-o", self.out_path
         )
         self.assertEqual(code, 0, msg=stderr)
-        self.assertIn(self.out_path, stderr)
+        # Compare resolved paths, not raw strings: on Windows CI runners
+        # Path.resolve() can expand an 8.3 short name (e.g. RUNNER~1) in
+        # self.out_path to its real long form, so a literal substring match
+        # against the unresolved path is not reliable there.
+        self.assertIn(os.path.realpath(self.out_path), stderr)
 
 
 # ===========================================================================
