@@ -51,6 +51,10 @@ from aidrin.structured_data_metrics.max_pairwise_correlation import (
     max_pairwise_correlation,
 )
 from aidrin.structured_data_metrics.skewness import skewness
+from aidrin.structured_data_metrics.variable_unit_validation import (
+    calculate_variable_unit_validation,
+    unit_suggestion_catalog,
+)
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
     categorize_metadata,
@@ -122,7 +126,9 @@ def custom_outlier_targets():
     if not file_path:
         return jsonify({"success": False, "message": "No file uploaded"}), 200
     try:
-        targets = iter_targets((file_path, file_name, file_type))
+        file_info = (file_path, file_name, file_type)
+        targets = iter_targets(file_info)
+        unit_metadata = calculate_variable_unit_validation(file_info)
         file_reference = discovery_configuration(
             current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS"),
             current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT"),
@@ -130,6 +136,8 @@ def custom_outlier_targets():
         return jsonify({
             "success": True,
             "targets": ensure_json_serializable(targets),
+            "unit_metadata": ensure_json_serializable(unit_metadata),
+            "unit_catalog": unit_suggestion_catalog(),
             "file_reference": file_reference,
         })
     except Exception as e:
@@ -2948,6 +2956,56 @@ def data_structure():
             return store_result("metrics.data_structure", final_dict)
 
     return get_result_or_default("metrics.data_structure", file_path, file_name)
+
+
+# ---------------------------------------------------------------------------
+# Understandability
+# ---------------------------------------------------------------------------
+
+@metrics_bp.route("/variable-unit-validation", methods=["GET", "POST"])
+def variable_unit_validation():
+    final_dict = {}
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = build_file_info(file_path, file_name, file_type)
+
+    if request.method == "POST":
+        start_time = time.time()
+        metric_time_log.info("Variable Unit Validation request started")
+        with trace_metric(
+            "variable_unit_validation",
+            "understandability",
+            file_name=file_name,
+            file_type=file_type,
+        ):
+            try:
+                raw_metadata = request.form.get("variable_unit_metadata")
+                metadata = json.loads(raw_metadata) if raw_metadata else None
+                unit_result = calculate_variable_unit_validation(file_info, metadata)
+            except Exception as e:
+                metric_time_log.error("Variable Unit Validation error: %s", e, exc_info=True)
+                final_dict["Variable Unit Validation"] = {
+                    "Error": f"{type(e).__name__}: {e}",
+                    "Description": (
+                        "Verifies that every logical variable has a recognized unit, "
+                        "is dimensionless, or is marked not applicable."
+                    ),
+                }
+            else:
+                final_dict["Variable Unit Validation"] = unit_result
+
+        metric_time_log.info(
+            "Variable Unit Validation completed in %.2f seconds",
+            time.time() - start_time,
+        )
+        return store_result("metrics.variable_unit_validation", final_dict)
+
+    return get_result_or_default(
+        "metrics.variable_unit_validation",
+        file_path,
+        file_name,
+    )
 
 
 # ---------------------------------------------------------------------------

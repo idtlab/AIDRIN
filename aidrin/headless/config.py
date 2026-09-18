@@ -52,6 +52,8 @@ class HeadlessConfig:
     max_results: Optional[int] = 100
     scan_limit: Optional[int] = None
     target_match: str = "exact"
+    unit_metadata: Optional[Dict[str, Any]] = None
+    unit_metadata_file: Optional[str] = None
     save_images: Optional[bool] = None
     image_dir: Optional[str] = None
 
@@ -81,6 +83,8 @@ class HeadlessConfig:
             "max-results": "max_results",
             "scan-limit": "scan_limit",
             "target-match": "target_match",
+            "unit-metadata": "unit_metadata",
+            "unit-metadata-file": "unit_metadata_file",
             "file-path": "file_path",
             "file-type": "file_type",
             "file-name": "file_name",

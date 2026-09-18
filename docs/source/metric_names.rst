@@ -31,7 +31,7 @@ Metrics are grouped into categories. ``aidrin list --category`` accepts five:
    * - ``data-quality``
      - Completeness, duplicates, outliers, and custom validity rules
    * - ``data-structure``
-     - Constant features, collinearity, and distribution shape
+     - Constant features, collinearity, distribution shape, and variable-unit metadata
    * - ``impact-of-data-on-AI``
      - Correlation and feature relevance
    * - ``fairness-and-bias``
@@ -39,9 +39,10 @@ Metrics are grouped into categories. ``aidrin list --category`` accepts five:
    * - ``data-governance``
      - Re-identification risk, HIPAA identifiers, and differential privacy
 
-The web interface groups the same metrics into **six** dimensions. The sixth,
-Understandability and Usability, has no CLI category because the FAIR metrics
-that make it up run only in the web interface.
+The web interface groups capabilities into **six** dimensions. It presents
+variable-unit validation under Understandability and Usability while retaining
+its ``data-structure`` registry category. The FAIR checks in that web dimension
+have no CLI category.
 
 Naming conventions
 ------------------
@@ -156,6 +157,11 @@ server, which dispatches on the same registry as the command line.
    * - Kurtosis
      - ``kurtosis``
      - ``calculate_kurtosis``
+     - |yes|
+     - |yes|
+   * - Unit Metadata Audit and Repair
+     - ``variable-unit-validation``
+     - ``calculate_variable_unit_validation``
      - |yes|
      - |yes|
    * - Correlation Analysis

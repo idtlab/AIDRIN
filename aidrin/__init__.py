@@ -579,6 +579,18 @@ def calculate_kurtosis(file_info):
     return kurtosis.apply(args=(file_info,)).get()
 
 
+def calculate_variable_unit_validation(file_info, unit_metadata=None):
+    """Audit every logical variable and return a canonical unit-metadata sidecar.
+
+    ``unit_metadata`` may be a sidecar previously returned by this function.
+    The source dataset is never modified.
+    """
+    from aidrin.structured_data_metrics.variable_unit_validation import (
+        calculate_variable_unit_validation as _calculate,
+    )
+    return _calculate(file_info, unit_metadata)
+
+
 __all__ = [
     "__version__",
     # Data Quality
@@ -607,4 +619,5 @@ __all__ = [
     "calculate_max_pairwise_correlation",
     "calculate_skewness",
     "calculate_kurtosis",
+    "calculate_variable_unit_validation",
 ]

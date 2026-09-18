@@ -150,6 +150,13 @@ Examples:
    aidrin run skewness /path/to/sample_dataset.csv
    aidrin run kurtosis /path/to/sample_dataset.csv
 
+   # Audit existing unit metadata and emit the canonical sidecar on stdout
+   aidrin run variable-unit-validation /path/to/sample_dataset.csv
+
+   # Apply resolutions from a sidecar and revalidate it
+   aidrin run variable-unit-validation /path/to/sample_dataset.csv \
+     --unit-metadata-file /path/to/sample_dataset.units.json
+
    # Data quality (completeness family — arguments are passed as named --flags)
    aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
    aidrin run duplicity-by-features /path/to/sample_dataset.csv --duplicate-columns "income,credit_score"
@@ -277,6 +284,17 @@ list or comma-separated targets:
    base-dir: /data/project
    max-results: 100
    scan-limit: 0
+
+Variable-unit validation accepts either a complete inline sidecar or a sidecar
+file resolved on the execution host. See :ref:`variable_unit_validation` for
+the canonical schema and audit-and-repair workflow:
+
+.. code-block:: yaml
+
+   file-path: /path/to/sample_dataset.csv
+   metrics:
+     - variable-unit-validation
+   unit-metadata-file: /path/to/sample_dataset.units.json
 
 **Example** — fairness analysis on the sample dataset:
 

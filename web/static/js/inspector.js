@@ -40,6 +40,12 @@ function _readinessTruncatedListItems(items, maxItems, renderItem) {
 let customOutlierTargets = [];
 let fileReferenceTargets = [];
 const globusDiscoveryCache = new Map();
+let variableUnitMetadata = null;
+let variableUnitCatalog = [];
+let variableUnitDraftKinds = {};
+let variableUnitMetadataDirty = false;
+let variableUnitPage = 0;
+const VARIABLE_UNIT_PAGE_SIZE = 10;
 let customOutlierRuleCounter = 0;
 let targetPickerDocumentHandlerRegistered = false;
 
@@ -389,6 +395,18 @@ function loadFileReferenceOptions() {
   const message = document.getElementById("file-reference-message");
   if (!checkbox) return Promise.resolve();
 
+  if (window.AIDRIN_GLOBUS_MODE) {
+    const capabilities = window.AIDRIN_GLOBUS_CAPABILITIES || [];
+    const unitMessage = document.getElementById("variable-unit-message");
+    if (!capabilities.includes("variable_unit_metadata_v1")) {
+      setVariableUnitEditorEnabled(false);
+      if (unitMessage) {
+        unitMessage.textContent =
+          "Unit metadata audit is unavailable on this endpoint. Upgrade and restart its AIDRIN worker.";
+      }
+    }
+  }
+
   const request = window.AIDRIN_GLOBUS_MODE
     ? loadGlobusTargetDiscovery()
     : fetch("/custom-outlier-targets", { method: "POST" }).then((response) =>
@@ -397,6 +415,14 @@ function loadFileReferenceOptions() {
 
   return request
     .then((data) => {
+      const capabilities = window.AIDRIN_GLOBUS_CAPABILITIES || [];
+      if (
+        !window.AIDRIN_GLOBUS_MODE ||
+        capabilities.includes("variable_unit_metadata_v1")
+      ) {
+        setVariableUnitCatalog(data.unit_catalog || []);
+        setVariableUnitMetadata(data.unit_metadata || null);
+      }
       applyFileReferenceOptions(
         data,
         window.AIDRIN_GLOBUS_MODE
@@ -419,6 +445,368 @@ function loadFileReferenceOptions() {
 async function loadInitialGlobusData() {
   await loadFileReferenceOptions();
   fetchGlobusSummary();
+}
+
+function setVariableUnitMetadata(metadata) {
+  if (
+    !metadata ||
+    metadata.format !== "aidrin.variable-unit-metadata" ||
+    metadata.version !== 1 ||
+    !Array.isArray(metadata.variables)
+  ) {
+    setVariableUnitEditorEnabled(false);
+    const message = document.getElementById("variable-unit-message");
+    if (message)
+      message.textContent = "Unable to load the unit metadata audit.";
+    return;
+  }
+  variableUnitMetadata = metadata;
+  variableUnitDraftKinds = {};
+  variableUnitMetadataDirty = false;
+  variableUnitPage = 0;
+  syncVariableUnitMetadata();
+  renderVariableUnitEditor();
+  setVariableUnitEditorEnabled(true);
+  updateVariableUnitAuditSummary();
+}
+
+function setVariableUnitCatalog(catalog) {
+  variableUnitCatalog = Array.isArray(catalog)
+    ? catalog.filter(
+        (group) =>
+          group &&
+          typeof group.quantity === "string" &&
+          Array.isArray(group.variable_terms) &&
+          Array.isArray(group.units),
+      )
+    : [];
+}
+
+function variableUnitChoices(variableName) {
+  const normalizedName = String(variableName || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+  const tokens = new Set(normalizedName.split(/[^a-z0-9]+/).filter(Boolean));
+  const matched = variableUnitCatalog.filter((group) =>
+    group.variable_terms.some((term) => tokens.has(String(term).toLowerCase())),
+  );
+  const recognized = matched.length > 0;
+  const visibleGroups = recognized ? matched : variableUnitCatalog;
+  const seen = new Set();
+  const choices = [];
+  visibleGroups.forEach((group) => {
+    group.units.forEach((item) => {
+      if (!item || typeof item.unit !== "string" || seen.has(item.unit)) return;
+      seen.add(item.unit);
+      choices.push({
+        unit: item.unit,
+        label: `${recognized ? "Suggested" : group.quantity}: ${item.label || item.unit}`,
+      });
+    });
+  });
+  return choices;
+}
+
+function syncVariableUnitMetadata() {
+  const input = document.getElementById("variable-unit-metadata");
+  if (input)
+    input.value = variableUnitMetadata
+      ? JSON.stringify(variableUnitMetadata)
+      : "";
+}
+
+function updateVariableUnitAuditSummary() {
+  const summary = variableUnitMetadata?.summary || {};
+  const counts = summary.counts || {};
+  const total = Number(counts.total || 0);
+  const unresolved = Number(counts.missing || 0);
+  const problems =
+    Number(counts.invalid || 0) +
+    Number(counts.ambiguous || 0) +
+    Number(counts.conflicting || 0);
+  const message = document.getElementById("variable-unit-message");
+  if (message) {
+    if (variableUnitMetadataDirty) {
+      message.textContent = "Unit metadata changes are pending validation.";
+    } else if (!total) {
+      message.textContent = "No logical variables were discovered.";
+    } else if (summary.all_variables_ready) {
+      message.textContent = `All ${total} variables have ready unit metadata.`;
+    } else {
+      message.textContent = `Audit found ${unresolved} unresolved and ${problems} problematic variable${unresolved + problems === 1 ? "" : "s"}.`;
+    }
+  }
+  const progress = document.getElementById("variable-unit-progress");
+  if (progress && variableUnitMetadataDirty) {
+    progress.textContent =
+      "Validate to refresh findings and enable Download JSON.";
+  } else if (progress && total) {
+    const accounted = total - unresolved;
+    progress.textContent = `${accounted} of ${total} variables accounted for. Source data has not been changed.`;
+  }
+  const download = document.getElementById("variable-unit-download");
+  if (download) download.disabled = variableUnitMetadataDirty;
+}
+
+function variableUnitResolutionKind(variable) {
+  return (
+    variableUnitDraftKinds[variable.name] ||
+    variable.resolution?.kind ||
+    "unresolved"
+  );
+}
+
+function updateVariableUnitResolution(name, kind, unit) {
+  const variable = variableUnitMetadata?.variables?.find(
+    (candidate) => candidate.name === name,
+  );
+  if (!variable) return;
+  const normalizedUnit = String(unit || "").trim();
+  if (kind === "unit" && !normalizedUnit) {
+    variableUnitDraftKinds[name] = "unit";
+    variable.resolution = { kind: "unresolved", source: "none" };
+  } else if (kind === "unit") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = {
+      kind: "unit",
+      unit: normalizedUnit,
+      source: "user",
+    };
+  } else if (kind === "dimensionless") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = {
+      kind: "dimensionless",
+      unit: "1",
+      source: "user",
+    };
+  } else if (kind === "not_applicable") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = { kind: "not_applicable", source: "user" };
+  } else {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = { kind: "unresolved", source: "none" };
+  }
+  variableUnitMetadataDirty = true;
+  syncVariableUnitMetadata();
+  renderVariableUnitEditor();
+  updateVariableUnitAuditSummary();
+  if (kind === "unit" && !normalizedUnit) {
+    Array.from(document.querySelectorAll("input[data-variable-unit-name]"))
+      .find((input) => input.dataset.variableUnitName === name)
+      ?.focus();
+  }
+}
+
+function renderVariableUnitEditor() {
+  const body = document.getElementById("variable-unit-editor-body");
+  if (!body) return;
+  const query = String(
+    document.getElementById("variable-unit-search")?.value || "",
+  )
+    .trim()
+    .toLowerCase();
+  const variables = variableUnitMetadata?.variables || [];
+  const filtered = variables.filter((variable) =>
+    `${variable.name} ${variable.dtype || ""}`.toLowerCase().includes(query),
+  );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filtered.length / VARIABLE_UNIT_PAGE_SIZE),
+  );
+  variableUnitPage = Math.min(variableUnitPage, pageCount - 1);
+  const pageTargets = filtered.slice(
+    variableUnitPage * VARIABLE_UNIT_PAGE_SIZE,
+    (variableUnitPage + 1) * VARIABLE_UNIT_PAGE_SIZE,
+  );
+  body.replaceChildren();
+
+  pageTargets.forEach((variable, rowIndex) => {
+    const row = document.createElement("tr");
+    row.className = "border-t border-gray-200 dark:border-gray-700";
+    const kind = variableUnitResolutionKind(variable);
+    const resolution = variable.resolution || {};
+    const observed = (variable.observed || [])
+      .map((item) => `${item.unit} (${item.source})`)
+      .join(", ");
+
+    const addCell = (text, className) => {
+      const cell = document.createElement("td");
+      cell.className = className || "px-2 py-2";
+      cell.textContent = text;
+      row.appendChild(cell);
+      return cell;
+    };
+    addCell(
+      variable.name,
+      "min-w-0 break-words px-2 py-2 font-medium text-gray-900 dark:text-white",
+    );
+    addCell(variable.dtype || "unknown");
+    addCell(observed || "None");
+
+    const resolutionCell = addCell("");
+    const select = document.createElement("select");
+    select.setAttribute(
+      "aria-label",
+      `Unit metadata resolution for ${variable.name}`,
+    );
+    select.className =
+      "w-full min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800";
+    [
+      ["unresolved", "Needs review"],
+      ["unit", "Has a physical unit"],
+      ["dimensionless", "Dimensionless (1)"],
+      ["not_applicable", "No unit applies"],
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === kind;
+      select.appendChild(option);
+    });
+    resolutionCell.appendChild(select);
+
+    const unitCell = addCell("");
+    const unitInput = document.createElement("input");
+    unitInput.type = "text";
+    unitInput.setAttribute("aria-label", `Unit for ${variable.name}`);
+    unitInput.setAttribute("aria-autocomplete", "list");
+    unitInput.autocomplete = "off";
+    unitInput.value = kind === "unit" ? resolution.unit || "" : "";
+    unitInput.placeholder = "Choose or type a unit";
+    unitInput.title =
+      "Choose a common unit. If needed, type a Pint-compatible unit expression; units unknown to Pint are flagged.";
+    unitInput.disabled = kind !== "unit";
+    unitInput.dataset.variableUnitName = variable.name;
+    unitInput.className =
+      "w-full min-w-0 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-xs disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800";
+    const choices = variableUnitChoices(variable.name);
+    if (choices.length) {
+      const list = document.createElement("datalist");
+      list.id = `variable-unit-choices-${variableUnitPage}-${rowIndex}`;
+      choices.forEach((choice) => {
+        const option = document.createElement("option");
+        option.value = choice.unit;
+        option.label = choice.label;
+        list.appendChild(option);
+      });
+      unitInput.setAttribute("list", list.id);
+      unitCell.appendChild(list);
+    }
+    unitCell.appendChild(unitInput);
+    const finding =
+      kind === "unit" && !String(unitInput.value).trim()
+        ? "Enter a unit"
+        : variableUnitMetadataDirty
+          ? "Pending validation"
+          : variable.finding?.message || "Needs review";
+    addCell(finding);
+
+    select.addEventListener("change", () =>
+      updateVariableUnitResolution(
+        variable.name,
+        select.value,
+        unitInput.value,
+      ),
+    );
+    unitInput.addEventListener("change", () =>
+      updateVariableUnitResolution(variable.name, "unit", unitInput.value),
+    );
+    body.appendChild(row);
+  });
+
+  const summary = document.getElementById("variable-unit-page-summary");
+  if (summary) {
+    const start = filtered.length
+      ? variableUnitPage * VARIABLE_UNIT_PAGE_SIZE + 1
+      : 0;
+    const end = Math.min(
+      filtered.length,
+      (variableUnitPage + 1) * VARIABLE_UNIT_PAGE_SIZE,
+    );
+    summary.textContent = `${start}-${end} of ${filtered.length} variables`;
+  }
+  const previous = document.getElementById("variable-unit-prev");
+  const next = document.getElementById("variable-unit-next");
+  if (previous) previous.disabled = variableUnitPage === 0;
+  if (next) next.disabled = variableUnitPage >= pageCount - 1;
+}
+
+function setVariableUnitEditorEnabled(enabled) {
+  document
+    .querySelectorAll(
+      "#variable-unit-validation-control input, #variable-unit-validation-control select, #variable-unit-validation-control button",
+    )
+    .forEach((element) => {
+      if (!enabled) {
+        element.disabled = true;
+      } else if (element.dataset.variableUnitName) {
+        const variable = variableUnitMetadata?.variables?.find(
+          (candidate) => candidate.name === element.dataset.variableUnitName,
+        );
+        element.disabled =
+          !variable || variableUnitResolutionKind(variable) !== "unit";
+      } else {
+        element.disabled = false;
+      }
+    });
+  const submit = document.getElementById("variable-unit-validate");
+  if (submit) submit.disabled = !enabled;
+}
+
+function downloadVariableUnitMetadata() {
+  if (!variableUnitMetadata || variableUnitMetadataDirty) return;
+  const blob = new Blob([JSON.stringify(variableUnitMetadata, null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  const datasetName =
+    String(variableUnitMetadata.dataset?.name || "dataset").replace(
+      /\.[^.]+$/,
+      "",
+    ) || "dataset";
+  link.download = `${datasetName}.units.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
+function importVariableUnitMetadata(file) {
+  if (!file) return;
+  file
+    .text()
+    .then((text) => {
+      const parsed = JSON.parse(text);
+      if (
+        !parsed ||
+        parsed.format !== "aidrin.variable-unit-metadata" ||
+        parsed.version !== 1 ||
+        !Array.isArray(parsed.variables)
+      ) {
+        throw new Error(
+          "Select an AIDRIN unit metadata JSON file (version 1).",
+        );
+      }
+      setVariableUnitMetadata(parsed);
+      variableUnitMetadataDirty = true;
+      syncVariableUnitMetadata();
+      updateVariableUnitAuditSummary();
+    })
+    .catch((error) => {
+      if (typeof showToast === "function") showToast(error.message, "error");
+    });
+}
+
+function adoptValidatedVariableUnitMetadata(result) {
+  const metadata =
+    result?.["Variable Unit Validation"]?.format ===
+    "aidrin.variable-unit-metadata"
+      ? result["Variable Unit Validation"]
+      : result?.format === "aidrin.variable-unit-metadata"
+        ? result
+        : null;
+  if (metadata) setVariableUnitMetadata(metadata);
 }
 
 /**
@@ -498,6 +886,7 @@ function showPanel(panelId, pushHistory) {
 const _panelCacheMap = {
   "data-quality": "data_quality",
   "data-structure": "data_structure",
+  "variable-unit-validation": "variable_unit_validation",
   fairness: "fairness",
   "correlation-analysis": "correlation_analysis",
   "feature-relevance": "feature_relevance",
@@ -528,6 +917,9 @@ function _restoreCachedResult(panelId) {
     .then((resp) => {
       if (resp.cached && resp.data && activePanel === panelId) {
         lastMetricResult = resp.data;
+        if (panelId === "variable-unit-validation") {
+          adoptValidatedVariableUnitMetadata(resp.data);
+        }
         const resultsSection = document.getElementById("results-section");
         if (resultsSection) resultsSection.style.display = "block";
         const hasLLMCache =
@@ -580,6 +972,11 @@ function _restoreFormState(panelId, state) {
 
   for (const [key, value] of Object.entries(state)) {
     if (!value) continue;
+    if (
+      panelId === "variable-unit-validation" &&
+      key === "variable_unit_metadata"
+    )
+      continue;
 
     // Checkboxes with name matching the key
     const checkboxes = panel.querySelectorAll(
@@ -734,6 +1131,7 @@ async function workspaceSubmit(targetUrl) {
         "skewness",
         "kurtosis",
       ],
+      "/variable-unit-validation": ["variable_unit_validation"],
       "/fairness": ["representation_rate", "statistical_rates"],
       "/feature-relevance": ["feature_relevance"],
       "/correlation-analysis": ["correlations"],
@@ -861,7 +1259,10 @@ async function workspaceSubmit(targetUrl) {
       }
       remoteParams.selected = selected;
       remoteDisplayName = selectedNames.join(", ");
-    } else if (targetUrl === "/data-structure") {
+    } else if (
+      targetUrl === "/data-structure" ||
+      targetUrl === "/variable-unit-validation"
+    ) {
       remoteName = "data_structure";
       const selected = [];
       const selectedNames = [];
@@ -914,6 +1315,11 @@ async function workspaceSubmit(targetUrl) {
           gFormData.get("file_reference_max_results"),
           100,
         );
+      }
+      if (gFormData.get("variable_unit_validation") === "yes") {
+        selected.push("variable_unit_validation");
+        selectedNames.push("Unit Metadata Audit");
+        remoteParams.unit_metadata = variableUnitMetadata;
       }
       if (selected.length === 0) {
         if (typeof showToast === "function")
@@ -1175,6 +1581,9 @@ async function workspaceSubmit(targetUrl) {
     .then((data) => {
       // Store for download
       lastMetricResult = data;
+      if (targetUrl === "/variable-unit-validation") {
+        adoptValidatedVariableUnitMetadata(data);
+      }
 
       // Handle special error formats from some endpoints (feature relevance, correlation)
       if (data.trigger === "correlationError") {
@@ -1229,6 +1638,39 @@ function prettyResultTitle(key) {
   return RESULT_TITLE_OVERRIDES[key] || key;
 }
 
+function isVariableUnitResult(type) {
+  return (
+    String(type || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, "_") === "variable_unit_validation"
+  );
+}
+
+function variableUnitResultsForDisplay(type, results) {
+  if (!isVariableUnitResult(type) || !isObject(results)) return results;
+  const displayResults = { ...results };
+  delete displayResults.$schema;
+  delete displayResults.format;
+  delete displayResults.version;
+  delete displayResults.unit_vocabulary;
+  if (isObject(results.dataset)) {
+    displayResults.dataset = { ...results.dataset };
+    delete displayResults.dataset.schema_fingerprint;
+  }
+  return displayResults;
+}
+
+function variableUnitErrorForDisplay(type, error) {
+  if (
+    isVariableUnitResult(type) &&
+    String(error).includes("schema fingerprint does not match")
+  ) {
+    return "Imported unit metadata does not match this dataset.";
+  }
+  return error;
+}
+
 function renderWorkspaceResults(data, options) {
   const skipLLM = options && options.skipLLM;
   const metrics = document.getElementById("metrics");
@@ -1243,12 +1685,13 @@ function renderWorkspaceResults(data, options) {
     if (results.is_async && results.task_id) continue;
 
     // Extract parts
+    const displayResults = variableUnitResultsForDisplay(type, results);
     const description = results.Description || "";
-    const error = results.Error || "";
+    const error = variableUnitErrorForDisplay(type, results.Error || "");
     const visualizations = [];
     const scores = {};
 
-    for (const [key, value] of Object.entries(results)) {
+    for (const [key, value] of Object.entries(displayResults)) {
       if (
         key === "Description" ||
         key === "Error" ||
@@ -1367,7 +1810,7 @@ function renderWorkspaceResults(data, options) {
 
       // Raw JSON toggle
       const rawJson = {};
-      for (const [k, v] of Object.entries(results)) {
+      for (const [k, v] of Object.entries(displayResults)) {
         if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
       }
       html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
@@ -1478,6 +1921,136 @@ function renderFileReferenceMetadataTable(rows) {
   return html + `</tbody></table></div></div>`;
 }
 
+function variableUnitResultPresentation(status, hasMismatch) {
+  if (hasMismatch || ["invalid", "conflicting"].includes(status)) {
+    return {
+      row: "border-t border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20",
+      badge: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+    };
+  }
+  if (["missing", "ambiguous"].includes(status)) {
+    return {
+      row: "border-t border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20",
+      badge:
+        "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    };
+  }
+  if (["valid", "dimensionless"].includes(status)) {
+    return {
+      row: "border-t border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20",
+      badge:
+        "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+    };
+  }
+  return {
+    row: "border-t border-gray-200 dark:border-gray-700",
+    badge: "font-semibold text-gray-700 dark:text-gray-300",
+  };
+}
+
+function renderVariableUnitResultTable(rows) {
+  let html = `<div class="mb-4">`;
+  html += `<div class="mb-2 flex flex-wrap items-center justify-between gap-2">`;
+  html += `<h4 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Variables (${rows.length})</h4>`;
+  html += `<label class="text-xs text-gray-600 dark:text-gray-300">Filter `;
+  html += `<select onchange="filterVariableUnitResults(this)" class="ml-1 rounded border border-gray-300 bg-white px-2 py-1 dark:border-gray-600 dark:bg-gray-800">`;
+  [
+    "all",
+    "missing",
+    "invalid",
+    "ambiguous",
+    "conflicting",
+    "mismatches",
+    "overrides",
+  ].forEach((status) => {
+    html += `<option value="${status}">${status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)}</option>`;
+  });
+  html += `</select></label></div>`;
+  html += `<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"><table class="w-full table-auto text-left text-xs text-gray-600 dark:text-gray-300">`;
+  html += `<thead class="bg-gray-50 uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-300"><tr>`;
+  [
+    "Variable",
+    "Type",
+    "Observed",
+    "Resolution",
+    "Unit",
+    "Normalized unit",
+    "Dimensionality",
+    "Finding",
+  ].forEach((heading) => {
+    html += `<th class="${heading === "Finding" ? "w-1/6 " : ""}px-2 py-2">${escapeHtml(heading)}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+  rows.forEach((row) => {
+    const finding = row.finding || {};
+    const resolution = row.resolution || {};
+    const status = String(finding.status || "");
+    const warnings = Array.isArray(finding.warnings) ? finding.warnings : [];
+    const mismatches = Array.isArray(finding.override_mismatches)
+      ? finding.override_mismatches
+      : [];
+    const hasOverride =
+      resolution.source === "user" && (row.observed || []).length > 0;
+    const hasMismatch = mismatches.length > 0;
+    const observed = (row.observed || [])
+      .map((item) => `${item.unit} (${item.source})`)
+      .join(", ");
+    const presentation = variableUnitResultPresentation(status, hasMismatch);
+    html += `<tr data-variable-unit-result data-status="${escapeHtml(status)}" data-override="${hasOverride ? "true" : "false"}" data-mismatch="${hasMismatch ? "true" : "false"}" class="${presentation.row}">`;
+    const values = [
+      row.name,
+      row.dtype,
+      observed || "None",
+      resolution.kind || "unresolved",
+      resolution.unit || "—",
+      finding.normalized_unit || "—",
+      finding.dimensionality || "—",
+    ];
+    values.forEach((value) => {
+      const displayValue = formatValue(value);
+      html += `<td class="px-2 py-2 align-top"><span class="whitespace-nowrap" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span></td>`;
+    });
+    if (hasMismatch) {
+      const mismatchMessage = mismatches
+        .map((mismatch) => mismatch.message)
+        .filter(Boolean)
+        .join(" ");
+      html += `<td class="w-1/6 px-2 py-2 align-top"><div class="max-w-48 whitespace-normal"><span class="mr-1 inline-flex rounded px-1.5 py-0.5 font-semibold ${presentation.badge}">Unit mismatch</span><span class="break-words">${escapeHtml(mismatchMessage)}</span></div></td>`;
+    } else {
+      const findingText = [finding.message, ...warnings]
+        .filter(Boolean)
+        .join(" ");
+      const statusLabel = (status || "unknown").replaceAll("_", " ");
+      html += `<td class="w-1/6 px-2 py-2 align-top"><div class="max-w-48 whitespace-normal"><span class="mr-1 inline-flex rounded px-1.5 py-0.5 capitalize ${presentation.badge}">${escapeHtml(statusLabel)}</span><span class="break-words">${escapeHtml(formatValue(findingText))}</span></div></td>`;
+    }
+    html += `</tr>`;
+  });
+  return html + `</tbody></table></div></div>`;
+}
+
+function filterVariableUnitResults(select) {
+  const filter = select?.value || "all";
+  const container = select?.closest(".mb-4");
+  container?.querySelectorAll("[data-variable-unit-result]").forEach((row) => {
+    const visible =
+      filter === "all" ||
+      (filter === "overrides" && row.dataset.override === "true") ||
+      (filter === "mismatches" && row.dataset.mismatch === "true") ||
+      row.dataset.status === filter;
+    row.classList.toggle("hidden", !visible);
+  });
+}
+
+function resultScoreName(groupName, itemName) {
+  if (groupName !== "counts") return itemName;
+  return (
+    {
+      conflicting: "Unresolved conflicts",
+      unit_mismatches: "Override mismatches",
+    }[itemName] || itemName
+  );
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
@@ -1505,12 +2078,18 @@ function renderScoresSection(scores, depth) {
       html += `</tr></thead><tbody>`;
       let rowIdx = 0;
       for (const [k, v] of Object.entries(value)) {
-        const stripe =
-          rowIdx % 2 === 0
-            ? "bg-white dark:bg-gray-800"
-            : "bg-gray-50 dark:bg-gray-700/50";
-        html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(k)}</td>`;
+        const needsAttention =
+          key === "counts" &&
+          ["conflicting", "unit_mismatches"].includes(k) &&
+          Number(v) > 0;
+        const rowClasses = needsAttention
+          ? "border-b border-red-300 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-900/20 dark:text-red-200"
+          : `${rowIdx % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50"} border-b dark:border-gray-700`;
+        const labelClasses = needsAttention
+          ? ""
+          : "text-gray-900 dark:text-white";
+        html += `<tr class="${rowClasses}">`;
+        html += `<td class="px-4 py-2 font-medium whitespace-nowrap ${labelClasses}">${escapeHtml(resultScoreName(key, k))}</td>`;
         html += `<td class="px-4 py-2 text-right font-mono text-xs">${escapeHtml(formatValue(v))}</td>`;
         html += `</tr>`;
         rowIdx++;
@@ -1552,7 +2131,9 @@ function renderScoresSection(scores, depth) {
       }
     }
     // Array
-    else if (key === "Invalid references" && Array.isArray(value)) {
+    else if (key === "variables" && Array.isArray(value)) {
+      html += renderVariableUnitResultTable(value);
+    } else if (key === "Invalid references" && Array.isArray(value)) {
       html += renderFileReferenceInvalidTable(value);
     } else if (key === "File metadata" && Array.isArray(value)) {
       html += renderFileReferenceMetadataTable(value);
@@ -2313,6 +2894,8 @@ function loadGlobusCustomOutlierTargets(message) {
     .then((result) => {
       if (result && result.success) {
         customOutlierTargets = result.targets || [];
+        setVariableUnitCatalog(result.unit_catalog || []);
+        setVariableUnitMetadata(result.unit_metadata);
         updateCustomOutlierTargetOptions();
         if (message) message.classList.add("hidden");
       } else {
@@ -3037,6 +3620,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
           // {Completeness: {...}, Outliers: {...}, Duplicity: {...}})
           // vs a single metric result (has Description/Visualization at top level)
           const result = response.result;
+          adoptValidatedVariableUnitMetadata(result);
           const isBundle =
             typeof result === "object" &&
             result !== null &&
@@ -3124,13 +3708,14 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
 function buildResultCard(type, results) {
   if (typeof results !== "object" || results === null) return "";
 
+  const displayResults = variableUnitResultsForDisplay(type, results);
   const description = results.Description || "";
-  const error = results.Error || "";
+  const error = variableUnitErrorForDisplay(type, results.Error || "");
   const interpretation = results["Graph interpretation"];
   const visualizations = [];
   const scores = {};
 
-  for (const [key, value] of Object.entries(results)) {
+  for (const [key, value] of Object.entries(displayResults)) {
     if (
       key === "Description" ||
       key === "Error" ||
@@ -6984,6 +7569,30 @@ function initWorkspace() {
 
   initFileReferenceTargetPicker();
   loadFileReferenceOptions();
+  document
+    .getElementById("variable-unit-search")
+    ?.addEventListener("input", () => {
+      variableUnitPage = 0;
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-prev")
+    ?.addEventListener("click", () => {
+      variableUnitPage = Math.max(0, variableUnitPage - 1);
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-next")
+    ?.addEventListener("click", () => {
+      variableUnitPage += 1;
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-import-file")
+    ?.addEventListener("change", (event) => {
+      importVariableUnitMetadata(event.target.files?.[0]);
+      event.target.value = "";
+    });
 
   // Feature relevance: disable target feature in checkbox lists
   const targetDropdown = document.getElementById(

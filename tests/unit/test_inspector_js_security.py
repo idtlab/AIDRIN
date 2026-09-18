@@ -11,6 +11,8 @@ INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
 INSPECTOR_TEMPLATE = REPO_ROOT / "web" / "templates" / "inspector.html"
 DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_quality.html"
 DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_structure.html"
+VARIABLE_UNIT_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_variable_unit_validation.html"
+SIDEBAR = REPO_ROOT / "web" / "templates" / "_components" / "sidebar.html"
 
 
 def test_result_renderer_escapes_untrusted_display_values():
@@ -303,6 +305,200 @@ def test_globus_file_reference_parameters_are_serialized_without_policy():
     assert "allowed_roots" not in globus_block
     assert "file_reference_scan_limit" not in globus_block
     assert "Execution location: Globus Compute worker" in source
+
+
+def test_variable_unit_editor_and_results_escape_dataset_metadata():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+
+    editor_start = source.index("function renderVariableUnitEditor()")
+    editor_end = source.index("function setVariableUnitEditorEnabled", editor_start)
+    editor = source[editor_start:editor_end]
+    assert "cell.textContent = text" in editor
+    assert "option.textContent = label" in editor
+
+    result_start = source.index("function renderVariableUnitResultTable(rows)")
+    result_end = source.index("function filterVariableUnitResults", result_start)
+    result_renderer = source[result_start:result_end]
+    assert "escapeHtml(displayValue)" in result_renderer
+    assert "escapeHtml(status)" in result_renderer
+    assert 'data-mismatch="${hasMismatch ? "true" : "false"}"' in result_renderer
+    assert "variableUnitResultPresentation(status, hasMismatch)" in result_renderer
+    assert ">Unit mismatch</span>" in result_renderer
+    assert "escapeHtml(mismatchMessage)" in result_renderer
+    assert "w-full table-auto" in result_renderer
+    assert "min-width: 72rem" not in result_renderer
+    assert "<colgroup>" not in result_renderer
+    assert 'heading === "Finding" ? "w-1/6 "' in result_renderer
+    assert 'class="whitespace-nowrap"' in result_renderer
+    assert 'class="max-w-48 whitespace-normal"' in result_renderer
+    assert 'class="break-words"' in result_renderer
+    assert "truncate whitespace-nowrap" not in result_renderer
+    assert "align-top break-all" not in result_renderer
+    assert 'filter === "mismatches"' in source
+
+
+def test_variable_unit_results_use_accessible_status_colors():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    style_start = source.index("function variableUnitResultPresentation(")
+    style_end = source.index("function renderVariableUnitResultTable(rows)", style_start)
+    styles = source[style_start:style_end]
+
+    assert '["invalid", "conflicting"]' in styles
+    assert "border-red-300 bg-red-50" in styles
+    assert '["missing", "ambiguous"]' in styles
+    assert "border-amber-300 bg-amber-50" in styles
+    assert '["valid", "dimensionless"]' in styles
+    assert "border-green-200 bg-green-50" in styles
+    assert 'row: "border-t border-gray-200 dark:border-gray-700"' in styles
+    assert 'badge: "font-semibold text-gray-700 dark:text-gray-300"' in styles
+
+
+def test_variable_unit_mismatch_count_shares_status_count_table():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    scores_start = source.index("function resultScoreName(")
+    scores_end = source.index("// Custom outlier preview", scores_start)
+    scores = source[scores_start:scores_end]
+
+    assert 'conflicting: "Unresolved conflicts"' in scores
+    assert 'unit_mismatches: "Override mismatches"' in scores
+    assert '["conflicting", "unit_mismatches"].includes(k)' in scores
+    assert "border-red-300 bg-red-50" in scores
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the Results projection test")
+def test_variable_unit_results_hide_sidecar_plumbing_without_mutating_output():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function isVariableUnitResult(")
+    end = source.index("function renderWorkspaceResults(", start)
+    projection = source[start:end]
+    script = f"""
+function isObject(value) {{ return value !== null && typeof value === "object" && !Array.isArray(value); }}
+{projection}
+const raw = {{
+  $schema: "schema-url",
+  format: "aidrin.variable-unit-metadata",
+  version: 1,
+  unit_vocabulary: "pint",
+  dataset: {{ name: "parkfield.csv", file_type: ".csv", schema_fingerprint: "sha256:secret" }},
+  summary: {{ all_variables_ready: true }},
+  variables: [],
+}};
+const shown = variableUnitResultsForDisplay("Variable Unit Validation", raw);
+if ("schema_fingerprint" in shown.dataset) process.exit(1);
+if (["$schema", "format", "version", "unit_vocabulary"].some((key) => key in shown)) process.exit(2);
+if (shown.dataset.name !== "parkfield.csv" || shown.dataset.file_type !== ".csv") process.exit(3);
+if (shown.summary !== raw.summary || shown.variables !== raw.variables) process.exit(4);
+if (raw.dataset.schema_fingerprint !== "sha256:secret" || raw.format !== "aidrin.variable-unit-metadata") process.exit(5);
+if (variableUnitResultsForDisplay("Other Metric", raw) !== raw) process.exit(6);
+if (
+  variableUnitErrorForDisplay(
+    "Variable Unit Validation",
+    "Variable-unit metadata schema fingerprint does not match the dataset",
+  ) !== "Imported unit metadata does not match this dataset."
+) process.exit(7);
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+    workspace_start = source.index("function renderWorkspaceResults(")
+    workspace_end = source.index("function renderFileReferenceInvalidTable", workspace_start)
+    workspace = source[workspace_start:workspace_end]
+    card_start = source.index("function buildResultCard(")
+    card_end = source.index("// ==================== Toast Notifications", card_start)
+    card = source[card_start:card_end]
+    assert "Object.entries(displayResults)" in workspace
+    assert "Object.entries(displayResults)" in card
+
+
+def test_variable_unit_editor_exposes_search_pagination_and_json_round_trip():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    panel = VARIABLE_UNIT_PANEL.read_text(encoding="utf-8")
+    data_structure_panel = DATA_STRUCTURE_PANEL.read_text(encoding="utf-8")
+    sidebar = SIDEBAR.read_text(encoding="utf-8")
+
+    for element_id in (
+        "variable-unit-search",
+        "variable-unit-import-file",
+        "variable-unit-prev",
+        "variable-unit-next",
+        "variable-unit-metadata",
+    ):
+        assert f'id="{element_id}"' in panel
+        assert f'id="{element_id}"' not in data_structure_panel
+    understandability_start = sidebar.index('id="pillar-understand"')
+    data_structure_start = sidebar.index("<!-- Pillar: Data Structure & Organization -->")
+    assert (
+        understandability_start
+        < sidebar.index("showPanel('variable-unit-validation')")
+        < data_structure_start
+    )
+    assert "const VARIABLE_UNIT_PAGE_SIZE = 10" in source
+    assert "function downloadVariableUnitMetadata()" in source
+    assert "function importVariableUnitMetadata(file)" in source
+    assert "function filterVariableUnitResults(select)" in source
+    assert ">Import JSON</button>" in panel
+    assert ">Download JSON</button>" in panel
+    assert 'title="Import an AIDRIN unit metadata JSON file' in panel
+    assert 'title="Download the validated unit metadata' in panel
+    assert "the source dataset is never modified" in panel
+    assert "use a Pint-compatible spelling" in panel
+    assert "units unknown to Pint are flagged as unrecognized" in panel
+
+
+def test_variable_unit_editor_preserves_physical_unit_draft_until_entry():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    update_start = source.index("function updateVariableUnitResolution(")
+    update_end = source.index("function renderVariableUnitEditor()", update_start)
+    update = source[update_start:update_end]
+
+    assert 'variableUnitDraftKinds[name] = "unit"' in update
+    assert 'variable.resolution = { kind: "unresolved", source: "none" }' in update
+    assert "input.dataset.variableUnitName === name" in update
+
+
+def test_variable_unit_editor_limits_recognized_names_and_keeps_fallback():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    choices_start = source.index("function variableUnitChoices(variableName)")
+    choices_end = source.index("function syncVariableUnitMetadata()", choices_start)
+    choices = source[choices_start:choices_end]
+    editor_start = source.index("function renderVariableUnitEditor()")
+    editor_end = source.index("function setVariableUnitEditorEnabled", editor_start)
+    editor = source[editor_start:editor_end]
+
+    assert "const recognized = matched.length > 0" in choices
+    assert "const visibleGroups = recognized ? matched : variableUnitCatalog" in choices
+    assert 'document.createElement("datalist")' in editor
+    assert 'unitInput.setAttribute("list", list.id)' in editor
+    assert 'unitInput.setAttribute("aria-autocomplete", "list")' in editor
+    assert 'unitInput.placeholder = "Choose or type a unit"' in editor
+
+
+def test_variable_unit_editor_columns_are_stable_across_rerenders():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    panel = VARIABLE_UNIT_PANEL.read_text(encoding="utf-8")
+    inspector = INSPECTOR_TEMPLATE.read_text(encoding="utf-8")
+    editor_start = source.index("function renderVariableUnitEditor()")
+    editor_end = source.index("function setVariableUnitEditorEnabled", editor_start)
+    editor = source[editor_start:editor_end]
+
+    assert '"w-full min-w-0 rounded border border-gray-300' in editor
+    assert '"min-w-0 break-words px-2 py-2 font-medium' in editor
+    assert 'class="w-full table-fixed' in panel
+    assert panel.count('<col style="width:') == 6
+    assert "html:has(#panel-variable-unit-validation:not(.hidden))" in inspector
+    assert "scrollbar-gutter: stable" in inspector
+
+
+def test_variable_unit_globus_control_is_capability_gated_and_serialized():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    inspector = (REPO_ROOT / "web" / "templates" / "inspector.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'capabilities.includes("variable_unit_metadata_v1")' in source
+    assert "Upgrade and restart its AIDRIN worker" in source
+    assert "remoteParams.unit_metadata = variableUnitMetadata" in source
+    assert "setVariableUnitMetadata(result.unit_metadata)" in source
+    assert "window.AIDRIN_GLOBUS_CAPABILITIES = {{ globus_capabilities | tojson }}" in inspector
 
 
 def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():

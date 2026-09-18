@@ -3,6 +3,9 @@
 {% block title %}AIDRIN - Infrastructure{% endblock %}
 
 {% block head_extra %}
+  <style>
+    html:has(#panel-variable-unit-validation:not(.hidden)) { scrollbar-gutter: stable; }
+  </style>
   <script src="https://code.jquery.com/jquery-3.6.4.min.js"
           integrity="sha512-pumBsjNRGGqkPzKHndZMaAG+bir374sORyzM3uulLV14lN5LyykqNk8eEeUlUkB3U0M4FApyaHraT65ihJhDpQ=="
           crossorigin="anonymous"></script>
@@ -66,6 +69,7 @@
           {% include '_panels/_privacy_preservation.html' %}
           {% include '_panels/_hipaa_compliance.html' %}
           {% include '_panels/_fair_assessment.html' %}
+          {% include '_panels/_variable_unit_validation.html' %}
           {% include '_panels/_custom_metrics.html' %}
         </div>
 
@@ -93,6 +97,7 @@
         // Globus mode — flag for workspaceSubmit to route through Globus
         window.AIDRIN_GLOBUS_MODE = true;
         window.AIDRIN_GLOBUS_ENDPOINT = '{{ globus_endpoint_id }}';
+        window.AIDRIN_GLOBUS_CAPABILITIES = {{ globus_capabilities | tojson }};
         window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
         window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};
