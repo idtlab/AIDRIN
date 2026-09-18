@@ -304,17 +304,6 @@ def test_zarr_ignores_unrelated_flask_session_keys(tmp_path, logger):
         assert list(reader.read().columns) == ["a", "b"]
 
 
-def test_read_file_returns_none_for_non_zarr_empty_read(tmp_path):
-    """Only Zarr raises; other formats keep returning None, not a message string."""
-    h5py = pytest.importorskip("h5py")
-    path = tmp_path / "ragged.h5"
-    with h5py.File(str(path), "w") as handle:
-        handle.create_dataset("a", data=np.arange(10))
-        handle.create_dataset("b", data=np.arange(7))
-
-    assert read_file((str(path), "ragged.h5", ".h5")) is None
-
-
 def test_read_file_raises_for_zarr_needing_selection(tmp_path):
     from aidrin.file_handling.file_parser import ReaderReturnedNone
 

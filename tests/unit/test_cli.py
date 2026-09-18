@@ -402,6 +402,44 @@ class TestRunCommand(unittest.TestCase):
         self.assertEqual(code, 0)
 
 
+class TestDifferentialPrivacyNoisyOutput(unittest.TestCase):
+    """--noisy-output / --no-noisy-output for `aidrin run differential-privacy`."""
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+
+    def tearDown(self):
+        _clean(self.csv)
+
+    def test_noisy_output_writes_to_given_path_and_reports_it(self):
+        import tempfile
+        tmp_dir = tempfile.mkdtemp()
+        target = os.path.join(tmp_dir, "custom", "noisy.csv")
+
+        stdout, stderr, code = _run_cli(
+            "run", "differential-privacy", self.csv, "age,income", "0.5",
+            "--noisy-output", target,
+        )
+
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertTrue(os.path.exists(target))
+        self.assertEqual(payload["Noisy file path"], os.path.realpath(target))
+
+    def test_no_noisy_output_skips_writing(self):
+        stdout, stderr, code = _run_cli(
+            "run", "differential-privacy", self.csv, "age,income", "0.5",
+            "--no-noisy-output",
+        )
+
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(
+            payload["Noisy file saved"], "Skipped (readiness report preview only)"
+        )
+        self.assertNotIn("Noisy file path", payload)
+
+
 # ===========================================================================
 # hipaa summary line (_summarize_metric)
 # ===========================================================================
@@ -1008,6 +1046,133 @@ class TestBatchReportAttachment(unittest.TestCase):
         ][0]
         names = [a.path for a in client.list_artifacts(parent.info.run_id)]
         self.assertIn(os.path.basename(self.report.name), names)
+
+
+# ===========================================================================
+# -o/--output: write the report to a file, same semantics as `agentic run -o`
+# ===========================================================================
+
+
+class TestOutputFlag(unittest.TestCase):
+    """`-o/--output` makes the report path an argument of the command, not a
+    shell redirect invisible to any tool that records the command."""
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+        self.tmpdir = tempfile.mkdtemp()
+        self.out_path = os.path.join(self.tmpdir, "reports", "out.json")
+
+    def tearDown(self):
+        import shutil
+        _clean(self.csv)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_run_writes_report_and_still_prints_to_stdout(self):
+        stdout, stderr, code = _run_cli(
+            "run", "completeness", self.csv, "-o", self.out_path
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertTrue(os.path.isfile(self.out_path))
+        on_disk = json.loads(open(self.out_path).read())
+        self.assertIn("Overall Completeness", on_disk)
+        printed = json.loads(stdout)
+        self.assertEqual(printed, on_disk)
+
+    def test_data_quality_writes_full_report_regardless_of_summary_mode(self):
+        stdout, stderr, code = _run_cli(
+            "data-quality", self.csv, "-o", self.out_path
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        on_disk = json.loads(open(self.out_path).read())
+        for key in ("completeness", "duplicity", "outliers"):
+            self.assertIn(key, on_disk)
+        # Default stdout mode is the human summary, not JSON.
+        self.assertIn("Completeness", stdout)
+
+    def test_summarize_writes_json_even_in_human_readable_mode(self):
+        stdout, stderr, code = _run_cli(
+            "summarize", self.csv, "--summary", "-o", self.out_path
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        on_disk = json.loads(open(self.out_path).read())
+        self.assertIn("shape", on_disk)
+        # stdout kept the human table, not JSON.
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+
+    def test_batch_writes_report(self):
+        cfg = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+        json.dump(
+            {"file_path": self.csv, "metrics": ["completeness"], "save_images": False},
+            cfg,
+        )
+        cfg.close()
+        try:
+            stdout, stderr, code = _run_cli(
+                "batch", cfg.name, "-o", self.out_path
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            on_disk = json.loads(open(self.out_path).read())
+            self.assertIn("completeness", on_disk)
+        finally:
+            _clean(cfg.name)
+
+    def test_output_path_reported_on_stderr(self):
+        _, stderr, code = _run_cli(
+            "run", "completeness", self.csv, "-o", self.out_path
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertIn(self.out_path, stderr)
+
+
+# ===========================================================================
+# inventory command
+# ===========================================================================
+
+
+class TestInventoryCommand(unittest.TestCase):
+    """`aidrin inventory <file>` classifies HDF5/Zarr layout without reading it."""
+
+    def setUp(self):
+        import h5py
+        import numpy as np
+
+        self.tmpdir = tempfile.mkdtemp()
+        self.h5_path = os.path.join(self.tmpdir, "ragged.h5")
+        with h5py.File(self.h5_path, "w") as f:
+            f.create_dataset("a", data=np.arange(10, dtype=np.int32))
+            f.create_dataset("b", data=np.arange(7, dtype=np.int32))
+        self.csv = _write_csv(_sample_df())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+        _clean(self.csv)
+
+    def test_reports_multi_dataset_layout(self):
+        stdout, stderr, code = _run_cli("inventory", self.h5_path)
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["type"], "multi_dataset")
+        paths = {ds["path"] for ds in payload["datasets"]}
+        self.assertEqual(paths, {"a", "b"})
+
+    def test_non_structured_format_is_rejected(self):
+        _, stderr, code = _run_cli("inventory", self.csv)
+        self.assertNotEqual(code, 0)
+        self.assertIn("csv", stderr.lower())
+
+    def test_data_quality_refuses_multi_dataset_without_selection(self):
+        _, stderr, code = _run_cli("data-quality", self.h5_path)
+        self.assertNotEqual(code, 0)
+        self.assertIn("multi_dataset", stderr)
+        self.assertIn("aidrin inventory", stderr)
+
+    def test_data_quality_succeeds_with_selected_keys(self):
+        _, stderr, code = _run_cli(
+            "data-quality", self.h5_path, "--selected-keys", "a", "--detail"
+        )
+        self.assertEqual(code, 0, msg=stderr)
 
 
 # ===========================================================================
