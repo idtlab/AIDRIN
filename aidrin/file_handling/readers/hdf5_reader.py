@@ -207,9 +207,22 @@ class hdf5Reader(BaseFileReader):
                 lengths.add(ds["shape"][0])
         return len(lengths) > 1
 
+    def _has_grid_datasets(self, datasets):
+        """True when any dataset is a grid (ndim >= 3).
+
+        Shape-based, unlike the length heuristics above.  A gridded file (e.g.
+        The Well) whose 1D coordinate arrays happen to share a length -- square
+        grid, or equal step and trajectory counts -- slips past both heuristics
+        and would otherwise be flattened by the legacy path into a ragged
+        object frame.
+        """
+        return any(ds["ndim"] >= 3 for ds in datasets)
+
     def _needs_dataset_selection(self, datasets):
-        return self._is_incompatible_root_layout(datasets) or self._is_grouped_hierarchical_layout(
-            datasets
+        return (
+            self._has_grid_datasets(datasets)
+            or self._is_incompatible_root_layout(datasets)
+            or self._is_grouped_hierarchical_layout(datasets)
         )
 
     def inventory(self):
@@ -360,6 +373,18 @@ class hdf5Reader(BaseFileReader):
                 self.logger.warning("HDF5 path is not a dataset: %s", path)
                 return None
 
+            # Read ndim off the h5py metadata, not the loaded array: grids are
+            # exactly what this refuses and also the largest datasets, so
+            # materializing one only to reject it would exhaust memory.
+            if int(getattr(obj, "ndim", 0)) >= 3:
+                self.logger.warning(
+                    "HDF5 dataset '%s' has ndim=%s; refusing to aggregate or flatten. "
+                    "Select a 1D (or single 2D) dataset via selected_keys.",
+                    path,
+                    obj.ndim,
+                )
+                return None
+
             data = obj[()]
             data = self._apply_fill_values(data, obj, path)
 
@@ -480,6 +505,23 @@ class hdf5Reader(BaseFileReader):
                 store_df = self._read_pandas_store()
                 if store_df is not None:
                     return store_df
+
+            # Grids never reach the flattening below: it walks every dataset and
+            # builds one row per element, turning an N-D array into cells that
+            # hold Python lists.  Single-dataset grids land here too, since
+            # inventory() short-circuits them to "single_dataset".
+            if self._has_grid_datasets(inv["datasets"]):
+                grids = [
+                    f"{ds['path']}{ds['shape']}" for ds in inv["datasets"] if ds["ndim"] >= 3
+                ]
+                self.logger.warning(
+                    "HDF5 file holds %d grid dataset(s) with ndim >= 3 (%s); refusing to "
+                    "aggregate or flatten. Use parse() / inventory() to list paths and "
+                    "select a 1D (or single 2D) dataset via selected_keys.",
+                    len(grids),
+                    ", ".join(grids[:5]),
+                )
+                return None
 
             rows = []
             # Clean up byte strings in all object columns
