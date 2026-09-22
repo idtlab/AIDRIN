@@ -680,3 +680,103 @@ class TestApiInventory:
             inventory(str(fpath_obj))
 
         assert "csv" in str(excinfo.value).lower()
+
+
+class TestGridDatasetGuard:
+    """Grids (ndim >= 3) must be refused, never flattened into list-valued cells.
+
+    Every path below previously produced a DataFrame whose cells held Python
+    lists (or, for the legacy walk, a mostly-NaN ragged frame).  Metrics then
+    reported confident nonsense: a fully populated file scored 1.0000
+    completeness over 15 list objects instead of its 1920 floats.
+    """
+
+    @staticmethod
+    def _write_grid_file(path, nx, ny, nt, ntraj):
+        """A gridded file: coordinate vectors plus (traj, t, x, y) fields."""
+        with h5py.File(path, "w") as f:
+            f.create_dataset("dimensions/x", data=np.linspace(0, 1, nx, dtype="f4"))
+            f.create_dataset("dimensions/y", data=np.linspace(0, 1, ny, dtype="f4"))
+            f.create_dataset("dimensions/time", data=np.arange(nt, dtype="f4"))
+            f.create_dataset("scalars/viscosity", data=np.full(ntraj, 0.01, dtype="f4"))
+            f.create_dataset("t0_fields/density", data=np.zeros((ntraj, nt, nx, ny), dtype="f4"))
+            f.create_dataset("t0_fields/pressure", data=np.zeros((ntraj, nt, nx, ny), dtype="f4"))
+
+    def test_equal_length_coords_still_require_selection(self, tmp_path, logger):
+        """Classification must key on shape, not 1D length.
+
+        A square grid with equal step and trajectory counts gives every
+        coordinate vector the same length, which slipped past both length
+        heuristics and typed the file 'legacy'.
+        """
+        fpath = str(tmp_path / "square_grid.h5")
+        self._write_grid_file(fpath, 8, 8, 8, 8)
+
+        assert hdf5Reader(fpath, logger).inventory()["type"] == "multi_dataset"
+
+    def test_equal_length_coords_are_not_flattened(self, tmp_path, logger):
+        fpath = str(tmp_path / "square_grid.h5")
+        self._write_grid_file(fpath, 8, 8, 8, 8)
+
+        assert hdf5Reader(fpath, logger).read() is None
+
+    def test_distinct_length_coords_require_selection(self, tmp_path, logger):
+        fpath = str(tmp_path / "rect_grid.h5")
+        self._write_grid_file(fpath, 16, 8, 5, 3)
+
+        assert hdf5Reader(fpath, logger).inventory()["type"] == "multi_dataset"
+
+    def test_lone_grid_dataset_is_refused(self, tmp_path, logger, caplog):
+        """A single grid short-circuits to 'single_dataset' and reaches the legacy walk."""
+        fpath = str(tmp_path / "solo_grid.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("field", data=np.zeros((4, 5, 6), dtype="f4"))
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger).read()
+
+        assert df is None
+        assert "ndim >= 3" in caplog.text
+
+    def test_selected_grid_dataset_is_refused(self, tmp_path, logger, caplog):
+        fpath = str(tmp_path / "grid.h5")
+        self._write_grid_file(fpath, 4, 5, 3, 2)
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger, selected_keys=["t0_fields/density"]).read()
+
+        assert df is None
+        assert "ndim=4" in caplog.text
+
+    def test_guard_reads_metadata_only(self, tmp_path, logger, monkeypatch):
+        """A real grid would not fit in RAM, so the guard must fire before any read."""
+        fpath = str(tmp_path / "grid.h5")
+        self._write_grid_file(fpath, 4, 5, 3, 2)
+
+        def _boom(self, item):
+            raise AssertionError("dataset was materialized before the ndim check")
+
+        monkeypatch.setattr(h5py.Dataset, "__getitem__", _boom)
+
+        reader = hdf5Reader(fpath, logger)
+        assert reader._read_dataset_path("t0_fields/density") is None
+
+    def test_two_dimensional_dataset_still_reads(self, tmp_path, logger):
+        """The guard starts at ndim 3: a 2D dataset is a table and must survive."""
+        fpath = str(tmp_path / "flat.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("grid2d", data=np.arange(12, dtype="f4").reshape(3, 4))
+
+        df = hdf5Reader(fpath, logger)._read_dataset_path("grid2d")
+
+        assert df is not None
+        assert df.shape == (3, 4)
+
+    def test_one_dimensional_selection_unaffected(self, tmp_path, logger):
+        fpath = str(tmp_path / "grid.h5")
+        self._write_grid_file(fpath, 4, 5, 3, 2)
+
+        df = hdf5Reader(fpath, logger, selected_keys=["scalars/viscosity"]).read()
+
+        assert df is not None
+        assert df.shape == (2, 1)
