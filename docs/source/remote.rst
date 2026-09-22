@@ -114,7 +114,7 @@ it exits with an error.
 Limitations
 -----------
 
-* Custom metrics, remedies, and the agentic pipeline are local-only.
+* Custom metrics, remedies, the agentic pipeline, and ``aidrin inventory`` are local-only.
 * Images are off by default. Results are capped near 10 MB, so visualization
   payloads are stripped on the endpoint unless a batch config asks for images
   with ``save_images: true``.

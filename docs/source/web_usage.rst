@@ -384,6 +384,14 @@ This is optional. Install the extra to enable it:
 
    Set ``GLOBUS_CLIENT_SECRET`` as well if you registered a confidential client.
 
+   Scheduler-backed endpoints may need longer than the default 30 seconds to
+   start a worker for the compatibility probe. Configure the server timeout in
+   seconds before starting AIDRIN, for example:
+
+   .. code-block:: bash
+
+      export AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT=900
+
 **Set up an endpoint on the machine holding your data**
 
 .. code-block:: bash
@@ -401,6 +409,15 @@ testing you can run an endpoint on the same machine under a different name.
 
 The endpoint machine needs ``aidrin`` installed, network access to
 authenticate with Globus, and the dataset reachable at the path you enter.
+
+For file-reference validation, the endpoint must expose a **Globus Compute worker**
+with ``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` and
+``AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT`` configured in ``worker_init``. The
+worker reads paths already visible on its filesystem; Globus Connect and Globus
+Transfer are not used. Direct Python API calls and local CLI or MCP runs check
+the host running those interfaces. ``aidrin remote`` commands and MCP calls
+with ``endpoint`` or ``profile`` check the selected Compute endpoint instead;
+those headless remote runs do not use this web worker-root policy.
 
 **Running a remote analysis**
 
