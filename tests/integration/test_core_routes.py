@@ -363,3 +363,15 @@ def test_summary_statistics_reports_grid_cells_as_rows(client, tmp_path):
         "t1_fields/velocity_1",
     ]
 
+def test_hdf5_option_accepts_the_hdf5_extension(client):
+    """The Well publishes .hdf5, which an accept filter of .h5 greys out.
+
+    The option's value stays the canonical .h5 so the reader lookup is
+    unchanged; only the browser's file dialog sees the wider list.
+    """
+    html = client.get("/inspector").get_data(as_text=True)
+
+    match = re.search(r'<option value="\.h5" data-accept="([^"]*)"', html)
+    assert match, "HDF5 option should carry an accept list"
+    assert ".hdf5" in match.group(1)
+    assert ".h5" in match.group(1)

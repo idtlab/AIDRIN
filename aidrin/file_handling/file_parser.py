@@ -43,6 +43,20 @@ SUPPORTED_FILE_TYPES = [
     # (file_type,file_type_name)
 ]
 
+# Extra extensions the browser file dialog should offer for a given type. The
+# READER_MAP key stays canonical (".h5"), so nothing downstream changes; these
+# are only the other spellings the same format is published under. HDF5 ships as
+# both ".h5" and ".hdf5", and an accept filter of ".h5" alone greys the other out.
+FILE_TYPE_ACCEPT_EXTENSIONS = {
+    ".h5": ".h5,.hdf5",
+}
+
+
+def accept_extensions_for(file_type):
+    """Browser ``accept`` value for a supported file type."""
+    return FILE_TYPE_ACCEPT_EXTENSIONS.get(file_type, file_type)
+
+
 # Globus (and other path-based surfaces) may include directory-shaped formats
 # that are not offered in the local browser upload dropdown.
 GLOBUS_FILE_TYPES = SUPPORTED_FILE_TYPES + [
