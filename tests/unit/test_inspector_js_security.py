@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,6 +14,7 @@ DATA_QUALITY_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_qualit
 DATA_STRUCTURE_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_data_structure.html"
 VARIABLE_UNIT_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_variable_unit_validation.html"
 SIDEBAR = REPO_ROOT / "web" / "templates" / "_components" / "sidebar.html"
+INTENT_MODAL = REPO_ROOT / "web" / "templates" / "_components" / "intent_modal.html"
 
 
 def test_result_renderer_escapes_untrusted_display_values():
@@ -701,3 +703,230 @@ def test_init_workspace_resets_readiness_state_for_dataset_switch():
     assert "Object.keys(_readinessSectionStatus)" in body
     assert "delete _readinessSectionStatus[key]" in body
     assert '_readinessFairCompliance = { status: "idle", data: null }' in body
+
+
+def test_intent_renderer_escapes_llm_authored_text():
+    """LLM output reaches innerHTML, so it must be escaped."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    required = [
+        "${escapeHtml(rec.why)}",
+        "${escapeHtml(rec.display_name)}",
+        "${escapeHtml(rec.panel_label)}",
+        "${escapeHtml(data.summary)}",
+    ]
+    for fragment in required:
+        assert fragment in source, f"missing escape: {fragment!r}"
+
+    forbidden = [
+        "${rec.why}",
+        "${rec.display_name}",
+        "${data.summary}",
+    ]
+    for fragment in forbidden:
+        assert fragment not in source, f"unescaped interpolation: {fragment!r}"
+
+
+def test_intent_panel_link_uses_server_side_panel_vocabulary():
+    """The jump control must never interpolate LLM-sourced text into onclick."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert "jumpToMetric('${rec.panel}', ${escapeHtml(JSON.stringify(rec.input_name))})" in source
+    assert "showPanel('${rec.panel}')" not in source
+
+
+def test_intent_jump_control_escapes_input_name_in_onclick_attribute():
+    """rec.input_name comes from a fixed server-side dict (CHECKBOX_BY_METRIC),
+    but it still lands inside an inline onclick="..." attribute. It must be
+    passed through JSON.stringify (a safe JS literal, including for null)
+    and then escapeHtml (so any quote in that literal cannot break out of the
+    double-quoted HTML attribute), never interpolated raw."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert source.count("${escapeHtml(JSON.stringify(rec.input_name))}") == 2
+    assert "${rec.input_name}" not in source
+
+
+def test_intent_collapses_criticals_beyond_the_first_six():
+    """A wall of equally-urgent critical cards makes the badge meaningless, so
+    the UI shows at most six full critical cards and collapses the rest into
+    a compact, still-escaped 'also critical' list that states its count."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert "_INTENT_CRITICAL_CARD_LIMIT = 6" in source
+    assert "critical.slice(0, _INTENT_CRITICAL_CARD_LIMIT)" in source
+    assert "critical.slice(_INTENT_CRITICAL_CARD_LIMIT)" in source
+    assert "${overflow.length} more" in source
+
+    # The collapsed list must escape exactly like the full cards, and never
+    # interpolate the raw (LLM-influenced) display name unescaped.
+    assert "${escapeHtml(rec.display_name)}" in source
+    assert "${escapeHtml(rec.panel_label)}" in source
+    assert "${rec.display_name}" not in source
+
+
+def test_intent_profile_name_is_escaped_before_reaching_innerhtml():
+    """profile_name is user-controlled text (it comes straight from a JSON
+    file the user picked). It is rendered into innerHTML in one place, the
+    panel summary line, which must escape it. The profile-builder page's
+    pre-filled name field (_panels/_profile_builder.html) is a static input
+    already in the DOM -- its default value is assigned via the safe
+    `.value` DOM property, never interpolated into an innerHTML template
+    literal, so no escaping is needed (or possible to forget) there."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert "${escapeHtml(data.profile_name)}" in source
+    assert "${data.profile_name}" not in source
+
+    start = source.index("function openProfileBuilder()")
+    end = source.index("\nfunction ", start + 1)
+    body = source[start:end]
+    assert "nameInput.value = defaultName;" in body
+    assert "${defaultName}" not in body
+    assert "innerHTML = `" not in body  # no template-literal render in this function
+
+
+PROFILE_BUILDER_PANEL = (
+    REPO_ROOT / "web" / "templates" / "_panels" / "_profile_builder.html"
+)
+INTENT_PANEL = REPO_ROOT / "web" / "templates" / "_panels" / "_intent.html"
+
+
+def test_profile_builder_moved_to_its_own_panel():
+    """The profile builder was moved off the Intent panel's inline "Profiles"
+    card onto its own page (panel-profile-builder), reachable only via the
+    "Build profile" button -- no old ids should linger anywhere."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    intent_panel = INTENT_PANEL.read_text(encoding="utf-8")
+    builder_panel = PROFILE_BUILDER_PANEL.read_text(encoding="utf-8")
+
+    assert 'id="panel-profile-builder"' in builder_panel
+    assert "function openProfileBuilder()" in source
+    assert 'showPanel("profile-builder")' in source
+    assert 'onclick="openProfileBuilder()"' in intent_panel
+
+    # The new panel provides an explicit way back to the Intent panel, since
+    # it carries no sidebar entry of its own.
+    assert "showPanel('intent')" in builder_panel
+
+    # No orphaned ids from the old inline card remain anywhere.
+    for stale_id in (
+        "intent-profile-save-open",
+        "intent-profile-editor",
+        "intent-profile-save-message",
+    ):
+        assert stale_id not in source
+        assert stale_id not in intent_panel
+        assert stale_id not in builder_panel
+
+    assert "function openIntentProfileEditor(" not in source
+
+
+def test_saved_profile_carries_profile_version_and_aidrin_version():
+    """The downloaded profile JSON must use the renamed "profile_version"
+    schema-compatibility key (never the old "version"), plus "aidrin_version"
+    sourced from GET /intent/metrics -- never a second, hardcoded copy of
+    the app version."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function saveIntentProfile()")
+    end = source.index("\nfunction ", start + 1)
+    body = source[start:end]
+
+    assert "profile_version: _INTENT_PROFILE_FILE_VERSION" in body
+    assert "aidrin_version: _intentAidrinVersion" in body
+    assert not re.search(r"(?<!profile_)version: _INTENT_PROFILE_FILE_VERSION", body)
+
+    assert '_intentAidrinVersion = data.aidrin_version || "";' in source
+
+
+def test_loaded_profile_surfaces_a_non_blocking_aidrin_version_note():
+    """aidrin_version is informational only (web/routes/intent.py's
+    load_profile() never rejects on it): a mismatch note must be appended to
+    the same non-error message as the dropped-metric notes, not treated as
+    an error."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function loadIntentProfile(")
+    end = source.index("\nfunction ", start + 1)
+    body = source[start:end]
+
+    assert "data.profile_aidrin_version_note" in body
+    version_note_start = body.index("if (data.profile_aidrin_version_note) {")
+    version_note_end = body.index('notes.join(" ")', version_note_start)
+    version_note_block = body[version_note_start:version_note_end]
+    assert "notes.push(data.profile_aidrin_version_note);" in version_note_block
+
+
+def test_intent_modal_submit_button_is_always_clickable():
+    """The 'Get recommendations' button used to ship `disabled` and rely on
+    updateIntentSubmitState() to enable it. A button that starts disabled
+    with no explanation reads as "the text field is required" (it isn't —
+    the field is optional), and if that one JS function is ever missing or
+    throws, the user is locked out of the feature with no message and no
+    route forward. The button must always be clickable; submitIntent()
+    itself now explains what is missing when nothing was selected."""
+    markup = INTENT_MODAL.read_text(encoding="utf-8")
+    start = markup.index('id="intent-submit"')
+    end = markup.index(">", start)
+    button_tag = markup[start:end]
+    # The Tailwind `disabled:opacity-50 disabled:cursor-not-allowed` variant
+    # classes are fine to keep; only the bare `disabled` HTML attribute
+    # (whitespace on both sides) must be gone.
+    assert not re.search(r"(?<![-:\w])disabled(?![-:\w])", button_tag)
+    assert 'onclick="submitIntent()"' in button_tag
+
+
+def test_submit_intent_explains_empty_selection_instead_of_silently_returning():
+    """submitIntent(source) used to bail out with a bare
+    `return Promise.resolve()` when nothing was selected and there were no
+    notes, leaving the user with no feedback at all. It must instead surface
+    a friendly message that points at the goals above (not the optional
+    notes box). For the default (modal) source that message goes to the
+    modal's #intent-modal-status element -- this test only exercises that
+    path, which is why it looks for that element unconditionally."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function submitIntent(source)")
+    end = source.index("\nfunction ", start + 1)
+    body = source[start:end]
+
+    assert "if (intents.length === 0 && !notes) return Promise.resolve();" not in body
+    assert 'document.getElementById("intent-modal-status")' in body
+
+    empty_case_start = body.index("if (intents.length === 0 && !notes) {")
+    empty_case_end = body.index("\n  }", empty_case_start)
+    empty_case = body[empty_case_start:empty_case_end]
+    assert "status.textContent = message" in empty_case
+    assert "goal" in empty_case.lower()
+    assert "return Promise.resolve();" in empty_case
+
+
+def test_update_intent_submit_state_only_clears_validation_messages():
+    """updateIntentSubmitState() is wired to fire on every checkbox/notes
+    change so it can dismiss the stale "select at least one goal" warning.
+    It used to blank #intent-modal-status unconditionally, which also wiped
+    out a server-error or network-failure message that submitIntent() had
+    just written moments earlier in the same promise chain -- the error
+    would flash and vanish before the user could read it. The clear must be
+    gated on the status element's message kind: only a "validation" message
+    may be cleared here; an "error" message has to survive until the user
+    starts a new submit."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function updateIntentSubmitState()")
+    end = source.index("\nfunction ", start + 1)
+    body = source[start:end]
+
+    # The clear must be conditioned on a message-kind check, not fire
+    # unconditionally whenever a goal is selected.
+    assert re.search(r'dataset\.kind\s*===\s*"validation"', body), (
+        "updateIntentSubmitState() must only clear the status element when "
+        "its message kind is 'validation', so error messages persist"
+    )
+    # Guard against the historical bug: an unconditional clear right after
+    # the early-return, with no kind check gating it.
+    assert not re.search(
+        r"return;\s*\n\s*const status = document\.getElementById\(\"intent-modal-status\"\);\s*\n\s*if \(status\) \{\s*\n\s*status\.textContent = \"\";",
+        body,
+    ), "the status clear must be gated on message kind, not unconditional"
+
+    # Submitting must reset both the message and its kind, so a new attempt
+    # never inherits a stale kind from a previous error.
+    submit_start = source.index("function submitIntent(source)")
+    submit_end = source.index("\nfunction ", submit_start + 1)
+    submit_body = source[submit_start:submit_end]
+    assert "delete status.dataset.kind;" in submit_body
+    assert 'status.dataset.kind = "error";' in submit_body
+    assert 'status.dataset.kind = "validation";' in submit_body

@@ -62,9 +62,10 @@ class ReaderReturnedNone(RuntimeError):
 
 
 # Formats whose readers legitimately refuse ambiguous inputs (a multi-array
-# Zarr store needing selected_keys). Returning None there is indistinguishable
-# from "unsupported type", so raise instead and let the CLI print one error.
-_RAISE_ON_EMPTY_FILE_TYPES = {".zarr"}
+# HDF5/Zarr store needing selected_keys). Returning None there is
+# indistinguishable from "unsupported type", so raise instead and let the
+# CLI print one error.
+_RAISE_ON_EMPTY_FILE_TYPES = {".h5", ".zarr"}
 
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
@@ -285,11 +286,10 @@ def read_file(file_info, columns=None):
         # Slow path: parse the source once.
         reader_cls = READER_MAP[file_type]
         if file_type in _SELECTION_FILE_TYPES:
-            df = reader_cls(
-                file_path, file_upload_time_log, selected_keys=selected_keys
-            ).read()
+            reader = reader_cls(file_path, file_upload_time_log, selected_keys=selected_keys)
         else:
-            df = reader_cls(file_path, file_upload_time_log).read()
+            reader = reader_cls(file_path, file_upload_time_log)
+        df = reader.read()
         file_upload_time_log.info("File successfully parsed!")
 
         # If a reader returns None (for example an invalid Zarr store/path or
@@ -300,9 +300,24 @@ def read_file(file_info, columns=None):
                 f"Reader returned no DataFrame for {file_path}. "
                 "Check the store/path or selected keys; reader returned None."
             )
+            if file_type in _RAISE_ON_EMPTY_FILE_TYPES and hasattr(reader, "inventory"):
+                # Name the layout and point at the command that shows it, so
+                # the caller doesn't have to guess why an ambiguous multi-array
+                # store refused to flatten into one table.
+                layout = reader.inventory().get("type")
+                if layout == "multi_dataset":
+                    msg = (
+                        f"{file_type} store '{file_path}' has layout 'multi_dataset' "
+                        "and needs an explicit dataset selection. Run "
+                        f"`aidrin inventory {file_path}` to see the dataset/array "
+                        "list, then pass --selected-keys (CLI) or "
+                        "selected_keys=[...] (library) with compatible paths."
+                    )
+                elif layout == "empty":
+                    msg = f"{file_type} store '{file_path}' has no readable datasets/arrays."
             file_upload_time_log.error(msg)
-            # For Zarr stores, prefer raising so the CLI/runner prints a single
-            # clear error and exits non-zero.
+            # For HDF5/Zarr stores, prefer raising so the CLI/runner prints a
+            # single clear error and exits non-zero.
             if file_type in _RAISE_ON_EMPTY_FILE_TYPES:
                 raise ReaderReturnedNone(msg)
             # Every other format keeps returning None, which callers already

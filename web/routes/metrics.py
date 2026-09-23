@@ -2661,7 +2661,8 @@ def _build_readiness_section(section, file_info, include_visualizations=False):
         metric_time_log.error(
             "Readiness report — %s error: %s", section, e, exc_info=True
         )
-        return {"error": f"{type(e).__name__}: {e}"}
+        # Exception text stays in the server log, not the response or PDF.
+        return {"error": "This section could not be computed. Details are in the server log."}
 
 
 @metrics_bp.route("/readiness-report/<section>/visualizations", methods=["GET"])
@@ -2684,7 +2685,7 @@ def readiness_report_visualizations(section):
         )
         return jsonify({
             "success": False,
-            "message": f"{type(e).__name__}: {e}",
+            "message": "Could not build the visualizations for this section.",
         }), 200
 
     if not from_cache:
@@ -2759,7 +2760,7 @@ def readiness_report():
         return jsonify(ensure_json_serializable(response))
     except Exception as e:
         metric_time_log.error("Readiness report error: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 200
+        return jsonify({"success": False, "message": "Could not build the readiness report."}), 200
 
 
 @metrics_bp.route("/readiness-report/pdf", methods=["GET"])
@@ -2834,11 +2835,16 @@ def readiness_report_pdf():
             download_name=pdf_filename(file_name, full=include_details),
         )
     except RuntimeError as e:
+        # Raised by web.readiness.pdf when WeasyPrint or the logo asset is missing.
         metric_time_log.error("Readiness report PDF error: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "message": "PDF export is not available on this server. Check that WeasyPrint and its "
+                       "native dependencies (pango, cairo, gdk-pixbuf) are installed; details are in the server log.",
+        }), 500
     except Exception as e:
         metric_time_log.error("Readiness report PDF error: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 500
+        return jsonify({"success": False, "message": "Could not generate the PDF report."}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -2948,7 +2954,7 @@ def data_structure():
 
             except Exception as e:
                 metric_time_log.error("Data Structure error: %s", e, exc_info=True)
-                return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
+                return jsonify({"error": "Error computing the data structure metrics."}), 200
 
             duration_ms = (time.time() - start_time) * 1000
             span.set_attribute("metric.duration_ms", duration_ms)

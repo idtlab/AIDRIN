@@ -106,6 +106,21 @@ def _dump_result(result: object) -> None:
     sys.stdout.write("\n")
 
 
+def _write_output_file(result: object, output_path: Optional[str]) -> None:
+    """Write a report to disk, same semantics as ``agentic run -o``.
+
+    Making the report path an explicit argument of the command (rather than a
+    shell redirect) is what lets provenance tooling that records the command
+    line see it as an output of that command.
+    """
+    if not output_path:
+        return
+    out = Path(output_path).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    sys.stderr.write(f"Results written to: {out}\n")
+
+
 def _fail_on_remote_error(result: object, remote_opts) -> None:
     """Exit 1 when a remote dispatch came back as a raised-on-the-worker error.
 
@@ -348,6 +363,8 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "max_export_rows": getattr(args, "max_export_rows", 10000),
         "scan_limit": getattr(args, "scan_limit", None),
         "target_match": target_match,
+        "noisy_output": getattr(args, "noisy_output", None),
+        "skip_noisy_output": getattr(args, "skip_noisy_output", False),
         "stop_after_outliers": getattr(args, "stop_after_outliers", False),
         # Default to no image generation/saving for headless usage
         "save_images": getattr(args, "save_images", False),
@@ -379,6 +396,7 @@ def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
         help="Comma-separated HDF5/Zarr array paths to read",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
+    parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
 
 def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: List[str]) -> None:
@@ -588,7 +606,7 @@ REMOTE_MANAGEMENT = {
 
 # Commands that cannot run on an endpoint: they need files or credentials that
 # live on the client machine.
-REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill"}
+REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory"}
 
 
 REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
@@ -896,6 +914,21 @@ def main() -> None:
             mparser.add_argument("--max-export-rows", type=int, default=10000, help="Export row cap per rule; 0 means unlimited")
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum values to scan per rule")
             mparser.add_argument("--stop-after-outliers", action="store_true", help="Stop scanning after preview cap is reached")
+        if metric_name == "differential_privacy":
+            mparser.add_argument(
+                "--noisy-output",
+                dest="noisy_output",
+                default=None,
+                help="Write the noisy CSV to this path instead of ./noisy/noisy_data.csv "
+                     "(the resolved path is always echoed in the JSON result as "
+                     "'Noisy file path')",
+            )
+            mparser.add_argument(
+                "--no-noisy-output",
+                dest="skip_noisy_output",
+                action="store_true",
+                help="Do not write the noisy CSV to disk",
+            )
         if metric_name == "file_reference_validation":
             mparser.add_argument(
                 "--target-match",
@@ -936,6 +969,11 @@ def main() -> None:
         default="metric",
         help="Run metric (default) or remedy; remedy output is always saved as CSV",
     )
+    custom_parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="With the remedy action, also re-run metric() on the remedied data and print before/after results",
+    )
     _configure_minimal_run_args(custom_parser)
 
     batch_parser = subparsers.add_parser("batch", help="Run metrics from config file (JSON or YAML)")
@@ -957,6 +995,7 @@ def main() -> None:
         help="Include visualization data in output",
         default=True,
     )
+    batch_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
     # Fast data quality command
     dq_parser = subparsers.add_parser("data-quality", help="Run fast data quality metrics (completeness, duplicity, outliers)")
@@ -970,6 +1009,7 @@ def main() -> None:
     )
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
+    dq_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
     # Dataset summary command
     summarize_parser = subparsers.add_parser("summarize", help="Describe numerical and categorical features of a dataset")
@@ -991,6 +1031,16 @@ def main() -> None:
         help="Limit stats to N features (split evenly between numerical and categorical)"
     )
     summarize_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print human-readable table instead of JSON")
+    summarize_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+
+    # HDF5/Zarr layout inspection
+    inventory_parser = subparsers.add_parser(
+        "inventory",
+        help="Classify an HDF5/Zarr file's on-disk layout and list its datasets, without reading it as a table",
+    )
+    inventory_parser.add_argument("file_path", help="Path to the HDF5 (.h5) or Zarr (.zarr) file")
+    inventory_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    inventory_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
     # Agentic evaluation commands
     agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
@@ -1097,23 +1147,37 @@ def main() -> None:
                         **_build_run_kwargs(args),
                     )
                 _fail_on_remote_error(result, remote_opts)
+                rounded = _round_floats(result)
+                _write_output_file(rounded, getattr(args, "output", None))
                 if getattr(args, "detail", True):
-                    _dump_result(_round_floats(result))
+                    _dump_result(rounded)
                 else:
                     _summarize_metric(metric_key, result)
                 return
 
             # Custom metrics/remedies
             if args.metric == "custom":
+                diff = getattr(args, "diff", False)
+                if diff and args.action != "remedy":
+                    sys.stderr.write("Error: --diff is only valid with the remedy action\n")
+                    sys.exit(2)
                 if args.action == "remedy":
-                    output_path = run_custom_metric_remedy(
+                    result = run_custom_metric_remedy(
                         args.name,
                         args.file_path,
                         output_dir=None,
                         file_type=getattr(args, "file_type", None),
+                        diff=diff,
                         **_build_run_kwargs(args),
                     )
-                    print(f"Remedied data saved to: {output_path}")
+                    if diff:
+                        result["remedied_file"] = result.pop("_saved_to")
+                        rounded = _round_floats(result)
+                        _write_output_file(rounded, getattr(args, "output", None))
+                        _dump_result(rounded)
+                        sys.stderr.write(f"Remedied data saved to: {result['remedied_file']}\n")
+                    else:
+                        print(f"Remedied data saved to: {result}")
                     return
                 result = executor.run_metric(
                     args.name,
@@ -1121,8 +1185,10 @@ def main() -> None:
                     file_type=getattr(args, "file_type", None),
                     **_build_run_kwargs(args),
                 )
+                rounded = _round_floats(result)
+                _write_output_file(rounded, getattr(args, "output", None))
                 if getattr(args, "detail", True):
-                    _dump_result(_round_floats(result))
+                    _dump_result(rounded)
                 else:
                     _summarize_metric(args.name.strip().lower(), result)
                 return
@@ -1164,7 +1230,9 @@ def main() -> None:
                 **batch_kwargs,
             )
             _fail_on_remote_error(result, remote_opts)
-            _dump_result(_round_floats(result))
+            rounded = _round_floats(result)
+            _write_output_file(rounded, getattr(args, "output", None))
+            _dump_result(rounded)
             return
 
         if args.command == "summarize":
@@ -1175,10 +1243,12 @@ def main() -> None:
                 selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
+            rounded = _round_floats(result)
+            _write_output_file(rounded, getattr(args, "output", None))
             if args.human_readable:
                 _print_summary_table(result, args.file_path)
             else:
-                _dump_result(_round_floats(result))
+                _dump_result(rounded)
             return
 
         if args.command == "data-quality":
@@ -1190,10 +1260,18 @@ def main() -> None:
                 selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
+            rounded = _round_floats(result)
+            _write_output_file(rounded, getattr(args, "output", None))
             if args.detail:
-                _dump_result(_round_floats(result))
+                _dump_result(rounded)
             else:
                 _summarize_data_quality(result)
+            return
+
+        if args.command == "inventory":
+            result = _local_api.inventory(args.file_path, file_type=args.file_type)
+            _write_output_file(result, getattr(args, "output", None))
+            _dump_result(result)
             return
 
         if args.command == "agentic":

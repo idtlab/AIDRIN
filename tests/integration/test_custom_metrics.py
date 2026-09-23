@@ -95,7 +95,10 @@ def test_custom_metrics_run_on_json_upload(uploaded_client_json):
     assert response.status_code == 200
     data = response.get_json()
     evaluation = data["Custom Metric Evaluation"]
-    assert evaluation["row_count"] == 3
+    # When remedy runs, metric() is re-run on the remedied data too, so the
+    # result is a before/after diff rather than a flat metric_results dict.
+    assert evaluation["before"]["row_count"] == 3
+    assert evaluation["after"]["row_count"] == 3
     # Remedy output must be a .csv file regardless of the .json input.
     assert evaluation["apply_remedy"].endswith(".csv")
 
@@ -199,3 +202,82 @@ class CustomDR(BaseDRAgent):
     response = _save_and_run(uploaded_client, code)
     assert response.status_code == 400
     assert "must return a dictionary" in response.get_json()["error"]
+
+
+# -------------------------------------------------
+# Custom metrics run — before/after diff on remedy
+# -------------------------------------------------
+
+_DIFF_CODE = """
+from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+class CustomDR(BaseDRAgent):
+    def metric(self, **kwargs):
+        return {"column_count": len(self.dataset.columns)}
+
+    def remedy(self, **kwargs):
+        df = self.dataset.copy()
+        df["new_flag"] = True
+        return df
+"""
+
+
+def test_custom_metrics_remedy_shows_before_and_after_diff(uploaded_client):
+    with uploaded_client.session_transaction() as sess:
+        if "session_id" not in sess:
+            sess["session_id"] = "test-session-diff"
+    uploaded_client.post(
+        "/save-custom-metric-text", data={"metric_code": _DIFF_CODE, "apply_remedy": "no"}
+    )
+    response = uploaded_client.post("/custom-metrics?return_type=json", data={"apply_remedy": "yes"})
+    assert response.status_code == 200
+    evaluation = response.get_json()["Custom Metric Evaluation"]
+    assert evaluation["before"] == {"column_count": 4}
+    assert evaluation["after"] == {"column_count": 5}
+    assert evaluation["apply_remedy"].endswith(".csv")
+
+
+def test_custom_metrics_without_remedy_keeps_flat_shape(uploaded_client):
+    """When Apply Remedy isn't checked, the response stays the original flat
+    metric_results dict — the before/after shape only applies to remedy runs."""
+    with uploaded_client.session_transaction() as sess:
+        if "session_id" not in sess:
+            sess["session_id"] = "test-session-flat"
+    uploaded_client.post(
+        "/save-custom-metric-text", data={"metric_code": _DIFF_CODE, "apply_remedy": "no"}
+    )
+    response = uploaded_client.post("/custom-metrics?return_type=json", data={"apply_remedy": "no"})
+    assert response.status_code == 200
+    evaluation = response.get_json()["Custom Metric Evaluation"]
+    assert evaluation == {"column_count": 4}
+
+
+def test_custom_metrics_runtime_error_in_after_metric_returns_400(uploaded_client, caplog):
+    """metric() succeeding before remedy but failing when re-run on the
+    remedied data must surface its own 400, with the exception text kept out
+    of the HTTP response (same information-exposure precaution as the other
+    error paths) but still logged server-side."""
+    code = """
+from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+_calls = {"n": 0}
+
+class CustomDR(BaseDRAgent):
+    def metric(self, **kwargs):
+        _calls["n"] += 1
+        if _calls["n"] == 1:
+            return {"ok": True}
+        raise ValueError("boom-after")
+
+    def remedy(self, **kwargs):
+        return self.dataset.copy()
+"""
+    with uploaded_client.session_transaction() as sess:
+        if "session_id" not in sess:
+            sess["session_id"] = "test-session-after-error"
+    uploaded_client.post("/save-custom-metric-text", data={"metric_code": code, "apply_remedy": "no"})
+    response = uploaded_client.post("/custom-metrics?return_type=json", data={"apply_remedy": "yes"})
+    assert response.status_code == 400
+    data = response.get_json()
+    assert "boom-after" not in data["error"]
+    assert "boom-after" in caplog.text

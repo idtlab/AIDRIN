@@ -144,6 +144,48 @@ def test_load_dataframe_simplifies_unknown_error(monkeypatch):
     assert "could not be read" in message.lower()
 
 
+def test_load_dataframe_handles_reader_refusal(monkeypatch):
+    """A reader that *raises* on an ambiguous input must not reach Flask.
+
+    Formats in ``_RAISE_ON_EMPTY_FILE_TYPES`` (a multi-array Zarr store, and
+    HDF5 once it joins them) raise instead of returning None, which would
+    otherwise escape this wrapper and 500 the upload route.
+    """
+    import web.routes.utils as utils
+    from aidrin.file_handling.file_parser import ReaderReturnedNone
+
+    def _refuse(file_info):
+        raise ReaderReturnedNone(
+            "store 'x.zarr' has layout 'multi_dataset' and needs an explicit "
+            "dataset selection."
+        )
+
+    monkeypatch.setattr(utils, "read_file", _refuse)
+    df, message = utils.load_dataframe(("x.zarr", "x.zarr", ".zarr"))
+
+    assert df is None
+    assert message
+    assert len(message) < 200
+
+
+def test_load_dataframe_refusal_does_not_claim_corruption(monkeypatch):
+    """An ambiguous layout is a readable file needing a choice, not a broken one."""
+    import web.routes.utils as utils
+    from aidrin.file_handling.file_parser import ReaderReturnedNone
+
+    def _refuse(file_info):
+        raise ReaderReturnedNone(
+            "store 'x.zarr' has layout 'multi_dataset' and needs an explicit "
+            "dataset selection."
+        )
+
+    monkeypatch.setattr(utils, "read_file", _refuse)
+    _df, message = utils.load_dataframe(("x.zarr", "x.zarr", ".zarr"))
+
+    assert "corrupted" not in message.lower()
+    assert "select" in message.lower()
+
+
 def test_load_dataframe_returns_df_for_valid_csv(sample_csv):
     """The shared helper returns a DataFrame and no error for a readable file."""
     import pandas as pd

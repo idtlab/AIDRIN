@@ -1,0 +1,71 @@
+<!-- Intent & Recommendations panel: which checks to run, and why. Goal
+     selection lives here too (the "Change goal" card), whose action row
+     also has a "Build profile" button to the standalone profile-builder
+     page (_panels/_profile_builder.html, all 29 readiness checks) --
+     reachable only from that button, with no sidebar entry of its own. The
+     intent modal (_components/intent_modal.html) still opens once per
+     dataset and is the only place to load a saved profile file -- see its
+     "Load profile from JSON" dropzone. -->
+<div id="panel-intent" class="metric-panel hidden">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Intent &amp; Recommendations</h2>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      Suggested readiness checks for what you plan to do with this dataset. Nothing here has been run.
+    </p>
+
+    <div id="intent-summary" class="mb-4"></div>
+    <div id="intent-cards" class="space-y-3">
+      <p class="text-sm text-gray-500 dark:text-gray-400">
+        No goal selected yet. Use <em>Change goal</em> below to get recommendations.
+      </p>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mt-4">
+    <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Change goal</h3>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+      Update your goal to refresh the recommended checks above.
+    </p>
+    <form id="intent-change-form" onsubmit="event.preventDefault()">
+      <div id="checkboxContainer_intent-change" class="mb-3">
+        {% for option in intent_options %}
+        <div class="mb-2 py-1">
+          <label class="material-checkbox">
+            <input type="checkbox" name="intent" value="{{ option.key }}" />
+            <span class="checkmark"></span>
+            {{ option.label }}
+          </label>
+          <p class="ml-7 text-xs text-gray-500 dark:text-gray-400">{{ option.description }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="mb-3">
+        <div id="intent-change-notes-field" class="intent-notes-field{{ '' if (llm_available and llm_configured) else ' hidden' }}">
+          <textarea id="intent-change-notes" rows="2" maxlength="500"
+                    placeholder="Anything else we should know?"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"></textarea>
+        </div>
+        <div id="intent-change-notes-notice" class="intent-notes-llm-notice{{ ' hidden' if (llm_available and llm_configured) else '' }} flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-3">
+          <svg class="w-5 h-5 shrink-0 text-purple-400 dark:text-purple-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/></svg>
+          <p class="flex-1 text-xs text-gray-500 dark:text-gray-400">
+            Free-text context is only used when AIDRIN is connected to an LLM provider.
+          </p>
+          <button type="button" onclick="openLLMSettings()"
+                  class="shrink-0 px-3 py-1.5 text-xs font-medium text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/20">
+            Connect a provider
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <button type="button" onclick="openProfileBuilder()"
+                class="px-5 py-2.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+          Build profile
+        </button>
+        <button type="button" onclick="withSubmitGuard(this, () => submitIntent('change'));"
+                class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+          Update recommendations
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
