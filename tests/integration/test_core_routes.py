@@ -2,6 +2,9 @@
 
 import re
 
+import numpy as np
+import pytest
+
 
 # -------------------------------------------------
 # Retrieve uploaded file
@@ -276,3 +279,87 @@ def test_all_advertised_sample_files_are_downloadable(client):
         if response.status_code != 200:
             missing.append((name, file_type, response.status_code))
     assert not missing, f"Sample files advertised but not downloadable: {missing}"
+
+
+def _write_well_shaped_h5(path, grid=(1, 2, 8, 10)):
+    """A gridded file in The Well's layout: scalar fields plus a vector field."""
+    import h5py
+
+    cells = int(np.prod(grid))
+    with h5py.File(path, "w") as f:
+        f.attrs["n_spatial_dims"] = 2
+        f.create_dataset("dimensions/x", data=np.arange(grid[2], dtype="f4"))
+        f.create_dataset("dimensions/y", data=np.arange(grid[3], dtype="f4"))
+        f.create_dataset("t0_fields/density", data=np.arange(cells, dtype="f4").reshape(grid))
+        f.create_dataset(
+            "t0_fields/temperature", data=(np.arange(cells, dtype="f4") * 3).reshape(grid)
+        )
+        f.create_dataset(
+            "t1_fields/velocity", data=np.arange(cells * 2, dtype="f4").reshape(grid + (2,))
+        )
+
+
+def _upload(client, path, name="well.h5"):
+    with open(path, "rb") as handle:
+        return client.post(
+            "/inspector",
+            data={"file": (handle, name), "fileTypeSelector": ".h5"},
+            content_type="multipart/form-data",
+        )
+
+
+def test_filter_file_accepts_a_grid_selection(client, tmp_path):
+    """The picker must accept what the reader can read.
+
+    It kept its own copy of the rule, which rejected every grid selection as
+    "not a 1D array" after the reader learned to flatten aligned grids.
+    """
+    pytest.importorskip("h5py")
+    fpath = tmp_path / "well.h5"
+    _write_well_shaped_h5(str(fpath))
+    _upload(client, str(fpath))
+
+    response = client.post(
+        "/filter-file",
+        json={"keys": ["t0_fields/density", "t0_fields/temperature", "t1_fields/velocity"]},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+
+
+def test_filter_file_rejects_fields_on_different_grids(client, tmp_path):
+    pytest.importorskip("h5py")
+    fpath = tmp_path / "well.h5"
+    _write_well_shaped_h5(str(fpath))
+    _upload(client, str(fpath))
+
+    response = client.post(
+        "/filter-file", json={"keys": ["t0_fields/density", "dimensions/x"]}
+    )
+
+    assert response.status_code == 400
+    assert "grid" in response.get_json()["error"]
+
+
+def test_summary_statistics_reports_grid_cells_as_rows(client, tmp_path):
+    """End to end: a grid selection becomes one row per cell with split components."""
+    pytest.importorskip("h5py")
+    fpath = tmp_path / "well.h5"
+    _write_well_shaped_h5(str(fpath))
+    _upload(client, str(fpath))
+    client.post(
+        "/filter-file",
+        json={"keys": ["t0_fields/density", "t1_fields/velocity"]},
+    )
+
+    payload = client.get("/summary-statistics").get_json()
+
+    assert payload["success"] is True
+    assert payload["records_count"] == 1 * 2 * 8 * 10
+    assert payload["numerical_features"] == [
+        "t0_fields/density",
+        "t1_fields/velocity_0",
+        "t1_fields/velocity_1",
+    ]
+
