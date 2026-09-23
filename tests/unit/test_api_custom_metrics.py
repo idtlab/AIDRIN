@@ -178,6 +178,52 @@ _METRIC_RESULTS_SCRIPT = textwrap.dedent(
 )
 
 
+_NULL_COUNT_SCRIPT = textwrap.dedent(
+    """
+    from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+    class CustomDR(BaseDRAgent):
+        def metric(self, **kwargs):
+            return {"null_count": int(self.dataset.isna().sum().sum())}
+
+        def remedy(self, **kwargs):
+            return self.dataset.fillna(0)
+    """
+)
+
+
+def test_run_custom_metric_remedy_diff_returns_before_and_after(tmp_path):
+    """diff=True should re-run metric() on the remedied data and report both
+    results, without changing the on-disk CSV output the non-diff path relies
+    on."""
+    script_path = tmp_path / "null_count_audit.py"
+    script_path.write_text(_NULL_COUNT_SCRIPT)
+    file_path = tmp_path / "data.csv"
+    pd.DataFrame({"age": [25, None, 35, 40]}).to_csv(file_path, index=False)
+    output_dir = tmp_path / "remedy_out"
+
+    result = run_custom_metric_remedy(
+        str(script_path), str(file_path), output_dir=str(output_dir), diff=True
+    )
+
+    assert result["before"] == {"null_count": 1}
+    assert result["after"] == {"null_count": 0}
+    assert result["_saved_to"].endswith(".csv")
+    assert os.path.exists(result["_saved_to"])
+
+
+def test_run_custom_metric_remedy_without_diff_returns_path_string(tmp_path, script_path):
+    """Default (diff=False) behavior must stay exactly what it was before the
+    diff option existed, since it's shared with the MCP tool."""
+    file_path = _write_csv(tmp_path)
+    output_dir = tmp_path / "remedy_out"
+
+    result = run_custom_metric_remedy(script_path, file_path, output_dir=str(output_dir))
+
+    assert isinstance(result, str)
+    assert result.endswith(".csv")
+
+
 def test_run_custom_metric_remedy_passes_metric_results_to_remedy(tmp_path):
     """The web UI runs metric() before remedy() and passes the results in
     (web/routes/custom.py), matching the contract documented in the
