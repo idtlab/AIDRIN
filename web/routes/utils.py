@@ -14,7 +14,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from flask import current_app, jsonify, redirect, request, session, url_for
 
-from aidrin.file_handling.file_parser import _SELECTION_FILE_TYPES, read_file
+from aidrin.file_handling.file_parser import (
+    _SELECTION_FILE_TYPES,
+    ReaderReturnedNone,
+    read_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +105,14 @@ def load_dataframe(file_info):
     tuple
         ``(DataFrame, None)`` on success, or ``(None, message)`` on failure.
     """
-    result = read_file(file_info)
+    try:
+        result = read_file(file_info)
+    except ReaderReturnedNone as exc:
+        # Formats that refuse an ambiguous input raise instead of returning
+        # None (a multi-array Zarr store, and HDF5 once it joins that set).
+        # Collapse it into the same failure shape as the rest of this wrapper,
+        # which route handlers rely on, rather than letting it reach Flask.
+        result = str(exc)
     if isinstance(result, pd.DataFrame):
         return result, None
     raw = result if isinstance(result, str) else None
@@ -130,6 +141,14 @@ def _friendly_read_error(raw, file_info):
         )
     if "file not found" in text:
         return "The uploaded file could not be found. Please upload it again."
+    if "selected keys" in text or "selection" in text or "multi_dataset" in text:
+        # The file is readable; it just holds several datasets that cannot be
+        # merged into one table. Saying "corrupted" here would be wrong.
+        return (
+            f"This {label} holds multiple datasets that cannot be combined into "
+            "one table. Select one or more compatible datasets (same length) to "
+            "analyze."
+        )
     return (
         f"The {label} could not be read. It may be empty, corrupted, or in an "
         "unexpected format."

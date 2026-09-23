@@ -25,7 +25,8 @@ Quick Start
    aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
 
 Local web upload does not accept ``.zarr`` directories; use the CLI or library. Multi-dimensional
-grids are not auto-flattened — select 1D (or a single 2D) arrays only. See
+grids are not auto-flattened — select 1D (or a single 2D) arrays only. Unsure whether an HDF5/Zarr
+file is really one table? Run ``aidrin inventory <file>`` first — see :ref:`cli_inventory`. See
 :ref:`cli_installation` to install Zarr support.
 
 ----
@@ -98,6 +99,9 @@ prints a compact summary.
    # Override the format inferred from the file extension
    aidrin data-quality /path/to/data --file-type .parquet
 
+   # Write the JSON report to a file (in addition to stdout)
+   aidrin data-quality /path/to/sample_dataset.csv -o /path/to/reports/data_quality.json
+
 ``aidrin summarize``
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -113,6 +117,60 @@ and cardinality. Useful for deciding which columns to feed to other metrics.
 
    # Cap how many features are described
    aidrin summarize /path/to/sample_dataset.csv --max-features 20
+
+   # Write the JSON report to a file (in addition to stdout, even with --summary)
+   aidrin summarize /path/to/sample_dataset.csv -o /path/to/reports/summary.json
+
+.. _cli_inventory:
+
+``aidrin inventory``
+~~~~~~~~~~~~~~~~~~~~
+
+Classifies an HDF5 (``.h5``) or Zarr (``.zarr``) file's on-disk layout and lists its
+datasets/arrays, without reading the file as a table. Every other supported format (CSV,
+Parquet, Excel, JSON, NumPy) is always read as a single table and has no ambiguous layout to
+vet, so ``inventory`` only applies to HDF5/Zarr.
+
+.. code-block:: bash
+
+   aidrin inventory /path/to/file.h5
+   aidrin inventory /path/to/store.zarr
+
+   # Write the JSON report to a file (in addition to stdout)
+   aidrin inventory /path/to/file.h5 -o /path/to/reports/inventory.json
+
+The ``type`` field in the output is one of:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Layout
+     - Meaning
+   * - ``empty``
+     - No readable datasets/arrays.
+   * - ``single_dataset``
+     - One dataset/array; ``run``/``data-quality``/``summarize`` auto-read it.
+   * - ``multi_dataset``
+     - Incompatible or grouped layout; an explicit ``--selected-keys`` choice is required.
+   * - ``legacy``
+     - Multiple datasets/arrays that share a compatible shape and are auto-read as columns of
+       one table. Always sanity-check the dataset list for this layout — an incidental shape
+       match does not guarantee the datasets represent one table (e.g. unrelated simulation
+       fields on a shared mesh).
+
+If a file's layout is ``multi_dataset``, ``run``, ``data-quality``, and ``summarize`` refuse to
+guess and exit non-zero, naming the layout and pointing back at ``aidrin inventory``:
+
+.. code-block:: bash
+
+   $ aidrin data-quality /path/to/ragged.h5
+   Error: .h5 store '/path/to/ragged.h5' has layout 'multi_dataset' and needs an explicit
+   dataset selection. Run `aidrin inventory /path/to/ragged.h5` to see the dataset/array list,
+   then pass --selected-keys (CLI) or selected_keys=[...] (library) with compatible paths.
+
+   $ aidrin data-quality /path/to/ragged.h5 --selected-keys a,b
+   {...}
 
 ``aidrin run``
 ~~~~~~~~~~~~~~
@@ -188,6 +246,9 @@ Examples:
    aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
    aidrin run differential-privacy /path/to/sample_dataset.csv "age,income" 1.0
 
+   # Write the JSON report to a file (in addition to stdout)
+   aidrin run completeness /path/to/sample_dataset.csv -o /path/to/reports/completeness.json
+
 For custom criteria outliers, ``--rule``, ``rules-json``, and ``--rules-file``
 describe expected valid values. Values that do not satisfy those conditions are
 flagged as outliers. A rules file is a UTF-8 JSON array using the same rule
@@ -217,6 +278,18 @@ The CLI, batch runner, and headless Python API intentionally do not apply the
 web server's configured root allowlist. They run with the invoking account's
 filesystem permissions and can inspect any path that account can access.
 
+``differential-privacy`` always writes the noised data to disk unless told not to. By default it
+writes ``./noisy/noisy_data.csv`` relative to the current directory and echoes the resolved path
+back as ``"Noisy file path"`` in the result; ``--noisy-output <path>`` writes there instead, and
+``--no-noisy-output`` skips the write entirely:
+
+.. code-block:: bash
+
+   aidrin run differential-privacy /path/to/sample_dataset.csv "age,income" 1.0 \
+     --noisy-output /path/to/reports/noisy.csv
+
+   aidrin run differential-privacy /path/to/sample_dataset.csv "age,income" 1.0 --no-noisy-output
+
 Options available on all ``run`` subcommands:
 
 .. list-table::
@@ -227,6 +300,8 @@ Options available on all ``run`` subcommands:
      - Description
    * - ``-v``, ``--verbose``
      - Show progress output while the metric runs
+   * - ``-o``, ``--output``
+     - Path to write the JSON report to (in addition to stdout)
 
 ``aidrin batch``
 ~~~~~~~~~~~~~~~~
@@ -239,11 +314,15 @@ Runs a set of metrics defined in a JSON or YAML config file. Useful for reproduc
    aidrin batch /path/to/my_project/batch_config.yaml -v          # verbose
    aidrin batch /path/to/my_project/batch_config.yaml --viz       # keep visualization data
 
-Results are printed as JSON to stdout. Redirect to a file to save:
+Results are printed as JSON to stdout, and can also be written to a file with ``-o``/``--output``:
 
 .. code-block:: bash
 
-   aidrin batch /path/to/my_project/batch_config.yaml > results.json
+   aidrin batch /path/to/my_project/batch_config.yaml -o /path/to/reports/results.json
+
+A shell redirect (``> results.json``) also works, but the path is then invisible to any tool
+that only records the command line, rather than a recorded argument of the run — prefer
+``-o``/``--output`` when that matters.
 
 **Config file format (YAML):**
 
@@ -300,7 +379,7 @@ list or comma-separated targets:
 
 .. code-block:: bash
 
-   aidrin batch /path/to/my_project/fairness_config.yaml > fairness_results.json
+   aidrin batch /path/to/my_project/fairness_config.yaml -o fairness_results.json
 
 .. _cli_add_custom_module:
 
