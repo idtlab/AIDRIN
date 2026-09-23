@@ -47,6 +47,16 @@ def _with_resolutions(file_info, resolutions):
         ("not_a_real_unit_zz", "invalid"),
         ("m//s", "invalid"),
         ("g", "ambiguous"),
+        ("", "missing"),
+        ("   ", "missing"),
+        ("N/A", "ambiguous"),
+        ("none", "ambiguous"),
+        ("nA", "valid"),
+        ("m**-2", "valid"),
+        ("m**1000", "invalid"),
+        ("10**10**8", "invalid"),
+        ("(9*9*9*9*9*9*9*9)**(9*9*9*9*9*9*9*9)", "invalid"),
+        ("m" * 300, "invalid"),
     ],
 )
 def test_unit_parser_classifies_supported_and_problem_units(unit, status):
@@ -411,6 +421,27 @@ def test_native_hdf5_discovery_reads_units_without_values(tmp_path):
         "target_type": "hdf5_dataset",
         "unit_candidates": [{"source": "native:unit", "unit": "kelvin"}],
     }]
+
+
+def test_empty_and_placeholder_native_units_are_not_ready(tmp_path):
+    path = tmp_path / "placeholders.h5"
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("empty", shape=(1,), dtype="f8").attrs["units"] = ""
+        h5.create_dataset("empty_with_name (m)", shape=(1,), dtype="f8").attrs["units"] = " "
+        h5.create_dataset("placeholder", shape=(1,), dtype="f8").attrs["units"] = "N/A"
+
+    sidecar = calculate_variable_unit_validation((str(path), path.name, ".h5"))
+    findings = {variable["name"]: variable["finding"] for variable in sidecar["variables"]}
+
+    assert findings["/empty"]["status"] == "missing"
+    assert findings["/empty_with_name (m)"]["status"] == "valid"
+    assert findings["/placeholder"]["status"] == "ambiguous"
+
+
+def test_costly_unit_in_column_name_is_rejected_quickly(tmp_path):
+    sidecar = calculate_variable_unit_validation(_csv(tmp_path, ["x (10**10**10)"]))
+
+    assert sidecar["variables"][0]["finding"]["status"] == "invalid"
 
 
 def test_hdf5_selected_keys_limit_logical_schema(tmp_path):

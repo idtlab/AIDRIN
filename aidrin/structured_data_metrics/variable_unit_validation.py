@@ -12,7 +12,8 @@ import h5py
 import pandas as pd
 import pyarrow.parquet as pq
 from celery import shared_task
-from pint import UnitRegistry
+from pint import UnitRegistry, pint_eval
+from pint.util import string_preprocessor
 
 from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
@@ -33,6 +34,16 @@ _UNDERSCORE_EXPONENT = re.compile(r"^(?P<unit>.+?)(?P<exponent>\d+)$")
 _READY_STATUSES = {"valid", "dimensionless", "not_applicable"}
 _RESOLUTION_KINDS = {"unit", "dimensionless", "not_applicable", "unresolved"}
 _RESOLUTION_SOURCES = {"detected", "user", "none"}
+# Pint evaluates integer powers exactly before rejecting scaling factors, so
+# ``10**10**8`` would hang the audit. Bound the input before Pint sees it.
+_MAX_UNIT_LENGTH = 256
+_MAX_UNIT_EXPONENT = 100
+# Common "no unit" placeholders that Pint would otherwise accept (N/A parses
+# as newton per ampere). Case-sensitive so real units such as nA still parse.
+_UNIT_PLACEHOLDERS = {
+    "N/A", "n/a", "NA", "na", "none", "None", "NONE", "null", "NULL",
+    "nan", "NaN", "NAN", "-", "--", "?", "unknown", "Unknown", "UNKNOWN",
+}
 
 _UNIT_SUGGESTION_GROUPS = (
     {
@@ -377,9 +388,58 @@ def _schema_fingerprint(targets: List[Dict[str, Any]]) -> str:
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
+class _UnitTooCostly(ValueError):
+    pass
+
+
+def _check_unit_cost(expression: str) -> None:
+    """Dry-run Pint's parse tree with floats and reject oversized exponents."""
+    if len(expression) > _MAX_UNIT_LENGTH:
+        raise _UnitTooCostly(f"Unit is longer than {_MAX_UNIT_LENGTH} characters.")
+
+    def power(base, exponent):
+        if abs(exponent) > _MAX_UNIT_EXPONENT:
+            raise _UnitTooCostly(f"Unit exponents must be at most {_MAX_UNIT_EXPONENT} in magnitude.")
+        return base ** exponent
+
+    def token_value(token):
+        try:
+            return float(token.string)
+        except ValueError:
+            return 1.0  # unit names only matter as operands here
+
+    # Mirror pint.util.ParserHelper.from_string so the dry run sees the same tree.
+    text = string_preprocessor(expression).replace("[", "__obra__").replace("]", "__cbra__")
+    try:
+        tree = pint_eval.build_eval_tree(pint_eval.tokenizer(text))
+        tree.evaluate(token_value, {**pint_eval._BINARY_OPERATOR_MAP, "**": power})
+    except _UnitTooCostly:
+        raise
+    except OverflowError:
+        raise _UnitTooCostly("Unit expression evaluates to an out-of-range number.")
+    except Exception:
+        return  # malformed input: let Pint report the real syntax error
+
+
 def _parse_unit(unit: str) -> Dict[str, Any]:
     original = unit
     stripped = unit.strip()
+    if not stripped:
+        return {
+            "status": "missing",
+            "original_unit": original,
+            "normalized_unit": None,
+            "dimensionality": None,
+            "message": "Unit metadata is empty.",
+        }
+    if stripped in _UNIT_PLACEHOLDERS:
+        return {
+            "status": "ambiguous",
+            "original_unit": original,
+            "normalized_unit": None,
+            "dimensionality": None,
+            "message": f"'{stripped}' is a placeholder, not a unit. Mark the variable dimensionless or units not applicable, or add a unit.",
+        }
     if stripped == "g":
         return {
             "status": "ambiguous",
@@ -400,6 +460,16 @@ def _parse_unit(unit: str) -> Dict[str, Any]:
     # A trailing ``[g]`` name annotation explicitly means acceleration rather
     # than the ambiguous bare symbol ``g``. All other input goes directly to Pint.
     parse_value = "standard_gravity" if stripped == "[g]" else stripped
+    try:
+        _check_unit_cost(parse_value)
+    except _UnitTooCostly as exc:
+        return {
+            "status": "invalid",
+            "original_unit": original,
+            "normalized_unit": None,
+            "dimensionality": None,
+            "message": str(exc),
+        }
     try:
         parsed = _UNIT_REGISTRY.Unit(parse_value)
     except Exception as exc:
@@ -596,7 +666,8 @@ def _record_for_target(
     target: Dict[str, Any],
     supplied_resolution: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    candidates = list(target.get("unit_candidates", []))
+    # Empty unit attributes (common in HDF5/netCDF) declare nothing.
+    candidates = [candidate for candidate in target.get("unit_candidates", []) if candidate["unit"].strip()]
     parsed_candidates = [(candidate, _parse_unit(candidate["unit"])) for candidate in candidates]
     observed = [_public_observation(candidate, parsed) for candidate, parsed in parsed_candidates]
     warnings = []
