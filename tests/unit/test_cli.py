@@ -787,13 +787,22 @@ class TestCustomMetricMultiFormat(unittest.TestCase):
             "run", "custom", self.script, self.parquet, "remedy", "--file-type", "parquet", "--diff"
         )
         self.assertEqual(code, 0, stderr)
-        self.assertIn("Remedied data saved to:", stdout)
-        json_part, _, saved_line = stdout.partition("\n\nRemedied data saved to:")
-        data = json.loads(json_part)
+        # stdout must be pure JSON so downstream tools can parse it; the
+        # human-readable note goes to stderr.
+        data = json.loads(stdout)
         self.assertEqual(data["before"], {"row_count": 5})
         self.assertEqual(data["after"], {"row_count": 5})
-        saved_path = saved_line.strip()
-        self.assertTrue(os.path.exists(saved_path))
+        self.assertTrue(os.path.exists(data["remedied_file"]))
+        self.assertIn("Remedied data saved to:", stderr)
+
+    def test_run_custom_remedy_with_diff_flag_honors_output(self):
+        out_path = os.path.join(self.tmpdir, "diff.json")
+        stdout, stderr, code = _run_cli(
+            "run", "custom", self.script, self.parquet, "remedy", "--file-type", "parquet", "--diff", "-o", out_path
+        )
+        self.assertEqual(code, 0, stderr)
+        with open(out_path, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), json.loads(stdout))
 
     def test_run_custom_metric_with_diff_flag_errors(self):
         """--diff only makes sense alongside the remedy action."""

@@ -1159,9 +1159,11 @@ def main() -> None:
                         **_build_run_kwargs(args),
                     )
                     if diff:
-                        saved_to = result.pop("_saved_to")
-                        _dump_result(result)
-                        print(f"\nRemedied data saved to: {saved_to}")
+                        result["remedied_file"] = result.pop("_saved_to")
+                        rounded = _round_floats(result)
+                        _write_output_file(rounded, getattr(args, "output", None))
+                        _dump_result(rounded)
+                        sys.stderr.write(f"Remedied data saved to: {result['remedied_file']}\n")
                     else:
                         print(f"Remedied data saved to: {result}")
                     return
