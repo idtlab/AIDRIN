@@ -38,6 +38,7 @@ PANEL_TEMPLATE_FILE = {
     "fairness": "_fairness.html",
     "privacy-preservation": "_privacy_preservation.html",
     "hipaa-compliance": "_hipaa_compliance.html",
+    "variable-unit-validation": "_variable_unit_validation.html",
     "fair-assessment": "_fair_assessment.html",
 }
 

@@ -35,6 +35,7 @@ dependencies = [
     "pyyaml>=6.0",
     "pyarrow>=15.0.0",
     "weasyprint>=62.0",
+    "pint>=0.24.4,<0.26",
 ]
 
 [project.urls]
@@ -109,6 +110,7 @@ dev = [
     # Inspects the rendered readiness PDF (pages, text, embedded images) in
     # tests/integration/test_readiness_pdf_render.py.
     "pypdf>=4.0",
+    "jsonschema>=4.0",
 ]
 docs = [
     "sphinx==8.1.3",
@@ -157,6 +159,7 @@ dev = [
     # Inspects the rendered readiness PDF (pages, text, embedded images) in
     # tests/integration/test_readiness_pdf_render.py.
     "pypdf>=4.0",
+    "jsonschema>=4.0",
 ]
 docs = [
     "sphinx==8.1.3",

@@ -327,7 +327,7 @@ def test_metrics_returns_every_recommendable_metric(client):
     data = response.get_json()
     returned = {entry["metric"] for entry in data["metrics"]}
     assert returned == all_metric_keys()
-    assert len(data["metrics"]) == 29
+    assert len(data["metrics"]) == 30
 
 
 def test_metrics_entries_carry_the_documented_shape(client):

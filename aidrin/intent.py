@@ -108,6 +108,7 @@ METRIC_KEYS: Set[str] = {
     "multiple_attribute_risk",
     "differential_privacy",
     "hipaa_compliance",
+    "variable_unit_validation",
 }
 
 # Exposed by the web UI but absent from METRIC_REGISTRY.
@@ -159,6 +160,7 @@ DISPLAY_NAMES: Dict[str, str] = {
     "multiple_attribute_risk": "Multiple Attribute Risk",
     "differential_privacy": "Differential Privacy",
     "hipaa_compliance": "HIPAA Compliance",
+    "variable_unit_validation": "Unit Metadata Audit",
     "fair_assessment": "FAIR Assessment",
     "conditional_demographic_disparity": "Conditional Demographic Disparity",
 }
@@ -194,6 +196,7 @@ DESCRIPTIONS: Dict[str, str] = {
     "multiple_attribute_risk": "Multiple attribute Markov-model risk scores.",
     "differential_privacy": "Differentially private noise statistics for selected columns.",
     "hipaa_compliance": "Scan columns for HIPAA-regulated PHI (SSN, email, phone, IP, URLs, medical IDs, postal codes).",
+    "variable_unit_validation": "Audit unit metadata for every logical variable and apply an optional canonical sidecar.",
     "fair_assessment": WEB_ONLY["fair_assessment"]["description"],
     "conditional_demographic_disparity": WEB_ONLY["conditional_demographic_disparity"]["description"],
 }
@@ -264,6 +267,7 @@ PANEL_BY_METRIC: Dict[str, str] = {
     "multiple_attribute_risk": "privacy-preservation",
     "differential_privacy": "privacy-preservation",
     "hipaa_compliance": "hipaa-compliance",
+    "variable_unit_validation": "variable-unit-validation",
     "fair_assessment": "fair-assessment",
 }
 
@@ -304,6 +308,7 @@ CHECKBOX_BY_METRIC: Dict[str, Optional[str]] = {
     "multiple_attribute_risk": "multiple attribute risk score",
     "differential_privacy": "differential privacy",
     "hipaa_compliance": "hipaa identifier scan",
+    "variable_unit_validation": "variable_unit_validation",
     "fair_assessment": None,
 }
 
@@ -317,6 +322,7 @@ PANEL_LABELS: Dict[str, str] = {
     "fairness": "Fairness & Bias",
     "privacy-preservation": "Privacy Preservation",
     "hipaa-compliance": "HIPAA Compliance",
+    "variable-unit-validation": "Unit Metadata Audit",
     "fair-assessment": "FAIR Assessment",
 }
 
