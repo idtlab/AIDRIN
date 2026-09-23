@@ -957,6 +957,11 @@ def main() -> None:
         default="metric",
         help="Run metric (default) or remedy; remedy output is always saved as CSV",
     )
+    custom_parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="With the remedy action, also re-run metric() on the remedied data and print before/after results",
+    )
     _configure_minimal_run_args(custom_parser)
 
     batch_parser = subparsers.add_parser("batch", help="Run metrics from config file (JSON or YAML)")
@@ -1140,15 +1145,27 @@ def main() -> None:
 
             # Custom metrics/remedies
             if args.metric == "custom":
+                diff = getattr(args, "diff", False)
+                if diff and args.action != "remedy":
+                    sys.stderr.write("Error: --diff is only valid with the remedy action\n")
+                    sys.exit(2)
                 if args.action == "remedy":
-                    output_path = run_custom_metric_remedy(
+                    result = run_custom_metric_remedy(
                         args.name,
                         args.file_path,
                         output_dir=None,
                         file_type=getattr(args, "file_type", None),
+                        diff=diff,
                         **_build_run_kwargs(args),
                     )
-                    print(f"Remedied data saved to: {output_path}")
+                    if diff:
+                        result["remedied_file"] = result.pop("_saved_to")
+                        rounded = _round_floats(result)
+                        _write_output_file(rounded, getattr(args, "output", None))
+                        _dump_result(rounded)
+                        sys.stderr.write(f"Remedied data saved to: {result['remedied_file']}\n")
+                    else:
+                        print(f"Remedied data saved to: {result}")
                     return
                 result = executor.run_metric(
                     args.name,
