@@ -11,6 +11,9 @@ let activePanel = "data-overview";
 let codeMirrorEditor = null;
 let lastMetricResult = null; // Store last result for JSON download
 let _readinessReportLoaded = false; // Lazy-load guard for the Readiness Report panel
+let _intentRestored = false; // Lazy-load guard for restoring cached intent recommendations
+let _intentSubmitInFlight = false; // Re-entrancy guard: one /intent/recommend request at a time
+let _lastIntentPayload = null; // Last /intent/recommend or /intent/profile response, for the profile save editor
 
 const _READINESS_REPORT_SECTIONS = [
   "dataset-overview",
@@ -456,6 +459,11 @@ function showPanel(panelId, pushHistory) {
 
   // Check for cached results and restore them
   _restoreCachedResult(panelId);
+
+  if (panelId === "intent" && !_intentRestored) {
+    _intentRestored = true;
+    _restoreIntentFromCache();
+  }
 
   // Highlight active sidebar item
   document.querySelectorAll(".sidebar-metric-item").forEach((btn) => {
@@ -1869,6 +1877,7 @@ function renderGlobusSummary(data) {
   }
 
   _unlockGlobusSidebar();
+  maybeShowIntentModal();
 }
 
 function _unlockGlobusSidebar() {
@@ -4694,6 +4703,11 @@ function selectHdf5Datasets(paths) {
     .then((r) => r.json())
     .then((resp) => {
       if (resp.success) {
+        // The server cleared session["intent"] for this dataset switch, but
+        // this re-runs initWorkspace() without a page reload, so the
+        // page-load "already asked" flag would otherwise stay stuck true and
+        // the modal would never reopen for the new dataset.
+        window.AIDRIN_INTENT_ASKED = false;
         initWorkspace();
       } else if (container) {
         const p = document.createElement("p");
@@ -4884,6 +4898,8 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
         if (data.histograms) {
           renderWorkspaceHistograms(data.histograms, histogramsId);
         }
+
+        maybeShowIntentModal();
       } else if (data.needs_dataset_selection && data.datasets?.length) {
         renderHdf5DatasetPicker(container, data);
       } else {
@@ -7016,6 +7032,7 @@ function initWorkspace() {
   // Dataset switches (e.g. HDF5) re-run init without a page reload. Drop stale
   // readiness state so the next open fetches the new dataset, not the previous one.
   _readinessReportLoaded = false;
+  _intentRestored = false;
   for (const key of Object.keys(_readinessVizCache)) {
     delete _readinessVizCache[key];
   }
@@ -7088,6 +7105,13 @@ function initWorkspace() {
     document.getElementById("fair-file"),
     document.getElementById("fairFileLabel"),
     document.getElementById("fairUploadIcon"),
+  );
+
+  // Handle intent profile-loader file input UI
+  _wireFairFileInput(
+    document.getElementById("intent-profile-file"),
+    document.getElementById("intentProfileFileLabel"),
+    document.getElementById("intentUploadIcon"),
   );
 }
 
@@ -7554,6 +7578,8 @@ function saveLLMSettings() {
     .then((data) => {
       if (data.success) {
         window.AIDRIN_LLM_ENABLED = true;
+        syncIntentNotesVisibility();
+        syncAiBannerVisibility();
         if (statusEl) {
           statusEl.className =
             "mt-3 text-sm text-green-600 dark:text-green-400";
@@ -7582,7 +7608,854 @@ function saveLLMSettings() {
 function disconnectLLM() {
   fetch("/llm/disconnect", { method: "POST" }).then(() => {
     window.AIDRIN_LLM_ENABLED = false;
+    syncIntentNotesVisibility();
+    syncAiBannerVisibility();
     closeLLMSettings();
     showToast("LLM disconnected", "info");
+  });
+}
+
+// ==================== Intent & Recommendations ====================
+
+/**
+ * Open the intent modal once per dataset, from the point where the summary is
+ * genuinely ready. Never called before a dataset exists. This is the only
+ * way the modal opens -- once window.AIDRIN_INTENT_ASKED is set, nothing
+ * reopens it for that dataset.
+ */
+function maybeShowIntentModal() {
+  if (window.AIDRIN_INTENT_ASKED) return;
+  const modal = document.getElementById("intent-modal");
+  if (!modal) return;
+  window.AIDRIN_INTENT_ASKED = true;
+  _prefillIntentModalFromLastPayload();
+  const status = document.getElementById("intent-modal-status");
+  if (status) {
+    status.textContent = "";
+    status.className = "mt-3 text-sm hidden";
+    delete status.dataset.kind;
+  }
+  modal.classList.remove("hidden");
+}
+
+function closeIntentModal() {
+  const modal = document.getElementById("intent-modal");
+  if (modal) modal.classList.add("hidden");
+  _resetCustomProfileOption();
+}
+
+function _selectedIntents(formId) {
+  const form = document.getElementById(formId);
+  if (!form) return [];
+  // "__custom__" (aidrin.intent.CUSTOM_PROFILE_OPTION_VALUE) is the goal
+  // lists' extra "Other / load a custom profile" checkbox -- not a real
+  // intent, just a trigger that reveals the profile file loader (see
+  // toggleCustomProfileOption at the end of this file). It must never reach
+  // /intent/recommend as a selected goal.
+  return Array.from(form.querySelectorAll('input[name="intent"]:checked'))
+    .map((el) => el.value)
+    .filter((value) => value !== "__custom__");
+}
+
+/**
+ * The "Get recommendations" button is always clickable (submitIntent()
+ * handles the empty case with a visible message), so this no longer
+ * disables anything. It only clears a stale VALIDATION message once the
+ * user has made a valid selection, so the warning disappears as soon as
+ * they tick a goal or type a note. An error message (data-kind="error")
+ * must be left alone here — it needs to stay visible until the user starts
+ * another submit, not vanish the instant the promise chain settles.
+ */
+function updateIntentSubmitState() {
+  const notes = (document.getElementById("intent-notes") || {}).value || "";
+  if (_selectedIntents("intent-form").length === 0 && !notes.trim()) return;
+  const status = document.getElementById("intent-modal-status");
+  if (status && status.dataset.kind === "validation") {
+    status.textContent = "";
+    status.className = "mt-3 text-sm hidden";
+    delete status.dataset.kind;
+  }
+}
+
+function skipIntent() {
+  closeIntentModal();
+  fetch("/intent/dismiss", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  }).catch(() => {});
+}
+
+/**
+ * Ask the server which checks this dataset needs. `source` picks which form
+ * to read: the default (modal, "Get recommendations") reads the intent
+ * modal's #intent-form and reports validation/errors inline in
+ * #intent-modal-status; `source === "change"` instead reads the panel's
+ * inline "Change goal" card (#intent-change-form), which has no status area
+ * of its own, so it reports the same cases via the global toast.
+ */
+function submitIntent(source) {
+  const fromChangeForm = source === "change";
+  const formId = fromChangeForm ? "intent-change-form" : "intent-form";
+  const notesId = fromChangeForm ? "intent-change-notes" : "intent-notes";
+  const intents = _selectedIntents(formId);
+  const notes = ((document.getElementById(notesId) || {}).value || "").trim();
+  const status = fromChangeForm
+    ? null
+    : document.getElementById("intent-modal-status");
+
+  if (intents.length === 0 && !notes) {
+    // The notes box is hidden when no LLM is connected (it feeds only the
+    // AI-enhancement layer -- see syncIntentNotesVisibility() at the end of
+    // this file), so telling the user to "describe your plan in the box" is
+    // both wrong (there is no box) and impossible to satisfy in that case.
+    const message = window.AIDRIN_LLM_ENABLED
+      ? "Select at least one goal above, or describe your plan in the box."
+      : "Select at least one goal above.";
+    if (status) {
+      status.className = "mt-3 text-sm text-yellow-700 dark:text-yellow-400";
+      status.textContent = message;
+      status.dataset.kind = "validation";
+    } else if (typeof showToast === "function") {
+      showToast(message, "error");
+    }
+    return Promise.resolve();
+  }
+
+  // Re-entrancy guard: neither the modal's "Get recommendations" button nor
+  // the panel's "Update recommendations" button (wrapped in withSubmitGuard,
+  // which only guards its own button) stop a second click here from firing
+  // two /intent/recommend requests — each a real LLM call when one is
+  // configured.
+  if (_intentSubmitInFlight) return Promise.resolve();
+  _intentSubmitInFlight = true;
+
+  const submitButton = fromChangeForm
+    ? null
+    : document.getElementById("intent-submit");
+  const busyOverlay = fromChangeForm
+    ? null
+    : document.getElementById("intent-modal-busy");
+  if (submitButton) submitButton.disabled = true;
+  if (status) {
+    status.textContent = "";
+    status.className = "mt-3 text-sm hidden";
+    delete status.dataset.kind;
+  }
+  if (busyOverlay) busyOverlay.classList.remove("hidden");
+
+  return fetch("/intent/recommend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ intents: intents, notes: notes }),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.error) {
+        if (status) {
+          status.className =
+            "mt-3 text-sm text-yellow-700 dark:text-yellow-400";
+          status.textContent = data.error;
+          status.dataset.kind = "error";
+        } else if (typeof showToast === "function") {
+          showToast(data.error, "error");
+        }
+        return;
+      }
+      window.AIDRIN_INTENT_ASKED = true;
+      renderIntentRecommendations(data);
+      if (!fromChangeForm) closeIntentModal();
+      // Cards are already rendered from this response; mark the cache as
+      // restored so showPanel's _restoreIntentFromCache() does not re-fetch
+      // and re-render the same content a second time.
+      _intentRestored = true;
+      showPanel("intent");
+    })
+    .catch((err) => {
+      const message = "Could not load recommendations: " + (err.message || err);
+      if (status) {
+        status.className = "mt-3 text-sm text-yellow-700 dark:text-yellow-400";
+        status.textContent = message;
+        status.dataset.kind = "error";
+      } else if (typeof showToast === "function") {
+        showToast(message, "error");
+      }
+      debugLog("Intent recommendation error:", err);
+    })
+    .finally(() => {
+      _intentSubmitInFlight = false;
+      if (busyOverlay) busyOverlay.classList.add("hidden");
+      // The button is only disabled to guard against a double-submit while
+      // a request is in flight; re-enable it now that it has settled, and
+      // clear any stale validation message in case the user fixed things
+      // up while the request was outstanding.
+      if (submitButton) {
+        submitButton.disabled = false;
+        updateIntentSubmitState();
+      }
+    });
+}
+
+/**
+ * Jump to a recommended metric's panel and, when the checkbox that runs it
+ * is known (aidrin/intent.py CHECKBOX_BY_METRIC), scroll to it and apply a
+ * brief highlight. Called from an inline onclick, so this must never throw:
+ * an absent panel, a renamed checkbox, or a missing wrapper should silently
+ * degrade to "just switch panels".
+ */
+function jumpToMetric(panel, inputName) {
+  showPanel(panel);
+  if (!inputName) return;
+
+  requestAnimationFrame(() => {
+    try {
+      const panelEl = document.getElementById("panel-" + panel);
+      const input = panelEl
+        ? panelEl.querySelector('input[name="' + inputName + '"]')
+        : null;
+      if (!input) return;
+
+      const wrapper =
+        input.closest(".checkboxContainerIndividual") ||
+        input.closest("label") ||
+        input;
+
+      const reduceMotion =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (typeof input.scrollIntoView === "function") {
+        input.scrollIntoView({
+          behavior: reduceMotion ? "auto" : "smooth",
+          block: "center",
+        });
+      }
+
+      wrapper.classList.add("intent-metric-highlight");
+      const holdMs = reduceMotion ? 1600 : 1200;
+      setTimeout(() => {
+        wrapper.classList.add("intent-metric-highlight-fade");
+      }, holdMs);
+      setTimeout(
+        () => {
+          wrapper.classList.remove(
+            "intent-metric-highlight",
+            "intent-metric-highlight-fade",
+          );
+        },
+        reduceMotion ? holdMs : holdMs + 1500,
+      );
+    } catch (err) {
+      debugLog("jumpToMetric highlight error:", err);
+    }
+  });
+}
+
+function _intentPriorityBadge(priority) {
+  const isCritical = priority === "critical";
+  const classes = isCritical
+    ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+    : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
+  const label = isCritical ? "Critical" : "Recommended";
+  return `<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${classes}">${label}</span>`;
+}
+
+function _intentCardHtml(rec, profileName, allAiSourced) {
+  // When the LLM is the primary recommender, every card is source "ai" --
+  // badging every row is noise once the page-level AI banner already says
+  // the whole list may be AI-generated, so the per-card badge only earns
+  // its place when some other-sourced cards are mixed in (never true today,
+  // since a run is either fully curated, fully AI, or fully profile-based,
+  // but this keeps the badge meaningful if that ever changes).
+  const aiBadge =
+    rec.source === "ai" && !allAiSourced
+      ? '<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">AI suggested</span>'
+      : "";
+  // Goal-derived cards say which goals asked for it ("For: training,
+  // publishing"); cards from a loaded profile instead say which profile
+  // ("From: Custom profile - <name>"), since recommendations_from_profile
+  // always sets reason_intents to []. profileName is escaped inline here.
+  let reasons = "";
+  if ((rec.reason_intents || []).length) {
+    reasons = `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For: ${escapeHtml(rec.reason_intents.join(", "))}</p>`;
+  } else if (profileName) {
+    reasons = `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">From: ${escapeHtml("Custom profile - " + profileName)}</p>`;
+  }
+  return `
+    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div class="flex flex-wrap items-center gap-2 mb-1">
+        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">${escapeHtml(rec.display_name)}</h4>
+        ${_intentPriorityBadge(rec.priority)}
+        ${aiBadge}
+        <button type="button" onclick="jumpToMetric('${rec.panel}', ${escapeHtml(JSON.stringify(rec.input_name))})"
+                class="ml-auto text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+          ${escapeHtml(rec.panel_label)} &rarr;
+        </button>
+      </div>
+      <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(rec.why)}</p>
+      ${reasons}
+    </div>`;
+}
+
+// Show at most this many critical cards in full; the rest collapse into a
+// compact "also critical" list so a wall of criticals doesn't drown the badge.
+const _INTENT_CRITICAL_CARD_LIMIT = 6;
+
+/**
+ * Compact list for critical recommendations beyond the card limit: display
+ * name plus a jump link only, no rationale paragraph. Reachable without JS
+ * trickery via a native <details> element, and states the overflow count.
+ */
+function _intentCollapsedCriticalHtml(overflow, profileName) {
+  if (!overflow.length) return "";
+  // Kept deliberately compact (no per-item rationale), except a loaded
+  // profile still needs SOME attribution here or an overflowed profile
+  // metric would carry none at all -- goal-derived overflow rows are
+  // unaffected and keep showing nothing extra, as before.
+  const attribution = profileName
+    ? `<div class="text-[10px] text-gray-400 dark:text-gray-500">From: ${escapeHtml("Custom profile - " + profileName)}</div>`
+    : "";
+  const items = overflow
+    .map(
+      (rec) => `
+      <li class="flex items-center justify-between gap-2 py-1">
+        <span class="text-gray-700 dark:text-gray-300">
+          ${escapeHtml(rec.display_name)}
+          ${attribution}
+        </span>
+        <button type="button" onclick="jumpToMetric('${rec.panel}', ${escapeHtml(JSON.stringify(rec.input_name))})"
+                class="shrink-0 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+          ${escapeHtml(rec.panel_label)} &rarr;
+        </button>
+      </li>`,
+    )
+    .join("");
+  return `
+    <details class="mt-2 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
+      <summary class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+        Also critical (${overflow.length} more)
+      </summary>
+      <ul class="mt-1 divide-y divide-gray-100 dark:divide-gray-700">${items}</ul>
+    </details>`;
+}
+
+/** Render the recommendation cards, grouped by priority. */
+function renderIntentRecommendations(data) {
+  _lastIntentPayload = data;
+  const summaryEl = document.getElementById("intent-summary");
+  const cardsEl = document.getElementById("intent-cards");
+  if (!cardsEl) return;
+
+  if (summaryEl) {
+    if (data.profile_name) {
+      summaryEl.innerHTML = `<p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">Profile: ${escapeHtml(data.profile_name)}</p>`;
+    } else {
+      summaryEl.innerHTML = data.summary
+        ? `<p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(data.summary)}</p>`
+        : "";
+    }
+  }
+
+  const recs = data.recommendations || [];
+  const profileName = data.profile_name || "";
+  // Today the LLM is the primary recommender: when it produced this list,
+  // every card is source "ai" (see web/routes/intent.py's
+  // _build_ai_recommendations), so the per-card badge would just repeat
+  // what the page-level AI banner already says. Derive this from the
+  // recommendations themselves, not data.llm_used, so it still degrades
+  // correctly if that ever stops being an all-or-nothing split.
+  const allAiSourced = recs.length > 0 && recs.every((r) => r.source === "ai");
+
+  if (recs.length === 0) {
+    cardsEl.innerHTML =
+      '<p class="text-sm text-gray-500 dark:text-gray-400">No checks matched that goal for this dataset.</p>';
+    return;
+  }
+
+  // Server sorts critical-first, then by how many selected goals agree, then
+  // panel, then metric key — so taking the first N is correct without
+  // re-sorting here.
+  const critical = recs.filter((r) => r.priority === "critical");
+  const rest = recs.filter((r) => r.priority !== "critical");
+  const criticalShown = critical.slice(0, _INTENT_CRITICAL_CARD_LIMIT);
+  const criticalOverflow = critical.slice(_INTENT_CRITICAL_CARD_LIMIT);
+
+  let html = "";
+  if (criticalShown.length) {
+    html +=
+      '<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Check these first</h3>';
+    html += criticalShown
+      .map((rec) => _intentCardHtml(rec, profileName, allAiSourced))
+      .join("");
+    html += _intentCollapsedCriticalHtml(criticalOverflow, profileName);
+  }
+  if (rest.length) {
+    html +=
+      '<h3 class="text-sm font-semibold text-gray-900 dark:text-white pt-2">Worth checking</h3>';
+    html += rest
+      .map((rec) => _intentCardHtml(rec, profileName, allAiSourced))
+      .join("");
+  }
+  cardsEl.innerHTML = html;
+}
+
+/**
+ * Restore a previous recommendation when the panel is reopened.
+ * Deliberately not routed through _panelCacheMap: that path feeds
+ * renderWorkspaceResults(), which expects metric-result shape.
+ */
+function _restoreIntentFromCache() {
+  return fetch("/cached-result/intent")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((resp) => {
+      if (resp && resp.data && resp.data.recommendations) {
+        renderIntentRecommendations(resp.data);
+      } else {
+        // Cache miss (e.g. a dataset switch cleared it): reset to the
+        // template's placeholder rather than leaving the previous dataset's
+        // cards on screen.
+        const summaryEl = document.getElementById("intent-summary");
+        const cardsEl = document.getElementById("intent-cards");
+        if (summaryEl) summaryEl.innerHTML = "";
+        if (cardsEl) {
+          cardsEl.innerHTML =
+            '<p class="text-sm text-gray-500 dark:text-gray-400">' +
+            "No goal selected yet. Use <em>Change goal</em> below to get recommendations." +
+            "</p>";
+        }
+      }
+    })
+    .catch(() => {});
+}
+
+// ==================== Intent Profiles (save / load) ====================
+//
+// A profile is an explicit metric list with priorities, saved to a JSON file
+// the user downloads and later picks back up -- never stored server-side.
+// Mirrors the custom-outlier-rules file pattern in _data_quality.html: read
+// in the browser, never uploaded or saved.
+
+// profile_version is the file-FORMAT compatibility gate the server checks
+// on load (web/routes/intent.py's load_profile()) -- a mismatch is
+// rejected. aidrin_version (set once GET /intent/metrics resolves, below)
+// is provenance only -- which AIDRIN build produced this file -- and is
+// never used to reject a load, so it is fine for it to be missing here if
+// the catalog fetch has not resolved yet.
+const _INTENT_PROFILE_FILE_VERSION = 1;
+
+/**
+ * Two independent load/build flows each carry their own message element --
+ * the modal's loader (#intent-profile-message) and the profile-builder
+ * page's (#profile-builder-message) -- so an error from one never appears
+ * next to the other. elementId defaults to the loader's.
+ */
+function _intentProfileMessage(text, isError, elementId) {
+  const el = document.getElementById(elementId || "intent-profile-message");
+  if (!el) return;
+  if (!text) {
+    el.classList.add("hidden");
+    el.textContent = "";
+    return;
+  }
+  // textContent, not innerHTML: dropped_unknown/dropped_inapplicable entries
+  // echo back user-supplied metric keys from the profile file.
+  el.textContent = text;
+  el.className = isError
+    ? "text-xs text-red-700 dark:text-red-400"
+    : "text-xs text-amber-700 dark:text-amber-300";
+  el.classList.remove("hidden");
+}
+
+function _slugifyIntentProfileName(name) {
+  const slug = (name || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "profile";
+}
+
+// The full metric catalog (aidrin.intent.all_metric_keys(), 29 entries) for
+// the profile builder, fetched once from GET /intent/metrics and cached here
+// -- it never changes at runtime, so there is no reason to refetch it every
+// time the editor opens. Grouped-by-panel already, server-side.
+let _intentMetricCatalog = null;
+
+// The running AIDRIN version, from the same GET /intent/metrics response
+// (see aidrin_version there) -- stamped into a saved profile as provenance
+// by saveIntentProfile(). Empty until that first fetch resolves.
+let _intentAidrinVersion = "";
+
+function _fetchIntentMetricCatalog() {
+  if (_intentMetricCatalog) return Promise.resolve(_intentMetricCatalog);
+  return fetch("/intent/metrics")
+    .then((r) => r.json())
+    .then((data) => {
+      _intentMetricCatalog = data.metrics || [];
+      _intentAidrinVersion = data.aidrin_version || "";
+      return _intentMetricCatalog;
+    });
+}
+
+/**
+ * One row of the profile builder: a canonical flat material-checkbox (input,
+ * then .checkmark, then the label text, as direct children -- matching every
+ * other checkbox in this app, see _data_quality.html/_fairness.html) plus a
+ * priority <select>, the same per-metric control idiom already used for
+ * dropdown choices elsewhere (e.g. the frequency/target selects in
+ * _data_quality.html and _privacy_preservation.html). Neither element is
+ * inside a .checkboxContainer/.checkboxContainerIndividual ancestor, so
+ * main.js's toggleValue() never touches it.
+ */
+function _intentProfileRowHtml(metric, currentPriority) {
+  const checked = currentPriority ? "checked" : "";
+  const priority = currentPriority || "recommended";
+  // The description is shown in-flow behind a <details> toggle (same idiom
+  // as _intentCollapsedCriticalHtml below) rather than the hover .info-icon
+  // tooltip used elsewhere: this list sits inside a scroll container, and a
+  // tooltip that opens with `position: absolute; left: 100%` gets clipped
+  // and appears to flicker there (it cannot escape an overflow:auto
+  // ancestor). The <details> is a sibling of the row div, not nested inside
+  // it, so it never interferes with the checkbox/select this row's own
+  // querySelector calls (saveIntentProfile, _updateIntentProfileSelectedCount)
+  // look for, and expanding it only pushes rows below it down -- it never
+  // shifts rows above.
+  return `
+    <div class="intent-profile-row flex items-center justify-between gap-2 py-1" data-metric="${escapeHtml(metric.metric)}">
+      <label class="material-checkbox min-w-0 flex-1">
+        <input type="checkbox" ${checked} onchange="_updateIntentProfileSelectedCount()" />
+        <span class="checkmark"></span>
+        <span class="truncate">${escapeHtml(metric.display_name)}</span>
+      </label>
+      <select class="shrink-0 text-xs rounded-lg border border-gray-300 bg-white px-1.5 py-1 text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200">
+        <option value="recommended"${priority === "recommended" ? " selected" : ""}>Recommended</option>
+        <option value="critical"${priority === "critical" ? " selected" : ""}>Critical</option>
+      </select>
+    </div>
+    <details class="ml-7 -mt-0.5 mb-1">
+      <summary class="text-xs text-gray-500 dark:text-gray-400 cursor-pointer">What does this check?</summary>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(metric.description || "")}</p>
+    </details>`;
+}
+
+/** Every metric, grouped by panel with a small heading per group (matching
+ * the sub-heading style already used inside a panel, e.g. "Custom criteria
+ * rules" in _data_quality.html). Relies on the server having already sorted
+ * the catalog so same-panel entries are contiguous. */
+function _intentProfileRowsHtml(catalog, currentByMetric) {
+  let html = "";
+  let lastPanelLabel = null;
+  catalog.forEach((metric) => {
+    if (metric.panel_label !== lastPanelLabel) {
+      const spacing = lastPanelLabel === null ? "" : "pt-3";
+      html += `<h4 class="text-sm font-semibold text-gray-900 dark:text-white ${spacing}">${escapeHtml(metric.panel_label)}</h4>`;
+      lastPanelLabel = metric.panel_label;
+    }
+    html += _intentProfileRowHtml(metric, currentByMetric[metric.metric]);
+  });
+  return html;
+}
+
+function _updateIntentProfileSelectedCount() {
+  const countEl = document.getElementById("profile-builder-selected-count");
+  const rowsEl = document.getElementById("profile-builder-rows");
+  if (!countEl || !rowsEl) return;
+  const n = rowsEl.querySelectorAll('input[type="checkbox"]:checked').length;
+  countEl.textContent = `${n} ${n === 1 ? "metric" : "metrics"} selected`;
+}
+
+/**
+ * Open the profile builder page (_panels/_profile_builder.html) over every
+ * recommendable metric, not just the currently rendered recommendations
+ * kept in _lastIntentPayload by renderIntentRecommendations: metrics
+ * already recommended start ticked with their existing priority, everything
+ * else starts unticked so the user can add to the profile, not just pare it
+ * down. When there are no recommendations yet (nothing has been submitted
+ * this dataset), _lastIntentPayload is null and every row starts unticked
+ * -- a blank slate. Reached only from the "Build profile" button in the
+ * Intent panel's "Change goal" card -- this page has no sidebar entry.
+ */
+function openProfileBuilder() {
+  showPanel("profile-builder");
+
+  const nameInput = document.getElementById("profile-builder-name");
+  const rowsEl = document.getElementById("profile-builder-rows");
+  const countEl = document.getElementById("profile-builder-selected-count");
+  if (!nameInput || !rowsEl || !countEl) return;
+
+  _intentProfileMessage("", false, "profile-builder-message");
+  const currentByMetric = {};
+  ((_lastIntentPayload && _lastIntentPayload.recommendations) || []).forEach(
+    (rec) => {
+      currentByMetric[rec.metric] = rec.priority;
+    },
+  );
+  const defaultName =
+    (_lastIntentPayload && _lastIntentPayload.profile_name) || "";
+  nameInput.value = defaultName;
+  countEl.textContent = "Loading metrics…";
+  rowsEl.innerHTML = "";
+
+  _fetchIntentMetricCatalog()
+    .then((catalog) => {
+      if (!catalog.length) {
+        rowsEl.innerHTML =
+          '<p class="text-xs text-red-700 dark:text-red-400">Could not load the metric list.</p>';
+        return;
+      }
+      rowsEl.innerHTML = _intentProfileRowsHtml(catalog, currentByMetric);
+      _updateIntentProfileSelectedCount();
+    })
+    .catch(() => {
+      rowsEl.innerHTML =
+        '<p class="text-xs text-red-700 dark:text-red-400">Could not load the metric list.</p>';
+    });
+}
+
+/** Collect the ticked rows from the profile-builder page and trigger a JSON download. */
+function saveIntentProfile() {
+  const rowsEl = document.getElementById("profile-builder-rows");
+  if (!rowsEl) return;
+
+  const critical = [];
+  const recommended = [];
+  Array.from(rowsEl.querySelectorAll(".intent-profile-row")).forEach((row) => {
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    const metric = row.dataset.metric;
+    if (!checkbox || !checkbox.checked || !metric) return;
+    const select = row.querySelector("select");
+    const priority =
+      select && select.value === "critical" ? "critical" : "recommended";
+    (priority === "critical" ? critical : recommended).push(metric);
+  });
+
+  if (critical.length === 0 && recommended.length === 0) {
+    _intentProfileMessage(
+      "Select at least one metric to save.",
+      true,
+      "profile-builder-message",
+    );
+    return;
+  }
+
+  const nameInput = document.getElementById("profile-builder-name");
+  const name = ((nameInput && nameInput.value) || "").trim().slice(0, 80);
+
+  const profile = {
+    // profile_version: can the server still read this file shape (a
+    // mismatch is rejected). aidrin_version: which AIDRIN build produced
+    // it -- informational provenance only, never a rejection reason, so it
+    // is simply omitted (JSON.stringify drops undefined values) if the
+    // /intent/metrics fetch has not resolved yet.
+    profile_version: _INTENT_PROFILE_FILE_VERSION,
+    aidrin_version: _intentAidrinVersion || undefined,
+    name: name || "Untitled profile",
+    critical: critical,
+    recommended: recommended,
+  };
+
+  const blob = new Blob([JSON.stringify(profile, null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${_slugifyIntentProfileName(name)}.aidrin-profile.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+
+  _intentProfileMessage("", false, "profile-builder-message");
+}
+
+/**
+ * Read a profile JSON file chosen by the user (never uploaded), POST it to
+ * /intent/profile, and render whatever comes back. Three failure modes are
+ * handled distinctly and visibly: an unreadable file, invalid JSON, and a
+ * 400 from the server. The input is reset in every case so re-picking the
+ * same file fires the change event again.
+ */
+function loadIntentProfile(inputEl) {
+  const file = inputEl && inputEl.files && inputEl.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onerror = () => {
+    _intentProfileMessage("Could not read the profile file.", true);
+    inputEl.value = "";
+  };
+  reader.onload = () => {
+    let profile;
+    try {
+      profile = JSON.parse(reader.result);
+    } catch (error) {
+      _intentProfileMessage("The profile file must contain valid JSON.", true);
+      inputEl.value = "";
+      return;
+    }
+
+    fetch("/intent/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    })
+      .then((response) =>
+        response.json().then((data) => ({ ok: response.ok, data })),
+      )
+      .then(({ ok, data }) => {
+        if (!ok) {
+          _intentProfileMessage(
+            data.error || "The server rejected this profile.",
+            true,
+          );
+          return;
+        }
+        renderIntentRecommendations(data);
+        showPanel("intent");
+
+        const notes = [];
+        const unknown = data.dropped_unknown || [];
+        const inapplicable = data.dropped_inapplicable || [];
+        if (unknown.length) {
+          notes.push(
+            `${unknown.length} ${unknown.length === 1 ? "entry was" : "entries were"} not recognised: ${unknown.join(", ")}`,
+          );
+        }
+        if (inapplicable.length) {
+          notes.push(
+            `${inapplicable.length} ${inapplicable.length === 1 ? "check does" : "checks do"} not apply to this dataset: ${inapplicable.join(", ")}`,
+          );
+        }
+        // aidrin_version is informational provenance only (see
+        // web/routes/intent.py's load_profile()): a mismatch is surfaced
+        // here as the same mild, non-blocking note as the two cases above,
+        // never as an error, and this is silently skipped when the field
+        // is absent (profiles saved before it existed).
+        if (data.profile_aidrin_version_note) {
+          notes.push(data.profile_aidrin_version_note);
+        }
+        _intentProfileMessage(notes.join(" "), false);
+        if (typeof showToast === "function") {
+          showToast("Loaded profile: " + data.profile_name, "success");
+        }
+      })
+      .catch((error) => {
+        _intentProfileMessage(
+          "Could not load the profile: " + (error.message || error),
+          true,
+        );
+        debugLog("Intent profile load error:", error);
+      })
+      .finally(() => {
+        inputEl.value = "";
+      });
+  };
+  reader.readAsText(file);
+}
+
+// ================ Intent goal list: "Other / custom profile" ================
+//
+// The intent modal's goal list carries an eighth, hard-coded checkbox --
+// "Other / load a custom profile" -- alongside the seven real intents. It is
+// not a real intent key (see _selectedIntents' filter above and
+// aidrin.intent.CUSTOM_PROFILE_OPTION_VALUE); ticking it reveals
+// #intent-modal-custom-slot, which holds only the JSON file loader -- the
+// modal is the sole place a saved profile can be loaded from. Building a
+// profile lives on the standalone profile-builder page instead
+// (openProfileBuilder() above), never in the modal.
+
+/** Show or hide #intent-modal-custom-slot. Safe to call even if it is absent. */
+function toggleCustomProfileOption(checked) {
+  const slot = document.getElementById("intent-modal-custom-slot");
+  if (!slot) return;
+  slot.classList.toggle("hidden", !checked);
+}
+
+/** Defensive cleanup: uncheck "Other" in the intent form and hide its slot,
+ * so closing the modal never leaves the loader visible under a checkbox
+ * that is no longer ticked. */
+function _resetCustomProfileOption() {
+  const form = document.getElementById("intent-form");
+  const checkbox = form
+    ? form.querySelector('input[name="intent"][value="__custom__"]')
+    : null;
+  if (checkbox) checkbox.checked = false;
+  toggleCustomProfileOption(false);
+}
+
+/**
+ * Prefill the intent modal from whatever the panel is currently showing
+ * (_lastIntentPayload, set by renderIntentRecommendations): tick the goals
+ * that produced the current recommendations, restore the notes text, and if
+ * the current result came from a loaded profile, tick "Other / load a
+ * custom profile" too. A first-ever open has no payload yet, so every field
+ * is left at its blank-slate default.
+ */
+function _prefillIntentModalFromLastPayload() {
+  const form = document.getElementById("intent-form");
+  if (!form) return;
+
+  const payload = _lastIntentPayload;
+  const intents = (payload && payload.intents) || [];
+  const isFromProfile = !!(payload && payload.profile_name);
+
+  form.querySelectorAll('input[name="intent"]').forEach((checkbox) => {
+    checkbox.checked =
+      checkbox.value === "__custom__"
+        ? isFromProfile
+        : intents.indexOf(checkbox.value) !== -1;
+  });
+
+  const notes = document.getElementById("intent-notes");
+  if (notes) notes.value = (payload && payload.notes) || "";
+
+  toggleCustomProfileOption(isFromProfile);
+  updateIntentSubmitState();
+}
+
+// ================ Intent notes: hide when no LLM is connected ================
+//
+// The intent modal's and the "Change goal" card's "Anything else we should
+// know?" textareas feed only web.llm.recommend_for_intent (see
+// web/routes/intent.py's recommend()): with no LLM configured, notes are
+// accepted by the server but never read by anything, so showing the field
+// is misleading. Both templates render two mutually exclusive siblings for
+// this -- an ".intent-notes-field" wrapper around the textarea and an
+// ".intent-notes-llm-notice" pointing at the AI Explanation Settings modal
+// -- and this toggles between them from the one flag the rest of the app
+// already uses for "is an LLM connected", window.AIDRIN_LLM_ENABLED (set at
+// page load from llm_available/llm_configured, and flipped at runtime by
+// saveLLMSettings()/disconnectLLM() with no reload).
+
+/**
+ * Show the notes field(s) when an LLM is connected, otherwise show the
+ * "connect an AI" notice in their place. Called once at page load (see
+ * inspector.html) and again whenever window.AIDRIN_LLM_ENABLED changes, so a
+ * user who connects an LLM mid-session sees the field appear without
+ * reloading.
+ */
+/**
+ * Show/hide the fixed AI banner and keep #main-content's top padding matched to
+ * it, so connecting or disconnecting a provider does not require a reload and
+ * never leaves the first panel tucked under the banner.
+ */
+function syncAiBannerVisibility() {
+  const enabled = !!window.AIDRIN_LLM_ENABLED;
+  const banner = document.getElementById("ai-enabled-banner");
+  if (banner) banner.classList.toggle("hidden", !enabled);
+  const main = document.getElementById("main-content");
+  if (main) {
+    main.classList.toggle("pt-[5.75rem]", enabled);
+    main.classList.toggle("pt-14", !enabled);
+  }
+}
+
+function syncIntentNotesVisibility() {
+  const enabled = !!window.AIDRIN_LLM_ENABLED;
+  document.querySelectorAll(".intent-notes-field").forEach((el) => {
+    el.classList.toggle("hidden", !enabled);
+  });
+  document.querySelectorAll(".intent-notes-llm-notice").forEach((el) => {
+    el.classList.toggle("hidden", enabled);
   });
 }
