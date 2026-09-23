@@ -9,6 +9,35 @@ from flask import current_app, session
 from aidrin.file_handling.readers.base_reader import BaseFileReader
 
 
+# Ceiling on the flattened grid table a selection may build, as
+# rows * columns * itemsize. Grids are read exactly at full resolution: a
+# 10-million-cell grid across a dozen fields is well under a gigabyte in single
+# precision and every metric runs over it in seconds, so sampling would trade
+# correctness for nothing. The ceiling only stops a selection whose table
+# genuinely will not fit.
+#
+# This counts the finished table, not the peak while building it. Copies made
+# on the way put real use at roughly twice the figure, so a ceiling set to the
+# memory available will need about half of it.
+_DEFAULT_MAX_GRID_BYTES = 2 * 1024**3
+
+# Largest axis still treated as components rather than grid. A component axis
+# indexes spatial directions or tensor entries, so it is small; anything longer
+# is a dimension of the grid itself.
+_MAX_COMPONENT_DIM = 4
+
+
+def _max_grid_bytes():
+    raw = os.environ.get("AIDRIN_HDF5_MAX_GRID_BYTES")
+    if not raw:
+        return _DEFAULT_MAX_GRID_BYTES
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return _DEFAULT_MAX_GRID_BYTES
+    return value if value > 0 else _DEFAULT_MAX_GRID_BYTES
+
+
 class hdf5Reader(BaseFileReader):
     def __init__(self, file_path: str, logger, fill_values=None, selected_keys=None):
         super().__init__(file_path, logger)
@@ -210,11 +239,10 @@ class hdf5Reader(BaseFileReader):
     def _has_grid_datasets(self, datasets):
         """True when any dataset is a grid (ndim >= 3).
 
-        Shape-based, unlike the length heuristics above.  A gridded file (e.g.
-        The Well) whose 1D coordinate arrays happen to share a length -- square
-        grid, or equal step and trajectory counts -- slips past both heuristics
-        and would otherwise be flattened by the legacy path into a ragged
-        object frame.
+        Shape-based, unlike the length heuristics above.  A gridded file whose
+        1D coordinate arrays happen to share a length -- a square grid, or equal
+        step and sample counts -- slips past both heuristics and would otherwise
+        be flattened by the legacy path into a ragged object frame.
         """
         return any(ds["ndim"] >= 3 for ds in datasets)
 
@@ -325,6 +353,288 @@ class hdf5Reader(BaseFileReader):
             return None
         return df
 
+    def _grid_column_names(self, path, trailing, used):
+        """One column per component: a scalar field gives one, a vector D."""
+        base = self._column_name_from_path(path, used)
+        if not trailing:
+            return [(base, ())]
+        return [
+            (f"{base}_" + "_".join(str(i) for i in idx), idx)
+            for idx in np.ndindex(*trailing)
+        ]
+
+    @staticmethod
+    def _is_image(dataset):
+        """True when a dataset declares itself an image.
+
+        The Image and Palette specification marks these with ``CLASS="IMAGE"``.
+        Their axes are height, width and colour components, which flatten into
+        a table perfectly well and mean nothing once there: a photograph scores
+        a duplicity of 0.4 because many pixels share a colour, and an outlier
+        fraction over its channels. AIDRIN assesses tabular data, so say that
+        rather than return numbers nobody should act on.
+        """
+        value = dataset.attrs.get("CLASS")
+        if isinstance(value, bytes):
+            value = value.decode("utf-8", "replace")
+        return value == "IMAGE"
+
+    def _selection_is_gridded(self, inv, selected):
+        """True when a selection should be flattened to one row per grid cell.
+
+        Rank 3 and above is a grid on its own: there is no other reading of it.
+        Rank 2 is ambiguous, because a single 2D dataset is an ordinary table of
+        rows and columns and is read as one. Several 2D datasets of the same
+        shape are not a table each; they are fields sampled on a shared grid,
+        and the only way to put them in one frame is a column each. That is how
+        netCDF and PDE benchmarks store a static field next to its coordinates.
+        """
+        shapes = {ds["path"]: ds["shape"] for ds in inv["datasets"]}
+        picked = [shapes.get(p.strip("/")) for p in selected]
+        picked = [shape for shape in picked if shape is not None]
+        if not picked:
+            return False
+        if any(len(shape) >= 3 for shape in picked):
+            return True
+        return len(picked) > 1 and len(set(picked)) == 1 and len(picked[0]) == 2
+
+    def _dominant_grid_shape(self):
+        """The shape most datasets in the file sit on, or None.
+
+        A field's own shape cannot say whether its last axis is a component or
+        another spatial one -- ``(T, Y, X, 3)`` could be either. Its neighbours
+        can: when most datasets in the file stop at ``(T, Y, X)``, the extra axis
+        is components. This reads the file's own structure rather than any one
+        format's metadata, so it resolves a vector field selected on its own
+        without knowing which project produced it.
+        """
+        shapes = [ds["shape"] for ds in self._list_datasets() if ds["ndim"] >= 2]
+        if not shapes:
+            return None
+
+        # Score each candidate by how many datasets it is a *prefix* of, not how
+        # many match it exactly: a grid is the start of every field that sits on
+        # it, and counting exact matches lets the widest fields outvote it, two
+        # tensors at (*grid, D, D) electing themselves over one scalar at
+        # (*grid).
+        #
+        # A short prefix would then win every time -- a 2D per-sample time array
+        # at (S, T) precedes every field at (S, T, Y, X) -- so a candidate only
+        # counts when what follows it could be components. Components index
+        # spatial directions or tensor entries and so are small; an axis of 512
+        # is grid. This is what separates the grid from anything that merely
+        # comes before it.
+        best = None
+        for candidate in set(shapes):
+            covered = [sh for sh in shapes if sh[: len(candidate)] == candidate]
+            if len(covered) < 2:
+                # One dataset on a shape is not a consensus, so it says nothing
+                # about which axes are grid.
+                continue
+            if any(
+                dim > _MAX_COMPONENT_DIM
+                for sh in covered
+                for dim in sh[len(candidate):]
+            ):
+                continue
+            # Widest agreement first, then the shortest shape, since a shorter
+            # prefix of the same datasets is the grid and the longer one carries
+            # components. Ties end on the shape itself so the answer does not
+            # depend on the order h5py happens to walk the file in.
+            key = (len(covered), -len(candidate), candidate)
+            if best is None or key > best[0]:
+                best = (key, candidate)
+        return best[1] if best else None
+
+    def _resolve_grid_base(self, specs, file_grid):
+        """Resolve the grid every selected dataset sits on.
+
+        ``specs`` is a list of ``(path, shape, dtype)``. Returns
+        ``(base_shape, error)`` where ``error`` is a user-facing message when the
+        selection cannot share rows, and ``None`` when it can.
+
+        The grid the rest of the file agrees on wins when every selected dataset
+        starts with it, which is what resolves a vector field selected on its
+        own. Otherwise the shortest selected shape stands in, which is right
+        whenever the selection itself contains a scalar field.
+        """
+        if file_grid is not None and all(
+            shape[: len(file_grid)] == file_grid for _p, shape, _d in specs
+        ):
+            base = file_grid
+        else:
+            base = min((spec[1] for spec in specs), key=len)
+            # Any lone high-rank dataset is ambiguous in principle, but warning
+            # on all of them trains the reader to ignore the warning. Two
+            # conditions make "grid plus components" the plausible reading: a
+            # trailing axis of 2 or 3, since a component axis holds one entry
+            # per spatial dimension while a grid axis is normally far longer,
+            # and at least two axes ahead of it, since a rank-2 array with a
+            # short second axis is far more often an ordinary table.
+            if len(specs) == 1 and len(base) >= 3 and base[-1] in (2, 3):
+                self.logger.warning(
+                    "HDF5 dataset '%s' has shape %s and is selected alone, and no "
+                    "other dataset in the file shares a grid that would identify a "
+                    "trailing component axis, so every axis is read as grid. If it "
+                    "is a vector field, select it together with a scalar field on "
+                    "the same grid so its components become separate columns.",
+                    specs[0][0],
+                    base,
+                )
+
+        for path, shape, _dtype in specs:
+            if shape[: len(base)] != base:
+                return None, (
+                    f"'{path}' has shape {shape}, which does not start with the "
+                    f"grid {base} shared by the rest of the selection. Select "
+                    "datasets that share one grid."
+                )
+        return base, None
+
+    def validate_selection(self, keys):
+        """Check a selection before it is stored, returning a message or None.
+
+        The dataset picker and the reader have to agree on what a usable
+        selection is, so the rule lives here and both call in rather than the
+        picker keeping a second copy that can fall behind.
+        """
+        keys = self._normalize_selected_keys(keys)
+        if not keys:
+            return "No datasets selected."
+
+        with h5py.File(self.file_path, "r") as f:
+            specs = []
+            for key in keys:
+                if key not in f:
+                    return f"Unknown dataset: {key}"
+                obj = f[key]
+                if not isinstance(obj, h5py.Dataset):
+                    return f"'{key}' is not a dataset."
+                if self._is_image(obj):
+                    return (
+                        f"'{key}' is an image. AIDRIN does not support images in "
+                        "HDF5 files."
+                    )
+                if obj.dtype.subdtype is not None:
+                    return (
+                        f"'{key}' has an array dtype ({obj.dtype}), which AIDRIN "
+                        "does not read as a grid."
+                    )
+                specs.append((key, tuple(int(x) for x in obj.shape), obj.dtype))
+
+            if any(len(shape) >= 3 for _p, shape, _d in specs):
+                _base, error = self._resolve_grid_base(specs, self._dominant_grid_shape())
+                return error
+
+        if len(specs) > 1:
+            for path, shape, _dtype in specs:
+                if len(shape) != 1:
+                    return (
+                        f"'{path}' is not a 1D array. Select 1D datasets with the "
+                        "same length, datasets that share a grid, or a single 2D "
+                        "dataset."
+                    )
+            lengths = {shape[0] if shape else 0 for _p, shape, _d in specs}
+            if len(lengths) > 1:
+                return "Selected datasets must have the same length to merge into one table."
+        return None
+
+    def _read_grid_dataset_paths(self, paths):
+        """Flatten aligned grid datasets into one row per cell, one column per field.
+
+        Every selected dataset must share a common leading shape -- the grid.
+        Vector and tensor fields are commonly stored as ``(*grid, D)`` and
+        ``(*grid, D, D)``, so a dataset carrying extra trailing dimensions
+        contributes one column per component (``field_0``, ``field_1``) rather
+        than being refused for not matching the scalar fields.
+
+        Shapes are read from metadata first so an oversized selection is rejected
+        before anything is loaded.
+        """
+        if not paths:
+            return None
+
+        with h5py.File(self.file_path, "r") as f:
+            specs = []
+            for path in paths:
+                if path not in f:
+                    self.logger.warning("HDF5 dataset path not found: %s", path)
+                    return None
+                obj = f[path]
+                if not isinstance(obj, h5py.Dataset):
+                    self.logger.warning("HDF5 path is not a dataset: %s", path)
+                    return None
+                if self._is_image(obj):
+                    self.logger.warning(
+                        "HDF5 dataset '%s' is an image. AIDRIN does not support "
+                        "images in HDF5 files.",
+                        path,
+                    )
+                    return None
+                if obj.dtype.subdtype is not None:
+                    # HDF5 can carry a dimension in the dtype rather than the
+                    # shape, and then shape no longer says how many values a
+                    # cell holds. Rare enough not to model.
+                    self.logger.warning(
+                        "HDF5 dataset '%s' has an array dtype (%s), which AIDRIN "
+                        "does not read as a grid.",
+                        path,
+                        obj.dtype,
+                    )
+                    return None
+                specs.append((path, tuple(int(x) for x in obj.shape), obj.dtype))
+
+            base, error = self._resolve_grid_base(specs, self._dominant_grid_shape())
+            if error:
+                self.logger.warning("%s", error)
+                return None
+
+            rows = 1
+            for dim in base:
+                rows *= dim
+            projected = 0
+            for path, shape, dtype in specs:
+                components = 1
+                for dim in shape[len(base):]:
+                    components *= dim
+                # _apply_fill_values casts to float64 when it replaces a
+                # sentinel, so a column with fill-value attributes can land at
+                # double the source itemsize. Project the larger of the two
+                # rather than admit a selection that then does not fit.
+                itemsize = int(dtype.itemsize)
+                explicit, _uncertain = self._collect_fill_values(f[path])
+                if explicit:
+                    itemsize = max(itemsize, 8)
+                projected += rows * components * itemsize
+
+            budget = _max_grid_bytes()
+            if projected > budget:
+                self.logger.warning(
+                    "HDF5 grid selection would build a %.2f GB table (%d rows from "
+                    "grid %s), over the %.2f GB ceiling. Select fewer datasets, or "
+                    "raise AIDRIN_HDF5_MAX_GRID_BYTES if the memory is available.",
+                    projected / 1024**3,
+                    rows,
+                    base,
+                    budget / 1024**3,
+                )
+                return None
+
+            columns = {}
+            for path, shape, _dtype in specs:
+                data = self._apply_fill_values(f[path][()], f[path], path)
+                trailing = shape[len(base):]
+                for name, idx in self._grid_column_names(path, trailing, set(columns)):
+                    values = data[(Ellipsis,) + idx] if idx else data
+                    columns[name] = np.asarray(values).reshape(-1)
+
+        df = pd.DataFrame(columns)
+        df = self._decode_bytes(df)
+        df.columns = [str(col) for col in df.columns]
+        if df.empty:
+            return None
+        return df
+
     def _apply_fill_values(self, data, dataset, name):
         """Replace fill-value sentinels with NaN for numeric dataset arrays."""
         if not (hasattr(data, "dtype") and data.dtype.kind in ("f", "i", "u")):
@@ -371,6 +681,16 @@ class hdf5Reader(BaseFileReader):
             obj = f[path]
             if not isinstance(obj, h5py.Dataset):
                 self.logger.warning("HDF5 path is not a dataset: %s", path)
+                return None
+
+            if self._is_image(obj):
+                # A 2D image reaches this path rather than the grid one, and
+                # would otherwise be read as an ordinary table of pixel rows.
+                self.logger.warning(
+                    "HDF5 dataset '%s' is an image. AIDRIN does not support "
+                    "images in HDF5 files.",
+                    path,
+                )
                 return None
 
             # Read ndim off the h5py metadata, not the loaded array: grids are
@@ -483,12 +803,28 @@ class hdf5Reader(BaseFileReader):
     def read(self):
         try:
             inv = self.inventory()
-            if inv["type"] == "multi_dataset":
-                selected = self._get_selected_dataset_keys()
-                if len(selected) == 1:
-                    return self._read_dataset_path(selected[0])
-                if len(selected) > 1:
+
+            # An explicit selection is explicit intent, so it is honoured before
+            # any layout branch. Reaching those first meant a selection was
+            # silently dropped unless the file happened to be typed
+            # "multi_dataset": a lone grid is typed "single_dataset", and a file
+            # mixing 2D fields with 1D coordinates is typed "legacy", and both
+            # went to the walk below, which ignores the selection and stacks
+            # every dataset into one ragged frame.
+            #
+            # A pandas HDFStore is the exception: its keys name frames rather
+            # than dataset paths, so _read_pandas_store resolves them.
+            selected = self._get_selected_dataset_keys()
+            if selected and inv["datasets"] and not self._is_pandas_pytables_store():
+                if self._selection_is_gridded(inv, selected):
+                    return self._read_grid_dataset_paths(selected)
+                known = {ds["path"] for ds in inv["datasets"]}
+                if all(key.strip("/") in known for key in selected):
+                    if len(selected) == 1:
+                        return self._read_dataset_path(selected[0])
                     return self._read_compatible_dataset_paths(selected)
+
+            if inv["type"] == "multi_dataset":
                 n = len(inv["datasets"])
                 self.logger.warning(
                     "HDF5 file has %d datasets in an incompatible layout; "
