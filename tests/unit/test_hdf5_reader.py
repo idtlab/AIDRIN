@@ -738,15 +738,20 @@ class TestGridDatasetGuard:
         assert df is None
         assert "ndim >= 3" in caplog.text
 
-    def test_selected_grid_dataset_is_refused(self, tmp_path, logger, caplog):
+    def test_selected_grid_dataset_is_read_as_a_table(self, tmp_path, logger):
+        """An explicit selection is explicit intent, so the grid is flattened.
+
+        Replaces an earlier assertion that this was refused: refusing was the
+        safe interim behaviour while a grid had no tabular reading at all.
+        """
         fpath = str(tmp_path / "grid.h5")
         self._write_grid_file(fpath, 4, 5, 3, 2)
 
-        with caplog.at_level(logging.WARNING):
-            df = hdf5Reader(fpath, logger, selected_keys=["t0_fields/density"]).read()
+        df = hdf5Reader(fpath, logger, selected_keys=["t0_fields/density"]).read()
 
-        assert df is None
-        assert "ndim=4" in caplog.text
+        assert df is not None
+        assert df.shape == (2 * 3 * 4 * 5, 1)
+
 
     def test_guard_reads_metadata_only(self, tmp_path, logger, monkeypatch):
         """A real grid would not fit in RAM, so the guard must fire before any read."""
@@ -780,3 +785,371 @@ class TestGridDatasetGuard:
 
         assert df is not None
         assert df.shape == (2, 1)
+
+class TestGridTables:
+    """Aligned grids flatten to one row per cell, one column per field."""
+
+    @staticmethod
+    def _write(path, grid=(2, 3, 4, 5), components=2):
+        """Scalar fields on a shared grid, plus a vector field with a trailing dim."""
+        cells = int(np.prod(grid))
+        with h5py.File(path, "w") as f:
+            f.create_dataset("dimensions/x", data=np.arange(grid[2], dtype="f4"))
+            f.create_dataset("dimensions/y", data=np.arange(grid[3], dtype="f4"))
+            f.create_dataset("dimensions/time", data=np.arange(grid[1], dtype="f4"))
+            f.create_dataset("t0_fields/density", data=np.arange(cells, dtype="f4").reshape(grid))
+            f.create_dataset(
+                "t0_fields/pressure",
+                data=(np.arange(cells, dtype="f4") * 2).reshape(grid),
+            )
+            f.create_dataset(
+                "t1_fields/velocity",
+                data=np.arange(cells * components, dtype="f4").reshape(grid + (components,)),
+            )
+
+    def test_aligned_fields_share_one_row_per_cell(self, tmp_path, logger):
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+
+        df = hdf5Reader(
+            fpath, logger, selected_keys=["t0_fields/density", "t0_fields/pressure"]
+        ).read()
+
+        assert df.shape == (2 * 3 * 4 * 5, 2)
+        assert list(df.columns) == ["t0_fields/density", "t0_fields/pressure"]
+        np.testing.assert_array_equal(df["t0_fields/density"].values, np.arange(120, dtype="f4"))
+        np.testing.assert_array_equal(
+            df["t0_fields/pressure"].values, np.arange(120, dtype="f4") * 2
+        )
+
+    def test_trailing_dimension_splits_into_components(self, tmp_path, logger):
+        """A vector field is (*grid, D); one column per component keeps it aligned."""
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+
+        df = hdf5Reader(
+            fpath, logger, selected_keys=["t0_fields/density", "t1_fields/velocity"]
+        ).read()
+
+        assert list(df.columns) == [
+            "t0_fields/density",
+            "t1_fields/velocity_0",
+            "t1_fields/velocity_1",
+        ]
+        assert len(df) == 120
+        # component i of cell n is the raw element at n * 2 + i
+        raw = np.arange(240, dtype="f4").reshape(2, 3, 4, 5, 2)
+        np.testing.assert_array_equal(
+            df["t1_fields/velocity_1"].values, raw[..., 1].reshape(-1)
+        )
+
+    def test_misaligned_selection_is_refused(self, tmp_path, logger, caplog):
+        """Fields on different grids cannot share rows; merging them would be a lie."""
+        fpath = str(tmp_path / "mixed.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("a/one", data=np.zeros((2, 3, 4), dtype="f4"))
+            f.create_dataset("a/two", data=np.zeros((2, 3, 5), dtype="f4"))
+            f.create_dataset("a/three", data=np.zeros((2, 3, 4), dtype="f4"))
+            f.create_dataset("a/four", data=np.zeros((2, 3, 4), dtype="f4"))
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger, selected_keys=["a/one", "a/two"]).read()
+
+        assert df is None
+        assert "share one grid" in caplog.text
+
+    def test_oversized_selection_is_refused(self, tmp_path, logger, caplog, monkeypatch):
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+        monkeypatch.setenv("AIDRIN_HDF5_MAX_GRID_BYTES", "16")
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger, selected_keys=["t0_fields/density"]).read()
+
+        assert df is None
+        assert "ceiling" in caplog.text
+
+    def test_size_is_checked_before_loading(self, tmp_path, logger, monkeypatch):
+        """The ceiling exists for tables that will not fit, so it must not build one."""
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+        monkeypatch.setenv("AIDRIN_HDF5_MAX_GRID_BYTES", "16")
+
+        def _boom(self, item):
+            raise AssertionError("dataset was materialized before the size check")
+
+        monkeypatch.setattr(h5py.Dataset, "__getitem__", _boom)
+
+        assert hdf5Reader(fpath, logger, selected_keys=["t0_fields/density"]).read() is None
+
+    def test_grid_without_a_selection_is_still_refused(self, tmp_path, logger):
+        """No selection means no intent; the file stays ambiguous."""
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+
+        assert hdf5Reader(fpath, logger).read() is None
+
+    def test_lone_vector_field_splits_using_the_grid_its_neighbours_share(self, tmp_path, logger):
+        """Selected alone, a vector field must not interleave its components.
+
+        Its own shape cannot say whether the trailing axis is a component or
+        another spatial dimension. The grid the rest of the file sits on can,
+        without reference to any particular project's metadata.
+        """
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+
+        df = hdf5Reader(fpath, logger, selected_keys=["t1_fields/velocity"]).read()
+
+        assert list(df.columns) == ["t1_fields/velocity_0", "t1_fields/velocity_1"]
+        assert len(df) == 120, "one row per grid cell, not per stored element"
+        raw = np.arange(240, dtype="f4").reshape(2, 3, 4, 5, 2)
+        np.testing.assert_array_equal(
+            df["t1_fields/velocity_0"].values, raw[..., 0].reshape(-1)
+        )
+
+    def test_lone_high_rank_field_warns_with_no_grid_to_compare_against(self, tmp_path, logger, caplog):
+        """With no neighbours on a shared grid, say so rather than guess silently."""
+        fpath = str(tmp_path / "solo_vector.h5")
+        with h5py.File(fpath, "w") as f:
+            # Every dataset a different shape, so nothing establishes a grid.
+            f.create_dataset("a/vector", data=np.zeros((2, 3, 4, 2), dtype="f4"))
+            f.create_dataset("a/other", data=np.zeros((5, 6), dtype="f4"))
+            f.create_dataset("a/more", data=np.zeros((7, 8, 9), dtype="f4"))
+            f.create_dataset("a/extra", data=np.zeros((3,), dtype="f4"))
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger, selected_keys=["a/vector"]).read()
+
+        assert df is not None
+        assert "no other dataset in the file shares a grid" in caplog.text
+
+    def test_one_field_sitting_on_the_grid_is_evidence_enough(self, tmp_path, logger):
+        """A neighbour stopping where the vector's components begin locates the grid."""
+        fpath = str(tmp_path / "pair.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("a/vector", data=np.zeros((2, 3, 4, 2), dtype="f4"))
+            f.create_dataset("a/scalar", data=np.zeros((2, 3, 4), dtype="f4"))
+            f.create_dataset("a/other", data=np.zeros((9, 9), dtype="f4"))
+            f.create_dataset("a/more", data=np.zeros((5,), dtype="f4"))
+
+        df = hdf5Reader(fpath, logger, selected_keys=["a/vector"]).read()
+
+        assert len(df) == 2 * 3 * 4, "the grid is where the neighbour stops"
+        assert list(df.columns) == ["a/vector_0", "a/vector_1"]
+
+    def test_wider_fields_cannot_outvote_the_grid(self, tmp_path, logger):
+        """Counting exact shapes let the widest fields elect themselves the grid.
+
+        Real datasets carry more tensor fields than scalar ones, so two tensors
+        at (*grid, D, D) outvoted the single scalar at (*grid) and folded their
+        components into rows.
+        """
+        fpath = str(tmp_path / "tensors.h5")
+        grid = (2, 3, 4)
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("t0/scalar", data=np.zeros(grid, dtype="f4"))
+            f.create_dataset("t1/vec", data=np.zeros(grid + (2,), dtype="f4"))
+            f.create_dataset("t2/D", data=np.zeros(grid + (2, 2), dtype="f4"))
+            f.create_dataset("t2/E", data=np.zeros(grid + (2, 2), dtype="f4"))
+
+        df = hdf5Reader(fpath, logger, selected_keys=["t2/D"]).read()
+
+        assert len(df) == 2 * 3 * 4, "one row per grid cell, not per tensor entry"
+        assert list(df.columns) == ["t2/D_0_0", "t2/D_0_1", "t2/D_1_0", "t2/D_1_1"]
+
+    def test_scalar_field_selected_alone_does_not_warn(self, tmp_path, logger, caplog):
+        """The warning above must not fire for an ordinary scalar field."""
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger, selected_keys=["t0_fields/density"]).read()
+
+        assert df.shape == (120, 1)
+        assert "cannot be told" not in caplog.text
+
+    def test_single_dataset_file_honours_its_selection(self, tmp_path, logger):
+        """A file holding one grid is typed 'single_dataset' and skipped the dispatch."""
+        fpath = str(tmp_path / "solo.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("field", data=np.arange(24, dtype="f4").reshape(2, 3, 4))
+
+        df = hdf5Reader(fpath, logger, selected_keys=["field"]).read()
+
+        assert df is not None
+        assert df.shape == (24, 1)
+        np.testing.assert_array_equal(df["field"].values, np.arange(24, dtype="f4"))
+
+    def test_budget_accounts_for_fill_value_promotion(self, tmp_path, logger, caplog, monkeypatch):
+        """Replacing a fill sentinel casts to float64, so project the wider type."""
+        fpath = str(tmp_path / "fill.h5")
+        with h5py.File(fpath, "w") as f:
+            for name in ("a", "b"):
+                d = f.create_dataset("g/" + name, shape=(2, 3, 4), dtype="f4", fillvalue=-999.0)
+                d[...] = np.arange(24, dtype="f4").reshape(2, 3, 4)
+            f.create_dataset("g/c", data=np.arange(24, dtype="f4").reshape(2, 3, 4))
+
+        # 24 cells * 1 column: 96 bytes as float32, 192 as float64.
+        monkeypatch.setenv("AIDRIN_HDF5_MAX_GRID_BYTES", "150")
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger, selected_keys=["g/a"]).read()
+
+        assert df is None
+        assert "ceiling" in caplog.text
+
+    def test_dominant_grid_is_independent_of_walk_order(self, tmp_path, logger):
+        """Two shapes can be equally common; the answer must not depend on order."""
+        fpath = str(tmp_path / "tie.h5")
+        with h5py.File(fpath, "w") as f:
+            for name in ("a", "b"):
+                f.create_dataset("g/" + name, data=np.zeros((4, 5), dtype="f4"))
+            for name in ("c", "d"):
+                f.create_dataset("g/" + name, data=np.zeros((5, 4), dtype="f4"))
+
+        answers = {hdf5Reader(fpath, logger)._dominant_grid_shape() for _ in range(5)}
+
+        assert len(answers) == 1
+
+    def test_a_selection_off_the_dominant_grid_still_reads(self, tmp_path, logger):
+        """The file's majority grid must not override a selection that shares another."""
+        fpath = str(tmp_path / "two_grids.h5")
+        with h5py.File(fpath, "w") as f:
+            for i in range(5):
+                f.create_dataset("big/f%d" % i, data=np.zeros((8, 9, 10), dtype="f4"))
+            for i in range(2):
+                f.create_dataset("small/g%d" % i, data=np.zeros((3, 4, 5), dtype="f4"))
+
+        df = hdf5Reader(fpath, logger, selected_keys=["small/g0", "small/g1"]).read()
+
+        assert df is not None
+        assert df.shape == (3 * 4 * 5, 2)
+
+    def test_rank_two_arrays_do_not_trigger_the_component_warning(self, tmp_path, logger, caplog):
+        """A short second axis on a rank-2 array is an ordinary table, not components."""
+        fpath = str(tmp_path / "flat.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("a/pairs", data=np.zeros((100, 3, 2), dtype="f4"))
+            f.create_dataset("a/other", data=np.zeros((7, 8), dtype="f4"))
+            f.create_dataset("a/more", data=np.zeros((9, 10, 11), dtype="f4"))
+            f.create_dataset("a/extra", data=np.zeros((5,), dtype="f4"))
+
+        with caplog.at_level(logging.WARNING):
+            hdf5Reader(fpath, logger, selected_keys=["a/pairs"]).read()
+
+        # rank 3 with a trailing 2 is a plausible vector field, so this one warns
+        assert "no other dataset in the file shares a grid" in caplog.text
+
+    def test_an_array_dtype_is_refused(self, tmp_path, logger, caplog):
+        """A dtype can carry its own dimension, and then shape understates a cell.
+
+        A (4, 3, 2) dataset of dtype ('<i4', (3,)) reads back as (4, 3, 2, 3),
+        so counting its shape gives three values for every grid cell. Too rare
+        to model, and silently mis-counting rows is the thing to avoid.
+        """
+        fpath = str(tmp_path / "arraydtype.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("g/vec", shape=(4, 3, 2), dtype=np.dtype(("<i4", (3,))))
+            f.create_dataset("g/plain", data=np.zeros((4, 3, 2), dtype="u1"))
+            f.create_dataset("g/other", data=np.zeros((4, 3, 2), dtype="u1"))
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger, selected_keys=["g/vec", "g/plain"]).read()
+
+        assert df is None
+        assert "array dtype" in caplog.text
+
+    def test_a_coordinate_array_cannot_pose_as_the_grid(self, tmp_path, logger):
+        """A per-sample coordinate precedes every field but is not the grid.
+
+        Real datasets store a 2D time array at (S, T) alongside fields at
+        (S, T, Y, X). Counting prefixes alone elected (S, T), which turned each
+        field's spatial extent into a quarter of a million columns.
+        """
+        fpath = str(tmp_path / "coords.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("dimensions/time", data=np.zeros((2, 5), dtype="f4"))
+            f.create_dataset("t0_fields/a", data=np.zeros((2, 5, 16, 16), dtype="f4"))
+            f.create_dataset("t0_fields/b", data=np.zeros((2, 5, 16, 16), dtype="f4"))
+            f.create_dataset("t1_fields/v", data=np.zeros((2, 5, 16, 16, 2), dtype="f4"))
+
+        reader = hdf5Reader(fpath, logger, selected_keys=["t1_fields/v"])
+
+        assert reader._dominant_grid_shape() == (2, 5, 16, 16)
+        df = reader.read()
+        assert len(df) == 2 * 5 * 16 * 16
+        assert list(df.columns) == ["t1_fields/v_0", "t1_fields/v_1"]
+
+    def test_same_shape_two_dimensional_fields_share_a_grid(self, tmp_path, logger):
+        """Several 2D datasets of one shape are fields on a grid, not tables each.
+
+        A single 2D dataset stays an ordinary table; only a selection of them
+        flattens, which is how netCDF and PDE benchmarks store a static field
+        beside its coordinates.
+        """
+        fpath = str(tmp_path / "flat_fields.h5")
+        with h5py.File(fpath, "w") as f:
+            f.create_dataset("depth", data=np.arange(12, dtype="f4").reshape(3, 4))
+            f.create_dataset("lat", data=np.arange(12, dtype="f4").reshape(3, 4))
+            f.create_dataset("lon", data=np.arange(12, dtype="f4").reshape(3, 4))
+            f.create_dataset("time", data=np.arange(7, dtype="f4"))
+
+        df = hdf5Reader(fpath, logger, selected_keys=["depth", "lat", "lon"]).read()
+        assert df.shape == (12, 3)
+
+        single = hdf5Reader(fpath, logger, selected_keys=["depth"]).read()
+        assert single.shape == (3, 4), "one 2D dataset is still a table"
+
+    def test_an_image_is_refused_rather_than_scored(self, tmp_path, logger, caplog):
+        """Images flatten into a table perfectly well and mean nothing there.
+
+        A real photograph scored a duplicity of 0.4, which only says many pixels
+        share a colour, and an outlier fraction over its channels. AIDRIN
+        assesses tabular data, so it should say so instead.
+        """
+        fpath = str(tmp_path / "image.h5")
+        with h5py.File(fpath, "w") as f:
+            d = f.create_dataset("rgb", data=np.zeros((4, 5, 3), dtype="u1"))
+            d.attrs["CLASS"] = np.bytes_("IMAGE")
+            d.attrs["IMAGE_SUBCLASS"] = np.bytes_("IMAGE_TRUECOLOR")
+            f.create_dataset("other", data=np.zeros((4, 5), dtype="u1"))
+            f.create_dataset("more", data=np.zeros((4, 5), dtype="u1"))
+
+        with caplog.at_level(logging.WARNING):
+            df = hdf5Reader(fpath, logger, selected_keys=["rgb"]).read()
+
+        assert df is None
+        assert "does not support images" in caplog.text
+
+    def test_a_two_dimensional_image_is_refused_too(self, tmp_path, logger):
+        """An indexed image is rank 2, so it reaches the single-dataset path.
+
+        The web picker already rejected it there while the reader read it as a
+        table of pixel rows, so the two disagreed about the same file.
+        """
+        fpath = str(tmp_path / "indexed.h5")
+        with h5py.File(fpath, "w") as f:
+            d = f.create_dataset("indexed", data=np.zeros((40, 30), dtype="u1"))
+            d.attrs["CLASS"] = np.bytes_("IMAGE")
+            d.attrs["IMAGE_SUBCLASS"] = np.bytes_("IMAGE_INDEXED")
+            f.create_dataset("other", data=np.zeros((4, 5), dtype="u1"))
+            f.create_dataset("more", data=np.zeros((4, 5), dtype="u1"))
+
+        reader = hdf5Reader(fpath, logger, selected_keys=["indexed"])
+
+        assert reader.read() is None
+        assert "does not support images" in reader.validate_selection(["indexed"])
+
+    def test_a_grid_frame_says_what_a_row_is(self, tmp_path, logger):
+        """A row is a grid cell, and a metric counting rows needs to know."""
+        from aidrin.file_handling.row_units import row_unit
+
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+
+        df = hdf5Reader(
+            fpath, logger, selected_keys=["t0_fields/density", "t0_fields/pressure"]
+        ).read()
+
+        assert row_unit(df) == "grid cell"
