@@ -1140,3 +1140,16 @@ class TestGridTables:
 
         assert reader.read() is None
         assert "does not support images" in reader.validate_selection(["indexed"])
+
+    def test_a_grid_frame_says_what_a_row_is(self, tmp_path, logger):
+        """A row is a grid cell, and a metric counting rows needs to know."""
+        from aidrin.file_handling.row_units import row_unit
+
+        fpath = str(tmp_path / "grid.h5")
+        self._write(fpath)
+
+        df = hdf5Reader(
+            fpath, logger, selected_keys=["t0_fields/density", "t0_fields/pressure"]
+        ).read()
+
+        assert row_unit(df) == "grid cell"

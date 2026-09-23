@@ -267,3 +267,25 @@ class TestOutliers(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_duplicity_qualifies_a_grid_frame(tmp_path):
+    """Zero duplicity reads as "no repeated records", which a grid has no notion of."""
+    import numpy as np
+    import pytest
+
+    h5py = pytest.importorskip("h5py")
+    from aidrin.structured_data_metrics.duplicity import duplicity
+
+    fpath = tmp_path / "grid.h5"
+    grid = (2, 3, 4, 5)
+    cells = int(np.prod(grid))
+    with h5py.File(str(fpath), "w") as f:
+        f.create_dataset("t0/a", data=np.arange(cells, dtype="f4").reshape(grid))
+        f.create_dataset("t0/b", data=np.arange(cells, dtype="f4").reshape(grid))
+        f.create_dataset("dims/x", data=np.arange(5, dtype="f4"))
+
+    result = duplicity.__wrapped__((str(fpath), "grid.h5", ".h5", ["t0/a", "t0/b"]))
+
+    assert result["Duplicity scores"]["Row unit"] == "grid cell"
+    assert "not a record" in result["Note"]

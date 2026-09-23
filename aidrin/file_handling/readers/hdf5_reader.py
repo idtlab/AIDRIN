@@ -7,6 +7,7 @@ import pandas as pd
 from flask import current_app, session
 
 from aidrin.file_handling.readers.base_reader import BaseFileReader
+from aidrin.file_handling.row_units import ROW_UNIT_ATTR
 
 
 # Ceiling on the flattened grid table a selection may build, as
@@ -633,6 +634,10 @@ class hdf5Reader(BaseFileReader):
         df.columns = [str(col) for col in df.columns]
         if df.empty:
             return None
+        # A row here is one cell of the grid, not one record. Metrics that count
+        # rows as records read this and say so rather than reporting a number
+        # that invites the wrong reading.
+        df.attrs[ROW_UNIT_ATTR] = "grid cell"
         return df
 
     def _apply_fill_values(self, data, dataset, name):
