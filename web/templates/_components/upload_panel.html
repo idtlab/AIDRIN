@@ -43,7 +43,7 @@
           <select id="fileTypeSelector" name="fileTypeSelector" class="w-full mb-4" style="max-width: none;">
             <option disabled value="" {% if not file_type %}selected{% endif %}>Select a File Type</option>
             {% for ext, label in supported_file_types %}
-              <option value="{{ ext }}" {% if file_type == ext %}selected{% endif %}>{{ label }} ({{ ext }})</option>
+              <option value="{{ ext }}" data-accept="{{ file_type_accept.get(ext, ext) }}" {% if file_type == ext %}selected{% endif %}>{{ label }} ({{ ext }})</option>
             {% endfor %}
           </select>
 

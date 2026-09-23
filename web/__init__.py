@@ -83,6 +83,12 @@ def create_app():
     app.config["MAX_CONTENT_LENGTH"] = max_upload_mb * 1024 * 1024
 
     @app.context_processor
+    def inject_file_type_accept():
+        from aidrin.file_handling.file_parser import FILE_TYPE_ACCEPT_EXTENSIONS
+
+        return dict(file_type_accept=FILE_TYPE_ACCEPT_EXTENSIONS)
+
+    @app.context_processor
     def inject_upload_limit():
         # expose the upload limit to templates for client-side validation
         return dict(

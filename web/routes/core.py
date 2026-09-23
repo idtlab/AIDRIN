@@ -289,38 +289,15 @@ def filter_file():
 
         file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_type = session.get("uploaded_file_type")
-        if file_path and file_type == ".h5" and len(keys_list) > 1:
-            inv = hdf5Reader(file_path, file_upload_time_log).inventory()
-            if inv["type"] == "multi_dataset":
-                ds_by_path = {ds["path"]: ds for ds in inv["datasets"]}
-                lengths = set()
-                for key in keys_list:
-                    ds = ds_by_path.get(key)
-                    if not ds:
-                        return jsonify(
-                            {"success": False, "error": f"Unknown dataset: {key}"}
-                        ), 400
-                    if ds["ndim"] != 1:
-                        return jsonify(
-                            {
-                                "success": False,
-                                "error": (
-                                    f"'{key}' is not a 1D array. Select 1D datasets "
-                                    "with the same length, or choose a single 2D dataset."
-                                ),
-                            }
-                        ), 400
-                    lengths.add(ds["shape"][0] if ds["shape"] else 0)
-                if len(lengths) > 1:
-                    return jsonify(
-                        {
-                            "success": False,
-                            "error": (
-                                "Selected datasets must have the same length to merge "
-                                "into one table."
-                            ),
-                        }
-                    ), 400
+        if file_path and file_type == ".h5":
+            reader = hdf5Reader(file_path, file_upload_time_log)
+            if reader.inventory()["type"] == "multi_dataset":
+                # The reader owns what a usable selection is. Keeping a second
+                # copy of the rule here is what let the picker keep rejecting
+                # grid selections after the reader learned to read them.
+                error = reader.validate_selection(keys_list)
+                if error:
+                    return jsonify({"success": False, "error": error}), 400
 
         session["selected_keys"] = keys_list
         session["minimize_preview"] = True
@@ -377,7 +354,8 @@ def clear_dataset_selection():
                 "current_checked_keys": previous,
                 "message": (
                     "This HDF5 file contains multiple datasets with different shapes. "
-                    "Select one or more compatible datasets (same length) to analyze."
+                    "Select 1D datasets of the same length, or fields that share a "
+                    "grid, to analyze."
                 ),
             })
         )
@@ -523,8 +501,8 @@ def summary_statistics():
                         "current_checked_keys": selected,
                         "message": (
                             "This HDF5 file contains multiple datasets with "
-                            "different shapes. Select one or more compatible "
-                            "datasets (same length) to analyze."
+                            "different shapes. Select 1D datasets of the same "
+                            "length, or fields that share a grid, to analyze."
                         ),
                     })
                 ), 200
