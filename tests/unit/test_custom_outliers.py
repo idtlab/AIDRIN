@@ -135,7 +135,7 @@ def test_comparison_across_tabular_formats(file_type):
     assert row["reference_values"] == {"alpha": 1}
     assert row["reason"] == "comparison_mismatch"
     assert row["location"]["row_index"] == 1
-    assert "alpha (1)" in row["flag"]
+    assert row["flag"] == "beta is 3, exceeds alpha 1"
     assert result["Outlier export"]["ordered-bounds"] == [row]
     if file_type == ".csv":
         assert row["location"]["source_line"] == 3
@@ -387,7 +387,7 @@ def test_iter_value_blocks_hdf5_streams_regular_slices(tmp_path, monkeypatch):
     assert summary["total"] == 10
     assert summary["outlier"] == 4
     assert result["Outlier preview"]["max-five"][0]["location"]["display"] == "/matrix[3,0]"
-    assert result["Outlier preview"]["max-five"][0]["flag"] == "> 5 by 1"
+    assert result["Outlier preview"]["max-five"][0]["flag"] == "/matrix is 6, exceeds maximum 5"
 
 
 def test_csv_regex_and_range_rules_report_expected_counts():
@@ -424,7 +424,7 @@ def test_range_allows_one_sided_bounds_and_reports_non_numeric():
 
     preview = result["Outlier preview"]["max-only"]
     assert [item["reason"] for item in preview] == ["non_numeric", "above_max"]
-    assert [item["flag"] for item in preview] == ["NaN", "> 10 by 2"]
+    assert [item["flag"] for item in preview] == ["value is bad, must be a number", "value is 12, exceeds maximum 10"]
 
 
 def test_compound_and_uses_all_conditions_as_valid_expression():
@@ -450,8 +450,8 @@ def test_compound_and_uses_all_conditions_as_valid_expression():
     assert summary["valid"] == 1
     assert summary["outlier"] == 2
     assert [row["flag"] for row in result["Outlier preview"]["range-and-even-text"]] == [
-        "< 10 by 5",
-        "> 20 by 5",
+        "value is 5, below minimum 10",
+        "value is 25, exceeds maximum 20",
     ]
 
 
@@ -478,7 +478,7 @@ def test_compound_or_accepts_any_condition():
     assert result["Rule summaries"]["edge-values"]["outlier"] == 1
     assert preview[0]["value"] == 5
     assert preview[0]["reason"] == "or_mismatch"
-    assert preview[0]["flag"] == "no match"
+    assert preview[0]["flag"] == "value is 5, matches none of the alternatives"
 
 
 def test_compound_not_inverts_condition():
@@ -501,7 +501,7 @@ def test_compound_not_inverts_condition():
     assert result["Rule summaries"]["not-mid"]["outlier"] == 1
     assert preview[0]["value"] == 5
     assert preview[0]["reason"] == "not_mismatch"
-    assert preview[0]["flag"] == "NOT"
+    assert preview[0]["flag"] == "value is 5, matches an excluded condition"
 
 
 def test_flat_rule_syntax_is_rejected():
@@ -908,3 +908,85 @@ def test_hdf5_fill_log_counts_only_sentinel_matches(tmp_path, caplog):
 
 def test_public_api_exports_calculate_custom_outliers():
     assert callable(aidrin.calculate_custom_outliers)
+
+
+@pytest.mark.parametrize(("operator", "lower", "expected"), [
+    ("<", 2, "lower is 2, must be less than upper 2"),
+    ("<", 3, "lower is 3, must be less than upper 2"),
+    ("<=", 3, "lower is 3, exceeds upper 2"),
+    (">", 2, "lower is 2, must be greater than upper 2"),
+    (">", 1, "lower is 1, must be greater than upper 2"),
+    (">=", 1, "lower is 1, below upper 2"),
+    ("==", 1, "lower is 1, must equal upper 2"),
+    ("==", 3, "lower is 3, must equal upper 2"),
+    ("!=", 2, "lower is 2, must differ from upper 2"),
+    ("<=", 9007199254740993, "lower is 9007199254740993, exceeds upper 2"),
+])
+def test_comparison_explanations_name_actual_operands(operator, lower, expected):
+    fi = _write_json_rows([{"lower": str(lower), "upper": "2"}])
+    try:
+        result = calculate_custom_outliers(fi, [_compare_rule(operator)])
+    finally:
+        _clean(fi[0])
+    preview = result["Outlier preview"]["ordered-bounds"]
+    assert preview[0]["reason"] == "comparison_mismatch"
+    assert preview[0]["flag"] == expected
+    assert result["Outlier export"]["ordered-bounds"] == preview
+
+
+@pytest.mark.parametrize(("criteria", "value", "expected"), [
+    ({"type": "range", "max": 2}, 3, "lower is 3, exceeds maximum 2"),
+    ({"type": "range", "min": 2}, 1, "lower is 1, below minimum 2"),
+    ({"type": "range", "min": 2, "min_inclusive": False}, 2, "lower is 2, must exceed minimum 2"),
+    ({"type": "range", "max": 2, "max_inclusive": False}, 2, "lower is 2, must be below maximum 2"),
+    ({"type": "regex", "pattern": "^[0-9]+$"}, "bad", "lower is 'bad', does not match /^[0-9]+$/"),
+])
+def test_range_and_regex_explanations_keep_boundary_semantics(criteria, value, expected):
+    fi = _write_json_rows([{"lower": value}])
+    try:
+        result = calculate_custom_outliers(fi, [{"id": "rule", "target": "lower", "target_type": "column", "criteria": criteria}])
+    finally:
+        _clean(fi[0])
+    assert result["Outlier preview"]["rule"][0]["flag"] == expected
+
+
+@pytest.mark.parametrize(("lower", "upper", "expected"), [
+    (None, 2, "lower is missing; this rule requires values"),
+    (1, None, "upper is missing; this rule requires values"),
+    (None, None, "lower, upper are missing; this rule requires values"),
+    ("bad", 2, "lower is bad, must be a finite number"),
+    (1, "bad", "upper is bad, must be a finite number"),
+])
+def test_unusable_comparison_explanations_do_not_blame_a_numeric_relationship(lower, upper, expected):
+    fi = _write_json_rows([{"lower": lower, "upper": upper}])
+    try:
+        result = calculate_custom_outliers(fi, [_compare_rule()])
+    finally:
+        _clean(fi[0])
+    assert result["Outlier preview"]["ordered-bounds"][0]["flag"] == expected
+
+
+def test_negated_comparison_explanation_does_not_claim_comparison_failed():
+    fi = _write_json_rows([{"lower": 1, "upper": 2}])
+    rule = _compare_rule(criteria={"op": "not", "condition": _compare_rule()["criteria"]})
+    try:
+        result = calculate_custom_outliers(fi, [rule])
+    finally:
+        _clean(fi[0])
+    row = result["Outlier preview"]["ordered-bounds"][0]
+    assert row["reason"] == "not_mismatch"
+    assert row["flag"] == "lower is 1, matches an excluded condition"
+
+
+def test_or_comparison_explanation_represents_all_failed_alternatives():
+    fi = _write_json_rows([{"lower": 3, "upper": 2}])
+    rule = _compare_rule(criteria={"op": "or", "conditions": [
+        _compare_rule()["criteria"], {"type": "regex", "pattern": "^9$"},
+    ]})
+    try:
+        result = calculate_custom_outliers(fi, [rule])
+    finally:
+        _clean(fi[0])
+    row = result["Outlier preview"]["ordered-bounds"][0]
+    assert row["reason"] == "or_mismatch"
+    assert row["flag"] == "lower is 3, matches none of the alternatives"

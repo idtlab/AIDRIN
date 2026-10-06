@@ -237,3 +237,20 @@ process.stdout.write(JSON.stringify({focused, hidden, expanded}));
         text=True, capture_output=True, check=True,
     )
     assert json.loads(completed.stdout) == {"focused": expected_focus, "hidden": True, "expanded": "false"}
+
+
+@pytest.mark.parametrize(("criteria", "expected"), [
+    ({"type": "range", "max": 2}, "lower is 3, exceeds maximum 2"),
+    (COMPARE, "lower is 3, exceeds upper 2"),
+])
+def test_imported_sample_rules_keep_intuitive_explanations(tmp_path, criteria, expected):
+    dataset = tmp_path / "bounds.csv"
+    dataset.write_text("lower,upper\n1,2\n3,2\n2,2\n,4\nbad,5\n")
+    # Exercise the actual file-mode download and manual-builder import serializer.
+    saved = browser_rules("save_file", [rule(criteria)])["rules"]
+    imported = browser_rules("round_trip", saved)
+    assert imported["valid"]
+    result = calculate_custom_outliers((str(dataset), dataset.name, ".csv"), imported["rules"])
+    rows = result["Outlier preview"]["bounds"]
+    assert [row["location"]["row_index"] for row in rows] == [1, 3, 4]
+    assert rows[0]["flag"] == expected

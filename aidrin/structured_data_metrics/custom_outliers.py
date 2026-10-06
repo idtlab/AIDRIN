@@ -432,7 +432,7 @@ def _apply_rule_to_block(
                 block,
                 value,
                 "missing",
-                "missing",
+                _format_missing_flag(rule["target"], value, reference_values),
                 location,
                 summary,
                 preview,
@@ -505,64 +505,72 @@ def _invalid_result(rule, value, reference_values=None):
         # Unusable comparison operands must not become valid via OR or NOT.
         for name, item in [(rule["target"], value), *reference_values.items()]:
             if _coerce_comparison_number(item) is None:
-                return "invalid_comparison", f"{name} must contain a finite number"
-    return _criteria_invalid_result(rule["criteria"], value, reference_values)
+                return "invalid_comparison", f"{name} is {_canonical_string(item)}, must be a finite number"
+    return _criteria_invalid_result(rule["criteria"], value, reference_values, rule["target"])
 
 
-def _criteria_invalid_result(criteria, value, reference_values=None):
+def _criteria_invalid_result(criteria, value, reference_values=None, target="Value"):
     if criteria.get("op") == "and":
         for child in criteria["conditions"]:
-            reason, flag = _criteria_invalid_result(child, value, reference_values)
+            reason, flag = _criteria_invalid_result(child, value, reference_values, target)
             if reason is not None:
                 return reason, flag
         return None, None
     if criteria.get("op") == "or":
         failures = []
         for child in criteria["conditions"]:
-            reason, flag = _criteria_invalid_result(child, value, reference_values)
+            reason, flag = _criteria_invalid_result(child, value, reference_values, target)
             if reason is None:
                 return None, None
             failures.append((reason, flag))
         if len(failures) == 1:
             return failures[0]
-        return "or_mismatch", "no match"
+        return "or_mismatch", f"{target} is {_canonical_string(value)}, matches none of the alternatives"
     if criteria.get("op") == "not":
-        reason, _flag = _criteria_invalid_result(criteria["condition"], value, reference_values)
+        reason, _flag = _criteria_invalid_result(criteria["condition"], value, reference_values, target)
         if reason is None:
-            return "not_mismatch", "NOT"
+            return "not_mismatch", f"{target} is {_canonical_string(value)}, matches an excluded condition"
         return None, None
 
     if criteria["type"] == "range":
         number = _coerce_numeric_scalar(value)
         if number is None:
-            return "non_numeric", "NaN"
+            return "non_numeric", f"{target} is {_canonical_string(value)}, must be a number"
         if "min" in criteria:
             if criteria["min_inclusive"]:
                 if number < criteria["min"]:
-                    return "below_min", _format_bound_flag("<", value, criteria["min"])
+                    return "below_min", _format_bound_flag("<", value, criteria["min"], target)
             elif number <= criteria["min"]:
-                return "below_min", _format_bound_flag("<=", value, criteria["min"])
+                return "below_min", _format_bound_flag("<=", value, criteria["min"], target)
         if "max" in criteria:
             if criteria["max_inclusive"]:
                 if number > criteria["max"]:
-                    return "above_max", _format_bound_flag(">", value, criteria["max"])
+                    return "above_max", _format_bound_flag(">", value, criteria["max"], target)
             elif number >= criteria["max"]:
-                return "above_max", _format_bound_flag(">=", value, criteria["max"])
+                return "above_max", _format_bound_flag(">=", value, criteria["max"], target)
         return None, None
 
     if criteria["type"] == "compare":
         other_value = reference_values[criteria["other_target"]]
         if COMPARISON_OPERATORS[criteria["operator"]](_coerce_comparison_number(value), _coerce_comparison_number(other_value)):
             return None, None
+        descriptions = {
+            "<": "must be less than",
+            "<=": "exceeds",
+            ">": "must be greater than",
+            ">=": "below",
+            "==": "must equal",
+            "!=": "must differ from",
+        }
         return "comparison_mismatch", (
-            f"expected {criteria['operator']} {criteria['other_target']} ({_canonical_string(other_value)}); "
-            f"got {_canonical_string(value)}"
+            f"{target} is {_canonical_string(value)}, {descriptions[criteria['operator']]} "
+            f"{criteria['other_target']} {_canonical_string(other_value)}"
         )
 
     text = _canonical_string(value)
     if criteria["_compiled_pattern"].fullmatch(text):
         return None, None
-    return "regex_mismatch", f"!= /{criteria.get('pattern', '')}/"
+    return "regex_mismatch", f"{target} is {text!r}, does not match /{criteria.get('pattern', '')}/"
 
 
 def _coerce_comparison_number(value):
@@ -634,27 +642,33 @@ def _is_unlimited(limit):
     return limit == 0
 
 
+def _format_missing_flag(target, value, reference_values):
+    missing_targets = [name for name, item in [(target, value), *reference_values.items()] if _is_scalar_missing(item)]
+    # A native dataset's missing mask can identify fill values not recognized by pandas.
+    if not missing_targets:
+        missing_targets = [target]
+    names = ", ".join(missing_targets)
+    verb = "is" if len(missing_targets) == 1 else "are"
+    return f"{names} {verb} missing; this rule requires values"
+
+
 def _format_outlier_flag(rule, value, reason):
-    if reason == "below_min" and "min" in rule:
-        return _format_bound_flag("<", value, rule["min"])
-    if reason == "above_max" and "max" in rule:
-        return _format_bound_flag(">", value, rule["max"])
-    if reason == "regex_mismatch":
-        return f"!= /{rule.get('pattern', '')}/"
-    if reason == "non_numeric":
-        return "NaN"
-    if reason == "missing":
-        return "missing"
-    return reason
+    labels = {
+        "missing": "A required value is missing",
+        "non_numeric": "A numeric value is required",
+        "regex_mismatch": "The value does not match the required pattern",
+    }
+    return labels.get(reason, "The value does not satisfy this rule")
 
 
-def _format_bound_flag(operator, value, bound):
-    try:
-        number = float(pd.to_numeric(value, errors="raise"))
-        delta = abs(number - float(bound))
-        return f"{operator} {_format_compact_number(bound)} by {_format_compact_number(delta)}"
-    except (TypeError, ValueError):
-        return f"{operator} {_format_compact_number(bound)}"
+def _format_bound_flag(operator, value, bound, target="Value"):
+    descriptions = {
+        "<": "below minimum",
+        "<=": "must exceed minimum",
+        ">": "exceeds maximum",
+        ">=": "must be below maximum",
+    }
+    return f"{target} is {_canonical_string(value)}, {descriptions[operator]} {_format_compact_number(bound)}"
 
 
 def _format_compact_number(value):

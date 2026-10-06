@@ -4455,7 +4455,7 @@ function renderCustomOutlierPreviewTable(previewByRule) {
     html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${escapeHtml(row.rule_name)}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">${escapeHtml(formatValue(locationDisplay))}</td>`;
     html += `<td class="px-3 py-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300">${escapeHtml(formatValue(row.value))}</td>`;
-    html += `<td class="px-3 py-2 font-mono text-xs text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(row.flag)}</td>`;
+    html += `<td class="px-3 py-2 min-w-48 max-w-md text-sm text-gray-900 dark:text-white whitespace-normal break-words">${escapeHtml(row.flag)}</td>`;
     html += `<td class="px-3 py-2 text-right">`;
     html += `<details class="inline-block text-left">`;
     html += `<summary class="cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">Expand</summary>`;
@@ -4471,11 +4471,15 @@ function renderCustomOutlierPreviewTable(previewByRule) {
 
 function formatOutlierFlagFallback(reason) {
   const labels = {
-    below_min: "< min",
-    above_max: "> max",
-    regex_mismatch: "!=",
-    non_numeric: "NaN",
-    missing: "missing",
+    below_min: "Below the allowed minimum",
+    above_max: "Above the allowed maximum",
+    regex_mismatch: "Does not match the required pattern",
+    non_numeric: "A numeric value is required",
+    missing: "A required value is missing",
+    comparison_mismatch: "Does not satisfy the column comparison",
+    invalid_comparison: "Comparison requires finite numbers",
+    or_mismatch: "Matches none of the alternatives",
+    not_mismatch: "Matches an excluded condition",
   };
   return labels[reason] || reason || "";
 }

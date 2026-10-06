@@ -704,8 +704,8 @@ def test_custom_outlier_preview_uses_compact_overview_table():
     assert "Preview rows failed a valid-value condition." in source
     assert "Why flagged" in source
     assert "formatOutlierFlagFallback(reason)" in source
-    assert 'below_min: "< min"' in source
-    assert 'above_max: "> max"' in source
+    assert 'below_min: "Below the allowed minimum"' in source
+    assert 'above_max: "Above the allowed maximum"' in source
 
 
 def test_custom_outlier_ui_explains_valid_value_semantics():
@@ -974,3 +974,23 @@ def test_update_intent_submit_state_only_clears_validation_messages():
     assert "delete status.dataset.kind;" in submit_body
     assert 'status.dataset.kind = "error";' in submit_body
     assert 'status.dataset.kind = "validation";' in submit_body
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the result renderer")
+def test_outlier_explanation_wraps_and_escapes_column_names(tmp_path):
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    preview = source[source.index("function flattenOutlierPreviewRows("):source.index("function findCustomOutlierExport(")]
+    helpers = source[source.index("function formatValue("):source.index("// ==================== FAIR Assessment")]
+    flag = "lower<script> is 3, exceeds upper 2"
+    payload = {"rule": [{"rule_name": "Rule 1", "target": "lower<script>", "value": 3,
+                         "flag": flag, "location": {"display": "row 1"}}]}
+    script = tmp_path / "preview.cjs"
+    script.write_text(preview + helpers + "\nprocess.stdout.write(renderCustomOutlierPreviewTable(JSON.parse(process.argv[2])));")
+    html = subprocess.run(["node", str(script), json.dumps(payload)], text=True, capture_output=True, check=True).stdout
+    assert "lower&lt;script&gt; is 3, exceeds upper 2" in html
+    assert "<script>" not in html
+    why_cell = re.search(r'<td class="([^"]+)">lower&lt;script&gt; is 3, exceeds upper 2</td>', html)
+    assert why_cell
+    assert "whitespace-normal" in why_cell[1]
+    assert "break-words" in why_cell[1]
+    assert "whitespace-nowrap" not in why_cell[1]
