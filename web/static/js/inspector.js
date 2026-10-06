@@ -99,9 +99,11 @@ function setTargetPickerOpen(picker, open) {
   const { button, menu, search } = targetPickerElements(picker);
   if (!button || !menu) return;
   const shouldOpen = Boolean(open) && !button.disabled;
+  const restoreFocus = !shouldOpen && menu.contains(document.activeElement);
   menu.classList.toggle("hidden", !shouldOpen);
   button.setAttribute("aria-expanded", String(shouldOpen));
   if (shouldOpen) search?.focus();
+  else if (restoreFocus && !button.disabled) button.focus();
 }
 
 function setTargetPickerEnabled(picker, enabled) {
@@ -3039,7 +3041,7 @@ function addCustomOutlierRuleRow() {
     "custom-outlier-rule relative rounded-lg border border-gray-200 dark:border-gray-700 p-2";
   row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
   row.innerHTML = `
-    <div class="grid gap-2 pr-7 md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]">
+    <div class="custom-outlier-rule-header grid gap-2 pr-7">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
         <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
@@ -3153,7 +3155,7 @@ function addCustomOutlierConditionRow(ruleRow) {
   condition.className =
     "custom-outlier-condition rounded-md bg-white p-1.5 shadow-sm dark:bg-gray-800";
   condition.innerHTML = `
-    <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.7fr)_1fr_auto]">
+    <div class="custom-outlier-condition-fields grid gap-2">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Type
         <select data-field="condition_type"
                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
@@ -3162,7 +3164,7 @@ function addCustomOutlierConditionRow(ruleRow) {
           <option value="compare">Compare columns</option>
         </select>
       </label>
-      <div data-section="condition-range" class="grid gap-2 sm:grid-cols-4">
+      <div data-section="condition-range" class="custom-outlier-range-fields grid gap-2">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
           <input type="number" step="any" data-field="condition_min"
                  class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
@@ -3187,7 +3189,7 @@ function addCustomOutlierConditionRow(ruleRow) {
         </label>
       </div>
       <div data-section="condition-compare" class="hidden space-y-2">
-        <div class="grid gap-2 sm:grid-cols-2">
+        <div class="custom-outlier-compare-fields grid gap-2">
           <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Target must be
             <select data-field="condition_operator"
                     class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
@@ -3925,7 +3927,7 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
       typeof criteria.other_target !== "string" ||
       !criteria.other_target.trim()
     ) {
-      return `${ruleName} compare condition requires an other_target column name.`;
+      return `${ruleName}: select a comparison column.`;
     }
     return null;
   }
@@ -3939,7 +3941,7 @@ function showCustomOutlierValidationError(text) {
     message.classList.remove("hidden");
   }
   if (typeof showToast === "function") {
-    showToast(text, "error");
+    showToast(text, "error", 5000);
   }
   return false;
 }

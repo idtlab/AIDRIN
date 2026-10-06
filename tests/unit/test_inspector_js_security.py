@@ -527,7 +527,11 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert 'data-section="target-exact"' in source
     assert 'data-section="target-regex"' in source
     assert 'aria-label="Target pattern (regular expression)"' in source
-    assert 'md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]' in source
+    assert 'custom-outlier-rule-header grid gap-2 pr-7' in source
+    css = (INSPECTOR_JS.parents[1] / "css/theme.css").read_text(encoding="utf-8")
+    assert "container-type: inline-size" in css
+    assert "@container (min-width: 52rem)" in css
+    assert "grid-template-columns: minmax(9rem, 0.6fr) minmax(16rem, 1.4fr) auto" in css
     assert 'class="absolute right-2 top-2' in source
     assert 'aria-label="Remove rule"' in source
     assert "function customOutlierRegexTargetType(row)" in source

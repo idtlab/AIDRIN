@@ -178,7 +178,7 @@ def test_advanced_valid_files_remain_unchanged_in_file_save_mode(original):
 @pytest.mark.parametrize(("rules", "error"), [
     ([], "Add at least one"),
     ([rule(COMPARE, target="")], "select a target"),
-    ([rule({**COMPARE, "other_target": ""})], "other_target"),
+    ([rule({**COMPARE, "other_target": ""})], "select a comparison column"),
     ([rule({**COMPARE, "other_target": "gone"})], "not available"),
     ([rule(COMPARE, target="gone")], "not available"),
     ([rule({"type": "range"})], "min or max"),
@@ -209,3 +209,31 @@ def test_builder_rejects_ids_with_colliding_output_keys():
                                         rule(COMPARE, id="custom_rule_1")])
     assert not result["valid"]
     assert "same output key" in result["error"]
+
+
+@pytest.mark.parametrize(("focus_inside", "disabled", "expected_focus"), [
+    (True, False, True),
+    (False, False, False),
+    (True, True, False),
+])
+def test_target_picker_close_restores_keyboard_focus_without_stealing_outside_focus(focus_inside, disabled, expected_focus):
+    source = SOURCE.read_text(encoding="utf-8")
+    start = source.index("function setTargetPickerOpen(")
+    end = source.index("function setTargetPickerEnabled(", start)
+    script = source[start:end] + r'''
+const input = JSON.parse(process.argv[2]);
+let focused = false;
+let hidden = false;
+let expanded;
+const document = {activeElement: {}};
+const button = {disabled: input.disabled, focus: () => {focused = true;}, setAttribute: (name, value) => {expanded = value;}};
+const menu = {contains: () => input.focus_inside, classList: {toggle: (name, value) => {hidden = value;}}};
+function targetPickerElements() {return {button, menu, search: {focus: () => {}}};}
+setTargetPickerOpen({}, false);
+process.stdout.write(JSON.stringify({focused, hidden, expanded}));
+'''
+    completed = subprocess.run(
+        ["node", "-e", script, "unused", json.dumps({"focus_inside": focus_inside, "disabled": disabled})],
+        text=True, capture_output=True, check=True,
+    )
+    assert json.loads(completed.stdout) == {"focused": expected_focus, "hidden": True, "expanded": "false"}
