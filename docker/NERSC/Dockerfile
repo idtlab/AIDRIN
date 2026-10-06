@@ -1,27 +1,72 @@
-# AIDRIN image for NERSC Spin: web + worker + beat under supervisord; Redis is separate.
-# Build from repo root: docker build -f docker/NERSC/Dockerfile -t aidrin:latest .
-# Add --build-arg AIDRIN_DEMO=1 to show the demo banner in the web UI (off by default).
-# Runs Celery beat, so deploy with exactly ONE replica.
-FROM python:3.13.11-slim-bookworm AS builder
+# AIDRIN images built from one file. Build from the repo root.
+#
+# web (default, last stage): NERSC Spin. Web + worker + beat under supervisord; Redis is separate.
+#   docker build -f docker/NERSC/Dockerfile -t aidrin:latest .
+#   Add --build-arg AIDRIN_DEMO=1 to show the demo banner in the web UI (off by default).
+#   Runs Celery beat, so deploy with exactly ONE replica.
+#
+# cli: the `aidrin` CLI for HPC modules (Shifter on Perlmutter, Singularity on Expanse; see hpc/).
+#   docker build -f docker/NERSC/Dockerfile --target cli -t aidrin:<ver> .
+#   docker build -f docker/NERSC/Dockerfile --target cli --build-arg AIDRIN_CLI_EXTRAS="--extra mcp" -t aidrin:<ver>-mcp .
+FROM python:3.13.11-slim-bookworm AS base
 COPY --from=ghcr.io/astral-sh/uv:0.9.27 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
 
-# Override to change extras (e.g. add --extra telemetry).
-ARG AIDRIN_EXTRAS="--extra llm --extra globus"
+# Extras for the cli image only; the web image sets its own in web-builder.
+ARG AIDRIN_CLI_EXTRAS=""
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev $AIDRIN_EXTRAS
+RUN uv sync --frozen --no-install-project --no-dev $AIDRIN_CLI_EXTRAS
 COPY . .
+RUN uv sync --frozen --no-dev $AIDRIN_CLI_EXTRAS
+
+FROM base AS web-builder
+
+# Override to change extras (e.g. add --extra telemetry).
+ARG AIDRIN_EXTRAS="--extra llm --extra globus"
+
 RUN uv sync --frozen --no-dev $AIDRIN_EXTRAS
 # supervisor 4.2.5 imports pkg_resources at startup; setuptools>=82 removed it,
 # so pin setuptools below 82 for the runtime tooling.
 RUN uv pip install gunicorn==23.0.0 supervisor==4.2.5 "setuptools<82"
 
-FROM python:3.13.11-slim-bookworm
+FROM python:3.13.11-slim-bookworm AS cli
+
+# libgomp1: OpenMP runtime for scikit-learn/scipy.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Shifter and Apptainer run the image as the calling user with the host environment, but
+# image ENV wins over host values. So the image isolates its own Python: PYTHONPATH and
+# PYTHONNOUSERSITE=1 keep a loaded conda/python module or ~/.local packages from leaking in.
+# PYTHONPATH must be non-empty: Shifter skips empty image ENV and keeps the host value
+# (seen on Perlmutter). It points at a directory that doesn't exist, which Python ignores.
+# HOME and MPLCONFIGDIR are left to the host so every user gets their own.
+ENV PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH=/app/no-host-pythonpath \
+    PYTHONNOUSERSITE=1 \
+    MPLBACKEND=Agg \
+    AIDRIN_FRAME_CACHE=0 \
+    PGEOCODE_DATA_DIR=/app/.cache/pgeocode
+
+WORKDIR /app
+COPY --from=base /app /app
+
+# Pre-fetch pgeocode's GeoNames data so the HIPAA postal-code check works offline and
+# from a read-only image. Best-effort at build.
+RUN mkdir -p /app/.cache/pgeocode \
+    && python -c "import pgeocode; pgeocode.Nominatim('us')" \
+    || echo "pgeocode prefetch skipped (offline build); will download at runtime"
+
+ENTRYPOINT ["aidrin"]
+
+FROM python:3.13.11-slim-bookworm AS web
 
 # libgomp1: OpenMP runtime for scikit-learn/scipy. The rest are
 # WeasyPrint's native dependencies (Pango/HarfBuzz/gdk-pixbuf) plus a base
@@ -50,7 +95,7 @@ ENV PYTHONUNBUFFERED=1 \
     FLASK_CELERY__result_backend=redis://redis:6379/0
 
 WORKDIR /app
-COPY --from=builder /app /app
+COPY --from=web-builder /app /app
 
 # Pre-fetch pgeocode's GeoNames data into PGEOCODE_DATA_DIR (under /app) so the HIPAA
 # postal-code check works for the arbitrary non-root UID on Spin: HOME=/tmp/.cache is
