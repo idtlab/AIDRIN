@@ -106,6 +106,7 @@ Four Ways to Use AIDRIN
    cli_installation
    cli_usage
    remote
+   hpc
 
 .. toctree::
    :maxdepth: 2
