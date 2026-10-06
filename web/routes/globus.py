@@ -60,11 +60,13 @@ def _store_negotiation(endpoint_id, report, checked_at=None):
     }
     record["fingerprint"] = _negotiation_fingerprint(record)
     session["globus_endpoint_negotiation"] = record
+    session["globus_capabilities"] = record["capabilities"]
     return record
 
 
 def _clear_negotiation():
     session.pop("globus_endpoint_negotiation", None)
+    session.pop("globus_capabilities", None)
 
 
 def _endpoint_probe_timeout():
@@ -155,6 +157,7 @@ def _remove_file_reference_capability(context):
     record["capabilities"] = capabilities
     record["fingerprint"] = _negotiation_fingerprint(record)
     session["globus_endpoint_negotiation"] = record
+    session["globus_capabilities"] = capabilities
     return True
 
 
@@ -282,8 +285,11 @@ def disconnect():
     session.pop("globus_file_path", None)
     session.pop("globus_file_name", None)
     session.pop("globus_file_type", None)
+    session.pop("globus_capabilities", None)
     session.pop("globus_active_tasks", None)
     session.pop("globus_task_contexts", None)
+    # This feature owns session["intent"]; the file identity ends here.
+    session.pop("intent", None)
     _clear_negotiation()
     return jsonify({"success": True})
 
@@ -391,6 +397,13 @@ def submit():
             return jsonify({"error": "Filesystem roots and scan limits are controlled by the Compute worker."}), 400
 
         # Store endpoint info in session for subsequent metric submissions
+        # /globus/submit runs once per metric, so only a genuinely different remote
+        # file invalidates the recommendations. Popping unconditionally would discard
+        # the user's intent every time they ran a check.
+        if (session.get("globus_file_name") != file_name
+                or session.get("globus_file_path") != file_path):
+            session.pop("intent", None)
+
         session["globus_endpoint_id"] = endpoint_id
         session["globus_file_path"] = file_path
         session["globus_file_name"] = file_name

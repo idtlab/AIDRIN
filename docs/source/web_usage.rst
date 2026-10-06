@@ -33,7 +33,10 @@ To use the AIDRIN web application:
    - A JSON report summarizing the results is available for download.
    - Return to the homepage to select another dimension or upload a new dataset.
 
-5. **AI Explanations (Optional)**:
+5. **Tell AIDRIN What You Plan to Do (Optional)**:
+   - After a dataset loads, a modal asks what you are preparing it for and suggests which checks matter most. See `Intent & Recommendations`_ below.
+
+6. **AI Explanations (Optional)**:
    - With the ``llm`` extra installed, each metric result can carry a short AI-generated interpretation. See `AI Explanations`_ below.
 
 Data Readiness Dimensions and Metrics
@@ -205,8 +208,21 @@ Focuses on privacy preservation through metrics that assess anonymity and disclo
 Understandability and Usability
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This feature evaluates dataset metadata for compliance with the **FAIR principles** — *Findable*, *Accessible*, *Interoperable*, and *Reusable*.
-It ensures your dataset is well-documented, discoverable, and reusable by others.
+This dimension checks whether dataset variables have usable unit metadata and
+evaluates dataset metadata for compliance with the **FAIR principles** —
+*Findable*, *Accessible*, *Interoperable*, and *Reusable*.
+
+Unit Metadata Audit and Repair
+''''''''''''''''''''''''''''''
+
+- **Method**: Audits every logical variable for a Pint-recognized unit, dimensionless ``1``, or an explicit not-applicable resolution. Native HDF5/Parquet metadata and trailing name annotations, including compact suffixes such as ``vp_m_per_s``, are preserved as observations; user resolutions can correct them without changing the dataset.
+- **Parameters**: Open **Unit Metadata Audit** under Understandability. Review every unresolved, invalid, ambiguous, or conflicting variable; select **Has a physical unit**, **Dimensionless**, or **No unit applies**; and validate the edited sidecar. For a recognized physical quantity, choose from the matching common units; unrecognized variable names show the full common-unit list. Free-form entry accepts Pint-compatible expressions. Suggestions do not assign units automatically. A complete canonical sidecar can also be imported.
+- **Result**: Separate classification coverage, applicable-unit coverage, and metadata-validity scores; deterministic per-variable findings; and a complete downloadable ``.units.json`` sidecar, including unresolved variables. Results use green for valid or dimensionless variables, amber for missing or ambiguous metadata, red for invalid, conflicting, or overridden mismatches, and neutral styling for not-applicable variables. Mismatch messages state whether the scale or physical dimension differs; source values are not converted.
+
+This checks metadata syntax and coverage only. It does not infer units from
+values, validate expected physical dimensions, convert data, or prove that a
+syntactically valid unit is correct. See :ref:`variable_unit_validation` for
+supported metadata, resolution behavior, ``g`` ambiguity, and Globus compatibility.
 
 FAIR Compliance Report
 '''''''''''''''''''''''
@@ -435,6 +451,103 @@ those headless remote runs do not use this web worker-root policy.
 5. Choose the file type and click **Load Remote Dataset**.
 6. Run metrics as usual. Computation happens on the endpoint; only results
    come back.
+
+Intent & Recommendations
+-------------------------
+
+After a dataset loads, AIDRIN asks what you plan to do with it — train or
+fine-tune a model, run inference, publish or archive the dataset, and so on
+— and suggests which readiness checks are worth running for that goal.
+
+This runs nothing. It computes no metric, reads no additional data, and
+scores nothing; it is advisory only. Its entire output is a prioritised list
+of which checks to look at and why, each with a link that jumps straight to
+the relevant panel and highlights the specific checkbox.
+
+**Setup**
+
+1. When the modal opens, select one or more goals (e.g. *Training or
+   fine-tuning a model*, *Publishing, sharing, or archiving*) and optionally
+   describe your plan in a few words. Alternatively, tick *Other / load a
+   custom profile* to skip the goals and load a profile file you saved
+   earlier (see **Custom profiles** below) instead.
+2. Click **Get recommendations**, or **Skip** to dismiss it for this session.
+3. Recommendations appear grouped into **Check these first** (critical) and
+   **Worth checking** (recommended), each with a short rationale and a link
+   to its panel.
+4. Revisit your goal any time from the **Intent & Recommendations** panel's
+   **Change goal** card, which repeats the same goal checklist and notes box
+   inline and updates the recommendations above without reopening the modal.
+   The same card's action row also has a **Build profile** button, next to
+   **Update recommendations**, that opens the profile-builder page described
+   below.
+
+**Custom profiles**
+
+A profile is an explicit list of checks (with a critical/recommended
+priority each) saved to a JSON file, for cases the curated goal list does
+not cover, or to reuse the same check list across datasets.
+
+- **Build one** on the profile-builder page: click **Build profile** in the
+  Intent & Recommendations panel's **Change goal** card, tick any of the 29
+  readiness checks (grouped by pillar) with a priority for each, and click
+  **Download profile JSON** to save the file. Metrics already recommended
+  for your current goal start pre-ticked. This page has no sidebar entry —
+  it is reached only from that button, and its own **Back to Intent &
+  Recommendations** control returns you to the panel above.
+- **Load one** from the intent modal: tick *Other / load a custom profile*
+  and choose the file. It is read in your browser and never uploaded; the
+  resulting recommendations show *From: Custom profile – <name>* on each
+  card. Loading a profile is only available from this modal — not from the
+  profile-builder page.
+
+The file itself is a small JSON object::
+
+    {
+      "profile_version": 1,
+      "aidrin_version": "2026.09.1",
+      "name": "Lab intake QC",
+      "critical": ["completeness", "row_level_completeness"],
+      "recommended": ["outliers"]
+    }
+
+``profile_version`` is the file-format compatibility gate: AIDRIN rejects a
+file whose ``profile_version`` it does not recognise. ``aidrin_version`` is
+informational only — which AIDRIN release produced the file — and never
+blocks a load; if it differs from the version you are running, AIDRIN loads
+the profile anyway and shows a small note about the difference.
+
+**Without an LLM**
+
+Recommendations come from a fixed, hand-curated mapping of goals to metrics
+built into AIDRIN, so this feature needs no API key and no network access.
+It works the same whether or not the ``llm`` extra is installed.
+
+**With an LLM connected**
+
+With the same OpenAI-compatible connection used for `AI Explanations`_
+(configured via the sparkle icon), the model — not the curated map — decides
+the checks: it is given the same catalog of available checks, your stated
+goal and notes, the dataset's structure, and the curated mapping as a
+starting point it may agree with, extend, trim, or reprioritise. Its own
+selection is what you see, with a short explanation of why each check
+matters for your stated goal.
+
+Because the model has more context than a fixed mapping — your goals, your
+free-text notes, and the dataset's actual shape — it may leave out checks
+the curated map would have included, including compliance-flavoured checks
+such as HIPAA Compliance or k-Anonymity for a publishing goal, if it judges
+them unnecessary for your situation. A check it omits simply does not
+appear; there is no guaranteed-minimum set layered underneath its choice.
+The dataset's structure can still veto a pick the model makes (for example,
+a categorical-only check is dropped for a dataset with no categorical
+columns), but that is the only floor.
+
+If the model is unavailable, unreachable, or its reply cannot be used at
+all, AIDRIN silently falls back to the curated list described above — the
+feature never depends on the LLM being reachable.
+
+----
 
 AI Explanations
 ---------------

@@ -1,0 +1,45 @@
+<!-- Profile builder page: build an explicit priority list over every
+     recommendable metric (all 29, grouped by pillar) and download it as a
+     JSON profile file. Reached ONLY via the "Build profile" button in the
+     Intent & Recommendations panel's "Change goal" card (_intent.html) --
+     deliberately has no sidebar entry of its own. Loading a saved profile
+     back in still happens only in the intent modal
+     (_components/intent_modal.html); this page never loads one. -->
+<div id="panel-profile-builder" class="metric-panel hidden">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    <div class="flex items-start justify-between gap-3 mb-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Build a profile</h2>
+      <button type="button" onclick="showPanel('intent')"
+              class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+        &larr; Back to Intent &amp; Recommendations
+      </button>
+    </div>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+      Tick any of the readiness checks below and mark each Critical or Recommended, then download the
+      result as a JSON file. Load it back later from the intent popup's <em>Load profile from JSON</em>
+      option.
+    </p>
+
+    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
+      Profile name
+      <input type="text" id="profile-builder-name" maxlength="80"
+             placeholder="e.g. Lab intake QC"
+             class="mt-1 block w-full max-w-sm rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+    </label>
+
+    <p id="profile-builder-selected-count" class="mt-3 text-xs text-gray-500 dark:text-gray-400">Loading metrics&hellip;</p>
+    <div id="profile-builder-rows" class="mt-1 space-y-1"></div>
+
+    <div class="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+      <button type="button" onclick="showPanel('intent')"
+              class="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+        Cancel
+      </button>
+      <button type="button" onclick="saveIntentProfile()"
+              class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
+        Download profile JSON
+      </button>
+    </div>
+    <div id="profile-builder-message" class="hidden mt-3 text-xs text-amber-700 dark:text-amber-300"></div>
+  </div>
+</div>

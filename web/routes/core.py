@@ -76,6 +76,8 @@ def inspector():
             session["uploaded_file_path"] = file_path
             session["uploaded_file_type"] = request.form.get("fileTypeSelector")
             session.pop("selected_keys", None)
+            # This feature owns session["intent"], so a new dataset drops it.
+            session.pop("intent", None)
 
             # Track files this session created so /clear removes only these,
             # never files belonging to other concurrent sessions.
@@ -141,6 +143,9 @@ def inspector():
     from web.llm import is_llm_available
     llm_available = is_llm_available()
     llm_configured = bool(session.get("llm_config", {}).get("api_key"))
+
+    # Intent-based metric recommendations (needs no LLM)
+    from aidrin.intent import CUSTOM_PROFILE_OPTION_VALUE, INTENTS
     globus_authenticated = session.get("globus_authenticated", False)
 
     # Globus remote file — treat as "uploaded" for sidebar/panels visibility
@@ -148,6 +153,7 @@ def inspector():
     globus_file_name = session.get("globus_file_name", "")
     globus_file_type = session.get("globus_file_type", "")
     globus_endpoint_id = session.get("globus_endpoint_id", "")
+    globus_capabilities = session.get("globus_capabilities", [])
     globus_mode = bool(globus_file_path and globus_authenticated)
 
     # If Globus mode, use globus file info for template (shows sidebar + panels)
@@ -171,8 +177,12 @@ def inspector():
             globus_authenticated=globus_authenticated,
             globus_mode=globus_mode,
             globus_endpoint_id=globus_endpoint_id,
+            globus_capabilities=globus_capabilities,
             llm_available=llm_available,
             llm_configured=llm_configured,
+            intent_options=INTENTS,
+            custom_profile_option_value=CUSTOM_PROFILE_OPTION_VALUE,
+            intent_asked=bool(session.get("intent")),
         )
     except Exception as e:
         file_upload_time_log.error("Error rendering workspace: %s", e, exc_info=True)
@@ -273,7 +283,7 @@ def _selection_message(file_type):
         return "This ROOT file contains multiple trees. Select one tree to analyze."
     return (
         "This HDF5 file contains multiple datasets with different shapes. "
-        "Select one or more compatible datasets (same length) to analyze."
+        "Select 1D datasets of the same length, or fields that share a grid, to analyze."
     )
 
 
@@ -305,41 +315,28 @@ def filter_file():
                 return jsonify({"success": False, "error": "The selected ROOT tree was not found."}), 400
             clear_all_user_cache()
 
-        if file_path and file_type == ".h5" and len(keys_list) > 1:
-            inv = _selection_inventory(file_path, file_type)
-            if inv["type"] == "multi_dataset":
-                ds_by_path = {ds["path"]: ds for ds in inv["datasets"]}
-                lengths = set()
-                for key in keys_list:
-                    ds = ds_by_path.get(key)
-                    if not ds:
-                        return jsonify(
-                            {"success": False, "error": f"Unknown dataset: {key}"}
-                        ), 400
-                    if ds["ndim"] != 1:
-                        return jsonify(
-                            {
-                                "success": False,
-                                "error": (
-                                    f"'{key}' is not a 1D array. Select 1D datasets "
-                                    "with the same length, or choose a single 2D dataset."
-                                ),
-                            }
-                        ), 400
-                    lengths.add(ds["shape"][0] if ds["shape"] else 0)
-                if len(lengths) > 1:
-                    return jsonify(
-                        {
-                            "success": False,
-                            "error": (
-                                "Selected datasets must have the same length to merge "
-                                "into one table."
-                            ),
-                        }
-                    ), 400
+        if file_path and file_type == ".h5":
+            reader = hdf5Reader(file_path, file_upload_time_log)
+            if reader.inventory()["type"] == "multi_dataset":
+                # The reader owns what a usable selection is. Keeping a second
+                # copy of the rule here is what let the picker keep rejecting
+                # grid selections after the reader learned to read them.
+                error = reader.validate_selection(keys_list)
+                if error:
+                    return jsonify({"success": False, "error": error}), 400
 
         session["selected_keys"] = keys_list
         session["minimize_preview"] = True
+        # Recommendations were computed for the previous column selection.
+        session.pop("intent", None)
+        # The file name is unchanged across an HDF5 key switch, so the cached
+        # recommendation payload (keyed on file name, not selected_keys) would
+        # otherwise survive and be served back on the next panel restore.
+        file_name = session.get("uploaded_file_name")
+        if file_name:
+            current_app.TEMP_RESULTS_CACHE.pop(
+                f"user:{get_current_user_id()}:file:{file_name}:intent", None
+            )
 
         return jsonify({"success": True, "message": "File filtered successfully"})
     except Exception as e:
@@ -361,6 +358,7 @@ def clear_dataset_selection():
             previous = [key.strip() for key in previous.split(",") if key.strip()]
         session.pop("selected_keys", None)
         session.pop("minimize_preview", None)
+        session.pop("intent", None)
 
         cleared_count = clear_all_user_cache()
         file_upload_time_log.info(

@@ -1,5 +1,6 @@
 # AIDRIN image for NERSC Spin: web + worker + beat under supervisord; Redis is separate.
 # Build from repo root: docker build -f docker/NERSC/Dockerfile -t aidrin:latest .
+# Add --build-arg AIDRIN_DEMO=1 to show the demo banner in the web UI (off by default).
 # Runs Celery beat, so deploy with exactly ONE replica.
 FROM python:3.13.11-slim-bookworm AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.9.27 /uv /uvx /bin/
@@ -36,8 +37,10 @@ RUN apt-get update \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
+ARG AIDRIN_DEMO=0
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
+    AIDRIN_DEMO=$AIDRIN_DEMO \
     GUNICORN_WORKERS=2 \
     GUNICORN_TIMEOUT=120 \
     HOME=/tmp \

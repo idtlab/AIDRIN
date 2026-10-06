@@ -19,6 +19,7 @@ from aidrin.telemetry import mlflow_sink
 from .config import HeadlessConfig
 from .runners import (
     _build_file_info,
+    _normalize_file_type,
     run_class_imbalance,
     run_completeness,
     run_constant_feature_count,
@@ -47,6 +48,7 @@ from .runners import (
     run_statistical_rates,
     run_t_closeness,
     run_temporal_completeness,
+    run_variable_unit_validation,
 )
 
 
@@ -91,6 +93,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "category": "data-structure",
         "description": "Per-feature excess kurtosis (tail heaviness).",
         "runner": run_kurtosis,
+        "required_args": [],
+    },
+    "variable_unit_validation": {
+        "category": "data-structure",
+        "description": "Audit unit metadata for every logical variable and apply an optional canonical sidecar.",
+        "runner": run_variable_unit_validation,
         "required_args": [],
     },
     "row_level_completeness": {
@@ -258,6 +266,44 @@ def _resolve_custom_outlier_rules(kwargs: Dict[str, Any]) -> Any:
     return source_value
 
 
+def _resolve_unit_metadata(kwargs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Resolve at most one inline, JSON-string, or host-local sidecar source."""
+    sources = {
+        "unit_metadata": kwargs.get("unit_metadata"),
+        "unit_metadata_json": kwargs.get("unit_metadata_json"),
+        "unit_metadata_file": kwargs.get("unit_metadata_file"),
+    }
+    supplied = [(name, value) for name, value in sources.items() if value is not None and value != ""]
+    if len(supplied) > 1:
+        raise ValueError(
+            "Provide at most one variable-unit metadata source: unit_metadata, "
+            "unit_metadata_json, or unit_metadata_file"
+        )
+    if not supplied:
+        return None
+
+    source_name, source_value = supplied[0]
+    if source_name == "unit_metadata":
+        return source_value
+    if source_name == "unit_metadata_file":
+        path = Path(source_value).expanduser()
+        try:
+            raw_sidecar = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"Unable to read variable-unit metadata file: {path}") from exc
+    else:
+        raw_sidecar = source_value
+
+    try:
+        sidecar = json.loads(raw_sidecar)
+    except (TypeError, json.JSONDecodeError) as exc:
+        label = "metadata file" if source_name == "unit_metadata_file" else "unit_metadata_json"
+        raise ValueError(f"Invalid JSON in variable-unit {label}") from exc
+    if not isinstance(sidecar, dict):
+        raise ValueError("Variable-unit metadata JSON must contain an object")
+    return sidecar
+
+
 def _sanitize(obj: Any) -> Any:
     """Recursively convert numpy scalars/arrays to native Python types."""
     if isinstance(obj, dict):
@@ -362,6 +408,39 @@ def get_metric_info(name: str) -> Dict[str, Any]:
         "description": metric["description"],
         "required_args": list(metric.get("required_args", [])),
     }
+
+
+def inventory(file_path: str, file_type: Optional[str] = None) -> Dict[str, Any]:
+    """Classify an HDF5/Zarr file's on-disk layout without reading it as a table.
+
+    Returns the reader's ``inventory()`` dict: ``{"type", "datasets", "groups"}``.
+    ``type`` is one of ``empty``, ``single_dataset``, ``multi_dataset``, or
+    ``legacy`` (see ``aidrin.file_handling.readers.structured`` for what each
+    means) -- ``multi_dataset`` is the layout that ``run``/``data-quality``/
+    ``summarize`` refuse to auto-flatten, and needs an explicit
+    ``selected_keys`` choice.
+
+    Every other supported format (CSV, Parquet, Excel, JSON, NumPy) is always
+    read as a single table and has no ambiguous layout to vet, so this raises
+    ``ValueError`` for them.
+    """
+    from aidrin.file_handling.file_parser import (
+        READER_MAP,
+        _SELECTION_FILE_TYPES,
+        file_upload_time_log,
+    )
+
+    normalized = _normalize_file_type(file_type, file_path)
+    if normalized not in _SELECTION_FILE_TYPES:
+        raise ValueError(
+            "'aidrin inventory' only applies to HDF5 (.h5) and Zarr (.zarr) "
+            f"files; got {normalized or '(unrecognized)'}. Every other "
+            "supported format is always read as a single table."
+        )
+    if not os.path.exists(file_path):
+        raise ValueError(f"File not found: {file_path}")
+    reader_cls = READER_MAP[normalized]
+    return reader_cls(file_path, file_upload_time_log).inventory()
 
 
 def summarize_dataset(
@@ -521,7 +600,8 @@ def _maybe_save_images(
 # params buries the ones that matter.
 _RESULT_AFFECTING_ARGS = frozenset({
     "epsilon", "threshold", "frequency", "distance_metric", "scan_limit",
-    "rules_file", "rules_json",
+    "rules_file", "rules_json", "unit_metadata_file", "unit_metadata_json",
+    "unit_metadata",
 })
 
 
@@ -745,6 +825,15 @@ def _run_registry_metric(
         )
         return _finalize(result)
 
+    if metric_key == "variable_unit_validation":
+        result = metric["runner"](
+            file_path,
+            file_type,
+            file_name,
+            _resolve_unit_metadata(kwargs),
+        )
+        return _finalize(result)
+
     if metric_key == "feature_relevance":
         cat_columns = _normalize_list(kwargs.get("cat_columns")) or []
         num_columns = _normalize_list(kwargs.get("num_columns")) or []
@@ -825,7 +914,11 @@ def _run_registry_metric(
         epsilon = kwargs.get("epsilon")
         if not columns or epsilon is None:
             raise ValueError("columns and epsilon are required for differential_privacy")
-        result = metric["runner"](file_path, file_type, file_name, columns, epsilon)
+        result = metric["runner"](
+            file_path, file_type, file_name, columns, epsilon,
+            noisy_output=kwargs.get("noisy_output"),
+            save_noisy_output=not kwargs.get("skip_noisy_output", False),
+        )
         return _finalize(result)
 
     if metric_key == "hipaa_compliance":
@@ -883,6 +976,8 @@ def run_batch_metrics(
         "max_results": config_obj.max_results,
         "scan_limit": config_obj.scan_limit,
         "target_match": config_obj.target_match,
+        "unit_metadata": config_obj.unit_metadata,
+        "unit_metadata_file": config_obj.unit_metadata_file,
         "save_images": bool(config_obj.save_images) if config_obj.save_images is not None else True,
         "image_dir": config_obj.image_dir,
         "verbose": verbose,
@@ -1106,14 +1201,19 @@ def run_custom_metric_remedy(
     output_dir: Optional[str] = None,
     file_type: Optional[str] = None,
     file_name: Optional[str] = None,
+    diff: bool = False,
     **kwargs,
-) -> str:
+) -> Any:
     """Execute `remedy` on a custom metric and save the returned DataFrame as CSV.
 
     The input dataset may be any format supported by file_handling/readers/
     (CSV, Excel, JSON, NPZ, HDF5, Parquet); the remedied output is always
     written as CSV, since remediated data doesn't round-trip losslessly back
     into every original format (e.g. JSON/NPZ/HDF5 are flattened on read).
+
+    Returns the saved CSV path (str) by default. When `diff` is true, instead
+    re-runs `metric()` on the remedied data and returns
+    `{"before": ..., "after": ..., "_saved_to": <path>}`.
     """
     script_path = _resolve_custom_script(metric_name)
     clean_name = os.path.splitext(os.path.basename(script_path))[0]
@@ -1173,4 +1273,15 @@ def run_custom_metric_remedy(
     output_path = os.path.join(target_dir, filename)
     remedied.to_csv(output_path, index=False)
 
-    return output_path
+    if not diff:
+        return output_path
+
+    after_agent = module.CustomDR(dataset=remedied, **kwargs)
+    _log_progress(f"Re-running metric on remedied data for: {metric_name}", kwargs.get("verbose", False))
+    after_results = after_agent.metric(**kwargs)
+    if not isinstance(after_results, dict):
+        raise TypeError(
+            f"metric() in '{script_path}' must return a dict, got {type(after_results).__name__}"
+        )
+
+    return {"before": metric_results, "after": after_results, "_saved_to": output_path}

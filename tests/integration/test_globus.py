@@ -127,6 +127,8 @@ def test_remote_runner_custom_outlier_targets():
 
     assert result["success"] is True
     assert any(target["name"] == "age" for target in result["targets"])
+    assert [variable["name"] for variable in result["unit_metadata"]["variables"]] == ["age", "label"]
+    assert any(group["quantity"] == "temperature" for group in result["unit_catalog"])
     assert result["file_reference"]["enabled"] is False
 
 
@@ -194,6 +196,50 @@ def test_remote_runner_file_reference_failure_is_metric_scoped(monkeypatch, tmp_
 
     assert "Constant Feature Count" in result
     assert "Select an allowed filesystem root" in result["File Reference Validation"]["Error"]
+
+
+def test_remote_runner_data_structure_variable_unit_validation():
+    path, name, file_type = _write_csv(pd.DataFrame({"speed": [1.0], "station": ["A"]}))
+    try:
+        sidecar = aidrin.calculate_variable_unit_validation((path, name, file_type))
+        resolutions = {
+            "speed": {"kind": "unit", "unit": "m/s", "source": "user"},
+            "station": {"kind": "not_applicable", "source": "user"},
+        }
+        for variable in sidecar["variables"]:
+            variable["resolution"] = resolutions[variable["name"]]
+        result = remote_metric_runner(
+            "data_structure",
+            path,
+            name,
+            file_type,
+            selected=["variable_unit_validation"],
+            unit_metadata=sidecar,
+        )
+    finally:
+        os.unlink(path)
+
+    assert result["Variable Unit Validation"]["summary"]["all_variables_ready"] is True
+
+
+def test_remote_runner_variable_unit_failure_is_metric_scoped():
+    path, name, file_type = _write_csv(pd.DataFrame({"speed": [1.0]}))
+    try:
+        sidecar = aidrin.calculate_variable_unit_validation((path, name, file_type))
+        sidecar["dataset"]["schema_fingerprint"] = "sha256:wrong-dataset"
+        result = remote_metric_runner(
+            "data_structure",
+            path,
+            name,
+            file_type,
+            selected=["constant_feature_count", "variable_unit_validation"],
+            unit_metadata=sidecar,
+        )
+    finally:
+        os.unlink(path)
+
+    assert "Constant Feature Count" in result
+    assert "schema fingerprint does not match" in result["Variable Unit Validation"]["Error"]
 
 
 def test_remote_runner_data_quality_custom_outliers():
@@ -268,6 +314,17 @@ def test_remote_env_probe_reports_versions():
     assert info["aidrin_version"] == aidrin.__version__
     assert info["python_version"] == ".".join(map(str, sys.version_info[:3]))
     assert info["capability_schema_version"] == 1
+    assert info["capabilities"] == [
+        "file_reference_validation_v1",
+        "variable_unit_metadata_v1",
+    ]
+
+
+def test_remote_env_probe_omits_unavailable_variable_unit_capability(monkeypatch):
+    monkeypatch.delattr(aidrin, "calculate_variable_unit_validation")
+
+    info = remote_env_probe()
+
     assert info["capabilities"] == ["file_reference_validation_v1"]
 
 
@@ -306,20 +363,26 @@ def test_check_endpoint_compatibility_matching():
     assert report["remote"]["capabilities"] == []
 
 
-def test_check_endpoint_compatibility_reports_optional_capabilities():
+def test_check_endpoint_compatibility_preserves_worker_capabilities():
     local_py = ".".join(map(str, sys.version_info[:3]))
     client = _FakeClient({
         "aidrin_version": aidrin.__version__,
         "python_version": local_py,
         "capability_schema_version": 1,
-        "capabilities": ["file_reference_validation_v1"],
+        "capabilities": [
+            "file_reference_validation_v1",
+            "variable_unit_metadata_v1",
+        ],
     })
 
     report = check_endpoint_compatibility(client, "endpoint-uuid")
 
     assert report["compatible"] is True
     assert report["remote"]["capability_schema_version"] == 1
-    assert report["remote"]["capabilities"] == ["file_reference_validation_v1"]
+    assert report["remote"]["capabilities"] == [
+        "file_reference_validation_v1",
+        "variable_unit_metadata_v1",
+    ]
 
 
 def test_check_endpoint_compatibility_ignores_unknown_capability_schema():
@@ -499,6 +562,152 @@ def test_remote_probe_reports_headless_import():
     assert env["headless_import"] is True
     assert env["aidrin_version"]
 
+
+# -------------------------------------------------
+# Intent state management in /globus/submit
+# -------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not is_globus_available(),
+    reason="globus SDK not installed",
+)
+def test_globus_submit_same_file_preserves_intent(client, monkeypatch):
+    """A second POST /globus/submit for the SAME file must preserve session["intent"]."""
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes, "check_endpoint_compatibility", lambda *_args: _compatibility_report()
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_a, **_kw: "task-id-1")
+
+    # Establish the file identity FIRST (setup, not the assertion).
+    setup_response = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/remote/data.csv",
+            "file_name": "data.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert setup_response.status_code == 200
+
+    # Now that the identity is set, stamp the intent to guard.
+    with client.session_transaction() as sess:
+        sess["intent"] = {"intents": ["training"], "notes": "", "dismissed": False}
+
+    # Submit again for the SAME file (same endpoint_id, file_path, file_name).
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_a, **_kw: "task-id-2")
+    response = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/remote/data.csv",
+            "file_name": "data.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert response.status_code == 200
+
+    # Intent should STILL be present (not cleared) because the file didn't change.
+    with client.session_transaction() as sess:
+        assert "intent" in sess
+        assert sess["intent"]["intents"] == ["training"]
+
+
+@pytest.mark.skipif(
+    not is_globus_available(),
+    reason="globus SDK not installed",
+)
+def test_globus_submit_different_file_clears_intent(client, monkeypatch):
+    """POST /globus/submit for a different file must clear session["intent"]."""
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes, "check_endpoint_compatibility", lambda *_args: _compatibility_report()
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_a, **_kw: "task-id-1")
+
+    # Establish the file identity FIRST (setup, not the assertion).
+    setup_response = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/remote/data.csv",
+            "file_name": "data.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert setup_response.status_code == 200
+
+    with client.session_transaction() as sess:
+        sess["intent"] = {"intents": ["training"], "notes": "", "dismissed": False}
+
+    # Submit for a DIFFERENT file (different name)
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_a, **_kw: "task-id-2")
+    response2 = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/remote/other.csv",
+            "file_name": "other.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert response2.status_code == 200
+
+    # Intent should be CLEARED because file name changed
+    with client.session_transaction() as sess:
+        assert "intent" not in sess
+
+    # Also test with different path but same basename.
+    # Re-establish identity for "other.csv" first, then stamp intent again.
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_a, **_kw: "task-id-3")
+    with client.session_transaction() as sess:
+        sess["intent"] = {"intents": ["publishing"], "notes": "", "dismissed": False}
+
+    response3 = client.post(
+        "/globus/submit",
+        json={
+            "endpoint_id": "endpoint-uuid",
+            "file_path": "/other/remote/other.csv",
+            "file_name": "other.csv",
+            "file_type": ".csv",
+            "metric_name": "completeness",
+        },
+    )
+    assert response3.status_code == 200
+
+    # Intent should be CLEARED because file path changed (even though name is same)
+    with client.session_transaction() as sess:
+        assert "intent" not in sess
+
+
+@pytest.mark.skipif(
+    not is_globus_available(),
+    reason="globus SDK not installed",
+)
+def test_globus_disconnect_clears_intent(client):
+    """POST /globus/disconnect must clear session["intent"]."""
+    # Set up authenticated Globus session with intent
+    with client.session_transaction() as sess:
+        sess["globus_authenticated"] = True
+        sess["globus_file_name"] = "data.csv"
+        sess["globus_file_path"] = "/remote/data.csv"
+        sess["intent"] = {"intents": ["training"], "notes": "", "dismissed": False}
+
+    # Call disconnect
+    response = client.post("/globus/disconnect")
+    assert response.status_code == 200
+
+    # Intent should be CLEARED
+    with client.session_transaction() as sess:
+        assert "intent" not in sess
 # Negotiation and asynchronous task context routes
 # -------------------------------------------------
 
@@ -723,6 +932,25 @@ def test_switching_endpoint_reuses_fresh_preflight_negotiation(client, monkeypat
     assert checked.status_code == 200
     assert submitted.status_code == 200
     assert calls == ["endpoint-uuid"]
+
+
+def test_submission_negotiation_synchronizes_template_capabilities(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["variable_unit_metadata_v1"]),
+    )
+    monkeypatch.setattr(globus_routes, "submit_metric", lambda *_args, **_kwargs: "task-id")
+
+    response = client.post("/globus/submit", json=_submission("custom_outlier_targets"))
+
+    assert response.status_code == 200
+    with client.session_transaction() as flask_session:
+        assert flask_session["globus_capabilities"] == ["variable_unit_metadata_v1"]
 
 
 def test_discovery_context_is_retained_pending_and_cleaned_on_completion(client, monkeypatch):

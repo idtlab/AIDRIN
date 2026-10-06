@@ -100,10 +100,18 @@ function updateFileInputBasedOnType(
   fileUploadMessage,
 ) {
   const fileType = fileTypeElement.value;
+  // One format can ship under several extensions (HDF5 as .h5 or .hdf5), so the
+  // option carries the full accept list from the backend. Filtering on the
+  // canonical extension alone greys the others out in the file dialog.
+  const selectedOption = fileTypeElement.selectedOptions
+    ? fileTypeElement.selectedOptions[0]
+    : null;
+  const acceptList =
+    (selectedOption && selectedOption.dataset.accept) || fileType;
   //if a filetype is present, set to that filetype only, otherwise disable
   if (fileType) {
     fileInput.disabled = false;
-    fileInput.setAttribute("accept", fileType);
+    fileInput.setAttribute("accept", acceptList);
     debugLog("USER SELECTED FILETYPE: " + fileType);
     fileUploadMessage.style.opacity = "1";
     fileUploadMessage.textContent = "Click to upload or drag and drop";
