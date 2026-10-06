@@ -23,17 +23,21 @@ def iter_targets(file_info):
     return _iter_column_targets(file_info)
 
 
-def iter_value_blocks(file_info, target):
+def iter_value_blocks(file_info, target, reference_targets=()):
     """Yield value blocks for one selectable target.
 
     Blocks include the planned fields plus an optional ``missing_mask`` used by
     metrics that need fill-sentinel-aware missing handling.
+    Tabular ``reference_targets`` are read from the same frame and included as
+    a ``references`` mapping of column names to positionally aligned series.
     """
     target_type = target.get("target_type")
     if target_type == "hdf5_dataset":
+        if reference_targets:
+            raise ValueError("Reference targets support tabular columns only")
         yield from _iter_hdf5_value_blocks(file_info[0], target)
     elif target_type == "column":
-        yield from _iter_column_value_blocks(file_info, target)
+        yield from _iter_column_value_blocks(file_info, target, reference_targets)
     else:
         raise ValueError(f"Unsupported target type: {target_type}")
 
@@ -58,7 +62,7 @@ def _iter_column_targets(file_info):
     return targets
 
 
-def _iter_column_value_blocks(file_info, target):
+def _iter_column_value_blocks(file_info, target, reference_targets=()):
     df = read_file(file_info)
     if not hasattr(df, "columns"):
         raise ValueError("Unable to read tabular file")
@@ -69,6 +73,15 @@ def _iter_column_value_blocks(file_info, target):
         raise KeyError(f"Target not found: {name}")
 
     series = df[name]
+    references = {}
+    for reference in reference_targets:
+        if reference not in df.columns:
+            raise KeyError(f"Comparison column not found: {reference}. Use an exact column name from the Target list.")
+        if not isinstance(df[reference], pd.Series):
+            raise ValueError(f"Comparison column is ambiguous: {reference}")
+        references[reference] = df[reference]
+    if references and not isinstance(series, pd.Series):
+        raise ValueError(f"Comparison target is ambiguous: {name}")
 
     def locate(index_tuple):
         row_index = int(index_tuple[0])
@@ -77,13 +90,16 @@ def _iter_column_value_blocks(file_info, target):
             location["source_line"] = row_index + 2
         return location
 
-    yield {
+    block = {
         "target": name,
         "target_type": "column",
         "values": series,
         "offset": None,
         "locate": locate,
     }
+    if references:
+        block["references"] = references
+    yield block
 
 
 def _normalize_tabular_columns(df):

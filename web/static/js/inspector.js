@@ -3384,8 +3384,24 @@ function validateCustomOutlierRulesFile(rules) {
     }
     const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
     if (error) return error;
+    if (
+      String(rule.target_type).trim() !== "column" &&
+      customOutlierHasComparisons(rule.criteria)
+    ) {
+      return `${ruleName}: compare criteria support tabular columns only.`;
+    }
   }
   return null;
+}
+
+function customOutlierHasComparisons(criteria) {
+  const op = String(criteria.op || "")
+    .trim()
+    .toLowerCase();
+  if (op === "not") return customOutlierHasComparisons(criteria.condition);
+  if (op === "and" || op === "or")
+    return criteria.conditions.some(customOutlierHasComparisons);
+  return criteria.type === "compare";
 }
 
 async function resolveCustomOutlierRules() {
@@ -3541,6 +3557,18 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
     return null;
   }
   if (criteria.type === "regex") return null;
+  if (criteria.type === "compare") {
+    if (!["<", "<=", ">", ">=", "==", "!="].includes(criteria.operator)) {
+      return `${ruleName} compare condition requires operator <, <=, >, >=, ==, or !=.`;
+    }
+    if (
+      typeof criteria.other_target !== "string" ||
+      !criteria.other_target.trim()
+    ) {
+      return `${ruleName} compare condition requires an other_target column name.`;
+    }
+    return null;
+  }
   return `${ruleName} has an unsupported condition type.`;
 }
 
@@ -4105,6 +4133,7 @@ function findCustomOutlierExport(result) {
 function downloadCustomOutlierExportCsv() {
   const exportByRule = findCustomOutlierExport(lastMetricResult);
   const rows = flattenOutlierExportRows(exportByRule);
+  const includeReferences = rows.some((row) => row.reference_values);
   const headers = [
     "rule_key",
     "rule_id",
@@ -4119,6 +4148,7 @@ function downloadCustomOutlierExportCsv() {
     "source_line",
     "row_index",
   ];
+  if (includeReferences) headers.push("reference_values");
   const csvRows = [headers.join(",")];
   for (const row of rows) {
     const location = row.location || {};
@@ -4136,6 +4166,8 @@ function downloadCustomOutlierExportCsv() {
       location.source_line ?? "",
       location.row_index ?? "",
     ];
+    if (includeReferences)
+      values.push(JSON.stringify(row.reference_values || {}));
     csvRows.push(values.map(csvEscape).join(","));
   }
   const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });

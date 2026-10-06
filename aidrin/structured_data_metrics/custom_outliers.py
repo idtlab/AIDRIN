@@ -1,5 +1,6 @@
 import logging
 import math
+import operator
 import re
 
 import numpy as np
@@ -14,6 +15,15 @@ from aidrin.file_handling.value_iterators import (
 )
 
 logger = logging.getLogger(__name__)
+
+COMPARISON_OPERATORS = {
+    "<": operator.lt,
+    "<=": operator.le,
+    ">": operator.gt,
+    ">=": operator.ge,
+    "==": operator.eq,
+    "!=": operator.ne,
+}
 
 
 def calculate_custom_outliers(
@@ -64,7 +74,8 @@ def calculate_custom_outliers(
             hdf5_aggregates[key] = _new_hdf5_aggregate_state()
 
             try:
-                for block in iter_value_blocks(file_info, target):
+                block_options = {"reference_targets": rule["reference_targets"]} if rule["reference_targets"] else {}
+                for block in iter_value_blocks(file_info, target, **block_options):
                     should_stop = _apply_rule_to_block(
                         execution_rule,
                         block,
@@ -190,6 +201,9 @@ def _validate_rules(rules):
         ):
             raise ValueError(f"Rule {rule_id} must use criteria tree syntax")
         criteria = _validate_rule_criteria(raw_rule.get("criteria"), rule_id)
+        reference_targets = sorted({node["other_target"] for node in _comparison_nodes(criteria)})
+        if reference_targets and target_type != "column":
+            raise ValueError(f"Rule {rule_id}: compare criteria support tabular columns only")
 
         target_match = str(raw_rule.get("target_match") or "exact").strip().lower()
         if target_match not in {"exact", "regex"}:
@@ -208,6 +222,7 @@ def _validate_rules(rules):
             "target_type": target_type,
             "target_match": target_match,
             "criteria": criteria,
+            "reference_targets": reference_targets,
             "allow_missing": bool(raw_rule.get("allow_missing", False)),
         }
         if compiled_target_pattern is not None:
@@ -291,7 +306,26 @@ def _validate_criteria_node(node, rule_id, path):
         return _validate_range_criteria(node, rule_id)
     if condition_type == "regex":
         return _validate_regex_criteria(node, rule_id)
+    if condition_type == "compare":
+        comparison_operator = node.get("operator")
+        if not isinstance(comparison_operator, str) or comparison_operator not in COMPARISON_OPERATORS:
+            raise ValueError(f"Rule {rule_id} {path}.compare requires operator <, <=, >, >=, ==, or !=")
+        other_target = node.get("other_target")
+        if not isinstance(other_target, str) or not other_target.strip():
+            raise ValueError(f"Rule {rule_id} {path}.compare requires a non-empty other_target column name")
+        return {"type": "compare", "operator": comparison_operator, "other_target": other_target.strip()}
     raise ValueError(f"Compound rule {rule_id} has unsupported condition type: {condition_type}")
+
+
+def _comparison_nodes(criteria):
+    """Find comparison leaves, including those nested under boolean conditions."""
+    if criteria.get("op") in {"and", "or"}:
+        for child in criteria["conditions"]:
+            yield from _comparison_nodes(child)
+    elif criteria.get("op") == "not":
+        yield from _comparison_nodes(criteria["condition"])
+    elif criteria.get("type") == "compare":
+        yield criteria
 
 
 def _coerce_bound(value, rule_id, field):
@@ -341,7 +375,7 @@ def _internal_rule_key(rule_id):
 
 
 def _base_summary(rule, max_outliers, scan_limit, stop_after_outliers, max_export_rows):
-    return {
+    summary = {
         "id": rule["id"],
         "name": rule["name"],
         "target": rule["target"],
@@ -359,6 +393,9 @@ def _base_summary(rule, max_outliers, scan_limit, stop_after_outliers, max_expor
         "export_truncated": False,
         "truncated": False,
     }
+    if rule["reference_targets"]:
+        summary["reference_targets"] = rule["reference_targets"]
+    return summary
 
 
 def _apply_rule_to_block(
@@ -382,7 +419,8 @@ def _apply_rule_to_block(
             return True
         summary["total"] += 1
         location = locate(index_tuple)
-        missing = is_missing(index_tuple, value)
+        reference_values = {name: series.iloc[index_tuple[0]] for name, series in block.get("references", {}).items()}
+        missing = is_missing(index_tuple, value) or any(_is_scalar_missing(item) for item in reference_values.values())
         if missing:
             summary["missing"] += 1
             if rule["allow_missing"]:
@@ -407,7 +445,7 @@ def _apply_rule_to_block(
                 return True
             continue
 
-        reason, flag = _invalid_result(rule, value)
+        reason, flag = _invalid_result(rule, value, reference_values)
         if reason is None:
             summary["valid"] += 1
             _record_hdf5_aggregate(rule, block, location, hdf5_aggregates, missing=False, outlier=False)
@@ -461,21 +499,27 @@ def _is_scalar_missing(value):
     return bool(missing) if np.isscalar(missing) else False
 
 
-def _invalid_result(rule, value):
-    return _criteria_invalid_result(rule["criteria"], value)
+def _invalid_result(rule, value, reference_values=None):
+    reference_values = reference_values or {}
+    if rule["reference_targets"]:
+        # Unusable comparison operands must not become valid via OR or NOT.
+        for name, item in [(rule["target"], value), *reference_values.items()]:
+            if _coerce_comparison_number(item) is None:
+                return "invalid_comparison", f"{name} must contain a finite number"
+    return _criteria_invalid_result(rule["criteria"], value, reference_values)
 
 
-def _criteria_invalid_result(criteria, value):
+def _criteria_invalid_result(criteria, value, reference_values=None):
     if criteria.get("op") == "and":
         for child in criteria["conditions"]:
-            reason, flag = _criteria_invalid_result(child, value)
+            reason, flag = _criteria_invalid_result(child, value, reference_values)
             if reason is not None:
                 return reason, flag
         return None, None
     if criteria.get("op") == "or":
         failures = []
         for child in criteria["conditions"]:
-            reason, flag = _criteria_invalid_result(child, value)
+            reason, flag = _criteria_invalid_result(child, value, reference_values)
             if reason is None:
                 return None, None
             failures.append((reason, flag))
@@ -483,7 +527,7 @@ def _criteria_invalid_result(criteria, value):
             return failures[0]
         return "or_mismatch", "no match"
     if criteria.get("op") == "not":
-        reason, _flag = _criteria_invalid_result(criteria["condition"], value)
+        reason, _flag = _criteria_invalid_result(criteria["condition"], value, reference_values)
         if reason is None:
             return "not_mismatch", "NOT"
         return None, None
@@ -506,10 +550,30 @@ def _criteria_invalid_result(criteria, value):
                 return "above_max", _format_bound_flag(">=", value, criteria["max"])
         return None, None
 
+    if criteria["type"] == "compare":
+        other_value = reference_values[criteria["other_target"]]
+        if COMPARISON_OPERATORS[criteria["operator"]](_coerce_comparison_number(value), _coerce_comparison_number(other_value)):
+            return None, None
+        return "comparison_mismatch", (
+            f"expected {criteria['operator']} {criteria['other_target']} ({_canonical_string(other_value)}); "
+            f"got {_canonical_string(value)}"
+        )
+
     text = _canonical_string(value)
     if criteria["_compiled_pattern"].fullmatch(text):
         return None, None
     return "regex_mismatch", f"!= /{criteria.get('pattern', '')}/"
+
+
+def _coerce_comparison_number(value):
+    """Keep integer precision when comparing finite numeric operands."""
+    try:
+        number = pd.to_numeric(value, errors="coerce")
+        if np.isscalar(number) and np.isrealobj(number) and math.isfinite(number):
+            return number.item() if isinstance(number, np.generic) else number
+    except (TypeError, ValueError, OverflowError):
+        pass
+    return None
 
 
 def _coerce_numeric_scalar(value):
@@ -556,6 +620,10 @@ def _record_outlier(
         "flag": flag or _format_outlier_flag(rule, value, reason),
         "location": location,
     }
+    if "references" in block:
+        row["reference_values"] = {
+            name: _json_scalar(series.iloc[location["row_index"]]) for name, series in block["references"].items()
+        }
     if _is_unlimited(max_outliers) or len(preview) < max_outliers:
         preview.append(row)
     if _is_unlimited(max_export_rows) or len(export_rows) < max_export_rows:

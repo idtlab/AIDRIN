@@ -1,5 +1,6 @@
 """Tests for metric submission from the inspector."""
 
+import io
 import json
 from pathlib import Path
 
@@ -452,6 +453,32 @@ def test_data_quality_custom_outlier_error_is_metric_scoped(uploaded_client):
     assert "error" not in data
     assert "Custom Criteria Outliers" in data
     assert "Error" in data["Custom Criteria Outliers"]
+
+
+def test_data_quality_cross_variable_rules(client):
+    uploaded = client.post("/inspector", data={
+        "file": (io.BytesIO(b"lower,upper\n1,2\n3,2\n1,\n"), "bounds.csv"),
+        "fileTypeSelector": ".csv",
+    }, content_type="multipart/form-data", follow_redirects=True)
+    assert uploaded.status_code == 200
+    rules = [{
+        "id": "ordered-bounds", "target": "lower", "target_type": "column",
+        "criteria": {"type": "compare", "operator": "<=", "other_target": "upper"},
+    }]
+    response = client.post("/data-quality?return_type=json", data={
+        "custom_outliers": "yes", "custom_outlier_rules": json.dumps(rules),
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    result = response.get_json()["Custom Criteria Outliers"]
+    summary = result["Rule summaries"]["ordered-bounds"]
+    assert "Errors" not in result
+    assert summary["total"] == 3
+    assert summary["valid"] == 1
+    assert summary["outlier"] == 2
+    assert summary["missing"] == 1
+    row = result["Outlier export"]["ordered-bounds"][0]
+    assert row["reference_values"] == {"upper": 2}
+    assert row["location"]["source_line"] == 3
 
 
 def test_data_quality_custom_outlier_missing_target_is_actionable(uploaded_client):
