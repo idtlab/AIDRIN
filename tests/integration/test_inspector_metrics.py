@@ -1,5 +1,6 @@
 """Tests for metric submission from the inspector."""
 
+import io
 import json
 from pathlib import Path
 
@@ -228,6 +229,34 @@ def test_understandability_variable_unit_validation_uses_request_local_sidecar(u
     assert result["summary"]["all_variables_ready"] == 1
     assert result["summary"]["counts"]["valid"] == 2
     assert result["summary"]["counts"]["not_applicable"] == 2
+
+
+def test_variable_unit_web_override_preserves_temperature_offset(client):
+    response = client.post(
+        "/inspector",
+        data={
+            "file": (io.BytesIO(b"temperature (degC)\n0\n25\n"), "temperature.csv"),
+            "fileTypeSelector": ".csv",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    metadata = client.post("/custom-outlier-targets").get_json()["unit_metadata"]
+    metadata["variables"][0]["resolution"] = {
+        "kind": "unit", "unit": "kelvin", "source": "user",
+    }
+
+    response = client.post(
+        "/variable-unit-validation?return_type=json",
+        data={"variable_unit_validation": "yes", "variable_unit_metadata": json.dumps(metadata)},
+    )
+    result = response.get_json()["Variable Unit Validation"]
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "offset"
+    assert mismatch["conversion_factor"] is None
+    assert "0 °C = 273.15 K" in mismatch["message"]
+    assert result["summary"]["all_variables_ready"] == 1
 
 
 def test_variable_unit_error_is_metric_scoped(uploaded_client):

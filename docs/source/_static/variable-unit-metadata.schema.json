@@ -219,7 +219,7 @@
       ],
       "properties": {
         "kind": {
-          "enum": ["scale", "dimension", "classification"]
+          "enum": ["scale", "offset", "dimension", "classification"]
         },
         "source": {
           "type": "string",

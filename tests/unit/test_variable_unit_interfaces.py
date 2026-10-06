@@ -119,6 +119,33 @@ def test_cli_accepts_unit_metadata_json_and_file(tmp_path):
     assert json.loads(file_out)["summary"]["all_variables_ready"] is True
 
 
+@pytest.mark.parametrize("resolved", ["kelvin", "degF"])
+def test_cli_preserves_temperature_offset_mismatch(tmp_path, resolved):
+    dataset = tmp_path / "temperature.csv"
+    pd.DataFrame({"temperature (degC)": [0.0, 25.0]}).to_csv(dataset, index=False)
+    original = dataset.read_bytes()
+    sidecar = calculate_variable_unit_validation((str(dataset), dataset.name, ".csv"))
+    sidecar["variables"][0]["resolution"] = {
+        "kind": "unit", "unit": resolved, "source": "user",
+    }
+    sidecar_path = tmp_path / "temperature.units.json"
+    sidecar_path.write_text(json.dumps(sidecar), encoding="utf-8")
+
+    output, error, code = _run_cli(
+        "run", "variable-unit-validation", str(dataset),
+        "--unit-metadata-file", str(sidecar_path),
+    )
+
+    assert code == 0, error
+    result = json.loads(output)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+    assert mismatch["kind"] == "offset"
+    assert mismatch["conversion_factor"] is None
+    assert "offset conversion" in mismatch["message"]
+    assert result["summary"]["all_variables_ready"] is True
+    assert dataset.read_bytes() == original
+
+
 def test_cli_sidecar_options_are_mutually_exclusive(tmp_path):
     _out, error, code = _run_cli(
         "run",

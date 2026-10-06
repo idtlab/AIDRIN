@@ -49,9 +49,9 @@ Every variable has one resolution:
 - unresolved when review remains necessary.
 
 A user resolution overrides detected metadata while preserving the observations.
-When the units differ, the result records whether their scale or physical
-dimension differs and states that values were not converted. The editor never
-embeds a correction in the source file.
+When the units differ, the result records whether their scale, temperature zero
+point, or physical dimension differs and states that values were not converted.
+The editor never embeds a correction in the source file.
 
 Canonical sidecar
 -----------------
@@ -172,6 +172,17 @@ For an override, equivalent spellings remain neutral. Convertible units with a
 different scale and units with different dimensions are recorded separately.
 For example, changing detected ``kg/m³`` to ``g/m³`` reports a 1000-fold scale
 difference and does not convert dataset values.
+
+Temperature overrides with different zero points (for example, Celsius to Kelvin
+or Fahrenheit) use mismatch kind ``offset`` and set ``conversion_factor`` to null.
+The message gives a reference point, such as ``0 °C = 273.15 K``, rather than a
+misleading scale factor. The reference describes the unit conversion only; the
+audit never converts dataset values. Purely multiplicative temperature conversions
+(such as Kelvin to Rankine) still use ``scale`` and a numeric factor.
+
+The version-1 sidecar schema accepts the additional ``offset`` mismatch kind;
+existing sidecars remain importable. Consumers validating against a cached schema
+should refresh it before validating results containing an offset mismatch.
 
 Interfaces
 ----------

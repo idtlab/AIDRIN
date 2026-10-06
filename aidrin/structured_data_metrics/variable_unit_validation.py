@@ -535,8 +535,17 @@ def _override_mismatches(
             detail = "different dimensions"
         else:
             kind = "scale"
-            conversion_factor = float((1 * observed["_parsed"]).to(chosen["_parsed"]).magnitude)
+            # Construct offset temperatures explicitly: their zero points can
+            # differ, so converting one degree is not a multiplicative factor.
+            quantity = _UNIT_REGISTRY.Quantity
+            conversion_factor = float(quantity(1, observed["_parsed"]).to(chosen["_parsed"]).magnitude)
             detail = f"{conversion_factor:g}× scale difference"
+            if observed["_parsed"].dimensionality == _UNIT_REGISTRY.kelvin.dimensionality:
+                zero = float(quantity(0, observed["_parsed"]).to(chosen["_parsed"]).magnitude)
+                if zero != 0:
+                    kind = "offset"
+                    conversion_factor = None
+                    detail = f"offset conversion: 0 {observed_unit} = {zero:g} {resolved_unit}"
         mismatches.append({
             "kind": kind,
             "source": candidate["source"],

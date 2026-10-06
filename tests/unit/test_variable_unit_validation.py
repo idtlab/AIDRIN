@@ -315,6 +315,73 @@ def test_scale_mismatch_override_is_explicit_and_does_not_convert_values(tmp_pat
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(result)
 
+    # Version-1 sidecars using the original scale kind remain importable.
+    assert calculate_variable_unit_validation(file_info, result) == result
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "zero_message"),
+    [
+        ("degC", "kelvin", "0 °C = 273.15 K"),
+        ("kelvin", "degC", "0 K = -273.15 °C"),
+        ("degC", "degF", "0 °C = 32 °F"),
+        ("degF", "degC", "0 °F = -17.7778 °C"),
+    ],
+)
+def test_temperature_override_reports_offset_without_converting_values(tmp_path, observed, resolved, zero_message):
+    name = f"temperature ({observed})"
+    file_info = _csv(tmp_path, [name])
+    original = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "offset"
+    assert mismatch["conversion_factor"] is None
+    assert zero_message in mismatch["message"]
+    assert "Values were not converted." in mismatch["message"]
+    assert "scale difference" not in mismatch["message"]
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
+    assert result["summary"]["all_variables_ready"] is True
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "factor"),
+    [("kelvin", "degree_Rankine", 1.8), ("delta_degC", "kelvin", 1.0)],
+)
+def test_multiplicative_temperature_override_keeps_scale_factor(tmp_path, observed, resolved, factor):
+    name = f"temperature ({observed})"
+    file_info = _csv(tmp_path, [name])
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "scale"
+    assert mismatch["conversion_factor"] == pytest.approx(factor)
+
+
+def test_equivalent_temperature_spelling_has_no_override_mismatch(tmp_path):
+    file_info = _csv(tmp_path, ["temperature (degC)"])
+    sidecar = _with_resolutions(file_info, {
+        "temperature (degC)": {"kind": "unit", "unit": "degree_Celsius", "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["variables"][0]["finding"]["override_mismatches"] == []
+    assert result["summary"]["counts"]["unit_mismatches"] == 0
+
 
 def test_equivalent_user_unit_has_no_override_mismatch(tmp_path):
     file_info = _csv(tmp_path, ["density_kg_per_m3"])
