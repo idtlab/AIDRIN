@@ -254,3 +254,107 @@ def test_imported_sample_rules_keep_intuitive_explanations(tmp_path, criteria, e
     rows = result["Outlier preview"]["bounds"]
     assert [row["location"]["row_index"] for row in rows] == [1, 3, 4]
     assert rows[0]["flag"] == expected
+
+
+def browser_target_discovery(remote, failure, target_match="exact", action="import"):
+    source = SOURCE.read_text(encoding="utf-8")
+    start = source.index("// ==================== Custom Criteria Outliers")
+    end = source.index("// ==================== Layout Helpers", start)
+    script = source[start:end] + r'''
+const payload = JSON.parse(process.argv[2]);
+let customOutlierTargets = ['lower', 'upper'].map(name => ({name, target_type: 'column'}));
+const originalRules = [{id: 'keep-me', target: 'lower'}];
+let manualRules = originalRules;
+let replaced = false;
+let updates = 0;
+let errors = [];
+const button = {disabled: false};
+const message = {textContent: '', classList: {add: () => {}, remove: () => {}}};
+const hidden = {value: 'original saved rules'};
+const file = {text: async () => JSON.stringify(payload.rules)};
+const input = {files: [file]};
+const manualMode = {checked: false};
+const list = {replaceChildren: () => {replaced = true; manualRules = [];}};
+const document = {
+  getElementById: id => ({'custom-outlier-rules-file': input, 'custom-outlier-edit-file': button,
+    'custom-outlier-message': message, 'custom-outlier-rule-list': list, 'custom-outlier-rules-json': hidden})[id],
+  querySelector: () => manualMode,
+};
+const window = {AIDRIN_GLOBUS_MODE: payload.remote};
+const globusDiscoveryCache = new Map();
+const discovered = [{name: 'new-column', target_type: 'column'}];
+function setVariableUnitCatalog() {}
+function setVariableUnitMetadata() {}
+updateCustomOutlierTargetOptions = () => {updates++;};
+showCustomOutlierFileError = error => {errors.push(error);};
+addCustomOutlierRuleRow = () => {throw new Error('Builder was already replaced');};
+const result = {success: !payload.failure, targets: discovered, message: 'Discovery failed'};
+const fetch = async () => {
+  if (payload.failure === 'network') throw new Error('Network unavailable');
+  return {ok: payload.failure !== 'http', json: async () => payload.failure === 'http'
+    ? {...result, success: true} : result};
+};
+loadGlobusTargetDiscovery = async () => {
+  if (payload.failure === 'network') throw new Error('Network unavailable');
+  return result;
+};
+(async () => {
+  const loaded = payload.action === 'load' ? await loadCustomOutlierTargets()
+    : await importCustomOutlierRulesIntoBuilder();
+  process.stdout.write(JSON.stringify({loaded, replaced, rulesPreserved: manualRules === originalRules,
+    saved: hidden.value, selectedFilePreserved: input.files[0] === file, manualMode: manualMode.checked,
+    buttonDisabled: button.disabled, targets: customOutlierTargets, updates, errors, message: message.textContent}));
+})().catch(error => {console.error(error); process.exitCode = 1;});
+'''
+    imported_rule = rule({"type": "range", "max": 2}, target_match=target_match,
+                         target="^lower$" if target_match == "regex" else "lower")
+    payload = {"remote": remote, "failure": failure, "action": action, "rules": [imported_rule]}
+    with tempfile.TemporaryDirectory() as directory:
+        script_file = Path(directory) / "discovery.cjs"
+        script_file.write_text(script, encoding="utf-8")
+        result = subprocess.run(["node", str(script_file), json.dumps(payload)], text=True, capture_output=True, check=True)
+    return json.loads(result.stdout)
+
+
+@pytest.mark.parametrize("remote", [False, True])
+@pytest.mark.parametrize("failure", ["unsuccessful", "network"])
+@pytest.mark.parametrize("target_match", ["exact", "regex"])
+def test_failed_target_discovery_keeps_builder_file_and_mode(remote, failure, target_match):
+    result = browser_target_discovery(remote, failure, target_match)
+    assert result["rulesPreserved"] and not result["replaced"]
+    assert result["saved"] == "original saved rules"
+    assert result["selectedFilePreserved"] and not result["manualMode"]
+    assert not result["buttonDisabled"]
+    assert result["targets"] == [] and result["updates"] == 0
+    assert result["errors"] == ["Unable to load targets. Existing rules were kept."]
+    assert "failed" in result["message"].lower() or "unavailable" in result["message"].lower()
+
+
+@pytest.mark.parametrize("target_match", ["exact", "regex"])
+def test_http_discovery_error_cannot_replace_builder_even_with_success_body(target_match):
+    result = browser_target_discovery(False, "http", target_match)
+    assert result["rulesPreserved"] and not result["replaced"]
+    assert result["targets"] == [] and result["updates"] == 0
+    assert result["errors"] == ["Unable to load targets. Existing rules were kept."]
+
+
+@pytest.mark.parametrize("remote", [False, True])
+def test_successful_target_loader_signals_success_and_updates_catalog(remote):
+    result = browser_target_discovery(remote, None, action="load")
+    assert result["loaded"] is True
+    assert result["targets"] == [{"name": "new-column", "target_type": "column"}]
+    assert result["updates"] == 1
+    assert result["errors"] == []
+
+
+def test_browser_roundtrip_preserves_exact_comparison_column_spaces(tmp_path):
+    path = tmp_path / "spaced.csv"
+    path.write_text("lower,upper, upper \n1,0,2\n3,0,2\n", encoding="utf-8")
+    original = [rule({**COMPARE, "other_target": " upper "})]
+    targets = [{"name": name, "target_type": "column"} for name in ["lower", "upper", " upper "]]
+    imported = browser_rules("roundtrip", original, targets)
+    assert imported["valid"]
+    assert imported["rules"][0]["criteria"]["conditions"][0]["other_target"] == " upper "
+    result = calculate_custom_outliers((str(path), path.name, ".csv"), imported["rules"])
+    assert "Errors" not in result
+    assert result["Outlier preview"]["bounds"][0]["reference_values"] == {" upper ": 2}

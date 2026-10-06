@@ -49,9 +49,15 @@ def _iter_column_targets(file_info):
     _normalize_tabular_columns(df)
 
     targets = []
-    for col in df.columns:
-        series = df[col]
+    seen_names = set()
+    for position, col in enumerate(df.columns):
         name = str(col)
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        # Label indexing returns a DataFrame for duplicate names. Discovery
+        # lists each name once; the block reader reports ambiguous comparisons.
+        series = df.iloc[:, position]
         targets.append({
             "name": name,
             "target_type": "column",

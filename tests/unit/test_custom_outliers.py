@@ -254,10 +254,6 @@ def test_comparison_aligns_by_position_and_rejects_ambiguous_columns(monkeypatch
     result = calculate_custom_outliers(("dummy", "dummy", ".csv"), [rule])
     assert result["Outlier preview"]["ordered-bounds"][0]["location"]["row_index"] == 1
     df.columns = ["1", "1"]
-    # Skip discovery to exercise ambiguity in the actual column block reader.
-    monkeypatch.setattr("aidrin.structured_data_metrics.custom_outliers.iter_targets", lambda _fi: [
-        {"name": "1", "target_type": "column"},
-    ])
     rule["criteria"]["other_target"] = "1"
     result = calculate_custom_outliers(("dummy", "dummy", ".csv"), [rule])
     assert "ambiguous" in result["Errors"][0]["error"]
@@ -990,3 +986,67 @@ def test_or_comparison_explanation_represents_all_failed_alternatives():
     row = result["Outlier preview"]["ordered-bounds"][0]
     assert row["reason"] == "or_mismatch"
     assert row["flag"] == "lower is 3, matches none of the alternatives"
+
+
+@pytest.mark.parametrize(("columns", "target", "reference", "ambiguous"), [
+    (["lower", "upper", "upper"], "lower", "upper", "column"),
+    (["lower", "lower", "upper"], "lower", "upper", "target"),
+    (["lower", 1, "1"], "lower", "1", "column"),
+])
+def test_duplicate_discovery_returns_rule_scoped_comparison_errors(monkeypatch, columns, target, reference, ambiguous):
+    df = pd.DataFrame([[1, 2, 3], [3, 2, 4]], columns=columns)
+    monkeypatch.setattr(value_iterators, "read_file", lambda _fi: df.copy())
+    file_info = ("dummy", "dummy", ".csv")
+    targets = iter_targets(file_info)
+    assert len({t["name"] for t in targets}) == len(targets) == 2
+    rule = _compare_rule(target=target, criteria={"type": "compare", "operator": "<=", "other_target": reference})
+    result = calculate_custom_outliers(file_info, [rule])
+    assert result["Errors"] == [{
+        "rule_id": "ordered-bounds", "target": target,
+        "error": f"Comparison {ambiguous} is ambiguous: {reference if ambiguous == 'column' else target}",
+    }]
+    assert result["Rule summaries"]["ordered-bounds"]["total"] == 0
+    assert result["Outlier preview"]["ordered-bounds"] == []
+
+
+def test_ambiguous_rule_does_not_prevent_an_unrelated_range_rule(monkeypatch):
+    df = pd.DataFrame([[1, 2, 3], [3, 2, 4]], columns=["lower", "upper", "upper"])
+    monkeypatch.setattr(value_iterators, "read_file", lambda _fi: df.copy())
+    result = calculate_custom_outliers(("dummy", "dummy", ".csv"), [
+        _compare_rule(), _range_rule("range", "lower", max_value=2),
+    ])
+    assert len(result["Errors"]) == 1
+    assert result["Rule summaries"]["range"]["total"] == 2
+    assert result["Outlier preview"]["range"][0]["value"] == 3
+
+
+def test_comparison_preserves_spaces_in_exact_reference_names():
+    fi = _write_csv(pd.DataFrame({"lower": [1, 3], "upper": [0, 0], " upper ": [2, 2]}))
+    try:
+        result = calculate_custom_outliers(fi, [_compare_rule(criteria={
+            "type": "compare", "operator": "<=", "other_target": " upper ",
+        })])
+    finally:
+        _clean(fi[0])
+    assert "Errors" not in result
+    assert result["Rule summaries"]["ordered-bounds"]["valid"] == 1
+    row = result["Outlier preview"]["ordered-bounds"][0]
+    assert row["location"]["row_index"] == 1
+    assert row["reference_values"] == {" upper ": 2}
+
+
+@pytest.mark.parametrize(("lower", "upper"), [
+    (True, 2), (False, 0), (1, True), (0, False), (np.bool_(True), 2), (1, np.bool_(False)),
+])
+@pytest.mark.parametrize("group", ["compare", "or", "not"])
+def test_comparison_rejects_python_and_numpy_boolean_operands(monkeypatch, lower, upper, group):
+    df = pd.DataFrame({"lower": pd.Series([lower], dtype=object), "upper": pd.Series([upper], dtype=object)})
+    monkeypatch.setattr(value_iterators, "read_file", lambda _fi: df.copy())
+    rule = _compare_rule()
+    if group == "or":
+        rule["criteria"] = {"op": "or", "conditions": [rule["criteria"], {"type": "regex", "pattern": ".*"}]}
+    elif group == "not":
+        rule["criteria"] = {"op": "not", "condition": rule["criteria"]}
+    result = calculate_custom_outliers(("dummy", "dummy", ".csv"), [rule])
+    assert result["Rule summaries"]["ordered-bounds"]["valid"] == 0
+    assert result["Outlier preview"]["ordered-bounds"][0]["reason"] == "invalid_comparison"

@@ -313,7 +313,7 @@ def _validate_criteria_node(node, rule_id, path):
         other_target = node.get("other_target")
         if not isinstance(other_target, str) or not other_target.strip():
             raise ValueError(f"Rule {rule_id} {path}.compare requires a non-empty other_target column name")
-        return {"type": "compare", "operator": comparison_operator, "other_target": other_target.strip()}
+        return {"type": "compare", "operator": comparison_operator, "other_target": other_target}
     raise ValueError(f"Compound rule {rule_id} has unsupported condition type: {condition_type}")
 
 
@@ -575,6 +575,8 @@ def _criteria_invalid_result(criteria, value, reference_values=None, target="Val
 
 def _coerce_comparison_number(value):
     """Keep integer precision when comparing finite numeric operands."""
+    if isinstance(value, (bool, np.bool_)):
+        return None
     try:
         number = pd.to_numeric(value, errors="coerce")
         if np.isscalar(number) and np.isrealobj(number) and math.isfinite(number):

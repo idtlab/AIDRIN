@@ -2886,22 +2886,24 @@ function loadCustomOutlierTargets() {
     return loadGlobusCustomOutlierTargets(message);
   }
   return fetch("/custom-outlier-targets", { method: "POST" })
-    .then((r) => r.json())
-    .then((data) => {
-      if (data.success) {
-        customOutlierTargets = data.targets || [];
-        updateCustomOutlierTargetOptions();
-        if (message) message.classList.add("hidden");
-      } else if (message) {
-        message.textContent = data.message || "Unable to load targets.";
-        message.classList.remove("hidden");
-      }
+    .then((response) =>
+      response.json().then((data) => ({ ok: response.ok, data })),
+    )
+    .then(({ ok, data }) => {
+      if (!ok || !data.success)
+        throw new Error(data.message || "Unable to load targets.");
+      customOutlierTargets = data.targets || [];
+      updateCustomOutlierTargetOptions();
+      if (message) message.classList.add("hidden");
+      return true;
     })
     .catch((err) => {
+      customOutlierTargets = [];
       if (message) {
         message.textContent = "Unable to load targets: " + err.message;
         message.classList.remove("hidden");
       }
+      return false;
     });
 }
 
@@ -2977,27 +2979,26 @@ function loadGlobusCustomOutlierTargets(message) {
   }
   return loadGlobusTargetDiscovery()
     .then((result) => {
-      if (result && result.success) {
-        customOutlierTargets = result.targets || [];
-        setVariableUnitCatalog(result.unit_catalog || []);
-        setVariableUnitMetadata(result.unit_metadata);
-        updateCustomOutlierTargetOptions();
-        if (message) message.classList.add("hidden");
-      } else {
+      if (!result?.success) {
         clearGlobusDiscoveryCache();
-        if (message) {
-          message.textContent =
-            (result && (result.message || result.error)) ||
-            "Remote target discovery failed.";
-          message.classList.remove("hidden");
-        }
+        throw new Error(
+          result?.message || result?.error || "Remote target discovery failed.",
+        );
       }
+      customOutlierTargets = result.targets || [];
+      setVariableUnitCatalog(result.unit_catalog || []);
+      setVariableUnitMetadata(result.unit_metadata);
+      updateCustomOutlierTargetOptions();
+      if (message) message.classList.add("hidden");
+      return true;
     })
     .catch((err) => {
+      customOutlierTargets = [];
       if (message) {
         message.textContent = "Remote target discovery failed: " + err.message;
         message.classList.remove("hidden");
       }
+      return false;
     });
 }
 
@@ -3619,7 +3620,8 @@ async function importCustomOutlierRulesIntoBuilder() {
     const plan = customOutlierBuilderPlan(
       parseCustomOutlierRulesJson(await file.text()),
     );
-    await loadCustomOutlierTargets();
+    if (!(await loadCustomOutlierTargets()))
+      throw new Error("Unable to load targets. Existing rules were kept.");
     for (const { rule } of plan) {
       const targetError = validateCustomOutlierBuilderTargets(rule);
       if (targetError) throw new Error(targetError);
