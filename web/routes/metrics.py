@@ -343,13 +343,13 @@ def data_quality():
                                 "Error": f"{type(e).__name__}: {e}",
                                 "Description": (
                                     "Custom criteria outliers are values that violate user-defined range "
-                                    "or regex rules on selected columns or native HDF5 datasets."
+                                    "or regex rules on selected columns or native HDF5 datasets, or same-row column comparisons."
                                 ),
                             }
                         else:
                             custom_dict["Description"] = (
                                 "Custom criteria outliers are values that violate user-defined range "
-                                "or regex rules on selected columns or native HDF5 datasets."
+                                "or regex rules on selected columns or native HDF5 datasets, or same-row column comparisons."
                             )
                             final_dict["Custom Criteria Outliers"] = custom_dict
                     metric_time_log.info("Custom Criteria Outliers took %.2f seconds", time.time() - t0)
