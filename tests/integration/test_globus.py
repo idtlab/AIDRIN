@@ -272,6 +272,22 @@ def test_remote_runner_data_quality_custom_outliers():
     assert len(custom["Outlier export"]["age-range"]) == 2
 
 
+def test_remote_runner_cross_variable_custom_outliers():
+    path, name, file_type = _write_csv(pd.DataFrame({"lower": [1, 3], "upper": [2, 2]}))
+    rules = [{
+        "id": "ordered-bounds", "target": "lower", "target_type": "column",
+        "criteria": {"type": "compare", "operator": "<=", "other_target": "upper"},
+    }]
+    try:
+        result = remote_metric_runner("data_quality", path, name, file_type,
+                                      selected=["custom_outliers"], custom_outlier_rules=rules)
+    finally:
+        os.unlink(path)
+    custom = result["Custom Criteria Outliers"]
+    assert custom["Rule summaries"]["ordered-bounds"]["outlier"] == 1
+    assert custom["Outlier export"]["ordered-bounds"][0]["reference_values"] == {"upper": 2}
+
+
 def test_remote_runner_data_quality_custom_outlier_error_is_metric_scoped():
     path, name, file_type = _write_csv(pd.DataFrame({"age": [25, 30, 45]}))
     try:

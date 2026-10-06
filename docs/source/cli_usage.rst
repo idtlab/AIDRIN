@@ -269,6 +269,23 @@ summary and preview rows. Use
 ``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
 or export rows.
 
+To check same-row consistency between numeric columns, use a JSON ``compare``
+condition. For a dataset containing ``lower`` and ``upper`` columns:
+
+.. code-block:: bash
+
+   aidrin run outliers-custom /path/to/bounds.csv \
+     --rules-file examples/cross_variable_outlier_rules.json
+
+The example requires ``lower <= upper``. Comparisons use an exact
+``other_target`` column name and support ``<``, ``<=``, ``>``, ``>=``, ``==``, and
+``!=``, including inside nested boolean criteria. They accept finite numbers and
+numeric strings in tabular files. Missing operands follow ``allow_missing``;
+other unusable operands are outliers. Use JSON rather than the ``--rule``
+shorthand for comparisons. The same file can be selected through the web
+inspector's **Select JSON file** option. See :ref:`python_api` for the Python
+API and detailed operand and result semantics.
+
 File-reference validation accepts a comma-separated target list for exact matching.
 With ``--target-match regex``, the target argument is one complete regular-expression
 pattern, so commas inside quantifiers such as ``{1,3}`` are preserved. Use a list in

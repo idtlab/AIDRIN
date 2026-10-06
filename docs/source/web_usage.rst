@@ -101,9 +101,31 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
 
 - **Custom Criteria Outliers**:
 
-  - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
-  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. The exact-name picker is searchable. In the manual editor, choose **Regex** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
-  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target.
+  - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, same-row column comparisons, missing-value handling, and nested ``and``/``or``/``not`` conditions.
+  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. The exact-name picker is searchable. In the manual editor, choose **Regex** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Rules from either source can be saved as a reusable JSON file; the browser reads the selected source file without uploading it.
+  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target. Comparison violations include both operand values in previews and exports.
+
+  In **Define conditions**, select a target and choose **Range**, **Regex**, or
+  **Compare columns** for each condition. For example, select ``lower``, choose
+  **Compare columns**, select **Less than or equal to**, and choose ``upper`` as
+  the **Comparison column**. The summary shows ``lower <= upper``. Comparisons
+  require exact column names within the same parsed table and compatible units;
+  units are not converted. Finite numeric strings are accepted. Non-numeric or
+  infinite operands are invalid even inside **Any** or **No** groups. Missing
+  operands follow **Allow missing values**. HDF5 datasets retain Range/Regex
+  controls; column comparisons are unavailable for them.
+
+  **All**, **Any**, and **No** combine conditions as ``and``, ``or``, and
+  ``not(or(...))`` respectively. **Save rules to JSON** downloads the canonical
+  rules array from either manual or file mode for reuse by the web inspector,
+  Python API, CLI, and MCP server. The source file is read in the browser.
+
+  To edit an existing file, choose **Select JSON file**, select the file, then
+  click **Edit file in builder**. This replaces the current manual rules after
+  validating every rule. Flat All/Any groups, single conditions, and No groups
+  can be edited. More deeply nested groups or advanced fields are refused with
+  a visible message; the selected file and existing manual rules remain intact.
+  Continue in file mode to run or save those rules without dropping any fields.
 
 Impact of Data on AI
 ^^^^^^^^^^^^^^^^^^^^
