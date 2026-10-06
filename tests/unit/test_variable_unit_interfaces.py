@@ -119,6 +119,42 @@ def test_cli_accepts_unit_metadata_json_and_file(tmp_path):
     assert json.loads(file_out)["summary"]["all_variables_ready"] is True
 
 
+@pytest.mark.parametrize(
+    ("observed", "resolved", "kind", "formula"),
+    [
+        ("degC", "kelvin", "offset", "K = °C × 1 + 273.15"),
+        ("degC", "degF", "offset", "°F = °C × 1.8 + 32"),
+        ("degF", "degC", "offset", "°C ≈ °F × 0.555556 - 17.7778"),
+        ("kPa", "Pa", "scale", "Pa = kPa × 1000"),
+        ("dBm", "watt", "conversion", "conversion formula unavailable for these units"),
+    ],
+)
+def test_cli_preserves_conversion_reporting(tmp_path, observed, resolved, kind, formula):
+    dataset = tmp_path / "temperature.csv"
+    pd.DataFrame({f"measurement ({observed})": [0.0, 25.0]}).to_csv(dataset, index=False)
+    original = dataset.read_bytes()
+    sidecar = calculate_variable_unit_validation((str(dataset), dataset.name, ".csv"))
+    sidecar["variables"][0]["resolution"] = {
+        "kind": "unit", "unit": resolved, "source": "user",
+    }
+    sidecar_path = tmp_path / "temperature.units.json"
+    sidecar_path.write_text(json.dumps(sidecar), encoding="utf-8")
+
+    output, error, code = _run_cli(
+        "run", "variable-unit-validation", str(dataset),
+        "--unit-metadata-file", str(sidecar_path),
+    )
+
+    assert code == 0, error
+    result = json.loads(output)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+    assert mismatch["kind"] == kind
+    assert mismatch["conversion_factor"] == (1000.0 if kind == "scale" else None)
+    assert formula in mismatch["message"]
+    assert result["summary"]["all_variables_ready"] is True
+    assert dataset.read_bytes() == original
+
+
 def test_cli_sidecar_options_are_mutually_exclusive(tmp_path):
     _out, error, code = _run_cli(
         "run",

@@ -10,6 +10,9 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from pint import UnitRegistry
+
+import aidrin.structured_data_metrics.variable_unit_validation as unit_validation
 
 from aidrin.structured_data_metrics.variable_unit_validation import (
     _name_unit,
@@ -306,7 +309,10 @@ def test_scale_mismatch_override_is_explicit_and_does_not_convert_values(tmp_pat
         "observed_unit": "kg/m³",
         "resolved_unit": "g/m³",
         "conversion_factor": 1000.0,
-        "message": "Unit mismatch: detected kg/m³, overridden with g/m³ (1000× scale difference). Values were not converted.",
+        "message": (
+            "Unit mismatch: detected kg/m³, overridden with g/m³ "
+            "(1000× scale difference; g/m³ = kg/m³ × 1000). Values were not converted."
+        ),
     }
     assert result["summary"]["counts"]["unit_mismatches"] == 1
     assert result["summary"]["all_variables_ready"] is True
@@ -314,6 +320,190 @@ def test_scale_mismatch_override_is_explicit_and_does_not_convert_values(tmp_pat
     schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(result)
+    assert calculate_variable_unit_validation(file_info, result) == result
+
+    # Version-1 sidecars using the original scale kind remain importable.
+    legacy = deepcopy(result)
+    legacy["variables"][0]["finding"]["override_mismatches"][0]["message"] = (
+        "Unit mismatch: detected kg/m³, overridden with g/m³ (1000× scale difference). Values were not converted."
+    )
+    assert calculate_variable_unit_validation(file_info, legacy) == result
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "formula"),
+    [
+        ("degC", "kelvin", "K = °C × 1 + 273.15"),
+        ("kelvin", "degC", "°C = K × 1 - 273.15"),
+        ("degC", "degF", "°F = °C × 1.8 + 32"),
+        ("degF", "degC", "°C ≈ °F × 0.555556 - 17.7778"),
+    ],
+)
+def test_temperature_override_reports_offset_without_converting_values(tmp_path, observed, resolved, formula):
+    name = f"temperature ({observed})"
+    file_info = _csv(tmp_path, [name])
+    original = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "offset"
+    assert mismatch["conversion_factor"] is None
+    assert f"(offset conversion: {formula})." in mismatch["message"]
+    assert "Values were not converted." in mismatch["message"]
+    assert "scale difference" not in mismatch["message"]
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
+    assert result["summary"]["all_variables_ready"] is True
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "factor"),
+    [("kelvin", "degree_Rankine", 1.8), ("delta_degC", "kelvin", 1.0)],
+)
+def test_multiplicative_temperature_override_keeps_scale_factor(tmp_path, observed, resolved, factor):
+    name = f"temperature ({observed})"
+    file_info = _csv(tmp_path, [name])
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "scale"
+    assert mismatch["conversion_factor"] == pytest.approx(factor)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "factor", "formula"),
+    [
+        ("kPa", "Pa", 1000, "Pa = kPa × 1000"),
+        ("Pa", "kPa", 0.001, "kPa = Pa × 0.001"),
+        ("m/s", "km/h", 3.6, "km/h = m/s × 3.6"),
+        ("km/h", "m/s", 1 / 3.6, "m/s ≈ km/h × 0.277778"),
+        ("g/m**3", "kg/m**3", 0.001, "kg/m³ = g/m³ × 0.001"),
+        ("hour", "second", 3600, "s = h × 3600"),
+        ("second", "hour", 1 / 3600, "h ≈ s × 0.000277778"),
+        ("meter", "nanometer", 1e9, "nm = m × 1e+09"),
+        ("nanometer", "meter", 1e-9, "m = nm × 1e-09"),
+        ("percent", "1", 0.01, "dimensionless = % × 0.01"),
+        ("1", "percent", 100, "% = dimensionless × 100"),
+    ],
+)
+def test_scale_formulas_apply_to_any_variable(tmp_path, observed, resolved, factor, formula):
+    name = f"measurement ({observed})"
+    file_info = _csv(tmp_path, [name])
+    original = Path(file_info[0]).read_bytes()
+    detected = calculate_variable_unit_validation(file_info)
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "dimensionless" if resolved == "1" else "unit", "unit": resolved, "source": "user"},
+    })
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "scale"
+    assert mismatch["conversion_factor"] == pytest.approx(factor)
+    assert f"; {formula}). Values were not converted." in mismatch["message"]
+    assert result["variables"][0]["observed"] == detected["variables"][0]["observed"]
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "formula"),
+    [
+        ("shifted_length", "meter", "m = sl × 2 + 10"),
+        ("meter", "shifted_length", "sl = m × 0.5 - 5"),
+        ("tiny_shifted_length", "meter", "m = tsl × 1e-09 + 1e+09"),
+    ],
+)
+def test_affine_formulas_are_not_temperature_specific(tmp_path, monkeypatch, observed, resolved, formula):
+    registry = UnitRegistry()
+    registry.define("shifted_length = 2 * meter; offset: 10 = sl")
+    registry.define("tiny_shifted_length = 1e-9 * meter; offset: 1e9 = tsl")
+    monkeypatch.setattr(unit_validation, "_UNIT_REGISTRY", registry)
+    file_info = _csv(tmp_path, [f"position ({observed})"])
+    original = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        f"position ({observed})": {"kind": "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "offset"
+    assert mismatch["conversion_factor"] is None
+    assert f"(offset conversion: {formula}). Values were not converted." in mismatch["message"]
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved"),
+    [
+        ("dBm", "watt"), ("watt", "dBm"), ("decibel", "1"), ("degC", "delta_degC"),
+        ("nanometer**100", "meter**100"), ("meter**100", "nanometer**100"),
+    ],
+)
+def test_unavailable_conversion_is_not_reported_as_scale_or_affine(tmp_path, observed, resolved):
+    file_info = _csv(tmp_path, [f"measurement ({observed})"])
+    original = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        f"measurement ({observed})": {
+            "kind": "dimensionless" if resolved == "1" else "unit", "unit": resolved, "source": "user",
+        },
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "conversion"
+    assert mismatch["conversion_factor"] is None
+    assert "(conversion formula unavailable for these units). Values were not converted." in mismatch["message"]
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+def test_scaled_alias_of_logarithmic_unit_has_no_affine_formula(tmp_path, monkeypatch):
+    registry = UnitRegistry()
+    registry.define("log_alias = 2 * decibel")
+    monkeypatch.setattr(unit_validation, "_UNIT_REGISTRY", registry)
+    file_info = _csv(tmp_path, ["measurement (log_alias)"])
+    sidecar = _with_resolutions(file_info, {
+        "measurement (log_alias)": {"kind": "dimensionless", "unit": "1", "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "conversion"
+    assert mismatch["conversion_factor"] is None
+    assert "conversion formula unavailable" in mismatch["message"]
+
+
+def test_equivalent_temperature_spelling_has_no_override_mismatch(tmp_path):
+    file_info = _csv(tmp_path, ["temperature (degC)"])
+    sidecar = _with_resolutions(file_info, {
+        "temperature (degC)": {"kind": "unit", "unit": "degree_Celsius", "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["variables"][0]["finding"]["override_mismatches"] == []
+    assert result["summary"]["counts"]["unit_mismatches"] == 0
 
 
 def test_equivalent_user_unit_has_no_override_mismatch(tmp_path):
