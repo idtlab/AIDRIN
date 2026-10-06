@@ -305,6 +305,11 @@ Stop the stack with ``docker compose -f docker/local/docker-compose.yml down``.
    externally. Because it runs Celery beat in-image, deploy it with **exactly one
    replica** or scheduled tasks will run more than once.
 
+   Build with ``--build-arg AIDRIN_DEMO=1`` to show a banner at the top of every
+   page marking the deployment as a demo and pointing users to the CLI, Python
+   API, and Claude Code skill. It is off by default; the banner can also be
+   enabled at runtime with the ``AIDRIN_DEMO=1`` environment variable.
+
 
 ----
 

@@ -43,9 +43,12 @@ def create_app():
     from web.telemetry import init_telemetry
     init_telemetry(app)
 
+    # AIDRIN_DEMO=1 shows the demo banner (set at build time in docker/NERSC/Dockerfile).
+    demo_mode = os.environ.get("AIDRIN_DEMO", "0").lower() in ("1", "true", "yes")
+
     @app.context_processor
     def inject_version():
-        return dict(app_version=__version__)
+        return dict(app_version=__version__, demo_mode=demo_mode)
 
     app.secret_key = os.environ.get("AIDRIN_SECRET_KEY", "aidrin")
 
@@ -83,6 +86,12 @@ def create_app():
     except ValueError:
         max_upload_mb = 1024
     app.config["MAX_CONTENT_LENGTH"] = max_upload_mb * 1024 * 1024
+
+    @app.context_processor
+    def inject_file_type_accept():
+        from aidrin.file_handling.file_parser import FILE_TYPE_ACCEPT_EXTENSIONS
+
+        return dict(file_type_accept=FILE_TYPE_ACCEPT_EXTENSIONS)
 
     @app.context_processor
     def inject_upload_limit():
