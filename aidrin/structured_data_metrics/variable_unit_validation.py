@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import math
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -13,6 +14,9 @@ import pandas as pd
 import pyarrow.parquet as pq
 from celery import shared_task
 from pint import UnitRegistry, pint_eval
+from pint.errors import PintError
+from pint.facets.nonmultiplicative.definitions import OffsetConverter
+from pint.facets.plain import ScaleConverter
 from pint.util import string_preprocessor
 
 from aidrin.file_handling.value_iterators import iter_targets
@@ -503,7 +507,60 @@ def _units_equivalent(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
 
 def _display_unit(parsed: Dict[str, Any], fallback: str) -> str:
     unit = parsed.get("_parsed")
-    return format(unit, "~P") if unit is not None else fallback
+    return (format(unit, "~P") or "dimensionless") if unit is not None else fallback
+
+
+def _has_affine_definition(unit: Any) -> bool:
+    """Only known scale/offset converters can establish an affine formula.
+
+    Inspect references too: a scale alias can depend on a logarithmic unit.
+    Pint's definition map is private; keep that dependency confined here.
+    """
+    pending = list(unit._units)
+    seen = set()
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        definition = _UNIT_REGISTRY._units[name]
+        # LogarithmicConverter inherits ScaleConverter, so isinstance is unsafe.
+        if type(definition.converter) not in (ScaleConverter, OffsetConverter):
+            return False
+        if not definition.is_base:
+            pending.extend(definition.reference)
+    return True
+
+
+def _conversion_detail(observed: Any, chosen: Any, observed_unit: str, resolved_unit: str) -> tuple[str, Optional[float], str]:
+    """Describe a unit conversion, never converting dataset values."""
+    unavailable = ("conversion", None, "conversion formula unavailable for these units")
+    if not (_has_affine_definition(observed) and _has_affine_definition(chosen)):
+        return unavailable
+    try:
+        source_scale, source_root = _UNIT_REGISTRY.get_root_units(observed, check_nonmult=False)
+        target_scale, target_root = _UNIT_REGISTRY.get_root_units(chosen, check_nonmult=False)
+        if source_root != target_root:
+            return unavailable
+        # Definition scales avoid subtracting two almost equal converted values
+        # when an offset is large relative to the slope.
+        slope = float(source_scale / target_scale)
+        offset = float(_UNIT_REGISTRY.Quantity(0, observed).to(chosen).magnitude)
+    except (PintError, ValueError, ArithmeticError):
+        return unavailable
+    if slope == 0 or not (math.isfinite(slope) and math.isfinite(offset)):
+        return unavailable
+    slope_text, offset_text = f"{slope:g}", f"{abs(offset):g}"
+    # Mark rounded coefficients as approximate, especially reverse conversions.
+    exact = math.isclose(slope, float(slope_text), rel_tol=1e-12, abs_tol=0) and math.isclose(
+        abs(offset), float(offset_text), rel_tol=1e-12, abs_tol=0,
+    )
+    relation = "=" if exact else "≈"
+    formula = f"{resolved_unit} {relation} {observed_unit} × {slope_text}"
+    if offset != 0:
+        formula += f" {'+' if offset > 0 else '-'} {offset_text}"
+        return "offset", None, f"offset conversion: {formula}"
+    return "scale", slope, f"{slope_text}× scale difference; {formula}"
 
 
 def _override_mismatches(
@@ -534,18 +591,9 @@ def _override_mismatches(
             conversion_factor = None
             detail = "different dimensions"
         else:
-            kind = "scale"
-            # Construct offset temperatures explicitly: their zero points can
-            # differ, so converting one degree is not a multiplicative factor.
-            quantity = _UNIT_REGISTRY.Quantity
-            conversion_factor = float(quantity(1, observed["_parsed"]).to(chosen["_parsed"]).magnitude)
-            detail = f"{conversion_factor:g}× scale difference"
-            if observed["_parsed"].dimensionality == _UNIT_REGISTRY.kelvin.dimensionality:
-                zero = float(quantity(0, observed["_parsed"]).to(chosen["_parsed"]).magnitude)
-                if zero != 0:
-                    kind = "offset"
-                    conversion_factor = None
-                    detail = f"offset conversion: 0 {observed_unit} = {zero:g} {resolved_unit}"
+            kind, conversion_factor, detail = _conversion_detail(
+                observed["_parsed"], chosen["_parsed"], observed_unit, resolved_unit,
+            )
         mismatches.append({
             "kind": kind,
             "source": candidate["source"],
