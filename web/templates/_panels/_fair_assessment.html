@@ -2,17 +2,17 @@
 <div id="panel-fair-assessment" class="metric-panel hidden">
   <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">FAIR Compliance Evaluation</h2>
-    <p class="text-sm mb-4 text-gray-500 dark:text-gray-400">Upload a JSON metadata file (DCAT or Datacite) to evaluate FAIR compliance.</p>
+    <p class="text-sm mb-4 text-gray-500 dark:text-gray-400">Upload a JSON metadata file (DCAT-US 1.1 or DataCite) to evaluate FAIR compliance.</p>
 
     <div class="p-4 mb-4 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
       <h4 class="font-semibold text-gray-900 dark:text-white mb-2">Supported Metadata Standards</h4>
       <ul class="space-y-2">
         <li>
-          <strong class="text-gray-900 dark:text-white">DCAT</strong> — Data Catalog Vocabulary, a W3C standard for describing datasets in data catalogs.
-          <a href="https://www.w3.org/TR/vocab-dcat-3/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">W3C Specification</a>
+          <strong class="text-gray-900 dark:text-white">DCAT-US 1.1</strong>: the Project Open Data metadata schema used by US federal data catalogs, based on the W3C Data Catalog Vocabulary.
+          <a href="https://resources.data.gov/resources/dcat-us/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">DCAT-US 1.1 Schema</a>
         </li>
         <li>
-          <strong class="text-gray-900 dark:text-white">DataCite</strong> — A metadata schema for persistent identification of research data, widely used in academic and scientific repositories.
+          <strong class="text-gray-900 dark:text-white">DataCite 4.x</strong>: a metadata schema for persistent identification of research data, widely used in academic and scientific repositories. DataCite REST API responses are accepted as downloaded.
           <a href="https://schema.datacite.org/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">DataCite Schema</a>
         </li>
       </ul>
@@ -23,8 +23,8 @@
       <div class="mb-4">
         <label for="fair-metadata-type" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Metadata type</label>
         <select name="metadata type" id="fair-metadata-type" required class="w-full" style="max-width: none;">
-          <option value="DCAT">DCAT</option>
-          <option value="Datacite">Datacite</option>
+          <option value="DCAT">DCAT-US 1.1 (Project Open Data)</option>
+          <option value="Datacite">DataCite 4.x</option>
         </select>
       </div>
 

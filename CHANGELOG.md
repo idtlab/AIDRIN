@@ -7,6 +7,32 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ### Changed (breaking)
 
+- **FAIR metadata assessment: DCAT-US 1.1 and DataCite scores change.** Both
+  standards are now scored by one checker,
+  `aidrin.structured_data_metrics.fair_metadata.calculate_fair_compliance`,
+  which replaces `FAIRness_dcat.py` and `FAIRness_datacite.py`.
+
+  **DCAT-US 1.1** (labelled "DCAT" before; the check was always DCAT-US 1.1 /
+  Project Open Data, not W3C DCAT): the old matcher flattened nested keys and
+  matched by suffix. Object-valued `publisher` and `contactPoint` always
+  failed, and `title`, `description` and `format` could be taken from a
+  distribution instead of the dataset. Dataset-level keys are now read from
+  the top level only, and `downloadURL`, `accessURL`, `mediaType` and `format`
+  from `distribution[]`. On the bundled samples, BUTTER-E goes from 18/26 to
+  20/26 and EGS_Collab_Experiment from 17/26 to 19/26.
+
+  **DataCite** (now 4.x, checked against 4.7): REST API responses
+  (`data.attributes`) are unwrapped instead of failing every check; the DOI is
+  read from `doi` or a DOI-typed `identifiers` entry; `contributors` moves from
+  Accessible to Reusable; Accessible now checks `url`/`contentUrl` and access
+  rights; checks move from 10/1/1/7 to 8/2/4/8. New `Conformance` (mandatory
+  properties) and `Structure` (ORCID, ROR, publisher, subject and funder
+  identifiers) sections are added. REST bookkeeping fields (`xml`, view and
+  citation counts) no longer appear in the report.
+
+  Principle values are now short summaries (a publisher's name, a keyword
+  list, "7/7 distributions") rather than raw objects.
+
 - **Completeness — `Overall Completeness` is now column-wise.** The
   `completeness` metric's `Overall Completeness` value changed from a *row-wise*
   score (the fraction of rows with no missing value in any column) to a
