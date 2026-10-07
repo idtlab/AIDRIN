@@ -1,6 +1,10 @@
 """Tests for the inspector page routes and rendering."""
 
+from pathlib import Path
+
 from aidrin._version import __version__
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 # -------------------------------------------------
@@ -86,6 +90,44 @@ def test_inspector_no_sidebar_without_file(client):
     response = client.get("/inspector")
     html = response.data.decode()
     assert 'id="sidebar"' not in html
+
+
+def test_upload_panel_has_fair_metadata_tab(client):
+    """The landing page offers the FAIR check as a tab, without a dataset."""
+    html = client.get("/inspector").data.decode()
+    assert 'id="tab-fair"' in html
+    assert 'id="fair-tab-panel"' in html
+    assert 'id="form-fair-assessment"' in html
+    assert "initLandingFairTab();" in html
+    assert 'id="sidebar"' not in html
+    # The landing tab shows only the type selector and upload, not the panel's intro.
+    assert "Supported Metadata Standards" not in html
+    assert ">Supported formats</h4>" in html
+    assert 'href="https://resources.data.gov/resources/dcat-us/"' in html
+    assert 'href="https://schema.datacite.org/"' in html
+    assert "submitFairAssessment);" not in html  # no Submit button: choosing a file runs the check
+
+
+def test_fair_metadata_tab_is_not_on_the_workspace(uploaded_client):
+    """With a dataset loaded, FAIR lives in the sidebar, not in a landing tab."""
+    html = uploaded_client.get("/inspector").data.decode()
+    assert 'id="tab-fair"' not in html
+    assert "initLandingFairTab();" not in html
+    assert html.count('id="panel-fair-assessment"') == 1
+    assert "Supported Metadata Standards" in html
+    assert "withSubmitGuard(this, submitFairAssessment);" in html
+
+
+def test_fair_assessment_post_needs_no_dataset(client):
+    """The FAIR check reads only the metadata file; no dataset is in this session."""
+    with open(ROOT / "examples/sample_data/dcat/BUTTER-E.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "BUTTER-E.json"), "metadata type": "DCAT"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    assert "Total Checks" in response.get_json()["FAIR Compliance Checks"]
 
 
 # -------------------------------------------------
