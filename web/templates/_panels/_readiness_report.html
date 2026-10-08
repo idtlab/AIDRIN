@@ -96,7 +96,7 @@
       <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Optional · requires metadata</span>
     </div>
     <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-      Upload a JSON metadata file (DCAT-US 1.1 or DataCite) to evaluate FAIR compliance. This section is not computed automatically.
+      Upload a JSON or JSON-LD metadata file (Croissant, DCAT-US 1.1 or DataCite) to evaluate FAIR compliance. This section is not computed automatically.
     </p>
     <div id="readiness-fair-upload">
       <form id="form-readiness-fair" method="post" enctype="multipart/form-data">
@@ -104,6 +104,8 @@
         <div class="mb-4">
           <label for="readiness-fair-metadata-type" class="block text-sm font-medium mb-1.5 text-gray-900 dark:text-white">Metadata type</label>
           <select name="metadata type" id="readiness-fair-metadata-type" required class="w-full" style="max-width: none;">
+            <option value="auto" selected>Detect automatically</option>
+            <option value="croissant">Croissant 1.0 / 1.1</option>
             <option value="DCAT">DCAT-US 1.1 (Project Open Data)</option>
             <option value="Datacite">DataCite 4.x</option>
           </select>
@@ -117,7 +119,7 @@
               <p class="mb-1 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
               <p id="readinessFairFileLabel" class="text-xs text-gray-500 dark:text-gray-400">JSON metadata file</p>
             </div>
-            <input id="readiness-fair-file" type="file" name="metadata" accept=".json" required class="hidden" />
+            <input id="readiness-fair-file" type="file" name="metadata" accept=".json,.jsonld" required class="hidden" />
           </label>
         </div>
         <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">

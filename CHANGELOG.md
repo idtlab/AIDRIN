@@ -60,6 +60,15 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ### Added
 
+- **Croissant support and auto-detection in the FAIR metadata assessment.**
+  MLCommons Croissant 1.0 and 1.1 files (from Hugging Face, Kaggle, OpenML)
+  are scored for FAIR, with `Conformance` (the nine required properties),
+  `Structure` (checksums, typed fields, record-set keys) and a `RAI
+  Documentation` section that lists the 20 Responsible AI properties as
+  declared or not, without scoring them. The standard is now detected by
+  default (`auto` in the web form, `aidrin fair`, the library and MCP), and
+  every result reports it under `Standard`. The web form accepts `.jsonld`.
+
 - **FAIR metadata assessment from the CLI, Python library and MCP server.** The
   FAIR check was web-only. It is now `aidrin fair <metadata.json> --standard
   dcat-us-1.1|datacite [--summary] [-o path]` (local-only),

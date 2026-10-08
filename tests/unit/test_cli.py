@@ -1241,13 +1241,22 @@ class TestFairCommand(unittest.TestCase):
         with open(out) as f:
             self.assertEqual(json.load(f)["FAIR Compliance Checks"]["Total Checks"], "20/26")
 
-    def test_standard_is_required_and_checked(self):
-        _, stderr, code = _run_cli("fair", _DCAT_SAMPLE)
-        self.assertEqual(code, 2)
-        self.assertIn("--standard", stderr)
+    def test_standard_is_detected_by_default_and_checked(self):
+        stdout, stderr, code = _run_cli("fair", _DCAT_SAMPLE)
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertEqual(json.loads(stdout)["Standard"]["Detected automatically"], "yes")
         _, stderr, code = _run_cli("fair", _DCAT_SAMPLE, "--standard", "iso19115")
         self.assertEqual(code, 2)
         self.assertIn("invalid choice", stderr)
+
+    def test_croissant_summary_lists_declared_rai_without_a_ratio(self):
+        path = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "croissant_1.0_mlcommons_dices_rai.json")
+        stdout, stderr, code = _run_cli("fair", path, "--summary")
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertIn("(Croissant 1.0): 12/20 FAIR checks passed", stdout)
+        self.assertIn("RAI documentation (reported, not scored):", stdout)
+        self.assertIn("declared: dataCollection,", stdout)
+        self.assertNotIn(" of 20", stdout)
 
     def test_missing_file_is_an_error(self):
         _, stderr, code = _run_cli("fair", "/no/such/metadata.json", "--standard", "datacite")

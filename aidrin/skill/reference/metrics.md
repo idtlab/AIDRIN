@@ -605,21 +605,24 @@ aidrin run differential-privacy examples/sample_data/csv/adult.csv "age,hours.pe
 Not an `aidrin run` metric: it scores a JSON **metadata** file, not a dataset, and is
 local-only (`aidrin remote fair` is rejected).
 
-- **Syntax:** `aidrin fair <metadata.json> --standard <dcat-us-1.1|datacite> [--summary] [-o <path>]`
-- **Args:** `--standard` is required: `dcat-us-1.1` (Project Open Data) or `datacite`
-  (DataCite 4.x JSON, including DataCite REST API responses).
+- **Syntax:** `aidrin fair <metadata.json> [--standard auto|croissant|dcat-us-1.1|datacite] [--summary] [-o <path>]`
+- **Args:** `--standard` defaults to `auto` (detects it). `croissant` is MLCommons Croissant
+  1.0/1.1; `dcat-us-1.1` is Project Open Data; `datacite` is DataCite 4.x JSON, including
+  DataCite REST API responses.
 - **Output keys:** `Findable`, `Accessible`, `Interoperable`, `Reusable` (each check mapped
   to what was found or `CHECK FAILED ❌`), `FAIR Compliance Checks` (`"n/m"` per principle
-  and `Total Checks`), `Other`, `Original Metadata`. DataCite adds `Conformance`
-  (mandatory properties) and `Structure` (ORCID, ROR, publisher, subject and funder
-  identifiers). No chart in the JSON.
+  and `Total Checks`), `Standard` (name, and whether it was detected), `Other`,
+  `Original Metadata`. DataCite and Croissant add `Conformance` (required properties)
+  and `Structure` (identifiers, checksums, typed fields). Croissant adds `RAI Documentation`:
+  each Responsible AI property declared (with its text) or `Not declared`. Report it,
+  never score it; it is free text. No chart in the JSON.
 - **Direction:** higher `n/m` = more FAIR elements present. Presence only: it does not
   check that the values are correct.
 
 **Example:**
 
 ```bash
-aidrin fair examples/sample_data/dcat/BUTTER-E.json --standard dcat-us-1.1 --summary
+aidrin fair examples/sample_data/dcat/BUTTER-E.json --summary
 ```
 
 ---

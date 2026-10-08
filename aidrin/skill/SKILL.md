@@ -1,6 +1,6 @@
 ---
 name: aidrin
-description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to validate file paths stored in a dataset, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, FAIR compliance of a metadata file (DCAT-US, DataCite), or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
+description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to validate file paths stored in a dataset, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, FAIR compliance of a metadata file (Croissant, DCAT-US, DataCite), or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
 ---
 
 # Assessing dataset AI-readiness with AIDRIN
@@ -133,7 +133,7 @@ Dimension → metric mapping for focused requests:
 | Data structure / distribution shape / collinearity / redundant features | max-pairwise-correlation, skewness, kurtosis |
 | Feature relevance / AI impact | feature-relevance, correlations |
 | Class imbalance | class-imbalance |
-| FAIR / metadata quality (DCAT-US 1.1, DataCite JSON) | `aidrin fair <metadata.json> --standard dcat-us-1.1\|datacite` (MCP: `check_fair_compliance`); scores the metadata file, not the dataset |
+| FAIR / metadata quality (Croissant, DCAT-US 1.1, DataCite JSON) | `aidrin fair <metadata.json>` (detects the standard; MCP: `check_fair_compliance`); scores the metadata file, not the dataset |
 | Data structure / organization | constant-feature-count |
 | Full readiness (no specific dimension) | all applicable metrics per the intent table in Step 4 |
 

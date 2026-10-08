@@ -227,20 +227,63 @@ supported metadata, resolution behavior, ``g`` ambiguity, and Globus compatibili
 FAIR Compliance Report
 '''''''''''''''''''''''
 
-The **FAIR Compliance Report** analyzes your dataset's metadata file (in **DCAT-US 1.1** or **DataCite JSON** format)
-and provides a detailed assessment against the FAIR criteria.
+The **FAIR Compliance Report** analyzes your dataset's metadata file (in **Croissant**, **DCAT-US 1.1** or
+**DataCite JSON** format) and provides a detailed assessment against the FAIR criteria.
 
 How it Works
 ''''''''''''''
 
 1. Open the **FAIR Assessment** panel from the sidebar of the `inspector page <https://demo.aidrin.org/inspector>`__.
-2. Choose the metadata type and upload your metadata file (**DCAT-US 1.1** or **DataCite JSON**).
+2. Upload your metadata file (``.json`` or ``.jsonld``). **Metadata type** defaults to *Detect
+   automatically*; choose a standard explicitly if detection picks the wrong one or fails.
 3. The system evaluates the file against the FAIR principles and generates a structured report.
+   The report's **Standard** section names the standard used and whether it was detected.
+
+Detection reads what the file declares: Croissant files carry ``conformsTo`` (or a ``cr`` context)
+naming their Croissant version; DataCite JSON uses ``titles`` and ``creators``, including REST API
+responses; DCAT-US 1.1 files carry ``accessLevel``, ``bureauCode`` or a Project Open Data
+``conformsTo``. A file that matches none of these is reported as undetected.
 
 A check passes when the element is present and not empty. Dataset-level elements are read from the
 top level of the file only, so a title or description on a distribution never stands in for the
 dataset's own. Elements written with a namespace prefix (``dct:title``) or as a full IRI match their
 plain name.
+
+FAIR Principles and Criteria: Croissant
+''''''''''''''''''''''''''''''''''''''''
+
+`Croissant <https://docs.mlcommons.org/croissant/docs/croissant-spec.html>`__ 1.0 and 1.1 are the
+MLCommons JSON-LD metadata formats for machine-learning datasets, published by Hugging Face, Kaggle and
+OpenML. MLCommons offers syntax validation for Croissant but no FAIR assessment; this mapping is
+AIDRIN's, with each check tied to an F-UJI FAIRsFAIR metric.
+
+**Findable** (FsF-F1-01D, FsF-F2-01M)
+    - ``name``, ``description``, ``keywords``, ``url``, ``version``, ``citeAs``
+    - ``identifier`` or ``sameAs``
+
+**Accessible** (FsF-A1-01M, FsF-A1-03D)
+    - ``isAccessibleForFree`` or ``conditionsOfAccess``
+    - ``contentUrl`` and ``encodingFormat`` *(distribution)*
+
+**Interoperable** (FsF-I1-01M, FsF-R1.3-01M)
+    - ``conformsTo``, ``@context``, ``recordSet``
+
+**Reusable** (FsF-R1.1-01M, FsF-R1.2-01M, FsF-R1-01MD)
+    - ``license``, ``creator``, ``publisher``, ``datePublished``, ``dateModified``
+    - provenance: ``wasDerivedFrom`` or ``wasGeneratedBy``
+    - ``dataType`` on the fields of each ``recordSet``
+
+The Croissant report also shows:
+
+- **Conformance**: which of the nine properties Croissant requires (``@context``, ``@type`` of
+  Dataset, ``conformsTo``, ``name``, ``description``, ``license``, ``url``, ``creator``,
+  ``datePublished``) are present.
+- **Structure**: FileObjects with a checksum (``sha256`` or ``md5``), fields with a ``dataType``, and
+  RecordSets with a ``key``.
+- **RAI Documentation**: the 20 properties of the `Croissant Responsible AI vocabulary
+  <https://docs.mlcommons.org/croissant/docs/croissant-rai-spec.html>`__ (data collection, labeling,
+  biases, limitations, sensitive information and so on), each shown as declared, with its text, or
+  *Not declared*. They are reported, never scored: the values are free text that AIDRIN cannot verify.
 
 FAIR Principles and Criteria: DCAT-US 1.1
 ''''''''''''''''''''''''''''''''''''''''''

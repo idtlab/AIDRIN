@@ -476,9 +476,10 @@ calculate_fair_compliance
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Scores a metadata file against the FAIR principles. It reads only the metadata,
-so it takes a path (or the parsed dict) instead of ``file_info``. ``standard`` is
-``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x JSON,
-including DataCite REST API responses). See :ref:`web_usage` for the checks.
+so it takes a path (or the parsed dict) instead of ``file_info``. ``standard``
+defaults to ``"auto"``, which detects it; or name it: ``"croissant"`` (Croissant
+1.0/1.1), ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x
+JSON, including DataCite REST API responses). See :ref:`web_usage` for the checks.
 
 **Usage**:
 
@@ -486,10 +487,12 @@ including DataCite REST API responses). See :ref:`web_usage` for the checks.
 
    from aidrin import calculate_fair_compliance
 
-   result = calculate_fair_compliance("metadata.json", "dcat-us-1.1")
-   print(result["FAIR Compliance Checks"]["Total Checks"])  # e.g. "20/26"
+   result = calculate_fair_compliance("metadata.json")
+   print(result["Standard"]["Name"])                        # e.g. "Croissant 1.1"
+   print(result["FAIR Compliance Checks"]["Total Checks"])  # e.g. "13/20"
 
 **Returns**: One dict per FAIR principle mapping each check to what was found or
 ``"CHECK FAILED ❌"``, ``"FAIR Compliance Checks"`` with ``"n/m"`` per principle and
-in total, ``"Other"``, ``"Original Metadata"``, and a base64 ``"Pie chart"``.
-DataCite results also include ``"Conformance"`` and ``"Structure"``.
+in total, ``"Standard"``, ``"Other"``, ``"Original Metadata"``, and a base64
+``"Pie chart"``. DataCite and Croissant results also include ``"Conformance"`` and
+``"Structure"``; Croissant adds ``"RAI Documentation"`` (reported, not scored).

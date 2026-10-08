@@ -178,12 +178,14 @@ guess and exit non-zero, naming the layout and pointing back at ``aidrin invento
 ~~~~~~~~~~~~~~~
 
 Scores a metadata file against the FAIR principles. It reads only the metadata, never a
-dataset, and runs locally (``aidrin remote fair`` is rejected). ``--standard`` is required:
+dataset, and runs locally (``aidrin remote fair`` is rejected). ``--standard`` defaults to
+``auto``, which detects the standard; or name it: ``croissant`` (Croissant 1.0/1.1),
 ``dcat-us-1.1`` (Project Open Data) or ``datacite`` (DataCite 4.x JSON, including DataCite REST
 API responses). The JSON output leaves out the chart; see :ref:`web_usage` for the checks.
 
 .. code-block:: bash
 
+   aidrin fair /path/to/croissant.json
    aidrin fair /path/to/metadata.json --standard dcat-us-1.1
 
    # Per-principle table with the checks that failed
@@ -196,7 +198,7 @@ API responses). The JSON output leaves out the chart; see :ref:`web_usage` for t
 
 .. code-block:: text
 
-   BUTTER-E.json: 20/26 FAIR checks passed
+   BUTTER-E.json (DCAT-US 1.1 (Project Open Data)): 20/26 FAIR checks passed
      Findable         5/6  missing: theme
      Accessible       6/6
      Interoperable    2/6  missing: conformsTo, references, language, temporal
