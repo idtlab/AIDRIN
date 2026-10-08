@@ -471,3 +471,25 @@ for the sidecar schema and workflow.
 
 **Returns**: Coverage and validity scores, readiness status, classification
 counts, and one machine-readable record per variable.
+
+calculate_fair_compliance
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Scores a metadata file against the FAIR principles. It reads only the metadata,
+so it takes a path (or the parsed dict) instead of ``file_info``. ``standard`` is
+``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x JSON,
+including DataCite REST API responses). See :ref:`web_usage` for the checks.
+
+**Usage**:
+
+.. code-block:: python
+
+   from aidrin import calculate_fair_compliance
+
+   result = calculate_fair_compliance("metadata.json", "dcat-us-1.1")
+   print(result["FAIR Compliance Checks"]["Total Checks"])  # e.g. "20/26"
+
+**Returns**: One dict per FAIR principle mapping each check to what was found or
+``"CHECK FAILED ❌"``, ``"FAIR Compliance Checks"`` with ``"n/m"`` per principle and
+in total, ``"Other"``, ``"Original Metadata"``, and a base64 ``"Pie chart"``.
+DataCite results also include ``"Conformance"`` and ``"Structure"``.

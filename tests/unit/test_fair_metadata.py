@@ -181,6 +181,36 @@ def test_datacite_totals_follow_the_profile():
 
 
 # ---------------------------------------------------------------------------
+# Standard names and the public API
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name, form_value", [("dcat-us-1.1", "DCAT"), ("datacite", "Datacite")])
+def test_standard_names_and_web_form_values_agree(name, form_value):
+    metadata = _load(DCAT_SAMPLES / "BUTTER-E.json")
+    by_name = calculate_fair_compliance(metadata, name)
+    by_form = calculate_fair_compliance(metadata, form_value)
+    assert by_name["FAIR Compliance Checks"] == by_form["FAIR Compliance Checks"]
+
+
+def test_public_api_reads_a_path_or_a_dict():
+    import aidrin
+
+    path = DCAT_SAMPLES / "BUTTER-E.json"
+    from_path = aidrin.calculate_fair_compliance(str(path), "dcat-us-1.1")
+    from_dict = aidrin.calculate_fair_compliance(_load(path), "dcat-us-1.1")
+    assert from_path["FAIR Compliance Checks"] == from_dict["FAIR Compliance Checks"]
+    assert "calculate_fair_compliance" in aidrin.__all__
+
+
+def test_headless_api_drops_only_the_chart_by_default():
+    from aidrin.headless import api
+
+    path = str(DCAT_SAMPLES / "BUTTER-E.json")
+    assert "Pie chart" not in api.calculate_fair_compliance(path, "dcat-us-1.1")
+    assert api.calculate_fair_compliance(path, "dcat-us-1.1", strip_visualizations=False)["Pie chart"]
+
+
+# ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
 

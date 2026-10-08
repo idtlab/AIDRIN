@@ -443,6 +443,25 @@ def inventory(file_path: str, file_type: Optional[str] = None) -> Dict[str, Any]
     return reader_cls(file_path, file_upload_time_log).inventory()
 
 
+def calculate_fair_compliance(
+    metadata_path: str, standard: str, strip_visualizations: bool = True
+) -> Dict[str, Any]:
+    """Score a JSON metadata file against the FAIR principles.
+
+    ``standard`` is ``"dcat-us-1.1"`` or ``"datacite"``. Reads only the
+    metadata file, so it runs locally and needs no dataset. With
+    ``strip_visualizations`` the base64 ``"Pie chart"`` is left out.
+    """
+    import aidrin
+
+    if not os.path.exists(metadata_path):
+        raise ValueError(f"File not found: {metadata_path}")
+    result = aidrin.calculate_fair_compliance(metadata_path, standard)
+    if strip_visualizations:
+        result.pop("Pie chart", None)
+    return _sanitize(result)
+
+
 def summarize_dataset(
     file_path: str,
     file_type: Optional[str] = None,
