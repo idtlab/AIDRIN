@@ -341,15 +341,16 @@ def check_fair_compliance(metadata_path: str, standard: str = "auto") -> str:
     dataset, and runs locally (no endpoint or profile).
 
     Returns pass/fail per check under each principle, "n/m" counts per principle
-    and in total, and the standard used ("Standard"). DataCite and Croissant add
-    "Conformance" (required properties) and "Structure" (identifiers, checksums,
-    typed fields); Croissant adds "RAI Documentation", which is reported but not
-    scored because its values are free text.
+    and in total, and the standard used ("Standard"). DataCite, Croissant and
+    RO-Crate add "Conformance" (required properties) and "Structure" (identifiers,
+    checksums, typed fields); Croissant adds "RAI Documentation", which is reported
+    but not scored because its values are free text.
 
     Args:
         metadata_path: Absolute path to the JSON or JSON-LD metadata file.
         standard: "auto" (detect it, the default), "croissant" (MLCommons
-                  Croissant 1.0/1.1), "dcat-us-1.1" (Project Open Data) or
+                  Croissant 1.0/1.1), "rocrate" (RO-Crate 1.2 ro-crate-metadata.json),
+                  "dcat-us-1.1" (Project Open Data) or
                   "datacite" (DataCite 4.x JSON, including REST API responses).
     """
     try:

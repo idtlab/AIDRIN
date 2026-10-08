@@ -605,17 +605,19 @@ aidrin run differential-privacy examples/sample_data/csv/adult.csv "age,hours.pe
 Not an `aidrin run` metric: it scores a JSON **metadata** file, not a dataset, and is
 local-only (`aidrin remote fair` is rejected).
 
-- **Syntax:** `aidrin fair <metadata.json> [--standard auto|croissant|dcat-us-1.1|datacite] [--summary] [-o <path>]`
+- **Syntax:** `aidrin fair <metadata.json> [--standard auto|croissant|rocrate|dcat-us-1.1|datacite] [--summary] [-o <path>]`
 - **Args:** `--standard` defaults to `auto` (detects it). `croissant` is MLCommons Croissant
-  1.0/1.1; `dcat-us-1.1` is Project Open Data; `datacite` is DataCite 4.x JSON, including
+  1.0/1.1; `rocrate` is RO-Crate 1.2 (`ro-crate-metadata.json`; other versions are assessed
+  with 1.2 rules); `dcat-us-1.1` is Project Open Data; `datacite` is DataCite 4.x JSON, including
   DataCite REST API responses.
 - **Output keys:** `Findable`, `Accessible`, `Interoperable`, `Reusable` (each check mapped
   to what was found or `CHECK FAILED ❌`), `FAIR Compliance Checks` (`"n/m"` per principle
   and `Total Checks`), `Standard` (name, and whether it was detected), `Other`,
-  `Original Metadata`. DataCite and Croissant add `Conformance` (required properties)
+  `Original Metadata`. DataCite, Croissant and RO-Crate add `Conformance` (required properties)
   and `Structure` (identifiers, checksums, typed fields). Croissant adds `RAI Documentation`:
   each Responsible AI property declared (with its text) or `Not declared`. Report it,
-  never score it; it is free text. No chart in the JSON.
+  never score it; it is free text. A local RO-Crate adds `Not applicable` for the checks that
+  need a web-based crate (left out of the score). No chart in the JSON.
 - **Direction:** higher `n/m` = more FAIR elements present. Presence only: it does not
   check that the values are correct.
 

@@ -227,8 +227,8 @@ supported metadata, resolution behavior, ``g`` ambiguity, and Globus compatibili
 FAIR Compliance Report
 '''''''''''''''''''''''
 
-The **FAIR Compliance Report** analyzes your dataset's metadata file (in **Croissant**, **DCAT-US 1.1** or
-**DataCite JSON** format) and provides a detailed assessment against the FAIR criteria.
+The **FAIR Compliance Report** analyzes your dataset's metadata file (in **Croissant**, **RO-Crate**, **DCAT-US 1.1**
+or **DataCite JSON** format) and provides a detailed assessment against the FAIR criteria.
 
 How it Works
 ''''''''''''''
@@ -240,7 +240,8 @@ How it Works
    The report's **Standard** section names the standard used and whether it was detected.
 
 Detection reads what the file declares: Croissant files carry ``conformsTo`` (or a ``cr`` context)
-naming their Croissant version; DataCite JSON uses ``titles`` and ``creators``, including REST API
+naming their Croissant version; an RO-Crate has an ``ro-crate-metadata.json`` entity in its
+``@graph`` or an RO-Crate context; DataCite JSON uses ``titles`` and ``creators``, including REST API
 responses; DCAT-US 1.1 files carry ``accessLevel``, ``bureauCode`` or a Project Open Data
 ``conformsTo``. A file that matches none of these is reported as undetected.
 
@@ -284,6 +285,46 @@ The Croissant report also shows:
   <https://docs.mlcommons.org/croissant/docs/croissant-rai-spec.html>`__ (data collection, labeling,
   biases, limitations, sensitive information and so on), each shown as declared, with its text, or
   *Not declared*. They are reported, never scored: the values are free text that AIDRIN cannot verify.
+
+FAIR Principles and Criteria: RO-Crate
+'''''''''''''''''''''''''''''''''''''''
+
+`RO-Crate 1.2 <https://www.researchobject.org/ro-crate/specification/1.2/>`__ packages research data
+with its metadata in an ``ro-crate-metadata.json`` file (JSON-LD on schema.org). It is used by workflow
+systems and repositories such as WorkflowHub, and by the Workflow Run Crate profiles. Upload the
+``ro-crate-metadata.json`` itself; zipped crates are not read. Other RO-Crate versions are assessed
+with the 1.2 rules, and the report says so.
+
+The checks run on the crate's root data entity, found through the metadata descriptor's ``about``
+(the root's ``@id`` is often ``./`` but need not be).
+
+**Findable** (FsF-F1-01D, FsF-F2-01M)
+    - ``name``, ``description``, ``keywords``
+    - ``identifier`` or ``cite-as``
+
+**Accessible** (FsF-A1-01M, FsF-A1-03D)
+    - ``conditionsOfAccess``
+    - web-based crates only (root ``@id`` is an absolute URI): ``url`` or ``distribution``, and
+      ``contentUrl`` on File entities. For a local crate these are listed under **Not applicable**
+      and left out of the score.
+
+**Interoperable** (FsF-I1-01M, FsF-R1.3-01M)
+    - the metadata descriptor's ``conformsTo`` names a versioned RO-Crate
+    - ``conformsTo`` on the root (the profiles the crate follows)
+    - ``encodingFormat`` on File entities
+
+**Reusable** (FsF-R1.1-01M, FsF-R1.2-01M)
+    - ``license``, ``author``, ``publisher``, ``funder``, ``datePublished``
+    - provenance: a ``CreateAction`` or ``UpdateAction`` with an ``object``
+
+The RO-Crate report also shows:
+
+- **Conformance**: the 1.2 requirements (MUST: a ``CreativeWork`` metadata descriptor, a root entity
+  found through ``about``, a root ``@type`` including ``Dataset``, and ``datePublished`` as one ISO 8601
+  date) and recommendations (SHOULD: a versioned ``conformsTo``, root ``name``, ``description`` and
+  ``license``, and ``cite-as`` when the ``identifier`` is a DOI), each with what is missing.
+- **Structure**: Files with ``encodingFormat`` and ``contentSize``, people with an ORCID, organizations
+  with a ROR, and actions with both ``agent`` and ``instrument``.
 
 FAIR Principles and Criteria: DCAT-US 1.1
 ''''''''''''''''''''''''''''''''''''''''''

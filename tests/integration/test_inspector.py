@@ -89,6 +89,20 @@ def test_fair_assessment_detects_croissant_from_a_jsonld_upload(client):
     assert "RAI Documentation" in body
 
 
+def test_fair_assessment_detects_an_rocrate_upload(client):
+    """An ro-crate-metadata.json uploaded with "auto" is detected and scored."""
+    with open(ROOT / "tests/fixtures/fair_metadata/rocrate_1.2_rainfall_example.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "ro-crate-metadata.json"), "metadata type": "auto"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["Standard"] == {"Name": "RO-Crate 1.2", "Detected automatically": "yes"}
+    assert body["FAIR Compliance Checks"]["Total Checks"] == "7/14"
+
+
 def test_fair_assessment_auto_reports_undetectable_metadata(client):
     """When detection fails the user is told to pick the standard, not shown a stack trace."""
     response = client.post(

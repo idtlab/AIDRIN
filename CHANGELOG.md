@@ -60,6 +60,14 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ### Added
 
+- **RO-Crate support in the FAIR metadata assessment.** RO-Crate 1.2
+  `ro-crate-metadata.json` files are detected and scored on the root data
+  entity (found through the descriptor's `about`), with `Conformance` (the
+  1.2 MUSTs and SHOULDs) and `Structure` (typed Files, ORCID and ROR
+  identifiers, provenance actions). Web-only checks are reported as
+  `Not applicable` for local crates instead of failing. Other versions are
+  assessed with the 1.2 rules and labelled as such.
+
 - **Croissant support and auto-detection in the FAIR metadata assessment.**
   MLCommons Croissant 1.0 and 1.1 files (from Hugging Face, Kaggle, OpenML)
   are scored for FAIR, with `Conformance` (the nine required properties),

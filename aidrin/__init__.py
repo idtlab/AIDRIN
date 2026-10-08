@@ -596,7 +596,7 @@ def calculate_fair_compliance(metadata, standard="auto"):
 
     ``metadata`` is the path to a JSON or JSON-LD metadata file, or the parsed
     dict. ``standard`` is ``"auto"`` (detect it), ``"croissant"``,
-    ``"dcat-us-1.1"`` or ``"datacite"``. Only the metadata is read; no dataset
+    ``"rocrate"``, ``"dcat-us-1.1"`` or ``"datacite"``. Only the metadata is read; no dataset
     is needed.
     """
     import json

@@ -478,7 +478,7 @@ calculate_fair_compliance
 Scores a metadata file against the FAIR principles. It reads only the metadata,
 so it takes a path (or the parsed dict) instead of ``file_info``. ``standard``
 defaults to ``"auto"``, which detects it; or name it: ``"croissant"`` (Croissant
-1.0/1.1), ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x
+1.0/1.1), ``"rocrate"`` (RO-Crate 1.2), ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x
 JSON, including DataCite REST API responses). See :ref:`web_usage` for the checks.
 
 **Usage**:
@@ -494,5 +494,6 @@ JSON, including DataCite REST API responses). See :ref:`web_usage` for the check
 **Returns**: One dict per FAIR principle mapping each check to what was found or
 ``"CHECK FAILED ❌"``, ``"FAIR Compliance Checks"`` with ``"n/m"`` per principle and
 in total, ``"Standard"``, ``"Other"``, ``"Original Metadata"``, and a base64
-``"Pie chart"``. DataCite and Croissant results also include ``"Conformance"`` and
-``"Structure"``; Croissant adds ``"RAI Documentation"`` (reported, not scored).
+``"Pie chart"``. DataCite, Croissant and RO-Crate results also include ``"Conformance"``
+and ``"Structure"``; Croissant adds ``"RAI Documentation"`` (reported, not scored), and
+a local RO-Crate adds ``"Not applicable"`` for checks that need a web-based crate.

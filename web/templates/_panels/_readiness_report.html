@@ -96,7 +96,7 @@
       <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Optional · requires metadata</span>
     </div>
     <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-      Upload a JSON or JSON-LD metadata file (Croissant, DCAT-US 1.1 or DataCite) to evaluate FAIR compliance. This section is not computed automatically.
+      Upload a JSON or JSON-LD metadata file (Croissant, RO-Crate, DCAT-US 1.1 or DataCite) to evaluate FAIR compliance. This section is not computed automatically.
     </p>
     <div id="readiness-fair-upload">
       <form id="form-readiness-fair" method="post" enctype="multipart/form-data">
@@ -106,6 +106,7 @@
           <select name="metadata type" id="readiness-fair-metadata-type" required class="w-full" style="max-width: none;">
             <option value="auto" selected>Detect automatically</option>
             <option value="croissant">Croissant 1.0 / 1.1</option>
+            <option value="rocrate">RO-Crate 1.2</option>
             <option value="DCAT">DCAT-US 1.1 (Project Open Data)</option>
             <option value="Datacite">DataCite 4.x</option>
           </select>

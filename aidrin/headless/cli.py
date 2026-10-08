@@ -1068,7 +1068,7 @@ def main() -> None:
 
     fair_parser = subparsers.add_parser(
         "fair",
-        help="Score a metadata file (Croissant, DCAT-US 1.1 or DataCite JSON) against the FAIR principles",
+        help="Score a metadata file (Croissant, RO-Crate, DCAT-US 1.1 or DataCite JSON) against the FAIR principles",
     )
     fair_parser.add_argument("metadata_path", help="Path to the JSON or JSON-LD metadata file")
     fair_parser.add_argument(

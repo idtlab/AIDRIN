@@ -276,6 +276,73 @@ def test_croissant_nested_description_does_not_satisfy_the_dataset_check():
 
 
 # ---------------------------------------------------------------------------
+# RO-Crate
+# ---------------------------------------------------------------------------
+
+# Real crates: the RO-Crate 1.2 spec's rainfall example (local), a Workflow Run
+# Crate (1.1, local, with CreateActions), and the Workflow Run Crate profile crate
+# (1.2-DRAFT, web-based: its root @id is an absolute URI).
+ROCRATE_EXAMPLE = FIXTURES / "rocrate_1.2_rainfall_example.json"
+ROCRATE_RUN = FIXTURES / "rocrate_1.1_workflow_run.json"
+ROCRATE_WEB = FIXTURES / "rocrate_1.2-draft_web_profile.json"
+
+
+@pytest.mark.parametrize(
+    "fixture, name, total, must",
+    [
+        (ROCRATE_EXAMPLE, "RO-Crate 1.2", "7/14", "4/4"),
+        (ROCRATE_RUN, "RO-Crate 1.1, assessed with 1.2 rules", "7/14", "4/4"),
+        (ROCRATE_WEB, "RO-Crate 1.2-DRAFT, assessed with 1.2 rules", "7/16", "3/4"),
+    ],
+)
+def test_rocrate_real_crates(fixture, name, total, must):
+    result = calculate_fair_compliance(_load(fixture), "rocrate")
+    assert result["Standard"]["Name"] == name
+    assert result["FAIR Compliance Checks"]["Total Checks"] == total
+    assert result["Conformance"]["Required (MUST) present"] == must
+    assert _scalar_values_only(result)
+
+
+def test_rocrate_root_is_found_through_the_descriptor_not_assumed():
+    # The profile crate's root is "https://w3id.org/ro/wfrun/workflow/0.5", not "./".
+    result = calculate_fair_compliance(_load(ROCRATE_WEB), "rocrate")
+    assert result["Findable"]["name"] == "Workflow Run Crate profile"
+    assert result["Structure"]["People with an ORCID"] == "41/41 people"
+
+
+def test_rocrate_missing_date_published_fails_conformance():
+    result = calculate_fair_compliance(_load(ROCRATE_WEB), "rocrate")
+    assert result["Conformance"]["Missing (MUST)"] == "datePublished is one ISO 8601 date"
+
+    crate = _load(ROCRATE_EXAMPLE)
+    root = next(e for e in crate["@graph"] if e["@id"] == "./")
+    root["datePublished"] = ["2024-01-01", "2025-01-01"]  # MUST be a single string
+    assert calculate_fair_compliance(crate, "rocrate")["Conformance"]["Required (MUST) present"] == "3/4"
+
+
+def test_rocrate_web_only_checks_are_not_applicable_to_local_crates():
+    local = calculate_fair_compliance(_load(ROCRATE_EXAMPLE), "rocrate")
+    assert set(local["Accessible"]) == {"conditionsOfAccess"}
+    assert set(local["Not applicable"]) == {"url or distribution", "contentUrl (Files)"}
+
+    web = calculate_fair_compliance(_load(ROCRATE_WEB), "rocrate")
+    assert "Not applicable" not in web
+    assert web["Accessible"]["contentUrl (Files)"] == "1/2 Files"
+
+
+def test_rocrate_provenance_counts_create_actions():
+    result = calculate_fair_compliance(_load(ROCRATE_RUN), "rocrate")
+    assert result["Reusable"]["provenance (CreateAction or UpdateAction)"] == "3 actions"
+    assert result["Structure"]["Actions with agent and instrument"] == "0/3 actions"
+    assert result["Structure"]["Files with encodingFormat and contentSize"] == "12/12 Files"
+
+
+def test_rocrate_without_a_descriptor_is_rejected():
+    with pytest.raises(ValueError, match="Not an RO-Crate"):
+        calculate_fair_compliance({"@graph": [{"@id": "./", "@type": "Dataset"}]}, "rocrate")
+
+
+# ---------------------------------------------------------------------------
 # Detection
 # ---------------------------------------------------------------------------
 
@@ -286,6 +353,10 @@ def test_croissant_nested_description_does_not_satisfy_the_dataset_check():
         (_load(CROISSANT_OPENML), "croissant"),
         ({"conformsTo": ["http://mlcommons.org/croissant/RAI/1.0", "http://mlcommons.org/croissant/1.1"]}, "croissant"),
         ({"@context": {"cr": "http://mlcommons.org/croissant/"}, "@type": "sc:Dataset"}, "croissant"),
+        (_load(ROCRATE_EXAMPLE), "rocrate"),
+        (_load(ROCRATE_RUN), "rocrate"),
+        (_load(ROCRATE_WEB), "rocrate"),
+        ({"@context": "https://w3id.org/ro/crate/1.2/context", "@graph": []}, "rocrate"),
         (_load(DCAT_SAMPLES / "BUTTER-E.json"), "dcat-us-1.1"),
         (_load(DCAT_SAMPLES / "EGS_Collab_Experiment.json"), "dcat-us-1.1"),
         (_load(FIXTURES / "datacite_rest_default.json"), "datacite"),
