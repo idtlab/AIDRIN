@@ -13,6 +13,7 @@ import pytest
 pytest.importorskip("mcp")
 
 from aidrin.mcp.server import (  # noqa: E402
+    check_fair_compliance,
     run_aidrin_metric,
     run_custom_metric,
     run_custom_outlier_check,
@@ -50,6 +51,23 @@ def _remove(path: str) -> None:
         os.unlink(path)
     except OSError:
         pass
+
+
+def test_fair_compliance_tool_scores_a_metadata_file():
+    path = Path(__file__).resolve().parents[2] / "examples" / "sample_data" / "dcat" / "BUTTER-E.json"
+    payload = json.loads(check_fair_compliance(str(path), "dcat-us-1.1"))
+    assert payload["FAIR Compliance Checks"]["Total Checks"] == "20/26"
+    assert "Pie chart" not in payload
+
+
+def test_fair_compliance_tool_returns_errors_as_json(tmp_path):
+    assert "File not found" in json.loads(check_fair_compliance(str(tmp_path / "none.json"), "datacite"))["error"]
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json")
+    assert "error" in json.loads(check_fair_compliance(str(bad), "datacite"))
+    empty = tmp_path / "empty.json"
+    empty.write_text("{}")
+    assert "Unknown metadata type" in json.loads(check_fair_compliance(str(empty), "iso19115"))["error"]
 
 
 def test_dedicated_mcp_tool_accepts_rules_file():

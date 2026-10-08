@@ -10,6 +10,7 @@ from typing import Any
 from mcp.server import MCPServer
 
 from aidrin.headless.api import (
+    calculate_fair_compliance,
     generate_metric_template,
     list_available_metrics,
     run_custom_metric_logic,
@@ -330,6 +331,28 @@ def verify_file_references(
         save_images=False,
     )
     return _dumps(result)
+
+
+@mcp_server.tool()
+def check_fair_compliance(metadata_path: str, standard: str) -> str:
+    """
+    Score a dataset's metadata file against the FAIR principles (Findable,
+    Accessible, Interoperable, Reusable). Reads only the metadata file, never a
+    dataset, and runs locally (no endpoint or profile).
+
+    Returns pass/fail per check under each principle, "n/m" counts per principle
+    and in total, and for DataCite also "Conformance" (mandatory properties) and
+    "Structure" (ORCID, ROR and other identifiers).
+
+    Args:
+        metadata_path: Absolute path to the JSON metadata file.
+        standard: "dcat-us-1.1" (Project Open Data) or "datacite" (DataCite 4.x
+                  JSON, including DataCite REST API responses).
+    """
+    try:
+        return _dumps(calculate_fair_compliance(metadata_path, standard))
+    except (OSError, ValueError) as exc:
+        return _dumps({"error": str(exc)})
 
 
 @mcp_server.tool()

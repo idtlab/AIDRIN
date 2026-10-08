@@ -172,6 +172,36 @@ guess and exit non-zero, naming the layout and pointing back at ``aidrin invento
    $ aidrin data-quality /path/to/ragged.h5 --selected-keys a,b
    {...}
 
+.. _cli_fair:
+
+``aidrin fair``
+~~~~~~~~~~~~~~~
+
+Scores a metadata file against the FAIR principles. It reads only the metadata, never a
+dataset, and runs locally (``aidrin remote fair`` is rejected). ``--standard`` is required:
+``dcat-us-1.1`` (Project Open Data) or ``datacite`` (DataCite 4.x JSON, including DataCite REST
+API responses). The JSON output leaves out the chart; see :ref:`web_usage` for the checks.
+
+.. code-block:: bash
+
+   aidrin fair /path/to/metadata.json --standard dcat-us-1.1
+
+   # Per-principle table with the checks that failed
+   aidrin fair /path/to/datacite.json --standard datacite --summary
+
+   # Write the JSON report to a file (in addition to stdout, even with --summary)
+   aidrin fair /path/to/metadata.json --standard dcat-us-1.1 -o /path/to/reports/fair.json
+
+``--summary`` prints, for example:
+
+.. code-block:: text
+
+   BUTTER-E.json: 20/26 FAIR checks passed
+     Findable         5/6  missing: theme
+     Accessible       6/6
+     Interoperable    2/6  missing: conformsTo, references, language, temporal
+     Reusable         7/8  missing: rights
+
 ``aidrin run``
 ~~~~~~~~~~~~~~
 

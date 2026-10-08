@@ -373,10 +373,14 @@ def _assess_datacite(metadata):
     }
 
 
-_STANDARDS = {
-    "DCAT": _assess_dcat_us_1_1,
-    "Datacite": _assess_datacite,
+_ASSESSORS = {
+    "dcat-us-1.1": _assess_dcat_us_1_1,
+    "datacite": _assess_datacite,
 }
+STANDARDS = tuple(_ASSESSORS)
+
+# The web form's values, which predate the names above.
+_FORM_VALUES = {"DCAT": "dcat-us-1.1", "Datacite": "datacite"}
 
 
 def calculate_fair_compliance(metadata, standard):
@@ -387,8 +391,9 @@ def calculate_fair_compliance(metadata, standard):
     metadata : dict
         The parsed metadata file.
     standard : str
-        ``"DCAT"`` (DCAT-US 1.1 / Project Open Data) or ``"Datacite"`` (DataCite 4.x JSON,
-        including REST API responses wrapped in ``data.attributes``).
+        ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x JSON, including
+        REST API responses wrapped in ``data.attributes``). The web form's ``"DCAT"`` and
+        ``"Datacite"`` are accepted too.
 
     Returns
     -------
@@ -400,6 +405,7 @@ def calculate_fair_compliance(metadata, standard):
     """
     if not isinstance(metadata, dict):
         raise ValueError("Metadata must be a JSON object")
-    if standard not in _STANDARDS:
+    standard = _FORM_VALUES.get(standard, standard)
+    if standard not in _ASSESSORS:
         raise ValueError(f"Unknown metadata type: {standard}")
-    return _STANDARDS[standard](metadata)
+    return _ASSESSORS[standard](metadata)

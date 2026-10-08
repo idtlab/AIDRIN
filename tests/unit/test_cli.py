@@ -1209,6 +1209,53 @@ class TestInventoryCommand(unittest.TestCase):
 
 
 # ===========================================================================
+# fair command
+# ===========================================================================
+
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_DCAT_SAMPLE = os.path.join(_REPO, "examples", "sample_data", "dcat", "BUTTER-E.json")
+_DATACITE_SAMPLE = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "datacite_rest_default.json")
+
+
+class TestFairCommand(unittest.TestCase):
+    """`aidrin fair <metadata.json> --standard ...` scores metadata, no dataset needed."""
+
+    def test_prints_json_without_the_chart(self):
+        stdout, stderr, code = _run_cli("fair", _DCAT_SAMPLE, "--standard", "dcat-us-1.1")
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["FAIR Compliance Checks"]["Total Checks"], "20/26")
+        self.assertNotIn("Pie chart", payload)
+
+    def test_summary_lists_scores_and_missing_checks(self):
+        stdout, stderr, code = _run_cli("fair", _DATACITE_SAMPLE, "--standard", "datacite", "--summary")
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertIn("14/22 FAIR checks passed", stdout)
+        self.assertIn("missing: access rights (rightsList)", stdout)
+        self.assertIn("Conformance:", stdout)
+
+    def test_writes_output_file(self):
+        out = os.path.join(tempfile.mkdtemp(), "fair.json")
+        _, stderr, code = _run_cli("fair", _DCAT_SAMPLE, "--standard", "dcat-us-1.1", "-o", out)
+        self.assertEqual(code, 0, msg=stderr)
+        with open(out, encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["FAIR Compliance Checks"]["Total Checks"], "20/26")
+
+    def test_standard_is_required_and_checked(self):
+        _, stderr, code = _run_cli("fair", _DCAT_SAMPLE)
+        self.assertEqual(code, 2)
+        self.assertIn("--standard", stderr)
+        _, stderr, code = _run_cli("fair", _DCAT_SAMPLE, "--standard", "iso19115")
+        self.assertEqual(code, 2)
+        self.assertIn("invalid choice", stderr)
+
+    def test_missing_file_is_an_error(self):
+        _, stderr, code = _run_cli("fair", "/no/such/metadata.json", "--standard", "datacite")
+        self.assertEqual(code, 1)
+        self.assertIn("File not found", stderr)
+
+
+# ===========================================================================
 # skill install command
 # ===========================================================================
 

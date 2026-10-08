@@ -60,6 +60,12 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ### Added
 
+- **FAIR metadata assessment from the CLI, Python library and MCP server.** The
+  FAIR check was web-only. It is now `aidrin fair <metadata.json> --standard
+  dcat-us-1.1|datacite [--summary] [-o path]` (local-only),
+  `aidrin.calculate_fair_compliance(path_or_dict, standard)`, and the MCP tool
+  `check_fair_compliance`. It reads only the metadata file, never a dataset.
+
 - **New data-quality completeness metrics** (CLI, Python library, batch, MCP,
   Globus, and web UI):
   - `row_level_completeness` — % of rows whose *required* columns are all

@@ -260,6 +260,23 @@ def _summarize_metric(metric_name: str, result: dict) -> None:
                 print(f"{k}: {_fmt(v)}")
 
 
+def _print_fair_summary(result: dict, metadata_path: str) -> None:
+    """Print per-principle FAIR scores and the checks that failed."""
+    from aidrin.structured_data_metrics.fair_metadata import FAILED, PRINCIPLES
+
+    checks = result["FAIR Compliance Checks"]
+    print(f"{Path(metadata_path).name}: {checks['Total Checks']} FAIR checks passed")
+    for principle in PRINCIPLES:
+        failed = [label for label, value in result[principle].items() if value == FAILED]
+        missing = f"  missing: {', '.join(failed)}" if failed else ""
+        print(f"  {principle:<14}{checks[f'{principle} Checks']:>6}{missing}")
+    for section in ("Conformance", "Structure"):
+        if section in result:
+            print(f"\n{section}:")
+            for label, value in result[section].items():
+                print(f"  {label}: {value}")
+
+
 def _print_summary_table(result: dict, file_path: str) -> None:
     """Print a human-readable summary of summarize_dataset output."""
     import os
@@ -606,7 +623,7 @@ REMOTE_MANAGEMENT = {
 
 # Commands that cannot run on an endpoint: they need files or credentials that
 # live on the client machine.
-REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory"}
+REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory", "fair"}
 
 
 REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
@@ -1042,6 +1059,20 @@ def main() -> None:
     inventory_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
     inventory_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
+    # FAIR assessment of a metadata file (reads no dataset)
+    from aidrin.structured_data_metrics.fair_metadata import STANDARDS as FAIR_STANDARDS
+
+    fair_parser = subparsers.add_parser(
+        "fair",
+        help="Score a metadata file (DCAT-US 1.1 or DataCite JSON) against the FAIR principles",
+    )
+    fair_parser.add_argument("metadata_path", help="Path to the JSON metadata file")
+    fair_parser.add_argument(
+        "--standard", required=True, choices=FAIR_STANDARDS, help="Metadata standard the file follows"
+    )
+    fair_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print a per-principle table instead of JSON")
+    fair_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+
     # Agentic evaluation commands
     agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
     agentic_sub = agentic_parser.add_subparsers(dest="agentic_command", required=True)
@@ -1272,6 +1303,15 @@ def main() -> None:
             result = _local_api.inventory(args.file_path, file_type=args.file_type)
             _write_output_file(result, getattr(args, "output", None))
             _dump_result(result)
+            return
+
+        if args.command == "fair":
+            result = _local_api.calculate_fair_compliance(args.metadata_path, args.standard)
+            _write_output_file(result, args.output)
+            if args.human_readable:
+                _print_fair_summary(result, args.metadata_path)
+            else:
+                _dump_result(result)
             return
 
         if args.command == "agentic":
