@@ -274,6 +274,106 @@ def _datacite_structure(meta):
     }
 
 
+# MLCommons Croissant 1.0 / 1.1 (JSON-LD on schema.org). Keys are matched by their local
+# name, so "dct:conformsTo" and "conformsTo", or "rai:dataBiases" and "dataBiases", agree.
+@_reads("recordSet")
+def _croissant_field_types(meta):
+    fields = [
+        f for rs in _as_list(meta.get("recordSet")) if isinstance(rs, dict)
+        for f in _as_list(rs.get("field")) if isinstance(f, dict)
+    ]
+    typed = sum(1 for f in fields if _present(f.get("dataType")))
+    return f"{typed}/{len(fields)} fields" if typed else None
+
+
+CROISSANT = {
+    "Findable": {
+        "name": key("name"),
+        "description": key("description"),
+        "keywords": key("keywords"),
+        "url": key("url"),
+        "identifier or sameAs": key("identifier", "sameAs"),
+        "version": key("version"),
+        "citeAs": key("citeAs", "citation"),
+    },
+    "Accessible": {
+        "isAccessibleForFree or conditionsOfAccess": key("isAccessibleForFree", "conditionsOfAccess"),
+        "contentUrl (distribution)": in_each("distribution", "contentUrl", "distributions"),
+        "encodingFormat (distribution)": in_each("distribution", "encodingFormat", "distributions"),
+    },
+    "Interoperable": {
+        "conformsTo": key("conformsTo"),
+        "@context": key("@context"),
+        "recordSet": key("recordSet"),
+    },
+    "Reusable": {
+        "license": key("license"),
+        "creator": key("creator"),
+        "publisher": key("publisher"),
+        "datePublished": key("datePublished"),
+        "dateModified": key("dateModified"),
+        "provenance (wasDerivedFrom or wasGeneratedBy)": key("wasDerivedFrom", "wasGeneratedBy"),
+        "dataType (recordSet fields)": _croissant_field_types,
+    },
+}
+
+# The properties Croissant 1.0 and 1.1 require of a dataset.
+CROISSANT_REQUIRED = (
+    "@context", "@type", "conformsTo", "name", "description", "license", "url", "creator", "datePublished",
+)
+
+# Croissant RAI 1.0 (croissant_rai.ttl), grouped by what each property documents.
+# Reported, never scored: the values are free text AIDRIN cannot verify.
+CROISSANT_RAI = {
+    "Data life cycle": (
+        "dataCollection", "dataCollectionType", "dataCollectionMissingData", "dataCollectionRawData",
+        "dataCollectionTimeframe", "dataPreprocessingProtocol", "dataImputationProtocol",
+        "dataManipulationProtocol", "dataReleaseMaintenancePlan",
+    ),
+    "Data labeling": (
+        "dataAnnotationProtocol", "dataAnnotationPlatform", "dataAnnotationAnalysis", "annotationsPerItem",
+        "annotatorDemographics", "machineAnnotationTools",
+    ),
+    "Safety and fairness": (
+        "dataLimitations", "dataBiases", "dataSocialImpact", "dataUseCases", "personalSensitiveInformation",
+    ),
+}
+_NOT_DECLARED = "Not declared"
+
+
+def _croissant_conformance(meta):
+    missing = [k for k in CROISSANT_REQUIRED if not _present(meta.get(k))]
+    if "@type" not in missing and "Dataset" not in {_local_name(str(t)) for t in _as_list(meta["@type"])}:
+        missing.append("@type")
+    return {
+        "Required properties present": f"{len(CROISSANT_REQUIRED) - len(missing)}/{len(CROISSANT_REQUIRED)}",
+        "Missing": ", ".join(missing) or "none",
+    }
+
+
+def _croissant_structure(meta):
+    files = [
+        d for d in _as_list(meta.get("distribution"))
+        if isinstance(d, dict) and "FileObject" in {_local_name(str(t)) for t in _as_list(d.get("@type"))}
+    ]
+    record_sets = [rs for rs in _as_list(meta.get("recordSet")) if isinstance(rs, dict)]
+    fields = [f for rs in record_sets for f in _as_list(rs.get("field")) if isinstance(f, dict)]
+    return {
+        "FileObjects with a checksum (sha256 or md5)": _ratio(
+            sum(1 for d in files if _present(d.get("sha256")) or _present(d.get("md5"))), len(files), "FileObjects"
+        ),
+        "Fields with dataType": _ratio(sum(1 for f in fields if _present(f.get("dataType"))), len(fields), "fields"),
+        "RecordSets with a key": _ratio(sum(1 for rs in record_sets if _present(rs.get("key"))), len(record_sets), "RecordSets"),
+    }
+
+
+def _croissant_rai(meta):
+    return {
+        group: {prop: _summary(meta[prop]) if _present(meta.get(prop)) else _NOT_DECLARED for prop in props}
+        for group, props in CROISSANT_RAI.items()
+    }
+
+
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
@@ -293,13 +393,11 @@ def _score(meta, profile):
     return results, summary, passed, totals
 
 
-def _other(meta, profile):
+def _other(meta, profile, shown_elsewhere=()):
     """Top-level keys no check looked at, summarised; subtrees stay in Original Metadata."""
     used = {name for p in PRINCIPLES for check in profile[p].values() for name in check.reads}
-    return {
-        k: _summary(v) for k, v in meta.items()
-        if k not in used and k != "distribution" and _present(v)
-    }
+    skip = used | {"distribution", "recordSet"} | set(shown_elsewhere)
+    return {k: _summary(v) for k, v in meta.items() if k not in skip and _present(v)}
 
 
 def _chart(passed, totals):
@@ -373,17 +471,82 @@ def _assess_datacite(metadata):
     }
 
 
+def _assess_croissant(metadata):
+    meta = _top_level(metadata)
+    results, summary, passed, totals = _score(meta, CROISSANT)
+    rai_properties = [p for props in CROISSANT_RAI.values() for p in props]
+    return {
+        **results,
+        "Other": _other(meta, CROISSANT, shown_elsewhere=[*rai_properties, *CROISSANT_REQUIRED]),
+        "Conformance": _croissant_conformance(meta),
+        "Structure": _croissant_structure(meta),
+        "RAI Documentation": _croissant_rai(meta),
+        "FAIR Compliance Checks": summary,
+        "Pie chart": _chart(passed, totals),
+        "Original Metadata": metadata,
+    }
+
+
 _ASSESSORS = {
+    "croissant": _assess_croissant,
     "dcat-us-1.1": _assess_dcat_us_1_1,
     "datacite": _assess_datacite,
 }
 STANDARDS = tuple(_ASSESSORS)
+STANDARD_NAMES = {
+    "croissant": "Croissant",
+    "dcat-us-1.1": "DCAT-US 1.1 (Project Open Data)",
+    "datacite": "DataCite 4.x",
+}
 
 # The web form's values, which predate the names above.
 _FORM_VALUES = {"DCAT": "dcat-us-1.1", "Datacite": "datacite"}
 
 
-def calculate_fair_compliance(metadata, standard):
+# ---------------------------------------------------------------------------
+# Detection
+# ---------------------------------------------------------------------------
+
+_CROISSANT_URI = re.compile(r"mlcommons\.org/croissant/(\d+\.\d+)")
+
+
+def _croissant_version(metadata):
+    """The Croissant version a file declares, or None if it is not Croissant."""
+    for value in _as_list(metadata.get("conformsTo") or metadata.get("dct:conformsTo")):
+        match = _CROISSANT_URI.search(str(value))  # the RAI extension's URI ends in /RAI/1.0 and does not match
+        if match:
+            return match.group(1)
+    context = metadata.get("@context")
+    if isinstance(context, dict) and "mlcommons.org/croissant" in str(context.get("cr", "")):
+        return "unknown version"
+    return None
+
+
+def detect_standard(metadata):
+    """Name the standard a metadata document follows, from what it declares or its key names.
+
+    Runs on the raw JSON: ``sc:Dataset`` and ``dcat:Dataset`` must not be confused by
+    prefix stripping. Raises ``ValueError`` when nothing matches.
+    """
+    if not isinstance(metadata, dict):
+        raise ValueError("Metadata must be a JSON object")
+    if _croissant_version(metadata):
+        return "croissant"
+    data = metadata.get("data")
+    attributes = data.get("attributes") if isinstance(data, dict) else None
+    datacite = attributes if isinstance(attributes, dict) else metadata
+    if "titles" in datacite and "creators" in datacite:
+        return "datacite"
+    conforms = " ".join(str(v) for v in _as_list(metadata.get("conformsTo")))
+    if "accessLevel" in metadata or "bureauCode" in metadata or "project-open-data" in conforms:
+        return "dcat-us-1.1"
+    raise ValueError(
+        "Could not detect the metadata standard. Supported: Croissant 1.0/1.1, DCAT-US 1.1 "
+        "(Project Open Data) and DataCite 4.x JSON; choose one explicitly if your file follows it."
+    )
+
+
+def calculate_fair_compliance(metadata, standard="auto"):
     """Score a metadata document against the FAIR principles.
 
     Parameters
@@ -391,6 +554,7 @@ def calculate_fair_compliance(metadata, standard):
     metadata : dict
         The parsed metadata file.
     standard : str
+        ``"auto"`` (detect it, the default), ``"croissant"`` (MLCommons Croissant 1.0/1.1),
         ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x JSON, including
         REST API responses wrapped in ``data.attributes``). The web form's ``"DCAT"`` and
         ``"Datacite"`` are accepted too.
@@ -400,12 +564,19 @@ def calculate_fair_compliance(metadata, standard):
     dict
         One dict per FAIR principle mapping each check to what was found or
         ``"CHECK FAILED ❌"``, plus ``"FAIR Compliance Checks"`` (``"n/m"`` per principle and
-        in total), ``"Other"``, ``"Pie chart"`` (base64 PNG) and ``"Original Metadata"``.
-        DataCite results also carry ``"Conformance"`` and ``"Structure"``.
+        in total), ``"Standard"``, ``"Other"``, ``"Pie chart"`` (base64 PNG) and
+        ``"Original Metadata"``. DataCite and Croissant results also carry ``"Conformance"``
+        and ``"Structure"``; Croissant adds ``"RAI Documentation"``.
     """
     if not isinstance(metadata, dict):
         raise ValueError("Metadata must be a JSON object")
-    standard = _FORM_VALUES.get(standard, standard)
+    detected = standard == "auto"
+    standard = detect_standard(metadata) if detected else _FORM_VALUES.get(standard, standard)
     if standard not in _ASSESSORS:
         raise ValueError(f"Unknown metadata type: {standard}")
-    return _ASSESSORS[standard](metadata)
+    result = _ASSESSORS[standard](metadata)
+    name = STANDARD_NAMES[standard]
+    if standard == "croissant":
+        name = f"{name} {_croissant_version(metadata) or '(no version declared)'}"
+    result["Standard"] = {"Name": name, "Detected automatically": "yes" if detected else "no"}
+    return result

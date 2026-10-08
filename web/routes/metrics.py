@@ -2595,7 +2595,7 @@ def _cache_readiness_fair_compliance(
 
 
 def _run_fair_assessment(data_dict, metadata_type):
-    """Run FAIR assessment for DCAT-US 1.1 or DataCite metadata."""
+    """Run FAIR assessment for Croissant, DCAT-US 1.1 or DataCite metadata ("auto" detects it)."""
     return format_dict_values(calculate_fair_compliance(data_dict, metadata_type))
 
 
@@ -3653,8 +3653,8 @@ def fair_assessment():
             file = request.files["metadata"]
             if file.filename == "":
                 return jsonify({"error": "No selected file"}), 400
-            if not file.filename.endswith(".json"):
-                return jsonify({"error": "Invalid file format. Please upload a JSON file."}), 400
+            if not file.filename.endswith((".json", ".jsonld")):
+                return jsonify({"error": "Invalid file format. Please upload a JSON or JSON-LD file."}), 400
 
             json_data = file.read()
             metadata_type = request.form.get("metadata type", "")
@@ -3698,6 +3698,8 @@ def fair_assessment():
                 try:
                     result = _run_fair_assessment(data_dict, metadata_type)
                 except ValueError:
+                    if metadata_type == "auto":
+                        return jsonify({"error": "Could not detect the metadata standard. Choose it in the Metadata type list."}), 400
                     return jsonify({"error": "Unknown metadata type"}), 400
                 except json.JSONDecodeError:
                     metric_time_log.warning(
@@ -3710,6 +3712,7 @@ def fair_assessment():
                 metric_time_log.info("FAIR Assessment completed in %.2f seconds", duration)
                 span.set_attribute("metric.duration_ms", duration * 1000)
                 span.set_attribute("metadata.type", metadata_type)
+                span.set_attribute("metadata.detected", result["Standard"]["Name"])
 
             result = ensure_json_serializable(result)
             if readiness_context and dataset_file_name:

@@ -265,7 +265,7 @@ def _print_fair_summary(result: dict, metadata_path: str) -> None:
     from aidrin.structured_data_metrics.fair_metadata import FAILED, PRINCIPLES
 
     checks = result["FAIR Compliance Checks"]
-    print(f"{Path(metadata_path).name}: {checks['Total Checks']} FAIR checks passed")
+    print(f"{Path(metadata_path).name} ({result['Standard']['Name']}): {checks['Total Checks']} FAIR checks passed")
     for principle in PRINCIPLES:
         failed = [label for label, value in result[principle].items() if value == FAILED]
         missing = f"  missing: {', '.join(failed)}" if failed else ""
@@ -275,6 +275,10 @@ def _print_fair_summary(result: dict, metadata_path: str) -> None:
             print(f"\n{section}:")
             for label, value in result[section].items():
                 print(f"  {label}: {value}")
+    if "RAI Documentation" in result:
+        declared = [p for group in result["RAI Documentation"].values() for p, v in group.items() if v != "Not declared"]
+        print("\nRAI documentation (reported, not scored):")
+        print(f"  declared: {', '.join(declared) or 'none'}")
 
 
 def _print_summary_table(result: dict, file_path: str) -> None:
@@ -1064,11 +1068,12 @@ def main() -> None:
 
     fair_parser = subparsers.add_parser(
         "fair",
-        help="Score a metadata file (DCAT-US 1.1 or DataCite JSON) against the FAIR principles",
+        help="Score a metadata file (Croissant, DCAT-US 1.1 or DataCite JSON) against the FAIR principles",
     )
-    fair_parser.add_argument("metadata_path", help="Path to the JSON metadata file")
+    fair_parser.add_argument("metadata_path", help="Path to the JSON or JSON-LD metadata file")
     fair_parser.add_argument(
-        "--standard", required=True, choices=FAIR_STANDARDS, help="Metadata standard the file follows"
+        "--standard", default="auto", choices=("auto", *FAIR_STANDARDS),
+        help="Metadata standard the file follows (default: detect it)",
     )
     fair_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print a per-principle table instead of JSON")
     fair_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")

@@ -591,12 +591,13 @@ def calculate_variable_unit_validation(file_info, unit_metadata=None):
     return _calculate(file_info, unit_metadata)
 
 
-def calculate_fair_compliance(metadata, standard):
+def calculate_fair_compliance(metadata, standard="auto"):
     """Score a metadata file against the FAIR principles.
 
-    ``metadata`` is the path to a JSON metadata file, or the parsed dict.
-    ``standard`` is ``"dcat-us-1.1"`` or ``"datacite"``. Only the metadata is
-    read; no dataset is needed.
+    ``metadata`` is the path to a JSON or JSON-LD metadata file, or the parsed
+    dict. ``standard`` is ``"auto"`` (detect it), ``"croissant"``,
+    ``"dcat-us-1.1"`` or ``"datacite"``. Only the metadata is read; no dataset
+    is needed.
     """
     import json
 

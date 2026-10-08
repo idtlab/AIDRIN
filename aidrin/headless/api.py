@@ -444,11 +444,12 @@ def inventory(file_path: str, file_type: Optional[str] = None) -> Dict[str, Any]
 
 
 def calculate_fair_compliance(
-    metadata_path: str, standard: str, strip_visualizations: bool = True
+    metadata_path: str, standard: str = "auto", strip_visualizations: bool = True
 ) -> Dict[str, Any]:
     """Score a JSON metadata file against the FAIR principles.
 
-    ``standard`` is ``"dcat-us-1.1"`` or ``"datacite"``. Reads only the
+    ``standard`` is ``"auto"`` (detect it), ``"croissant"``, ``"dcat-us-1.1"``
+    or ``"datacite"``. Reads only the
     metadata file, so it runs locally and needs no dataset. With
     ``strip_visualizations`` the base64 ``"Pie chart"`` is left out.
     """
