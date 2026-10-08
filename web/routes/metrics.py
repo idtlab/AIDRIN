@@ -2595,7 +2595,7 @@ def _cache_readiness_fair_compliance(
 
 
 def _run_fair_assessment(data_dict, metadata_type):
-    """Run FAIR assessment for Croissant, DCAT-US 1.1 or DataCite metadata ("auto" detects it)."""
+    """Run FAIR assessment for Croissant, RO-Crate, DCAT-US 1.1 or DataCite metadata ("auto" detects it)."""
     return format_dict_values(calculate_fair_compliance(data_dict, metadata_type))
 
 

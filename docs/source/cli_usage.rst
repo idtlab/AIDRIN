@@ -180,12 +180,14 @@ guess and exit non-zero, naming the layout and pointing back at ``aidrin invento
 Scores a metadata file against the FAIR principles. It reads only the metadata, never a
 dataset, and runs locally (``aidrin remote fair`` is rejected). ``--standard`` defaults to
 ``auto``, which detects the standard; or name it: ``croissant`` (Croissant 1.0/1.1),
+``rocrate`` (RO-Crate 1.2 ``ro-crate-metadata.json``),
 ``dcat-us-1.1`` (Project Open Data) or ``datacite`` (DataCite 4.x JSON, including DataCite REST
 API responses). The JSON output leaves out the chart; see :ref:`web_usage` for the checks.
 
 .. code-block:: bash
 
    aidrin fair /path/to/croissant.json
+   aidrin fair /path/to/crate/ro-crate-metadata.json
    aidrin fair /path/to/metadata.json --standard dcat-us-1.1
 
    # Per-principle table with the checks that failed

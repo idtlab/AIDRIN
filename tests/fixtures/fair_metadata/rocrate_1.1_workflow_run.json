@@ -1,0 +1,508 @@
+{
+  "@context": [
+    "https://w3id.org/ro/crate/1.1/context",
+    {
+      "ParameterConnection": "https://w3id.org/ro/terms/workflow-run#ParameterConnection",
+      "ContainerImage": "https://w3id.org/ro/terms/workflow-run#ContainerImage",
+      "DockerImage": "https://w3id.org/ro/terms/workflow-run#DockerImage",
+      "SIFImage": "https://w3id.org/ro/terms/workflow-run#SIFImage",
+      "connection": "https://w3id.org/ro/terms/workflow-run#connection",
+      "sourceParameter": "https://w3id.org/ro/terms/workflow-run#sourceParameter",
+      "targetParameter": "https://w3id.org/ro/terms/workflow-run#targetParameter",
+      "md5": "https://w3id.org/ro/terms/workflow-run#md5",
+      "sha1": "https://w3id.org/ro/terms/workflow-run#sha1",
+      "sha256": "https://w3id.org/ro/terms/workflow-run#sha256",
+      "sha512": "https://w3id.org/ro/terms/workflow-run#sha512",
+      "environment": "https://w3id.org/ro/terms/workflow-run#environment",
+      "registry": "https://w3id.org/ro/terms/workflow-run#registry",
+      "tag": "https://w3id.org/ro/terms/workflow-run#tag",
+      "containerImage": "https://w3id.org/ro/terms/workflow-run#containerImage",
+      "resourceUsage": "https://w3id.org/ro/terms/workflow-run#resourceUsage",
+      "filledFrom": "https://w3id.org/ro/terms/wfexs#filledFrom",
+      "globPattern": "https://w3id.org/ro/terms/wfexs#globPattern",
+      "syntheticOutput": "https://w3id.org/ro/terms/wfexs#syntheticOutput"
+    }
+  ],
+  "@graph": [
+    {
+      "@id": "./",
+      "@type": "Dataset",
+      "conformsTo": [
+        {
+          "@id": "https://w3id.org/ro/wfrun/process/0.3"
+        },
+        {
+          "@id": "https://w3id.org/ro/wfrun/workflow/0.3"
+        },
+        {
+          "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0"
+        }
+      ],
+      "datePublished": "2024-05-31T16:59:58+00:00",
+      "description": "RO-Crate from staged WfExS working directory e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0 (unpleasant açorès)",
+      "hasPart": [
+        {
+          "@id": "README.md"
+        },
+        {
+          "@id": "containers/docker.io_node:slim.img_meta.json"
+        },
+        {
+          "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl"
+        },
+        {
+          "@id": "containers/bash:5.2.15.img_meta.json"
+        },
+        {
+          "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl/cwl/hello-tool.cwl"
+        },
+        {
+          "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl"
+        },
+        {
+          "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello.yml"
+        },
+        {
+          "@id": "outputs/_1717170071_13581/hello_output.txt"
+        },
+        {
+          "@id": "meta/outputs/_1717170071_13581/stats/dag.dot"
+        },
+        {
+          "@id": "meta/outputs/_1717170071_13581/stats/dag.dot.png"
+        },
+        {
+          "@id": "meta/outputs/_1717170071_13581/stdout.txt"
+        },
+        {
+          "@id": "meta/outputs/_1717170071_13581/stderr.txt"
+        }
+      ],
+      "license": "notspecified",
+      "mainEntity": {
+        "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl"
+      },
+      "mentions": {
+        "@id": "#5948ab04-5716-49c8-b50d-93851dcffbc5"
+      }
+    },
+    {
+      "@id": "ro-crate-metadata.json",
+      "@type": "CreativeWork",
+      "about": {
+        "@id": "./"
+      },
+      "conformsTo": [
+        {
+          "@id": "https://w3id.org/ro/crate/1.1"
+        },
+        {
+          "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0"
+        }
+      ]
+    },
+    {
+      "@id": "https://w3id.org/workflowhub/workflow-ro-crate#cwl",
+      "@type": "ComputerLanguage",
+      "alternateName": "CWL",
+      "identifier": {
+        "@id": "https://w3id.org/cwl/v1.0/"
+      },
+      "name": "Common Workflow Language",
+      "url": {
+        "@id": "https://www.commonwl.org/"
+      },
+      "version": "v1.0"
+    },
+    {
+      "@id": "https://w3id.org/ro/wfrun/process/0.3",
+      "@type": "CreativeWork",
+      "name": "ProcessRun Crate",
+      "version": "0.3"
+    },
+    {
+      "@id": "https://w3id.org/ro/wfrun/workflow/0.3",
+      "@type": "CreativeWork",
+      "name": "Workflow Run Crate",
+      "version": "0.3"
+    },
+    {
+      "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0",
+      "@type": "CreativeWork",
+      "name": "Workflow RO-Crate",
+      "version": "1.0"
+    },
+    {
+      "@id": "https://github.com/inab/WfExS-backend",
+      "@type": "SoftwareApplication",
+      "name": "WfExS-backend",
+      "softwareVersion": "0.99.2-2-g690544c (690544c3a447c3478b79cfc528b216a2f26c20f5, branch full_circle)",
+      "url": "https://github.com/inab/WfExS-backend"
+    },
+    {
+      "@id": "README.md",
+      "@type": "File",
+      "about": {
+        "@id": "./"
+      },
+      "contentSize": "5666",
+      "encodingFormat": "text/markdown",
+      "license": {
+        "@id": "https://spdx.org/licenses/CC-BY-4.0"
+      },
+      "sha256": "9a3d1a5cf053dc8e611b3f74845f1bd46c22e637961c44e25edb25c86717d7a0"
+    },
+    {
+      "@id": "https://spdx.org/licenses/CC-BY-4.0",
+      "@type": "CreativeWork",
+      "identifier": "CC-BY-4.0",
+      "name": "Creative Commons Attribution 4.0 International",
+      "url": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    {
+      "@id": "https://pypi.org/project/cwltool/",
+      "@type": "SoftwareApplication",
+      "softwareRequirements": {
+        "@id": "docker://docker.io/node:slim"
+      },
+      "softwareVersion": "cwltool 3.1.20240112164112"
+    },
+    {
+      "@id": "https://apptainer.org/",
+      "@type": "SoftwareApplication",
+      "applicationCategory": "https://www.wikidata.org/wiki/Q7935198",
+      "name": "singularity",
+      "softwareVersion": "apptainer version 1.3.0"
+    },
+    {
+      "@id": "https://www.docker.com/",
+      "@type": "SoftwareApplication",
+      "applicationCategory": "https://www.wikidata.org/wiki/Q7935198",
+      "name": "docker"
+    },
+    {
+      "@id": "containers/docker.io_node:slim.img_meta.json",
+      "@type": "File",
+      "about": {
+        "@id": "docker://docker.io/node:slim"
+      },
+      "contentSize": "1542",
+      "encodingFormat": "application/json",
+      "sha256": "c069ec3129dbde341b8205fcc4d503860f59847073b105db06705076e5d4b1d7"
+    },
+    {
+      "@id": "docker://docker.io/node:slim",
+      "@type": [
+        "ContainerImage",
+        "SoftwareApplication"
+      ],
+      "additionalType": {
+        "@id": "https://w3id.org/ro/terms/workflow-run#DockerImage"
+      },
+      "applicationCategory": "https://www.wikidata.org/wiki/Q51294208",
+      "name": "docker.io/node",
+      "operatingSystem": "linux",
+      "processorRequirements": "amd64",
+      "registry": "docker.io",
+      "sha256": "840079c08ec485123cf7ea506a13afea630db25606f71e6140cf8dbdf9bba552",
+      "softwareRequirements": {
+        "@id": "https://apptainer.org/"
+      },
+      "softwareVersion": "library/node@sha256:840079c08ec485123cf7ea506a13afea630db25606f71e6140cf8dbdf9bba552",
+      "tag": "slim"
+    },
+    {
+      "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl",
+      "@type": [
+        "File",
+        "SoftwareSourceCode",
+        "ComputationalWorkflow",
+        "SoftwareApplication"
+      ],
+      "alternateName": "cwl/hello-workflow.cwl",
+      "codeRepository": "https://github.com/inab/hello-workflows.git",
+      "conformsTo": {
+        "@id": "https://bioschemas.org/profiles/ComputationalWorkflow/1.0-RELEASE"
+      },
+      "contentSize": "323",
+      "contentUrl": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl",
+      "description": "Unconsolidated Workflow Entrypoint",
+      "encodingFormat": "text/plain",
+      "hasPart": {
+        "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl/cwl/hello-tool.cwl"
+      },
+      "name": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow",
+      "programmingLanguage": {
+        "@id": "https://w3id.org/workflowhub/workflow-ro-crate#cwl"
+      },
+      "runtimePlatform": "cwltool 3.1.20240112164112",
+      "sha256": "0a70c7cfa9bbf41dc49b4ad193611a7e68f10079c74d5ca5dec0bc562e985804",
+      "softwareRequirements": {
+        "@id": "https://pypi.org/project/cwltool/"
+      },
+      "url": "https://github.com/inab/hello-workflows/tree/b0afc5871c6fdbd66576fcc5a3813ea49aca5104",
+      "version": "b0afc5871c6fdbd66576fcc5a3813ea49aca5104"
+    },
+    {
+      "@id": "containers/bash:5.2.15.img_meta.json",
+      "@type": "File",
+      "about": {
+        "@id": "docker://bash:5.2.15"
+      },
+      "contentSize": "1998",
+      "encodingFormat": "application/json",
+      "sha256": "002c14a9eb8301ff408b747324352b1fc5564416707c1426c9552ba61a43da45"
+    },
+    {
+      "@id": "docker://bash:5.2.15",
+      "@type": [
+        "ContainerImage",
+        "SoftwareApplication"
+      ],
+      "additionalType": {
+        "@id": "https://w3id.org/ro/terms/workflow-run#DockerImage"
+      },
+      "applicationCategory": "https://www.wikidata.org/wiki/Q51294208",
+      "name": "bash",
+      "operatingSystem": "linux",
+      "processorRequirements": "amd64",
+      "registry": "docker.io",
+      "sha256": "acbac47fb9ea642a211c35013f50481bec20bd23db852c9c2634a4d153e631f1",
+      "softwareRequirements": {
+        "@id": "https://apptainer.org/"
+      },
+      "softwareVersion": "library/bash@sha256:acbac47fb9ea642a211c35013f50481bec20bd23db852c9c2634a4d153e631f1",
+      "tag": "5.2.15"
+    },
+    {
+      "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl/cwl/hello-tool.cwl",
+      "@type": [
+        "File",
+        "SoftwareSourceCode"
+      ],
+      "alternateName": "cwl/hello-tool.cwl",
+      "contentSize": "617",
+      "contentUrl": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl/cwl/hello-tool.cwl",
+      "encodingFormat": "text/plain",
+      "sha256": "82ed62b7e7d819f2ef64904dfbf614907211e2804e83570d3dac97cb65f05001"
+    },
+    {
+      "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl",
+      "@type": [
+        "File",
+        "SoftwareSourceCode",
+        "ComputationalWorkflow",
+        "SoftwareApplication"
+      ],
+      "alternateName": "../consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl",
+      "conformsTo": {
+        "@id": "https://bioschemas.org/profiles/ComputationalWorkflow/1.0-RELEASE"
+      },
+      "contentSize": "2470",
+      "description": "Consolidated Workflow Entrypoint",
+      "encodingFormat": "application/json",
+      "image": {
+        "@id": "meta/outputs/_1717170071_13581/stats/dag.dot.png"
+      },
+      "input": {
+        "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl#param:an_input"
+      },
+      "isBasedOn": {
+        "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl"
+      },
+      "name": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow",
+      "output": {
+        "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl#output:hello_output"
+      },
+      "programmingLanguage": {
+        "@id": "https://w3id.org/workflowhub/workflow-ro-crate#cwl"
+      },
+      "runtimePlatform": "cwltool 3.1.20240112164112",
+      "sha256": "57e93aeee4ba5d1063aae3336442a5624160a8abc610443f79390f41672d8a71",
+      "softwareRequirements": [
+        {
+          "@id": "https://pypi.org/project/cwltool/"
+        },
+        {
+          "@id": "https://apptainer.org/"
+        },
+        {
+          "@id": "docker://bash:5.2.15"
+        }
+      ],
+      "version": "b0afc5871c6fdbd66576fcc5a3813ea49aca5104"
+    },
+    {
+      "@id": "#50053118-cd8c-4c83-ac4d-ea03f7505f57",
+      "@type": "CreateAction",
+      "actionStatus": {
+        "@id": "http://schema.org/CompletedActionStatus"
+      },
+      "instrument": {
+        "@id": "https://github.com/inab/WfExS-backend"
+      },
+      "name": "Workflow consolidation",
+      "object": {
+        "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello-workflow.cwl"
+      },
+      "result": {
+        "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl"
+      }
+    },
+    {
+      "@id": "#5948ab04-5716-49c8-b50d-93851dcffbc5",
+      "@type": "CreateAction",
+      "actionStatus": {
+        "@id": "http://schema.org/CompletedActionStatus"
+      },
+      "containerImage": {
+        "@id": "docker://bash:5.2.15"
+      },
+      "endTime": "2024-05-31T15:41:13.424559+00:00",
+      "instrument": {
+        "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl"
+      },
+      "name": "Run outputs/_1717170071_13581 of consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl",
+      "object": [
+        {
+          "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello.yml"
+        }
+      ],
+      "result": [
+        {
+          "@id": "outputs/_1717170071_13581/hello_output.txt"
+        },
+        {
+          "@id": "meta/outputs/_1717170071_13581/stats/dag.dot"
+        },
+        {
+          "@id": "meta/outputs/_1717170071_13581/stats/dag.dot.png"
+        },
+        {
+          "@id": "#a634066d-7295-48f1-9809-750e8b524b79"
+        }
+      ],
+      "startTime": "2024-05-31T15:41:12.450425+00:00"
+    },
+    {
+      "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl#param:an_input",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "conformsTo": {
+        "@id": "https://bioschemas.org/profiles/FormalParameter/1.0-RELEASE"
+      },
+      "name": "an_input",
+      "valueRequired": true,
+      "workExample": {
+        "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello.yml"
+      }
+    },
+    {
+      "@id": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello.yml",
+      "@type": "File",
+      "contentSize": "43",
+      "contentUrl": "https://raw.githubusercontent.com/inab/hello-workflows/b0afc5871c6fdbd66576fcc5a3813ea49aca5104/cwl/hello.yml",
+      "encodingFormat": "text/plain",
+      "exampleOfWork": {
+        "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl#param:an_input"
+      },
+      "license": "notspecified",
+      "sha256": "c93021c12ead57111ab283d5af3ddd58ab026aba57d88d1e93650afb9b0246de"
+    },
+    {
+      "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl#output:hello_output",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "conformsTo": {
+        "@id": "https://bioschemas.org/profiles/FormalParameter/1.0-RELEASE"
+      },
+      "name": "hello_output",
+      "syntheticOutput": false,
+      "valueRequired": true,
+      "workExample": {
+        "@id": "outputs/_1717170071_13581/hello_output.txt"
+      }
+    },
+    {
+      "@id": "outputs/_1717170071_13581/hello_output.txt",
+      "@type": "File",
+      "alternateName": "hello_output.txt",
+      "contentSize": "1628",
+      "encodingFormat": "text/plain",
+      "exampleOfWork": {
+        "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl#output:hello_output"
+      },
+      "sha256": "074342ee7342ff48093c856634239a92762ebed7df62c03b6c060d06de0503eb"
+    },
+    {
+      "@id": "meta/outputs/_1717170071_13581/stats/dag.dot",
+      "@type": [
+        "File",
+        "ImageObject"
+      ],
+      "contentSize": "516",
+      "encodingFormat": "text/plain",
+      "isBasedOn": {
+        "@id": "consolidated-workflow/e6b77dc5-33a2-40fb-9b64-8cdb9d6d17a0_workflow.cwl"
+      },
+      "sha256": "f44eca2f7d5d9aae72b97f53c51bf2e56a7daecda7e531f7d8853cca465955fb"
+    },
+    {
+      "@id": "meta/outputs/_1717170071_13581/stats/dag.dot.png",
+      "@type": [
+        "File",
+        "ImageObject"
+      ],
+      "contentSize": "16790",
+      "encodingFormat": "image/png",
+      "isBasedOn": {
+        "@id": "meta/outputs/_1717170071_13581/stats/dag.dot"
+      },
+      "sha256": "179d11996b70461946855c88560aabb2efe945ca6b304cea711058c11e0d2193"
+    },
+    {
+      "@id": "#ed4cbab3-62ea-4e03-b2c7-bff6987ac987",
+      "@type": "CreateAction",
+      "actionStatus": {
+        "@id": "http://schema.org/CompletedActionStatus"
+      },
+      "description": "dot -Tpng -ometa/outputs/_1717170071_13581/stats/dag.dot.png meta/outputs/_1717170071_13581/stats/dag.dot",
+      "instrument": {
+        "@id": "https://github.com/inab/WfExS-backend"
+      },
+      "name": "Generate diagram PNG image from DOT",
+      "object": {
+        "@id": "meta/outputs/_1717170071_13581/stats/dag.dot"
+      },
+      "result": {
+        "@id": "meta/outputs/_1717170071_13581/stats/dag.dot.png"
+      }
+    },
+    {
+      "@id": "#a634066d-7295-48f1-9809-750e8b524b79",
+      "@type": "Collection",
+      "hasPart": [
+        {
+          "@id": "meta/outputs/_1717170071_13581/stdout.txt"
+        },
+        {
+          "@id": "meta/outputs/_1717170071_13581/stderr.txt"
+        }
+      ]
+    },
+    {
+      "@id": "meta/outputs/_1717170071_13581/stdout.txt",
+      "@type": "File",
+      "contentSize": "567",
+      "encodingFormat": "application/json",
+      "sha256": "ed8401e66a64b91ca9ac3a5e117f4cb0a0dd44a1cb266345d8a2123a1aa42837"
+    },
+    {
+      "@id": "meta/outputs/_1717170071_13581/stderr.txt",
+      "@type": "File",
+      "contentSize": "2868",
+      "encodingFormat": "text/plain",
+      "sha256": "7579cd77f695a54b26c2e89cf4df1dd916c8afbae8d77e0ece87a6d6a79fbade"
+    }
+  ]
+}

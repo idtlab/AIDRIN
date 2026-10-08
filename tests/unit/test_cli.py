@@ -1249,6 +1249,13 @@ class TestFairCommand(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("invalid choice", stderr)
 
+    def test_rocrate_is_detected(self):
+        path = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "rocrate_1.2_rainfall_example.json")
+        stdout, stderr, code = _run_cli("fair", path, "--summary")
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertIn("(RO-Crate 1.2): 7/14 FAIR checks passed", stdout)
+        self.assertIn("Required (MUST) present: 4/4", stdout)
+
     def test_croissant_summary_lists_declared_rai_without_a_ratio(self):
         path = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "croissant_1.0_mlcommons_dices_rai.json")
         stdout, stderr, code = _run_cli("fair", path, "--summary")
