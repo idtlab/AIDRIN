@@ -103,6 +103,18 @@ def test_fair_assessment_detects_an_rocrate_upload(client):
     assert body["FAIR Compliance Checks"]["Total Checks"] == "7/14"
 
 
+def test_fair_assessment_scores_dcat_us_3_by_form_value(client):
+    """The dropdown's dcat-us-3.0 value scores a DCAT-US 3.0 record."""
+    with open(ROOT / "tests/fixtures/fair_metadata/dcat_us_3.0_gsa_schema_example.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "dataset.json"), "metadata type": "dcat-us-3.0"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    assert response.get_json()["FAIR Compliance Checks"]["Total Checks"] == "16/23"
+
+
 def test_fair_assessment_auto_reports_undetectable_metadata(client):
     """When detection fails the user is told to pick the standard, not shown a stack trace."""
     response = client.post(

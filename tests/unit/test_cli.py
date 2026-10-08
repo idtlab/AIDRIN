@@ -1249,6 +1249,12 @@ class TestFairCommand(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("invalid choice", stderr)
 
+    def test_dcat_us_3_is_detected(self):
+        path = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "dcat_us_3.0_gsa_schema_example.json")
+        stdout, stderr, code = _run_cli("fair", path, "--summary")
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertIn("(DCAT-US 3.0): 16/23 FAIR checks passed", stdout)
+
     def test_rocrate_is_detected(self):
         path = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "rocrate_1.2_rainfall_example.json")
         stdout, stderr, code = _run_cli("fair", path, "--summary")

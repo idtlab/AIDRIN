@@ -13,7 +13,7 @@ learning work. It scores quality, structure, fairness, and privacy risk, and
 returns the results as plots and machine-readable JSON. Use it from a browser,
 a terminal, a notebook, or Claude Code.
 
-It reads CSV, Excel, JSON, NumPy (``.npz``), HDF5, and Parquet, plus DCAT-US 1.1 and
+It reads CSV, Excel, JSON, NumPy (``.npz``), HDF5, and Parquet, plus Croissant, RO-Crate, DCAT-US 3.0 and 1.1, and
 DataCite JSON for metadata.
 
 ----
@@ -40,7 +40,7 @@ interface, the command line, and the Python library.
    * - **Data Governance**
      - Re-identification risk: k-anonymity, l-diversity, t-closeness, entropy risk, HIPAA identifiers, and differential privacy
    * - **Understandability and Usability**
-     - Variable-unit metadata readiness and FAIR compliance against the DCAT-US 1.1 and DataCite schemas
+     - Variable-unit metadata readiness and FAIR compliance against the Croissant, RO-Crate, DCAT-US 3.0 and 1.1, and DataCite schemas
    * - **Data Structure**
      - Constant features, collinearity, skewness, and kurtosis
 

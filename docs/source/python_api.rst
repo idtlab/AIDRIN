@@ -478,7 +478,7 @@ calculate_fair_compliance
 Scores a metadata file against the FAIR principles. It reads only the metadata,
 so it takes a path (or the parsed dict) instead of ``file_info``. ``standard``
 defaults to ``"auto"``, which detects it; or name it: ``"croissant"`` (Croissant
-1.0/1.1), ``"rocrate"`` (RO-Crate 1.2), ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x
+1.0/1.1), ``"rocrate"`` (RO-Crate 1.2), ``"dcat-us-3.0"``, ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x
 JSON, including DataCite REST API responses). See :ref:`web_usage` for the checks.
 
 **Usage**:

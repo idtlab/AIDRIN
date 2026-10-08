@@ -116,7 +116,7 @@ WEB_ONLY: Dict[str, Dict[str, str]] = {
     "fair_assessment": {
         "category": "understandability",
         "description": (
-            "Evaluates Croissant, RO-Crate, DCAT-US 1.1 or DataCite metadata against the FAIR principles. "
+            "Evaluates Croissant, RO-Crate, DCAT-US 3.0 or 1.1, or DataCite metadata against the FAIR principles. "
             "Requires uploading a JSON metadata file."
         ),
     },
@@ -231,7 +231,7 @@ CAVEATS: Dict[str, str] = {
     "entropy_risk": "You will need to nominate the quasi-identifier columns.",
     "single_attribute_risk": "You will need an ID column and the columns to evaluate.",
     "multiple_attribute_risk": "You will need an ID column and the columns to evaluate.",
-    "fair_assessment": "This one is optional and needs a Croissant, RO-Crate, DCAT-US 1.1 or DataCite metadata file.",
+    "fair_assessment": "This one is optional and needs a Croissant, RO-Crate, DCAT-US 3.0 or 1.1, or DataCite metadata file.",
 }
 
 

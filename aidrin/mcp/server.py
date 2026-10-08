@@ -350,6 +350,7 @@ def check_fair_compliance(metadata_path: str, standard: str = "auto") -> str:
         metadata_path: Absolute path to the JSON or JSON-LD metadata file.
         standard: "auto" (detect it, the default), "croissant" (MLCommons
                   Croissant 1.0/1.1), "rocrate" (RO-Crate 1.2 ro-crate-metadata.json),
+                  "dcat-us-3.0" (one DCAT-US 3.0 dataset record),
                   "dcat-us-1.1" (Project Open Data) or
                   "datacite" (DataCite 4.x JSON, including REST API responses).
     """

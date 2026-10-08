@@ -227,8 +227,8 @@ supported metadata, resolution behavior, ``g`` ambiguity, and Globus compatibili
 FAIR Compliance Report
 '''''''''''''''''''''''
 
-The **FAIR Compliance Report** analyzes your dataset's metadata file (in **Croissant**, **RO-Crate**, **DCAT-US 1.1**
-or **DataCite JSON** format) and provides a detailed assessment against the FAIR criteria.
+The **FAIR Compliance Report** analyzes your dataset's metadata file (in **Croissant**, **RO-Crate**,
+**DCAT-US 3.0**, **DCAT-US 1.1** or **DataCite JSON** format) and provides a detailed assessment against the FAIR criteria.
 
 How it Works
 ''''''''''''''
@@ -243,7 +243,8 @@ Detection reads what the file declares: Croissant files carry ``conformsTo`` (or
 naming their Croissant version; an RO-Crate has an ``ro-crate-metadata.json`` entity in its
 ``@graph`` or an RO-Crate context; DataCite JSON uses ``titles`` and ``creators``, including REST API
 responses; DCAT-US 1.1 files carry ``accessLevel``, ``bureauCode`` or a Project Open Data
-``conformsTo``. A file that matches none of these is reported as undetected.
+``conformsTo``; a DCAT-US 3.0 record has ``title`` with ``contactPoint`` or ``distribution`` and none
+of the 1.1 keys. A file that matches none of these is reported as undetected.
 
 A check passes when the element is present and not empty. Dataset-level elements are read from the
 top level of the file only, so a title or description on a distribution never stands in for the
@@ -325,6 +326,35 @@ The RO-Crate report also shows:
   ``license``, and ``cite-as`` when the ``identifier`` is a DOI), each with what is missing.
 - **Structure**: Files with ``encodingFormat`` and ``contentSize``, people with an ORCID, organizations
   with a ROR, and actions with both ``agent`` and ``instrument``.
+
+FAIR Principles and Criteria: DCAT-US 3.0
+''''''''''''''''''''''''''''''''''''''''''
+
+`DCAT-US 3.0 <https://resources.data.gov/resources/dcat-us3/>`__ is the current US federal data
+catalog schema (GSA), based on W3C DCAT 3 and published as JSON Schema with plain keys. Upload one
+dataset record; a whole catalog (a ``dataset`` array) is rejected with a message saying so.
+``bureauCode``, ``programCode`` and ``accessLevel`` are not part of 3.0 and are not scored.
+
+**Findable**
+    - ``identifier``, ``title``, ``description``, ``keyword``, ``theme``, ``landingPage``
+
+**Accessible**
+    - ``accessRights``, ``issued``, ``modified``
+    - ``accessURL`` or ``downloadURL``, and ``mediaType`` *(distribution)*
+
+**Interoperable**
+    - ``conformsTo``, ``spatial``, ``temporal``, ``qualifiedRelation``
+    - ``format`` *(distribution)*
+
+**Reusable**
+    - ``license`` on the dataset or a distribution
+    - ``rights``, ``publisher``, ``contactPoint``, ``version``
+    - provenance: ``wasGeneratedBy`` or ``provenance``
+    - ``checksum`` *(distribution)*
+
+**Conformance** reports the four properties DCAT-US 3.0 requires of a dataset: ``title``,
+``description``, ``contactPoint`` and ``identifier``. DCAT 3 versioning and series properties
+(``hasVersion``, ``previousVersion``, ``inSeries`` and so on) appear under **Other**, unscored.
 
 FAIR Principles and Criteria: DCAT-US 1.1
 ''''''''''''''''''''''''''''''''''''''''''

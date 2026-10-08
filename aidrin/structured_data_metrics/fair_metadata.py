@@ -88,11 +88,13 @@ def key(*names):
 
 
 def in_each(parent, child, noun):
-    """Passes when at least one entry of the ``parent`` list carries ``child``."""
+    """Passes when at least one entry of the ``parent`` list carries ``child`` (or one of a tuple)."""
+    children = child if isinstance(child, tuple) else (child,)
+
     @_reads(parent)
     def check(meta):
         entries = [e for e in _as_list(meta.get(parent)) if isinstance(e, dict)]
-        found = sum(1 for e in entries if _present(e.get(child)))
+        found = sum(1 for e in entries if any(_present(e.get(c)) for c in children))
         return f"{found}/{len(entries)} {noun}" if found else None
     return check
 
@@ -150,6 +152,49 @@ DCAT_US_1_1 = {
         "contactPoint": key("contactPoint"),
     },
 }
+
+
+# DCAT-US 3.0 (GSA, JSON Schema with plain keys; dataset requires title, description,
+# contactPoint and identifier). License may sit on the dataset or on its distributions.
+@_reads("license", "distribution")
+def _dcat_us_3_license(meta):
+    return key("license")(meta) or in_each("distribution", "license", "distributions")(meta)
+
+
+DCAT_US_3 = {
+    "Findable": {
+        "identifier": key("identifier"),
+        "title": key("title"),
+        "description": key("description"),
+        "keyword": key("keyword"),
+        "theme": key("theme"),
+        "landingPage": key("landingPage"),
+    },
+    "Accessible": {
+        "accessRights": key("accessRights"),
+        "accessURL or downloadURL (distribution)": in_each("distribution", ("accessURL", "downloadURL"), "distributions"),
+        "mediaType (distribution)": in_each("distribution", "mediaType", "distributions"),
+        "issued": key("issued"),
+        "modified": key("modified"),
+    },
+    "Interoperable": {
+        "conformsTo": key("conformsTo"),
+        "format (distribution)": in_each("distribution", "format", "distributions"),
+        "spatial": key("spatial"),
+        "temporal": key("temporal"),
+        "qualifiedRelation": key("qualifiedRelation"),
+    },
+    "Reusable": {
+        "license (dataset or distribution)": _dcat_us_3_license,
+        "rights": key("rights"),
+        "publisher": key("publisher"),
+        "contactPoint": key("contactPoint"),
+        "version": key("version"),
+        "provenance (wasGeneratedBy or provenance)": key("wasGeneratedBy", "provenance"),
+        "checksum (distribution)": in_each("distribution", "checksum", "distributions"),
+    },
+}
+DCAT_US_3_REQUIRED = ("title", "description", "contactPoint", "identifier")
 
 _ACCESS_RIGHTS = "info:eu-repo/semantics/"
 
@@ -580,6 +625,23 @@ def _assess_dcat_us_1_1(metadata):
     }
 
 
+def _assess_dcat_us_3(metadata):
+    meta = _top_level(metadata)
+    results, summary, passed, totals = _score(meta, DCAT_US_3)
+    missing = [k for k in DCAT_US_3_REQUIRED if not _present(meta.get(k))]
+    return {
+        **results,
+        "Other": _other(meta, DCAT_US_3, shown_elsewhere=["@type"]),
+        "Conformance": {
+            "Required properties present": f"{len(DCAT_US_3_REQUIRED) - len(missing)}/{len(DCAT_US_3_REQUIRED)}",
+            "Missing": ", ".join(missing) or "none",
+        },
+        "FAIR Compliance Checks": summary,
+        "Pie chart": _chart(passed, totals),
+        "Original Metadata": metadata,
+    }
+
+
 def _assess_datacite(metadata):
     data = metadata.get("data")
     if isinstance(data, dict) and isinstance(data.get("attributes"), dict):
@@ -642,6 +704,7 @@ def _assess_rocrate(metadata):
 _ASSESSORS = {
     "croissant": _assess_croissant,
     "rocrate": _assess_rocrate,
+    "dcat-us-3.0": _assess_dcat_us_3,
     "dcat-us-1.1": _assess_dcat_us_1_1,
     "datacite": _assess_datacite,
 }
@@ -649,6 +712,7 @@ STANDARDS = tuple(_ASSESSORS)
 STANDARD_NAMES = {
     "croissant": "Croissant",
     "rocrate": "RO-Crate",
+    "dcat-us-3.0": "DCAT-US 3.0",
     "dcat-us-1.1": "DCAT-US 1.1 (Project Open Data)",
     "datacite": "DataCite 4.x",
 }
@@ -694,12 +758,18 @@ def detect_standard(metadata):
     datacite = attributes if isinstance(attributes, dict) else metadata
     if "titles" in datacite and "creators" in datacite:
         return "datacite"
+    if isinstance(metadata.get("dataset"), list):
+        raise ValueError("This is a DCAT catalog; upload a single dataset record from it.")
     conforms = " ".join(str(v) for v in _as_list(metadata.get("conformsTo")))
     if "accessLevel" in metadata or "bureauCode" in metadata or "project-open-data" in conforms:
         return "dcat-us-1.1"
+    # DCAT uses "title" where schema.org uses "name"; contactPoint or distribution confirms it.
+    if "title" in metadata and ("contactPoint" in metadata or "distribution" in metadata):
+        return "dcat-us-3.0"
     raise ValueError(
-        "Could not detect the metadata standard. Supported: Croissant 1.0/1.1, RO-Crate 1.2, DCAT-US 1.1 "
-        "(Project Open Data) and DataCite 4.x JSON; choose one explicitly if your file follows it."
+        "Could not detect the metadata standard. Supported: Croissant 1.0/1.1, RO-Crate 1.2, "
+        "DCAT-US 3.0, DCAT-US 1.1 (Project Open Data) and DataCite 4.x JSON; choose one explicitly "
+        "if your file follows it."
     )
 
 
@@ -713,6 +783,7 @@ def calculate_fair_compliance(metadata, standard="auto"):
     standard : str
         ``"auto"`` (detect it, the default), ``"croissant"`` (MLCommons Croissant 1.0/1.1),
         ``"rocrate"`` (RO-Crate 1.2; other versions are assessed with 1.2 rules),
+        ``"dcat-us-3.0"`` (GSA DCAT-US 3.0 dataset record),
         ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x JSON, including
         REST API responses wrapped in ``data.attributes``). The web form's ``"DCAT"`` and
         ``"Datacite"`` are accepted too.

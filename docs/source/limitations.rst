@@ -19,7 +19,7 @@ What We Can Do
 ~~~~~~~~~~~~~~
 
 - Provide **quantitative metrics** for dataset readiness and visualizations of results.
-- Analyze **DCAT-US 1.1 and DataCite JSON metadata** for FAIR compliance.
+- Analyze **Croissant, RO-Crate, DCAT-US 3.0 and 1.1, and DataCite JSON metadata** for FAIR compliance.
 - Identify **missing or incomplete metadata elements**.
 - Work with **structured tabular datasets** (CSV, Excel, JSON, NumPy ``.npz``,
   HDF5 ``.h5``, and Parquet ``.parquet``) for data readiness checks.
