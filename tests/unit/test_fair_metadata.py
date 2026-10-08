@@ -343,6 +343,63 @@ def test_rocrate_without_a_descriptor_is_rejected():
 
 
 # ---------------------------------------------------------------------------
+# DCAT-US 3.0
+# ---------------------------------------------------------------------------
+
+# The example GSA ships in the DCAT-US 3.0 JSON Schema (Dataset.json, CC0).
+DCAT_US_3_EXAMPLE = FIXTURES / "dcat_us_3.0_gsa_schema_example.json"
+
+
+def test_dcat_us_3_gsa_example():
+    result = calculate_fair_compliance(_load(DCAT_US_3_EXAMPLE), "dcat-us-3.0")
+    checks = result["FAIR Compliance Checks"]
+    assert checks == {
+        "Findable Checks": "6/6",
+        "Accessible Checks": "5/5",
+        "Interoperable Checks": "2/5",
+        "Reusable Checks": "3/7",
+        "Total Checks": "16/23",
+    }
+    assert result["Conformance"] == {"Required properties present": "4/4", "Missing": "none"}
+    assert result["Standard"]["Name"] == "DCAT-US 3.0"
+    assert _scalar_values_only(result)
+
+
+def test_dcat_us_3_conformance_names_missing_required_properties():
+    metadata = _load(DCAT_US_3_EXAMPLE)
+    del metadata["contactPoint"]
+    result = calculate_fair_compliance(metadata, "dcat-us-3.0")
+    assert result["Conformance"]["Missing"] == "contactPoint"
+
+
+def test_dcat_us_3_license_may_sit_on_a_distribution():
+    metadata = _load(DCAT_US_3_EXAMPLE)
+    metadata["distribution"][0]["license"] = "https://creativecommons.org/publicdomain/zero/1.0/"
+    result = calculate_fair_compliance(metadata, "dcat-us-3.0")
+    assert result["Reusable"]["license (dataset or distribution)"] == "1/1 distributions"
+
+
+def test_dcat_us_3_does_not_score_1_1_only_keys():
+    metadata = _load(DCAT_US_3_EXAMPLE)
+    metadata.update({"bureauCode": ["019:20"], "programCode": ["019:023"], "accessLevel": "public"})
+    result = calculate_fair_compliance(metadata, "dcat-us-3.0")
+    assert result["FAIR Compliance Checks"]["Total Checks"] == "16/23"
+    assert {"bureauCode", "programCode", "accessLevel"} <= set(result["Other"])
+
+
+def test_a_dcat_us_1_1_record_scores_lower_under_3_0_rules():
+    # The same BUTTER-E record: 3.0 expects accessRights, qualifiedRelation, provenance and checksums.
+    metadata = _load(DCAT_SAMPLES / "BUTTER-E.json")
+    assert calculate_fair_compliance(metadata, "dcat-us-1.1")["FAIR Compliance Checks"]["Total Checks"] == "20/26"
+    assert calculate_fair_compliance(metadata, "dcat-us-3.0")["FAIR Compliance Checks"]["Total Checks"] == "14/23"
+
+
+def test_a_dcat_catalog_is_rejected_with_a_clear_message():
+    with pytest.raises(ValueError, match="catalog"):
+        detect_standard({"@type": "Catalog", "title": "c", "dataset": [_load(DCAT_US_3_EXAMPLE)]})
+
+
+# ---------------------------------------------------------------------------
 # Detection
 # ---------------------------------------------------------------------------
 
@@ -357,6 +414,7 @@ def test_rocrate_without_a_descriptor_is_rejected():
         (_load(ROCRATE_RUN), "rocrate"),
         (_load(ROCRATE_WEB), "rocrate"),
         ({"@context": "https://w3id.org/ro/crate/1.2/context", "@graph": []}, "rocrate"),
+        (_load(DCAT_US_3_EXAMPLE), "dcat-us-3.0"),
         (_load(DCAT_SAMPLES / "BUTTER-E.json"), "dcat-us-1.1"),
         (_load(DCAT_SAMPLES / "EGS_Collab_Experiment.json"), "dcat-us-1.1"),
         (_load(FIXTURES / "datacite_rest_default.json"), "datacite"),
@@ -374,7 +432,9 @@ def test_croissant_version_ignores_the_rai_uri():
 
 def test_detection_fails_clearly_on_unknown_metadata():
     with pytest.raises(ValueError, match="Could not detect"):
-        detect_standard({"@type": "dcat:Dataset", "title": "x"})
+        detect_standard({"@type": "dcat:Dataset", "title": "x"})  # no contactPoint or distribution
+    with pytest.raises(ValueError, match="Could not detect"):
+        detect_standard({"@type": "Dataset", "name": "x", "distribution": []})  # schema.org, not DCAT
 
 
 def test_auto_is_the_default_and_is_reported():

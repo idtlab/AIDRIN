@@ -126,7 +126,7 @@ READINESS_METRIC_GLOSSARY = {
         "l-Diversity or t-Closeness signals suggesting sensitive-attribute values may be inferable."
     ),
     "fair_compliance": (
-        "Optional metadata assessment (Croissant, RO-Crate, DCAT-US 1.1 or DataCite JSON); not derived from the dataset file."
+        "Optional metadata assessment (Croissant, RO-Crate, DCAT-US 3.0 or 1.1, or DataCite JSON); not derived from the dataset file."
     ),
 }
 
