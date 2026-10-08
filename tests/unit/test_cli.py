@@ -1238,7 +1238,7 @@ class TestFairCommand(unittest.TestCase):
         out = os.path.join(tempfile.mkdtemp(), "fair.json")
         _, stderr, code = _run_cli("fair", _DCAT_SAMPLE, "--standard", "dcat-us-1.1", "-o", out)
         self.assertEqual(code, 0, msg=stderr)
-        with open(out) as f:
+        with open(out, encoding="utf-8") as f:
             self.assertEqual(json.load(f)["FAIR Compliance Checks"]["Total Checks"], "20/26")
 
     def test_standard_is_detected_by_default_and_checked(self):
