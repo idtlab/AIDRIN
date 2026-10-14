@@ -99,9 +99,11 @@ function setTargetPickerOpen(picker, open) {
   const { button, menu, search } = targetPickerElements(picker);
   if (!button || !menu) return;
   const shouldOpen = Boolean(open) && !button.disabled;
+  const restoreFocus = !shouldOpen && menu.contains(document.activeElement);
   menu.classList.toggle("hidden", !shouldOpen);
   button.setAttribute("aria-expanded", String(shouldOpen));
   if (shouldOpen) search?.focus();
+  else if (restoreFocus && !button.disabled) button.focus();
 }
 
 function setTargetPickerEnabled(picker, enabled) {
@@ -2813,6 +2815,9 @@ function initCustomOutlierEditor() {
   if (saveButton) {
     saveButton.addEventListener("click", downloadCustomOutlierRules);
   }
+  document
+    .getElementById("custom-outlier-edit-file")
+    ?.addEventListener("click", importCustomOutlierRulesIntoBuilder);
   const checkbox = document.getElementById("toggleButton_custom_outliers");
   document
     .querySelectorAll('input[name="custom_outlier_rule_source"]')
@@ -2881,22 +2886,24 @@ function loadCustomOutlierTargets() {
     return loadGlobusCustomOutlierTargets(message);
   }
   return fetch("/custom-outlier-targets", { method: "POST" })
-    .then((r) => r.json())
-    .then((data) => {
-      if (data.success) {
-        customOutlierTargets = data.targets || [];
-        updateCustomOutlierTargetOptions();
-        if (message) message.classList.add("hidden");
-      } else if (message) {
-        message.textContent = data.message || "Unable to load targets.";
-        message.classList.remove("hidden");
-      }
+    .then((response) =>
+      response.json().then((data) => ({ ok: response.ok, data })),
+    )
+    .then(({ ok, data }) => {
+      if (!ok || !data.success)
+        throw new Error(data.message || "Unable to load targets.");
+      customOutlierTargets = data.targets || [];
+      updateCustomOutlierTargetOptions();
+      if (message) message.classList.add("hidden");
+      return true;
     })
     .catch((err) => {
+      customOutlierTargets = [];
       if (message) {
         message.textContent = "Unable to load targets: " + err.message;
         message.classList.remove("hidden");
       }
+      return false;
     });
 }
 
@@ -2972,27 +2979,26 @@ function loadGlobusCustomOutlierTargets(message) {
   }
   return loadGlobusTargetDiscovery()
     .then((result) => {
-      if (result && result.success) {
-        customOutlierTargets = result.targets || [];
-        setVariableUnitCatalog(result.unit_catalog || []);
-        setVariableUnitMetadata(result.unit_metadata);
-        updateCustomOutlierTargetOptions();
-        if (message) message.classList.add("hidden");
-      } else {
+      if (!result?.success) {
         clearGlobusDiscoveryCache();
-        if (message) {
-          message.textContent =
-            (result && (result.message || result.error)) ||
-            "Remote target discovery failed.";
-          message.classList.remove("hidden");
-        }
+        throw new Error(
+          result?.message || result?.error || "Remote target discovery failed.",
+        );
       }
+      customOutlierTargets = result.targets || [];
+      setVariableUnitCatalog(result.unit_catalog || []);
+      setVariableUnitMetadata(result.unit_metadata);
+      updateCustomOutlierTargetOptions();
+      if (message) message.classList.add("hidden");
+      return true;
     })
     .catch((err) => {
+      customOutlierTargets = [];
       if (message) {
         message.textContent = "Remote target discovery failed: " + err.message;
         message.classList.remove("hidden");
       }
+      return false;
     });
 }
 
@@ -3024,13 +3030,19 @@ function pollGlobusCustomOutlierTargets(taskId) {
 function addCustomOutlierRuleRow() {
   const list = document.getElementById("custom-outlier-rule-list");
   if (!list) return;
-  customOutlierRuleCounter += 1;
+  do {
+    customOutlierRuleCounter += 1;
+  } while (
+    Array.from(list.children).some(
+      (row) => row.dataset.ruleId === `custom-rule-${customOutlierRuleCounter}`,
+    )
+  );
   const row = document.createElement("div");
   row.className =
     "custom-outlier-rule relative rounded-lg border border-gray-200 dark:border-gray-700 p-2";
   row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
   row.innerHTML = `
-    <div class="grid gap-2 pr-7 md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]">
+    <div class="custom-outlier-rule-header grid gap-2 pr-7">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
         <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
@@ -3121,7 +3133,12 @@ function addCustomOutlierRuleRow() {
     .addEventListener("change", () => updateCustomOutlierRegexPreview(row));
   row
     .querySelector('[data-field="target"][data-target-picker]')
-    .addEventListener("target-picker-change", serializeCustomOutlierRules);
+    .addEventListener("target-picker-change", () => {
+      row
+        .querySelectorAll(".custom-outlier-condition")
+        .forEach(updateCustomOutlierComparisonControls);
+      serializeCustomOutlierRules();
+    });
   row.addEventListener("input", serializeCustomOutlierRules);
   row.addEventListener("change", serializeCustomOutlierRules);
 
@@ -3129,6 +3146,7 @@ function addCustomOutlierRuleRow() {
   updateCustomOutlierTargetOptions(row);
   updateCustomOutlierTargetMatch(row);
   serializeCustomOutlierRules();
+  return row;
 }
 
 function addCustomOutlierConditionRow(ruleRow) {
@@ -3138,15 +3156,16 @@ function addCustomOutlierConditionRow(ruleRow) {
   condition.className =
     "custom-outlier-condition rounded-md bg-white p-1.5 shadow-sm dark:bg-gray-800";
   condition.innerHTML = `
-    <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.7fr)_1fr_auto]">
+    <div class="custom-outlier-condition-fields grid gap-2">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Type
         <select data-field="condition_type"
                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
           <option value="range">Range</option>
           <option value="regex">Regex</option>
+          <option value="compare">Compare columns</option>
         </select>
       </label>
-      <div data-section="condition-range" class="grid gap-2 sm:grid-cols-4">
+      <div data-section="condition-range" class="custom-outlier-range-fields grid gap-2">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
           <input type="number" step="any" data-field="condition_min"
                  class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
@@ -3170,6 +3189,27 @@ function addCustomOutlierConditionRow(ruleRow) {
                  class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
         </label>
       </div>
+      <div data-section="condition-compare" class="hidden space-y-2">
+        <div class="custom-outlier-compare-fields grid gap-2">
+          <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Target must be
+            <select data-field="condition_operator"
+                    class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+              <option value="&lt;=">≤ Less than or equal to</option>
+              <option value="&gt;=">≥ Greater than or equal to</option>
+              <option value="&lt;">&lt; Less than</option>
+              <option value="&gt;">&gt; Greater than</option>
+              <option value="==">= Equal to</option>
+              <option value="!=">≠ Not equal to</option>
+            </select>
+          </label>
+          <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Comparison column
+            <select data-field="condition_other_target"
+                    class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+          </label>
+        </div>
+        <p data-section="comparison-summary" role="status" aria-live="polite" class="text-xs text-gray-600 dark:text-gray-300"></p>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Compare values on the same row, using compatible units. Numeric text is accepted; other non-numeric values are flagged. Missing values follow “Allow missing values”.</p>
+      </div>
       <button type="button" data-action="remove-condition"
               class="self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
         Remove
@@ -3188,6 +3228,10 @@ function addCustomOutlierConditionRow(ruleRow) {
       serializeCustomOutlierRules();
     });
   updateCustomOutlierConditionSections(condition);
+  condition.addEventListener("change", () =>
+    updateCustomOutlierComparisonControls(condition),
+  );
+  return condition;
 }
 
 function updateCustomOutlierTargetOptions(scope) {
@@ -3215,6 +3259,9 @@ function updateCustomOutlierTargetOptions(scope) {
   root
     .querySelectorAll(".custom-outlier-rule")
     .forEach(updateCustomOutlierRegexPreview);
+  root
+    .querySelectorAll(".custom-outlier-condition")
+    .forEach(updateCustomOutlierComparisonControls);
 }
 
 function updateCustomOutlierTargetMatch(row) {
@@ -3233,6 +3280,9 @@ function updateCustomOutlierTargetMatch(row) {
     .querySelector('[data-section="target-type"]')
     ?.classList.toggle("hidden", !isRegex || targetTypes.length <= 1);
   updateCustomOutlierRegexPreview(row);
+  row
+    .querySelectorAll(".custom-outlier-condition")
+    .forEach(updateCustomOutlierComparisonControls);
 }
 
 function updateCustomOutlierRegexPreview(row) {
@@ -3242,6 +3292,9 @@ function updateCustomOutlierRegexPreview(row) {
     customOutlierTargets,
     customOutlierRegexTargetType(row),
   );
+  row
+    .querySelectorAll(".custom-outlier-condition")
+    .forEach(updateCustomOutlierComparisonControls);
 }
 
 function customOutlierRegexTargetType(row) {
@@ -3266,12 +3319,11 @@ function serializeCustomOutlierRules() {
       targetMatch === "regex"
         ? row.querySelector('[data-field="target_regex"]')?.value.trim()
         : selectedTarget?.value;
-    if (!target) return;
     const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
     const rule = {
       id,
       name: row.querySelector('[data-field="name"]')?.value || id,
-      target,
+      target: target || "",
       target_type:
         targetMatch === "regex"
           ? customOutlierRegexTargetType(row)
@@ -3289,9 +3341,9 @@ function serializeCustomOutlierRules() {
   return rules;
 }
 
-function downloadCustomOutlierRules() {
-  const rules = serializeCustomOutlierRules();
-  if (!validateCustomOutlierRuleSelection(rules)) return;
+async function downloadCustomOutlierRules() {
+  const rules = await resolveCustomOutlierRules();
+  if (!rules) return;
 
   const blob = new Blob([JSON.stringify(rules, null, 2)], {
     type: "application/json",
@@ -3384,8 +3436,24 @@ function validateCustomOutlierRulesFile(rules) {
     }
     const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
     if (error) return error;
+    if (
+      String(rule.target_type).trim() !== "column" &&
+      customOutlierHasComparisons(rule.criteria)
+    ) {
+      return `${ruleName}: compare criteria support tabular columns only.`;
+    }
   }
   return null;
+}
+
+function customOutlierHasComparisons(criteria) {
+  const op = String(criteria.op || "")
+    .trim()
+    .toLowerCase();
+  if (op === "not") return customOutlierHasComparisons(criteria.condition);
+  if (op === "and" || op === "or")
+    return criteria.conditions.some(customOutlierHasComparisons);
+  return criteria.type === "compare";
 }
 
 async function resolveCustomOutlierRules() {
@@ -3413,6 +3481,234 @@ async function resolveCustomOutlierRules() {
   }
 }
 
+function customOutlierComparisonTargets(criteria) {
+  const op = String(criteria.op || "")
+    .trim()
+    .toLowerCase();
+  if (op === "not") return customOutlierComparisonTargets(criteria.condition);
+  if (op === "and" || op === "or")
+    return criteria.conditions.flatMap(customOutlierComparisonTargets);
+  return criteria.type === "compare" ? [criteria.other_target] : [];
+}
+
+function validateCustomOutlierBuilderTargets(rule) {
+  const name = rule.name || rule.id;
+  if (
+    rule.target_match !== "regex" &&
+    !customOutlierTargets.some(
+      (target) =>
+        target.name === rule.target && target.target_type === rule.target_type,
+    )
+  ) {
+    return `${name}: target ${rule.target} is not available in this file. Choose a target from the list.`;
+  }
+  const references = customOutlierComparisonTargets(rule.criteria);
+  if (references.length && rule.target_type !== "column")
+    return `${name}: compare conditions require tabular columns.`;
+  for (const reference of references) {
+    if (
+      !customOutlierTargets.some(
+        (target) =>
+          target.name === reference && target.target_type === "column",
+      )
+    ) {
+      return `${name}: comparison column ${reference} is not available in this file. Choose a column from the list.`;
+    }
+  }
+  return null;
+}
+
+function customOutlierBuilderPlan(rules) {
+  const error = validateCustomOutlierRulesFile(rules);
+  if (error) throw new Error(error);
+  const unsupported = (name) =>
+    new Error(
+      `${name}: this file uses nested groups or advanced fields that the simple builder cannot edit. Keep Select JSON file to run or save it unchanged.`,
+    );
+  const checkFields = (value, fields, name) => {
+    if (Object.keys(value).some((key) => !fields.includes(key)))
+      throw unsupported(name);
+  };
+  const leaf = (criteria, name) => {
+    const fields = {
+      range: ["type", "min", "max", "min_inclusive", "max_inclusive"],
+      regex: ["type", "pattern"],
+      compare: ["type", "operator", "other_target"],
+    }[criteria.type];
+    if (!fields) throw unsupported(name);
+    checkFields(criteria, fields, name);
+    if (criteria.type === "regex" && typeof criteria.pattern !== "string")
+      throw unsupported(name);
+    for (const field of ["min", "max"]) {
+      const value = criteria[field];
+      if (value == null || value === "") continue;
+      if (
+        !["number", "string"].includes(typeof value) ||
+        (typeof value === "string" &&
+          !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value.trim()))
+      )
+        throw unsupported(name);
+    }
+    for (const field of ["min_inclusive", "max_inclusive"]) {
+      if (field in criteria && typeof criteria[field] !== "boolean")
+        throw unsupported(name);
+    }
+    return criteria;
+  };
+  return rules.map((rule) => {
+    const name = rule.name || rule.id;
+    if (
+      typeof rule.id !== "string" ||
+      typeof rule.target !== "string" ||
+      ("name" in rule && typeof rule.name !== "string") ||
+      !["column", "hdf5_dataset"].includes(rule.target_type) ||
+      (String(rule.target_match || "exact")
+        .trim()
+        .toLowerCase() === "regex" &&
+        rule.target !== rule.target.trim()) ||
+      ("allow_missing" in rule && typeof rule.allow_missing !== "boolean")
+    )
+      throw unsupported(name);
+    checkFields(
+      rule,
+      [
+        "id",
+        "name",
+        "target",
+        "target_type",
+        "target_match",
+        "allow_missing",
+        "criteria",
+      ],
+      name,
+    );
+    const criteria = rule.criteria;
+    const op = String(criteria.op || "and")
+      .trim()
+      .toLowerCase();
+    let conditions;
+    if (!criteria.op) conditions = [leaf(criteria, name)];
+    else if (op === "not") {
+      checkFields(criteria, ["op", "condition"], name);
+      if (
+        String(criteria.condition.op || "")
+          .trim()
+          .toLowerCase() === "or"
+      ) {
+        checkFields(criteria.condition, ["op", "conditions"], name);
+        conditions = criteria.condition.conditions.map((condition) =>
+          leaf(condition, name),
+        );
+      } else conditions = [leaf(criteria.condition, name)];
+    } else {
+      checkFields(criteria, ["op", "conditions"], name);
+      conditions = criteria.conditions.map((condition) =>
+        leaf(condition, name),
+      );
+    }
+    return { rule, op, conditions };
+  });
+}
+
+async function importCustomOutlierRulesIntoBuilder() {
+  const file = document.getElementById("custom-outlier-rules-file")?.files?.[0];
+  if (!file)
+    return showCustomOutlierFileError("Choose a JSON rules file to edit.");
+  const button = document.getElementById("custom-outlier-edit-file");
+  if (button) button.disabled = true;
+  try {
+    const plan = customOutlierBuilderPlan(
+      parseCustomOutlierRulesJson(await file.text()),
+    );
+    if (!(await loadCustomOutlierTargets()))
+      throw new Error("Unable to load targets. Existing rules were kept.");
+    for (const { rule } of plan) {
+      const targetError = validateCustomOutlierBuilderTargets(rule);
+      if (targetError) throw new Error(targetError);
+    }
+    const list = document.getElementById("custom-outlier-rule-list");
+    list.replaceChildren();
+    for (const { rule, op, conditions } of plan) {
+      const row = addCustomOutlierRuleRow();
+      row.dataset.ruleId = String(rule.id).trim();
+      row.querySelector('[data-field="name"]').value = rule.name || rule.id;
+      row.querySelector('[data-field="allow_missing"]').checked = Boolean(
+        rule.allow_missing,
+      );
+      row.querySelector('[data-field="target_match"]').value = String(
+        rule.target_match || "exact",
+      )
+        .trim()
+        .toLowerCase();
+      row.querySelector('[data-field="target_regex"]').value = rule.target;
+      row.querySelector('[data-field="target_type"]').value = rule.target_type;
+      const picker = row.querySelector(
+        '[data-field="target"][data-target-picker]',
+      );
+      picker
+        .querySelectorAll("[data-target-picker-option-input]")
+        .forEach((input) => {
+          input.checked =
+            input.value === rule.target &&
+            input.dataset.targetType === rule.target_type;
+          setTargetPickerOptionSelected(
+            input.closest("[data-target-picker-option]"),
+            input.checked,
+          );
+        });
+      updateTargetPickerSummary(picker);
+      row.querySelector('[data-field="criteria_op"]').value = op;
+      row
+        .querySelector('[data-section="criteria-conditions"]')
+        .replaceChildren();
+      conditions.forEach((criteria) => {
+        const condition = addCustomOutlierConditionRow(row);
+        condition.querySelector('[data-field="condition_type"]').value =
+          criteria.type;
+        const values = {
+          min:
+            criteria.min == null || criteria.min === ""
+              ? ""
+              : Number(criteria.min),
+          max:
+            criteria.max == null || criteria.max === ""
+              ? ""
+              : Number(criteria.max),
+          pattern: criteria.pattern ?? ".*",
+          operator: criteria.operator ?? "<=",
+          other_target: criteria.other_target ?? "",
+        };
+        for (const [field, value] of Object.entries(values))
+          condition.querySelector(`[data-field="condition_${field}"]`).value =
+            value;
+        condition.querySelector(
+          '[data-field="condition_min_inclusive"]',
+        ).checked = criteria.min_inclusive !== false;
+        condition.querySelector(
+          '[data-field="condition_max_inclusive"]',
+        ).checked = criteria.max_inclusive !== false;
+        updateCustomOutlierConditionSections(condition);
+      });
+      updateCustomOutlierTargetMatch(row);
+    }
+    document.querySelector(
+      'input[name="custom_outlier_rule_source"][value="manual"]',
+    ).checked = true;
+    clearCustomOutlierResults();
+    clearCustomOutlierFileError();
+    updateCustomOutlierRuleSource();
+    serializeCustomOutlierRules();
+    const message = document.getElementById("custom-outlier-message");
+    message.textContent =
+      "Rules loaded. Edit the conditions, then save them to JSON or submit.";
+    message.classList.remove("hidden");
+  } catch (error) {
+    showCustomOutlierFileError(error.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function updateCustomOutlierConditionSections(condition) {
   const type = condition.querySelector('[data-field="condition_type"]')?.value;
   condition
@@ -3421,6 +3717,70 @@ function updateCustomOutlierConditionSections(condition) {
   condition
     .querySelector('[data-section="condition-regex"]')
     ?.classList.toggle("hidden", type !== "regex");
+  condition
+    .querySelector('[data-section="condition-compare"]')
+    ?.classList.toggle("hidden", type !== "compare");
+  updateCustomOutlierComparisonControls(condition);
+}
+
+function updateCustomOutlierComparisonControls(condition) {
+  const row = condition.closest(".custom-outlier-rule");
+  const select = condition.querySelector(
+    '[data-field="condition_other_target"]',
+  );
+  if (!row || !select) return;
+  const columns = customOutlierTargets.filter(
+    (target) => target.target_type === "column",
+  );
+  const selected = select.value;
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = columns.length
+    ? "Select a column…"
+    : "No tabular columns available";
+  select.appendChild(placeholder);
+  columns.forEach((target) => {
+    const option = document.createElement("option");
+    option.value = target.name;
+    option.textContent = target.display_label || target.name;
+    select.appendChild(option);
+  });
+  if (selected && !columns.some((target) => target.name === selected)) {
+    const unavailable = document.createElement("option");
+    unavailable.value = selected;
+    unavailable.textContent = `${selected} (not available)`;
+    unavailable.disabled = true;
+    select.appendChild(unavailable);
+  }
+  select.value = selected;
+  select.disabled = columns.length === 0;
+  const isRegex =
+    row.querySelector('[data-field="target_match"]')?.value === "regex";
+  const target = selectedTargetPickerInputs(
+    row.querySelector('[data-field="target"][data-target-picker]'),
+  )[0];
+  const targetType = isRegex
+    ? customOutlierRegexTargetType(row)
+    : target?.dataset.targetType;
+  const supported = columns.length > 0 && targetType !== "hdf5_dataset";
+  condition.querySelector(
+    '[data-field="condition_type"] option[value="compare"]',
+  ).disabled = !supported;
+  const summary = condition.querySelector(
+    '[data-section="comparison-summary"]',
+  );
+  const left = isRegex
+    ? row.querySelector('[data-field="target_regex"]')?.value
+    : target?.value;
+  const operator = condition.querySelector(
+    '[data-field="condition_operator"]',
+  )?.value;
+  summary.textContent = !supported
+    ? "Column comparisons require a tabular target. Use Range or Regex for HDF5 datasets."
+    : left && selected
+      ? `Valid when ${left} ${operator} ${selected}.`
+      : "Choose the target above and a comparison column.";
 }
 
 function serializeCustomOutlierCriteria(row) {
@@ -3453,6 +3813,17 @@ function serializeCustomOutlierCondition(condition) {
         "",
     };
   }
+  if (type === "compare") {
+    return {
+      type: "compare",
+      operator:
+        condition.querySelector('[data-field="condition_operator"]')?.value ||
+        "<=",
+      other_target:
+        condition.querySelector('[data-field="condition_other_target"]')
+          ?.value || "",
+    };
+  }
 
   const min = condition.querySelector('[data-field="condition_min"]')?.value;
   const max = condition.querySelector('[data-field="condition_max"]')?.value;
@@ -3483,9 +3854,18 @@ function validateCustomOutlierRuleSelection(rules) {
   }
   for (const rule of rules) {
     const ruleName = rule.name || rule.id || "Custom outlier rule";
+    if (!rule.target)
+      return showCustomOutlierValidationError(
+        `${ruleName}: select a target before submitting or saving.`,
+      );
     const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
     if (error) return showCustomOutlierValidationError(error);
+    const targetError = validateCustomOutlierBuilderTargets(rule);
+    if (targetError) return showCustomOutlierValidationError(targetError);
   }
+  const fileError = validateCustomOutlierRulesFile(rules);
+  if (fileError) return showCustomOutlierValidationError(fileError);
+  document.getElementById("custom-outlier-message")?.classList.add("hidden");
   return true;
 }
 
@@ -3541,6 +3921,18 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
     return null;
   }
   if (criteria.type === "regex") return null;
+  if (criteria.type === "compare") {
+    if (!["<", "<=", ">", ">=", "==", "!="].includes(criteria.operator)) {
+      return `${ruleName} compare condition requires operator <, <=, >, >=, ==, or !=.`;
+    }
+    if (
+      typeof criteria.other_target !== "string" ||
+      !criteria.other_target.trim()
+    ) {
+      return `${ruleName}: select a comparison column.`;
+    }
+    return null;
+  }
   return `${ruleName} has an unsupported condition type.`;
 }
 
@@ -3551,7 +3943,7 @@ function showCustomOutlierValidationError(text) {
     message.classList.remove("hidden");
   }
   if (typeof showToast === "function") {
-    showToast(text, "error");
+    showToast(text, "error", 5000);
   }
   return false;
 }
@@ -4065,7 +4457,7 @@ function renderCustomOutlierPreviewTable(previewByRule) {
     html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${escapeHtml(row.rule_name)}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">${escapeHtml(formatValue(locationDisplay))}</td>`;
     html += `<td class="px-3 py-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300">${escapeHtml(formatValue(row.value))}</td>`;
-    html += `<td class="px-3 py-2 font-mono text-xs text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(row.flag)}</td>`;
+    html += `<td class="px-3 py-2 min-w-48 max-w-md text-sm text-gray-900 dark:text-white whitespace-normal break-words">${escapeHtml(row.flag)}</td>`;
     html += `<td class="px-3 py-2 text-right">`;
     html += `<details class="inline-block text-left">`;
     html += `<summary class="cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">Expand</summary>`;
@@ -4081,11 +4473,15 @@ function renderCustomOutlierPreviewTable(previewByRule) {
 
 function formatOutlierFlagFallback(reason) {
   const labels = {
-    below_min: "< min",
-    above_max: "> max",
-    regex_mismatch: "!=",
-    non_numeric: "NaN",
-    missing: "missing",
+    below_min: "Below the allowed minimum",
+    above_max: "Above the allowed maximum",
+    regex_mismatch: "Does not match the required pattern",
+    non_numeric: "A numeric value is required",
+    missing: "A required value is missing",
+    comparison_mismatch: "Does not satisfy the column comparison",
+    invalid_comparison: "Comparison requires finite numbers",
+    or_mismatch: "Matches none of the alternatives",
+    not_mismatch: "Matches an excluded condition",
   };
   return labels[reason] || reason || "";
 }
@@ -4105,6 +4501,7 @@ function findCustomOutlierExport(result) {
 function downloadCustomOutlierExportCsv() {
   const exportByRule = findCustomOutlierExport(lastMetricResult);
   const rows = flattenOutlierExportRows(exportByRule);
+  const includeReferences = rows.some((row) => row.reference_values);
   const headers = [
     "rule_key",
     "rule_id",
@@ -4119,6 +4516,7 @@ function downloadCustomOutlierExportCsv() {
     "source_line",
     "row_index",
   ];
+  if (includeReferences) headers.push("reference_values");
   const csvRows = [headers.join(",")];
   for (const row of rows) {
     const location = row.location || {};
@@ -4136,6 +4534,8 @@ function downloadCustomOutlierExportCsv() {
       location.source_line ?? "",
       location.row_index ?? "",
     ];
+    if (includeReferences)
+      values.push(JSON.stringify(row.reference_values || {}));
     csvRows.push(values.map(csvEscape).join(","));
   }
   const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });

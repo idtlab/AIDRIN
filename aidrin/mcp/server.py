@@ -350,8 +350,10 @@ def run_custom_outlier_check(
     allow_missing, and target_match. Set target_match to regex to apply a rule
     to every target whose complete name matches target.
     Criteria define expected valid values and support numeric ranges, regex
-    patterns, and nested and/or/not operators. Values that do not satisfy the
-    rule are flagged as outliers.
+    patterns, and nested and/or/not operators. A compare leaf uses operator
+    (<, <=, >, >=, ==, !=) and an exact other_target column name to compare
+    finite numeric values at the same row in tabular files. Values that do
+    not satisfy the rule are flagged as outliers.
 
     Args:
         file_path: Absolute path to the dataset.
