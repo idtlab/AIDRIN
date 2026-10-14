@@ -1,6 +1,13 @@
 """Tests for the inspector page routes and rendering."""
 
+import io
+from pathlib import Path
+
+import pytest
+
 from aidrin._version import __version__
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 # -------------------------------------------------
@@ -44,6 +51,38 @@ def test_fair_assessment_get_redirects(client):
     response = client.get("/fair-assessment")
     assert response.status_code == 302
     assert "/inspector" in response.headers["Location"]
+
+
+@pytest.mark.parametrize(
+    "path, metadata_type, total",
+    [
+        ("examples/sample_data/dcat/BUTTER-E.json", "DCAT", "20/26"),
+        ("tests/fixtures/fair_metadata/datacite_rest_default.json", "Datacite", "14/22"),
+    ],
+)
+def test_fair_assessment_post_scores_metadata(client, path, metadata_type, total):
+    """/fair-assessment POST scores an uploaded metadata file with the chosen standard."""
+    with open(ROOT / path, "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, Path(path).name), "metadata type": metadata_type},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["FAIR Compliance Checks"]["Total Checks"] == total
+    assert body["Pie chart"]
+
+
+def test_fair_assessment_post_rejects_unknown_type(client):
+    """An unknown metadata type is a 400, not a crash."""
+    response = client.post(
+        "/fair-assessment",
+        data={"metadata": (io.BytesIO(b"{}"), "meta.json"), "metadata type": "ISO19115"},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Unknown metadata type"}
 
 
 def test_nonexistent_route(client):

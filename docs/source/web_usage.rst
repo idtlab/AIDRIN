@@ -227,20 +227,27 @@ supported metadata, resolution behavior, ``g`` ambiguity, and Globus compatibili
 FAIR Compliance Report
 '''''''''''''''''''''''
 
-The **FAIR Compliance Report** analyzes your dataset's metadata file (in **DCAT** or **DataCite JSON** format)
+The **FAIR Compliance Report** analyzes your dataset's metadata file (in **DCAT-US 1.1** or **DataCite JSON** format)
 and provides a detailed assessment against the FAIR criteria.
 
 How it Works
 ''''''''''''''
 
 1. Open the **FAIR Assessment** panel from the sidebar of the `inspector page <https://demo.aidrin.org/inspector>`__.
-2. Upload your metadata file (**DCAT** or **DataCite JSON**).
+2. Choose the metadata type and upload your metadata file (**DCAT-US 1.1** or **DataCite JSON**).
 3. The system evaluates the file against the FAIR principles and generates a structured report.
 
-FAIR Principles and Criteria
-'''''''''''''''''''''''''''''
+A check passes when the element is present and not empty. Dataset-level elements are read from the
+top level of the file only, so a title or description on a distribution never stands in for the
+dataset's own. Elements written with a namespace prefix (``dct:title``) or as a full IRI match their
+plain name.
 
-The evaluation checks for the presence and quality of specific metadata elements grouped under each FAIR principle:
+FAIR Principles and Criteria: DCAT-US 1.1
+''''''''''''''''''''''''''''''''''''''''''
+
+`DCAT-US 1.1 <https://resources.data.gov/resources/dcat-us/>`__ (Project Open Data) is the metadata
+schema of US federal data catalogs. Elements marked *(distribution)* pass when at least one entry of
+``distribution`` carries them, and the report shows how many do.
 
 **Findable**
     - ``identifier``
@@ -252,9 +259,9 @@ The evaluation checks for the presence and quality of specific metadata elements
 
 **Accessible**
     - ``accessLevel``
-    - ``downloadURL``
-    - ``mediaType``
-    - ``accessURL``
+    - ``downloadURL`` *(distribution)*
+    - ``mediaType`` *(distribution)*
+    - ``accessURL`` *(distribution)*
     - ``issued``
     - ``modified``
 
@@ -262,7 +269,7 @@ The evaluation checks for the presence and quality of specific metadata elements
     - ``conformsTo``
     - ``references``
     - ``language``
-    - ``format``
+    - ``format`` *(distribution)*
     - ``spatial``
     - ``temporal``
 
@@ -271,10 +278,47 @@ The evaluation checks for the presence and quality of specific metadata elements
     - ``rights``
     - ``publisher``
     - ``description``
-    - ``format``
+    - ``format`` *(distribution)*
     - ``programCode``
     - ``bureauCode``
     - ``contactPoint``
+
+FAIR Principles and Criteria: DataCite
+'''''''''''''''''''''''''''''''''''''''
+
+`DataCite Metadata Schema 4.x <https://schema.datacite.org/>`__ JSON, either as exported by your
+repository or as returned by the `DataCite REST API <https://support.datacite.org/docs/api-get-doi>`__
+(the ``data.attributes`` wrapper is removed automatically). DataCite does not publish a FAIR mapping;
+this one follows the F-UJI assessment tool's DataCite mapping and
+`Habermann (2024) <https://doi.org/10.5281/zenodo.12168626>`__.
+
+**Findable**
+    - identifier: ``doi``, or an ``identifiers`` entry whose ``identifierType`` is ``DOI``
+    - ``creators``, ``titles``, ``publisher``, ``publicationYear``, ``subjects``, ``alternateIdentifiers``
+    - ``descriptions`` with ``descriptionType`` ``Abstract``
+
+**Accessible**
+    - ``url`` or ``contentUrl`` (registration fields: present in REST API responses, usually absent from schema exports)
+    - an access-rights entry in ``rightsList`` (``rightsUri`` starting with ``info:eu-repo/semantics/``)
+
+**Interoperable**
+    - ``types.resourceTypeGeneral``
+    - ``relatedIdentifiers`` with ``relationType``
+    - ``subjects`` with ``valueUri``
+    - ``language``
+
+**Reusable**
+    - a license: a ``rightsList`` entry with a ``rightsUri`` other than the access-rights entry
+    - ``contributors``, ``fundingReferences``, ``dates``, ``version``, ``formats``, ``sizes``, ``relatedItems``
+
+The DataCite report also shows:
+
+- **Conformance**: how many of the six mandatory properties (Identifier, Creator, Title, Publisher,
+  PublicationYear, ResourceType) are present.
+- **Structure**: creators with an ORCID, affiliations with a ROR identifier, a publisher identifier,
+  subjects with a ``valueUri``, and funders with a ``funderIdentifier``. The REST API returns
+  affiliations and the publisher as plain names unless the record is requested with
+  ``?affiliation=true&publisher=true``; for plain names these rows read *not assessable* instead of 0.
 
 Output
 ''''''
@@ -362,7 +406,7 @@ Notes
 
 - **File Formats**: The web application supports CSV, Excel, JSON, NumPy (``.npz``),
   HDF5 (``.h5``), and Parquet (``.parquet``) files for data uploads, and
-  DCAT/DataCite JSON for metadata
+  DCAT-US 1.1/DataCite JSON for metadata
   in the Understandability and Usability dimension.  For HDF5 files, fill-value
   sentinels (``_FillValue``, ``missing_value``, and the HDF5 native fill value) are
   automatically converted to ``NaN`` so that all metrics — completeness, outliers,
