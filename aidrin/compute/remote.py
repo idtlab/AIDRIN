@@ -187,7 +187,12 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         )
 
     def _summary_statistics():
-        """Compute summary statistics + histograms on the remote file."""
+        """Compute summary statistics + histograms on the remote file.
+
+        ``summary_statistics``, ``categorical_summary``, and ``histograms``
+        cover only the requested page. Dataset-wide counts and feature lists
+        stay complete. ``class_imbalance_features`` still scans every column.
+        """
         import io
         import base64
         import pandas as pd
@@ -195,6 +200,15 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         import seaborn as sns
         from aidrin.file_handling.file_parser import read_file as _read_file
         from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
+        from aidrin.structured_data_metrics.summary_pagination import (
+            paginate_features,
+            parse_page_params,
+        )
+
+        try:
+            page, page_size = parse_page_params(params.get("page"), params.get("page_size"))
+        except ValueError as exc:
+            return {"error": str(exc)}
 
         df = _read_file(file_info)
         if isinstance(df, str):
@@ -212,15 +226,18 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             if pd.api.types.is_string_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
         ]
         all_features = numerical_columns + categorical_columns
+        page_features = paginate_features(numerical_columns, categorical_columns, page, page_size)
+        page_numeric = page_features["numerical"]
+        page_categorical = page_features["categorical"]
 
-        # Restrict to numeric columns: describe() would otherwise fall back to
-        # object-column stats (top/freq are strings) and the numeric formatter
-        # below would fail on them when there are no numerical features (#125).
-        numeric_df = df.select_dtypes(include="number")
-        if numeric_df.shape[1] == 0:
+        # Restrict to this page's numeric columns: describe() would otherwise
+        # fall back to object-column stats (top/freq are strings) and the
+        # numeric formatter below would fail on them when there are no
+        # numerical features (#125).
+        if not page_numeric:
             summary = {}
         else:
-            summary = numeric_df.describe().map(
+            summary = df[page_numeric].describe().map(
                 lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
             ).to_dict()
 
@@ -230,10 +247,10 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
                 if old_key in ["25%", "50%", "75%"]:
                     v[old_key.replace("%", "th percentile")] = v.pop(old_key)
 
-        # Per-column summary for categorical features (parity with the local
-        # /summary-statistics panel).
+        # Per-column summary for categorical features on this page (parity
+        # with the local /summary-statistics panel).
         categorical_summary = {}
-        for col in categorical_columns:
+        for col in page_categorical:
             # value_counts() and nunique() both hash, so a column holding
             # arrays/lists/dicts (parquet/HDF5/JSON) would raise and take the
             # whole summary down. Normalize such columns first.
@@ -249,11 +266,11 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
                 "freq_pct": round(freq / count * 100, 1) if count else 0.0,
             }
 
-        # Generate histograms (transparent, same as local)
+        # Generate histograms for this page's numeric columns (transparent, same as local).
         text_color = "#6b7280"
         curve_color = "#4485F4"
         histograms = {}
-        for column in df.select_dtypes(include="number").columns:
+        for column in page_numeric:
             try:
                 fig, ax = plt.subplots(figsize=(4, 3))
                 fig.patch.set_alpha(0)
@@ -284,6 +301,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             "summary_statistics": summary,
             "categorical_summary": categorical_summary,
             "histograms": histograms,
+            "pagination": page_features["pagination"],
             "class_imbalance_features": [
                 col for col in all_features if safe_nunique(df[col]) <= 30
             ],
@@ -448,6 +466,7 @@ def remote_env_probe():
     capabilities = ["file_reference_validation_v1"]
     if hasattr(aidrin, "calculate_variable_unit_validation"):
         capabilities.append("variable_unit_metadata_v1")
+    capabilities.append("summary_pagination_v1")
 
     return {
         "aidrin_version": aidrin.__version__,

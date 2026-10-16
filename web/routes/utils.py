@@ -19,6 +19,10 @@ from aidrin.file_handling.file_parser import (
     ReaderReturnedNone,
     read_file,
 )
+from aidrin.structured_data_metrics.summary_pagination import (
+    DEFAULT_PAGE,
+    DEFAULT_PAGE_SIZE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -211,9 +215,37 @@ def generate_metric_cache_key(file_name, metric_type, **params):
 
     elif metric_type == "summarystats":
         selected_keys = params.get("selected_keys", [])
-        cache_parts.append(f"summarystats:keys:{', '.join(sorted(selected_keys))}")
+        page = params.get("page", DEFAULT_PAGE)
+        page_size = params.get("page_size", DEFAULT_PAGE_SIZE)
+        keys = ", ".join(sorted(selected_keys))
+        cache_parts.append(f"summarystats:keys:{keys}:page:{page}:size:{page_size}")
 
     return "|".join(cache_parts)
+
+
+def globus_summary_cache_key(endpoint_id, file_path, page, page_size):
+    """Cache key for one page of a Globus Data Overview.
+
+    Not scoped by user, matching the previous ``globus_summary`` key.
+    """
+    return f"globus_summary:{endpoint_id}:{file_path}:p{page}:s{page_size}"
+
+
+def purge_globus_summary_cache(cache, endpoint_id, file_path):
+    """Drop every page of a Globus summary, including the legacy unpaged key.
+
+    Matches the exact legacy key and keys with a ``:p`` page suffix. A bare
+    prefix would also delete a longer path such as ``/data.csv.bak``.
+    """
+    legacy = f"globus_summary:{endpoint_id}:{file_path}"
+    page_prefix = f"{legacy}:p"
+    keys = [
+        key for key in list(cache)
+        if key == legacy or (isinstance(key, str) and key.startswith(page_prefix))
+    ]
+    for key in keys:
+        cache.pop(key, None)
+    return len(keys)
 
 
 def is_metric_cache_valid(cache_entry):

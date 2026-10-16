@@ -678,8 +678,61 @@ def test_workspace_init_releases_clear_file_lock_after_overview_load():
     drop the processing lock. Calling .finally on undefined throws, which left
     the top-bar clear button with pointer-events-none forever."""
     source = INSPECTOR_JS.read_text(encoding="utf-8")
-    assert "return fetch(\"/summary-statistics\")" in source
+    assert (
+        "return fetch(\n"
+        "    `/summary-statistics?page=${dataOverviewPage}&page_size=${DATA_OVERVIEW_PAGE_SIZE}`,"
+    ) in source
     assert "Promise.resolve(loadDataOverview()).finally(initTaskDone)" in source
+
+
+def test_data_overview_pagination_is_shared_and_guarded():
+    """The Data Overview pager must not interpolate feature names, and a slow
+    response must not overwrite a newer page. Readiness builds its own overview."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    pager_start = source.index("function buildDataOverviewPager")
+    pager_end = source.index("function showDataOverviewLoading", pager_start)
+    pager = source[pager_start:pager_end]
+    assert "escapeHtml" in pager
+    assert "data-overview-page" in pager
+    assert "onclick" not in pager
+    assert "${feat" not in pager
+
+    assert "let dataOverviewRequest = 0;" in source
+    assert "requestId !== dataOverviewRequest" in source
+    assert "page=${dataOverviewPage}" in source
+    assert "page_size=${DATA_OVERVIEW_PAGE_SIZE}" in source
+
+    init_start = source.index("function initWorkspace()")
+    init_end = source.find("\nfunction ", init_start + 1)
+    init_body = source[init_start:init_end]
+    assert "dataOverviewPage = 1;" in init_body
+    assert "globusSummaryDropdownsReady = false;" in init_body
+    assert 'aria-label="Data Overview pagination"' in pager
+
+    render_start = source.index("function renderGlobusSummary")
+    render_end = source.index("function _unlockGlobusSidebar", render_start)
+    render = source[render_start:render_end]
+    dropdown_call = render.index("populateWorkspaceDropdowns")
+    assert "if (!globusSummaryDropdownsReady)" in render[:dropdown_call]
+    assert "needs an AIDRIN upgrade" in render
+
+    readiness_start = source.index("function loadReadinessReport()")
+    readiness_end = source.index("function initWorkspace()")
+    assert "loadDataOverview(" not in source[readiness_start:readiness_end]
+
+
+def test_init_workspace_resets_globus_summary_dropdown_flag():
+    """HDF5/dataset switches re-run initWorkspace without a reload. The Globus
+    summary path must re-populate dropdowns for the new file, so the ready flag
+    resets next to the page counter."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function initWorkspace()")
+    nxt = source.find("\nfunction ", start + 1)
+    body = source[start:nxt if nxt != -1 else None]
+    page_reset = body.index("dataOverviewPage = 1;")
+    flag_reset = body.index("globusSummaryDropdownsReady = false;")
+    assert flag_reset > page_reset
+    assert flag_reset - page_reset < 80
 
 
 def test_readiness_report_loaded_flag_resets_when_leaving_panel_mid_flight():
