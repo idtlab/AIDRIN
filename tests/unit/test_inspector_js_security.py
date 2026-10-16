@@ -704,7 +704,10 @@ def test_data_overview_pagination_is_shared_and_guarded():
 
     init_start = source.index("function initWorkspace()")
     init_end = source.find("\nfunction ", init_start + 1)
-    assert "dataOverviewPage = 1;" in source[init_start:init_end]
+    init_body = source[init_start:init_end]
+    assert "dataOverviewPage = 1;" in init_body
+    assert "globusSummaryDropdownsReady = false;" in init_body
+    assert 'aria-label="Data Overview pagination"' in pager
 
     render_start = source.index("function renderGlobusSummary")
     render_end = source.index("function _unlockGlobusSidebar", render_start)
@@ -716,6 +719,20 @@ def test_data_overview_pagination_is_shared_and_guarded():
     readiness_start = source.index("function loadReadinessReport()")
     readiness_end = source.index("function initWorkspace()")
     assert "loadDataOverview(" not in source[readiness_start:readiness_end]
+
+
+def test_init_workspace_resets_globus_summary_dropdown_flag():
+    """HDF5/dataset switches re-run initWorkspace without a reload. The Globus
+    summary path must re-populate dropdowns for the new file, so the ready flag
+    resets next to the page counter."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function initWorkspace()")
+    nxt = source.find("\nfunction ", start + 1)
+    body = source[start:nxt if nxt != -1 else None]
+    page_reset = body.index("dataOverviewPage = 1;")
+    flag_reset = body.index("globusSummaryDropdownsReady = false;")
+    assert flag_reset > page_reset
+    assert flag_reset - page_reset < 80
 
 
 def test_readiness_report_loaded_flag_resets_when_leaving_panel_mid_flight():

@@ -2327,7 +2327,7 @@ function buildDataOverviewPager(pagination) {
   const prevDisabled = page <= 1 ? "disabled" : "";
   const nextDisabled = page >= totalPages ? "disabled" : "";
   return `
-    <div class="flex flex-col gap-3 my-4 sm:flex-row sm:items-center sm:justify-between" data-overview-pager>
+    <nav aria-label="Data Overview pagination" class="flex flex-col gap-3 my-4 sm:flex-row sm:items-center sm:justify-between" data-overview-pager>
       <p class="text-sm text-gray-600 dark:text-gray-400">
         Page ${escapeHtml(String(page))} of ${escapeHtml(String(totalPages))}
         <span class="text-gray-400 dark:text-gray-500">·</span>
@@ -2337,7 +2337,7 @@ function buildDataOverviewPager(pagination) {
         <button type="button" data-overview-page="prev" ${prevDisabled} class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">Previous</button>
         <button type="button" data-overview-page="next" ${nextDisabled} class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">Next</button>
       </div>
-    </div>`;
+    </nav>`;
 }
 
 function showDataOverviewLoading(summaryId, histogramsId) {
@@ -7765,6 +7765,7 @@ function initWorkspace() {
   // Dataset switches (e.g. HDF5) re-run init without a page reload. Drop stale
   // readiness state so the next open fetches the new dataset, not the previous one.
   dataOverviewPage = 1;
+  globusSummaryDropdownsReady = false;
   _readinessReportLoaded = false;
   _intentRestored = false;
   for (const key of Object.keys(_readinessVizCache)) {

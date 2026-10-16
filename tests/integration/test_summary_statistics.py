@@ -150,6 +150,24 @@ def test_summary_statistics_default_page_returns_25_features(client, tmp_path):
     assert data["categorical_summary"] == {}
 
 
+def test_summary_statistics_single_feature_has_one_page(client, tmp_path):
+    _upload(client, tmp_path, "score\n1.0\n2.5\n", name="single.csv")
+    data = client.get("/summary-statistics").get_json()
+    assert data["success"] is True
+    assert data["features_count"] == 1
+    assert data["numerical_features"] == ["score"]
+    assert data["categorical_features"] == []
+    assert list(data["summary_statistics"]) == ["score"]
+    assert data["pagination"] == {
+        "page": 1,
+        "page_size": 25,
+        "total_pages": 1,
+        "total_features": 1,
+        "start": 1,
+        "end": 1,
+    }
+
+
 def test_summary_statistics_explicit_page_keeps_numerical_order(client, tmp_path):
     _upload(client, tmp_path, _wide_csv(), name="wide.csv")
     data = client.get("/summary-statistics?page=2&page_size=25").get_json()
