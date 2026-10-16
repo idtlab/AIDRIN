@@ -288,7 +288,7 @@ def test_hdf5_profile_lookup_is_keyed_by_selected_keys(client, app):
     # Built by hand, mirroring generate_metric_cache_key's "summarystats"
     # branch (web/routes/utils.py), since that helper requires a request
     # context and none is active here.
-    cache_key = f"user:{user_id}|file:{file_name}|summarystats:keys:dataset_a"
+    cache_key = f"user:{user_id}|file:{file_name}|summarystats:keys:dataset_a:page:1:size:25"
     app.TEMP_RESULTS_CACHE[cache_key] = {
         "data": {
             "success": True,
@@ -313,6 +313,48 @@ def test_hdf5_profile_lookup_is_keyed_by_selected_keys(client, app):
     miss = client.post("/intent/recommend", json={"intents": ["exploration"]})
     miss_metrics = [r["metric"] for r in miss.get_json()["recommendations"]]
     assert "skewness" in miss_metrics
+
+
+def _wide_csv_with_late_null():
+    header = [f"n{i}" for i in range(30)] + [f"c{i}" for i in range(10)]
+    row_a = [str(i) for i in range(30)] + [f"a{i}" for i in range(10)]
+    row_b = [str(i + 1) for i in range(30)] + [f"b{i}" for i in range(10)]
+    row_b[30] = ""
+    return ",".join(header) + "\n" + ",".join(row_a) + "\n" + ",".join(row_b) + "\n"
+
+
+def test_wide_profile_does_not_report_a_partial_null_count(client, tmp_path, monkeypatch):
+    """Page 1 has no nulls. The null sits on a later page, so a page-local
+    count would be 0. The profile must refuse that partial figure."""
+    _upload_csv(client, tmp_path, _wide_csv_with_late_null(), filename="wide.csv")
+    warm = client.get("/summary-statistics")
+    assert warm.status_code == 200
+    assert warm.get_json()["pagination"]["total_pages"] > 1
+
+    seen = {}
+    real = intent_routes._columns_with_nulls
+
+    def wrapped(data):
+        seen["value"] = real(data)
+        return seen["value"]
+
+    monkeypatch.setattr(intent_routes, "_columns_with_nulls", wrapped)
+    response = client.post("/intent/recommend", json={"intents": ["exploration"]})
+    assert response.status_code == 200
+    assert seen["value"] is None
+
+
+def test_profile_cache_miss_does_not_read_the_dataset(client, tmp_path, monkeypatch):
+    _upload_csv(client, tmp_path, "name,age\nAda,36\n", filename="small.csv")
+
+    def fail_read(*_args, **_kwargs):
+        raise AssertionError("dataset was read on a summary cache miss")
+
+    monkeypatch.setattr("aidrin.file_handling.file_parser.read_file", fail_read)
+    monkeypatch.setattr("web.routes.utils.read_file", fail_read)
+    monkeypatch.setattr("web.routes.core.load_dataframe", fail_read)
+    response = client.post("/intent/recommend", json={"intents": ["exploration"]})
+    assert response.status_code == 200
 
 
 # --------------------------------------------------------------------------

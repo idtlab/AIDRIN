@@ -2304,8 +2304,111 @@ function switchUploadTab(tab) {
   }
 }
 
+const DATA_OVERVIEW_PAGE_SIZE = 25;
+let dataOverviewPage = 1;
+let dataOverviewRequest = 0;
+let globusSummaryDropdownsReady = false;
+
+function dataOverviewSpinnerHtml(message) {
+  return `
+      <div role="status" class="inline-block">
+        <svg class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101" aria-hidden="true"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+      </div>
+      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">${escapeHtml(message)}</p>`;
+}
+
+function buildDataOverviewPager(pagination) {
+  if (!pagination || Number(pagination.total_pages) <= 1) return "";
+  const page = Number(pagination.page) || 1;
+  const totalPages = Number(pagination.total_pages) || 1;
+  const start = Number(pagination.start) || 0;
+  const end = Number(pagination.end) || 0;
+  const total = Number(pagination.total_features) || 0;
+  const prevDisabled = page <= 1 ? "disabled" : "";
+  const nextDisabled = page >= totalPages ? "disabled" : "";
+  return `
+    <div class="flex flex-col gap-3 my-4 sm:flex-row sm:items-center sm:justify-between" data-overview-pager>
+      <p class="text-sm text-gray-600 dark:text-gray-400">
+        Page ${escapeHtml(String(page))} of ${escapeHtml(String(totalPages))}
+        <span class="text-gray-400 dark:text-gray-500">·</span>
+        Features ${escapeHtml(String(start))}-${escapeHtml(String(end))} of ${escapeHtml(String(total))}
+      </p>
+      <div class="flex items-center gap-2">
+        <button type="button" data-overview-page="prev" ${prevDisabled} class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">Previous</button>
+        <button type="button" data-overview-page="next" ${nextDisabled} class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">Next</button>
+      </div>
+    </div>`;
+}
+
+function showDataOverviewLoading(summaryId, histogramsId) {
+  document.querySelectorAll("[data-overview-page]").forEach((button) => {
+    button.disabled = true;
+  });
+  if (window.AIDRIN_GLOBUS_MODE) {
+    const loading = document.getElementById("globus-summary-loading");
+    const content = document.getElementById("globus-summary-content");
+    if (loading) {
+      loading.style.display = "";
+      loading.innerHTML = dataOverviewSpinnerHtml(
+        "Loading summary statistics from remote endpoint...",
+      );
+    }
+    if (content) content.innerHTML = "";
+  } else {
+    const container = document.getElementById(summaryId || "workspace-summary");
+    if (container) {
+      container.innerHTML = dataOverviewSpinnerHtml(
+        "Loading summary statistics...",
+      );
+    }
+  }
+  const histograms = document.getElementById(
+    histogramsId || "workspace-histograms",
+  );
+  if (histograms) histograms.innerHTML = "";
+}
+
+function renderDataOverviewHistograms(histograms, histogramsId, pagination) {
+  const containerId = histogramsId || "workspace-histograms";
+  const container = document.getElementById(containerId);
+  if (histograms && Object.keys(histograms).length) {
+    renderWorkspaceHistograms(histograms, containerId);
+    if (container) container.style.display = "block";
+  } else if (container) {
+    container.innerHTML = "";
+  }
+  const pager = buildDataOverviewPager(pagination);
+  if (container && pager) {
+    container.insertAdjacentHTML("beforeend", pager);
+    container.style.display = "block";
+  }
+  wireDataOverviewPagers(container);
+}
+
+function onDataOverviewPageClick(event) {
+  const button = event.currentTarget;
+  if (!button || button.disabled) return;
+  const direction = button.getAttribute("data-overview-page");
+  if (direction !== "prev" && direction !== "next") return;
+  if (direction === "prev" && dataOverviewPage <= 1) return;
+  document.querySelectorAll("[data-overview-page]").forEach((el) => {
+    el.disabled = true;
+  });
+  dataOverviewPage += direction === "next" ? 1 : -1;
+  if (window.AIDRIN_GLOBUS_MODE) fetchGlobusSummary(dataOverviewPage);
+  else loadDataOverview();
+}
+
+function wireDataOverviewPagers(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-overview-page]").forEach((button) => {
+    button.addEventListener("click", onDataOverviewPageClick);
+  });
+}
+
 /** Fetch summary statistics via Globus Compute and render in data overview. */
-function fetchGlobusSummary() {
+function fetchGlobusSummary(page) {
+  if (typeof page === "number") dataOverviewPage = page;
   const endpointId = window.AIDRIN_GLOBUS_ENDPOINT;
   const filePath = window.AIDRIN_GLOBUS_FILE_PATH;
   const fileName = window.AIDRIN_GLOBUS_FILE_NAME;
@@ -2313,6 +2416,8 @@ function fetchGlobusSummary() {
 
   if (!endpointId || !filePath) return;
 
+  const requestId = ++dataOverviewRequest;
+  showDataOverviewLoading();
   _beginServerProcessing();
 
   fetch("/globus/submit", {
@@ -2324,11 +2429,18 @@ function fetchGlobusSummary() {
       file_name: fileName,
       file_type: fileType,
       metric_name: "summary_statistics",
-      params: {},
+      params: {
+        page: dataOverviewPage,
+        page_size: DATA_OVERVIEW_PAGE_SIZE,
+      },
     }),
   })
     .then((r) => r.json())
     .then((data) => {
+      if (requestId !== dataOverviewRequest) {
+        _endServerProcessing();
+        return;
+      }
       if (data.error) {
         const loading = document.getElementById("globus-summary-loading");
         if (loading)
@@ -2343,12 +2455,16 @@ function fetchGlobusSummary() {
         return;
       }
       if (data.task_id) {
-        pollGlobusSummary(data.task_id);
+        pollGlobusSummary(data.task_id, requestId);
       } else {
         _endServerProcessing();
       }
     })
     .catch((err) => {
+      if (requestId !== dataOverviewRequest) {
+        _endServerProcessing();
+        return;
+      }
       const loading = document.getElementById("globus-summary-loading");
       if (loading)
         loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${escapeHtml(err.message)}</div>`;
@@ -2365,6 +2481,13 @@ function renderGlobusSummary(data) {
   if (data.error) {
     if (content)
       content.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
+    _unlockGlobusSidebar();
+    return;
+  }
+
+  if (!data.pagination) {
+    if (content)
+      content.innerHTML = `<div class="p-4 text-sm text-amber-800 rounded-lg bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">${escapeHtml("This endpoint needs an AIDRIN upgrade before the Data Overview can be paged.")}</div>`;
     _unlockGlobusSidebar();
     return;
   }
@@ -2390,6 +2513,7 @@ function renderGlobusSummary(data) {
         </div>
       </div>
     `;
+    html += buildDataOverviewPager(data.pagination);
 
     if (
       data.summary_statistics &&
@@ -2441,23 +2565,24 @@ function renderGlobusSummary(data) {
     html += buildCategoricalSummaryTable(data.categorical_summary);
 
     content.innerHTML = html;
+    wireDataOverviewPagers(content);
   }
 
-  // Render histograms if available
-  if (data.histograms && typeof renderWorkspaceHistograms === "function") {
-    var wh = document.getElementById("workspace-histograms");
-    if (wh) {
-      wh.style.display = "block";
-      renderWorkspaceHistograms(data.histograms);
+  renderDataOverviewHistograms(
+    data.histograms,
+    "workspace-histograms",
+    data.pagination,
+  );
+
+  // Dropdowns rebuild their checkbox containers and wipe selections, so only
+  // the first successful page populates them. Later pages keep the sidebar.
+  if (!globusSummaryDropdownsReady) {
+    if (data.all_features && typeof populateWorkspaceDropdowns === "function") {
+      populateWorkspaceDropdowns(data);
     }
+    _unlockGlobusSidebar();
+    globusSummaryDropdownsReady = true;
   }
-
-  // Populate feature dropdowns for metric panels
-  if (data.all_features && typeof populateWorkspaceDropdowns === "function") {
-    populateWorkspaceDropdowns(data);
-  }
-
-  _unlockGlobusSidebar();
   maybeShowIntentModal();
 }
 
@@ -2470,15 +2595,23 @@ function _unlockGlobusSidebar() {
 }
 
 /** Poll for Globus summary statistics and render when complete. */
-function pollGlobusSummary(taskId) {
+function pollGlobusSummary(taskId, requestId) {
   let attempts = 0;
   const maxAttempts = 120;
 
   const poll = () => {
+    if (requestId !== dataOverviewRequest) {
+      _endServerProcessing();
+      return;
+    }
     attempts++;
     fetch(`/globus/check-task/${taskId}`)
       .then((r) => r.json())
       .then((response) => {
+        if (requestId !== dataOverviewRequest) {
+          _endServerProcessing();
+          return;
+        }
         if (response.status === "completed" && response.result) {
           renderGlobusSummary(response.result);
           _endServerProcessing();
@@ -2501,6 +2634,10 @@ function pollGlobusSummary(taskId) {
         }
       })
       .catch((err) => {
+        if (requestId !== dataOverviewRequest) {
+          _endServerProcessing();
+          return;
+        }
         if (attempts < maxAttempts) setTimeout(poll, 3000);
         else _endServerProcessing();
       });
@@ -5365,21 +5502,27 @@ function returnToHdf5DatasetPicker() {
 }
 
 /**
- * Fetch summary statistics from the backend and render the stat cards,
+ * Fetch one page of summary statistics and render the stat cards,
  * summary table, and feature-distribution histograms into the given
- * containers. Reused by both the Data Overview panel and the
- * Readiness Report panel.
+ * containers. Called from initWorkspace(). The Readiness Report builds
+ * its own overview and does not use this function.
  *
  * @param {string} summaryContainerId - element ID for the stats/table.
  * @param {string} histogramsContainerId - element ID for the histograms.
+ * @returns {Promise} the fetch promise, so initWorkspace can release its lock.
  */
 function loadDataOverview(summaryContainerId, histogramsContainerId) {
   const summaryId = summaryContainerId || "workspace-summary";
   const histogramsId = histogramsContainerId || "workspace-histograms";
+  const requestId = ++dataOverviewRequest;
+  showDataOverviewLoading(summaryId, histogramsId);
 
-  return fetch("/summary-statistics")
+  return fetch(
+    `/summary-statistics?page=${dataOverviewPage}&page_size=${DATA_OVERVIEW_PAGE_SIZE}`,
+  )
     .then((r) => r.json())
     .then((data) => {
+      if (requestId !== dataOverviewRequest) return;
       const container = document.getElementById(summaryId);
       if (!container) return;
 
@@ -5423,6 +5566,7 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
             </div>
           </div>
         `;
+        html += buildDataOverviewPager(data.pagination);
 
         // Summary statistics table — pivoted: rows = features, columns = stats
         if (
@@ -5478,11 +5622,14 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
         html += buildCategoricalSummaryTable(data.categorical_summary);
 
         container.innerHTML = html;
+        wireDataOverviewPagers(container);
 
-        // Render histograms below the summary table
-        if (data.histograms) {
-          renderWorkspaceHistograms(data.histograms, histogramsId);
-        }
+        // Render this page's histograms, then the same pager under them.
+        renderDataOverviewHistograms(
+          data.histograms,
+          histogramsId,
+          data.pagination,
+        );
 
         maybeShowIntentModal();
       } else if (data.needs_dataset_selection && data.datasets?.length) {
@@ -5496,6 +5643,7 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
       }
     })
     .catch((err) => {
+      if (requestId !== dataOverviewRequest) return;
       const container = document.getElementById(summaryId);
       if (container) {
         const p = document.createElement("p");
@@ -7616,6 +7764,7 @@ function renderReadinessGovernance(container, gov) {
 function initWorkspace() {
   // Dataset switches (e.g. HDF5) re-run init without a page reload. Drop stale
   // readiness state so the next open fetches the new dataset, not the previous one.
+  dataOverviewPage = 1;
   _readinessReportLoaded = false;
   _intentRestored = false;
   for (const key of Object.keys(_readinessVizCache)) {

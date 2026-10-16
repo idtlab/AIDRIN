@@ -24,6 +24,10 @@ from aidrin.file_handling.file_parser import (
 )
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
+from aidrin.structured_data_metrics.summary_pagination import (
+    paginate_features,
+    parse_page_params,
+)
 from web.routes.utils import (
     clear_all_user_cache,
     confine_to_upload_folder,
@@ -32,6 +36,7 @@ from web.routes.utils import (
     get_current_user_id,
     is_metric_cache_valid,
     load_dataframe,
+    purge_globus_summary_cache,
     summary_histograms,
 )
 
@@ -233,8 +238,9 @@ def clear_file():
         endpoint_id = session.get("globus_endpoint_id", "")
         file_path = session.get("globus_file_path", "")
         if endpoint_id and file_path:
-            cache_key = f"globus_summary:{endpoint_id}:{file_path}"
-            current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+            purge_globus_summary_cache(
+                current_app.TEMP_RESULTS_CACHE, endpoint_id, file_path
+            )
         if session.get("globus_active_tasks"):
             try:
                 from web.routes.globus import _cancel_active_globus_tasks
@@ -451,6 +457,13 @@ def cached_result(metric_name):
 
 @core_bp.route("/summary-statistics", methods=["GET", "POST"])
 def summary_statistics():
+    """Return dataset-wide counts and one page of feature statistics.
+
+    ``records_count``, ``features_count``, ``numerical_features``,
+    ``categorical_features``, and ``all_features`` describe the whole dataset.
+    ``summary_statistics``, ``categorical_summary``, and ``histograms`` are
+    page-local: only the requested page of features is computed.
+    """
     if request.method == "POST":
         try:
             uploaded_file_path = session.get("uploaded_file_path")
@@ -460,6 +473,11 @@ def summary_statistics():
         except Exception as e:
             file_upload_time_log.error("Error in summary_statistics POST: %s", e, exc_info=True)
             return jsonify({"success": False, "message": "An internal error occurred"})
+
+    try:
+        page, page_size = parse_page_params(request.args.get("page"), request.args.get("page_size"))
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
 
     try:
         file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
@@ -477,7 +495,13 @@ def summary_statistics():
             if isinstance(selected, str):
                 selected = [key.strip() for key in selected.split(",") if key.strip()]
 
-        cache_key = generate_metric_cache_key(file_name, "summarystats", selected_keys=selected)
+        cache_key = generate_metric_cache_key(
+            file_name,
+            "summarystats",
+            selected_keys=selected,
+            page=page,
+            page_size=page_size,
+        )
         cached_entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
         if cached_entry and is_metric_cache_valid(cached_entry):
             current_app.TEMP_RESULTS_CACHE[cache_key] = {
@@ -512,22 +536,8 @@ def summary_statistics():
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200
 
-        # Restrict to numeric columns: describe() would otherwise fall back to
-        # object-column stats (top/freq are strings) and the numeric formatter
-        # below would fail on them. Datasets with no numerical features simply
-        # get an empty numerical summary (issue #125).
-        numeric_df = df.select_dtypes(include="number")
-        if numeric_df.shape[1] == 0:
-            summary_statistics = {}
-        else:
-            summary_statistics = numeric_df.describe().map(
-                lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
-            ).to_dict()
-
-        histograms = summary_histograms(df)
-
         # Booleans are treated as categorical (they're excluded from describe()
-        # and select_dtypes("number") above, so they belong with the categorical
+        # and select_dtypes("number") below, so they belong with the categorical
         # summary, not the numerical one).
         numerical_columns = [
             col for col, dtype in df.dtypes.items()
@@ -538,6 +548,22 @@ def summary_statistics():
             if pd.api.types.is_string_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
         ]
         all_features = numerical_columns + categorical_columns
+        page_features = paginate_features(numerical_columns, categorical_columns, page, page_size)
+        page_numeric = page_features["numerical"]
+        page_categorical = page_features["categorical"]
+
+        # Restrict to this page's numeric columns: describe() would otherwise
+        # fall back to object-column stats (top/freq are strings) and the
+        # numeric formatter below would fail on them. A page with no numerical
+        # features simply gets an empty numerical summary (issue #125).
+        if not page_numeric:
+            summary_statistics = {}
+            histograms = {}
+        else:
+            summary_statistics = df[page_numeric].describe().map(
+                lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
+            ).to_dict()
+            histograms = summary_histograms(df[page_numeric])
 
         for v in summary_statistics.values():
             for old_key in list(v.keys()):
@@ -549,7 +575,7 @@ def summary_statistics():
         selected_dataset_keys = selected
 
         categorical_summary = {}
-        for col in categorical_columns:
+        for col in page_categorical:
             # value_counts() and nunique() both hash, so a column holding
             # arrays/lists/dicts (parquet/HDF5/JSON) would raise and take the
             # whole summary down. Normalize such columns first.
@@ -581,6 +607,7 @@ def summary_statistics():
             "histograms": histograms,
             "hdf5_multi_dataset": hdf5_multi_dataset,
             "selected_dataset_keys": selected_dataset_keys,
+            "pagination": page_features["pagination"],
         })
         current_app.TEMP_RESULTS_CACHE[cache_key] = {
             "data": response_data,

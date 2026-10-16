@@ -678,8 +678,44 @@ def test_workspace_init_releases_clear_file_lock_after_overview_load():
     drop the processing lock. Calling .finally on undefined throws, which left
     the top-bar clear button with pointer-events-none forever."""
     source = INSPECTOR_JS.read_text(encoding="utf-8")
-    assert "return fetch(\"/summary-statistics\")" in source
+    assert (
+        "return fetch(\n"
+        "    `/summary-statistics?page=${dataOverviewPage}&page_size=${DATA_OVERVIEW_PAGE_SIZE}`,"
+    ) in source
     assert "Promise.resolve(loadDataOverview()).finally(initTaskDone)" in source
+
+
+def test_data_overview_pagination_is_shared_and_guarded():
+    """The Data Overview pager must not interpolate feature names, and a slow
+    response must not overwrite a newer page. Readiness builds its own overview."""
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    pager_start = source.index("function buildDataOverviewPager")
+    pager_end = source.index("function showDataOverviewLoading", pager_start)
+    pager = source[pager_start:pager_end]
+    assert "escapeHtml" in pager
+    assert "data-overview-page" in pager
+    assert "onclick" not in pager
+    assert "${feat" not in pager
+
+    assert "let dataOverviewRequest = 0;" in source
+    assert "requestId !== dataOverviewRequest" in source
+    assert "page=${dataOverviewPage}" in source
+    assert "page_size=${DATA_OVERVIEW_PAGE_SIZE}" in source
+
+    init_start = source.index("function initWorkspace()")
+    init_end = source.find("\nfunction ", init_start + 1)
+    assert "dataOverviewPage = 1;" in source[init_start:init_end]
+
+    render_start = source.index("function renderGlobusSummary")
+    render_end = source.index("function _unlockGlobusSidebar", render_start)
+    render = source[render_start:render_end]
+    dropdown_call = render.index("populateWorkspaceDropdowns")
+    assert "if (!globusSummaryDropdownsReady)" in render[:dropdown_call]
+    assert "needs an AIDRIN upgrade" in render
+
+    readiness_start = source.index("function loadReadinessReport()")
+    readiness_end = source.index("function initWorkspace()")
+    assert "loadDataOverview(" not in source[readiness_start:readiness_end]
 
 
 def test_readiness_report_loaded_flag_resets_when_leaving_panel_mid_flight():
