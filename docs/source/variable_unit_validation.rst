@@ -49,8 +49,9 @@ Every variable has one resolution:
 - unresolved when review remains necessary.
 
 A user resolution overrides detected metadata while preserving the observations.
-When the units differ, the result records whether their scale, temperature zero
-point, or physical dimension differs and states that values were not converted.
+When the units differ, the result records whether their scale, offset, or physical
+dimension differs, or that no conversion formula is available, and states that
+values were not converted.
 The editor never embeds a correction in the source file.
 
 Canonical sidecar
@@ -173,6 +174,10 @@ different scale and units with different dimensions are recorded separately.
 For example, changing detected ``kg/m³`` to ``g/m³`` reports a 1000-fold scale
 difference with the formula ``g/m³ = kg/m³ × 1000``. Scale conversions use mismatch
 kind ``scale`` and a numeric ``conversion_factor``.
+Convertible units with distinct dimensionless roots, such as ``count`` and
+``radian``, retain their scale factor, including 1.0 for a 1:1 conversion.
+Dimensionless units retain an empty string in the mismatch's ``observed_unit``
+or ``resolved_unit`` field; formulas label that unit as ``dimensionless``.
 
 Affine conversions with different zero points use mismatch kind ``offset`` and
 set ``conversion_factor`` to null. The message shows the full formula, including

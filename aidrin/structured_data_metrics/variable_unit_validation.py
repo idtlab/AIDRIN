@@ -507,7 +507,7 @@ def _units_equivalent(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
 
 def _display_unit(parsed: Dict[str, Any], fallback: str) -> str:
     unit = parsed.get("_parsed")
-    return (format(unit, "~P") or "dimensionless") if unit is not None else fallback
+    return format(unit, "~P") if unit is not None else fallback
 
 
 def _has_affine_definition(unit: Any) -> bool:
@@ -519,8 +519,9 @@ def _has_affine_definition(unit: Any) -> bool:
     pending = list(unit._units)
     seen = set()
     while pending:
-        name = pending.pop()
-        if name in seen:
+        # References may use symbols or prefixes absent from the definition map.
+        name = _UNIT_REGISTRY.get_name(pending.pop())
+        if not name or name in seen:
             continue
         seen.add(name)
         definition = _UNIT_REGISTRY._units[name]
@@ -535,18 +536,19 @@ def _has_affine_definition(unit: Any) -> bool:
 def _conversion_detail(observed: Any, chosen: Any, observed_unit: str, resolved_unit: str) -> tuple[str, Optional[float], str]:
     """Describe a unit conversion, never converting dataset values."""
     unavailable = ("conversion", None, "conversion formula unavailable for these units")
-    if not (_has_affine_definition(observed) and _has_affine_definition(chosen)):
-        return unavailable
     try:
+        if not (_has_affine_definition(observed) and _has_affine_definition(chosen)):
+            return unavailable
         source_scale, source_root = _UNIT_REGISTRY.get_root_units(observed, check_nonmult=False)
         target_scale, target_root = _UNIT_REGISTRY.get_root_units(chosen, check_nonmult=False)
-        if source_root != target_root:
-            return unavailable
         # Definition scales avoid subtracting two almost equal converted values
         # when an offset is large relative to the slope.
         slope = float(source_scale / target_scale)
+        if source_root != target_root:
+            # Roots such as radian, count, and dimensionless still convert 1:1.
+            slope *= float(_UNIT_REGISTRY.Quantity(1, source_root).to(target_root).magnitude)
         offset = float(_UNIT_REGISTRY.Quantity(0, observed).to(chosen).magnitude)
-    except (PintError, ValueError, ArithmeticError):
+    except (PintError, KeyError, ValueError, ArithmeticError):
         return unavailable
     if slope == 0 or not (math.isfinite(slope) and math.isfinite(offset)):
         return unavailable
@@ -556,7 +558,7 @@ def _conversion_detail(observed: Any, chosen: Any, observed_unit: str, resolved_
         abs(offset), float(offset_text), rel_tol=1e-12, abs_tol=0,
     )
     relation = "=" if exact else "≈"
-    formula = f"{resolved_unit} {relation} {observed_unit} × {slope_text}"
+    formula = f"{resolved_unit or 'dimensionless'} {relation} {observed_unit or 'dimensionless'} × {slope_text}"
     if offset != 0:
         formula += f" {'+' if offset > 0 else '-'} {offset_text}"
         return "offset", None, f"offset conversion: {formula}"
@@ -575,6 +577,7 @@ def _override_mismatches(
         if observed["status"] not in _READY_STATUSES or _units_equivalent(observed, chosen):
             continue
         observed_unit = _display_unit(observed, candidate["unit"])
+        observed_label = observed_unit or "dimensionless"
         if resolution["kind"] == "not_applicable":
             mismatches.append({
                 "kind": "classification",
@@ -582,10 +585,11 @@ def _override_mismatches(
                 "observed_unit": observed_unit,
                 "resolved_unit": None,
                 "conversion_factor": None,
-                "message": f"Unit mismatch: detected {observed_unit}, overridden as not applicable.",
+                "message": f"Unit mismatch: detected {observed_label}, overridden as not applicable.",
             })
             continue
         resolved_unit = _display_unit(chosen, resolution.get("unit", "1"))
+        resolved_label = resolved_unit or "dimensionless"
         if observed.get("dimensionality") != chosen.get("dimensionality"):
             kind = "dimension"
             conversion_factor = None
@@ -601,7 +605,7 @@ def _override_mismatches(
             "resolved_unit": resolved_unit,
             "conversion_factor": conversion_factor,
             "message": (
-                f"Unit mismatch: detected {observed_unit}, overridden with {resolved_unit} "
+                f"Unit mismatch: detected {observed_label}, overridden with {resolved_label} "
                 f"({detail}). Values were not converted."
             ),
         })

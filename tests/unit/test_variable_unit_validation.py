@@ -387,6 +387,7 @@ def test_multiplicative_temperature_override_keeps_scale_factor(tmp_path, observ
     [
         ("kPa", "Pa", 1000, "Pa = kPa × 1000"),
         ("Pa", "kPa", 0.001, "kPa = Pa × 0.001"),
+        ("cmH2O", "kPa", 0.0980665, "kPa = cmH2O × 0.0980665"),
         ("m/s", "km/h", 3.6, "km/h = m/s × 3.6"),
         ("km/h", "m/s", 1 / 3.6, "m/s ≈ km/h × 0.277778"),
         ("g/m**3", "kg/m**3", 0.001, "kg/m³ = g/m³ × 0.001"),
@@ -414,6 +415,40 @@ def test_scale_formulas_apply_to_any_variable(tmp_path, observed, resolved, fact
     assert f"; {formula}). Values were not converted." in mismatch["message"]
     assert result["variables"][0]["observed"] == detected["variables"][0]["observed"]
     assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "observed_unit", "resolved_unit", "factor", "formula"),
+    [
+        ("dimensionless", "radian", "", "rad", 1, "rad = dimensionless × 1"),
+        ("radian", "1", "rad", "", 1, "dimensionless = rad × 1"),
+        ("count", "1", "count", "", 1, "dimensionless = count × 1"),
+        ("dimensionless", "count", "", "count", 1, "count = dimensionless × 1"),
+        ("percent", "radian", "%", "rad", 0.01, "rad = % × 0.01"),
+        ("radian/second", "Hz", "rad/s", "Hz", 1, "Hz = rad/s × 1"),
+    ],
+)
+def test_convertible_roots_preserve_scale_and_dimensionless_fields(
+    tmp_path, observed, resolved, observed_unit, resolved_unit, factor, formula,
+):
+    name = f"measurement ({observed})"
+    file_info = _csv(tmp_path, [name])
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "dimensionless" if resolved == "1" else "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "scale"
+    assert mismatch["conversion_factor"] == pytest.approx(factor)
+    assert mismatch["observed_unit"] == observed_unit
+    assert mismatch["resolved_unit"] == resolved_unit
+    assert f"detected {observed_unit or 'dimensionless'}, overridden with {resolved_unit or 'dimensionless'}" in mismatch["message"]
+    assert f"; {formula}). Values were not converted." in mismatch["message"]
     assert calculate_variable_unit_validation(file_info, result) == result
     schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
     Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
