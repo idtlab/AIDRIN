@@ -38,6 +38,23 @@ def is_globus_available():
     return _globus_available
 
 
+GLOBUS_WEB_AUTH_SETUP_MESSAGE = (
+    "Web sign-in requires the GLOBUS_CLIENT_ID environment variable. "
+    "Register an app at https://developers.globus.org/, set the redirect URI "
+    "to this server's /globus/callback URL, export GLOBUS_CLIENT_ID "
+    "(and GLOBUS_CLIENT_SECRET for a confidential client), then restart the "
+    "server. CLI and MCP remote execution use native Globus login and do not "
+    "need GLOBUS_CLIENT_ID."
+)
+
+
+def is_globus_web_auth_configured():
+    """Return True when the web OAuth flow can start (client ID is set)."""
+    if not _globus_available:
+        return False
+    return bool(os.environ.get("GLOBUS_CLIENT_ID", "").strip())
+
+
 # ---------------------------------------------------------------------------
 # The function that runs on the remote endpoint
 # ---------------------------------------------------------------------------
@@ -61,12 +78,9 @@ GLOBUS_AUTH_SCOPE = "openid profile email"
 
 
 def _get_client_id():
-    client_id = os.environ.get("GLOBUS_CLIENT_ID")
+    client_id = os.environ.get("GLOBUS_CLIENT_ID", "").strip()
     if not client_id:
-        raise ValueError(
-            "GLOBUS_CLIENT_ID environment variable is required. "
-            "Register an app at https://developers.globus.org/"
-        )
+        raise ValueError(GLOBUS_WEB_AUTH_SETUP_MESSAGE)
     return client_id
 
 

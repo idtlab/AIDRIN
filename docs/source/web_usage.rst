@@ -400,6 +400,10 @@ This is optional. Install the extra to enable it:
 
    Set ``GLOBUS_CLIENT_SECRET`` as well if you registered a confidential client.
 
+   These variables are required only for **web** sign-in (OAuth redirect flow).
+   ``aidrin remote`` and MCP remote runs authenticate with the Globus SDK's
+   native login and shared token cache; they do not use ``GLOBUS_CLIENT_ID``.
+
    Scheduler-backed endpoints may need longer than the default 30 seconds to
    start a worker for the compatibility probe. Configure the server timeout in
    seconds before starting AIDRIN, for example:

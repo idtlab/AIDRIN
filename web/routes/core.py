@@ -134,8 +134,9 @@ def inspector():
             current_checked_keys = None
 
     # Check if Globus Compute is available
-    from web.globus import is_globus_available
+    from web.globus import is_globus_available, is_globus_web_auth_configured
     globus_available = is_globus_available()
+    globus_web_auth_configured = is_globus_web_auth_configured()
 
     # Check if LLM explanations are available
     from web.llm import is_llm_available
@@ -172,6 +173,7 @@ def inspector():
             if current_checked_keys is not None
             else [],
             globus_available=globus_available,
+            globus_web_auth_configured=globus_web_auth_configured,
             globus_authenticated=globus_authenticated,
             globus_mode=globus_mode,
             globus_endpoint_id=globus_endpoint_id,
