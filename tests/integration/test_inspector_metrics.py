@@ -1,7 +1,10 @@
 """Tests for metric submission from the inspector."""
 
+import io
 import json
 from pathlib import Path
+
+import pytest
 
 import web.routes.metrics as metrics_routes
 
@@ -228,6 +231,44 @@ def test_understandability_variable_unit_validation_uses_request_local_sidecar(u
     assert result["summary"]["all_variables_ready"] == 1
     assert result["summary"]["counts"]["valid"] == 2
     assert result["summary"]["counts"]["not_applicable"] == 2
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "kind", "formula"),
+    [
+        ("degC", "kelvin", "offset", "K = °C × 1 + 273.15"),
+        ("degC", "degF", "offset", "°F = °C × 1.8 + 32"),
+        ("degF", "degC", "offset", "°C ≈ °F × 0.555556 - 17.7778"),
+        ("kPa", "Pa", "scale", "Pa = kPa × 1000"),
+        ("dBm", "watt", "conversion", "conversion formula unavailable for these units"),
+    ],
+)
+def test_variable_unit_web_override_preserves_conversion_reporting(client, observed, resolved, kind, formula):
+    response = client.post(
+        "/inspector",
+        data={
+            "file": (io.BytesIO(f"measurement ({observed})\n0\n25\n".encode()), "measurement.csv"),
+            "fileTypeSelector": ".csv",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    metadata = client.post("/custom-outlier-targets").get_json()["unit_metadata"]
+    metadata["variables"][0]["resolution"] = {
+        "kind": "unit", "unit": resolved, "source": "user",
+    }
+
+    response = client.post(
+        "/variable-unit-validation?return_type=json",
+        data={"variable_unit_validation": "yes", "variable_unit_metadata": json.dumps(metadata)},
+    )
+    result = response.get_json()["Variable Unit Validation"]
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == kind
+    assert mismatch["conversion_factor"] == (1000.0 if kind == "scale" else None)
+    assert formula in mismatch["message"]
+    assert result["summary"]["all_variables_ready"] == 1
 
 
 def test_variable_unit_error_is_metric_scoped(uploaded_client):
