@@ -1,9 +1,20 @@
 name: Publish to PyPI
 
-# Manual release: Actions > Publish to PyPI > Run workflow, and pick the release tag (e.g. v2026.09.1)
-# as the ref. Uses PyPI trusted publishing (OIDC), so no API token is stored in the repo.
+# Manual release: Actions > Publish to PyPI > Run workflow, then choose the target index.
+#   pypi:     pick the release tag (e.g. v2026.09.1) as the ref; publishes that exact version.
+#   testpypi: any branch or tag; publishes <version>.dev<UTC timestamp>, so every run gets a
+#             new version and nothing is ever overwritten.
+# Uses trusted publishing (OIDC), so no API token is stored in the repo. Each index needs its own
+# trusted publisher configured for this workflow file, with the environment name matching the
+# target (testpypi / pypi).
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Where to publish
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
 
 permissions:
   contents: read
@@ -20,12 +31,28 @@ jobs:
         run: python -m pip install --upgrade uv
 
       - name: Check the ref is a tag matching the package version
+        if: inputs.target == 'pypi'
         run: |
           version=$(python -c "exec(open('aidrin/_version.py').read()); print(__version__)")
           if [ "$GITHUB_REF" != "refs/tags/v$version" ]; then
             echo "::error::Run this from tag v$version (got $GITHUB_REF)"
             exit 1
           fi
+
+      - name: Add a unique dev suffix for TestPyPI
+        if: inputs.target == 'testpypi'
+        run: |
+          python - <<'EOF'
+          import pathlib, time
+          path = pathlib.Path("aidrin/_version.py")
+          src = path.read_text()
+          ns = {}
+          exec(src, ns)
+          old = ns["__version__"]
+          new = f"{old}.dev{time.strftime('%Y%m%d%H%M%S', time.gmtime())}"
+          path.write_text(src.replace(old, new, 1))
+          print(f"Building {new}")
+          EOF
 
       - name: Build sdist and wheel
         run: |
@@ -52,8 +79,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: pypi
-      url: https://pypi.org/project/aidrin/
+      name: ${{ inputs.target }}
+      url: ${{ inputs.target == 'pypi' && 'https://pypi.org/project/aidrin/' || 'https://test.pypi.org/project/aidrin/' }}
     permissions:
       id-token: write
     steps:
@@ -62,3 +89,5 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.target == 'pypi' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
