@@ -213,10 +213,15 @@ reachable.
    * - ``agentic_run``
      - Runs the full agentic evaluation pipeline
 
+``summarize_dataset``, ``run_data_quality_check``, and ``run_aidrin_metric`` accept an
+optional ``loader`` (``path/to/loader.py:function``) for formats AIDRIN cannot read
+natively; ``run_batch`` takes the same value as ``loader:`` in its config. The loader
+must return a pandas DataFrame (see ``aidrin add-custom-loader`` in the CLI guide).
+
 .. warning::
 
-   ``run_custom_metric``, ``run_custom_remedy``, and the agentic tools execute
-   Python from the files you point them at. Only use them with code you trust.
+   ``run_custom_metric``, ``run_custom_remedy``, the agentic tools, and any ``loader``
+   execute Python from the files you point them at. Only use them with code you trust.
 
 ----
 

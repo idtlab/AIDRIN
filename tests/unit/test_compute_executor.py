@@ -105,6 +105,28 @@ class TestCommandShaping(unittest.TestCase):
         self.assertIsInstance(kwargs["config"], dict)
         self.assertEqual(kwargs["config"]["file_path"], "/scratch/data.csv")
 
+    def test_loader_is_sent_only_when_set(self):
+        """Endpoints on older releases reject an unknown ``loader`` keyword, so
+        payloads must not carry it unless the user asked for a loader."""
+        from aidrin.headless.config import HeadlessConfig
+
+        def submitted(loader):
+            rec = _Recorder()
+            config = HeadlessConfig.from_dict(
+                {"file_path": "/scratch/data.csv", "metrics": ["completeness"], "loader": loader}
+            )
+            with patch("aidrin.compute.executor.client", rec):
+                ex = _executor(rec)
+                ex.summarize_dataset("/scratch/data.csv", loader=loader)
+                ex.run_data_quality("/scratch/data.csv", loader=loader)
+                ex.run_batch_metrics(config)
+            return [kwargs.get("config", kwargs) for _endpoint, _command, kwargs in rec.submitted]
+
+        for payload in submitted(None):
+            self.assertNotIn("loader", payload)
+        for payload in submitted("/scratch/load.py:load"):
+            self.assertEqual(payload["loader"], "/scratch/load.py:load")
+
 
 class TestImagePolicy(unittest.TestCase):
 

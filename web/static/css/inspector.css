@@ -80,6 +80,19 @@ html.dark .relative.overflow-x-auto thead {
   min-height: 300px;
 }
 
+#uploadLoaderCode + .CodeMirror {
+  min-height: 360px;
+  height: 360px;
+  margin-bottom: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 13px !important;
+}
+
+html.dark #uploadLoaderCode + .CodeMirror {
+  border-color: #4b5563;
+}
+
 /* Submit-button loading state — prevents duplicate submissions (issue #108).
    Applied by withSubmitGuard() in inspector.js for the duration of the
    in-flight request. The label is made transparent (so the button keeps its
