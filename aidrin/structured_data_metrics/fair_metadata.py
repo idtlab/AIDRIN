@@ -198,6 +198,9 @@ DCAT_US_3_REQUIRED = ("title", "description", "contactPoint", "identifier")
 
 _ACCESS_RIGHTS = "info:eu-repo/semantics/"
 
+_DCAT_US_3_SHAPED = ("landingPage", "temporal", "spatial", "conformsTo", "describedBy", "rights")
+
+
 
 def _is_access_rights(entry):
     return str(entry.get("rightsUri", "")).startswith(_ACCESS_RIGHTS)
@@ -761,10 +764,14 @@ def detect_standard(metadata):
     if isinstance(metadata.get("dataset"), list):
         raise ValueError("This is a DCAT catalog; upload a single dataset record from it.")
     conforms = " ".join(str(v) for v in _as_list(metadata.get("conformsTo")))
-    if "accessLevel" in metadata or "bureauCode" in metadata or "project-open-data" in conforms:
+    if "project-open-data" in conforms:
         return "dcat-us-1.1"
-    # DCAT uses "title" where schema.org uses "name"; contactPoint or distribution confirms it.
-    if "title" in metadata and ("contactPoint" in metadata or "distribution" in metadata):
+    dcat = "title" in metadata and ("contactPoint" in metadata or "distribution" in metadata)
+    if dcat and ("accessRights" in metadata or any(isinstance(metadata.get(k), (dict, list)) for k in _DCAT_US_3_SHAPED)):
+        return "dcat-us-3.0"
+    if "accessLevel" in metadata or "bureauCode" in metadata:
+        return "dcat-us-1.1"
+    if dcat:
         return "dcat-us-3.0"
     raise ValueError(
         "Could not detect the metadata standard. Supported: Croissant 1.0/1.1, RO-Crate 1.2, "
