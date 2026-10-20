@@ -201,7 +201,6 @@ _ACCESS_RIGHTS = "info:eu-repo/semantics/"
 _DCAT_US_3_SHAPED = ("landingPage", "temporal", "spatial", "conformsTo", "describedBy", "rights")
 
 
-
 def _is_access_rights(entry):
     return str(entry.get("rightsUri", "")).startswith(_ACCESS_RIGHTS)
 
