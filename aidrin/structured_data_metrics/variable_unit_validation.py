@@ -19,6 +19,7 @@ from pint.facets.nonmultiplicative.definitions import OffsetConverter
 from pint.facets.plain import ScaleConverter
 from pint.util import string_preprocessor
 
+from aidrin.file_handling.file_parser import _unpack_file_info_extras
 from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 
@@ -332,8 +333,9 @@ def _discover_hdf5(file_info: tuple) -> List[Dict[str, Any]]:
         return _pandas_hdf_columns(file_path)
 
     selected = None
-    if len(file_info) > 3 and file_info[3]:
-        selected = {str(value).lstrip("/") for value in file_info[3]}
+    selected_keys, _ = _unpack_file_info_extras(file_info)
+    if selected_keys:
+        selected = {str(value).lstrip("/") for value in selected_keys}
 
     targets = []
     with h5py.File(file_path, "r") as h5:
