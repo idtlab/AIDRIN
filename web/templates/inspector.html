@@ -216,6 +216,10 @@
 
     document.addEventListener('DOMContentLoaded', function() {
       renderFiles();
+      {% if upload_error and custom_loaders_enabled %}
+      // Upload errors come from the custom loader form: reopen it.
+      switchUploadTab('custom');
+      {% endif %}
       const sel = document.getElementById('fileTypeSelect');
       if (sel) sel.addEventListener('change', filterFiles);
 
@@ -228,14 +232,6 @@
           updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
         });
         updateFileInputBasedOnType(fileTypeEl, fileInput, fileMsg);
-      }
-
-      const customContinue = document.getElementById('upload-custom-continue');
-      const customFileInput = document.getElementById('file-custom');
-      if (customContinue && customFileInput) {
-        customContinue.addEventListener('click', function() {
-          customFileInput.click();
-        });
       }
 
       function bindDropzone(dropzone, fileInput, onDrop) {

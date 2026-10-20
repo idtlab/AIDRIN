@@ -21,10 +21,12 @@
               class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' if globus_available and globus_authenticated else 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' }}">
         Upload File
       </button>
+      {% if custom_loaders_enabled %}
       <button type="button" onclick="switchUploadTab('custom')" id="tab-custom"
               class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400">
         Custom Loader
       </button>
+      {% endif %}
       {% if globus_available %}
       <button type="button" onclick="switchUploadTab('globus')" id="tab-globus"
               class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' if globus_authenticated else 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' }}">
@@ -40,7 +42,7 @@
     {% if upload_error %}
     <div class="flex items-start gap-2 p-3 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-300" role="alert">
       <svg class="w-4 h-4 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>
-      <span>{{ upload_error }}</span>
+      <span class="min-w-0 break-words">{{ upload_error }}</span>
     </div>
     {% endif %}
 
@@ -112,6 +114,7 @@
       </div>
     </div>
 
+    {% if custom_loaders_enabled %}
     <!-- Custom loader tab -->
     <div id="custom-upload" class="hidden">
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
@@ -155,12 +158,12 @@ def load(path: str, **kwargs) -> pd.DataFrame:
               <p class="text-xs text-gray-500 dark:text-gray-400">Any file your loader can read (e.g. .root)</p>
             </div>
             <input id="file-custom" name="file" type="file" class="hidden" required
-                   accept=".root,.h5,.hdf5,.csv,.json,.parquet,.npz,.xls,.xlsx,.xlsm,.xlsb,*/*"
                    onchange="uploadCustomForm();" />
           </label>
         </form>
       </div>
     </div>
+    {% endif %}
 
     {% if globus_available %}
     <!-- Globus remote panel -->

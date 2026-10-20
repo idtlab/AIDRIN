@@ -897,8 +897,10 @@ class TestCustomLoaderCLI(unittest.TestCase):
             "run", "completeness", self.csv_path, "--loader", f"{loader}:load"
         )
         self.assertNotEqual(code, 0)
-        self.assertIn(self.csv_path, err)
-        self.assertIn(f"{loader}:load", err)
+        # Loader errors name files, not absolute paths (they also reach web users).
+        self.assertIn(os.path.basename(self.csv_path), err)
+        self.assertIn("json_loader.py:load", err)
+        self.assertNotIn(self.tmpdir, err)
         self.assertIn("Check that the file format matches what this loader expects", err)
         self.assertIn("Original error: ValueError:", err)
 

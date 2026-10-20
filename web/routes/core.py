@@ -7,6 +7,7 @@ import uuid
 import pandas as pd
 from flask import (
     Blueprint,
+    abort,
     current_app,
     jsonify,
     redirect,
@@ -28,6 +29,7 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
     clear_all_user_cache,
     confine_to_upload_folder,
+    describe_loader_error,
     ensure_json_serializable,
     generate_metric_cache_key,
     get_current_user_id,
@@ -52,6 +54,10 @@ def inspector():
     if request.method == "POST":
         file_upload_time_log.info("File upload initiated (workspace)")
         file = request.files.get("file")
+        if (request.form.get("fileTypeSelector") or "").strip() == ".custom" and not current_app.config.get(
+            "ENABLE_WEB_CUSTOM_LOADERS"
+        ):
+            abort(403)
 
         if file:
             cleared_count = clear_all_user_cache()
@@ -100,35 +106,31 @@ def inspector():
                         tempfile.gettempdir(), "aidrin_custom_loaders",
                     )
                 os.makedirs(loaders_folder, exist_ok=True)
-                if "session_id" not in session:
-                    session["session_id"] = str(uuid.uuid4())
+                # One script per upload: Celery tasks queued for an earlier
+                # dataset keep running the loader they were submitted with.
                 loader_path = os.path.join(
-                    loaders_folder, f"custom_loader_{session['session_id']}.py"
+                    loaders_folder, f"custom_loader_{uuid.uuid4().hex}.py"
                 )
                 with open(loader_path, "w", encoding="utf-8") as handle:
                     handle.write(loader_code)
                 spec = f"{loader_path}:load"
                 try:
                     load_via_custom_loader(spec, file_path)
-                except CustomLoaderError as exc:
-                    try:
-                        os.remove(file_path)
-                    except OSError:
-                        pass
-                    session.pop("custom_loader_spec", None)
-                    session["upload_error"] = str(exc)
-                    file_upload_time_log.error("Upload custom loader failed: %s", exc)
-                    return redirect(url_for("core.inspector"))
                 except Exception as exc:
-                    try:
-                        os.remove(file_path)
-                    except OSError:
-                        pass
-                    session.pop("custom_loader_spec", None)
-                    session["upload_error"] = (
-                        f"Custom loader '{spec}' failed for '{file_path}': "
-                        f"{type(exc).__name__}: {exc}"
-                    )
+                    # Remove only this attempt's files; the previous dataset
+                    # and its loader stay active.
+                    for path in (file_path, loader_path):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                    if isinstance(exc, CustomLoaderError):
+                        session["upload_error"] = describe_loader_error(exc, file_path, display_name)
+                    else:
+                        session["upload_error"] = (
+                            f"Custom loader failed for '{display_name}': "
+                            f"{type(exc).__name__}: {exc}"
+                        )
                     file_upload_time_log.error(
                         "Upload custom loader failed: %s", exc, exc_info=True
                     )
@@ -136,6 +138,7 @@ def inspector():
                 session["custom_loader_spec"] = spec
             else:
                 file_type = selected_type
+                loader_path = None
                 session.pop("custom_loader_spec", None)
 
             session["uploaded_file_name"] = display_name
@@ -149,8 +152,9 @@ def inspector():
             # Track files this session created so /clear removes only these,
             # never files belonging to other concurrent sessions.
             owned_files = session.get("owned_files", [])
-            if file_path not in owned_files:
-                owned_files.append(file_path)
+            for owned_path in (file_path, loader_path):
+                if owned_path and owned_path not in owned_files:
+                    owned_files.append(owned_path)
             session["owned_files"] = owned_files
 
             return redirect(url_for("core.inspector"))
@@ -237,6 +241,7 @@ def inspector():
             file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
             upload_file_types=list(SUPPORTED_FILE_TYPES),
+            custom_loaders_enabled=current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False),
             upload_error=upload_error,
             globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],

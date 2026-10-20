@@ -465,9 +465,10 @@ Library API:
    summarize_dataset("sample.root", loader="loaders/root_ttree_loader.py:load")
 
 **Security:** loader scripts execute in-process with full Python access (same trust model as
-custom metrics and the agentic ``paths.data_loader``). Only run trusted scripts.
+custom metrics and the agentic ``paths.data_loader``). Only run trusted scripts. The web
+interface's Custom Loader tab is off by default; see :ref:`web_installation`.
 
-**Errors:** failures always name the loader spec, dataset path, and cause (missing file,
+**Errors:** failures always name the loader file, dataset file, and cause (missing file,
 import error, exception inside ``load``, or non-DataFrame return). They never look like a
 silent built-in reader miss.
 

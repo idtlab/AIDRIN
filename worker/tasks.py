@@ -1,21 +1,25 @@
 import os
+import re
 import time
 from celery import shared_task
 from flask import current_app
 
 
-def prune_upload_folder(folder, max_age_seconds, now):
+def prune_upload_folder(folder, max_age_seconds, now, name_pattern=None):
     """Delete files in ``folder`` older than ``max_age_seconds`` relative to ``now``.
 
     Covers both uploaded sources and their ``.aidrin.feather`` cache sidecars
     (every plain file in the upload folder is eligible). Subdirectories are left
     untouched. Returns the number of files removed. Pure and side-effect-scoped
-    so it can be unit-tested without Flask/Celery.
+    so it can be unit-tested without Flask/Celery. When ``name_pattern`` is set,
+    only file names that fully match it are eligible.
     """
     removed = 0
     if not os.path.isdir(folder):
         return removed
     for filename in os.listdir(folder):
+        if name_pattern and not re.fullmatch(name_pattern, filename):
+            continue
         file_path = os.path.join(folder, filename)
         try:
             if os.path.isfile(file_path) and now - os.path.getmtime(file_path) > max_age_seconds:
@@ -36,9 +40,16 @@ def delete_old_uploads():
     """
     app = current_app._get_current_object()
     folder = app.config.get("UPLOAD_FOLDER")
-    if not folder:
-        return
-    prune_upload_folder(folder, max_age_seconds=3600, now=time.time())
+    if folder:
+        prune_upload_folder(folder, max_age_seconds=3600, now=time.time())
+    # Web custom loader scripts (and their bytecode) are reaped on the same schedule. Only
+    # generated names are touched, in case CUSTOM_LOADERS_FOLDER points at a shared directory.
+    loaders = app.config.get("CUSTOM_LOADERS_FOLDER")
+    if loaders:
+        prune_upload_folder(loaders, 3600, time.time(), name_pattern=r"custom_loader_[0-9a-f]{32}\.py")
+        prune_upload_folder(
+            os.path.join(loaders, "__pycache__"), 3600, time.time(), name_pattern=r"custom_loader_[0-9a-f]{32}\..+\.pyc"
+        )
 
 
 def _is_generated_custom_metric_script(filename):

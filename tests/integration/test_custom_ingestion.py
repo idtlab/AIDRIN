@@ -125,6 +125,134 @@ def test_custom_loader_format_mismatch_shows_actionable_error(client):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert "Check that the file format matches what this loader expects" in html
-    assert "Original error: ValueError:" in html
+    assert "Original error" not in html  # kept in the server log only
     with client.session_transaction() as sess:
         assert not sess.get("custom_loader_spec")
+
+
+RAISING_LOADER = """
+def load(path, **kwargs):
+    raise RuntimeError("broken loader")
+"""
+
+
+def _custom_upload(client, path, code, name=None):
+    with open(path, "rb") as handle:
+        return client.post(
+            "/inspector",
+            data={"file": (handle, name or path.name), "fileTypeSelector": ".custom", "loader_code": code},
+            content_type="multipart/form-data",
+        )
+
+
+def _weird_file(tmp_path, name="data.weird"):
+    path = tmp_path / name
+    path.write_text("a,b\n1,2\n3,4\n5,6\n", encoding="utf-8")
+    return path
+
+
+def _loader_file(client):
+    from pathlib import Path
+
+    with client.session_transaction() as sess:
+        return Path(sess["custom_loader_spec"].rsplit(":", 1)[0])
+
+
+def test_web_custom_loaders_are_off_by_default(tmp_path, monkeypatch):
+    from web import create_app
+
+    monkeypatch.delenv("AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", raising=False)
+    assert create_app().config["ENABLE_WEB_CUSTOM_LOADERS"] is False
+    monkeypatch.setenv("AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", "1")
+    assert create_app().config["ENABLE_WEB_CUSTOM_LOADERS"] is True
+
+
+def test_disabled_custom_loaders_hide_tab_and_reject_upload(client, app, tmp_path):
+    import os
+
+    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = False
+    html = client.get("/inspector").get_data(as_text=True)
+    assert 'id="tab-custom"' not in html
+    assert 'id="custom-upload"' not in html
+
+    response = _custom_upload(client, _weird_file(tmp_path), GOOD_LOADER)
+    assert response.status_code == 403
+    assert os.listdir(app.config["CUSTOM_LOADERS_FOLDER"]) == []
+    assert os.listdir(app.config["UPLOAD_FOLDER"]) == []
+    with client.session_transaction() as sess:
+        assert not sess.get("custom_loader_spec")
+        assert not sess.get("uploaded_file_path")
+
+
+def test_failed_custom_upload_keeps_previous_dataset_and_loader(client, tmp_path):
+    first = _weird_file(tmp_path, "first.weird")
+    assert _custom_upload(client, first, GOOD_LOADER).status_code == 302
+    loader_file = _loader_file(client)
+    with client.session_transaction() as sess:
+        before = {key: sess.get(key) for key in ("uploaded_file_path", "uploaded_file_type", "custom_loader_spec")}
+
+    _custom_upload(client, _weird_file(tmp_path, "second.weird"), RAISING_LOADER)
+
+    with client.session_transaction() as sess:
+        assert {key: sess.get(key) for key in before} == before
+        assert sess.get("upload_error")
+    assert loader_file.read_text() == GOOD_LOADER.strip()
+    summary = client.get("/summary-statistics").get_json()
+    assert summary["success"] is True
+    assert summary["records_count"] == 3
+
+
+def test_each_custom_upload_gets_its_own_loader_file(client, tmp_path):
+    assert _custom_upload(client, _weird_file(tmp_path, "first.weird"), GOOD_LOADER).status_code == 302
+    first_loader = _loader_file(client)
+    other_code = GOOD_LOADER.replace("from_custom_loader", "second_loader")
+    assert _custom_upload(client, _weird_file(tmp_path, "second.weird"), other_code).status_code == 302
+    second_loader = _loader_file(client)
+
+    assert first_loader != second_loader
+    assert first_loader.read_text() == GOOD_LOADER.strip()
+
+
+def test_clear_removes_custom_loader_script(client, tmp_path):
+    assert _custom_upload(client, _weird_file(tmp_path), GOOD_LOADER).status_code == 302
+    loader_file = _loader_file(client)
+    client.post("/clear")
+    assert not loader_file.exists()
+
+
+def test_custom_loader_errors_do_not_expose_server_paths(client, app, tmp_path, caplog):
+    counter = tmp_path / "count.txt"
+    flaky = (
+        "import pathlib\nimport pandas as pd\n"
+        f"COUNTER = pathlib.Path({str(counter)!r})\n"
+        "def load(path, **kwargs):\n"
+        "    calls = int(COUNTER.read_text()) if COUNTER.exists() else 0\n"
+        "    COUNTER.write_text(str(calls + 1))\n"
+        "    if calls:\n"
+        "        raise RuntimeError(f'read failed in file {path}')\n"
+        "    return pd.read_csv(path)\n"
+    )
+    assert _custom_upload(client, _weird_file(tmp_path), flaky).status_code == 302
+    path_echoing = "def load(path, **kwargs):\n    raise ValueError(f'not a ROOT file: {path}')\n"
+    _custom_upload(client, _weird_file(tmp_path, "other.weird"), path_echoing)
+    with client.session_transaction() as sess:
+        upload_error = sess["upload_error"]
+    feature_set = client.post("/feature-set", data={}).get_data(as_text=True)
+
+    for body in (upload_error, feature_set):
+        assert app.config["CUSTOM_LOADERS_FOLDER"] not in body
+        assert app.config["UPLOAD_FOLDER"] not in body
+        assert "custom_loader_" not in body
+    assert upload_error.startswith("Your custom loader failed for 'other.weird'")
+    assert "Your custom loader failed for 'data.weird'" in feature_set
+    # The loader's own error goes to the server log, not the page.
+    assert "not a ROOT file" not in upload_error
+    assert "read failed" not in feature_set
+    assert "not a ROOT file" in caplog.text and "read failed" in caplog.text
+
+
+def test_custom_file_input_accepts_any_extension(client):
+    # An accept list makes the browser picker grey out formats only a loader can read (e.g. .txt).
+    html = client.get("/inspector").data.decode()
+    tag = html[html.index('id="file-custom"'):]
+    assert "accept=" not in tag[:tag.index(">")]

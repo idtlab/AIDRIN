@@ -680,6 +680,19 @@ def test_hdf5_selected_keys_limit_logical_schema(tmp_path):
     assert [target["name"] for target in targets] == ["/b"]
 
 
+def test_hdf5_loader_spec_in_file_info_is_not_read_as_selected_keys(tmp_path):
+    path = tmp_path / "native.h5"
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("a", data=[1])
+        h5.create_dataset("b", data=[2])
+
+    loader_only = discover_variable_units((str(path), path.name, ".h5", "loader.py:load"))
+    keys_and_loader = discover_variable_units((str(path), path.name, ".h5", ["/b"], "loader.py:load"))
+
+    assert [target["name"] for target in loader_only] == ["/a", "/b"]
+    assert [target["name"] for target in keys_and_loader] == ["/b"]
+
+
 def test_pandas_hdfstore_discovers_logical_columns_not_internal_datasets(tmp_path):
     path = tmp_path / "frame.h5"
     pd.DataFrame({"speed (m/s)": [1.0], "station": ["A"]}).to_hdf(path, key="data", format="table")

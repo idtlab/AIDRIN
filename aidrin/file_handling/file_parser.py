@@ -286,6 +286,7 @@ def read_file(file_info, columns=None, loader=None):
     """
     from aidrin.file_handling.custom_loader import (
         CustomLoaderError,
+        _format_loader_failure,
         get_active_loader_spec,
         load_dataframe,
     )
@@ -326,8 +327,7 @@ def read_file(file_info, columns=None, loader=None):
                 "Unexpected custom loader error: %s", e, exc_info=True
             )
             raise CustomLoaderError(
-                f"Custom loader '{loader_spec}' failed for '{file_path}': "
-                f"{type(e).__name__}: {e}"
+                _format_loader_failure(loader_spec, file_path, f"{type(e).__name__}: {e}")
             ) from e
 
     if file_type not in READER_MAP:

@@ -451,20 +451,15 @@ def summarize_dataset(
     selected_keys: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Return shape, per-column descriptive stats, and missing counts for a dataset."""
-    from pathlib import Path
     from aidrin.file_handling.custom_loader import using_custom_loader
     from aidrin.file_handling.file_parser import read_file
     from .runners import _build_file_info
 
-    path = Path(file_path)
-    if file_type and str(file_type).startswith("."):
-        ext = file_type
-    elif file_type:
-        ext = f".{file_type}"
-    else:
-        ext = path.suffix.lower()
     file_info = _build_file_info(
-        file_path, ext, path.name, selected_keys=_normalize_list(selected_keys)
+        file_path,
+        file_type,
+        None,
+        selected_keys=_normalize_list(selected_keys),
     )
     with using_custom_loader(loader):
         df = read_file(file_info, loader=loader)
@@ -981,7 +976,7 @@ def run_batch_metrics(
         "timestamp_column": config_obj.timestamp_column,
         "batch_column": config_obj.batch_column,
         "target_columns": config_obj.target_columns,
-        "loader": getattr(config_obj, "loader", None),
+        "loader": config_obj.loader,
         "selected_keys": config_obj.selected_keys,
         "path_targets": config_obj.path_targets,
         "base_dir": config_obj.base_dir,
