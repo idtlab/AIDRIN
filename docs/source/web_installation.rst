@@ -241,6 +241,14 @@ Once running, visit:
 
 .. note::
 
+   The **Custom Loader** upload tab is off by default, because the pasted loader
+   code runs inside the Flask process with full Python access. Enable it only on
+   trusted deployments (e.g., a local, single-user install) by setting
+   ``AIDRIN_ENABLE_WEB_CUSTOM_LOADERS=1`` before starting the Flask server. The
+   CLI and library ``loader`` option is not affected.
+
+.. note::
+
    **Frame cache.** To avoid re-parsing the uploaded file for every metric, the
    first read of a dataset is materialised to an on-disk Arrow/Feather artifact
    (``<source>.aidrin.feather``) next to the upload; later metric tasks reload it
