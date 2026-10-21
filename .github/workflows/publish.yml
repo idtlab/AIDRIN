@@ -39,6 +39,11 @@ jobs:
             exit 1
           fi
 
+      - name: Run the test suite
+        run: |
+          uv sync --group dev
+          PYTHONPATH=. uv run pytest tests/
+
       - name: Add a unique dev suffix for TestPyPI
         if: inputs.target == 'testpypi'
         run: |
