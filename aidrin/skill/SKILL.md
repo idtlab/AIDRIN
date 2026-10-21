@@ -136,7 +136,7 @@ Ask every time, before eliciting general intent:
   single `llm` block (`base_url` + `model`) reused by all four LLM stages (executor,
   retrieval, complexity_scorer, remediation) — don't ask per stage, and don't let the
   user pick different providers for different stages. Leave `llm.embedding_model` on
-  its default (`text-embedding-3-large`) unless the user brings it up unprompted.
+  its default (`openai/text-embedding-3-large`) unless the user brings it up unprompted.
 - **How the dataset gets loaded for the pipeline** (the agentic profiler is a separate
   code path from AIDRIN's own file parser — it does not reuse Step 4's reader):
   - Plain comma-separated CSV → use `paths.data_csv` directly, no extra step.
@@ -296,7 +296,7 @@ for minutes with no visible checkpoint.
    path from Step 2, `retrieval.questions` = the user's domain questions from Step 2.
    Set `llm.base_url` and `llm.model` to the provider and model chosen in Step 2 — one
    block, reused by all four LLM stages. Leave `llm.embedding_model` on
-   `text-embedding-3-large` unless the user said otherwise. For loading the dataset itself, use whichever of the three cases
+   `openai/text-embedding-3-large` unless the user said otherwise. For loading the dataset itself, use whichever of the three cases
    from Step 2 applied: `paths.data_csv` for plain CSV, a `read_file()`-wrapping loader
    you write for another AIDRIN-supported format, or the user-supplied loader path for
    a format AIDRIN can't parse.
@@ -415,7 +415,7 @@ The pipeline is entirely config-driven. Create a YAML file with these sections:
 llm:
   base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov" — pick one, never both
   model: "openai/gpt-oss-120b"                # chat backend, reused by executor/complexity_scorer/remediation below
-  embedding_model: "text-embedding-3-large"  # used by build-index and by retrieval's query embedding
+  embedding_model: "openai/text-embedding-3-large"  # used by build-index and by retrieval's query embedding
 
 paths:
   data_loader: "./loader.py:load_dataset"  # Python function returning a DataFrame
