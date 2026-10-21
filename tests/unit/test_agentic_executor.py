@@ -57,6 +57,11 @@ class TestCodeExecutorSubprocess(unittest.TestCase):
         self.data_path = Path(self.tmpdir) / "data.csv"
         self.data_path.write_text("x\n1\n2\n3\n", encoding="utf-8")
         self.df = pd.read_csv(self.data_path)
+        # _execute() takes a path to a pickled dataframe (read fresh by each
+        # attempt's child process), not the dataframe itself -- see
+        # _run_code_in_subprocess's docstring for why.
+        self.df_path = Path(self.tmpdir) / "df.pkl"
+        self.df.to_pickle(self.df_path)
 
     def tearDown(self):
         import shutil
@@ -68,21 +73,30 @@ class TestCodeExecutorSubprocess(unittest.TestCase):
         # docstring), so this isn't testing timeout behavior.
         cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=15)
         executor = self.CodeExecutor(cfg)
-        result = executor._execute("result = int(df['x'].sum())", self.df)
+        result = executor._execute("result = int(df['x'].sum())", self.df_path)
         self.assertEqual(result["answer"], 6)
 
     def test_error_in_code_raises_runtime_error_with_message(self):
         cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=15)
         executor = self.CodeExecutor(cfg)
         with self.assertRaises(RuntimeError) as ctx:
-            executor._execute("raise ValueError('boom')", self.df)
+            executor._execute("raise ValueError('boom')", self.df_path)
         self.assertIn("boom", str(ctx.exception))
 
+    def test_timeout_seconds_is_floored(self):
+        from aidrin.agentic.executor import _MIN_TIMEOUT_SECONDS
+
+        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=0)
+        executor = self.CodeExecutor(cfg)
+        self.assertEqual(executor.timeout_seconds, _MIN_TIMEOUT_SECONDS)
+
     def test_timeout_raises(self):
-        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=1)
+        # Configured above _MIN_TIMEOUT_SECONDS (5.0) so the floor doesn't
+        # change what's actually being tested here.
+        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=6)
         executor = self.CodeExecutor(cfg)
         with self.assertRaises(TimeoutError) as ctx:
-            executor._execute("import time\ntime.sleep(5)\nresult = 1", self.df)
+            executor._execute("import time\ntime.sleep(10)\nresult = 1", self.df_path)
         self.assertIn("timeout", str(ctx.exception).lower())
 
     def test_timeout_actually_kills_the_process_not_just_abandons_it(self):
@@ -99,26 +113,29 @@ class TestCodeExecutorSubprocess(unittest.TestCase):
         observed, even after waiting well past when it would have run.
         """
         marker = Path(self.tmpdir) / "side_effect_marker.txt"
-        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=1)
+        # Configured above _MIN_TIMEOUT_SECONDS (5.0) so the floor doesn't
+        # change what's actually being tested here.
+        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=6)
         executor = self.CodeExecutor(cfg)
 
         slow_code = f"""
 import time
-time.sleep(3)
+time.sleep(10)
 with open({str(marker)!r}, "w") as f:
     f.write("ran")
 """
         start = time.time()
         with self.assertRaises(TimeoutError):
-            executor._execute(slow_code, self.df)
+            executor._execute(slow_code, self.df_path)
         elapsed = time.time() - start
 
-        # Returns promptly rather than waiting out the full 3s sleep.
-        self.assertLess(elapsed, 2.5)
+        # Returns around the 6s timeout (plus spawn/terminate overhead),
+        # not after waiting out the full 10s sleep.
+        self.assertLess(elapsed, 9)
 
-        # Wait past when the sleep(3) would have completed if the process
+        # Wait past when the sleep(10) would have completed if the process
         # were merely abandoned rather than killed.
-        time.sleep(3)
+        time.sleep(6)
         self.assertFalse(marker.exists(), "side effect ran after timeout: the process was not actually killed")
 
     def test_large_result_does_not_deadlock_or_misreport_as_timeout(self):
@@ -137,14 +154,14 @@ with open({str(marker)!r}, "w") as f:
         # near-instantly (no sleep) so a correct implementation returns in
         # well under the 10s timeout.
         code = "result = 'x' * 2_000_000"
-        result = executor._execute(code, self.df)
+        result = executor._execute(code, self.df_path)
         self.assertEqual(result["answer"], "x" * 2_000_000)
 
     def test_run_reports_timeout_as_last_error_without_crashing(self):
-        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=1, max_attempts=1)
+        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=6, max_attempts=1)
         executor = self.CodeExecutor(cfg)
         result = executor.run(
-            retrieval_result={"code": "import time\ntime.sleep(5)\nresult = 1", "query": "slow"}
+            retrieval_result={"code": "import time\ntime.sleep(10)\nresult = 1", "query": "slow"}
         )
         self.assertFalse(result["success"])
         self.assertIn("timeout", result["last_error"].lower())

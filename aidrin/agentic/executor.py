@@ -25,6 +25,8 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import multiprocessing
+import os
+import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -41,19 +43,37 @@ except Exception:
 
 from aidrin.agentic.llm_factory import create_chat_model, resolve_provider_api_key
 
+# Process spawn + reimporting this package costs real wall-clock time
+# (~1-2s measured with an empty dataset, more once the dataset itself has to
+# be pickled through -- see _run_code_in_subprocess) before any generated
+# code even runs. A timeout_seconds at or near 0 would make every attempt an
+# instant, unconditional failure regardless of what the code does, so it's
+# floored here rather than trusted as-is.
+_MIN_TIMEOUT_SECONDS = 5.0
 
-def _run_code_in_subprocess(code: str, df: pd.DataFrame, queue: "multiprocessing.Queue") -> None:
+
+def _run_code_in_subprocess(code: str, df_path: str, queue: "multiprocessing.Queue") -> None:
     """
     Module-level (picklable, spawn-safe) worker: exec() the LLM-provided code
-    against its own copy of the dataframe in this child process, then reduce
-    the result to the same JSON-safe payload CodeExecutor.run() returns —
-    computed here, not in the parent, because the raw namespace (`pd`/`np`
-    modules, arbitrary LLM-created objects) generally isn't picklable across
-    the process boundary, while the reduced payload always is.
+    against the dataframe in this child process, then reduce the result to
+    the same JSON-safe payload CodeExecutor.run() returns — computed here,
+    not in the parent, because the raw namespace (`pd`/`np` modules,
+    arbitrary LLM-created objects) generally isn't picklable across the
+    process boundary, while the reduced payload always is.
+
+    df_path: filesystem path to a pickled DataFrame, read fresh in this
+    child rather than passed as a spawn argument. CodeExecutor.run() can
+    call _execute() several times (one per self-healing attempt) against
+    the same dataframe; passing the DataFrame itself through spawn's args
+    would re-pickle the *entire dataset* through the inter-process pipe on
+    every single attempt. Writing it to disk once, before the first
+    attempt, and having each attempt's child read its own copy from there
+    instead avoids that repeated cost.
 
     Puts exactly one ("success", result_payload) or ("error", formatted_text)
     tuple onto `queue` before exiting.
     """
+    df = pd.read_pickle(df_path)
     ns: dict[str, Any] = {"pd": pd, "df": df, "result": None}
     if np is not None:
         ns["np"] = np
@@ -128,47 +148,59 @@ class CodeExecutor:
         last_error: str | None = None
         result_payload: dict[str, Any] = {}
 
-        for attempt in range(1, self.max_attempts + 1):
-            try:
-                result_payload = self._execute(code, df)
-                attempts.append({"attempt": attempt, "status": "success"})
-                return {
-                    "enabled": True,
-                    "success": True,
-                    "attempts": attempts,
-                    "final_code": code,
-                    "result": result_payload,
-                }
-            except Exception as exc:
-                last_error = f"{exc}\n{traceback.format_exc()}"
-                attempts.append({"attempt": attempt, "status": "error", "error": str(exc)})
-                if attempt >= self.max_attempts:
-                    break
-                code = self._repair_code(
-                    code=code,
-                    error_text=last_error,
-                    question=question,
-                    plan_steps=plan_steps,
-                    prompt_context=prompt_context,
-                    profile_result=profile_result,
-                    original_code=initial_code,
-                    data_loader_path=data_loader_path,
-                )
+        # Written once, read by every attempt's child process -- see
+        # _run_code_in_subprocess for why this avoids re-pickling the full
+        # dataset through the spawn pipe on every self-healing retry.
+        tmp_fd, tmp_name = tempfile.mkstemp(suffix=".pkl", prefix="aidrin_executor_df_")
+        os.close(tmp_fd)
+        df_path = Path(tmp_name)
+        try:
+            df.to_pickle(df_path)
 
-        return {
-            "enabled": True,
-            "success": False,
-            "attempts": attempts,
-            "final_code": code,
-            "last_error": last_error,
-        }
+            for attempt in range(1, self.max_attempts + 1):
+                try:
+                    result_payload = self._execute(code, df_path)
+                    attempts.append({"attempt": attempt, "status": "success"})
+                    return {
+                        "enabled": True,
+                        "success": True,
+                        "attempts": attempts,
+                        "final_code": code,
+                        "result": result_payload,
+                    }
+                except Exception as exc:
+                    last_error = f"{exc}\n{traceback.format_exc()}"
+                    attempts.append({"attempt": attempt, "status": "error", "error": str(exc)})
+                    if attempt >= self.max_attempts:
+                        break
+                    code = self._repair_code(
+                        code=code,
+                        error_text=last_error,
+                        question=question,
+                        plan_steps=plan_steps,
+                        prompt_context=prompt_context,
+                        profile_result=profile_result,
+                        original_code=initial_code,
+                        data_loader_path=data_loader_path,
+                    )
 
-    def _execute(self, code: str, df: pd.DataFrame) -> dict[str, Any]:
+            return {
+                "enabled": True,
+                "success": False,
+                "attempts": attempts,
+                "final_code": code,
+                "last_error": last_error,
+            }
+        finally:
+            df_path.unlink(missing_ok=True)
+
+    def _execute(self, code: str, df_path: Path) -> dict[str, Any]:
         """
-        Run the LLM-provided code against the dataframe, in an isolated child
-        process, under a hard wall-clock timeout (executor.timeout_seconds,
-        default 60s). Returns the JSON-safe result payload (with `answer`/
-        `answer_truncated` already set) on success.
+        Run the LLM-provided code against the dataframe pickled at df_path,
+        in an isolated child process, under a hard wall-clock timeout
+        (executor.timeout_seconds, default 60s, floored at
+        _MIN_TIMEOUT_SECONDS). Returns the JSON-safe result payload (with
+        `answer`/`answer_truncated` already set) on success.
 
         A thread can't be force-killed in Python, so an earlier version of
         this ran the code on a daemon thread and simply abandoned it on
@@ -187,10 +219,11 @@ class CodeExecutor:
         other threads at fork time can deadlock the child).
 
         Note: spawning a process and reimporting this package costs real
-        wall-clock time (~1-2s measured), which counts against
-        timeout_seconds before any generated code even runs. Negligible
-        against the 60s default; a very low timeout_seconds risks spurious
-        timeouts on trivial code.
+        wall-clock time (~1-2s measured with an empty dataset), which counts
+        against timeout_seconds before any generated code even runs.
+        Negligible against the 60s default, but this and the dataset's own
+        pd.read_pickle(df_path) cost inside the child are why timeout_seconds
+        is floored rather than trusted at face value for very low settings.
 
         Reads the result queue *while* waiting, not after a separate
         process.join(timeout) — multiprocessing.Queue.put() hands off to a
@@ -202,7 +235,9 @@ class CodeExecutor:
         """
         ctx = multiprocessing.get_context("spawn")
         result_queue: multiprocessing.Queue = ctx.Queue()
-        process = ctx.Process(target=_run_code_in_subprocess, args=(code, df, result_queue), daemon=True)
+        process = ctx.Process(
+            target=_run_code_in_subprocess, args=(code, str(df_path), result_queue), daemon=True
+        )
         process.start()
 
         deadline = time.monotonic() + self.timeout_seconds
@@ -414,7 +449,7 @@ class CodeExecutor:
         exec_cfg = cfg.get("executor", {}) or {}
         enabled = bool(exec_cfg.get("enabled", True))
         max_attempts = max(1, int(exec_cfg.get("max_attempts", 1)))
-        timeout_seconds = float(exec_cfg.get("timeout_seconds", 60))
+        timeout_seconds = max(_MIN_TIMEOUT_SECONDS, float(exec_cfg.get("timeout_seconds", 60)))
         temperature = float(exec_cfg.get("temperature", 0.0))
         llm_cfg = cfg.get("llm", {}) or {}
         model = llm_cfg.get("model", "gpt-4o")
