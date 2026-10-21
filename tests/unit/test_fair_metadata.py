@@ -355,10 +355,10 @@ def test_dcat_us_3_gsa_example():
     checks = result["FAIR Compliance Checks"]
     assert checks == {
         "Findable Checks": "6/6",
-        "Accessible Checks": "5/5",
+        "Accessible Checks": "5/6",
         "Interoperable Checks": "2/5",
         "Reusable Checks": "3/7",
-        "Total Checks": "16/23",
+        "Total Checks": "16/24",
     }
     assert result["Conformance"] == {"Required properties present": "4/4", "Missing": "none"}
     assert result["Standard"]["Name"] == "DCAT-US 3.0"
@@ -383,7 +383,7 @@ def test_dcat_us_3_does_not_score_1_1_only_keys():
     metadata = _load(DCAT_US_3_EXAMPLE)
     metadata.update({"bureauCode": ["019:20"], "programCode": ["019:023"], "accessLevel": "public"})
     result = calculate_fair_compliance(metadata, "dcat-us-3.0")
-    assert result["FAIR Compliance Checks"]["Total Checks"] == "16/23"
+    assert result["FAIR Compliance Checks"]["Total Checks"] == "16/24"
     assert {"bureauCode", "programCode", "accessLevel"} <= set(result["Other"])
 
 
@@ -391,7 +391,7 @@ def test_a_dcat_us_1_1_record_scores_lower_under_3_0_rules():
     # The same BUTTER-E record: 3.0 expects accessRights, qualifiedRelation, provenance and checksums.
     metadata = _load(DCAT_SAMPLES / "BUTTER-E.json")
     assert calculate_fair_compliance(metadata, "dcat-us-1.1")["FAIR Compliance Checks"]["Total Checks"] == "20/26"
-    assert calculate_fair_compliance(metadata, "dcat-us-3.0")["FAIR Compliance Checks"]["Total Checks"] == "14/23"
+    assert calculate_fair_compliance(metadata, "dcat-us-3.0")["FAIR Compliance Checks"]["Total Checks"] == "15/24"
 
 
 def test_a_dcat_catalog_is_rejected_with_a_clear_message():

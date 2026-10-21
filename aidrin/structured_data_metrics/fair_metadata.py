@@ -172,8 +172,9 @@ DCAT_US_3 = {
     },
     "Accessible": {
         "accessRights": key("accessRights"),
-        "accessURL or downloadURL (distribution)": in_each("distribution", ("accessURL", "downloadURL"), "distributions"),
+        "downloadURL (distribution)": in_each("distribution", "downloadURL", "distributions"),
         "mediaType (distribution)": in_each("distribution", "mediaType", "distributions"),
+        "accessURL (distribution)": in_each("distribution", "accessURL", "distributions"),
         "issued": key("issued"),
         "modified": key("modified"),
     },

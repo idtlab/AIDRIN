@@ -112,7 +112,7 @@ def test_fair_assessment_scores_dcat_us_3_by_form_value(client):
             content_type="multipart/form-data",
         )
     assert response.status_code == 200
-    assert response.get_json()["FAIR Compliance Checks"]["Total Checks"] == "16/23"
+    assert response.get_json()["FAIR Compliance Checks"]["Total Checks"] == "16/24"
 
 
 def test_fair_assessment_auto_reports_undetectable_metadata(client):
