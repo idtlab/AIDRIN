@@ -60,6 +60,12 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ### Added
 
+- **DCAT-US 3.0 support in the FAIR metadata assessment.** Single DCAT-US 3.0
+  dataset records (GSA's JSON Schema) are detected and scored, with
+  `Conformance` for the four required properties. Versioning and series
+  properties are shown under `Other`, unscored. A DCAT catalog is rejected
+  with a message to upload one dataset record.
+
 - **RO-Crate support in the FAIR metadata assessment.** RO-Crate 1.2
   `ro-crate-metadata.json` files are detected and scored on the root data
   entity (found through the descriptor's `about`), with `Conformance` (the

@@ -449,7 +449,7 @@ def calculate_fair_compliance(
     """Score a JSON metadata file against the FAIR principles.
 
     ``standard`` is ``"auto"`` (detect it), ``"croissant"``, ``"rocrate"``,
-    ``"dcat-us-1.1"`` or ``"datacite"``. Reads only the
+    ``"dcat-us-3.0"``, ``"dcat-us-1.1"`` or ``"datacite"``. Reads only the
     metadata file, so it runs locally and needs no dataset. With
     ``strip_visualizations`` the base64 ``"Pie chart"`` is left out.
     """

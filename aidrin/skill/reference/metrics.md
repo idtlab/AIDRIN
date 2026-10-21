@@ -605,10 +605,11 @@ aidrin run differential-privacy examples/sample_data/csv/adult.csv "age,hours.pe
 Not an `aidrin run` metric: it scores a JSON **metadata** file, not a dataset, and is
 local-only (`aidrin remote fair` is rejected).
 
-- **Syntax:** `aidrin fair <metadata.json> [--standard auto|croissant|rocrate|dcat-us-1.1|datacite] [--summary] [-o <path>]`
+- **Syntax:** `aidrin fair <metadata.json> [--standard auto|croissant|rocrate|dcat-us-3.0|dcat-us-1.1|datacite] [--summary] [-o <path>]`
 - **Args:** `--standard` defaults to `auto` (detects it). `croissant` is MLCommons Croissant
   1.0/1.1; `rocrate` is RO-Crate 1.2 (`ro-crate-metadata.json`; other versions are assessed
-  with 1.2 rules); `dcat-us-1.1` is Project Open Data; `datacite` is DataCite 4.x JSON, including
+  with 1.2 rules); `dcat-us-3.0` is one DCAT-US 3.0 dataset record (not a catalog);
+  `dcat-us-1.1` is Project Open Data; `datacite` is DataCite 4.x JSON, including
   DataCite REST API responses.
 - **Output keys:** `Findable`, `Accessible`, `Interoperable`, `Reusable` (each check mapped
   to what was found or `CHECK FAILED ❌`), `FAIR Compliance Checks` (`"n/m"` per principle
