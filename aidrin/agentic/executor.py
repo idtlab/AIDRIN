@@ -9,9 +9,10 @@ Config (YAML) expected keys:
     executor:
       enabled: true
       max_attempts: 3
+      timeout_seconds: 60    # wall-clock limit per execution attempt
       model: gpt-4o-mini
       temperature: 0.0
-      openai_api_key: null   # falls back to OPENAI_API_KEY env var
+      openai_api_key: null   # falls back to OPENROUTER_API_KEY/CBORG_API_KEY/OPENAI_API_KEY env vars
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import os
+import threading
 import traceback
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,7 @@ class CodeExecutor:
         cfg = self._load_config(self.config_path)
         self.enabled: bool = cfg["enabled"]
         self.max_attempts: int = cfg["max_attempts"]
+        self.timeout_seconds: float = cfg["timeout_seconds"]
         self.model: str = cfg["model"]
         self.temperature: float = cfg["temperature"]
         self.api_key: str | None = cfg["openai_api_key"]
@@ -50,10 +53,24 @@ class CodeExecutor:
         api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
         self.llm = None
         if self.enabled:
-            self.llm = create_chat_model(self.model, temperature=self.temperature, api_key=api_key, base_url=self.base_url)
+            self.llm = create_chat_model(
+                self.model, temperature=self.temperature, api_key=api_key, base_url=self.base_url,
+                component="execution",
+            )
 
-    def run(self, retrieval_result: dict[str, Any] | None, profile_result: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Execute generated code with optional self-healing repairs."""
+    def run(
+        self,
+        retrieval_result: dict[str, Any] | None,
+        profile_result: dict[str, Any] | None = None,
+        data_loader_override: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Execute generated code with optional self-healing repairs.
+
+        data_loader_override: if given, takes precedence over paths.data_loader
+        from the config for this call only (e.g. a per-question loader), so the
+        executed code runs against the same dataset the profile/retrieval used.
+        """
         if not self.enabled:
             return {"enabled": False, "message": "Executor disabled in config."}
 
@@ -65,8 +82,9 @@ class CodeExecutor:
         plan_steps = retrieval_result.get("plan_steps")
         prompt_context = retrieval_result.get("prompt_context")
 
-        if self.data_loader_path:
-            df = self._load_via_loader(self.data_loader_path)
+        data_loader_path = data_loader_override or self.data_loader_path
+        if data_loader_path:
+            df = self._load_via_loader(data_loader_path)
         else:
             if not self.data_path or not self.data_path.exists():
                 raise FileNotFoundError(f"Data file not found: {self.data_path}")
@@ -105,6 +123,7 @@ class CodeExecutor:
                     prompt_context=prompt_context,
                     profile_result=profile_result,
                     original_code=initial_code,
+                    data_loader_path=data_loader_path,
                 )
 
         return {
@@ -116,11 +135,45 @@ class CodeExecutor:
         }
 
     def _execute(self, code: str, df: pd.DataFrame) -> tuple[Any, dict[str, Any], set[str], str | None]:
+        """
+        Run the LLM-provided code against the dataframe, under a hard wall-clock
+        timeout (executor.timeout_seconds, default 60s).
+
+        exec() runs on a separate daemon thread so a runaway/hanging generation
+        (e.g. an accidental infinite loop or a full re-scan of a multi-million-row
+        file) can't block the pipeline forever. If the timeout is hit, that thread
+        is abandoned — Python has no safe way to force-kill a running thread — and
+        a TimeoutError is raised on the calling thread instead, which flows into
+        the normal attempt/repair retry loop in run(). The abandoned thread is a
+        daemon, so it won't block process exit even if it never finishes.
+        """
         ns: dict[str, Any] = {"pd": pd, "df": df.copy(), "result": None}
         if np is not None:
             ns["np"] = np
         before_keys = set(ns.keys())
-        exec(code, ns, ns)  # noqa: S102
+
+        outcome: dict[str, BaseException] = {}
+
+        def _run() -> None:
+            try:
+                exec(code, ns, ns)  # noqa: S102
+            except BaseException as exc:  # noqa: BLE001 - re-raised on the calling thread below
+                outcome["error"] = exc
+
+        worker = threading.Thread(target=_run, daemon=True)
+        worker.start()
+        worker.join(self.timeout_seconds)
+
+        if worker.is_alive():
+            raise TimeoutError(
+                f"Code execution exceeded the {self.timeout_seconds:g}s timeout and was abandoned. "
+                "This usually means the generated code has an inefficient or infinite loop "
+                "(e.g. re-reading/re-scanning the full dataset repeatedly instead of using "
+                "the already-loaded `df`). Rewrite it as a single vectorised pandas/numpy pass."
+            )
+        if "error" in outcome:
+            raise outcome["error"]
+
         value, chosen_key = self._select_result(ns, before_keys)
         return value, ns, before_keys, chosen_key
 
@@ -166,13 +219,17 @@ class CodeExecutor:
         prompt_context: str | None,
         profile_result: dict[str, Any] | None,
         original_code: str,
+        data_loader_path: str | None = None,
     ) -> str:
+        """Ask the LLM to minimally patch the code using the error details."""
         if not self.llm:
             return code
 
         profile_summary = ""
         if profile_result and profile_result.get("summary"):
             profile_summary = str(profile_result.get("summary"))
+
+        dataset_label = self.data_path or (f"loader:{data_loader_path}" if data_loader_path else None)
 
         messages = [
             (
@@ -183,7 +240,7 @@ class CodeExecutor:
             (
                 "human",
                 f"Question: {question}\n"
-                f"Dataset: {self.data_path}\n"
+                f"Dataset: {dataset_label}\n"
                 f"Plan steps: {plan_steps}\n"
                 f"Context: {prompt_context}\n"
                 f"Profile summary: {profile_summary}\n"
@@ -270,12 +327,20 @@ class CodeExecutor:
         exec_cfg = cfg.get("executor", {}) or {}
         enabled = bool(exec_cfg.get("enabled", True))
         max_attempts = max(1, int(exec_cfg.get("max_attempts", 1)))
+        timeout_seconds = float(exec_cfg.get("timeout_seconds", 60))
         model = exec_cfg.get("model", "gpt-4o")
         temperature = float(exec_cfg.get("temperature", 0.0))
         llm_cfg = cfg.get("llm", {}) or {}
+        # A chat call (repair LLM), same as retrieval/complexity_scorer/remediation's
+        # answer model — so it must fall back to OPENROUTER_API_KEY (or CBORG_API_KEY)
+        # when base_url points at OpenRouter/CBORG, not just OPENAI_API_KEY. Without
+        # this, base_url set + no explicit executor/llm openai_api_key silently sends
+        # an unauthenticated request and the provider rejects it with a 401.
         openai_api_key = (
             exec_cfg.get("openai_api_key")
             or llm_cfg.get("api_key")
+            or os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("CBORG_API_KEY")
             or os.environ.get("OPENAI_API_KEY")
         )
         base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
@@ -293,6 +358,7 @@ class CodeExecutor:
         return {
             "enabled": enabled,
             "max_attempts": max_attempts,
+            "timeout_seconds": timeout_seconds,
             "model": model,
             "temperature": temperature,
             "openai_api_key": openai_api_key,

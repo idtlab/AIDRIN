@@ -116,6 +116,7 @@ class VectorRetriever:
         self.google_api_key = cfg["google_api_key"]
         self.base_url = cfg["base_url"]
         self.answer_model = cfg["answer_model"]
+        self.answer_model_api_key = cfg["answer_model_api_key"]
         self.preview_chars = cfg["preview_chars"]
         self.context_compression = cfg["context_compression"]
         self.metadata_path = self.vector_dir / "metadata.json"
@@ -162,6 +163,16 @@ class VectorRetriever:
         google_api_key = retrieval_cfg.get("google_api_key") or os.environ.get("GOOGLE_API_KEY")
         base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
         answer_model = retrieval_cfg.get("answer_model", "gpt-4o")
+        # Separate from openai_api_key: the query-embedding call always needs a key
+        # for the configured embedding provider, while answer_model may point at a
+        # different OpenAI-compatible provider (e.g. OpenRouter/CBORG) via base_url,
+        # which needs its own key rather than reusing openai_api_key and getting a 401.
+        answer_model_api_key = (
+            retrieval_cfg.get("answer_model_api_key")
+            or os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("CBORG_API_KEY")
+            or openai_api_key
+        )
         preview_chars = int(retrieval_cfg.get("preview_chars", 500))
         context_compression = bool(retrieval_cfg.get("context_compression", False))
 
@@ -175,6 +186,7 @@ class VectorRetriever:
             "google_api_key": google_api_key,
             "base_url": base_url,
             "answer_model": answer_model,
+            "answer_model_api_key": answer_model_api_key,
             "preview_chars": preview_chars,
             "context_compression": context_compression,
         }
@@ -223,9 +235,73 @@ class VectorRetriever:
         top = np.argsort(-sims)[:top_k]
         return list(top)
 
+    def get_retrieved_context(self, question: str, llm: Any = None) -> tuple[list[dict[str, Any]], str]:
+        """
+        Embed the question, search the vector store, and build the prompt_context
+        string from the top_k retrieved chunks (with optional context_compression).
+
+        This is the retrieval-only step of retrieve() — it does not call the LLM to
+        generate code/reasoning, so it's reusable by callers that want the same
+        retrieved domain context without triggering the code-generation call.
+
+        Returns (retrieved_items, prompt_context). If retrieval is disabled
+        (self.enabled is False), returns ([], "").
+        """
+        if not self.enabled:
+            return [], ""
+
+        embeddings, metadata = self._load_store()
+        query_vec = self._embed_query(question)
+        idxs = self._search(query_vec, embeddings, self.top_k)
+
+        retrieved = []
+        for i in idxs:
+            if i < len(metadata):
+                item = dict(metadata[i])
+                raw = item.get("text", "") or item.get("full_text", "") or ""
+                text = self._sanitize(raw)
+                item["full_text"] = text
+                item["preview"] = text[: self.preview_chars] if text.strip() else "(no text extracted for this chunk)"
+                retrieved.append(item)
+
+        if self.context_compression:
+            if llm is None:
+                llm = create_chat_model(
+                    self.answer_model, api_key=self.answer_model_api_key, base_url=self.base_url, temperature=0,
+                    component="context_compression",
+                )
+
+            def _compress_one(item: dict[str, Any]) -> str:
+                resp = llm.invoke([
+                    (
+                        "system",
+                        "Given the following question and context, extract any part of the context "
+                        "*AS IS* that is relevant to answer the question. "
+                        "If none of the context is relevant return NO_OUTPUT.",
+                    ),
+                    (
+                        "human",
+                        f"Question: {question}\n\nContext:\n{item['full_text']}\n\nExtracted relevant parts:",
+                    ),
+                ])
+                text = getattr(resp, "content", str(resp)).strip()
+                return "" if text == "NO_OUTPUT" else text
+            with ThreadPoolExecutor(max_workers=len(retrieved)) as pool:
+                context_texts = list(pool.map(_compress_one, retrieved))
+        else:
+            context_texts = [item.get("full_text", "") for item in retrieved]
+
+        prompt_context = "\n\n".join(
+            f"[Source: {item.get('source','unknown')}]\n{self._sanitize(text)}"
+            for item, text in zip(retrieved, context_texts)
+        )
+        return retrieved, prompt_context
+
     def retrieve(self, profile_summary: dict[str, Any] | None = None, question: str | None = None) -> dict[str, Any]:
-        api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
-        llm = create_chat_model(self.answer_model, api_key=api_key, temperature=0, base_url=self.base_url)
+        llm = create_chat_model(
+            self.answer_model, api_key=self.answer_model_api_key, base_url=self.base_url, temperature=0,
+            component="generation",
+        )
 
         question = question or self.question
 
@@ -272,45 +348,7 @@ class VectorRetriever:
                 "profile_used": bool(profile_summary),
             }
 
-        embeddings, metadata = self._load_store()
-        query_vec = self._embed_query(question)
-        idxs = self._search(query_vec, embeddings, self.top_k)
-
-        retrieved = []
-        for i in idxs:
-            if i < len(metadata):
-                item = dict(metadata[i])
-                raw = item.get("text", "") or item.get("full_text", "") or ""
-                text = self._sanitize(raw)
-                item["full_text"] = text
-                item["preview"] = text[: self.preview_chars] if text.strip() else "(no text extracted for this chunk)"
-                retrieved.append(item)
-
-        if self.context_compression:
-            def _compress_one(item: dict[str, Any]) -> str:
-                resp = llm.invoke([
-                    (
-                        "system",
-                        "Given the following question and context, extract any part of the context "
-                        "*AS IS* that is relevant to answer the question. "
-                        "If none of the context is relevant return NO_OUTPUT.",
-                    ),
-                    (
-                        "human",
-                        f"Question: {question}\n\nContext:\n{item['full_text']}\n\nExtracted relevant parts:",
-                    ),
-                ])
-                text = getattr(resp, "content", str(resp)).strip()
-                return "" if text == "NO_OUTPUT" else text
-            with ThreadPoolExecutor(max_workers=len(retrieved)) as pool:
-                context_texts = list(pool.map(_compress_one, retrieved))
-        else:
-            context_texts = [item.get("full_text", "") for item in retrieved]
-
-        prompt_context = "\n\n".join(
-            f"[Source: {item.get('source', 'unknown')}]\n{self._sanitize(text)}"
-            for item, text in zip(retrieved, context_texts)
-        )
+        retrieved, prompt_context = self.get_retrieved_context(question, llm=llm)
 
         resp = llm.invoke(
             [

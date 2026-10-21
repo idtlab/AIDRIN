@@ -1143,12 +1143,27 @@ def run_agentic_pipeline(
 
     parsed_questions = [_parse_q(q) for q in questions_raw]
 
+    # Precompute one profile per unique data_loader in use (dedup across questions
+    # that share a loader), sequentially, before any threads start. Reuses the
+    # profile already computed above for the default loader. Without this, every
+    # question would be scored against the default dataset's profile even when its
+    # own loader points at a different dataset.
+    default_loader = (cfg.get("paths", {}) or {}).get("data_loader")
+    profiles_by_loader: Dict[Any, Dict[str, Any]] = {default_loader: profile_result}
+    for _, loader in parsed_questions:
+        if loader in profiles_by_loader:
+            continue
+        try:
+            profiles_by_loader[loader] = profiler.profile(data_loader_override=loader)
+        except Exception as exc:
+            profiles_by_loader[loader] = {"error": str(exc)}
+
     max_workers = int(retrieval_cfg.get("max_workers", 4))
     query_results: List[Dict[str, Any]] = []
     if parsed_questions:
         with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
             futures = {
-                pool.submit(_run_query, resolved, text, profile_result, loader): text
+                pool.submit(_run_query, resolved, text, profiles_by_loader[loader], loader): text
                 for text, loader in parsed_questions
             }
             for future in as_completed(futures):

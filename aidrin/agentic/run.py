@@ -81,9 +81,11 @@ def _run_query(
     executor_result = None
     try:
         executor = CodeExecutor(config_path)
-        if loader_override:
-            executor.data_loader_path = loader_override
-        executor_result = executor.run(retrieval_result=retrieval_result, profile_result=profile_result)
+        executor_result = executor.run(
+            retrieval_result=retrieval_result,
+            profile_result=profile_result,
+            data_loader_override=loader_override,
+        )
     except Exception as exc:
         executor_result = {"error": str(exc)}
 

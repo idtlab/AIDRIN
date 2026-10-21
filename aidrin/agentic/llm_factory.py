@@ -23,7 +23,14 @@ class _ResponsesWrapper:
     the OpenAI `responses` endpoint (e.g., gpt-5.2, gpt-5-codex).
     """
 
-    def __init__(self, model: str, api_key: str | None, temperature: float, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None,
+        temperature: float,
+        base_url: str | None = None,
+        component: str = "unknown",
+    ) -> None:
         try:
             from openai import OpenAI  # type: ignore
         except Exception as exc:
@@ -34,6 +41,7 @@ class _ResponsesWrapper:
         self.client = OpenAI(**kwargs)
         self.model = model
         self.temperature = temperature
+        self.component = component
 
     def invoke(self, messages: list[tuple[str, str]]) -> Any:
         prompt = "\n".join(f"{role}: {content}" for role, content in messages)
@@ -51,6 +59,7 @@ class _ResponsesWrapper:
                     self.model,
                     int(getattr(usage, "input_tokens", 0)),
                     int(getattr(usage, "output_tokens", 0)),
+                    component=self.component,
                 )
         except Exception:
             pass
@@ -95,9 +104,10 @@ class _FallbackWrapper:
 class _TrackingWrapper:
     """Wraps a LangChain chat model to record token usage after each invoke."""
 
-    def __init__(self, llm: Any, model_name: str) -> None:
+    def __init__(self, llm: Any, model_name: str, component: str = "unknown") -> None:
         self._llm = llm
         self._model_name = model_name
+        self._component = component
 
     def invoke(self, messages: Any) -> Any:
         resp = self._llm.invoke(messages)
@@ -110,6 +120,7 @@ class _TrackingWrapper:
                     self._model_name,
                     int(usage.get("input_tokens", 0)),
                     int(usage.get("output_tokens", 0)),
+                    component=self._component,
                 )
             else:
                 token_usage = getattr(resp, "response_metadata", {}).get("token_usage", {})
@@ -118,6 +129,7 @@ class _TrackingWrapper:
                         self._model_name,
                         int(token_usage.get("prompt_tokens", 0)),
                         int(token_usage.get("completion_tokens", 0)),
+                        component=self._component,
                     )
         except Exception:
             pass
@@ -133,9 +145,15 @@ def create_chat_model(
     api_key: str | None = None,
     temperature: float = 0.0,
     base_url: str | None = None,
+    component: str = "unknown",
 ) -> Any:
     """
     Create a chat model client that works across providers when possible.
+
+    component: which pipeline stage this model instance belongs to (e.g.
+    "generation", "context_compression", "execution", "remediation",
+    "complexity_scorer"), tagged onto every token_tracker record_chat() call
+    made through it — see aidrin/agentic/token_tracker.py's per-component breakdown.
 
     When ``base_url`` is provided the client targets that OpenAI-compatible endpoint
     (e.g. LBL CBORG at https://api.cborg.lbl.gov) using ChatOpenAI directly.
@@ -146,7 +164,9 @@ def create_chat_model(
     Raises ImportError if neither path is available.
     """
     if any(x in model_name.lower() for x in ["gpt-5", "codex"]):
-        return _ResponsesWrapper(model=model_name, api_key=api_key, temperature=temperature, base_url=base_url)
+        return _ResponsesWrapper(
+            model=model_name, api_key=api_key, temperature=temperature, base_url=base_url, component=component
+        )
 
     # Custom OpenAI-compatible endpoint (CBORG, science clouds, local servers, etc.)
     # Falls back to the standard OpenAI API if the custom endpoint fails.
@@ -156,10 +176,12 @@ def create_chat_model(
             primary = _TrackingWrapper(
                 ChatOpenAI(model=model_name, temperature=temperature, api_key=api_key, base_url=base_url),
                 model_name,
+                component,
             )
             fallback = _TrackingWrapper(
                 ChatOpenAI(model=model_name, temperature=temperature, api_key=api_key),
                 model_name,
+                component,
             )
             return _FallbackWrapper(primary, fallback)
         except ImportError as exc:
@@ -170,26 +192,34 @@ def create_chat_model(
         litellm.drop_params = True
     except Exception:
         pass
+    is_claude = model_name.lower().startswith("claude")
+    # Claude 4.6+ models reject an explicit temperature/top_p/top_k — steering is
+    # done via prompting instead, so only pass it through for providers that
+    # still accept it.
     try:
         from langchain_litellm import ChatLiteLLM  # type: ignore
-        llm_model = model_name
-        if model_name.lower().startswith("claude"):
-            llm_model = f"anthropic/{model_name}"
-        return _TrackingWrapper(ChatLiteLLM(model=llm_model, temperature=temperature, api_key=api_key), llm_model)
+        llm_model = f"anthropic/{model_name}" if is_claude else model_name
+        kwargs: dict[str, Any] = {"model": llm_model, "api_key": api_key}
+        if not is_claude:
+            kwargs["temperature"] = temperature
+        return _TrackingWrapper(ChatLiteLLM(**kwargs), llm_model, component)
     except ImportError:
         pass
     try:
         from langchain_community.chat_models import ChatLiteLLM  # type: ignore
-        llm_model = model_name
-        if model_name.lower().startswith("claude"):
-            llm_model = f"anthropic/{model_name}"
-        return _TrackingWrapper(ChatLiteLLM(model=llm_model, temperature=temperature, api_key=api_key), llm_model)
+        llm_model = f"anthropic/{model_name}" if is_claude else model_name
+        kwargs = {"model": llm_model, "api_key": api_key}
+        if not is_claude:
+            kwargs["temperature"] = temperature
+        return _TrackingWrapper(ChatLiteLLM(**kwargs), llm_model, component)
     except Exception:
         pass
 
     try:
         from langchain_openai import ChatOpenAI
-        return _TrackingWrapper(ChatOpenAI(model=model_name, temperature=temperature, api_key=api_key), model_name)
+        return _TrackingWrapper(
+            ChatOpenAI(model=model_name, temperature=temperature, api_key=api_key), model_name, component
+        )
     except Exception as exc:
         raise ImportError(
             "No compatible chat model client found. Install `langchain-openai` for OpenAI "

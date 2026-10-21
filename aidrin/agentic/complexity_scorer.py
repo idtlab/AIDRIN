@@ -172,7 +172,9 @@ class QueryComplexityScorer:
     def _get_llm(self) -> Any:
         if self._llm is None:
             api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
-            self._llm = create_chat_model(self.model, api_key=api_key, temperature=0, base_url=self.base_url)
+            self._llm = create_chat_model(
+                self.model, api_key=api_key, temperature=0, base_url=self.base_url, component="complexity_scorer"
+            )
         return self._llm
 
     def _load_config(self, config_path: Path) -> dict[str, Any]:
@@ -182,8 +184,15 @@ class QueryComplexityScorer:
         llm_cfg = raw.get("llm", {}) or {}
         enabled = bool(scorer_cfg.get("enabled", True))
         model = scorer_cfg.get("model") or retrieval_cfg.get("answer_model", "gpt-4o")
+        # Prefer the answer-model key (e.g. an OpenRouter/CBORG key) over
+        # retrieval.openai_api_key, which stays dedicated to the query-embedding step
+        # and would 401 against a different provider's base_url — see retriever.py's
+        # answer_model_api_key.
         api_key = (
             scorer_cfg.get("openai_api_key")
+            or retrieval_cfg.get("answer_model_api_key")
+            or os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("CBORG_API_KEY")
             or retrieval_cfg.get("openai_api_key")
             or llm_cfg.get("api_key")
             or os.environ.get("OPENAI_API_KEY")
