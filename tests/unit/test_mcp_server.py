@@ -162,6 +162,22 @@ def test_run_custom_metric_accepts_non_csv_format(tmp_path):
     assert result["row_count"] == 3
 
 
+def test_mcp_tools_read_custom_formats_with_a_loader(tmp_path):
+    from aidrin.mcp.server import run_data_quality_check, summarize_dataset
+
+    data = tmp_path / "data.weird"
+    data.write_text("a|b\n1|x\n2|\n3|z\n", encoding="utf-8")
+    script = tmp_path / "pipe_loader.py"
+    script.write_text("import pandas as pd\ndef load(path, **kwargs):\n    return pd.read_csv(path, sep='|')\n", encoding="utf-8")
+    loader = f"{script}:load"
+
+    assert json.loads(summarize_dataset(str(data), loader=loader))["shape"] == {"rows": 3, "columns": 2}
+    quality = json.loads(run_data_quality_check(str(data), loader=loader))
+    assert quality["completeness"]["Completeness scores"]["b"] == pytest.approx(2 / 3)
+    metric = json.loads(run_aidrin_metric(str(data), "completeness", loader=loader))
+    assert metric["Completeness scores"]["a"] == 1.0
+
+
 def test_run_custom_remedy_saves_csv_for_non_csv_input(tmp_path):
     script_path = _write_script(str(tmp_path))
     parquet_path = _write_parquet(str(tmp_path))
