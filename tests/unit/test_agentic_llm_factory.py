@@ -24,11 +24,19 @@ try:
 except ImportError:
     HAS_LANGCHAIN_OPENAI = False
 
-from aidrin.agentic.llm_factory import create_chat_model, resolve_provider_api_key
 
-
+@unittest.skipUnless(HAS_LANGCHAIN_OPENAI, "agentic extras not installed (pip install 'aidrin[agentic]')")
 class TestResolveProviderApiKey(unittest.TestCase):
     def setUp(self):
+        # Imported here, not at module level: aidrin.agentic's __init__ eagerly
+        # imports every submodule (including retriever.py, which imports
+        # langchain_openai unconditionally), so importing anything under
+        # aidrin.agentic at module scope would make pytest fail to even
+        # *collect* this file in a matrix job without the [agentic] extra —
+        # before the skipUnless above gets a chance to skip anything.
+        from aidrin.agentic.llm_factory import resolve_provider_api_key
+
+        self.resolve_provider_api_key = resolve_provider_api_key
         self._saved_env = {
             k: os.environ.pop(k, None)
             for k in ("OPENROUTER_API_KEY", "CBORG_API_KEY", "OPENAI_API_KEY")
@@ -42,24 +50,24 @@ class TestResolveProviderApiKey(unittest.TestCase):
                 os.environ[k] = v
 
     def test_no_base_url_returns_none(self):
-        self.assertIsNone(resolve_provider_api_key(None))
+        self.assertIsNone(self.resolve_provider_api_key(None))
 
     def test_explicit_key_wins_regardless_of_base_url(self):
         os.environ["OPENROUTER_API_KEY"] = "or-key"
         self.assertEqual(
-            resolve_provider_api_key("https://openrouter.ai/api/v1", explicit="explicit-key"),
+            self.resolve_provider_api_key("https://openrouter.ai/api/v1", explicit="explicit-key"),
             "explicit-key",
         )
 
     def test_openrouter_base_url_resolves_openrouter_key(self):
         os.environ["OPENROUTER_API_KEY"] = "or-key"
         os.environ["CBORG_API_KEY"] = "cborg-key"
-        self.assertEqual(resolve_provider_api_key("https://openrouter.ai/api/v1"), "or-key")
+        self.assertEqual(self.resolve_provider_api_key("https://openrouter.ai/api/v1"), "or-key")
 
     def test_cborg_base_url_resolves_cborg_key(self):
         os.environ["OPENROUTER_API_KEY"] = "or-key"
         os.environ["CBORG_API_KEY"] = "cborg-key"
-        self.assertEqual(resolve_provider_api_key("https://api.cborg.lbl.gov"), "cborg-key")
+        self.assertEqual(self.resolve_provider_api_key("https://api.cborg.lbl.gov"), "cborg-key")
 
     def test_unrecognized_base_url_raises_immediately(self):
         """
@@ -73,7 +81,7 @@ class TestResolveProviderApiKey(unittest.TestCase):
         """
         os.environ["OPENAI_API_KEY"] = "sk-real-openai-key"
         with self.assertRaises(ValueError) as ctx:
-            resolve_provider_api_key("https://api.openai.com/v1")
+            self.resolve_provider_api_key("https://api.openai.com/v1")
         message = str(ctx.exception)
         self.assertIn("api.openai.com", message)
         self.assertIn("OpenRouter", message)
@@ -83,7 +91,7 @@ class TestResolveProviderApiKey(unittest.TestCase):
         """An OPENAI_API_KEY in the environment must not mask the error."""
         os.environ["OPENAI_API_KEY"] = "sk-real-openai-key"
         with self.assertRaises(ValueError):
-            resolve_provider_api_key("https://api.openai.com/v1")
+            self.resolve_provider_api_key("https://api.openai.com/v1")
 
 
 @unittest.skipUnless(HAS_LANGCHAIN_OPENAI, "langchain-openai not installed")
@@ -100,6 +108,10 @@ class TestCreateChatModelNoFallback(unittest.TestCase):
     """
 
     def test_only_one_chat_openai_instance_is_constructed(self):
+        # Imported here, not at module level -- see TestResolveProviderApiKey's
+        # setUp for why.
+        from aidrin.agentic.llm_factory import create_chat_model
+
         with patch("langchain_openai.ChatOpenAI") as mock_chat_openai:
             create_chat_model(
                 "some-model", api_key="or-key", base_url="https://openrouter.ai/api/v1", temperature=0
@@ -110,6 +122,8 @@ class TestCreateChatModelNoFallback(unittest.TestCase):
         self.assertEqual(kwargs.get("base_url"), "https://openrouter.ai/api/v1")
 
     def test_invoke_failure_propagates_instead_of_retrying_against_plain_openai(self):
+        from aidrin.agentic.llm_factory import create_chat_model
+
         with patch("langchain_openai.ChatOpenAI") as mock_chat_openai:
             mock_chat_openai.return_value.invoke.side_effect = RuntimeError("endpoint unreachable")
             llm = create_chat_model(
