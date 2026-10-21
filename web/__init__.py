@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 import time
 from celery import Celery, Task
 from flask import Flask
@@ -42,9 +43,12 @@ def create_app():
     from web.telemetry import init_telemetry
     init_telemetry(app)
 
+    # AIDRIN_DEMO=1 shows the demo banner (set at build time in docker/NERSC/Dockerfile).
+    demo_mode = os.environ.get("AIDRIN_DEMO", "0").lower() in ("1", "true", "yes")
+
     @app.context_processor
     def inject_version():
-        return dict(app_version=__version__)
+        return dict(app_version=__version__, demo_mode=demo_mode)
 
     app.secret_key = os.environ.get("AIDRIN_SECRET_KEY", "aidrin")
 
@@ -69,6 +73,10 @@ def create_app():
         "result_expires": 600,
     }
     app.config.from_prefixed_env()
+    # Local UI demos without Redis: set AIDRIN_CELERY_EAGER=1 (after env merge)
+    if os.environ.get("AIDRIN_CELERY_EAGER", "").strip().lower() in {"1", "true", "yes"}:
+        app.config["CELERY"]["task_always_eager"] = True
+        app.config["CELERY"]["task_eager_propagates"] = True
 
     # Maximum upload size (default 1 GB; override per deployment via AIDRIN_MAX_UPLOAD_MB).
     # Set after from_prefixed_env so AIDRIN_MAX_UPLOAD_MB takes precedence. Flask rejects
@@ -78,6 +86,12 @@ def create_app():
     except ValueError:
         max_upload_mb = 1024
     app.config["MAX_CONTENT_LENGTH"] = max_upload_mb * 1024 * 1024
+
+    @app.context_processor
+    def inject_file_type_accept():
+        from aidrin.file_handling.file_parser import FILE_TYPE_ACCEPT_EXTENSIONS
+
+        return dict(file_type_accept=FILE_TYPE_ACCEPT_EXTENSIONS)
 
     @app.context_processor
     def inject_upload_limit():
@@ -156,6 +170,19 @@ def create_app():
     os.makedirs(custom_metrics_folder, exist_ok=True)
     app.config["CUSTOM_METRICS_FOLDER"] = custom_metrics_folder
     app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {"py"}
+
+    # Session loaders live outside the repo tree so the Flask debug reloader
+    # does not restart mid-request when Apply writes the script file.
+    custom_loaders_folder = app.config.get("CUSTOM_LOADERS_FOLDER") or os.path.join(
+        tempfile.gettempdir(), "aidrin_custom_loaders"
+    )
+    os.makedirs(custom_loaders_folder, exist_ok=True)
+    app.config["CUSTOM_LOADERS_FOLDER"] = custom_loaders_folder
+    # Pasted loader code runs inside this process, so the web Custom Loader is
+    # opt-in: set AIDRIN_ENABLE_WEB_CUSTOM_LOADERS=1 for trusted deployments only.
+    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = os.environ.get(
+        "AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", ""
+    ).strip().lower() in {"1", "true", "yes"}
 
     remedy_folder = os.path.join(custom_metrics_folder, "remedy_data")
     os.makedirs(remedy_folder, exist_ok=True)

@@ -87,6 +87,14 @@ The local stdio MCP server intentionally does not apply the web interface's
 configured root allowlist. It uses the filesystem permissions of the account
 that started ``aidrin-mcp`` and should be connected only to trusted clients.
 
+Variable units can be audited with ``verify_variable_units`` or with
+``run_aidrin_metric`` using ``variable-unit-validation``. With no sidecar,
+the tools return an audit of existing metadata. Supply at most one of
+``unit_metadata_json`` and ``unit_metadata_file`` to apply resolutions and
+revalidate the complete sidecar. File paths resolve on the execution host,
+including a selected remote endpoint. See :ref:`variable_unit_validation`
+for the canonical sidecar schema and deterministic validation rules.
+
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -110,9 +118,19 @@ tools become available to Claude for that session.
 
 .. note::
 
-   **Using a different project directory?** Copy ``.mcp.json`` and the
-   ``.claude/skills/aidrin/`` folder into your project root. Claude Code
-   will pick both up on next launch.
+   **Using a different project directory?** The skill ships inside the
+   ``aidrin`` package, so from your project root run:
+
+   .. code-block:: bash
+
+      aidrin skill install
+
+   This installs into every skills folder already present in the project
+   (``.claude/skills``, ``.agents/skills``); pass ``--dir <folder>`` to
+   pick one explicitly or to create it. Then copy ``.mcp.json`` alongside
+   it; Claude Code picks both up on next launch. After
+   ``pip install -U aidrin``, re-run ``aidrin skill install`` to refresh the
+   skill to the version that matches the package.
 
 Step 3 — Verify the connection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -127,6 +145,30 @@ Claude should call the ``list_metrics`` tool and return the full metric catalogu
 category. If it falls back to running ``aidrin list`` in the terminal instead, the MCP server
 did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mcp``).
 
+Alternative — Install via skills.sh
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The skill is also published on `skills.sh <https://www.skills.sh/idtlab/aidrin/aidrin>`_
+and can be installed into any project, for any agent that supports the skills format
+(Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, and others), without cloning
+the repository:
+
+.. code-block:: bash
+
+   npx skills add idtlab/aidrin
+
+This installs only the skill. It drives AIDRIN through the ``aidrin`` command-line
+interface, so AIDRIN must be installed and on your PATH (:ref:`cli_installation`).
+To use the MCP server instead, complete Steps 1–2 above as well.
+
+Installing this way also keeps the skill easy to update: the CLI records the source
+repository in a ``skills-lock.json`` next to the skill, and a single command pulls the
+latest version from ``main`` — no release or manual copy needed:
+
+.. code-block:: bash
+
+   npx skills update aidrin
+
 ----
 
 .. _aidrin_skill_tools:
@@ -134,7 +176,7 @@ did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mc
 Available Tools
 ---------------
 
-The MCP server exposes eleven tools. You do not normally call these by name;
+The MCP server exposes the following tools. You do not normally call these by name;
 Claude selects them from your request. They are listed here so you know what is
 reachable.
 
@@ -152,6 +194,10 @@ reachable.
      - Runs the three core data quality metrics: completeness, duplicity, outliers
    * - ``run_aidrin_metric``
      - Runs a single built-in metric against a dataset
+   * - ``verify_variable_units``
+     - Audits unit metadata or revalidates a complete inline or host-local sidecar
+   * - ``verify_file_references``
+     - Validates file references stored in selected dataset targets
    * - ``run_custom_outlier_check``
      - Runs Custom Criteria Outliers against selected targets
    * - ``run_batch``
@@ -167,10 +213,15 @@ reachable.
    * - ``agentic_run``
      - Runs the full agentic evaluation pipeline
 
+``summarize_dataset``, ``run_data_quality_check``, and ``run_aidrin_metric`` accept an
+optional ``loader`` (``path/to/loader.py:function``) for formats AIDRIN cannot read
+natively; ``run_batch`` takes the same value as ``loader:`` in its config. The loader
+must return a pandas DataFrame (see ``aidrin add-custom-loader`` in the CLI guide).
+
 .. warning::
 
-   ``run_custom_metric``, ``run_custom_remedy``, and the agentic tools execute
-   Python from the files you point them at. Only use them with code you trust.
+   ``run_custom_metric``, ``run_custom_remedy``, the agentic tools, and any ``loader``
+   execute Python from the files you point them at. Only use them with code you trust.
 
 ----
 

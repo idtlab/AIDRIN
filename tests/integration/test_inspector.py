@@ -124,6 +124,8 @@ def test_inspector_with_file_loads_panels(uploaded_client):
     html = response.data.decode()
     panels = [
         "panel-data-overview",
+        "panel-intent",
+        "panel-profile-builder",
         "panel-data-quality",
         "panel-feature-relevance",
         "panel-correlation-analysis",
@@ -135,3 +137,32 @@ def test_inspector_with_file_loads_panels(uploaded_client):
     ]
     for panel_id in panels:
         assert panel_id in html, f"Panel '{panel_id}' not found in DOM"
+
+
+def test_profile_builder_panel_has_no_sidebar_entry(uploaded_client):
+    """The profile-builder page is reachable only via the "Build profile"
+    button in the Intent panel -- it must never appear in the sidebar's
+    metric-item list."""
+    response = uploaded_client.get("/inspector")
+    html = response.data.decode()
+    assert "showPanel('profile-builder')" not in html
+    assert "showPanel(\"profile-builder\")" not in html
+
+
+def test_intent_panel_build_profile_button_precedes_update_recommendations(uploaded_client):
+    """The Change goal action row must show "Build profile" (secondary)
+    before "Update recommendations" (primary, unchanged classes)."""
+    response = uploaded_client.get("/inspector")
+    html = response.data.decode()
+    build_idx = html.index("Build profile")
+    update_idx = html.index("Update recommendations")
+    assert build_idx < update_idx
+
+    # "Update recommendations" keeps the standard primary button classes.
+    assert 'bg-blue-700 hover:bg-blue-800' in html
+
+    # The old inline "Profiles" card and its ids are gone entirely.
+    assert "intent-profile-save-open" not in html
+    assert 'id="intent-profile-editor"' not in html
+    assert "intent-profile-save-message" not in html
+    assert ">Profiles<" not in html

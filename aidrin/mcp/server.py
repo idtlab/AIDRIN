@@ -53,6 +53,7 @@ def summarize_dataset(
     file_path: str,
     file_type: str | None = None,
     max_features: int | None = None,
+    loader: str | None = None,
     endpoint: str | None = None,
     profile: str | None = None,
 ) -> str:
@@ -69,13 +70,15 @@ def summarize_dataset(
                       and categorical. All column names still appear in 'columns'.
                       If one type has fewer columns than its share, the remainder goes
                       to the other type.
+        loader: Optional custom data loader as path.py:function returning a pandas DataFrame,
+                for formats AIDRIN cannot read natively. Runs local Python: trusted scripts only.
         endpoint: Optional Globus Compute endpoint UUID. When set, the summary runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
     return _dumps(
         _executor(endpoint, profile).summarize_dataset(
-            file_path, file_type=file_type, max_features=max_features
+            file_path, file_type=file_type, max_features=max_features, loader=loader
         )
     )
 
@@ -110,6 +113,7 @@ def list_metrics(category: str | None = None) -> str:
 def run_data_quality_check(
     file_path: str,
     file_type: str | None = None,
+    loader: str | None = None,
     endpoint: str | None = None,
     profile: str | None = None,
 ) -> str:
@@ -120,12 +124,14 @@ def run_data_quality_check(
     Args:
         file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
         file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
+        loader: Optional custom data loader as path.py:function returning a pandas DataFrame,
+                for formats AIDRIN cannot read natively. Runs local Python: trusted scripts only.
         endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
     result = _executor(endpoint, profile).run_data_quality(
-        file_path, file_type=file_type, strip_visualizations=True
+        file_path, file_type=file_type, strip_visualizations=True, loader=loader
     )
     return _dumps(result)
 
@@ -164,6 +170,9 @@ def run_aidrin_metric(
     path_targets: str | list[str] | None = None,
     base_dir: str | None = None,
     target_match: str = "exact",
+    unit_metadata_json: str | None = None,
+    unit_metadata_file: str | None = None,
+    loader: str | None = None,
     endpoint: str | None = None,
     profile: str | None = None,
     session_id: str | None = None,
@@ -208,6 +217,10 @@ def run_aidrin_metric(
         path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
         base_dir: Server-local directory used to resolve relative file references.
         target_match: Interpret path_targets as exact names or full-match regular expressions.
+        unit_metadata_json: Inline canonical sidecar JSON for variable-unit-validation.
+        unit_metadata_file: Execution-host path to a canonical sidecar JSON file.
+        loader: Optional custom data loader as path.py:function returning a pandas DataFrame,
+                for formats AIDRIN cannot read natively. Runs local Python: trusted scripts only.
         endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
@@ -244,6 +257,9 @@ def run_aidrin_metric(
             ("path_targets", path_targets),
             ("base_dir", base_dir),
             ("target_match", target_match),
+            ("unit_metadata_json", unit_metadata_json),
+            ("unit_metadata_file", unit_metadata_file),
+            ("loader", loader),
         ]
         if v is not None
     }
@@ -257,6 +273,33 @@ def run_aidrin_metric(
         strip_visualizations=True,
         save_images=False,
         **kwargs,
+    )
+    return _dumps(result)
+
+
+@mcp_server.tool()
+def verify_variable_units(
+    file_path: str,
+    file_type: str | None = None,
+    unit_metadata_json: str | None = None,
+    unit_metadata_file: str | None = None,
+    endpoint: str | None = None,
+    profile: str | None = None,
+) -> str:
+    """Audit or resolve unit metadata and return the canonical sidecar.
+
+    Provide at most one sidecar source. ``unit_metadata_file`` is resolved on
+    the execution host, including a selected Globus endpoint. With no sidecar,
+    this performs a read-only audit of metadata already associated with the data.
+    """
+    result = _executor(endpoint, profile).run_metric(
+        "variable-unit-validation",
+        file_path,
+        file_type=file_type,
+        unit_metadata_json=unit_metadata_json,
+        unit_metadata_file=unit_metadata_file,
+        strip_visualizations=True,
+        save_images=False,
     )
     return _dumps(result)
 
@@ -409,6 +452,7 @@ def run_custom_remedy(
     file_path: str,
     output_dir: str | None = None,
     file_type: str | None = None,
+    diff: bool = False,
 ) -> str:
     """
     Run the remedy() method of a CustomDR class, apply it to the dataset,
@@ -422,13 +466,24 @@ def run_custom_remedy(
         output_dir: Directory to write the remedied CSV.
                     Defaults to <script_dir>/remedy_data/.
         file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
+        diff: If true, also re-run metric() on the remedied data and include
+              "before"/"after" results in the response.
     """
-    saved_path = run_custom_metric_remedy(
+    result = run_custom_metric_remedy(
         metric_name_or_path,
         file_path,
         output_dir=output_dir,
         file_type=file_type,
+        diff=diff,
     )
+    if diff:
+        saved_path = result.pop("_saved_to")
+        return _dumps({
+            **result,
+            "remedied_file": saved_path,
+            "message": f"Remedied dataset saved to {saved_path}",
+        })
+    saved_path = result
     return _dumps({
         "remedied_file": saved_path,
         "message": f"Remedied dataset saved to {saved_path}",

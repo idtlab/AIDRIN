@@ -402,6 +402,44 @@ class TestRunCommand(unittest.TestCase):
         self.assertEqual(code, 0)
 
 
+class TestDifferentialPrivacyNoisyOutput(unittest.TestCase):
+    """--noisy-output / --no-noisy-output for `aidrin run differential-privacy`."""
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+
+    def tearDown(self):
+        _clean(self.csv)
+
+    def test_noisy_output_writes_to_given_path_and_reports_it(self):
+        import tempfile
+        tmp_dir = tempfile.mkdtemp()
+        target = os.path.join(tmp_dir, "custom", "noisy.csv")
+
+        stdout, stderr, code = _run_cli(
+            "run", "differential-privacy", self.csv, "age,income", "0.5",
+            "--noisy-output", target,
+        )
+
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertTrue(os.path.exists(target))
+        self.assertEqual(payload["Noisy file path"], os.path.realpath(target))
+
+    def test_no_noisy_output_skips_writing(self):
+        stdout, stderr, code = _run_cli(
+            "run", "differential-privacy", self.csv, "age,income", "0.5",
+            "--no-noisy-output",
+        )
+
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(
+            payload["Noisy file saved"], "Skipped (readiness report preview only)"
+        )
+        self.assertNotIn("Noisy file path", payload)
+
+
 # ===========================================================================
 # hipaa summary line (_summarize_metric)
 # ===========================================================================
@@ -744,6 +782,35 @@ class TestCustomMetricMultiFormat(unittest.TestCase):
         self.assertTrue(saved_path.endswith(".csv"))
         self.assertTrue(os.path.exists(saved_path))
 
+    def test_run_custom_remedy_with_diff_flag_prints_before_after_json(self):
+        stdout, stderr, code = _run_cli(
+            "run", "custom", self.script, self.parquet, "remedy", "--file-type", "parquet", "--diff"
+        )
+        self.assertEqual(code, 0, stderr)
+        # stdout must be pure JSON so downstream tools can parse it; the
+        # human-readable note goes to stderr.
+        data = json.loads(stdout)
+        self.assertEqual(data["before"], {"row_count": 5})
+        self.assertEqual(data["after"], {"row_count": 5})
+        self.assertTrue(os.path.exists(data["remedied_file"]))
+        self.assertIn("Remedied data saved to:", stderr)
+
+    def test_run_custom_remedy_with_diff_flag_honors_output(self):
+        out_path = os.path.join(self.tmpdir, "diff.json")
+        stdout, stderr, code = _run_cli(
+            "run", "custom", self.script, self.parquet, "remedy", "--file-type", "parquet", "--diff", "-o", out_path
+        )
+        self.assertEqual(code, 0, stderr)
+        with open(out_path, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), json.loads(stdout))
+
+    def test_run_custom_metric_with_diff_flag_errors(self):
+        """--diff only makes sense alongside the remedy action."""
+        stdout, stderr, code = _run_cli(
+            "run", "custom", self.script, self.parquet, "metric", "--file-type", "parquet", "--diff"
+        )
+        self.assertNotEqual(code, 0)
+
     def test_run_custom_metric_on_hyphenated_path(self):
         """`metric` used to route through run_metric(), which lowercased and
         underscored the script path before resolving it — corrupting any
@@ -762,6 +829,100 @@ class TestCustomMetricMultiFormat(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         result = json.loads(stdout)
         self.assertEqual(result["row_count"], 5)
+
+
+# ===========================================================================
+# Custom loader (--loader / add-custom-loader)
+# ===========================================================================
+
+
+class TestCustomLoaderCLI(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.csv_path = _write_csv(_sample_df(20))
+        self.loader_path = os.path.join(self.tmpdir, "fake_loader.py")
+        with open(self.loader_path, "w", encoding="utf-8") as handle:
+            handle.write(
+                "import pandas as pd\n"
+                "def load(path, **kwargs):\n"
+                "    return pd.DataFrame({'loader_col': [1, 2, 3], 'y': [0.1, 0.2, 0.3]})\n"
+            )
+
+    def tearDown(self):
+        import shutil
+        _clean(self.csv_path)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_add_custom_loader_creates_template(self):
+        out, err, code = _run_cli(
+            "add-custom-loader", "my_ingest", "--dir", self.tmpdir
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        path = os.path.join(self.tmpdir, "my_ingest.py")
+        self.assertTrue(os.path.exists(path))
+        with open(path, encoding="utf-8") as handle:
+            body = handle.read()
+        self.assertIn("def load", body)
+
+    def test_run_completeness_with_loader(self):
+        out, err, code = _run_cli(
+            "run",
+            "completeness",
+            self.csv_path,
+            "--loader",
+            f"{self.loader_path}:load",
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        payload = json.loads(out)
+        blob = json.dumps(payload)
+        self.assertIn("loader_col", blob)
+
+    def test_loader_format_mismatch_reports_input_and_original_error(self):
+        loader = os.path.join(self.tmpdir, "json_loader.py")
+        with open(loader, "w", encoding="utf-8") as handle:
+            handle.write(
+                "import pandas as pd\n"
+                "def load(path, **kwargs):\n"
+                "    return pd.read_json(path)\n"
+            )
+        matching = os.path.join(self.tmpdir, "data.json")
+        with open(matching, "w", encoding="utf-8") as handle:
+            json.dump([{"value": 1}, {"value": 2}], handle)
+        out, err, code = _run_cli(
+            "run", "completeness", matching, "--loader", f"{loader}:load"
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        out, err, code = _run_cli(
+            "run", "completeness", self.csv_path, "--loader", f"{loader}:load"
+        )
+        self.assertNotEqual(code, 0)
+        # Loader errors name files, not absolute paths (they also reach web users).
+        self.assertIn(os.path.basename(self.csv_path), err)
+        self.assertIn("json_loader.py:load", err)
+        self.assertNotIn(self.tmpdir, err)
+        self.assertIn("Check that the file format matches what this loader expects", err)
+        self.assertIn("Original error: ValueError:", err)
+
+    def test_failed_loader_exits_nonzero(self):
+        bad = os.path.join(self.tmpdir, "bad_loader.py")
+        with open(bad, "w", encoding="utf-8") as handle:
+            handle.write("def load(path, **kwargs):\n    return None\n")
+        # Use an unsupported extension so success cannot come from a built-in reader.
+        weird = os.path.join(self.tmpdir, "data.weird")
+        with open(weird, "w", encoding="utf-8") as handle:
+            handle.write("x")
+        out, err, code = _run_cli(
+            "run",
+            "completeness",
+            weird,
+            "--loader",
+            f"{bad}:load",
+        )
+        self.assertNotEqual(code, 0)
+        combined = (err or "") + (out or "")
+        self.assertIn("Custom loader", combined)
+        self.assertIn("None", combined)
 
 
 # ===========================================================================
@@ -820,6 +981,66 @@ class TestCLIErrorHandling(unittest.TestCase):
     def test_no_command_exits_nonzero(self):
         _, _, code = _run_cli()
         self.assertNotEqual(code, 0)
+
+
+# ===========================================================================
+# selected-keys (HDF5 / Zarr)
+# ===========================================================================
+
+
+class TestSelectedKeysCLI(unittest.TestCase):
+    """CLI --selected-keys for multi-array Zarr stores."""
+
+    @classmethod
+    def setUpClass(cls):
+        pytest = __import__("pytest")
+        zarr = pytest.importorskip("zarr")
+        cls._tmpdir = tempfile.TemporaryDirectory()
+        store = os.path.join(cls._tmpdir.name, "pick.zarr")
+        root = zarr.open_group(store, mode="w")
+        for name, length in (("age", 20), ("income", 20), ("meta", 1)):
+            arr = root.create_array(name, shape=(length,), dtype="f8")
+            arr[:] = np.arange(length, dtype=np.float64)
+        cls.store = store
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmpdir.cleanup()
+
+    def test_run_completeness_with_selected_keys(self):
+        stdout, stderr, code = _run_cli(
+            "run",
+            "completeness",
+            self.store,
+            "--selected-keys",
+            "age,income",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        scores = payload.get("Completeness scores", {})
+        self.assertIn("age", scores)
+        self.assertIn("income", scores)
+        self.assertNotIn("meta", scores)
+
+    def test_summarize_with_selected_keys(self):
+        stdout, stderr, code = _run_cli(
+            "summarize",
+            self.store,
+            "--selected-keys",
+            "age",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["shape"]["columns"], 1)
+        self.assertIn("age", payload.get("numerical", {}))
+
+    def test_build_file_info_includes_selected_keys(self):
+        from aidrin.headless.runners import _build_file_info, using_selected_keys
+
+        with using_selected_keys(["S1/X", "S1/Y"]):
+            info = _build_file_info(self.store, None, None)
+        self.assertEqual(info[2], ".zarr")
+        self.assertEqual(info[3], ["S1/X", "S1/Y"])
 
 
 if __name__ == "__main__":
@@ -948,3 +1169,199 @@ class TestBatchReportAttachment(unittest.TestCase):
         ][0]
         names = [a.path for a in client.list_artifacts(parent.info.run_id)]
         self.assertIn(os.path.basename(self.report.name), names)
+
+
+# ===========================================================================
+# -o/--output: write the report to a file, same semantics as `agentic run -o`
+# ===========================================================================
+
+
+class TestOutputFlag(unittest.TestCase):
+    """`-o/--output` makes the report path an argument of the command, not a
+    shell redirect invisible to any tool that records the command."""
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df())
+        self.tmpdir = tempfile.mkdtemp()
+        self.out_path = os.path.join(self.tmpdir, "reports", "out.json")
+
+    def tearDown(self):
+        import shutil
+        _clean(self.csv)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_run_writes_report_and_still_prints_to_stdout(self):
+        stdout, stderr, code = _run_cli(
+            "run", "completeness", self.csv, "-o", self.out_path
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertTrue(os.path.isfile(self.out_path))
+        on_disk = json.loads(open(self.out_path).read())
+        self.assertIn("Overall Completeness", on_disk)
+        printed = json.loads(stdout)
+        self.assertEqual(printed, on_disk)
+
+    def test_data_quality_writes_full_report_regardless_of_summary_mode(self):
+        stdout, stderr, code = _run_cli(
+            "data-quality", self.csv, "-o", self.out_path
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        on_disk = json.loads(open(self.out_path).read())
+        for key in ("completeness", "duplicity", "outliers"):
+            self.assertIn(key, on_disk)
+        # Default stdout mode is the human summary, not JSON.
+        self.assertIn("Completeness", stdout)
+
+    def test_summarize_writes_json_even_in_human_readable_mode(self):
+        stdout, stderr, code = _run_cli(
+            "summarize", self.csv, "--summary", "-o", self.out_path
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        on_disk = json.loads(open(self.out_path).read())
+        self.assertIn("shape", on_disk)
+        # stdout kept the human table, not JSON.
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+
+    def test_batch_writes_report(self):
+        cfg = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
+        json.dump(
+            {"file_path": self.csv, "metrics": ["completeness"], "save_images": False},
+            cfg,
+        )
+        cfg.close()
+        try:
+            stdout, stderr, code = _run_cli(
+                "batch", cfg.name, "-o", self.out_path
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            on_disk = json.loads(open(self.out_path).read())
+            self.assertIn("completeness", on_disk)
+        finally:
+            _clean(cfg.name)
+
+    def test_output_path_reported_on_stderr(self):
+        _, stderr, code = _run_cli(
+            "run", "completeness", self.csv, "-o", self.out_path
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        # Compare resolved paths, not raw strings: on Windows CI runners
+        # Path.resolve() can expand an 8.3 short name (e.g. RUNNER~1) in
+        # self.out_path to its real long form, so a literal substring match
+        # against the unresolved path is not reliable there.
+        self.assertIn(os.path.realpath(self.out_path), stderr)
+
+
+# ===========================================================================
+# inventory command
+# ===========================================================================
+
+
+class TestInventoryCommand(unittest.TestCase):
+    """`aidrin inventory <file>` classifies HDF5/Zarr layout without reading it."""
+
+    def setUp(self):
+        import h5py
+        import numpy as np
+
+        self.tmpdir = tempfile.mkdtemp()
+        self.h5_path = os.path.join(self.tmpdir, "ragged.h5")
+        with h5py.File(self.h5_path, "w") as f:
+            f.create_dataset("a", data=np.arange(10, dtype=np.int32))
+            f.create_dataset("b", data=np.arange(7, dtype=np.int32))
+        self.csv = _write_csv(_sample_df())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+        _clean(self.csv)
+
+    def test_reports_multi_dataset_layout(self):
+        stdout, stderr, code = _run_cli("inventory", self.h5_path)
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["type"], "multi_dataset")
+        paths = {ds["path"] for ds in payload["datasets"]}
+        self.assertEqual(paths, {"a", "b"})
+
+    def test_non_structured_format_is_rejected(self):
+        _, stderr, code = _run_cli("inventory", self.csv)
+        self.assertNotEqual(code, 0)
+        self.assertIn("csv", stderr.lower())
+
+    def test_data_quality_refuses_multi_dataset_without_selection(self):
+        _, stderr, code = _run_cli("data-quality", self.h5_path)
+        self.assertNotEqual(code, 0)
+        self.assertIn("multi_dataset", stderr)
+        self.assertIn("aidrin inventory", stderr)
+
+    def test_data_quality_succeeds_with_selected_keys(self):
+        _, stderr, code = _run_cli(
+            "data-quality", self.h5_path, "--selected-keys", "a", "--detail"
+        )
+        self.assertEqual(code, 0, msg=stderr)
+
+
+# ===========================================================================
+# skill install command
+# ===========================================================================
+
+
+class TestSkillInstallCommand(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_copies_bundled_skill(self):
+        out, _, code = _run_cli("skill", "install", "--dir", self.tmpdir)
+        self.assertEqual(code, 0)
+        target = os.path.join(self.tmpdir, "aidrin")
+        self.assertIn(target, out)
+        self.assertTrue(os.path.isfile(os.path.join(target, "SKILL.md")))
+        self.assertTrue(os.path.isfile(os.path.join(target, "reference", "metrics.md")))
+
+    def test_rerun_overwrites_in_place(self):
+        _run_cli("skill", "install", "--dir", self.tmpdir)
+        skill_md = os.path.join(self.tmpdir, "aidrin", "SKILL.md")
+        with open(skill_md, "w") as fh:
+            fh.write("stale")
+        _, _, code = _run_cli("skill", "install", "--dir", self.tmpdir)
+        self.assertEqual(code, 0)
+        with open(skill_md) as fh:
+            self.assertTrue(fh.read().startswith("---"))
+
+    def test_default_installs_into_existing_skill_dirs(self):
+        os.makedirs(os.path.join(self.tmpdir, ".claude", "skills"))
+        os.makedirs(os.path.join(self.tmpdir, ".agents", "skills"))
+        cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        try:
+            _, _, code = _run_cli("skill", "install")
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 0)
+        for d in (".claude", ".agents"):
+            self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, d, "skills", "aidrin", "SKILL.md")))
+
+    def test_default_errors_when_no_skill_dir(self):
+        cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        try:
+            _, err, code = _run_cli("skill", "install")
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 2)
+        self.assertIn("--dir", err)
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, ".claude")))
+
+    def test_refuses_symlink_target(self):
+        real = os.path.join(self.tmpdir, "real")
+        os.makedirs(real)
+        os.symlink(real, os.path.join(self.tmpdir, "aidrin"))
+        _, err, code = _run_cli("skill", "install", "--dir", self.tmpdir)
+        self.assertEqual(code, 2)
+        self.assertIn("symlink", err)

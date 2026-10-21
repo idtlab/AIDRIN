@@ -1,11 +1,13 @@
 import logging
 import os
+import tempfile
 import time
 import uuid
 
 import pandas as pd
 from flask import (
     Blueprint,
+    abort,
     current_app,
     jsonify,
     redirect,
@@ -17,12 +19,17 @@ from flask import (
     url_for,
 )
 from werkzeug.utils import secure_filename
-from aidrin.file_handling.file_parser import SUPPORTED_FILE_TYPES, READER_MAP
+from aidrin.file_handling.file_parser import (
+    GLOBUS_FILE_TYPES,
+    READER_MAP,
+    SUPPORTED_FILE_TYPES,
+)
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
     clear_all_user_cache,
     confine_to_upload_folder,
+    describe_loader_error,
     ensure_json_serializable,
     generate_metric_cache_key,
     get_current_user_id,
@@ -46,7 +53,11 @@ def homepage():
 def inspector():
     if request.method == "POST":
         file_upload_time_log.info("File upload initiated (workspace)")
-        file = request.files["file"]
+        file = request.files.get("file")
+        if (request.form.get("fileTypeSelector") or "").strip() == ".custom" and not current_app.config.get(
+            "ENABLE_WEB_CUSTOM_LOADERS"
+        ):
+            abort(403)
 
         if file:
             cleared_count = clear_all_user_cache()
@@ -66,16 +77,84 @@ def inspector():
                 return redirect(url_for("core.inspector"))
             file.save(file_path)
 
+            selected_type = (request.form.get("fileTypeSelector") or "").strip()
+            loader_code = (request.form.get("loader_code") or "").strip()
+            # ".custom" means: any extension + required user loader on upload.
+            if selected_type == ".custom":
+                _, ext = os.path.splitext(display_name or "")
+                file_type = (ext or "").lower() or ".custom"
+                if not loader_code:
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    session["upload_error"] = (
+                        "Custom loader code is required when using "
+                        "'Other / custom loader'. Define load(path, **kwargs) "
+                        "that returns a pandas DataFrame."
+                    )
+                    return redirect(url_for("core.inspector"))
+
+                from aidrin.file_handling.custom_loader import (
+                    CustomLoaderError,
+                    load_dataframe as load_via_custom_loader,
+                )
+
+                loaders_folder = current_app.config.get("CUSTOM_LOADERS_FOLDER")
+                if not loaders_folder:
+                    loaders_folder = os.path.join(
+                        tempfile.gettempdir(), "aidrin_custom_loaders",
+                    )
+                os.makedirs(loaders_folder, exist_ok=True)
+                # One script per upload: Celery tasks queued for an earlier
+                # dataset keep running the loader they were submitted with.
+                loader_path = os.path.join(
+                    loaders_folder, f"custom_loader_{uuid.uuid4().hex}.py"
+                )
+                with open(loader_path, "w", encoding="utf-8") as handle:
+                    handle.write(loader_code)
+                spec = f"{loader_path}:load"
+                try:
+                    load_via_custom_loader(spec, file_path)
+                except Exception as exc:
+                    # Remove only this attempt's files; the previous dataset
+                    # and its loader stay active.
+                    for path in (file_path, loader_path):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                    if isinstance(exc, CustomLoaderError):
+                        session["upload_error"] = describe_loader_error(exc, file_path, display_name)
+                    else:
+                        session["upload_error"] = (
+                            f"Custom loader failed for '{display_name}': "
+                            f"{type(exc).__name__}: {exc}"
+                        )
+                    file_upload_time_log.error(
+                        "Upload custom loader failed: %s", exc, exc_info=True
+                    )
+                    return redirect(url_for("core.inspector"))
+                session["custom_loader_spec"] = spec
+            else:
+                file_type = selected_type
+                loader_path = None
+                session.pop("custom_loader_spec", None)
+
             session["uploaded_file_name"] = display_name
             session["uploaded_file_path"] = file_path
-            session["uploaded_file_type"] = request.form.get("fileTypeSelector")
+            session["uploaded_file_type"] = file_type
             session.pop("selected_keys", None)
+            session.pop("upload_error", None)
+            # This feature owns session["intent"], so a new dataset drops it.
+            session.pop("intent", None)
 
             # Track files this session created so /clear removes only these,
             # never files belonging to other concurrent sessions.
             owned_files = session.get("owned_files", [])
-            if file_path not in owned_files:
-                owned_files.append(file_path)
+            for owned_path in (file_path, loader_path):
+                if owned_path and owned_path not in owned_files:
+                    owned_files.append(owned_path)
             session["owned_files"] = owned_files
 
             return redirect(url_for("core.inspector"))
@@ -135,6 +214,9 @@ def inspector():
     from web.llm import is_llm_available
     llm_available = is_llm_available()
     llm_configured = bool(session.get("llm_config", {}).get("api_key"))
+
+    # Intent-based metric recommendations (needs no LLM)
+    from aidrin.intent import CUSTOM_PROFILE_OPTION_VALUE, INTENTS
     globus_authenticated = session.get("globus_authenticated", False)
 
     # Globus remote file — treat as "uploaded" for sidebar/panels visibility
@@ -142,6 +224,7 @@ def inspector():
     globus_file_name = session.get("globus_file_name", "")
     globus_file_type = session.get("globus_file_type", "")
     globus_endpoint_id = session.get("globus_endpoint_id", "")
+    globus_capabilities = session.get("globus_capabilities", [])
     globus_mode = bool(globus_file_path and globus_authenticated)
 
     # If Globus mode, use globus file info for template (shows sidebar + panels)
@@ -150,12 +233,17 @@ def inspector():
     effective_file_type = file_type or globus_file_type
 
     try:
+        upload_error = session.pop("upload_error", None)
         return render_template(
             "inspector.html",
             uploaded_file_path=effective_file_path or "",
             uploaded_file_name=effective_file_name or "",
             file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
+            upload_file_types=list(SUPPORTED_FILE_TYPES),
+            custom_loaders_enabled=current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False),
+            upload_error=upload_error,
+            globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],
             current_checked_keys=current_checked_keys
             if current_checked_keys is not None
@@ -164,8 +252,12 @@ def inspector():
             globus_authenticated=globus_authenticated,
             globus_mode=globus_mode,
             globus_endpoint_id=globus_endpoint_id,
+            globus_capabilities=globus_capabilities,
             llm_available=llm_available,
             llm_configured=llm_configured,
+            intent_options=INTENTS,
+            custom_profile_option_value=CUSTOM_PROFILE_OPTION_VALUE,
+            intent_asked=bool(session.get("intent")),
         )
     except Exception as e:
         file_upload_time_log.error("Error rendering workspace: %s", e, exc_info=True)
@@ -203,6 +295,11 @@ def retrieve_uploaded_file():
     return jsonify({"error": "No file path found"}), 404
 
 
+# Session keys /clear keeps: user-level settings and credentials that are not
+# tied to the dataset being cleared.
+PRESERVED_ON_CLEAR = ("llm_config", "globus_tokens", "globus_authenticated")
+
+
 @core_bp.route("/clear", methods=["GET", "POST"])
 def clear_file():
     file_upload_time_log.info("Clearing File")
@@ -225,11 +322,20 @@ def clear_file():
     # Capture this session's own files before clearing the session.
     owned_files = session.get("owned_files", [])
 
+    # State that belongs to the user rather than to the dataset being cleared,
+    # so it survives starting a new configuration. Globus sign-out has its own
+    # explicit action (/globus/disconnect), as does the LLM key (/llm/disconnect).
+    preserved = {
+        key: session[key] for key in PRESERVED_ON_CLEAR if key in session
+    }
+
     session.pop("uploaded_file_path", None)
     session.pop("uploaded_file_name", None)
     session.pop("uploaded_file_type", None)
     session.pop("minimize_preview", None)
     session.clear()
+
+    session.update(preserved)
 
     try:
         for file_path in owned_files:
@@ -260,41 +366,28 @@ def filter_file():
 
         file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_type = session.get("uploaded_file_type")
-        if file_path and file_type == ".h5" and len(keys_list) > 1:
-            inv = hdf5Reader(file_path, file_upload_time_log).inventory()
-            if inv["type"] == "multi_dataset":
-                ds_by_path = {ds["path"]: ds for ds in inv["datasets"]}
-                lengths = set()
-                for key in keys_list:
-                    ds = ds_by_path.get(key)
-                    if not ds:
-                        return jsonify(
-                            {"success": False, "error": f"Unknown dataset: {key}"}
-                        ), 400
-                    if ds["ndim"] != 1:
-                        return jsonify(
-                            {
-                                "success": False,
-                                "error": (
-                                    f"'{key}' is not a 1D array. Select 1D datasets "
-                                    "with the same length, or choose a single 2D dataset."
-                                ),
-                            }
-                        ), 400
-                    lengths.add(ds["shape"][0] if ds["shape"] else 0)
-                if len(lengths) > 1:
-                    return jsonify(
-                        {
-                            "success": False,
-                            "error": (
-                                "Selected datasets must have the same length to merge "
-                                "into one table."
-                            ),
-                        }
-                    ), 400
+        if file_path and file_type == ".h5":
+            reader = hdf5Reader(file_path, file_upload_time_log)
+            if reader.inventory()["type"] == "multi_dataset":
+                # The reader owns what a usable selection is. Keeping a second
+                # copy of the rule here is what let the picker keep rejecting
+                # grid selections after the reader learned to read them.
+                error = reader.validate_selection(keys_list)
+                if error:
+                    return jsonify({"success": False, "error": error}), 400
 
         session["selected_keys"] = keys_list
         session["minimize_preview"] = True
+        # Recommendations were computed for the previous column selection.
+        session.pop("intent", None)
+        # The file name is unchanged across an HDF5 key switch, so the cached
+        # recommendation payload (keyed on file name, not selected_keys) would
+        # otherwise survive and be served back on the next panel restore.
+        file_name = session.get("uploaded_file_name")
+        if file_name:
+            current_app.TEMP_RESULTS_CACHE.pop(
+                f"user:{get_current_user_id()}:file:{file_name}:intent", None
+            )
 
         return jsonify({"success": True, "message": "File filtered successfully"})
     except Exception as e:
@@ -316,6 +409,7 @@ def clear_dataset_selection():
             previous = [key.strip() for key in previous.split(",") if key.strip()]
         session.pop("selected_keys", None)
         session.pop("minimize_preview", None)
+        session.pop("intent", None)
 
         cleared_count = clear_all_user_cache()
         file_upload_time_log.info(
@@ -337,7 +431,8 @@ def clear_dataset_selection():
                 "current_checked_keys": previous,
                 "message": (
                     "This HDF5 file contains multiple datasets with different shapes. "
-                    "Select one or more compatible datasets (same length) to analyze."
+                    "Select 1D datasets of the same length, or fields that share a "
+                    "grid, to analyze."
                 ),
             })
         )
@@ -483,8 +578,8 @@ def summary_statistics():
                         "current_checked_keys": selected,
                         "message": (
                             "This HDF5 file contains multiple datasets with "
-                            "different shapes. Select one or more compatible "
-                            "datasets (same length) to analyze."
+                            "different shapes. Select 1D datasets of the same "
+                            "length, or fields that share a grid, to analyze."
                         ),
                     })
                 ), 200

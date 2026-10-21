@@ -1,6 +1,6 @@
 import base64
-import os
 from io import BytesIO
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +17,14 @@ def add_laplace_noise(data, epsilon):
         raise Exception("Epsilon cannot be 0")
 
 
-def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True, include_visualization=True):
+def return_noisy_stats(
+    add_noise_columns,
+    epsilon,
+    file_info,
+    save_output=True,
+    include_visualization=True,
+    output_path=None,
+):
     # Convert JSON back to DataFrame if needed, otherwise use DataFrame directly
     import pandas as pd
 
@@ -123,9 +130,11 @@ def return_noisy_stats(add_noise_columns, epsilon, file_info, save_output=True, 
 
     if save_output:
         try:
-            os.makedirs("noisy", exist_ok=True)
-            df_drop_na.to_csv("noisy/noisy_data.csv", index=False)
+            target = Path(output_path) if output_path else Path("noisy") / "noisy_data.csv"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            df_drop_na.to_csv(target, index=False)
             stat_dict["Noisy file saved"] = "Successful"
+            stat_dict["Noisy file path"] = str(target.resolve())
         except Exception:
             stat_dict["Noisy file saved"] = "Error"
     else:

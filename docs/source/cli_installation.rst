@@ -44,6 +44,22 @@ The simplest way to get the CLI:
 
 ----
 
+Zarr Support (Optional)
+------------------------
+
+Reading ``.zarr`` stores requires an additional dependency — install it as a separate optional
+extra (Python >= 3.11):
+
+.. code-block:: bash
+
+   # PyPI install
+   pip install "aidrin[zarr]"
+
+   # Source install
+   pip install -e ".[zarr]"
+
+----
+
 Agentic Evaluation (Optional)
 ------------------------------
 

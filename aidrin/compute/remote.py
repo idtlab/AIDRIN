@@ -124,12 +124,67 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Skewness"] = aidrin.calculate_skewness(file_info)
         if "kurtosis" in selected:
             result["Kurtosis"] = aidrin.calculate_kurtosis(file_info)
+        if "file_reference_validation" in selected:
+            try:
+                result["File Reference Validation"] = _file_reference_validation()
+            except Exception as e:
+                result["File Reference Validation"] = {
+                    "Error": f"{type(e).__name__}: {e}",
+                }
+        if "variable_unit_validation" in selected:
+            try:
+                result["Variable Unit Validation"] = (
+                    aidrin.calculate_variable_unit_validation(
+                        file_info,
+                        params.get("unit_metadata"),
+                    )
+                )
+            except Exception as e:
+                result["Variable Unit Validation"] = {
+                    "Error": f"{type(e).__name__}: {e}",
+                    "Description": (
+                        "Verifies that every logical variable has a recognized unit, "
+                        "is dimensionless, or is marked not applicable."
+                    ),
+                }
         return result
 
     def _custom_outlier_targets():
         """Discover selectable custom-outlier targets on the remote file."""
+        from aidrin.file_handling.file_reference_policy import discovery_configuration
         from aidrin.file_handling.value_iterators import iter_targets
-        return {"success": True, "targets": iter_targets(file_info)}
+        from aidrin.structured_data_metrics.variable_unit_validation import (
+            unit_suggestion_catalog,
+        )
+
+        return {
+            "success": True,
+            "targets": iter_targets(file_info),
+            "unit_metadata": aidrin.calculate_variable_unit_validation(file_info),
+            "file_reference": discovery_configuration(),
+            "unit_catalog": unit_suggestion_catalog(),
+        }
+
+    def _file_reference_validation():
+        """Validate manifest references using worker-controlled policy."""
+        from aidrin.file_handling.file_reference_policy import allowed_roots, resolve_base_dir, scan_limit
+        from aidrin.structured_data_metrics.file_reference_validation import calculate_file_reference_validation
+
+        roots = allowed_roots()
+        base_dir = resolve_base_dir(
+            roots,
+            params.get("root_id"),
+            params.get("base_subdirectory"),
+        )
+        return calculate_file_reference_validation(
+            file_info,
+            params.get("path_targets"),
+            base_dir=base_dir,
+            max_results=params.get("max_results", 100),
+            scan_limit=scan_limit(),
+            allowed_roots=roots,
+            target_match=params.get("target_match", "exact"),
+        )
 
     def _summary_statistics():
         """Compute summary statistics + histograms on the remote file."""
@@ -275,6 +330,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         "data_quality": _data_quality,
         "data_structure": _data_structure,
         "custom_outlier_targets": _custom_outlier_targets,
+        "file_reference_validation": _file_reference_validation,
         "completeness": lambda: aidrin.calculate_completeness(file_info),
         "outliers": lambda: aidrin.calculate_outliers(file_info),
         "duplicates": lambda: aidrin.calculate_duplicates(file_info),
@@ -389,10 +445,16 @@ def remote_env_probe():
     except Exception as exc:
         headless_import = f"{type(exc).__name__}: {exc}"
 
+    capabilities = ["file_reference_validation_v1"]
+    if hasattr(aidrin, "calculate_variable_unit_validation"):
+        capabilities.append("variable_unit_metadata_v1")
+
     return {
         "aidrin_version": aidrin.__version__,
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "headless_import": headless_import,
+        "capability_schema_version": 1,
+        "capabilities": capabilities,
     }
 
 

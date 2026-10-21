@@ -1,7 +1,10 @@
 """Tests for metric submission from the inspector."""
 
+import io
 import json
 from pathlib import Path
+
+import pytest
 
 import web.routes.metrics as metrics_routes
 
@@ -117,6 +120,15 @@ def test_custom_outlier_targets_with_file(uploaded_client):
     assert data["success"] is True
     targets = data["targets"]
     assert any(t["name"] == "age" and t["target_type"] == "column" for t in targets)
+    metadata = data["unit_metadata"]
+    assert metadata["format"] == "aidrin.variable-unit-metadata"
+    assert [variable["name"] for variable in metadata["variables"]] == [
+        "age",
+        "income",
+        "education",
+        "gender",
+    ]
+    assert all("observed" in variable for variable in metadata["variables"])
 
 
 def test_custom_outlier_targets_returns_generic_failure(uploaded_client, monkeypatch):
@@ -184,6 +196,92 @@ def test_data_structure_file_reference_validation_returns_metadata(uploaded_clie
     assert result["Summary"]["all_references_valid"] == 1
     assert result["File metadata"][0]["resolved_path"] == str(artifact)
     assert result["File metadata"][0]["size_bytes"] == 6
+
+
+def test_understandability_variable_unit_validation_uses_request_local_sidecar(uploaded_client):
+    discovery = uploaded_client.post("/custom-outlier-targets").get_json()
+    metadata = discovery["unit_metadata"]
+    temperature = next(
+        group
+        for group in discovery["unit_catalog"]
+        if group["quantity"] == "temperature"
+    )
+    assert temperature["units"][0] == {
+        "label": "Celsius (°C)",
+        "unit": "degree_Celsius",
+    }
+    resolutions = {
+        "age": {"kind": "unit", "unit": "year", "source": "user"},
+        "income": {"kind": "unit", "unit": "kilogram", "source": "user"},
+        "education": {"kind": "not_applicable", "source": "user"},
+        "gender": {"kind": "not_applicable", "source": "user"},
+    }
+    for variable in metadata["variables"]:
+        variable["resolution"] = resolutions[variable["name"]]
+
+    response = uploaded_client.post(
+        "/variable-unit-validation?return_type=json",
+        data={
+            "variable_unit_validation": "yes",
+            "variable_unit_metadata": json.dumps(metadata),
+        },
+    )
+    result = response.get_json()["Variable Unit Validation"]
+
+    assert result["summary"]["all_variables_ready"] == 1
+    assert result["summary"]["counts"]["valid"] == 2
+    assert result["summary"]["counts"]["not_applicable"] == 2
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "kind", "formula"),
+    [
+        ("degC", "kelvin", "offset", "K = °C × 1 + 273.15"),
+        ("degC", "degF", "offset", "°F = °C × 1.8 + 32"),
+        ("degF", "degC", "offset", "°C ≈ °F × 0.555556 - 17.7778"),
+        ("kPa", "Pa", "scale", "Pa = kPa × 1000"),
+        ("dBm", "watt", "conversion", "conversion formula unavailable for these units"),
+    ],
+)
+def test_variable_unit_web_override_preserves_conversion_reporting(client, observed, resolved, kind, formula):
+    response = client.post(
+        "/inspector",
+        data={
+            "file": (io.BytesIO(f"measurement ({observed})\n0\n25\n".encode()), "measurement.csv"),
+            "fileTypeSelector": ".csv",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    metadata = client.post("/custom-outlier-targets").get_json()["unit_metadata"]
+    metadata["variables"][0]["resolution"] = {
+        "kind": "unit", "unit": resolved, "source": "user",
+    }
+
+    response = client.post(
+        "/variable-unit-validation?return_type=json",
+        data={"variable_unit_validation": "yes", "variable_unit_metadata": json.dumps(metadata)},
+    )
+    result = response.get_json()["Variable Unit Validation"]
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == kind
+    assert mismatch["conversion_factor"] == (1000.0 if kind == "scale" else None)
+    assert formula in mismatch["message"]
+    assert result["summary"]["all_variables_ready"] == 1
+
+
+def test_variable_unit_error_is_metric_scoped(uploaded_client):
+    response = uploaded_client.post(
+        "/variable-unit-validation?return_type=json",
+        data={
+            "variable_unit_validation": "yes",
+            "variable_unit_metadata": "[]",
+        },
+    )
+    data = response.get_json()
+
+    assert "Variable-unit metadata must be a JSON object" in data["Variable Unit Validation"]["Error"]
 
 
 def test_data_structure_file_reference_validation_preserves_comma_target_names(uploaded_client, app):

@@ -8,7 +8,7 @@
 - [Impact on AI](#impact-on-ai): correlations, feature-relevance
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
 - [Data governance](#data-governance): k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk, hipaa-compliance
-- [Privacy](#privacy): differential-privacy (currently unavailable)
+- [Privacy](#privacy): differential-privacy
 - [Batch config format](#batch-config-format)
 
 ---
@@ -29,6 +29,17 @@
 - Column lists are comma-separated strings; quote them: `"col_a,col_b"`.
 - `--detail` defaults on for `run`/`batch` (full JSON). Visualizations are
   stripped by default.
+- `run`, `batch`, `data-quality`, and `summarize` all accept `-o/--output
+  <path>` to write the JSON report to a file (creating parent directories as
+  needed) in addition to stdout — same semantics as `agentic run -o`. Prefer
+  this over a shell redirect (`> report.json`) when the report path needs to
+  be a recorded argument of the command, not just a stdout destination.
+- For HDF5 (`.h5`) or Zarr (`.zarr`) files, run `aidrin inventory <file>`
+  first if unsure whether the file is really one table: it prints the layout
+  classification (`empty`/`single_dataset`/`multi_dataset`/`legacy`) and the
+  dataset/array list without reading anything as a table. A `multi_dataset`
+  layout makes `run`/`data-quality`/`summarize` refuse (non-zero exit) unless
+  `--selected-keys <comma-separated-paths>` is also given.
 - Examples use bare `aidrin`. If `aidrin` is not on PATH, see
   reference/installation.md for the invocation form (e.g. `uv run aidrin`).
 - Per metric below: **Syntax**, **Args (in order)**, **Output keys**,
@@ -571,12 +582,17 @@ Note: this is regex/pattern-based PHI detection (SSN, email, phone, IP, URL, VIN
   - `Variance of feature <col>(after noise)` — scalar
   - `Description` — string explaining the Laplacian noise mechanism
   - `Noisy file saved` — confirmation string
+  - `Noisy file path` — absolute path of the written CSV (present whenever a file was written)
 - **Direction:** lower epsilon = more privacy (more noise added). Compare before/after variance to quantify the noise impact per column.
+- This metric always writes the noised data to disk unless told not to: pass
+  `--noisy-output <path>` to choose where, or `--no-noisy-output` to skip the
+  write entirely. With neither flag it writes `./noisy/noisy_data.csv`
+  relative to the current directory.
 
 **Example:**
 
 ```bash
-aidrin run differential-privacy examples/sample_data/csv/adult.csv "age,hours.per.week" 1.0
+aidrin run differential-privacy examples/sample_data/csv/adult.csv "age,hours.per.week" 1.0 --noisy-output /tmp/noisy.csv
 ```
 
 ---

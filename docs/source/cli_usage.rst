@@ -20,6 +20,15 @@ Quick Start
    # Run a batch of metrics from a YAML config
    aidrin batch /path/to/my_project/batch_config.yaml
 
+   # HDF5 / Zarr: pick compatible 1D arrays (comma-separated paths)
+   aidrin run completeness /path/to/store.zarr --selected-keys age,income
+   aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
+
+Local web upload does not accept ``.zarr`` directories; use the CLI or library. Multi-dimensional
+grids are not auto-flattened — select 1D (or a single 2D) arrays only. Unsure whether an HDF5/Zarr
+file is really one table? Run ``aidrin inventory <file>`` first — see :ref:`cli_inventory`. See
+:ref:`cli_installation` to install Zarr support.
+
 ----
 
 Sample Dataset
@@ -90,6 +99,9 @@ prints a compact summary.
    # Override the format inferred from the file extension
    aidrin data-quality /path/to/data --file-type .parquet
 
+   # Write the JSON report to a file (in addition to stdout)
+   aidrin data-quality /path/to/sample_dataset.csv -o /path/to/reports/data_quality.json
+
 ``aidrin summarize``
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -105,6 +117,60 @@ and cardinality. Useful for deciding which columns to feed to other metrics.
 
    # Cap how many features are described
    aidrin summarize /path/to/sample_dataset.csv --max-features 20
+
+   # Write the JSON report to a file (in addition to stdout, even with --summary)
+   aidrin summarize /path/to/sample_dataset.csv -o /path/to/reports/summary.json
+
+.. _cli_inventory:
+
+``aidrin inventory``
+~~~~~~~~~~~~~~~~~~~~
+
+Classifies an HDF5 (``.h5``) or Zarr (``.zarr``) file's on-disk layout and lists its
+datasets/arrays, without reading the file as a table. Every other supported format (CSV,
+Parquet, Excel, JSON, NumPy) is always read as a single table and has no ambiguous layout to
+vet, so ``inventory`` only applies to HDF5/Zarr.
+
+.. code-block:: bash
+
+   aidrin inventory /path/to/file.h5
+   aidrin inventory /path/to/store.zarr
+
+   # Write the JSON report to a file (in addition to stdout)
+   aidrin inventory /path/to/file.h5 -o /path/to/reports/inventory.json
+
+The ``type`` field in the output is one of:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Layout
+     - Meaning
+   * - ``empty``
+     - No readable datasets/arrays.
+   * - ``single_dataset``
+     - One dataset/array; ``run``/``data-quality``/``summarize`` auto-read it.
+   * - ``multi_dataset``
+     - Incompatible or grouped layout; an explicit ``--selected-keys`` choice is required.
+   * - ``legacy``
+     - Multiple datasets/arrays that share a compatible shape and are auto-read as columns of
+       one table. Always sanity-check the dataset list for this layout — an incidental shape
+       match does not guarantee the datasets represent one table (e.g. unrelated simulation
+       fields on a shared mesh).
+
+If a file's layout is ``multi_dataset``, ``run``, ``data-quality``, and ``summarize`` refuse to
+guess and exit non-zero, naming the layout and pointing back at ``aidrin inventory``:
+
+.. code-block:: bash
+
+   $ aidrin data-quality /path/to/ragged.h5
+   Error: .h5 store '/path/to/ragged.h5' has layout 'multi_dataset' and needs an explicit
+   dataset selection. Run `aidrin inventory /path/to/ragged.h5` to see the dataset/array list,
+   then pass --selected-keys (CLI) or selected_keys=[...] (library) with compatible paths.
+
+   $ aidrin data-quality /path/to/ragged.h5 --selected-keys a,b
+   {...}
 
 ``aidrin run``
 ~~~~~~~~~~~~~~
@@ -141,6 +207,13 @@ Examples:
    aidrin run max-pairwise-correlation /path/to/sample_dataset.csv
    aidrin run skewness /path/to/sample_dataset.csv
    aidrin run kurtosis /path/to/sample_dataset.csv
+
+   # Audit existing unit metadata and emit the canonical sidecar on stdout
+   aidrin run variable-unit-validation /path/to/sample_dataset.csv
+
+   # Apply resolutions from a sidecar and revalidate it
+   aidrin run variable-unit-validation /path/to/sample_dataset.csv \
+     --unit-metadata-file /path/to/sample_dataset.units.json
 
    # Data quality (completeness family — arguments are passed as named --flags)
    aidrin run row-level-completeness /path/to/sample_dataset.csv --required-columns "income,credit_score"
@@ -180,6 +253,9 @@ Examples:
    aidrin run hipaa-compliance /path/to/sample_dataset.csv "age,zipcode,diagnosis"
    aidrin run differential-privacy /path/to/sample_dataset.csv "age,income" 1.0
 
+   # Write the JSON report to a file (in addition to stdout)
+   aidrin run completeness /path/to/sample_dataset.csv -o /path/to/reports/completeness.json
+
 For custom criteria outliers, ``--rule``, ``rules-json``, and ``--rules-file``
 describe expected valid values. Values that do not satisfy those conditions are
 flagged as outliers. A rules file is a UTF-8 JSON array using the same rule
@@ -209,6 +285,18 @@ The CLI, batch runner, and headless Python API intentionally do not apply the
 web server's configured root allowlist. They run with the invoking account's
 filesystem permissions and can inspect any path that account can access.
 
+``differential-privacy`` always writes the noised data to disk unless told not to. By default it
+writes ``./noisy/noisy_data.csv`` relative to the current directory and echoes the resolved path
+back as ``"Noisy file path"`` in the result; ``--noisy-output <path>`` writes there instead, and
+``--no-noisy-output`` skips the write entirely:
+
+.. code-block:: bash
+
+   aidrin run differential-privacy /path/to/sample_dataset.csv "age,income" 1.0 \
+     --noisy-output /path/to/reports/noisy.csv
+
+   aidrin run differential-privacy /path/to/sample_dataset.csv "age,income" 1.0 --no-noisy-output
+
 Options available on all ``run`` subcommands:
 
 .. list-table::
@@ -219,6 +307,8 @@ Options available on all ``run`` subcommands:
      - Description
    * - ``-v``, ``--verbose``
      - Show progress output while the metric runs
+   * - ``-o``, ``--output``
+     - Path to write the JSON report to (in addition to stdout)
 
 ``aidrin batch``
 ~~~~~~~~~~~~~~~~
@@ -231,11 +321,15 @@ Runs a set of metrics defined in a JSON or YAML config file. Useful for reproduc
    aidrin batch /path/to/my_project/batch_config.yaml -v          # verbose
    aidrin batch /path/to/my_project/batch_config.yaml --viz       # keep visualization data
 
-Results are printed as JSON to stdout. Redirect to a file to save:
+Results are printed as JSON to stdout, and can also be written to a file with ``-o``/``--output``:
 
 .. code-block:: bash
 
-   aidrin batch /path/to/my_project/batch_config.yaml > results.json
+   aidrin batch /path/to/my_project/batch_config.yaml -o /path/to/reports/results.json
+
+A shell redirect (``> results.json``) also works, but the path is then invisible to any tool
+that only records the command line, rather than a recorded argument of the run — prefer
+``-o``/``--output`` when that matters.
 
 **Config file format (YAML):**
 
@@ -252,6 +346,9 @@ Results are printed as JSON to stdout. Redirect to a file to save:
 
    target-column: approved
 
+For HDF5/Zarr multi-array stores, add ``selected-keys`` (list or comma-separated string)
+with compatible 1D paths, for example ``selected-keys: [age, income]``.
+
 For a file manifest, batch configuration accepts dashed or underscored forms and
 list or comma-separated targets:
 
@@ -266,6 +363,17 @@ list or comma-separated targets:
    base-dir: /data/project
    max-results: 100
    scan-limit: 0
+
+Variable-unit validation accepts either a complete inline sidecar or a sidecar
+file resolved on the execution host. See :ref:`variable_unit_validation` for
+the canonical schema and audit-and-repair workflow:
+
+.. code-block:: yaml
+
+   file-path: /path/to/sample_dataset.csv
+   metrics:
+     - variable-unit-validation
+   unit-metadata-file: /path/to/sample_dataset.units.json
 
 **Example** — fairness analysis on the sample dataset:
 
@@ -289,7 +397,7 @@ list or comma-separated targets:
 
 .. code-block:: bash
 
-   aidrin batch /path/to/my_project/fairness_config.yaml > fairness_results.json
+   aidrin batch /path/to/my_project/fairness_config.yaml -o fairness_results.json
 
 .. _cli_add_custom_module:
 
@@ -316,6 +424,57 @@ or set explicitly with ``--file-type``:
 
 The remedy output is always saved as a CSV, regardless of the input format, to a ``remedy_data/``
 folder next to the module file (``/path/to/my_project/remedy_data/my_audit_remedy.csv``).
+
+``aidrin add-custom-loader``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Scaffolds a trusted user data loader that returns a ``pandas.DataFrame``. Use this for
+formats AIDRIN does not read natively yet (for example ROOT ``.root`` files via
+``uproot``), or when you need a custom reshape before metrics run.
+
+.. code-block:: bash
+
+   aidrin add-custom-loader my_ingest --dir /path/to/my_project/loaders
+
+This creates ``/path/to/my_project/loaders/my_ingest.py`` with a ``load(path, **kwargs)``
+stub. Implement the body so it returns a non-empty DataFrame, then pass the loader on any
+read command:
+
+.. code-block:: bash
+
+   aidrin run completeness /path/to/store.zarr --loader /path/to/my_project/loaders/my_ingest.py:load
+   aidrin summarize /path/to/sample.root --loader ./examples/custom_loaders/root_ttree_loader.py:load
+   aidrin data-quality /path/to/data.nc --loader ./loaders/nc.py:to_table
+
+Batch YAML accepts the same contract:
+
+.. code-block:: yaml
+
+   file-path: /path/to/sample.root
+   loader: ./examples/custom_loaders/root_ttree_loader.py:load
+   metrics:
+     - completeness
+
+Library API:
+
+.. code-block:: python
+
+   from aidrin.headless.api import run_metric, summarize_dataset
+
+   run_metric("completeness", "sample.root", loader="loaders/root_ttree_loader.py:load")
+   summarize_dataset("sample.root", loader="loaders/root_ttree_loader.py:load")
+
+**Security:** loader scripts execute in-process with full Python access (same trust model as
+custom metrics and the agentic ``paths.data_loader``). Only run trusted scripts. The web
+interface's Custom Loader tab is off by default; see :ref:`web_installation`.
+
+**Errors:** failures always name the loader file, dataset file, and cause (missing file,
+import error, exception inside ``load``, or non-DataFrame return). They never look like a
+silent built-in reader miss.
+
+**ROOT note:** AIDRIN's built-in ``rootReader`` is still a stub. Until a real ROOT reader
+ships, use a custom loader with ``uproot`` (install it yourself). See
+``examples/custom_loaders/root_ttree_loader.py``.
 
 ----
 

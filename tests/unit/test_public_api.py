@@ -113,6 +113,9 @@ class TestPublicAPIImports(unittest.TestCase):
     def test_compute_entropy_risk_importable(self):
         self._assert_callable("compute_entropy_risk")
 
+    def test_calculate_variable_unit_validation_importable(self):
+        self._assert_callable("calculate_variable_unit_validation")
+
 
 # ===========================================================================
 # Data Quality

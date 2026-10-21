@@ -453,6 +453,34 @@ html.dark .info-text {
   display: flex;
 }
 
+/* Jump-to-metric highlight: briefly marks the checkbox a recommendation card
+   sent the user to (inspector.js jumpToMetric). Reuses the app's existing
+   accent blue (--brandBlue: #4485f4) rather than a new colour, and that
+   variable is the same in both themes, so this reads consistently in light
+   and dark mode. */
+.intent-metric-highlight {
+  outline: 2px solid var(--brandBlue);
+  outline-offset: 2px;
+  background-color: rgba(68, 133, 244, 0.16);
+  border-radius: 6px;
+  transition:
+    background-color 1.5s ease,
+    outline-color 1.5s ease;
+}
+
+.intent-metric-highlight.intent-metric-highlight-fade {
+  background-color: rgba(68, 133, 244, 0);
+  outline-color: rgba(68, 133, 244, 0);
+}
+
+/* Respect prefers-reduced-motion: no fade, just a static highlight that is
+   removed outright once its hold period (set in inspector.js) elapses. */
+@media (prefers-reduced-motion: reduce) {
+  .intent-metric-highlight {
+    transition: none;
+  }
+}
+
 .metric-inputs {
   transition: all 0.3s ease;
   overflow: visible !important;

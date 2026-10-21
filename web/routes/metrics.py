@@ -19,8 +19,13 @@ from flask import (
     session,
     url_for,
 )
-from werkzeug.utils import safe_join
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.file_reference_policy import (
+    allowed_roots,
+    discovery_configuration,
+    resolve_base_dir,
+    scan_limit,
+)
 from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import (
@@ -46,6 +51,10 @@ from aidrin.structured_data_metrics.max_pairwise_correlation import (
     max_pairwise_correlation,
 )
 from aidrin.structured_data_metrics.skewness import skewness
+from aidrin.structured_data_metrics.variable_unit_validation import (
+    calculate_variable_unit_validation,
+    unit_suggestion_catalog,
+)
 from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
 from aidrin.structured_data_metrics.FAIRness_dcat import (
     categorize_metadata,
@@ -91,96 +100,18 @@ metrics_bp = Blueprint("metrics", __name__)
 
 metric_time_log = logging.getLogger("metric")
 METRIC_CELERY_TIMEOUT = 120
-FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT = 10000
 
 
 def _file_reference_allowed_roots():
-    configured = current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS")
-    if configured is None:
-        raw = os.environ.get("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS", "")
-        if raw:
-            try:
-                configured = json.loads(raw)
-            except json.JSONDecodeError:
-                metric_time_log.warning("AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS must be a JSON array")
-                configured = []
-    if not isinstance(configured, (list, tuple)):
-        if configured is not None:
-            metric_time_log.warning("FILE_REFERENCE_ALLOWED_ROOTS must be a list of absolute directories")
-        return []
-
-    roots = []
-    seen = set()
-    for value in configured:
-        try:
-            path = os.fspath(value)
-            if not os.path.isabs(path):
-                raise ValueError("not absolute")
-            canonical = os.path.realpath(path)
-            if not os.path.isdir(canonical):
-                raise ValueError("not an existing directory")
-        except (TypeError, ValueError, OSError) as exc:
-            metric_time_log.warning("Ignoring invalid file-reference root %r: %s", value, exc)
-            continue
-        key = os.path.normcase(canonical)
-        if key not in seen:
-            seen.add(key)
-            roots.append(canonical)
-    return roots
-
-
-def _file_reference_root_choices(roots):
-    return [
-        {"id": f"root-{index}", "label": root}
-        for index, root in enumerate(roots)
-    ]
+    return allowed_roots(current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS"))
 
 
 def _file_reference_web_scan_limit():
-    value = current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT")
-    if value is None:
-        value = os.environ.get(
-            "AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT",
-            FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT,
-        )
-    try:
-        limit = int(value)
-        if limit <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        metric_time_log.warning(
-            "Invalid file-reference web scan limit %r; using %d",
-            value,
-            FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT,
-        )
-        return FILE_REFERENCE_DEFAULT_WEB_SCAN_LIMIT
-    return limit
+    return scan_limit(current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT"))
 
 
 def _file_reference_base_dir(roots, root_id, subdirectory):
-    choices = {f"root-{index}": root for index, root in enumerate(roots)}
-    if root_id not in choices:
-        raise ValueError("Select an allowed filesystem root.")
-    root = choices[root_id]
-    relative = (subdirectory or "").strip()
-    if os.path.isabs(relative):
-        raise ValueError("Base subdirectory must be relative to the selected root.")
-    candidate = safe_join(root, relative)
-    if candidate is None:
-        raise ValueError("Base subdirectory must stay inside the selected root.")
-    candidate = os.path.realpath(candidate)
-    try:
-        inside_root = (
-            os.path.commonpath([os.path.normcase(candidate), os.path.normcase(root)])
-            == os.path.normcase(root)
-        )
-    except ValueError:
-        inside_root = False
-    if not inside_root:
-        raise ValueError("Base subdirectory must stay inside the selected root.")
-    if not os.path.isdir(candidate):
-        raise ValueError("Base subdirectory must identify an existing directory.")
-    return candidate
+    return resolve_base_dir(roots, root_id, subdirectory)
 
 
 # ---------------------------------------------------------------------------
@@ -195,18 +126,18 @@ def custom_outlier_targets():
     if not file_path:
         return jsonify({"success": False, "message": "No file uploaded"}), 200
     try:
-        targets = iter_targets((file_path, file_name, file_type))
-        roots = _file_reference_allowed_roots()
-        file_reference = {
-            "enabled": bool(roots),
-            "roots": _file_reference_root_choices(roots),
-            "scan_limit": _file_reference_web_scan_limit(),
-        }
-        if not roots:
-            file_reference["message"] = "File-reference validation is not configured by the server administrator."
+        file_info = (file_path, file_name, file_type)
+        targets = iter_targets(file_info)
+        unit_metadata = calculate_variable_unit_validation(file_info)
+        file_reference = discovery_configuration(
+            current_app.config.get("FILE_REFERENCE_ALLOWED_ROOTS"),
+            current_app.config.get("FILE_REFERENCE_WEB_SCAN_LIMIT"),
+        )
         return jsonify({
             "success": True,
             "targets": ensure_json_serializable(targets),
+            "unit_metadata": ensure_json_serializable(unit_metadata),
+            "unit_catalog": unit_suggestion_catalog(),
             "file_reference": file_reference,
         })
     except Exception as e:
@@ -2730,7 +2661,8 @@ def _build_readiness_section(section, file_info, include_visualizations=False):
         metric_time_log.error(
             "Readiness report — %s error: %s", section, e, exc_info=True
         )
-        return {"error": f"{type(e).__name__}: {e}"}
+        # Exception text stays in the server log, not the response or PDF.
+        return {"error": "This section could not be computed. Details are in the server log."}
 
 
 @metrics_bp.route("/readiness-report/<section>/visualizations", methods=["GET"])
@@ -2753,7 +2685,7 @@ def readiness_report_visualizations(section):
         )
         return jsonify({
             "success": False,
-            "message": f"{type(e).__name__}: {e}",
+            "message": "Could not build the visualizations for this section.",
         }), 200
 
     if not from_cache:
@@ -2828,7 +2760,7 @@ def readiness_report():
         return jsonify(ensure_json_serializable(response))
     except Exception as e:
         metric_time_log.error("Readiness report error: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 200
+        return jsonify({"success": False, "message": "Could not build the readiness report."}), 200
 
 
 @metrics_bp.route("/readiness-report/pdf", methods=["GET"])
@@ -2903,11 +2835,16 @@ def readiness_report_pdf():
             download_name=pdf_filename(file_name, full=include_details),
         )
     except RuntimeError as e:
+        # Raised by web.readiness.pdf when WeasyPrint or the logo asset is missing.
         metric_time_log.error("Readiness report PDF error: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "message": "PDF export is not available on this server. Check that WeasyPrint and its "
+                       "native dependencies (pango, cairo, gdk-pixbuf) are installed; details are in the server log.",
+        }), 500
     except Exception as e:
         metric_time_log.error("Readiness report PDF error: %s", e, exc_info=True)
-        return jsonify({"success": False, "message": f"{type(e).__name__}: {e}"}), 500
+        return jsonify({"success": False, "message": "Could not generate the PDF report."}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -3017,7 +2954,7 @@ def data_structure():
 
             except Exception as e:
                 metric_time_log.error("Data Structure error: %s", e, exc_info=True)
-                return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
+                return jsonify({"error": "Error computing the data structure metrics."}), 200
 
             duration_ms = (time.time() - start_time) * 1000
             span.set_attribute("metric.duration_ms", duration_ms)
@@ -3025,6 +2962,56 @@ def data_structure():
             return store_result("metrics.data_structure", final_dict)
 
     return get_result_or_default("metrics.data_structure", file_path, file_name)
+
+
+# ---------------------------------------------------------------------------
+# Understandability
+# ---------------------------------------------------------------------------
+
+@metrics_bp.route("/variable-unit-validation", methods=["GET", "POST"])
+def variable_unit_validation():
+    final_dict = {}
+    file_path = session.get("uploaded_file_path")
+    file_name = session.get("uploaded_file_name")
+    file_type = session.get("uploaded_file_type")
+    file_info = build_file_info(file_path, file_name, file_type)
+
+    if request.method == "POST":
+        start_time = time.time()
+        metric_time_log.info("Variable Unit Validation request started")
+        with trace_metric(
+            "variable_unit_validation",
+            "understandability",
+            file_name=file_name,
+            file_type=file_type,
+        ):
+            try:
+                raw_metadata = request.form.get("variable_unit_metadata")
+                metadata = json.loads(raw_metadata) if raw_metadata else None
+                unit_result = calculate_variable_unit_validation(file_info, metadata)
+            except Exception as e:
+                metric_time_log.error("Variable Unit Validation error: %s", e, exc_info=True)
+                final_dict["Variable Unit Validation"] = {
+                    "Error": f"{type(e).__name__}: {e}",
+                    "Description": (
+                        "Verifies that every logical variable has a recognized unit, "
+                        "is dimensionless, or is marked not applicable."
+                    ),
+                }
+            else:
+                final_dict["Variable Unit Validation"] = unit_result
+
+        metric_time_log.info(
+            "Variable Unit Validation completed in %.2f seconds",
+            time.time() - start_time,
+        )
+        return store_result("metrics.variable_unit_validation", final_dict)
+
+    return get_result_or_default(
+        "metrics.variable_unit_validation",
+        file_path,
+        file_name,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -3182,14 +3169,13 @@ def correlation_analysis():
                     corr_dict = correlations_result.get(timeout=METRIC_CELERY_TIMEOUT)
                     if "Message" in corr_dict:
                         metric_time_log.warning("Correlation analysis failed: %s", corr_dict["Message"])
-                        final_dict["Error"] = corr_dict["Message"]
-                    else:
-                        final_dict["Correlations Analysis Categorical"] = corr_dict[
-                            "Correlations Analysis Categorical"
-                        ]
-                        final_dict["Correlations Analysis Numerical"] = corr_dict[
-                            "Correlations Analysis Numerical"
-                        ]
+                        return jsonify({"trigger": "correlationError", "error": corr_dict["Message"]}), 200
+                    final_dict["Correlations Analysis Categorical"] = corr_dict[
+                        "Correlations Analysis Categorical"
+                    ]
+                    final_dict["Correlations Analysis Numerical"] = corr_dict[
+                        "Correlations Analysis Numerical"
+                    ]
                     metric_time_log.info("Correlations took %.2f seconds", time.time() - t0)
                     duration = time.time() - start_time
                     metric_time_log.info("Correlation Analysis completed in %.2f seconds", duration)
@@ -3199,7 +3185,12 @@ def correlation_analysis():
                 return jsonify({"message": "No correlation analysis selected"}), 200
         except Exception as e:
             metric_time_log.error("Correlation Analysis error: %s", e, exc_info=True)
-            return jsonify({"error": f"{type(e).__name__}: {e}"}), 200
+            return jsonify(
+                {
+                    "trigger": "correlationError",
+                    "error": "An internal error occurred while running correlation analysis.",
+                }
+            ), 200
 
     return get_result_or_default("metrics.correlation_analysis", file_path, file_name)
 

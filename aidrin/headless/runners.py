@@ -1,7 +1,9 @@
 import os
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from aidrin.file_handling.file_parser import read_file
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -28,6 +30,7 @@ from aidrin.structured_data_metrics.row_level_completeness import row_level_comp
 from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
 from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
+from aidrin.structured_data_metrics.variable_unit_validation import variable_unit_validation
 from aidrin.structured_data_metrics.privacy_measure import (
     compute_entropy_risk,
     compute_k_anonymity,
@@ -48,6 +51,22 @@ os.environ.setdefault("AIDRIN_HEADLESS", "1")
 
 _EXCEL_TYPES = {".xls", ".xlsx", ".xlsm", ".xlsb"}
 _EXCEL_KEY = ".xls, .xlsb, .xlsx, .xlsm"
+
+# Optional HDF5/Zarr path selection for the current headless call (CLI/API/batch).
+_selected_keys_ctx: ContextVar[Optional[List[str]]] = ContextVar(
+    "aidrin_selected_keys", default=None
+)
+
+
+@contextmanager
+def using_selected_keys(selected_keys: Optional[List[str]] = None) -> Iterator[None]:
+    """Apply ``selected_keys`` to all ``_build_file_info`` calls in this context."""
+    keys = [str(k).strip() for k in (selected_keys or []) if str(k).strip()] or None
+    token = _selected_keys_ctx.set(keys)
+    try:
+        yield
+    finally:
+        _selected_keys_ctx.reset(token)
 
 
 class NullTask:
@@ -71,10 +90,16 @@ def _normalize_file_type(file_type: Optional[str], file_path: str) -> Optional[s
 
 
 def _build_file_info(
-    file_path: str, file_type: Optional[str], file_name: Optional[str]
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    selected_keys: Optional[List[str]] = None,
 ) -> tuple:
     normalized_type = _normalize_file_type(file_type, file_path)
     final_name = file_name or os.path.basename(file_path)
+    keys = selected_keys if selected_keys is not None else _selected_keys_ctx.get()
+    if keys:
+        return (file_path, final_name, normalized_type, list(keys))
     return (file_path, final_name, normalized_type)
 
 
@@ -106,6 +131,16 @@ def run_duplicity(file_path: str, file_type: Optional[str], file_name: Optional[
 def run_constant_feature_count(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     return _call_task(constant_feature_count, file_info)
+
+
+def run_variable_unit_validation(
+    file_path: str,
+    file_type: Optional[str],
+    file_name: Optional[str],
+    unit_metadata: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(variable_unit_validation, file_info, unit_metadata)
 
 
 def run_max_pairwise_correlation(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
@@ -483,10 +518,16 @@ def run_differential_privacy(
     file_name: Optional[str],
     columns: List[str],
     epsilon: float,
+    noisy_output: Optional[str] = None,
+    save_noisy_output: bool = True,
 ) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
     data = read_file(file_info)
     try:
-        return return_noisy_stats(columns, float(epsilon), data)
+        return return_noisy_stats(
+            columns, float(epsilon), data,
+            save_output=save_noisy_output,
+            output_path=noisy_output,
+        )
     except Exception as exc:
         return _dp_error_payload(str(exc))

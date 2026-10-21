@@ -1,0 +1,730 @@
+"""Tests for variable-unit discovery, parsing, precedence, and aggregation."""
+
+import json
+from copy import deepcopy
+from pathlib import Path
+
+import h5py
+from jsonschema import Draft202012Validator
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pytest
+from pint import UnitRegistry
+
+import aidrin.structured_data_metrics.variable_unit_validation as unit_validation
+
+from aidrin.structured_data_metrics.variable_unit_validation import (
+    _name_unit,
+    _parse_unit,
+    calculate_variable_unit_validation,
+    discover_variable_units,
+    unit_suggestion_catalog,
+)
+
+
+def _csv(tmp_path, columns):
+    path = tmp_path / "data.csv"
+    pd.DataFrame({column: [1, 2] for column in columns}).to_csv(path, index=False)
+    return (str(path), path.name, ".csv")
+
+
+def _with_resolutions(file_info, resolutions):
+    sidecar = deepcopy(calculate_variable_unit_validation(file_info))
+    by_name = {variable["name"]: variable for variable in sidecar["variables"]}
+    for name, resolution in resolutions.items():
+        by_name[name]["resolution"] = resolution
+    return sidecar
+
+
+@pytest.mark.parametrize(
+    ("unit", "status"),
+    [
+        ("m/s^2", "valid"),
+        ("m/s²", "valid"),
+        ("standard_gravity", "valid"),
+        ("[g]", "valid"),
+        ("g_0", "valid"),
+        ("gram", "valid"),
+        ("1", "dimensionless"),
+        ("not_a_real_unit_zz", "invalid"),
+        ("m//s", "invalid"),
+        ("g", "ambiguous"),
+        ("", "missing"),
+        ("   ", "missing"),
+        ("N/A", "ambiguous"),
+        ("none", "ambiguous"),
+        ("nA", "valid"),
+        ("m**-2", "valid"),
+        ("m**1000", "invalid"),
+        ("10**10**8", "invalid"),
+        ("(9*9*9*9*9*9*9*9)**(9*9*9*9*9*9*9*9)", "invalid"),
+        ("m" * 300, "invalid"),
+    ],
+)
+def test_unit_parser_classifies_supported_and_problem_units(unit, status):
+    assert _parse_unit(unit)["status"] == status
+
+
+def test_bare_g_message_gives_both_remedies():
+    message = _parse_unit("g")["message"]
+    assert "gram" in message
+    assert "standard_gravity" in message
+
+
+def test_free_form_unit_input_uses_pint_without_custom_aliases(tmp_path):
+    file_info = _csv(tmp_path, ["measurement"])
+    sidecar = _with_resolutions(
+        file_info,
+        {
+            "measurement": {
+                "kind": "unit",
+                "unit": "Celsius degree",
+                "source": "user",
+            }
+        },
+    )
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["variables"][0]["resolution"]["unit"] == "Celsius degree"
+    assert result["variables"][0]["finding"]["normalized_unit"] is None
+    assert result["variables"][0]["finding"]["status"] == "invalid"
+
+
+def test_every_curated_suggestion_is_unique_and_recognized_by_pint():
+    catalog = unit_suggestion_catalog()
+    units = [item for group in catalog for item in group["units"]]
+    canonical_units = [item["unit"] for item in units]
+
+    assert len(canonical_units) == len(set(canonical_units))
+    assert all(_parse_unit(unit)["status"] == "valid" for unit in canonical_units)
+    assert next(group for group in catalog if group["quantity"] == "temperature") == {
+        "quantity": "temperature",
+        "variable_terms": ["temperature", "temp"],
+        "units": [
+            {"label": "Celsius (°C)", "unit": "degree_Celsius"},
+            {"label": "Fahrenheit (°F)", "unit": "degree_Fahrenheit"},
+            {"label": "Kelvin (K)", "unit": "kelvin"},
+        ],
+    }
+    assert next(group for group in catalog if group["quantity"] == "density") == {
+        "quantity": "density",
+        "variable_terms": ["density"],
+        "units": [
+            {"label": "Kilograms per cubic meter (kg/m³)", "unit": "kilogram/meter**3"},
+            {"label": "Grams per cubic meter (g/m³)", "unit": "gram/meter**3"},
+            {"label": "Grams per cubic centimeter (g/cm³)", "unit": "gram/centimeter**3"},
+            {"label": "Kilograms per liter (kg/L)", "unit": "kilogram/liter"},
+        ],
+    }
+
+
+def test_detected_non_pint_unit_is_invalid_and_round_trips(tmp_path):
+    file_info = _csv(tmp_path, ["temperature (degrees Celsius)"])
+
+    first = calculate_variable_unit_validation(file_info)
+    second = calculate_variable_unit_validation(file_info, first)
+
+    assert first["variables"][0]["resolution"] == {
+        "kind": "unit",
+        "unit": "degrees Celsius",
+        "source": "detected",
+    }
+    assert first["variables"][0]["finding"]["status"] == "invalid"
+    assert second == first
+
+
+@pytest.mark.parametrize(
+    ("name", "unit"),
+    [
+        ("velocity (m/s)", "m/s"),
+        ("velocity [m/s]", "m/s"),
+        ("acceleration [g]", "[g]"),
+        ("depth_m", "m"),
+        ("vp_m_per_s", "m/s"),
+        ("density_kg_per_m3", "kg/m^3"),
+        ("area_m2", "m^2"),
+        ("acceleration_g", "g"),
+        ("pressure_bar", "bar"),
+        ("velocity (m/s) estimate", None),
+        ("velocity [m/s] estimate", None),
+        ("velocity_m_per_s_estimate", None),
+        ("created_at", None),
+        ("sample_count", None),
+        ("logged_in", None),
+        ("foo_bar", None),
+        ("user_id", None),
+        ("velocity", None),
+    ],
+)
+def test_name_annotations_are_trailing_only(name, unit):
+    assert _name_unit(name) == unit
+
+
+def test_sidecar_accounts_for_every_resolution_form_and_reports_separate_scores(tmp_path):
+    file_info = _csv(tmp_path, ["speed", "score", "station", "missing"])
+    sidecar = _with_resolutions(file_info, {
+        "speed": {"kind": "unit", "unit": "m/s", "source": "user"},
+        "score": {"kind": "dimensionless", "unit": "1", "source": "user"},
+        "station": {"kind": "not_applicable", "source": "user"},
+    })
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["format"] == "aidrin.variable-unit-metadata"
+    assert result["version"] == 1
+    assert result["$schema"].endswith("/variable-unit-metadata.schema.json")
+    assert result["unit_vocabulary"] == "pint"
+    assert result["summary"]["classification_coverage"] == 0.75
+    assert result["summary"]["applicable_unit_coverage"] == pytest.approx(2 / 3)
+    assert result["summary"]["metadata_validity"] == 1.0
+    assert result["summary"]["all_variables_ready"] is False
+    assert result["summary"]["counts"] == {
+        "total": 4,
+        "valid": 1,
+        "missing": 1,
+        "invalid": 0,
+        "ambiguous": 0,
+        "conflicting": 0,
+        "dimensionless": 1,
+        "not_applicable": 1,
+        "unit_mismatches": 0,
+    }
+
+
+def test_name_units_can_make_all_variables_ready(tmp_path):
+    file_info = _csv(tmp_path, ["velocity (meter/second)", "acceleration [g]"])
+    result = calculate_variable_unit_validation(file_info)
+
+    assert result["summary"]["all_variables_ready"] is True
+    assert [record["name"] for record in result["variables"]] == [
+        "velocity (meter/second)",
+        "acceleration [g]",
+    ]
+    assert result["summary"]["counts"]["valid"] == 2
+
+
+def test_underscore_unit_suffixes_from_parkfield_columns_are_audited(tmp_path):
+    file_info = _csv(tmp_path, ["depth_m", "vp_m_per_s", "vs_m_per_s", "density_kg_per_m3", "qp", "qs"])
+
+    result = calculate_variable_unit_validation(file_info)
+    by_name = {variable["name"]: variable for variable in result["variables"]}
+
+    assert result["summary"]["counts"]["valid"] == 4
+    assert result["summary"]["counts"]["missing"] == 2
+    assert by_name["depth_m"]["observed"][0]["unit"] == "m"
+    assert by_name["vp_m_per_s"]["observed"][0]["unit"] == "m/s"
+    assert by_name["density_kg_per_m3"]["observed"][0]["unit"] == "kg/m^3"
+    assert by_name["qp"]["observed"] == []
+
+
+def test_public_python_api_runs_same_validator(tmp_path):
+    import aidrin
+
+    file_info = _csv(tmp_path, ["speed"])
+    sidecar = _with_resolutions(
+        file_info,
+        {"speed": {"kind": "unit", "unit": "m/s", "source": "user"}},
+    )
+    result = aidrin.calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["summary"]["all_variables_ready"] is True
+    assert result["variables"][0]["finding"]["normalized_unit"] == "m / s"
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda sidecar: sidecar.update({"format": "wrong"}),
+    lambda sidecar: sidecar.update({"version": 2}),
+    lambda sidecar: sidecar.update({"unit_vocabulary": "unknown"}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unit", "unit": "", "source": "user"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "dimensionless", "unit": "m", "source": "user"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "not_applicable", "unit": "m", "source": "user"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unit", "unit": "m", "source": "agent"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unresolved", "source": "user"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "unit", "unit": "m", "source": "none"}}),
+    lambda sidecar: sidecar["variables"][0].update({"resolution": {"kind": "not_applicable", "source": "detected"}}),
+])
+def test_malformed_sidecar_is_rejected(tmp_path, mutation):
+    file_info = _csv(tmp_path, ["speed"])
+    sidecar = calculate_variable_unit_validation(file_info)
+    mutation(sidecar)
+    with pytest.raises(ValueError):
+        calculate_variable_unit_validation(file_info, sidecar)
+
+
+def test_sidecar_must_match_dataset_schema_exactly(tmp_path):
+    first = _csv(tmp_path, ["Speed"])
+    sidecar = calculate_variable_unit_validation(first)
+    second_path = tmp_path / "other.csv"
+    pd.DataFrame({"speed": [1]}).to_csv(second_path, index=False)
+
+    with pytest.raises(ValueError, match="schema fingerprint does not match"):
+        calculate_variable_unit_validation((str(second_path), second_path.name, ".csv"), sidecar)
+
+
+def test_user_resolution_overrides_conflict_and_retains_observations(tmp_path):
+    path = tmp_path / "units.h5"
+    with h5py.File(path, "w") as h5:
+        dataset = h5.create_dataset("velocity (km/h)", data=[1.0])
+        dataset.attrs["units"] = "m/s"
+
+    file_info = (str(path), path.name, ".h5")
+    sidecar = _with_resolutions(file_info, {
+        "/velocity (km/h)": {
+            "kind": "unit",
+            "unit": "meter/second",
+            "source": "user",
+        },
+    })
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    record = result["variables"][0]
+    assert record["finding"]["status"] == "valid"
+    assert record["resolution"]["source"] == "user"
+    assert len(record["observed"]) == 2
+    assert record["finding"]["warnings"] == [
+        "User resolution overrides detected unit metadata."
+    ]
+    assert len(record["finding"]["override_mismatches"]) == 1
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
+    assert result["summary"]["all_variables_ready"] is True
+
+
+def test_scale_mismatch_override_is_explicit_and_does_not_convert_values(tmp_path):
+    file_info = _csv(tmp_path, ["density_kg_per_m3"])
+    sidecar = _with_resolutions(file_info, {
+        "density_kg_per_m3": {
+            "kind": "unit",
+            "unit": "gram/meter**3",
+            "source": "user",
+        },
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch == {
+        "kind": "scale",
+        "source": "name",
+        "observed_unit": "kg/m³",
+        "resolved_unit": "g/m³",
+        "conversion_factor": 1000.0,
+        "message": (
+            "Unit mismatch: detected kg/m³, overridden with g/m³ "
+            "(1000× scale difference; g/m³ = kg/m³ × 1000). Values were not converted."
+        ),
+    }
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
+    assert result["summary"]["all_variables_ready"] is True
+
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(result)
+    assert calculate_variable_unit_validation(file_info, result) == result
+
+    # Version-1 sidecars using the original scale kind remain importable.
+    legacy = deepcopy(result)
+    legacy["variables"][0]["finding"]["override_mismatches"][0]["message"] = (
+        "Unit mismatch: detected kg/m³, overridden with g/m³ (1000× scale difference). Values were not converted."
+    )
+    assert calculate_variable_unit_validation(file_info, legacy) == result
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "formula"),
+    [
+        ("degC", "kelvin", "K = °C × 1 + 273.15"),
+        ("kelvin", "degC", "°C = K × 1 - 273.15"),
+        ("degC", "degF", "°F = °C × 1.8 + 32"),
+        ("degF", "degC", "°C ≈ °F × 0.555556 - 17.7778"),
+    ],
+)
+def test_temperature_override_reports_offset_without_converting_values(tmp_path, observed, resolved, formula):
+    name = f"temperature ({observed})"
+    file_info = _csv(tmp_path, [name])
+    original = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "offset"
+    assert mismatch["conversion_factor"] is None
+    assert f"(offset conversion: {formula})." in mismatch["message"]
+    assert "Values were not converted." in mismatch["message"]
+    assert "scale difference" not in mismatch["message"]
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
+    assert result["summary"]["all_variables_ready"] is True
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "factor"),
+    [("kelvin", "degree_Rankine", 1.8), ("delta_degC", "kelvin", 1.0)],
+)
+def test_multiplicative_temperature_override_keeps_scale_factor(tmp_path, observed, resolved, factor):
+    name = f"temperature ({observed})"
+    file_info = _csv(tmp_path, [name])
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "scale"
+    assert mismatch["conversion_factor"] == pytest.approx(factor)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "factor", "formula"),
+    [
+        ("kPa", "Pa", 1000, "Pa = kPa × 1000"),
+        ("Pa", "kPa", 0.001, "kPa = Pa × 0.001"),
+        ("cmH2O", "kPa", 0.0980665, "kPa = cmH2O × 0.0980665"),
+        ("m/s", "km/h", 3.6, "km/h = m/s × 3.6"),
+        ("km/h", "m/s", 1 / 3.6, "m/s ≈ km/h × 0.277778"),
+        ("g/m**3", "kg/m**3", 0.001, "kg/m³ = g/m³ × 0.001"),
+        ("hour", "second", 3600, "s = h × 3600"),
+        ("second", "hour", 1 / 3600, "h ≈ s × 0.000277778"),
+        ("meter", "nanometer", 1e9, "nm = m × 1e+09"),
+        ("nanometer", "meter", 1e-9, "m = nm × 1e-09"),
+        ("percent", "1", 0.01, "dimensionless = % × 0.01"),
+        ("1", "percent", 100, "% = dimensionless × 100"),
+    ],
+)
+def test_scale_formulas_apply_to_any_variable(tmp_path, observed, resolved, factor, formula):
+    name = f"measurement ({observed})"
+    file_info = _csv(tmp_path, [name])
+    original = Path(file_info[0]).read_bytes()
+    detected = calculate_variable_unit_validation(file_info)
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "dimensionless" if resolved == "1" else "unit", "unit": resolved, "source": "user"},
+    })
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "scale"
+    assert mismatch["conversion_factor"] == pytest.approx(factor)
+    assert f"; {formula}). Values were not converted." in mismatch["message"]
+    assert result["variables"][0]["observed"] == detected["variables"][0]["observed"]
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "observed_unit", "resolved_unit", "factor", "formula"),
+    [
+        ("dimensionless", "radian", "", "rad", 1, "rad = dimensionless × 1"),
+        ("radian", "1", "rad", "", 1, "dimensionless = rad × 1"),
+        ("count", "1", "count", "", 1, "dimensionless = count × 1"),
+        ("dimensionless", "count", "", "count", 1, "count = dimensionless × 1"),
+        ("percent", "radian", "%", "rad", 0.01, "rad = % × 0.01"),
+        ("radian/second", "Hz", "rad/s", "Hz", 1, "Hz = rad/s × 1"),
+    ],
+)
+def test_convertible_roots_preserve_scale_and_dimensionless_fields(
+    tmp_path, observed, resolved, observed_unit, resolved_unit, factor, formula,
+):
+    name = f"measurement ({observed})"
+    file_info = _csv(tmp_path, [name])
+    sidecar = _with_resolutions(file_info, {
+        name: {"kind": "dimensionless" if resolved == "1" else "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "scale"
+    assert mismatch["conversion_factor"] == pytest.approx(factor)
+    assert mismatch["observed_unit"] == observed_unit
+    assert mismatch["resolved_unit"] == resolved_unit
+    assert f"detected {observed_unit or 'dimensionless'}, overridden with {resolved_unit or 'dimensionless'}" in mismatch["message"]
+    assert f"; {formula}). Values were not converted." in mismatch["message"]
+    assert calculate_variable_unit_validation(file_info, result) == result
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved", "formula"),
+    [
+        ("shifted_length", "meter", "m = sl × 2 + 10"),
+        ("meter", "shifted_length", "sl = m × 0.5 - 5"),
+        ("tiny_shifted_length", "meter", "m = tsl × 1e-09 + 1e+09"),
+    ],
+)
+def test_affine_formulas_are_not_temperature_specific(tmp_path, monkeypatch, observed, resolved, formula):
+    registry = UnitRegistry()
+    registry.define("shifted_length = 2 * meter; offset: 10 = sl")
+    registry.define("tiny_shifted_length = 1e-9 * meter; offset: 1e9 = tsl")
+    monkeypatch.setattr(unit_validation, "_UNIT_REGISTRY", registry)
+    file_info = _csv(tmp_path, [f"position ({observed})"])
+    original = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        f"position ({observed})": {"kind": "unit", "unit": resolved, "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "offset"
+    assert mismatch["conversion_factor"] is None
+    assert f"(offset conversion: {formula}). Values were not converted." in mismatch["message"]
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+
+
+@pytest.mark.parametrize(
+    ("observed", "resolved"),
+    [
+        ("dBm", "watt"), ("watt", "dBm"), ("decibel", "1"), ("degC", "delta_degC"),
+        ("nanometer**100", "meter**100"), ("meter**100", "nanometer**100"),
+    ],
+)
+def test_unavailable_conversion_is_not_reported_as_scale_or_affine(tmp_path, observed, resolved):
+    file_info = _csv(tmp_path, [f"measurement ({observed})"])
+    original = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        f"measurement ({observed})": {
+            "kind": "dimensionless" if resolved == "1" else "unit", "unit": resolved, "source": "user",
+        },
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "conversion"
+    assert mismatch["conversion_factor"] is None
+    assert "(conversion formula unavailable for these units). Values were not converted." in mismatch["message"]
+    assert result["summary"]["counts"]["unit_mismatches"] == 1
+    assert Path(file_info[0]).read_bytes() == original
+    assert calculate_variable_unit_validation(file_info, result) == result
+    schema_path = Path(__file__).parents[2] / "docs" / "source" / "_static" / "variable-unit-metadata.schema.json"
+    Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(result)
+
+
+def test_scaled_alias_of_logarithmic_unit_has_no_affine_formula(tmp_path, monkeypatch):
+    registry = UnitRegistry()
+    registry.define("log_alias = 2 * decibel")
+    monkeypatch.setattr(unit_validation, "_UNIT_REGISTRY", registry)
+    file_info = _csv(tmp_path, ["measurement (log_alias)"])
+    sidecar = _with_resolutions(file_info, {
+        "measurement (log_alias)": {"kind": "dimensionless", "unit": "1", "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "conversion"
+    assert mismatch["conversion_factor"] is None
+    assert "conversion formula unavailable" in mismatch["message"]
+
+
+def test_equivalent_temperature_spelling_has_no_override_mismatch(tmp_path):
+    file_info = _csv(tmp_path, ["temperature (degC)"])
+    sidecar = _with_resolutions(file_info, {
+        "temperature (degC)": {"kind": "unit", "unit": "degree_Celsius", "source": "user"},
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["variables"][0]["finding"]["override_mismatches"] == []
+    assert result["summary"]["counts"]["unit_mismatches"] == 0
+
+
+def test_equivalent_user_unit_has_no_override_mismatch(tmp_path):
+    file_info = _csv(tmp_path, ["density_kg_per_m3"])
+    sidecar = _with_resolutions(file_info, {
+        "density_kg_per_m3": {
+            "kind": "unit",
+            "unit": "kilogram/meter**3",
+            "source": "user",
+        },
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+
+    assert result["variables"][0]["finding"]["override_mismatches"] == []
+    assert result["summary"]["counts"]["unit_mismatches"] == 0
+
+
+def test_dimension_mismatch_override_is_distinguished_from_scale(tmp_path):
+    file_info = _csv(tmp_path, ["density_kg_per_m3"])
+    sidecar = _with_resolutions(file_info, {
+        "density_kg_per_m3": {
+            "kind": "unit",
+            "unit": "meter/second",
+            "source": "user",
+        },
+    })
+
+    result = calculate_variable_unit_validation(file_info, sidecar)
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == "dimension"
+    assert mismatch["conversion_factor"] is None
+    assert mismatch["message"] == (
+        "Unit mismatch: detected kg/m³, overridden with m/s (different dimensions). Values were not converted."
+    )
+
+
+def test_unresolved_native_name_conflict_fails(tmp_path):
+    path = tmp_path / "units.h5"
+    with h5py.File(path, "w") as h5:
+        dataset = h5.create_dataset("velocity (km/h)", data=[1.0])
+        dataset.attrs["units"] = "m/s"
+
+    result = calculate_variable_unit_validation((str(path), path.name, ".h5"))
+
+    assert result["variables"][0]["finding"]["status"] == "conflicting"
+    assert result["summary"]["counts"]["conflicting"] == 1
+    assert result["summary"]["all_variables_ready"] is False
+
+
+def test_equivalent_native_and_name_declarations_do_not_conflict(tmp_path):
+    path = tmp_path / "units.h5"
+    with h5py.File(path, "w") as h5:
+        dataset = h5.create_dataset("velocity (meter/second)", data=[1.0])
+        dataset.attrs["units"] = "m/s"
+
+    result = calculate_variable_unit_validation((str(path), path.name, ".h5"))
+
+    assert result["variables"][0]["finding"]["status"] == "valid"
+    assert result["variables"][0]["resolution"]["source"] == "detected"
+    assert result["summary"]["all_variables_ready"] is True
+
+
+def test_sidecar_round_trip_is_deterministic_and_does_not_change_dataset(tmp_path):
+    file_info = _csv(tmp_path, ["speed", "station"])
+    before = Path(file_info[0]).read_bytes()
+    sidecar = _with_resolutions(file_info, {
+        "speed": {"kind": "unit", "unit": "m/s", "source": "user"},
+        "station": {"kind": "not_applicable", "source": "user"},
+    })
+
+    first = calculate_variable_unit_validation(file_info, sidecar)
+    second = calculate_variable_unit_validation(file_info, first)
+
+    assert second == first
+    assert Path(file_info[0]).read_bytes() == before
+
+
+def test_generated_sidecar_conforms_to_published_json_schema(tmp_path):
+    file_info = _csv(tmp_path, ["speed (m/s)", "station"])
+    sidecar = calculate_variable_unit_validation(file_info)
+    schema_path = (
+        Path(__file__).parents[2]
+        / "docs"
+        / "source"
+        / "_static"
+        / "variable-unit-metadata.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    Draft202012Validator(schema).validate(sidecar)
+
+
+def test_native_hdf5_discovery_reads_units_without_values(tmp_path):
+    path = tmp_path / "native.h5"
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("group/temperature", shape=(100,), dtype="f8").attrs["unit"] = "kelvin"
+
+    targets = discover_variable_units((str(path), path.name, ".h5"))
+
+    assert targets == [{
+        "name": "/group/temperature",
+        "dtype": "float64",
+        "target_type": "hdf5_dataset",
+        "unit_candidates": [{"source": "native:unit", "unit": "kelvin"}],
+    }]
+
+
+def test_empty_and_placeholder_native_units_are_not_ready(tmp_path):
+    path = tmp_path / "placeholders.h5"
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("empty", shape=(1,), dtype="f8").attrs["units"] = ""
+        h5.create_dataset("empty_with_name (m)", shape=(1,), dtype="f8").attrs["units"] = " "
+        h5.create_dataset("placeholder", shape=(1,), dtype="f8").attrs["units"] = "N/A"
+
+    sidecar = calculate_variable_unit_validation((str(path), path.name, ".h5"))
+    findings = {variable["name"]: variable["finding"] for variable in sidecar["variables"]}
+
+    assert findings["/empty"]["status"] == "missing"
+    assert findings["/empty_with_name (m)"]["status"] == "valid"
+    assert findings["/placeholder"]["status"] == "ambiguous"
+
+
+def test_costly_unit_in_column_name_is_rejected_quickly(tmp_path):
+    sidecar = calculate_variable_unit_validation(_csv(tmp_path, ["x (10**10**10)"]))
+
+    assert sidecar["variables"][0]["finding"]["status"] == "invalid"
+
+
+def test_hdf5_selected_keys_limit_logical_schema(tmp_path):
+    path = tmp_path / "native.h5"
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("a", data=[1])
+        h5.create_dataset("b", data=[2])
+
+    targets = discover_variable_units((str(path), path.name, ".h5", ["/b"]))
+
+    assert [target["name"] for target in targets] == ["/b"]
+
+
+def test_hdf5_loader_spec_in_file_info_is_not_read_as_selected_keys(tmp_path):
+    path = tmp_path / "native.h5"
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("a", data=[1])
+        h5.create_dataset("b", data=[2])
+
+    loader_only = discover_variable_units((str(path), path.name, ".h5", "loader.py:load"))
+    keys_and_loader = discover_variable_units((str(path), path.name, ".h5", ["/b"], "loader.py:load"))
+
+    assert [target["name"] for target in loader_only] == ["/a", "/b"]
+    assert [target["name"] for target in keys_and_loader] == ["/b"]
+
+
+def test_pandas_hdfstore_discovers_logical_columns_not_internal_datasets(tmp_path):
+    path = tmp_path / "frame.h5"
+    pd.DataFrame({"speed (m/s)": [1.0], "station": ["A"]}).to_hdf(path, key="data", format="table")
+
+    targets = discover_variable_units((str(path), path.name, ".h5"))
+
+    assert [target["name"] for target in targets] == ["speed (m/s)", "station"]
+    assert targets[0]["unit_candidates"] == [{"source": "name", "unit": "m/s"}]
+
+
+def test_parquet_field_metadata_prefers_units_and_accepts_unit_alias(tmp_path):
+    path = tmp_path / "units.parquet"
+    schema = pa.schema([
+        pa.field("speed", pa.float64(), metadata={b"units": b"m/s"}),
+        pa.field("temperature", pa.float64(), metadata={b"unit": b"kelvin"}),
+    ])
+    pq.write_table(pa.Table.from_arrays([pa.array([1.0]), pa.array([273.0])], schema=schema), path)
+
+    targets = discover_variable_units((str(path), path.name, ".parquet"))
+
+    assert targets[0]["unit_candidates"] == [{"source": "native:units", "unit": "m/s"}]
+    assert targets[1]["unit_candidates"] == [{"source": "native:unit", "unit": "kelvin"}]
+
+
+def test_empty_logical_schema_has_null_scores(tmp_path):
+    path = tmp_path / "empty.json"
+    path.write_text(json.dumps([]), encoding="utf-8")
+
+    result = calculate_variable_unit_validation((str(path), path.name, ".json"))
+
+    assert result["summary"]["classification_coverage"] is None
+    assert result["summary"]["applicable_unit_coverage"] is None
+    assert result["summary"]["metadata_validity"] is None
+    assert result["summary"]["all_variables_ready"] is False
+    assert result["summary"]["counts"]["total"] == 0
