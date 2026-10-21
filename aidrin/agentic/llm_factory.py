@@ -28,6 +28,17 @@ def resolve_provider_api_key(base_url: str | None, explicit: str | None = None) 
     points at — ``OPENROUTER_API_KEY`` for OpenRouter, ``CBORG_API_KEY`` for
     CBORG — so a stray key for the *other* provider sitting in the environment
     never gets used by mistake.
+
+    Returns None (not an error) when base_url itself is unset — some callers
+    legitimately construct without one. But a base_url that *is* set to
+    anything other than OpenRouter/CBORG (e.g. an old config still pointing at
+    api.openai.com — this pipeline dropped built-in OpenAI support) raises
+    immediately with a clear, actionable message, rather than silently
+    returning None here and surfacing as either a confusing "no API key"
+    error several frames away, or — worse — silently working anyway because
+    the underlying provider SDK falls back to OPENAI_API_KEY on its own when
+    no key is passed, which is exactly the cross-provider mixing this
+    single-provider design exists to prevent.
     """
     if explicit:
         return explicit
@@ -38,7 +49,12 @@ def resolve_provider_api_key(base_url: str | None, explicit: str | None = None) 
         return os.environ.get("OPENROUTER_API_KEY")
     if "cborg" in lowered:
         return os.environ.get("CBORG_API_KEY")
-    return None
+    raise ValueError(
+        f"llm.base_url {base_url!r} is not a supported provider. This pipeline only "
+        "supports OpenRouter (https://openrouter.ai/api/v1) or LBL CBORG "
+        "(https://api.cborg.lbl.gov) — point llm.base_url at one of those. "
+        "Direct OpenAI/Google endpoints are no longer supported."
+    )
 
 
 class _ResponsesWrapper:
