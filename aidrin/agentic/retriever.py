@@ -203,7 +203,7 @@ class VectorRetriever:
                 item["preview"] = text[: self.preview_chars] if text.strip() else "(no text extracted for this chunk)"
                 retrieved.append(item)
 
-        if self.context_compression:
+        if self.context_compression and retrieved:
             if llm is None:
                 llm = create_chat_model(
                     self.model, api_key=self.api_key, base_url=self.base_url, temperature=0,
