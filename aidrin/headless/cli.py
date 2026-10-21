@@ -533,26 +533,36 @@ def _skill_install(args: argparse.Namespace) -> None:
         print(f"Skill installed at: {target}")
 
 
-def _agentic_build_index(args: argparse.Namespace) -> None:
+def _require_agentic_deps() -> None:
+    """
+    Narrow dependency probe, kept separate from the actual pipeline call: an
+    ImportError raised *during* a real run (e.g. a user's own data_loader.py
+    importing a package that isn't installed) must surface as that real
+    error, not get misdiagnosed as "agentic dependencies not installed" --
+    which would hide the real traceback and, for `run`, discard already-
+    completed (paid-for) LLM work instead of returning what succeeded.
+    """
     try:
-        result = _local_api.run_agentic_index(args.config)
+        import langchain_openai  # noqa: F401 - cheapest reliable signal that aidrin[agentic] is installed
     except ImportError:
         sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
         sys.exit(1)
+
+
+def _agentic_build_index(args: argparse.Namespace) -> None:
+    _require_agentic_deps()
+    result = _local_api.run_agentic_index(args.config)
     print(json.dumps(result, indent=2))
 
 
 def _agentic_run(args: argparse.Namespace) -> None:
-    try:
-        result = _local_api.run_agentic_pipeline(
-            args.config,
-            output_path=args.output,
-            skip_vector=args.skip_vector,
-            verbose=getattr(args, "verbose", False),
-        )
-    except ImportError:
-        sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
-        sys.exit(1)
+    _require_agentic_deps()
+    result = _local_api.run_agentic_pipeline(
+        args.config,
+        output_path=args.output,
+        skip_vector=args.skip_vector,
+        verbose=getattr(args, "verbose", False),
+    )
 
     saved_to = result.pop("_saved_to", None)
     if saved_to:

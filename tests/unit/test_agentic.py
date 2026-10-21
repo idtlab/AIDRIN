@@ -137,6 +137,42 @@ class TestAgenticCLI(unittest.TestCase):
         _, _, code = _run_cli("agentic", "build-index", "-c", "/nonexistent/config.yaml")
         self.assertNotEqual(code, 0)
 
+    def test_agentic_run_midrun_import_error_is_not_misdiagnosed(self):
+        """
+        Regression test: an ImportError raised *during* a real run (e.g. the
+        user's own data_loader.py imports a package that isn't installed)
+        must surface as that real error, not get misdiagnosed as "agentic
+        dependencies not installed" -- which would hide the actual problem
+        and, on a real pipeline run with questions, discard any already-
+        completed (paid-for) LLM work.
+        """
+        loader_path = Path(self.tmpdir) / "loader.py"
+        loader_path.write_text(
+            textwrap.dedent("""\
+                import some_definitely_missing_package_xyz  # noqa: F401
+
+                def load_dataset():
+                    raise AssertionError("should never reach here")
+            """),
+            encoding="utf-8",
+        )
+        meta_path = Path(self.tmpdir) / "metadata.txt"
+        meta_path.write_text("Test dataset.", encoding="utf-8")
+        cfg_path = Path(self.tmpdir) / "config.yaml"
+        cfg_path.write_text(
+            textwrap.dedent(f"""\
+                paths:
+                  data_loader: "{loader_path}:load_dataset"
+                  metadata_csv: {meta_path}
+            """),
+            encoding="utf-8",
+        )
+
+        _, stderr, code = _run_cli("agentic", "run", "-c", str(cfg_path))
+        self.assertNotEqual(code, 0)
+        self.assertNotIn("agentic dependencies not installed", stderr)
+        self.assertIn("some_definitely_missing_package_xyz", stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
