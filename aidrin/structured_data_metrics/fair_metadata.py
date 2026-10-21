@@ -8,6 +8,7 @@ keys only, so a nested ``distribution[].title`` can never stand in for the datas
 
 import base64
 import io
+import json
 import re
 
 import matplotlib.pyplot as plt
@@ -87,11 +88,13 @@ def key(*names):
 
 
 def in_each(parent, child, noun):
-    """Passes when at least one entry of the ``parent`` list carries ``child``."""
+    """Passes when at least one entry of the ``parent`` list carries ``child`` (or one of a tuple)."""
+    children = child if isinstance(child, tuple) else (child,)
+
     @_reads(parent)
     def check(meta):
         entries = [e for e in _as_list(meta.get(parent)) if isinstance(e, dict)]
-        found = sum(1 for e in entries if _present(e.get(child)))
+        found = sum(1 for e in entries if any(_present(e.get(c)) for c in children))
         return f"{found}/{len(entries)} {noun}" if found else None
     return check
 
@@ -150,7 +153,53 @@ DCAT_US_1_1 = {
     },
 }
 
+
+# DCAT-US 3.0 (GSA, JSON Schema with plain keys; dataset requires title, description,
+# contactPoint and identifier). License may sit on the dataset or on its distributions.
+@_reads("license", "distribution")
+def _dcat_us_3_license(meta):
+    return key("license")(meta) or in_each("distribution", "license", "distributions")(meta)
+
+
+DCAT_US_3 = {
+    "Findable": {
+        "identifier": key("identifier"),
+        "title": key("title"),
+        "description": key("description"),
+        "keyword": key("keyword"),
+        "theme": key("theme"),
+        "landingPage": key("landingPage"),
+    },
+    "Accessible": {
+        "accessRights": key("accessRights"),
+        "downloadURL (distribution)": in_each("distribution", "downloadURL", "distributions"),
+        "mediaType (distribution)": in_each("distribution", "mediaType", "distributions"),
+        "accessURL (distribution)": in_each("distribution", "accessURL", "distributions"),
+        "issued": key("issued"),
+        "modified": key("modified"),
+    },
+    "Interoperable": {
+        "conformsTo": key("conformsTo"),
+        "format (distribution)": in_each("distribution", "format", "distributions"),
+        "spatial": key("spatial"),
+        "temporal": key("temporal"),
+        "qualifiedRelation": key("qualifiedRelation"),
+    },
+    "Reusable": {
+        "license (dataset or distribution)": _dcat_us_3_license,
+        "rights": key("rights"),
+        "publisher": key("publisher"),
+        "contactPoint": key("contactPoint"),
+        "version": key("version"),
+        "provenance (wasGeneratedBy or provenance)": key("wasGeneratedBy", "provenance"),
+        "checksum (distribution)": in_each("distribution", "checksum", "distributions"),
+    },
+}
+DCAT_US_3_REQUIRED = ("title", "description", "contactPoint", "identifier")
+
 _ACCESS_RIGHTS = "info:eu-repo/semantics/"
+
+_DCAT_US_3_SHAPED = ("landingPage", "temporal", "spatial", "conformsTo", "describedBy", "rights")
 
 
 def _is_access_rights(entry):
@@ -374,6 +423,136 @@ def _croissant_rai(meta):
     }
 
 
+# RO-Crate 1.2 (ro-crate-metadata.json, JSON-LD on schema.org). Checks run on the root
+# data entity, found through the metadata descriptor's "about" as the spec prescribes.
+_ROCRATE_DESCRIPTORS = ("ro-crate-metadata.json", "ro-crate-metadata.jsonld")
+_ROCRATE_URI = re.compile(r"w3id\.org/ro/crate/(\d+\.\d+(?:-DRAFT)?)")
+_ISO_8601 = re.compile(r"^\d{4}(-\d{2}){0,2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$")
+_LOCAL_CRATE = "not applicable to a local crate (relative root @id)"
+
+
+def _types(entity):
+    return {_local_name(str(t)) for t in _as_list(entity.get("@type"))}
+
+
+def _ref_id(value):
+    return value.get("@id") if isinstance(value, dict) else value
+
+
+class _Crate:
+    """An RO-Crate's @graph, with its descriptor and root data entity resolved."""
+
+    def __init__(self, metadata):
+        self.graph = [e for e in _as_list(metadata.get("@graph")) if isinstance(e, dict)]
+        by_id = {e.get("@id"): e for e in self.graph}
+        self.descriptor = next((by_id[d] for d in _ROCRATE_DESCRIPTORS if d in by_id), {})
+        self.root = by_id.get(_ref_id(self.descriptor.get("about")), {})
+        self.local = not re.match(r"^[a-z][a-z0-9+.-]*:", str(self.root.get("@id", "./")))
+
+    def of_type(self, name):
+        return [e for e in self.graph if name in _types(e)]
+
+    def version(self):
+        for value in _as_list(self.descriptor.get("conformsTo")):
+            match = _ROCRATE_URI.search(str(_ref_id(value)))
+            if match:
+                return match.group(1)
+        return None
+
+
+def _rocrate_profile(crate):
+    """FAIR checks for one crate; web-only checks are left out for local crates."""
+    files = crate.of_type("File")
+
+    def files_with(prop):
+        @_reads()
+        def check(_meta):
+            found = sum(1 for f in files if _present(f.get(prop)))
+            return f"{found}/{len(files)} Files" if found else None
+        return check
+
+    def descriptor_version(_meta):
+        version = crate.version()
+        return f"RO-Crate {version}" if version else None
+
+    def provenance(_meta):
+        actions = [a for a in crate.of_type("CreateAction") + crate.of_type("UpdateAction") if _present(a.get("object"))]
+        return f"{len(actions)} actions" if actions else None
+
+    accessible = {"conditionsOfAccess": key("conditionsOfAccess")}
+    if not crate.local:
+        accessible["url or distribution"] = key("url", "distribution")
+        accessible["contentUrl (Files)"] = files_with("contentUrl")
+    return {
+        "Findable": {
+            "name": key("name"),
+            "description": key("description"),
+            "identifier or cite-as": key("identifier", "cite-as"),
+            "keywords": key("keywords"),
+        },
+        "Accessible": accessible,
+        "Interoperable": {
+            "conformsTo (metadata descriptor)": _reads()(descriptor_version),
+            "conformsTo (profiles on the root)": key("conformsTo"),
+            "encodingFormat (Files)": files_with("encodingFormat"),
+        },
+        "Reusable": {
+            "license": key("license"),
+            "author": key("author"),
+            "publisher": key("publisher"),
+            "funder": key("funder"),
+            "datePublished": key("datePublished"),
+            "provenance (CreateAction or UpdateAction)": _reads()(provenance),
+        },
+    }
+
+
+def _rocrate_conformance(crate):
+    root, descriptor = crate.root, crate.descriptor
+    must = {
+        "metadata descriptor (CreativeWork)": "CreativeWork" in _types(descriptor),
+        "root data entity found through about": bool(root),
+        "root @type includes Dataset": "Dataset" in _types(root),
+        "datePublished is one ISO 8601 date": isinstance(root.get("datePublished"), str)
+        and bool(_ISO_8601.match(root["datePublished"])),
+    }
+    should = {
+        "descriptor conformsTo a versioned RO-Crate": crate.version() is not None,
+        "root name": _present(root.get("name")),
+        "root description": _present(root.get("description")),
+        "root license": _present(root.get("license")),
+    }
+    if str(_ref_id(root.get("identifier")) or "").startswith(("https://doi.org/", "http://doi.org/", "doi:")):
+        should["cite-as for a persistent identifier"] = _present(root.get("cite-as"))
+    return {
+        "Required (MUST) present": f"{sum(must.values())}/{len(must)}",
+        "Missing (MUST)": ", ".join(k for k, ok in must.items() if not ok) or "none",
+        "Recommended (SHOULD) present": f"{sum(should.values())}/{len(should)}",
+        "Missing (SHOULD)": ", ".join(k for k, ok in should.items() if not ok) or "none",
+    }
+
+
+def _rocrate_structure(crate):
+    files = crate.of_type("File")
+    people = crate.of_type("Person")
+    orgs = crate.of_type("Organization")
+    actions = crate.of_type("CreateAction") + crate.of_type("UpdateAction")
+    return {
+        "Files with encodingFormat and contentSize": _ratio(
+            sum(1 for f in files if _present(f.get("encodingFormat")) and _present(f.get("contentSize"))), len(files), "Files"
+        ),
+        "People with an ORCID": _ratio(
+            sum(1 for p in people if str(p.get("@id", "")).startswith("https://orcid.org/")), len(people), "people"
+        ),
+        "Organizations with a ROR": _ratio(
+            sum(1 for o in orgs if str(o.get("@id", "")).startswith("https://ror.org/")), len(orgs), "organizations"
+        ),
+        "Actions with agent and instrument": _ratio(
+            sum(1 for a in actions if _present(a.get("agent")) and _present(a.get("instrument"))), len(actions), "actions"
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
@@ -449,6 +628,23 @@ def _assess_dcat_us_1_1(metadata):
     }
 
 
+def _assess_dcat_us_3(metadata):
+    meta = _top_level(metadata)
+    results, summary, passed, totals = _score(meta, DCAT_US_3)
+    missing = [k for k in DCAT_US_3_REQUIRED if not _present(meta.get(k))]
+    return {
+        **results,
+        "Other": _other(meta, DCAT_US_3, shown_elsewhere=["@type"]),
+        "Conformance": {
+            "Required properties present": f"{len(DCAT_US_3_REQUIRED) - len(missing)}/{len(DCAT_US_3_REQUIRED)}",
+            "Missing": ", ".join(missing) or "none",
+        },
+        "FAIR Compliance Checks": summary,
+        "Pie chart": _chart(passed, totals),
+        "Original Metadata": metadata,
+    }
+
+
 def _assess_datacite(metadata):
     data = metadata.get("data")
     if isinstance(data, dict) and isinstance(data.get("attributes"), dict):
@@ -487,14 +683,39 @@ def _assess_croissant(metadata):
     }
 
 
+def _assess_rocrate(metadata):
+    crate = _Crate(metadata)
+    if not crate.descriptor:
+        raise ValueError("Not an RO-Crate: no ro-crate-metadata.json entity in @graph")
+    profile = _rocrate_profile(crate)
+    meta = _top_level(crate.root)
+    results, summary, passed, totals = _score(meta, profile)
+    result = {
+        **results,
+        "Other": _other(meta, profile, shown_elsewhere=["@id", "@type", "hasPart"]),
+        "Conformance": _rocrate_conformance(crate),
+        "Structure": _rocrate_structure(crate),
+        "FAIR Compliance Checks": summary,
+        "Pie chart": _chart(passed, totals),
+        "Original Metadata": metadata,
+    }
+    if crate.local:
+        result["Not applicable"] = {"url or distribution": _LOCAL_CRATE, "contentUrl (Files)": _LOCAL_CRATE}
+    return result
+
+
 _ASSESSORS = {
     "croissant": _assess_croissant,
+    "rocrate": _assess_rocrate,
+    "dcat-us-3.0": _assess_dcat_us_3,
     "dcat-us-1.1": _assess_dcat_us_1_1,
     "datacite": _assess_datacite,
 }
 STANDARDS = tuple(_ASSESSORS)
 STANDARD_NAMES = {
     "croissant": "Croissant",
+    "rocrate": "RO-Crate",
+    "dcat-us-3.0": "DCAT-US 3.0",
     "dcat-us-1.1": "DCAT-US 1.1 (Project Open Data)",
     "datacite": "DataCite 4.x",
 }
@@ -532,17 +753,30 @@ def detect_standard(metadata):
         raise ValueError("Metadata must be a JSON object")
     if _croissant_version(metadata):
         return "croissant"
+    graph_ids = {e.get("@id") for e in _as_list(metadata.get("@graph")) if isinstance(e, dict)}
+    if graph_ids & set(_ROCRATE_DESCRIPTORS) or "w3id.org/ro/crate/" in json.dumps(metadata.get("@context", "")):
+        return "rocrate"
     data = metadata.get("data")
     attributes = data.get("attributes") if isinstance(data, dict) else None
     datacite = attributes if isinstance(attributes, dict) else metadata
     if "titles" in datacite and "creators" in datacite:
         return "datacite"
+    if isinstance(metadata.get("dataset"), list):
+        raise ValueError("This is a DCAT catalog; upload a single dataset record from it.")
     conforms = " ".join(str(v) for v in _as_list(metadata.get("conformsTo")))
-    if "accessLevel" in metadata or "bureauCode" in metadata or "project-open-data" in conforms:
+    if "project-open-data" in conforms:
         return "dcat-us-1.1"
+    dcat = "title" in metadata and ("contactPoint" in metadata or "distribution" in metadata)
+    if dcat and ("accessRights" in metadata or any(isinstance(metadata.get(k), (dict, list)) for k in _DCAT_US_3_SHAPED)):
+        return "dcat-us-3.0"
+    if "accessLevel" in metadata or "bureauCode" in metadata:
+        return "dcat-us-1.1"
+    if dcat:
+        return "dcat-us-3.0"
     raise ValueError(
-        "Could not detect the metadata standard. Supported: Croissant 1.0/1.1, DCAT-US 1.1 "
-        "(Project Open Data) and DataCite 4.x JSON; choose one explicitly if your file follows it."
+        "Could not detect the metadata standard. Supported: Croissant 1.0/1.1, RO-Crate 1.2, "
+        "DCAT-US 3.0, DCAT-US 1.1 (Project Open Data) and DataCite 4.x JSON; choose one explicitly "
+        "if your file follows it."
     )
 
 
@@ -555,6 +789,8 @@ def calculate_fair_compliance(metadata, standard="auto"):
         The parsed metadata file.
     standard : str
         ``"auto"`` (detect it, the default), ``"croissant"`` (MLCommons Croissant 1.0/1.1),
+        ``"rocrate"`` (RO-Crate 1.2; other versions are assessed with 1.2 rules),
+        ``"dcat-us-3.0"`` (GSA DCAT-US 3.0 dataset record),
         ``"dcat-us-1.1"`` (Project Open Data) or ``"datacite"`` (DataCite 4.x JSON, including
         REST API responses wrapped in ``data.attributes``). The web form's ``"DCAT"`` and
         ``"Datacite"`` are accepted too.
@@ -566,7 +802,8 @@ def calculate_fair_compliance(metadata, standard="auto"):
         ``"CHECK FAILED ❌"``, plus ``"FAIR Compliance Checks"`` (``"n/m"`` per principle and
         in total), ``"Standard"``, ``"Other"``, ``"Pie chart"`` (base64 PNG) and
         ``"Original Metadata"``. DataCite and Croissant results also carry ``"Conformance"``
-        and ``"Structure"``; Croissant adds ``"RAI Documentation"``.
+        and ``"Structure"``; Croissant adds ``"RAI Documentation"``; a local RO-Crate adds
+        ``"Not applicable"`` for the checks that only apply to web-based crates.
     """
     if not isinstance(metadata, dict):
         raise ValueError("Metadata must be a JSON object")
@@ -578,5 +815,8 @@ def calculate_fair_compliance(metadata, standard="auto"):
     name = STANDARD_NAMES[standard]
     if standard == "croissant":
         name = f"{name} {_croissant_version(metadata) or '(no version declared)'}"
+    elif standard == "rocrate":
+        version = _Crate(metadata).version()
+        name = f"{name} {version}" if version == "1.2" else f"{name} {version or '(no version declared)'}, assessed with 1.2 rules"
     result["Standard"] = {"Name": name, "Detected automatically": "yes" if detected else "no"}
     return result
