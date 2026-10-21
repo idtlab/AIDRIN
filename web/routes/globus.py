@@ -17,6 +17,7 @@ from flask import (
     session,
     url_for,
 )
+from aidrin.structured_data_metrics.summary_pagination import parse_page_params
 from web.globus import (
     is_globus_available,
     get_auth_url,
@@ -26,6 +27,7 @@ from web.globus import (
     check_task,
     check_endpoint_compatibility,
 )
+from web.routes.utils import globus_summary_cache_key, purge_globus_summary_cache
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,11 @@ DEFAULT_ENDPOINT_PROBE_TIMEOUT = 30.0
 FILE_REFERENCE_CAPABILITY = "file_reference_validation_v1"
 FILE_REFERENCE_UPGRADE_MESSAGE = (
     "File-reference validation is unavailable on this endpoint. Upgrade AIDRIN "
+    "in every Globus Compute worker environment and restart the endpoint."
+)
+SUMMARY_PAGINATION_CAPABILITY = "summary_pagination_v1"
+SUMMARY_PAGINATION_UPGRADE_MESSAGE = (
+    "Data Overview pagination is unavailable on this endpoint. Upgrade AIDRIN "
     "in every Globus Compute worker environment and restart the endpoint."
 )
 
@@ -118,6 +125,10 @@ def _requires_file_reference_capability(metric_name, params):
         metric_name == "data_structure"
         and "file_reference_validation" in params.get("selected", [])
     )
+
+
+def _requires_summary_pagination_capability(metric_name):
+    return metric_name == "summary_statistics"
 
 
 def _submission_negotiation(client, endpoint_id, refresh_capabilities):
@@ -277,8 +288,7 @@ def disconnect():
     endpoint_id = session.get("globus_endpoint_id", "")
     file_path = session.get("globus_file_path", "")
     if endpoint_id and file_path:
-        cache_key = f"globus_summary:{endpoint_id}:{file_path}"
-        current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+        purge_globus_summary_cache(current_app.TEMP_RESULTS_CACHE, endpoint_id, file_path)
     session.pop("globus_tokens", None)
     session.pop("globus_authenticated", None)
     session.pop("globus_endpoint_id", None)
@@ -365,12 +375,24 @@ def submit():
     if not isinstance(params, dict):
         return jsonify({"error": "params must be a JSON object"}), 400
 
+    summary_page = None
+    summary_page_size = None
+    if metric_name == "summary_statistics":
+        try:
+            summary_page, summary_page_size = parse_page_params(
+                params.get("page"), params.get("page_size")
+            )
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
     task_id = None
     try:
         # Check cache for summary_statistics first (avoid redundant remote
         # calls, including the endpoint negotiation probe, on page reload)
         if metric_name == "summary_statistics":
-            cache_key = f"globus_summary:{endpoint_id}:{file_path}"
+            cache_key = globus_summary_cache_key(
+                endpoint_id, file_path, summary_page, summary_page_size
+            )
             cached = current_app.TEMP_RESULTS_CACHE.get(cache_key)
             if cached and cached.get("data"):
                 logger.info("Globus summary cache hit: %s", cache_key)
@@ -383,7 +405,12 @@ def submit():
         tokens = session.get("globus_tokens", {})
         client = get_compute_client(tokens)
         requires_file_reference = _requires_file_reference_capability(metric_name, params)
-        refresh_capabilities = requires_file_reference or metric_name == "custom_outlier_targets"
+        requires_summary_pagination = _requires_summary_pagination_capability(metric_name)
+        refresh_capabilities = (
+            requires_file_reference
+            or requires_summary_pagination
+            or metric_name == "custom_outlier_targets"
+        )
         negotiation, report = _submission_negotiation(client, endpoint_id, refresh_capabilities)
         if negotiation is None:
             return jsonify({
@@ -393,6 +420,11 @@ def submit():
 
         if requires_file_reference and FILE_REFERENCE_CAPABILITY not in negotiation["capabilities"]:
             return jsonify({"error": FILE_REFERENCE_UPGRADE_MESSAGE}), 409
+        if (
+            requires_summary_pagination
+            and SUMMARY_PAGINATION_CAPABILITY not in negotiation["capabilities"]
+        ):
+            return jsonify({"error": SUMMARY_PAGINATION_UPGRADE_MESSAGE}), 409
         if requires_file_reference and any(key in params for key in ("allowed_roots", "scan_limit")):
             return jsonify({"error": "Filesystem roots and scan limits are controlled by the Compute worker."}), 400
 
@@ -470,7 +502,17 @@ def cache_summary():
     if not endpoint_id or not file_path:
         return jsonify({"error": "No Globus file in session"}), 400
 
-    cache_key = f"globus_summary:{endpoint_id}:{file_path}"
+    pagination = data.get("pagination") if isinstance(data, dict) else None
+    if (
+        not isinstance(pagination, dict)
+        or pagination.get("page") is None
+        or pagination.get("page_size") is None
+    ):
+        return jsonify({"success": True, "cached": False})
+
+    cache_key = globus_summary_cache_key(
+        endpoint_id, file_path, pagination["page"], pagination["page_size"]
+    )
     current_app.TEMP_RESULTS_CACHE[cache_key] = {
         "data": data,
         "timestamp": __import__("time").time(),

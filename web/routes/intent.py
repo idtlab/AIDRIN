@@ -29,6 +29,10 @@ from aidrin.intent import (
     recommend_metrics,
     recommendations_from_profile,
 )
+from aidrin.structured_data_metrics.summary_pagination import (
+    DEFAULT_PAGE,
+    DEFAULT_PAGE_SIZE,
+)
 from web.routes.utils import (
     generate_metric_cache_key,
     get_current_user_id,
@@ -77,9 +81,17 @@ def _columns_with_nulls(data):
     """Derive the null-column count; None when it cannot be established.
 
     /summary-statistics does not report this directly. summary_statistics is
-    empty when a dataset has no numeric columns (core.py:507-508), so the
-    figure is best-effort and the prompt omits the line when it is None.
+    empty when a dataset has no numeric columns, so the figure is best-effort
+    and the prompt omits the line when it is None.
+
+    A paginated payload only covers one page of features. Counting nulls from
+    that page would under-report, so return None unless the cached payload is
+    the whole dataset (a single page, or a payload with no pagination block).
     """
+    pagination = data.get("pagination") or {}
+    if not isinstance(pagination, dict) or pagination.get("total_pages", 1) > 1:
+        return None
+
     records = _to_number(data.get("records_count"))
     if not records:
         return None
@@ -112,7 +124,13 @@ def _build_profile():
         return None
 
     file_type = session.get("uploaded_file_type")
-    cache_key = generate_metric_cache_key(file_name, "summarystats", selected_keys=_selected_keys(file_type))
+    cache_key = generate_metric_cache_key(
+        file_name,
+        "summarystats",
+        selected_keys=_selected_keys(file_type),
+        page=DEFAULT_PAGE,
+        page_size=DEFAULT_PAGE_SIZE,
+    )
     entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
     if not entry or not is_metric_cache_valid(entry):
         return None

@@ -32,6 +32,15 @@ All notable changes to AIDRIN are documented here. This project loosely follows
   `Overall Completeness (column-wise)` (present briefly on this branch) were
   removed in favor of the single `Overall Completeness` key.
 
+### Changed
+
+- **Data Overview is paged by feature.** `/summary-statistics` accepts `page`
+  and `page_size` (defaults 1 and 25, maximum page size 100) and adds a
+  `pagination` object. `summary_statistics`, `categorical_summary`, and
+  `histograms` are page-local; dataset-wide counts and feature lists stay
+  complete. Globus workers need the `summary_pagination_v1` capability. An
+  older worker gets an upgrade message instead of computing every feature.
+
 ### Added
 
 - **New data-quality completeness metrics** (CLI, Python library, batch, MCP,

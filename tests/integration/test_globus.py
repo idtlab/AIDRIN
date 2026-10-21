@@ -4,12 +4,15 @@ import os
 import json
 import sys
 import tempfile
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
+import seaborn as sns
 
 import aidrin
 import web.routes.globus as globus_routes
+from web.routes.utils import globus_summary_cache_key, purge_globus_summary_cache
 from web.globus import (
     is_globus_available,
     remote_metric_runner,
@@ -317,6 +320,7 @@ def test_remote_env_probe_reports_versions():
     assert info["capabilities"] == [
         "file_reference_validation_v1",
         "variable_unit_metadata_v1",
+        "summary_pagination_v1",
     ]
 
 
@@ -325,7 +329,10 @@ def test_remote_env_probe_omits_unavailable_variable_unit_capability(monkeypatch
 
     info = remote_env_probe()
 
-    assert info["capabilities"] == ["file_reference_validation_v1"]
+    assert info["capabilities"] == [
+        "file_reference_validation_v1",
+        "summary_pagination_v1",
+    ]
 
 
 # -------------------------------------------------
@@ -1113,3 +1120,178 @@ def test_globus_disconnect_clears_auth_after_clear(client):
     client.post("/globus/disconnect")
 
     assert client.get("/globus/status").get_json()["authenticated"] is False
+
+
+def _wide_csv_text():
+    header = [f"n{i}" for i in range(30)] + [f"c{i}" for i in range(10)]
+    row_a = [str(i) for i in range(30)] + [f"a{i}" for i in range(10)]
+    row_b = [str(i + 1) for i in range(30)] + [f"b{i}" for i in range(10)]
+    return ",".join(header) + "\n" + ",".join(row_a) + "\n" + ",".join(row_b) + "\n"
+
+
+def test_remote_summary_page_matches_local_slice(client, tmp_path):
+    content = _wide_csv_text()
+    path = tmp_path / "wide.csv"
+    path.write_text(content)
+    with open(path, "rb") as handle:
+        uploaded = client.post(
+            "/inspector",
+            data={"file": (handle, "wide.csv"), "fileTypeSelector": ".csv"},
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+    assert uploaded.status_code == 302
+    local = client.get("/summary-statistics?page=2&page_size=10").get_json()
+    remote = remote_metric_runner(
+        "summary_statistics", str(path), "wide.csv", ".csv", page=2, page_size=10,
+    )
+    assert "error" not in remote
+    assert remote["pagination"] == local["pagination"]
+    assert remote["summary_statistics"] == local["summary_statistics"]
+    assert remote["categorical_summary"] == local["categorical_summary"]
+    assert set(remote["histograms"]) == set(local["histograms"])
+    assert remote["numerical_features"] == local["numerical_features"]
+    assert remote["categorical_features"] == local["categorical_features"]
+    assert remote["all_features"] == local["all_features"]
+    assert set(remote["class_imbalance_features"]) == set(remote["all_features"])
+
+
+def test_remote_summary_kde_runs_only_for_the_page(tmp_path):
+    path = tmp_path / "wide.csv"
+    path.write_text(_wide_csv_text())
+    with patch.object(sns, "kdeplot", wraps=sns.kdeplot) as kde:
+        result = remote_metric_runner(
+            "summary_statistics", str(path), "wide.csv", ".csv", page=2, page_size=10,
+        )
+    assert result["pagination"]["start"] == 11
+    assert [call.args[0].name for call in kde.call_args_list] == [f"n{i}" for i in range(10, 20)]
+
+
+def test_remote_summary_rejects_invalid_page_params(tmp_path):
+    path = tmp_path / "wide.csv"
+    path.write_text(_wide_csv_text())
+    for kwargs in ({"page": 0}, {"page": True}, {"page": 1.5}, {"page_size": 101}, {"page": "abc"}):
+        result = remote_metric_runner(
+            "summary_statistics", str(path), "wide.csv", ".csv", **kwargs,
+        )
+        assert "error" in result
+        assert "Remote execution failed" not in result["error"]
+
+
+def test_globus_summary_cache_keys_do_not_collide_and_purge_is_exact():
+    page1 = globus_summary_cache_key("ep", "/remote/data.csv", 1, 25)
+    page2 = globus_summary_cache_key("ep", "/remote/data.csv", 2, 25)
+    size10 = globus_summary_cache_key("ep", "/remote/data.csv", 1, 10)
+    sibling = globus_summary_cache_key("ep", "/remote/data.csv.bak", 1, 25)
+    legacy = "globus_summary:ep:/remote/data.csv"
+    assert len({page1, page2, size10, sibling, legacy}) == 5
+    cache = {page1: 1, page2: 1, size10: 1, sibling: 1, legacy: 1}
+    purge_globus_summary_cache(cache, "ep", "/remote/data.csv")
+    assert list(cache) == [sibling]
+
+
+def test_summary_statistics_submission_forwards_page_and_requires_capability(client, monkeypatch):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    captured = {}
+    probes = {"count": 0}
+
+    def capture_submission(*_args, **kwargs):
+        captured["kwargs"] = kwargs
+        return "summary-task"
+
+    def probe(*_args):
+        probes["count"] += 1
+        return _compatibility_report(["summary_pagination_v1"])
+
+    monkeypatch.setattr(globus_routes, "get_compute_client", lambda _tokens: object())
+    monkeypatch.setattr(globus_routes, "check_endpoint_compatibility", probe)
+    monkeypatch.setattr(globus_routes, "submit_metric", capture_submission)
+    with client.session_transaction() as flask_session:
+        flask_session["globus_endpoint_negotiation"] = {
+            "endpoint_id": "endpoint-uuid",
+            "remote_aidrin_version": aidrin.__version__,
+            "capability_schema_version": 1,
+            "capabilities": ["file_reference_validation_v1"],
+            "checked_at": 0,
+            "fingerprint": "stale",
+        }
+
+    forwarded = client.post(
+        "/globus/submit",
+        json=_submission("summary_statistics", {"page": 2, "page_size": 10}),
+    )
+    assert forwarded.status_code == 200
+    assert probes["count"] == 1
+    assert captured["kwargs"]["page"] == 2
+    assert captured["kwargs"]["page_size"] == 10
+
+    captured.clear()
+    blocked = client.post(
+        "/globus/submit",
+        json=_submission("summary_statistics", {"page": "nope"}),
+    )
+    assert blocked.status_code == 400
+    assert "positive integer" in blocked.get_json()["error"]
+    assert "kwargs" not in captured
+
+    monkeypatch.setattr(
+        globus_routes,
+        "check_endpoint_compatibility",
+        lambda *_args: _compatibility_report(["file_reference_validation_v1"]),
+    )
+    with client.session_transaction() as flask_session:
+        flask_session.pop("globus_endpoint_negotiation", None)
+    denied = client.post(
+        "/globus/submit",
+        json=_submission("summary_statistics", {"page": 1, "page_size": 25}),
+    )
+    assert denied.status_code == 409
+    assert "Upgrade AIDRIN" in denied.get_json()["error"]
+
+
+def test_globus_summary_cache_is_per_page_and_cleared(client, app):
+    if not is_globus_available():
+        return
+    _authenticate(client)
+    with client.session_transaction() as flask_session:
+        flask_session["globus_endpoint_id"] = "endpoint-uuid"
+        flask_session["globus_file_path"] = "/remote/data.csv"
+
+    page1 = {"success": True, "pagination": {"page": 1, "page_size": 25}}
+    page2 = {"success": True, "pagination": {"page": 2, "page_size": 10}}
+    assert client.post("/globus/cache-summary", json=page1).status_code == 200
+    assert client.post("/globus/cache-summary", json=page2).status_code == 200
+    sibling = globus_summary_cache_key("endpoint-uuid", "/remote/data.csv.bak", 1, 25)
+    app.TEMP_RESULTS_CACHE[sibling] = {"data": {"pagination": {"page": 1, "page_size": 25}}}
+    before = set(app.TEMP_RESULTS_CACHE)
+    assert client.post("/globus/cache-summary", json={"success": True}).status_code == 200
+    assert set(app.TEMP_RESULTS_CACHE) == before
+
+    stored = {
+        key for key in app.TEMP_RESULTS_CACHE
+        if key.startswith("globus_summary:endpoint-uuid:/remote/data.csv")
+    }
+    assert globus_summary_cache_key("endpoint-uuid", "/remote/data.csv", 1, 25) in stored
+    assert globus_summary_cache_key("endpoint-uuid", "/remote/data.csv", 2, 10) in stored
+
+    assert client.post("/clear").status_code in (200, 302)
+    remaining = [
+        key for key in app.TEMP_RESULTS_CACHE
+        if isinstance(key, str) and key.startswith("globus_summary:")
+    ]
+    assert remaining == [sibling]
+
+    app.TEMP_RESULTS_CACHE[globus_summary_cache_key("endpoint-uuid", "/remote/data.csv", 1, 25)] = {"data": {}}
+    app.TEMP_RESULTS_CACHE[globus_summary_cache_key("endpoint-uuid", "/remote/data.csv", 3, 25)] = {"data": {}}
+    with client.session_transaction() as flask_session:
+        flask_session["globus_authenticated"] = True
+        flask_session["globus_endpoint_id"] = "endpoint-uuid"
+        flask_session["globus_file_path"] = "/remote/data.csv"
+    assert client.post("/globus/disconnect").status_code == 200
+    remaining = [
+        key for key in app.TEMP_RESULTS_CACHE
+        if isinstance(key, str) and key.startswith("globus_summary:")
+    ]
+    assert remaining == [sibling]
