@@ -32,21 +32,46 @@ html.dark .sidebar-metric-item.active {
 }
 
 /* Custom-outlier editor: unify control heights. The selects otherwise inherit
-   theme.css's taller global select padding (10px) while the inputs use their
-   Tailwind padding, leaving rows uneven. Match everything to the compact
-   px-3 py-2 (8px) control height. */
+   theme.css's taller global select padding (10px) while the inputs and the
+   target-picker button use their Tailwind padding, leaving rows uneven. Match
+   everything to the app-standard Flowbite p-2.5 (10px) control height. */
 #custom-outlier-editor select:not([multiple]),
 #custom-outlier-editor input[type="text"],
-#custom-outlier-editor input[type="number"] {
-  padding: 8px 12px;
+#custom-outlier-editor input[type="number"],
+#custom-outlier-editor [data-target-picker-button] {
+  padding: 10px 12px;
   font-size: 0.875rem;
-  line-height: 1.25rem;
+  line-height: 1.5;
   border-radius: 8px;
   max-width: none;
 }
 
 #custom-outlier-editor select:not([multiple]) {
-  padding-right: 32px; /* room for the chevron */
+  padding-right: 40px; /* room for the chevron */
+}
+
+/* theme.css resets button borders to none; restore the width/style so the
+   picker button's Tailwind border color classes apply and it matches the
+   bordered fields beside it. */
+#custom-outlier-editor [data-target-picker-button] {
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* Unit audit table: dense 12px rows. The global select styling otherwise
+   inflates the resolution select to 14px with 10px padding, mismatching the
+   compact unit input beside it; size both to the table's text-xs scale. */
+#variable-unit-editor-body select:not([multiple]),
+#variable-unit-editor-body input[type="text"] {
+  padding: 5px 8px;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  border-radius: 6px;
+}
+
+#variable-unit-editor-body select:not([multiple]) {
+  padding-right: 28px; /* room for the chevron */
+  background-position: right 8px center;
 }
 
 /* Tables: outer border + header separator */
