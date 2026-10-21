@@ -736,9 +736,6 @@ AIDRIN infers which key to use from ``llm.base_url`` — ``OPENROUTER_API_KEY`` 
      enabled: true
      context_chars: 3000
 
-   output:
-     save_log: true
-
 Step 4: Build the vector index
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

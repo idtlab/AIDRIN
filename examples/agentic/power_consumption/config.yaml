@@ -51,6 +51,3 @@ complexity_scorer:
 remediation:
   enabled: true
   context_chars: 3000
-
-output:
-  save_log: true

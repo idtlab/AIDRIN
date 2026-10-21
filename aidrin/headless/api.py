@@ -1091,17 +1091,15 @@ def run_agentic_pipeline(
     generate + self-heal analysis code, score complexity, and recommend
     remediation. Requires `pip install 'aidrin[agentic]'`.
 
-    Writes the combined result to `output_path` when given; otherwise, when the
-    config's `output.save_log` is true (the default), auto-saves it under
-    `aidrin/agentic/outputs/`. Either way, the saved path (if any) is returned
-    under the `_saved_to` key.
+    Writes the combined result to `output_path` when given; the saved path is
+    then returned under the `_saved_to` key. Nothing is written to disk
+    otherwise -- pass `output_path` (the CLI's `-o`) to save a copy.
     """
     import yaml
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    import aidrin.agentic as _agentic_pkg
     from aidrin.agentic.data_profiler import DataProfiler
-    from aidrin.agentic.run import _json_safe, _run_query, _write_run_log
+    from aidrin.agentic.run import _json_safe, _run_query
     from aidrin.agentic.token_tracker import get_tracker
     from aidrin.agentic.vector_db_builder import VectorDBBuilder
 
@@ -1113,8 +1111,6 @@ def run_agentic_pipeline(
 
     cfg = yaml.safe_load(resolved.read_text()) if resolved.exists() else {}
     cfg = cfg or {}
-    output_cfg = cfg.get("output", {}) or {}
-    save_log = bool(output_cfg.get("save_log", True))
 
     # Always rebuilds unless skip_vector -- matching --skip-vector's documented
     # meaning ("use the existing index") rather than silently reusing a stale
@@ -1180,22 +1176,19 @@ def run_agentic_pipeline(
         "token_usage": get_tracker().to_dict(),
     })
 
-    # A disk-write failure here (e.g. a read-only install, or an unwritable
-    # -o path) must never discard a result that already reflects completed,
-    # paid-for LLM calls -- record the error and still return combined
-    # rather than letting the exception propagate and lose everything.
-    try:
-        if output_path:
+    # Nothing is written to disk unless output_path is explicitly given. A
+    # disk-write failure (e.g. an unwritable -o path) must never discard a
+    # result that already reflects completed, paid-for LLM calls -- record
+    # the error and still return combined rather than letting the exception
+    # propagate and lose everything.
+    if output_path:
+        try:
             out = Path(output_path).resolve()
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
             combined["_saved_to"] = str(out)
-        elif save_log:
-            out_dir = Path(_agentic_pkg.__file__).resolve().parent / "outputs"
-            log_path = _write_run_log(combined, out_dir)
-            combined["_saved_to"] = str(log_path)
-    except OSError as exc:
-        combined["_save_error"] = str(exc)
+        except OSError as exc:
+            combined["_save_error"] = str(exc)
 
     return combined
 

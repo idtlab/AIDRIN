@@ -450,10 +450,10 @@ complexity_scorer:
 
 remediation:
   enabled: true
-
-output:
-  save_log: true
 ```
+
+Nothing is written to disk by `agentic_run`/`aidrin agentic run` unless you pass
+an output path (MCP's `output_path` / CLI's `-o`).
 
 The API key is never written into the config — it's resolved from `llm.base_url`
 (`OPENROUTER_API_KEY` for OpenRouter, `CBORG_API_KEY` for CBORG), or an explicit

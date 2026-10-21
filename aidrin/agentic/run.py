@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import uuid
-from datetime import datetime
 from pathlib import Path
 
 from aidrin.agentic.retriever import VectorRetriever
@@ -54,14 +52,6 @@ def _json_safe(obj):
         return obj
     except Exception:
         return str(obj)
-
-
-def _write_run_log(payload: dict, out_dir: Path) -> Path:
-    run_id = datetime.now().strftime("log_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{run_id}.json"
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    return path
 
 
 def _run_query(

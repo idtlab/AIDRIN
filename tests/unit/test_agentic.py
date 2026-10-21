@@ -234,20 +234,37 @@ class TestAgenticCLI(unittest.TestCase):
 
         mock_build.assert_called_once()
 
-    def test_agentic_run_save_failure_does_not_discard_results(self):
+    def test_agentic_run_does_not_write_anything_without_output_path(self):
         """
-        Regression test: a disk-write failure when auto-saving the run log
-        (e.g. a read-only install) must not discard a result that already
-        reflects completed, paid-for LLM calls. The CLI should still print
-        the full JSON result (with a _save_error key) and exit 0, not crash
-        with an uncaught PermissionError.
+        `run` without -o must not write anything to disk by default (no
+        implicit auto-save): only an explicit output path should ever cause
+        a write.
         """
         cfg = _make_agentic_fixture(self.tmpdir)
-        with patch(
-            "aidrin.agentic.run._write_run_log",
-            side_effect=PermissionError("Permission denied: read-only install"),
-        ):
+        with patch("pathlib.Path.write_text") as mock_write_text:
             stdout, _, code = _run_cli("agentic", "run", "-c", str(cfg))
+
+        mock_write_text.assert_not_called()
+        self.assertEqual(code, 0)
+        data = json.loads(stdout)
+        self.assertNotIn("_saved_to", data)
+        self.assertNotIn("_save_error", data)
+
+    def test_agentic_run_save_failure_with_explicit_output_does_not_discard_results(self):
+        """
+        Regression test: a disk-write failure when saving to an explicit -o
+        path must not discard a result that already reflects completed,
+        paid-for LLM calls. The CLI should still print the full JSON result
+        (with a _save_error key) and exit 0, not crash with an uncaught
+        PermissionError.
+        """
+        cfg = _make_agentic_fixture(self.tmpdir)
+        out = Path(self.tmpdir) / "result.json"
+        with patch(
+            "pathlib.Path.write_text",
+            side_effect=PermissionError("Permission denied: read-only filesystem"),
+        ):
+            stdout, _, code = _run_cli("agentic", "run", "-c", str(cfg), "-o", str(out))
 
         self.assertEqual(code, 0)
         data = json.loads(stdout)
@@ -255,6 +272,7 @@ class TestAgenticCLI(unittest.TestCase):
         self.assertIn("token_usage", data)
         self.assertIn("_save_error", data)
         self.assertNotIn("_saved_to", data)
+        self.assertFalse(out.exists())
 
 
 if __name__ == "__main__":

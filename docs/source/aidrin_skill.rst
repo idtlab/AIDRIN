@@ -366,9 +366,6 @@ stage below uses it, so there's nothing to configure per stage:
    remediation:
      enabled: true
 
-   output:
-     save_log: true
-
 .. note::
 
    ``paths.metadata_csv`` is **required**. It is a plain-text file describing your dataset
