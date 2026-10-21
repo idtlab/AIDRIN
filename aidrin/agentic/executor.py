@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import threading
+import multiprocessing
 import traceback
 from pathlib import Path
 from typing import Any
@@ -38,6 +38,34 @@ except Exception:
     np = None
 
 from aidrin.agentic.llm_factory import create_chat_model, resolve_provider_api_key
+
+
+def _run_code_in_subprocess(code: str, df: pd.DataFrame, queue: "multiprocessing.Queue") -> None:
+    """
+    Module-level (picklable, spawn-safe) worker: exec() the LLM-provided code
+    against its own copy of the dataframe in this child process, then reduce
+    the result to the same JSON-safe payload CodeExecutor.run() returns —
+    computed here, not in the parent, because the raw namespace (`pd`/`np`
+    modules, arbitrary LLM-created objects) generally isn't picklable across
+    the process boundary, while the reduced payload always is.
+
+    Puts exactly one ("success", result_payload) or ("error", formatted_text)
+    tuple onto `queue` before exiting.
+    """
+    ns: dict[str, Any] = {"pd": pd, "df": df, "result": None}
+    if np is not None:
+        ns["np"] = np
+    before_keys = set(ns.keys())
+    try:
+        exec(code, ns, ns)  # noqa: S102
+        value, chosen_key = CodeExecutor._select_result(ns, before_keys)
+        result_payload = CodeExecutor._summarize(value, ns, before_keys, chosen_key)
+        answer_value, answer_truncated = CodeExecutor._answer_value(value)
+        result_payload["answer"] = answer_value
+        result_payload["answer_truncated"] = answer_truncated
+        queue.put(("success", result_payload))
+    except BaseException as exc:  # noqa: BLE001 - reported back to the parent, not re-raised here
+        queue.put(("error", f"{exc}\n{traceback.format_exc()}"))
 
 
 class CodeExecutor:
@@ -100,11 +128,7 @@ class CodeExecutor:
 
         for attempt in range(1, self.max_attempts + 1):
             try:
-                exec_result, exec_ns, before_keys, chosen_key = self._execute(code, df)
-                result_payload = self._summarize(exec_result, exec_ns, before_keys, chosen_key)
-                answer_value, answer_truncated = self._answer_value(exec_result)
-                result_payload["answer"] = answer_value
-                result_payload["answer_truncated"] = answer_truncated
+                result_payload = self._execute(code, df)
                 attempts.append({"attempt": attempt, "status": "success"})
                 return {
                     "enabled": True,
@@ -137,48 +161,63 @@ class CodeExecutor:
             "last_error": last_error,
         }
 
-    def _execute(self, code: str, df: pd.DataFrame) -> tuple[Any, dict[str, Any], set[str], str | None]:
+    def _execute(self, code: str, df: pd.DataFrame) -> dict[str, Any]:
         """
-        Run the LLM-provided code against the dataframe, under a hard wall-clock
-        timeout (executor.timeout_seconds, default 60s).
+        Run the LLM-provided code against the dataframe, in an isolated child
+        process, under a hard wall-clock timeout (executor.timeout_seconds,
+        default 60s). Returns the JSON-safe result payload (with `answer`/
+        `answer_truncated` already set) on success.
 
-        exec() runs on a separate daemon thread so a runaway/hanging generation
-        (e.g. an accidental infinite loop or a full re-scan of a multi-million-row
-        file) can't block the pipeline forever. If the timeout is hit, that thread
-        is abandoned — Python has no safe way to force-kill a running thread — and
-        a TimeoutError is raised on the calling thread instead, which flows into
-        the normal attempt/repair retry loop in run(). The abandoned thread is a
-        daemon, so it won't block process exit even if it never finishes.
+        A thread can't be force-killed in Python, so an earlier version of
+        this ran the code on a daemon thread and simply abandoned it on
+        timeout — but an abandoned thread keeps running: it can still mutate
+        shared state, perform I/O, or finish late and race a subsequent
+        repair attempt. A process can actually be terminated, so on timeout
+        the child is killed (terminate(), escalating to kill() if it ignores
+        SIGTERM) and joined — reaped, confirmed dead — before this returns,
+        so the next attempt never overlaps with a still-running previous one
+        and no abandoned workers accumulate across repeated timeouts.
+
+        Uses the "spawn" start method explicitly rather than the platform
+        default: run_agentic_pipeline dispatches questions across a
+        ThreadPoolExecutor, so _execute can be called from a worker thread,
+        and fork()ing a multi-threaded process is unsafe (locks held by
+        other threads at fork time can deadlock the child).
+
+        Note: spawning a process and reimporting this package costs real
+        wall-clock time (~1-2s measured), which counts against
+        timeout_seconds before any generated code even runs. Negligible
+        against the 60s default; a very low timeout_seconds risks spurious
+        timeouts on trivial code.
         """
-        ns: dict[str, Any] = {"pd": pd, "df": df.copy(), "result": None}
-        if np is not None:
-            ns["np"] = np
-        before_keys = set(ns.keys())
+        ctx = multiprocessing.get_context("spawn")
+        queue: multiprocessing.Queue = ctx.Queue()
+        process = ctx.Process(target=_run_code_in_subprocess, args=(code, df, queue), daemon=True)
+        process.start()
+        process.join(self.timeout_seconds)
 
-        outcome: dict[str, BaseException] = {}
-
-        def _run() -> None:
-            try:
-                exec(code, ns, ns)  # noqa: S102
-            except BaseException as exc:  # noqa: BLE001 - re-raised on the calling thread below
-                outcome["error"] = exc
-
-        worker = threading.Thread(target=_run, daemon=True)
-        worker.start()
-        worker.join(self.timeout_seconds)
-
-        if worker.is_alive():
+        if process.is_alive():
+            process.terminate()
+            process.join(5)
+            if process.is_alive():
+                process.kill()
+                process.join()
             raise TimeoutError(
-                f"Code execution exceeded the {self.timeout_seconds:g}s timeout and was abandoned. "
+                f"Code execution exceeded the {self.timeout_seconds:g}s timeout and was terminated. "
                 "This usually means the generated code has an inefficient or infinite loop "
                 "(e.g. re-reading/re-scanning the full dataset repeatedly instead of using "
                 "the already-loaded `df`). Rewrite it as a single vectorised pandas/numpy pass."
             )
-        if "error" in outcome:
-            raise outcome["error"]
 
-        value, chosen_key = self._select_result(ns, before_keys)
-        return value, ns, before_keys, chosen_key
+        try:
+            status, payload = queue.get(timeout=5)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Code execution subprocess exited without a result (exit code {process.exitcode})."
+            ) from exc
+        if status == "error":
+            raise RuntimeError(payload)
+        return payload
 
     @staticmethod
     def _select_result(ns: dict[str, Any], before_keys: set[str]) -> tuple[Any, str | None]:
@@ -310,7 +349,8 @@ class CodeExecutor:
             }
         return {"type": type(result).__name__, "preview": str(result), "chosen_key": chosen_key}
 
-    def _answer_value(self, result: Any) -> tuple[Any, bool]:
+    @staticmethod
+    def _answer_value(result: Any) -> tuple[Any, bool]:
         if isinstance(result, (str, int, float, bool)):
             return result, False
         if isinstance(result, (list, tuple)):
