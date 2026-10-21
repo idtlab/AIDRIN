@@ -118,29 +118,6 @@ class _ResponsesWrapper:
         return _Resp(text)
 
 
-class _FallbackWrapper:
-    """Tries a primary LLM; falls back to standard OpenAI on any invoke failure."""
-
-    def __init__(self, primary: Any, fallback: Any) -> None:
-        self._primary = primary
-        self._fallback = fallback
-        self._use_fallback = False
-
-    def invoke(self, messages: Any) -> Any:
-        if self._use_fallback:
-            return self._fallback.invoke(messages)
-        try:
-            return self._primary.invoke(messages)
-        except Exception as exc:
-            import sys
-            sys.stderr.write(f"[aidrin] Custom endpoint failed ({exc}); falling back to OpenAI API.\n")
-            self._use_fallback = True
-            return self._fallback.invoke(messages)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._primary, name)
-
-
 class _TrackingWrapper:
     """Wraps a LangChain chat model to record token usage after each invoke."""
 
@@ -196,7 +173,12 @@ def create_chat_model(
     made through it — see aidrin/agentic/token_tracker.py's per-component breakdown.
 
     When ``base_url`` is provided the client targets that OpenAI-compatible endpoint
-    (e.g. LBL CBORG at https://api.cborg.lbl.gov) using ChatOpenAI directly.
+    (OpenRouter or LBL CBORG — see resolve_provider_api_key) using ChatOpenAI directly,
+    with no fallback to any other endpoint: falling back to plain OpenAI on a request
+    failure would silently resend the OpenRouter/CBORG key to api.openai.com, exactly
+    the cross-provider key mixing this single-provider design exists to prevent. A
+    request failure propagates normally instead, for the caller's own retry logic
+    (e.g. CodeExecutor's self-healing loop) to handle.
 
     Otherwise tries, in order:
     1) ChatLiteLLM (langchain_community) for broad provider support.
@@ -208,22 +190,14 @@ def create_chat_model(
             model=model_name, api_key=api_key, temperature=temperature, base_url=base_url, component=component
         )
 
-    # Custom OpenAI-compatible endpoint (CBORG, science clouds, local servers, etc.)
-    # Falls back to the standard OpenAI API if the custom endpoint fails.
     if base_url:
         try:
             from langchain_openai import ChatOpenAI
-            primary = _TrackingWrapper(
+            return _TrackingWrapper(
                 ChatOpenAI(model=model_name, temperature=temperature, api_key=api_key, base_url=base_url),
                 model_name,
                 component,
             )
-            fallback = _TrackingWrapper(
-                ChatOpenAI(model=model_name, temperature=temperature, api_key=api_key),
-                model_name,
-                component,
-            )
-            return _FallbackWrapper(primary, fallback)
         except ImportError as exc:
             raise ImportError("langchain-openai is required for custom base_url endpoints.") from exc
 
