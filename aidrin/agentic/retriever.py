@@ -81,14 +81,26 @@ class VectorRetriever:
         with config_path.open("r", encoding="utf-8") as fh:
             cfg = yaml.safe_load(fh) or {}
         retrieval_cfg = cfg.get("retrieval", {}) or {}
+        vector_store_cfg = cfg.get("vector_store", {}) or {}
         enabled = bool(retrieval_cfg.get("enabled", False))
         question = retrieval_cfg.get("question", "")
         top_k = int(retrieval_cfg.get("top_k", 3))
 
-        store_name = retrieval_cfg.get("vector_store_name", "vector_store")
+        # vector_store_name/vector_store_dir are set once under vector_store: (the
+        # same section build-index reads) and shared here — retrieval.vector_store_name
+        # is only a legacy override for pointing retrieval at a different index than
+        # the one build-index would create for this config.
+        store_name = (
+            retrieval_cfg.get("vector_store_name")
+            or vector_store_cfg.get("vector_store_name", "vector_store")
+        )
         base = config_path.parent
         default_dir = (base.parent / store_name).resolve()
-        vector_dir_raw = retrieval_cfg.get("vector_store_dir", default_dir)
+        vector_dir_raw = (
+            retrieval_cfg.get("vector_store_dir")
+            or vector_store_cfg.get("vector_store_dir")
+            or default_dir
+        )
         if Path(vector_dir_raw).is_absolute():
             vector_dir = Path(vector_dir_raw)
         else:
