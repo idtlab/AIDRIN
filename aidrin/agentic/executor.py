@@ -6,20 +6,24 @@ Config (YAML) expected keys:
 
 .. code-block:: yaml
 
+    llm:
+      base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov" — one provider for the whole pipeline
+      model: openai/gpt-4o-mini                   # used here and by retrieval/complexity_scorer/remediation
+
     executor:
       enabled: true
       max_attempts: 3
       timeout_seconds: 60    # wall-clock limit per execution attempt
-      model: gpt-4o-mini
       temperature: 0.0
-      openai_api_key: null   # falls back to OPENROUTER_API_KEY/CBORG_API_KEY/OPENAI_API_KEY env vars
+
+The API key is resolved from ``llm.base_url`` — ``OPENROUTER_API_KEY`` for OpenRouter,
+``CBORG_API_KEY`` for CBORG (or an explicit ``llm.api_key`` in config).
 """
 
 from __future__ import annotations
 
 import importlib
 import importlib.util
-import os
 import threading
 import traceback
 from pathlib import Path
@@ -33,7 +37,7 @@ try:
 except Exception:
     np = None
 
-from aidrin.agentic.llm_factory import create_chat_model
+from aidrin.agentic.llm_factory import create_chat_model, resolve_provider_api_key
 
 
 class CodeExecutor:
@@ -45,16 +49,15 @@ class CodeExecutor:
         self.timeout_seconds: float = cfg["timeout_seconds"]
         self.model: str = cfg["model"]
         self.temperature: float = cfg["temperature"]
-        self.api_key: str | None = cfg["openai_api_key"]
+        self.api_key: str | None = cfg["api_key"]
         self.base_url: str | None = cfg["base_url"]
         self.data_path: Path | None = cfg.get("data_path")
         self.data_loader_path: str | None = cfg.get("data_loader")
 
-        api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
         self.llm = None
         if self.enabled:
             self.llm = create_chat_model(
-                self.model, temperature=self.temperature, api_key=api_key, base_url=self.base_url,
+                self.model, temperature=self.temperature, api_key=self.api_key, base_url=self.base_url,
                 component="execution",
             )
 
@@ -328,22 +331,13 @@ class CodeExecutor:
         enabled = bool(exec_cfg.get("enabled", True))
         max_attempts = max(1, int(exec_cfg.get("max_attempts", 1)))
         timeout_seconds = float(exec_cfg.get("timeout_seconds", 60))
-        model = exec_cfg.get("model", "gpt-4o")
         temperature = float(exec_cfg.get("temperature", 0.0))
         llm_cfg = cfg.get("llm", {}) or {}
-        # A chat call (repair LLM), same as retrieval/complexity_scorer/remediation's
-        # answer model — so it must fall back to OPENROUTER_API_KEY (or CBORG_API_KEY)
-        # when base_url points at OpenRouter/CBORG, not just OPENAI_API_KEY. Without
-        # this, base_url set + no explicit executor/llm openai_api_key silently sends
-        # an unauthenticated request and the provider rejects it with a 401.
-        openai_api_key = (
-            exec_cfg.get("openai_api_key")
-            or llm_cfg.get("api_key")
-            or os.environ.get("OPENROUTER_API_KEY")
-            or os.environ.get("CBORG_API_KEY")
-            or os.environ.get("OPENAI_API_KEY")
-        )
-        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
+        model = llm_cfg.get("model", "gpt-4o")
+        base_url = llm_cfg.get("base_url")
+        # One provider (llm.base_url) for the whole pipeline — no mixing OpenRouter and
+        # CBORG keys within a single run. See resolve_provider_api_key for the inference.
+        api_key = resolve_provider_api_key(base_url, llm_cfg.get("api_key"))
 
         paths_cfg = cfg.get("paths", {}) or {}
         data_loader = paths_cfg.get("data_loader")
@@ -361,7 +355,7 @@ class CodeExecutor:
             "timeout_seconds": timeout_seconds,
             "model": model,
             "temperature": temperature,
-            "openai_api_key": openai_api_key,
+            "api_key": api_key,
             "base_url": base_url,
             "data_path": data_csv,
             "data_loader": data_loader,

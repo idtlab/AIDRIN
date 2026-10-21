@@ -122,21 +122,21 @@ Ask every time, before eliciting general intent:
 **If no path is given**, skip straight to Step 3. Nothing else about the workflow changes.
 
 **If a path is given:**
-- Requires `pip install 'aidrin[agentic]'` and an OpenAI-compatible API key
-  (`OPENAI_API_KEY` or equivalent) available in the environment. If a build-index call
-  reports agentic dependencies are missing, tell the user and fall back to the standard
-  workflow rather than retrying.
+- Requires `pip install 'aidrin[agentic]'` and an API key for one of the two supported
+  providers — OpenRouter (`OPENROUTER_API_KEY`) or LBL CBORG (`CBORG_API_KEY`) — available
+  in the environment. The pipeline uses exactly one provider for the whole run; don't mix
+  the two. If a build-index call reports agentic dependencies are missing, tell the user
+  and fall back to the standard workflow rather than retrying.
 - Ask what specific domain requirements or questions to check against that literature
   (e.g. "Does more than 80% of the data conform to IEC smart-meter resampling
   standards?"). The user supplies these — don't invent domain-specific questions
   yourself, they know the regulation better than you do.
-- Ask which OpenAI model to use (e.g. "Which OpenAI model should I use for the agentic
-  pipeline? Default: `gpt-4o`."). One answer is reused for all four LLM stages
-  (`retrieval.answer_model`, `executor.model`, `complexity_scorer.model`,
-  `remediation.model`) — don't ask per stage. OpenAI-compatible endpoints other than
-  OpenAI itself (e.g. a local/self-hosted `base_url`) are out of scope for this
-  question for now; only ask about the model name. Leave `vector_store.embedding_model`
-  on its default (`text-embedding-3-small`) unless the user brings it up unprompted.
+- Ask which provider and model to use (e.g. "OpenRouter or CBORG, and which model on
+  that provider? Default: OpenRouter with `openai/gpt-4o-mini`."). One answer sets a
+  single `llm` block (`base_url` + `model`) reused by all four LLM stages (executor,
+  retrieval, complexity_scorer, remediation) — don't ask per stage, and don't let the
+  user pick different providers for different stages. Leave `llm.embedding_model` on
+  its default (`text-embedding-3-small`) unless the user brings it up unprompted.
 - **How the dataset gets loaded for the pipeline** (the agentic profiler is a separate
   code path from AIDRIN's own file parser — it does not reuse Step 4's reader):
   - Plain comma-separated CSV → use `paths.data_csv` directly, no extra step.
@@ -253,9 +253,9 @@ agentic profiler / your description instead."
 
 If domain grounding was requested in Step 2, also list the resource path(s) that
 will be indexed, the exact domain questions that will be run against them, and the
-OpenAI model that will be used for all four LLM stages — this is the only checkpoint
-before any LLM API calls happen, so make sure the user sees it before you build the
-index or run the pipeline.
+provider + model that will be used for all four LLM stages — this is the only
+checkpoint before any LLM API calls happen, so make sure the user sees it before you
+build the index or run the pipeline.
 
 **This confirmation must be its own explicit yes/no request covering the complete
 metric list** — e.g. "Run this plan?" with the full list restated. A narrower question
@@ -294,10 +294,9 @@ for minutes with no visible checkpoint.
 2. Write `config.yaml` following the schema in "Agentic pipeline (advanced)" below:
    `paths.metadata_csv` = the file from step 1, `vector_store.sources` = the resource
    path from Step 2, `retrieval.questions` = the user's domain questions from Step 2.
-   Set `retrieval.answer_model`, `executor.model`, `complexity_scorer.model`, and
-   `remediation.model` to the OpenAI model chosen in Step 2 (all four, the same model).
-   Leave `vector_store.embedding_model` on `text-embedding-3-small` unless the user
-   said otherwise. For loading the dataset itself, use whichever of the three cases
+   Set `llm.base_url` and `llm.model` to the provider and model chosen in Step 2 — one
+   block, reused by all four LLM stages. Leave `llm.embedding_model` on
+   `text-embedding-3-small` unless the user said otherwise. For loading the dataset itself, use whichever of the three cases
    from Step 2 applied: `paths.data_csv` for plain CSV, a `read_file()`-wrapping loader
    you write for another AIDRIN-supported format, or the user-supplied loader path for
    a format AIDRIN can't parse.
@@ -393,7 +392,9 @@ different config, or driving the pipeline outside the guided workflow.
 For domain-specific dataset evaluation grounded in field literature. Use when the
 user has domain PDFs (research papers, standards, regulations) and wants to evaluate
 whether the dataset meets domain-specific requirements — not just generic quality
-checks. Requires `pip install 'aidrin[agentic]'` and an OpenAI-compatible API key.
+checks. Requires `pip install 'aidrin[agentic]'` and an API key for one provider —
+OpenRouter (`OPENROUTER_API_KEY`) or LBL CBORG (`CBORG_API_KEY`). Pick one; the
+pipeline does not mix providers within a run.
 
 **How domain specificity works:** You define domain-specific questions in the config
 (`retrieval.question` / `retrieval.questions`). The pipeline embeds those questions,
@@ -412,7 +413,9 @@ The pipeline is entirely config-driven. Create a YAML file with these sections:
 
 ```yaml
 llm:
-  base_url: "https://api.openai.com/v1"   # any OpenAI-compatible endpoint
+  base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov" — pick one, never both
+  model: "openai/gpt-4o-mini"                # chat backend, reused by executor/complexity_scorer/remediation below
+  embedding_model: "text-embedding-3-small"  # used by build-index and by retrieval's query embedding
 
 paths:
   data_loader: "./loader.py:load_dataset"  # Python function returning a DataFrame
@@ -422,14 +425,12 @@ paths:
 vector_store:
   sources:
     - ./sources                            # directory of domain PDFs
-  embedding_model: text-embedding-3-small
   vector_store_name: my_index             # output directory name
   chunk_size: 1000
   chunk_overlap: 200
 
 retrieval:
   enabled: true                           # false = skip RAG, use LLM knowledge only
-  answer_model: gpt-4o                    # any model served at base_url
   top_k: 3
   max_workers: 4                          # questions run in parallel
   question: "Single question as a string"
@@ -441,20 +442,22 @@ retrieval:
 executor:
   enabled: true
   max_attempts: 5                         # self-heal retries
-  model: gpt-4o                           # any model served at base_url
+  timeout_seconds: 60                     # wall-clock limit per execution attempt
   temperature: 0.0
 
 complexity_scorer:
   enabled: true
-  model: gpt-4o                           # any model served at base_url
 
 remediation:
   enabled: true
-  model: gpt-4o                           # any model served at base_url
 
 output:
   save_log: true
 ```
+
+The API key is never written into the config — it's resolved from `llm.base_url`
+(`OPENROUTER_API_KEY` for OpenRouter, `CBORG_API_KEY` for CBORG), or an explicit
+`llm.api_key` if you need to override that inference.
 
 `paths.data_loader` is required for non-CSV datasets. It points to a Python file and
 function (`"./loader.py:load_dataset"`) that returns a pandas DataFrame.

@@ -1,27 +1,28 @@
 """
 VectorDBBuilder: ingest text/PDF documents, chunk, embed, and persist a FAISS vector index.
 
-Config (YAML) expects a ``vector_store`` section:
+One provider (OpenRouter or LBL CBORG) for the whole pipeline, configured once under ``llm``
+(see executor.py/retriever.py):
 
 .. code-block:: yaml
+
+    llm:
+      base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
+      embedding_model: text-embedding-3-small
 
     vector_store:
       sources:
         - "./docs"
         - "./notes.txt"
-      embedding_model: text-embedding-3-small
       chunk_size: 500
       chunk_overlap: 50
       vector_store_name: my_vector_store   # name for the output directory
-
-Requires ``OPENAI_API_KEY`` (or ``GOOGLE_API_KEY`` for Gemini embedding models).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -46,62 +47,16 @@ except ImportError as exc:
         "Install with: pip install 'aidrin[agentic]'"
     ) from exc
 
-try:
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
-except ImportError:
-    GoogleGenerativeAIEmbeddings = None  # type: ignore
+from aidrin.agentic.llm_factory import resolve_provider_api_key
 
 
-def _make_embeddings(
-    model_name: str,
-    openai_api_key: str | None = None,
-    google_api_key: str | None = None,
-    base_url: str | None = None,
-):
-    if "gemini" in model_name or "embedding-001" in model_name:
-        if GoogleGenerativeAIEmbeddings is None:
-            raise ImportError(
-                "langchain-google-genai is required for Gemini embeddings. "
-                "Install with: pip install langchain-google-genai"
-            )
-        kwargs: dict[str, Any] = {"model": model_name}
-        if google_api_key:
-            kwargs["google_api_key"] = google_api_key
-        return GoogleGenerativeAIEmbeddings(**kwargs)
-
+def _make_embeddings(model_name: str, api_key: str | None, base_url: str | None):
     kwargs: dict[str, Any] = {"model": model_name}
-    if openai_api_key:
-        kwargs["api_key"] = openai_api_key
+    if api_key:
+        kwargs["api_key"] = api_key
     if base_url:
         kwargs["base_url"] = base_url
-    model = OpenAIEmbeddings(**kwargs)
-    if not base_url:
-        return model
-
-    # Wrap with fallback to standard OpenAI when a custom endpoint is configured.
-    fallback_kwargs: dict[str, Any] = {"model": model_name}
-    if openai_api_key:
-        fallback_kwargs["api_key"] = openai_api_key
-    fallback = OpenAIEmbeddings(**fallback_kwargs)
-
-    import sys as _sys
-
-    class _FallbackEmbeddings:
-        def embed_documents(self, texts: list[str]) -> list[list[float]]:
-            try:
-                return model.embed_documents(texts)
-            except Exception as exc:
-                _sys.stderr.write(f"[aidrin] Embedding via custom endpoint failed ({exc}); falling back to OpenAI API.\n")
-                return fallback.embed_documents(texts)
-
-        def embed_query(self, text: str) -> list[float]:
-            try:
-                return model.embed_query(text)
-            except Exception as exc:
-                _sys.stderr.write(f"[aidrin] Embedding via custom endpoint failed ({exc}); falling back to OpenAI API.\n")
-                return fallback.embed_query(text)
-
-    return _FallbackEmbeddings()
+    return OpenAIEmbeddings(**kwargs)
 
 
 class VectorDBBuilder:
@@ -112,8 +67,7 @@ class VectorDBBuilder:
         cfg = self._load_config(self.config_path)
         self.sources: list[Path] = cfg["sources"]
         self.embedding_model_name: str = cfg["embedding_model"]
-        self.openai_api_key = cfg["openai_api_key"]
-        self.google_api_key = cfg["google_api_key"]
+        self.api_key = cfg["api_key"]
         self.base_url: str | None = cfg["base_url"]
         self.chunk_size: int = cfg["chunk_size"]
         self.chunk_overlap: int = cfg["chunk_overlap"]
@@ -132,17 +86,13 @@ class VectorDBBuilder:
             cfg = yaml.safe_load(fh) or {}
         vector_cfg = cfg.get("vector_store") or {}
         sources = vector_cfg.get("sources", [])
-        embedding_model = vector_cfg.get("embedding_model")
         llm_cfg = cfg.get("llm", {}) or {}
-        openai_api_key = (
-            vector_cfg.get("openai_api_key")
-            or llm_cfg.get("api_key")
-            or os.environ.get("OPENAI_API_KEY")
-        )
-        google_api_key = vector_cfg.get("google_api_key") or os.environ.get("GOOGLE_API_KEY")
-        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
+        embedding_model = llm_cfg.get("embedding_model")
+        base_url = llm_cfg.get("base_url")
+        # One provider (llm.base_url) for the whole pipeline.
+        api_key = resolve_provider_api_key(base_url, llm_cfg.get("api_key"))
         if not embedding_model:
-            raise ValueError("vector_store.embedding_model must be set in the config YAML.")
+            raise ValueError("llm.embedding_model must be set in the config YAML.")
         if not sources:
             raise ValueError("vector_store.sources must list files or directories to index.")
 
@@ -170,8 +120,7 @@ class VectorDBBuilder:
         return {
             "sources": resolved_sources,
             "embedding_model": embedding_model,
-            "openai_api_key": openai_api_key,
-            "google_api_key": google_api_key,
+            "api_key": api_key,
             "base_url": base_url,
             "vector_store_name": store_name,
             "chunk_size": chunk_size,
@@ -220,7 +169,7 @@ class VectorDBBuilder:
         return splitter.split_text(text)
 
     def _embed(self, texts: list[str]) -> tuple[list[list[float]], int]:
-        model = _make_embeddings(self.embedding_model_name, self.openai_api_key, self.google_api_key, self.base_url)
+        model = _make_embeddings(self.embedding_model_name, self.api_key, self.base_url)
         vectors = model.embed_documents(texts)
         dims = len(vectors[0]) if vectors else 0
         return vectors, dims
@@ -243,12 +192,11 @@ class VectorDBBuilder:
 
     def build(self) -> dict[str, Any]:
         """Build and persist the vector index. Returns a summary dict."""
-        is_gemini = "gemini" in self.embedding_model_name or "embedding-001" in self.embedding_model_name
-        if is_gemini:
-            if not (self.google_api_key or "GOOGLE_API_KEY" in os.environ):
-                raise ValueError("Google API key missing. Set GOOGLE_API_KEY environment variable.")
-        elif not (self.openai_api_key or "OPENAI_API_KEY" in os.environ):
-            raise ValueError("OpenAI API key missing. Set OPENAI_API_KEY environment variable.")
+        if not self.api_key:
+            raise ValueError(
+                "No API key available for llm.base_url. Set OPENROUTER_API_KEY or CBORG_API_KEY "
+                "to match the configured provider, or set llm.api_key in config."
+            )
 
         files = self._gather_files()
         all_chunks: list[str] = []

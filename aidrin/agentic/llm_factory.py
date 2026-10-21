@@ -1,20 +1,44 @@
 """
 Lightweight chat LLM factory with optional provider flexibility.
 
-Supports:
-- OpenAI Chat models via langchain-openai (gpt-4o, gpt-3.5, etc.)
-- Any model supported by litellm through langchain_community ChatLiteLLM (e.g., Anthropic, Llama, Qwen, Mistral)
+The agentic pipeline is designed around a single OpenAI-compatible provider per
+run — OpenRouter or LBL CBORG, configured once via ``llm.base_url`` — rather than
+mixing providers across pipeline stages. ``create_chat_model`` just builds a
+client for whatever ``base_url``/``api_key``/``model`` it's given; the single-
+provider-per-run resolution of which API key belongs to which base_url lives in
+``resolve_provider_api_key`` below.
 
 Usage:
-    llm = create_chat_model(model_name="gpt-4o", api_key=None, temperature=0)
-
-If ChatLiteLLM is available it is used first for broad provider coverage; otherwise
-it falls back to ChatOpenAI for OpenAI models.
+    llm = create_chat_model(model_name="openai/gpt-4o-mini", api_key=key, base_url=base_url, temperature=0)
 """
 
 from __future__ import annotations
 
+import os
 from typing import Any
+
+
+def resolve_provider_api_key(base_url: str | None, explicit: str | None = None) -> str | None:
+    """
+    Resolve the API key for a single-provider setup where every pipeline stage
+    shares one ``llm.base_url`` (either OpenRouter or LBL CBORG — no mixing).
+
+    An explicit key (e.g. ``llm.api_key`` from config) always wins. Otherwise the
+    right environment variable is inferred from which provider ``base_url``
+    points at — ``OPENROUTER_API_KEY`` for OpenRouter, ``CBORG_API_KEY`` for
+    CBORG — so a stray key for the *other* provider sitting in the environment
+    never gets used by mistake.
+    """
+    if explicit:
+        return explicit
+    if not base_url:
+        return None
+    lowered = base_url.lower()
+    if "openrouter" in lowered:
+        return os.environ.get("OPENROUTER_API_KEY")
+    if "cborg" in lowered:
+        return os.environ.get("CBORG_API_KEY")
+    return None
 
 
 class _ResponsesWrapper:

@@ -304,7 +304,7 @@ There are two ways to run it:
    ``aidrin agentic build-index`` / ``aidrin agentic run`` from the command line (see
    :ref:`agentic_integration`). Use this when you want to re-run with a different
    config, tune settings the guided path doesn't ask about (retrieval ``top_k``, chunk
-   size, per-stage models), or evaluate a dataset outside a full AIDRIN assessment.
+   size), or evaluate a dataset outside a full AIDRIN assessment.
    The rest of this section documents that config format.
 
 Setup
@@ -316,18 +316,24 @@ Setup
 
    pip install -e ".[agentic]"
 
-**Set your API key:**
+**Pick one provider — OpenRouter or LBL CBORG, not both — and set its key:**
 
 .. code-block:: bash
 
-   export OPENAI_API_KEY="sk-..."   # or the key for your OpenAI-compatible endpoint
+   export OPENROUTER_API_KEY="sk-or-..."
+   # — or —
+   export CBORG_API_KEY="sk-cborg-..."
 
-**Create an agentic config YAML.** All paths are resolved relative to the config file:
+**Create an agentic config YAML.** All paths are resolved relative to the config file. One
+``llm`` block sets the endpoint, chat model, and embedding model for the whole pipeline — every
+stage below uses it, so there's nothing to configure per stage:
 
 .. code-block:: yaml
 
    llm:
-     base_url: "https://api.openai.com/v1"   # any OpenAI-compatible endpoint
+     base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
+     model: "openai/gpt-4o-mini"
+     embedding_model: "openai/text-embedding-3-small"
 
    paths:
      data_loader: "./loader.py:load_dataset"  # Python function returning a DataFrame
@@ -337,14 +343,12 @@ Setup
    vector_store:
      sources:
        - ./sources                            # directory containing domain PDFs
-     embedding_model: text-embedding-ada-002
      vector_store_name: my_index
      chunk_size: 1000
      chunk_overlap: 200
 
    retrieval:
      enabled: true                            # false = skip RAG, use LLM knowledge only
-     answer_model: gpt-4o
      top_k: 3
      max_workers: 4                           # questions run in parallel
      question:
@@ -354,16 +358,13 @@ Setup
    executor:
      enabled: true
      max_attempts: 5
-     model: gpt-4o
      temperature: 0.0
 
    complexity_scorer:
      enabled: true
-     model: gpt-4o
 
    remediation:
      enabled: true
-     model: gpt-4o
 
    output:
      save_log: true

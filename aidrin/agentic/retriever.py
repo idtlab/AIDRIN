@@ -2,18 +2,23 @@
 VectorRetriever: loads a built vector store, runs a similarity search for a query from YAML,
 and formats a prompt context for the answer LLM.
 
-Config expects a ``retrieval`` section:
+One provider (OpenRouter or LBL CBORG) for the whole pipeline, configured once under ``llm``:
 
 .. code-block:: yaml
+
+    llm:
+      base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
+      model: openai/gpt-4o-mini                   # chat backend, also used by executor/complexity_scorer/remediation
+      embedding_model: text-embedding-3-small      # used here and by vector_db_builder
 
     retrieval:
       enabled: true
       question: "What does the dataset cover?"
       top_k: 3
       vector_store_name: my_vector_store   # name of directory under project root
-      embedding_model: text-embedding-3-small
-      answer_model: gpt-4o
-      openai_api_key: null   # falls back to OPENAI_API_KEY env var
+
+The API key is resolved from ``llm.base_url`` (``OPENROUTER_API_KEY`` or ``CBORG_API_KEY``),
+or an explicit ``llm.api_key`` in config.
 
 Requires: langchain-openai, faiss-cpu (optional, falls back to brute-force cosine search).
 """
@@ -21,7 +26,6 @@ Requires: langchain-openai, faiss-cpu (optional, falls back to brute-force cosin
 from __future__ import annotations
 
 import json
-import os
 import re
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
@@ -43,64 +47,16 @@ except ImportError as exc:
         "langchain-openai is required. Install with: pip install 'aidrin[agentic]'"
     ) from exc
 
-try:
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
-except ImportError:
-    GoogleGenerativeAIEmbeddings = None  # type: ignore
-
-from aidrin.agentic.llm_factory import create_chat_model
+from aidrin.agentic.llm_factory import create_chat_model, resolve_provider_api_key
 
 
-def _make_embeddings(
-    model_name: str,
-    openai_api_key: str | None = None,
-    google_api_key: str | None = None,
-    base_url: str | None = None,
-):
-    if "gemini" in model_name or "embedding-001" in model_name:
-        if GoogleGenerativeAIEmbeddings is None:
-            raise ImportError(
-                "langchain-google-genai is required for Gemini embeddings. "
-                "Install with: pip install langchain-google-genai"
-            )
-        kwargs: dict[str, Any] = {"model": model_name}
-        if google_api_key:
-            kwargs["google_api_key"] = google_api_key
-        return GoogleGenerativeAIEmbeddings(**kwargs)
-
+def _make_embeddings(model_name: str, api_key: str | None, base_url: str | None):
     kwargs: dict[str, Any] = {"model": model_name}
-    if openai_api_key:
-        kwargs["api_key"] = openai_api_key
+    if api_key:
+        kwargs["api_key"] = api_key
     if base_url:
         kwargs["base_url"] = base_url
-    model = OpenAIEmbeddings(**kwargs)
-    if not base_url:
-        return model
-
-    # Wrap with fallback to standard OpenAI when a custom endpoint is configured.
-    fallback_kwargs: dict[str, Any] = {"model": model_name}
-    if openai_api_key:
-        fallback_kwargs["api_key"] = openai_api_key
-    fallback = OpenAIEmbeddings(**fallback_kwargs)
-
-    import sys as _sys
-
-    class _FallbackEmbeddings:
-        def embed_documents(self, texts: list[str]) -> list[list[float]]:
-            try:
-                return model.embed_documents(texts)
-            except Exception as exc:
-                _sys.stderr.write(f"[aidrin] Embedding via custom endpoint failed ({exc}); falling back to OpenAI API.\n")
-                return fallback.embed_documents(texts)
-
-        def embed_query(self, text: str) -> list[float]:
-            try:
-                return model.embed_query(text)
-            except Exception as exc:
-                _sys.stderr.write(f"[aidrin] Embedding via custom endpoint failed ({exc}); falling back to OpenAI API.\n")
-                return fallback.embed_query(text)
-
-    return _FallbackEmbeddings()
+    return OpenAIEmbeddings(**kwargs)
 
 
 class VectorRetriever:
@@ -112,11 +68,9 @@ class VectorRetriever:
         self.top_k = cfg["top_k"]
         self.vector_dir = cfg["vector_store_dir"]
         self.embedding_model = cfg["embedding_model"]
-        self.api_key = cfg["openai_api_key"]
-        self.google_api_key = cfg["google_api_key"]
+        self.model = cfg["model"]
         self.base_url = cfg["base_url"]
-        self.answer_model = cfg["answer_model"]
-        self.answer_model_api_key = cfg["answer_model_api_key"]
+        self.api_key = cfg["api_key"]
         self.preview_chars = cfg["preview_chars"]
         self.context_compression = cfg["context_compression"]
         self.metadata_path = self.vector_dir / "metadata.json"
@@ -127,22 +81,14 @@ class VectorRetriever:
         with config_path.open("r", encoding="utf-8") as fh:
             cfg = yaml.safe_load(fh) or {}
         retrieval_cfg = cfg.get("retrieval", {}) or {}
-        vector_store_cfg = cfg.get("vector_store", {}) or {}
         enabled = bool(retrieval_cfg.get("enabled", False))
         question = retrieval_cfg.get("question", "")
         top_k = int(retrieval_cfg.get("top_k", 3))
 
-        store_name = (
-            retrieval_cfg.get("vector_store_name")
-            or vector_store_cfg.get("vector_store_name", "vector_store")
-        )
+        store_name = retrieval_cfg.get("vector_store_name", "vector_store")
         base = config_path.parent
         default_dir = (base.parent / store_name).resolve()
-        vector_dir_raw = (
-            retrieval_cfg.get("vector_store_dir")
-            or vector_store_cfg.get("vector_store_dir")
-            or default_dir
-        )
+        vector_dir_raw = retrieval_cfg.get("vector_store_dir", default_dir)
         if Path(vector_dir_raw).is_absolute():
             vector_dir = Path(vector_dir_raw)
         else:
@@ -150,29 +96,13 @@ class VectorRetriever:
             candidate2 = (base.parent / vector_dir_raw).resolve()
             vector_dir = candidate1 if candidate1.exists() else candidate2
 
-        embedding_model = (
-            retrieval_cfg.get("embedding_model")
-            or vector_store_cfg.get("embedding_model", "text-embedding-3-small")
-        )
         llm_cfg = cfg.get("llm", {}) or {}
-        openai_api_key = (
-            retrieval_cfg.get("openai_api_key")
-            or llm_cfg.get("api_key")
-            or os.environ.get("OPENAI_API_KEY")
-        )
-        google_api_key = retrieval_cfg.get("google_api_key") or os.environ.get("GOOGLE_API_KEY")
-        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
-        answer_model = retrieval_cfg.get("answer_model", "gpt-4o")
-        # Separate from openai_api_key: the query-embedding call always needs a key
-        # for the configured embedding provider, while answer_model may point at a
-        # different OpenAI-compatible provider (e.g. OpenRouter/CBORG) via base_url,
-        # which needs its own key rather than reusing openai_api_key and getting a 401.
-        answer_model_api_key = (
-            retrieval_cfg.get("answer_model_api_key")
-            or os.environ.get("OPENROUTER_API_KEY")
-            or os.environ.get("CBORG_API_KEY")
-            or openai_api_key
-        )
+        embedding_model = llm_cfg.get("embedding_model", "text-embedding-3-small")
+        model = llm_cfg.get("model", "gpt-4o")
+        base_url = llm_cfg.get("base_url")
+        # One provider (llm.base_url) for the whole pipeline — the same key is used for
+        # both the query-embedding call and the answer/generation model below.
+        api_key = resolve_provider_api_key(base_url, llm_cfg.get("api_key"))
         preview_chars = int(retrieval_cfg.get("preview_chars", 500))
         context_compression = bool(retrieval_cfg.get("context_compression", False))
 
@@ -182,11 +112,9 @@ class VectorRetriever:
             "top_k": top_k,
             "vector_store_dir": vector_dir,
             "embedding_model": embedding_model,
-            "openai_api_key": openai_api_key,
-            "google_api_key": google_api_key,
+            "model": model,
             "base_url": base_url,
-            "answer_model": answer_model,
-            "answer_model_api_key": answer_model_api_key,
+            "api_key": api_key,
             "preview_chars": preview_chars,
             "context_compression": context_compression,
         }
@@ -210,13 +138,12 @@ class VectorRetriever:
         return embeddings, metadata
 
     def _embed_query(self, text: str) -> np.ndarray:
-        is_gemini = "gemini" in self.embedding_model or "embedding-001" in self.embedding_model
-        if is_gemini:
-            if not (self.google_api_key or "GOOGLE_API_KEY" in os.environ):
-                raise ValueError("Google API key missing. Set GOOGLE_API_KEY or retrieval.google_api_key in config.")
-        elif not (self.api_key or "OPENAI_API_KEY" in os.environ):
-            raise ValueError("OpenAI API key missing. Set OPENAI_API_KEY or retrieval.openai_api_key in config.")
-        model = _make_embeddings(self.embedding_model, self.api_key, self.google_api_key, self.base_url)
+        if not self.api_key:
+            raise ValueError(
+                "No API key available for llm.base_url. Set OPENROUTER_API_KEY or CBORG_API_KEY "
+                "to match the configured provider, or set llm.api_key in config."
+            )
+        model = _make_embeddings(self.embedding_model, self.api_key, self.base_url)
         vec = model.embed_query(text)
         try:
             from aidrin.agentic.token_tracker import get_tracker
@@ -267,7 +194,7 @@ class VectorRetriever:
         if self.context_compression:
             if llm is None:
                 llm = create_chat_model(
-                    self.answer_model, api_key=self.answer_model_api_key, base_url=self.base_url, temperature=0,
+                    self.model, api_key=self.api_key, base_url=self.base_url, temperature=0,
                     component="context_compression",
                 )
 
@@ -299,7 +226,7 @@ class VectorRetriever:
 
     def retrieve(self, profile_summary: dict[str, Any] | None = None, question: str | None = None) -> dict[str, Any]:
         llm = create_chat_model(
-            self.answer_model, api_key=self.answer_model_api_key, base_url=self.base_url, temperature=0,
+            self.model, api_key=self.api_key, base_url=self.base_url, temperature=0,
             component="generation",
         )
 
