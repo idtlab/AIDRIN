@@ -391,16 +391,23 @@ This is optional. Install the extra to enable it:
 
 **One-time setup**
 
-1. Register an application at `developers.globus.org <https://developers.globus.org/>`_.
-2. Set the client ID before starting the server:
+For **local** web use on ``localhost``, you can sign in without setting any
+Globus environment variables: the web app uses the same public native OAuth
+client as ``globus-compute-sdk`` (PKCE, registered localhost callback URLs).
+
+For **hosted or custom-domain** deployments, register an application at
+`developers.globus.org <https://developers.globus.org/>`_ and set the client ID
+before starting the server:
 
    .. code-block:: bash
 
       export GLOBUS_CLIENT_ID=<your-client-id>
 
    Set ``GLOBUS_CLIENT_SECRET`` as well if you registered a confidential client.
+   Optionally set ``GLOBUS_REDIRECT_URI`` when the public callback URL differs
+   from the default ``/globus/callback`` on this server.
 
-   These variables are required only for **web** sign-in (OAuth redirect flow).
+   These variables apply only to **web** sign-in (OAuth redirect flow).
    ``aidrin remote`` and MCP remote runs authenticate with the Globus SDK's
    native login and shared token cache; they do not use ``GLOBUS_CLIENT_ID``.
 

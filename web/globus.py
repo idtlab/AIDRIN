@@ -39,20 +39,71 @@ def is_globus_available():
 
 
 GLOBUS_WEB_AUTH_SETUP_MESSAGE = (
-    "Web sign-in requires the GLOBUS_CLIENT_ID environment variable. "
-    "Register an app at https://developers.globus.org/, set the redirect URI "
-    "to this server's /globus/callback URL, export GLOBUS_CLIENT_ID "
-    "(and GLOBUS_CLIENT_SECRET for a confidential client), then restart the "
-    "server. CLI and MCP remote execution use native Globus login and do not "
-    "need GLOBUS_CLIENT_ID."
+    "Web sign-in on this server needs a Globus OAuth client ID. For local "
+    "development (localhost), AIDRIN uses the same public native client as "
+    "``globus-compute-sdk`` when GLOBUS_CLIENT_ID is unset. For other hosts, "
+    "register an app at https://developers.globus.org/, set the redirect URI "
+    "to this server's /globus/callback URL (or GLOBUS_REDIRECT_URI), export "
+    "GLOBUS_CLIENT_ID (and GLOBUS_CLIENT_SECRET for a confidential client), "
+    "then restart the server. CLI and MCP remote execution use native Globus "
+    "login and do not need GLOBUS_CLIENT_ID."
 )
 
 
-def is_globus_web_auth_configured():
-    """Return True when the web OAuth flow can start (client ID is set)."""
+def _builtin_globus_web_client_id():
+    """Public native client bundled with globus-compute-sdk (local dev default)."""
+    if not _globus_available:
+        return ""
+    try:
+        from globus_compute_sdk.sdk.auth.globus_app import DEFAULT_CLIENT_ID
+
+        return (DEFAULT_CLIENT_ID or "").strip()
+    except ImportError:
+        return ""
+
+
+def get_globus_web_client_id():
+    """Effective OAuth client ID: deployment env override, else built-in default."""
+    client_id = os.environ.get("GLOBUS_CLIENT_ID", "").strip()
+    if client_id:
+        return client_id
+    return _builtin_globus_web_client_id()
+
+
+def _is_local_redirect_uri(redirect_uri):
+    from urllib.parse import urlparse
+
+    host = (urlparse(redirect_uri).hostname or "").lower()
+    return host in ("localhost", "127.0.0.1", "::1")
+
+
+def is_globus_web_auth_configured(redirect_uri=None):
+    """Return True when the web OAuth flow can start for this redirect URI."""
     if not _globus_available:
         return False
-    return bool(os.environ.get("GLOBUS_CLIENT_ID", "").strip())
+    if os.environ.get("GLOBUS_CLIENT_ID", "").strip():
+        return True
+    builtin = _builtin_globus_web_client_id()
+    if not builtin:
+        return False
+    if redirect_uri is None:
+        return True
+    return _is_local_redirect_uri(redirect_uri)
+
+
+def globus_web_auth_uses_builtin_client():
+    """True when web sign-in uses the bundled native client (no env override)."""
+    return bool(
+        _globus_available
+        and not os.environ.get("GLOBUS_CLIENT_ID", "").strip()
+        and _builtin_globus_web_client_id()
+    )
+
+
+def resolve_globus_redirect_uri(external_callback_url):
+    """OAuth redirect URI from GLOBUS_REDIRECT_URI or the Flask callback URL."""
+    configured = os.environ.get("GLOBUS_REDIRECT_URI", "").strip()
+    return configured or external_callback_url
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +129,7 @@ GLOBUS_AUTH_SCOPE = "openid profile email"
 
 
 def _get_client_id():
-    client_id = os.environ.get("GLOBUS_CLIENT_ID", "").strip()
+    client_id = get_globus_web_client_id()
     if not client_id:
         raise ValueError(GLOBUS_WEB_AUTH_SETUP_MESSAGE)
     return client_id

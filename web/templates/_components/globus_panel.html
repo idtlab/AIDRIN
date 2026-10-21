@@ -7,9 +7,11 @@
     <div class="py-4">
       <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-2">Globus web sign-in not configured</h3>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        The Globus SDK is installed, but this server has no <code class="text-xs">GLOBUS_CLIENT_ID</code>.
-        Configure OAuth before using <strong>Sign in with Globus</strong> in the web app.
-        The CLI and MCP use native Globus login and do not need this variable.
+        The Globus SDK is installed, but this server is not using the built-in local
+        OAuth client. Set <code class="text-xs">GLOBUS_CLIENT_ID</code> (and optional
+        <code class="text-xs">GLOBUS_REDIRECT_URI</code>) for your deployment before
+        using <strong>Sign in with Globus</strong>. The CLI and MCP use native Globus
+        login and do not need these variables.
       </p>
       <ol class="text-sm text-gray-600 dark:text-gray-400 list-decimal list-inside space-y-2 mb-4">
         <li>Register an app at <a href="https://developers.globus.org/" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">developers.globus.org</a>.</li>

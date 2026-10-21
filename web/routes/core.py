@@ -134,9 +134,16 @@ def inspector():
             current_checked_keys = None
 
     # Check if Globus Compute is available
-    from web.globus import is_globus_available, is_globus_web_auth_configured
+    from web.globus import (
+        is_globus_available,
+        is_globus_web_auth_configured,
+        resolve_globus_redirect_uri,
+    )
     globus_available = is_globus_available()
-    globus_web_auth_configured = is_globus_web_auth_configured()
+    globus_redirect_uri = resolve_globus_redirect_uri(
+        url_for("globus.callback", _external=True),
+    )
+    globus_web_auth_configured = is_globus_web_auth_configured(globus_redirect_uri)
 
     # Check if LLM explanations are available
     from web.llm import is_llm_available
