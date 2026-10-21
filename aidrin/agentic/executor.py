@@ -25,8 +25,10 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import multiprocessing
+import time
 import traceback
 from pathlib import Path
+from queue import Empty
 from typing import Any
 
 import pandas as pd
@@ -189,32 +191,74 @@ class CodeExecutor:
         timeout_seconds before any generated code even runs. Negligible
         against the 60s default; a very low timeout_seconds risks spurious
         timeouts on trivial code.
+
+        Reads the result queue *while* waiting, not after a separate
+        process.join(timeout) — multiprocessing.Queue.put() hands off to a
+        background feeder thread that blocks if the OS pipe buffer fills
+        (~64KB) with nobody draining it. join(timeout) alone never drains
+        it, so a fast attempt whose result exceeds that size would look
+        "still alive" at the deadline and get killed and misreported as a
+        timeout, even though it had already finished computing.
         """
         ctx = multiprocessing.get_context("spawn")
-        queue: multiprocessing.Queue = ctx.Queue()
-        process = ctx.Process(target=_run_code_in_subprocess, args=(code, df, queue), daemon=True)
+        result_queue: multiprocessing.Queue = ctx.Queue()
+        process = ctx.Process(target=_run_code_in_subprocess, args=(code, df, result_queue), daemon=True)
         process.start()
-        process.join(self.timeout_seconds)
 
+        deadline = time.monotonic() + self.timeout_seconds
+        status: str | None = None
+        payload: Any = None
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                status, payload = result_queue.get(timeout=min(remaining, 0.2))
+                break
+            except Empty:
+                if not process.is_alive():
+                    # Exited without us having drained a result yet -- one
+                    # last non-blocking check for a result that arrived in
+                    # the race between is_alive() and the get() above.
+                    try:
+                        status, payload = result_queue.get_nowait()
+                    except Empty:
+                        pass
+                    break
+
+        if status is None:
+            # Either still running past the deadline, or exited (e.g.
+            # crashed) without ever putting a result. Either way, confirm
+            # it's actually dead -- terminate(), escalating to kill() if it
+            # ignores SIGTERM -- before reporting failure, so the next
+            # attempt can never overlap with this one.
+            if process.is_alive():
+                process.terminate()
+                process.join(5)
+                if process.is_alive():
+                    process.kill()
+                    process.join()
+            else:
+                process.join()
+            raise TimeoutError(
+                f"Code execution exceeded the {self.timeout_seconds:g}s timeout and was terminated. "
+                "This usually means the generated code has an inefficient or infinite loop "
+                "(e.g. re-reading/re-scanning the full dataset repeatedly instead of using "
+                "the already-loaded `df`), or is returning a result too large to transfer "
+                "between processes quickly enough. Rewrite it as a single vectorised "
+                "pandas/numpy pass, or return a smaller/summarized result."
+            )
+
+        # Got a result: the queue is already drained, so the child should
+        # exit promptly now that nothing is blocking its feeder thread.
+        process.join(5)
         if process.is_alive():
             process.terminate()
             process.join(5)
             if process.is_alive():
                 process.kill()
                 process.join()
-            raise TimeoutError(
-                f"Code execution exceeded the {self.timeout_seconds:g}s timeout and was terminated. "
-                "This usually means the generated code has an inefficient or infinite loop "
-                "(e.g. re-reading/re-scanning the full dataset repeatedly instead of using "
-                "the already-loaded `df`). Rewrite it as a single vectorised pandas/numpy pass."
-            )
 
-        try:
-            status, payload = queue.get(timeout=5)
-        except Exception as exc:
-            raise RuntimeError(
-                f"Code execution subprocess exited without a result (exit code {process.exitcode})."
-            ) from exc
         if status == "error":
             raise RuntimeError(payload)
         return payload

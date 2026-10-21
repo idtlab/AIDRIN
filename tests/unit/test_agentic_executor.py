@@ -121,6 +121,25 @@ with open({str(marker)!r}, "w") as f:
         time.sleep(3)
         self.assertFalse(marker.exists(), "side effect ran after timeout: the process was not actually killed")
 
+    def test_large_result_does_not_deadlock_or_misreport_as_timeout(self):
+        """
+        Regression test: multiprocessing.Queue.put() hands off to a background
+        feeder thread that blocks if the OS pipe buffer (~64KB) fills with
+        nobody draining it. A prior implementation called process.join(timeout)
+        before ever reading the queue, so a fast attempt whose result exceeded
+        that size looked "still alive" at the deadline, got killed, and was
+        misreported as a timeout — even though it had already finished
+        computing. The fix drains the queue while waiting, not after.
+        """
+        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=10)
+        executor = self.CodeExecutor(cfg)
+        # A couple MB, comfortably past the ~64KB pipe buffer, computed
+        # near-instantly (no sleep) so a correct implementation returns in
+        # well under the 10s timeout.
+        code = "result = 'x' * 2_000_000"
+        result = executor._execute(code, self.df)
+        self.assertEqual(result["answer"], "x" * 2_000_000)
+
     def test_run_reports_timeout_as_last_error_without_crashing(self):
         cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=1, max_attempts=1)
         executor = self.CodeExecutor(cfg)
