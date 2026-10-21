@@ -3220,7 +3220,7 @@ function addCustomOutlierConditionRow(ruleRow) {
         <p class="text-xs text-gray-500 dark:text-gray-400">Compare values on the same row, using compatible units. Numeric text is accepted; other non-numeric values are flagged. Missing values follow “Allow missing values”.</p>
       </div>
       <button type="button" data-action="remove-condition"
-              class="self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+              class="justify-self-end self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
         Remove
       </button>
     </div>`;
