@@ -8,7 +8,7 @@ Config (YAML) expected keys:
 
     llm:
       base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov" — one provider for the whole pipeline
-      model: openai/gpt-4o-mini                   # used here and by retrieval/complexity_scorer/remediation
+      model: openai/gpt-oss-120b                   # used here and by retrieval/complexity_scorer/remediation
 
     executor:
       enabled: true

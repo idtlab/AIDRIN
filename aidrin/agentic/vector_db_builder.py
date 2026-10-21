@@ -8,7 +8,7 @@ One provider (OpenRouter or LBL CBORG) for the whole pipeline, configured once u
 
     llm:
       base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
-      embedding_model: text-embedding-3-small
+      embedding_model: text-embedding-3-large
 
     vector_store:
       sources:

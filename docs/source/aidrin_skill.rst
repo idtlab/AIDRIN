@@ -332,8 +332,8 @@ stage below uses it, so there's nothing to configure per stage:
 
    llm:
      base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
-     model: "openai/gpt-4o-mini"
-     embedding_model: "openai/text-embedding-3-small"
+     model: "openai/gpt-oss-120b"
+     embedding_model: "openai/text-embedding-3-large"
 
    paths:
      data_loader: "./loader.py:load_dataset"  # Python function returning a DataFrame

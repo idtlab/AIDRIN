@@ -14,8 +14,8 @@
 # One provider for the whole pipeline — no mixing. Pick OpenRouter or CBORG, not both:
 llm:
   base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
-  model: "openai/gpt-4o-mini"                  # chat backend — used by executor, retrieval, complexity_scorer, remediation
-  embedding_model: "openai/text-embedding-3-small"   # used by build-index and by retrieval's query embedding
+  model: "openai/gpt-oss-120b"                  # chat backend — used by executor, retrieval, complexity_scorer, remediation
+  embedding_model: "openai/text-embedding-3-large"   # used by build-index and by retrieval's query embedding
 
 paths:
   data_loader: "./loader.py:load_dataset"

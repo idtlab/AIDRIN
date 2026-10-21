@@ -9,7 +9,7 @@ provider-per-run resolution of which API key belongs to which base_url lives in
 ``resolve_provider_api_key`` below.
 
 Usage:
-    llm = create_chat_model(model_name="openai/gpt-4o-mini", api_key=key, base_url=base_url, temperature=0)
+    llm = create_chat_model(model_name="openai/gpt-oss-120b", api_key=key, base_url=base_url, temperature=0)
 """
 
 from __future__ import annotations

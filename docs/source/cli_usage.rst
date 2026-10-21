@@ -699,8 +699,8 @@ AIDRIN infers which key to use from ``llm.base_url`` — ``OPENROUTER_API_KEY`` 
 
    llm:
      base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
-     model: "openai/gpt-4o-mini"                  # chat backend for every stage below
-     embedding_model: "openai/text-embedding-3-small"   # used by build-index + retrieval
+     model: "openai/gpt-oss-120b"                  # chat backend for every stage below
+     embedding_model: "openai/text-embedding-3-large"   # used by build-index + retrieval
 
    paths:
      data_loader: "./loader.py:load_dataset"
@@ -838,8 +838,8 @@ is used by every stage — retrieval, execution, complexity scoring, remediation
 
    llm:
      base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
-     model: "openai/gpt-4o-mini"
-     embedding_model: "openai/text-embedding-3-small"
+     model: "openai/gpt-oss-120b"
+     embedding_model: "openai/text-embedding-3-large"
 
    paths:
      data_loader: "./loader.py:load_dataset"   # module:function relative to config dir

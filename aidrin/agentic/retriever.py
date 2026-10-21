@@ -8,8 +8,8 @@ One provider (OpenRouter or LBL CBORG) for the whole pipeline, configured once u
 
     llm:
       base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
-      model: openai/gpt-4o-mini                   # chat backend, also used by executor/complexity_scorer/remediation
-      embedding_model: text-embedding-3-small      # used here and by vector_db_builder
+      model: openai/gpt-oss-120b                   # chat backend, also used by executor/complexity_scorer/remediation
+      embedding_model: text-embedding-3-large      # used here and by vector_db_builder
 
     retrieval:
       enabled: true
@@ -97,7 +97,7 @@ class VectorRetriever:
             vector_dir = candidate1 if candidate1.exists() else candidate2
 
         llm_cfg = cfg.get("llm", {}) or {}
-        embedding_model = llm_cfg.get("embedding_model", "text-embedding-3-small")
+        embedding_model = llm_cfg.get("embedding_model", "text-embedding-3-large")
         model = llm_cfg.get("model", "gpt-4o")
         base_url = llm_cfg.get("base_url")
         # One provider (llm.base_url) for the whole pipeline — the same key is used for
