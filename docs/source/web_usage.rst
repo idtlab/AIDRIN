@@ -391,13 +391,16 @@ This is optional. Install the extra to enable it:
 
 **One-time setup**
 
-For **local** web use on ``localhost``, you can sign in without setting any
-Globus environment variables: the web app uses the same public native OAuth
-client as ``globus-compute-sdk`` (PKCE, registered localhost callback URLs).
+For **local** web use on ``localhost`` or ``127.0.0.1``, you can sign in without
+setting any Globus environment variables. AIDRIN ships a public native OAuth
+client ID in ``web/aidrin_globus_defaults.py`` (PKCE; no client secret in the
+repository). @idtlab/aidrin maintainers register that app and update the
+bundled ID; see ``examples/globus/web-oauth-local-app.rst``.
 
-For **hosted or custom-domain** deployments, register an application at
-`developers.globus.org <https://developers.globus.org/>`_ and set the client ID
-before starting the server:
+For **hosted AIDRIN** and **other self-hosted** deployments on a non-local
+hostname, register an application at
+`Globus Developers <https://app.globus.org/settings/developers>`_ and set the
+client ID before starting the server:
 
    .. code-block:: bash
 

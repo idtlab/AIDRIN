@@ -74,8 +74,11 @@ Installation and use of the optional extras are documented in
 - ``web/globus.py``: Globus Auth client and token handling
 - ``web/templates/_components/globus_panel.html``: the Remote (Globus) tab
 
-Reads ``GLOBUS_CLIENT_ID``, and ``GLOBUS_CLIENT_SECRET`` for the confidential
-client flow.
+**Web OAuth:** Local ``localhost`` sign-in uses the bundled public native client
+in ``web/aidrin_globus_defaults.py`` (see ``examples/globus/web-oauth-local-app.rst``).
+Hosted and custom-domain deployments set ``GLOBUS_CLIENT_ID``, and
+``GLOBUS_CLIENT_SECRET`` for the confidential client flow. ``GLOBUS_REDIRECT_URI``
+overrides the callback URL shown in the setup panel.
 
 Globus worker file-reference policy
 -----------------------------------

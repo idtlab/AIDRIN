@@ -50,7 +50,7 @@ def test_globus_status_reports_web_auth_flag(client, monkeypatch):
     data = response.get_json()
     assert data["globus_available"] is True
     assert data["web_auth_configured"] is True
-    assert data["web_auth_uses_builtin_client"] is True
+    assert data["web_auth_uses_aidrin_default_client"] is True
 
 
 def test_inspector_shows_setup_when_web_auth_missing(client, monkeypatch):

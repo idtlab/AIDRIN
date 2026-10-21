@@ -12,6 +12,7 @@ import os
 import sys
 
 from aidrin import __version__ as AIDRIN_VERSION
+from web.aidrin_globus_defaults import aidrin_bundled_globus_native_client_id
 
 logger = logging.getLogger(__name__)
 
@@ -39,35 +40,23 @@ def is_globus_available():
 
 
 GLOBUS_WEB_AUTH_SETUP_MESSAGE = (
-    "Web sign-in on this server needs a Globus OAuth client ID. For local "
-    "development (localhost), AIDRIN uses the same public native client as "
-    "``globus-compute-sdk`` when GLOBUS_CLIENT_ID is unset. For other hosts, "
-    "register an app at https://developers.globus.org/, set the redirect URI "
-    "to this server's /globus/callback URL (or GLOBUS_REDIRECT_URI), export "
-    "GLOBUS_CLIENT_ID (and GLOBUS_CLIENT_SECRET for a confidential client), "
-    "then restart the server. CLI and MCP remote execution use native Globus "
-    "login and do not need GLOBUS_CLIENT_ID."
+    "Web sign-in on this server needs a Globus OAuth client ID. Local "
+    "development on localhost can use AIDRIN's bundled public native client "
+    "when GLOBUS_CLIENT_ID is unset. For other hosts, register an app at "
+    "https://app.globus.org/settings/developers, set the redirect URI to this "
+    "server's /globus/callback URL (or GLOBUS_REDIRECT_URI), export "
+    "GLOBUS_CLIENT_ID (and GLOBUS_CLIENT_SECRET for a confidential hosted "
+    "client), then restart the server. CLI and MCP remote execution use native "
+    "Globus login and do not need GLOBUS_CLIENT_ID."
 )
 
 
-def _builtin_globus_web_client_id():
-    """Public native client bundled with globus-compute-sdk (local dev default)."""
-    if not _globus_available:
-        return ""
-    try:
-        from globus_compute_sdk.sdk.auth.globus_app import DEFAULT_CLIENT_ID
-
-        return (DEFAULT_CLIENT_ID or "").strip()
-    except ImportError:
-        return ""
-
-
 def get_globus_web_client_id():
-    """Effective OAuth client ID: deployment env override, else built-in default."""
+    """Effective OAuth client ID: deployment env override, else AIDRIN default."""
     client_id = os.environ.get("GLOBUS_CLIENT_ID", "").strip()
     if client_id:
         return client_id
-    return _builtin_globus_web_client_id()
+    return aidrin_bundled_globus_native_client_id()
 
 
 def _is_local_redirect_uri(redirect_uri):
@@ -83,21 +72,25 @@ def is_globus_web_auth_configured(redirect_uri=None):
         return False
     if os.environ.get("GLOBUS_CLIENT_ID", "").strip():
         return True
-    builtin = _builtin_globus_web_client_id()
-    if not builtin:
+    bundled = aidrin_bundled_globus_native_client_id()
+    if not bundled:
         return False
     if redirect_uri is None:
         return True
     return _is_local_redirect_uri(redirect_uri)
 
 
-def globus_web_auth_uses_builtin_client():
-    """True when web sign-in uses the bundled native client (no env override)."""
+def globus_web_auth_uses_aidrin_default_client():
+    """True when web sign-in uses the bundled AIDRIN native client (no env override)."""
     return bool(
         _globus_available
         and not os.environ.get("GLOBUS_CLIENT_ID", "").strip()
-        and _builtin_globus_web_client_id()
+        and aidrin_bundled_globus_native_client_id()
     )
+
+
+# Backward-compatible alias for routes/tests added in PR #290.
+globus_web_auth_uses_builtin_client = globus_web_auth_uses_aidrin_default_client
 
 
 def resolve_globus_redirect_uri(external_callback_url):

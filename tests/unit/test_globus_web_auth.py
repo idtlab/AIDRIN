@@ -17,7 +17,9 @@ def test_web_auth_uses_builtin_client_without_env(monkeypatch):
     monkeypatch.delenv("GLOBUS_CLIENT_ID", raising=False)
     monkeypatch.delenv("GLOBUS_CLIENT_SECRET", raising=False)
     assert get_globus_web_client_id()
-    assert globus_web_auth_uses_builtin_client() is True
+    from web.globus import globus_web_auth_uses_aidrin_default_client
+
+    assert globus_web_auth_uses_aidrin_default_client() is True
     assert is_globus_web_auth_configured("http://127.0.0.1:5000/globus/callback") is True
 
 
@@ -35,4 +37,6 @@ def test_web_auth_configured_with_client_id(monkeypatch):
 
     monkeypatch.setenv("GLOBUS_CLIENT_ID", "test-client-id")
     assert is_globus_web_auth_configured("https://aidrin.example.org/globus/callback") is True
-    assert globus_web_auth_uses_builtin_client() is False
+    from web.globus import globus_web_auth_uses_aidrin_default_client
+
+    assert globus_web_auth_uses_aidrin_default_client() is False

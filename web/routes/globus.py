@@ -21,7 +21,7 @@ from web.globus import (
     GLOBUS_WEB_AUTH_SETUP_MESSAGE,
     is_globus_available,
     is_globus_web_auth_configured,
-    globus_web_auth_uses_builtin_client,
+    globus_web_auth_uses_aidrin_default_client,
     resolve_globus_redirect_uri,
     get_auth_url,
     exchange_code_for_tokens,
@@ -280,7 +280,8 @@ def status():
         "authenticated": session.get("globus_authenticated", False),
         "globus_available": is_globus_available(),
         "web_auth_configured": is_globus_web_auth_configured(redirect_uri),
-        "web_auth_uses_builtin_client": globus_web_auth_uses_builtin_client(),
+        "web_auth_uses_aidrin_default_client": globus_web_auth_uses_aidrin_default_client(),
+        "web_auth_uses_builtin_client": globus_web_auth_uses_aidrin_default_client(),
     })
 
 

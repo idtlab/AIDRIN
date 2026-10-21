@@ -137,6 +137,7 @@ def inspector():
     from web.globus import (
         is_globus_available,
         is_globus_web_auth_configured,
+        globus_web_auth_uses_aidrin_default_client,
         resolve_globus_redirect_uri,
     )
     globus_available = is_globus_available()
@@ -144,6 +145,7 @@ def inspector():
         url_for("globus.callback", _external=True),
     )
     globus_web_auth_configured = is_globus_web_auth_configured(globus_redirect_uri)
+    globus_web_auth_uses_aidrin_default = globus_web_auth_uses_aidrin_default_client()
 
     # Check if LLM explanations are available
     from web.llm import is_llm_available
@@ -181,6 +183,7 @@ def inspector():
             else [],
             globus_available=globus_available,
             globus_web_auth_configured=globus_web_auth_configured,
+            globus_web_auth_uses_aidrin_default=globus_web_auth_uses_aidrin_default,
             globus_authenticated=globus_authenticated,
             globus_mode=globus_mode,
             globus_endpoint_id=globus_endpoint_id,
