@@ -19,6 +19,12 @@ on:
 permissions:
   contents: read
 
+# Queue overlapping dispatches instead of racing them to the upload; never
+# cancel a publish that may already be mid-upload.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
