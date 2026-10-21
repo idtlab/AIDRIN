@@ -471,15 +471,6 @@ def summarize_dataset(
         )
         raise ValueError(detail)
 
-    if df is None:
-        raise ValueError(
-            f"Unsupported file type: {ext!r}. AIDRIN's file parser does not "
-            "recognize this extension — pass file_type to override, or use a "
-            "custom data loader if this format needs special handling."
-        )
-    if isinstance(df, str):
-        raise ValueError(f"Failed to parse {file_path}: {df}")
-
     num_cols = df.select_dtypes(include="number").columns.tolist()
     cat_cols = df.select_dtypes(include="object").columns.tolist()
     missing = df.isnull().sum()
