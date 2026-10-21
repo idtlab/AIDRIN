@@ -173,6 +173,67 @@ class TestAgenticCLI(unittest.TestCase):
         self.assertNotIn("agentic dependencies not installed", stderr)
         self.assertIn("some_definitely_missing_package_xyz", stderr)
 
+    def test_agentic_run_vector_build_failure_is_recorded_not_fatal(self):
+        """
+        Regression test: a vector index build failure must not abort the
+        whole pipeline. It should be recorded as vector_store={"error": ...}
+        while profile/queries/token_usage still come back from the rest of
+        the run, rather than the exception propagating and discarding
+        everything.
+        """
+        cfg = _make_agentic_fixture(self.tmpdir)
+        with open(cfg, "a", encoding="utf-8") as fh:
+            # No llm.embedding_model -- VectorDBBuilder's own construction
+            # raises ValueError("llm.embedding_model must be set...").
+            fh.write("\nvector_store:\n  dummy: true\n")
+
+        stdout, _, code = _run_cli("agentic", "run", "-c", str(cfg))
+        self.assertEqual(code, 0)
+        data = json.loads(stdout)
+        self.assertIn("error", data["vector_store"])
+        self.assertIn("embedding_model", data["vector_store"]["error"])
+        self.assertIn("profile", data)
+        self.assertIn("token_usage", data)
+
+    def test_agentic_run_rebuilds_even_when_index_already_exists(self):
+        """
+        Regression test: `run` without --skip-vector must rebuild the index
+        every time (matching --skip-vector's documented meaning: pass it to
+        reuse the existing one), not silently skip the rebuild just because
+        a directory of that name already exists -- which would leave new
+        PDFs added to sources/ unindexed with no warning.
+        """
+        cfg = _make_agentic_fixture(self.tmpdir)
+        index_dir = Path(self.tmpdir) / "test_index"
+        index_dir.mkdir()
+        # Simulate a pre-existing (possibly stale) index.
+        (index_dir / "metadata.json").write_text("[]", encoding="utf-8")
+        (index_dir / "embeddings.npy").write_bytes(b"")
+        sources_dir = Path(self.tmpdir) / "sources"
+        sources_dir.mkdir()
+        (sources_dir / "doc.txt").write_text("hello", encoding="utf-8")
+        with open(cfg, "a", encoding="utf-8") as fh:
+            fh.write(
+                textwrap.dedent(f"""\
+
+                    llm:
+                      embedding_model: test-embedding-model
+
+                    vector_store:
+                      sources:
+                        - {sources_dir}
+                      vector_store_dir: {index_dir}
+                """)
+            )
+
+        with patch(
+            "aidrin.agentic.vector_db_builder.VectorDBBuilder.build",
+            return_value={"files_indexed": 0, "chunks": 0},
+        ) as mock_build:
+            _run_cli("agentic", "run", "-c", str(cfg))
+
+        mock_build.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

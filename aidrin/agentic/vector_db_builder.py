@@ -77,9 +77,6 @@ class VectorDBBuilder:
         self.index_path = self.output_dir / "index.faiss"
         self.embeddings_path = self.output_dir / "embeddings.npy"
 
-    def exists(self) -> bool:
-        return self.metadata_path.exists() and self.embeddings_path.exists()
-
     @staticmethod
     def _load_config(config_path: Path) -> dict[str, Any]:
         with config_path.open("r", encoding="utf-8") as fh:

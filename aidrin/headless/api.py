@@ -1116,12 +1116,22 @@ def run_agentic_pipeline(
     output_cfg = cfg.get("output", {}) or {}
     save_log = bool(output_cfg.get("save_log", True))
 
+    # Always rebuilds unless skip_vector -- matching --skip-vector's documented
+    # meaning ("use the existing index") rather than silently reusing a stale
+    # one just because a directory of that name happens to exist (e.g. new
+    # PDFs added to sources/ since the last build would otherwise go
+    # unindexed with no warning). A build failure is recorded, not fatal: the
+    # rest of the pipeline (profile, retrieval with whatever index already
+    # exists or none, execution, scoring, remediation) still runs rather than
+    # aborting the whole call over a step that's allowed to be skipped.
     vector_result = None
     if not skip_vector and cfg.get("vector_store"):
-        builder = VectorDBBuilder(resolved)
-        if not builder.exists():
+        try:
+            builder = VectorDBBuilder(resolved)
             vector_result = builder.build()
-            _log_progress(json.dumps(vector_result), verbose)
+        except Exception as exc:
+            vector_result = {"error": str(exc)}
+        _log_progress(json.dumps(vector_result), verbose)
 
     retrieval_cfg = cfg.get("retrieval", {}) or {}
     questions_raw = retrieval_cfg.get("questions") or []
