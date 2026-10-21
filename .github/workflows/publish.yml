@@ -67,8 +67,12 @@ jobs:
           printf 'age,income\n25,<=50K\n40,>50K\n,<=50K\n33,>50K\n' > smoke.csv
           /tmp/smoke/bin/python -c "import aidrin; print('aidrin', aidrin.__version__)"
           /tmp/smoke/bin/aidrin list
-          /tmp/smoke/bin/aidrin data-quality smoke.csv
-          /tmp/smoke/bin/aidrin run class-imbalance smoke.csv income
+          # The CLI reports metric failures inside its output and still exits 0,
+          # so assert on the output, not the exit code (see AGENTS.md).
+          /tmp/smoke/bin/aidrin data-quality smoke.csv | tee dq.txt
+          grep -Eq 'Completeness: +[0-9]' dq.txt
+          /tmp/smoke/bin/aidrin run class-imbalance smoke.csv income | tee ci.json
+          /tmp/smoke/bin/python -c "import json; r = json.load(open('ci.json')); assert 'Error' not in r and 'Imbalance degree' in r, r"
 
       - uses: actions/upload-artifact@v4
         with:
