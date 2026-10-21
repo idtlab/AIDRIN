@@ -1180,15 +1180,22 @@ def run_agentic_pipeline(
         "token_usage": get_tracker().to_dict(),
     })
 
-    if output_path:
-        out = Path(output_path).resolve()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
-        combined["_saved_to"] = str(out)
-    elif save_log:
-        out_dir = Path(_agentic_pkg.__file__).resolve().parent / "outputs"
-        log_path = _write_run_log(combined, out_dir)
-        combined["_saved_to"] = str(log_path)
+    # A disk-write failure here (e.g. a read-only install, or an unwritable
+    # -o path) must never discard a result that already reflects completed,
+    # paid-for LLM calls -- record the error and still return combined
+    # rather than letting the exception propagate and lose everything.
+    try:
+        if output_path:
+            out = Path(output_path).resolve()
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
+            combined["_saved_to"] = str(out)
+        elif save_log:
+            out_dir = Path(_agentic_pkg.__file__).resolve().parent / "outputs"
+            log_path = _write_run_log(combined, out_dir)
+            combined["_saved_to"] = str(log_path)
+    except OSError as exc:
+        combined["_save_error"] = str(exc)
 
     return combined
 

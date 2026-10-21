@@ -234,6 +234,28 @@ class TestAgenticCLI(unittest.TestCase):
 
         mock_build.assert_called_once()
 
+    def test_agentic_run_save_failure_does_not_discard_results(self):
+        """
+        Regression test: a disk-write failure when auto-saving the run log
+        (e.g. a read-only install) must not discard a result that already
+        reflects completed, paid-for LLM calls. The CLI should still print
+        the full JSON result (with a _save_error key) and exit 0, not crash
+        with an uncaught PermissionError.
+        """
+        cfg = _make_agentic_fixture(self.tmpdir)
+        with patch(
+            "aidrin.agentic.run._write_run_log",
+            side_effect=PermissionError("Permission denied: read-only install"),
+        ):
+            stdout, _, code = _run_cli("agentic", "run", "-c", str(cfg))
+
+        self.assertEqual(code, 0)
+        data = json.loads(stdout)
+        self.assertIn("profile", data)
+        self.assertIn("token_usage", data)
+        self.assertIn("_save_error", data)
+        self.assertNotIn("_saved_to", data)
+
 
 if __name__ == "__main__":
     unittest.main()
