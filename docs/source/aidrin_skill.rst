@@ -37,7 +37,7 @@ Prerequisites
 
 - **Claude Code** installed (CLI, desktop app, or IDE extension). See the
   `Claude Code documentation <https://docs.anthropic.com/en/docs/claude-code>`_.
-- **AIDRIN** installed in a Python 3.10+ environment with its conda/virtual environment
+- **AIDRIN** installed in a Python 3.11+ environment with its conda/virtual environment
   activated. If you haven't done this yet, follow :ref:`cli_installation` first, then return here.
 
 ----
