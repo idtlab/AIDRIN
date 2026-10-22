@@ -10,26 +10,23 @@ Scores three dimensions (each 0.0–1.0, LLM-assigned):
 ``overall_score`` is a weighted sum (0.2 × profile + 0.5 × domain + 0.3 × code).
 ``query_class``: ``"easy"`` < 0.35, ``"moderate"`` < 0.65, ``"hard"`` ≥ 0.65.
 
-Optional config section (falls back to retrieval.answer_model if absent):
+Uses the single shared ``llm.model``/``llm.base_url`` (see executor.py):
 
 .. code-block:: yaml
 
     complexity_scorer:
       enabled: true
-      model: gpt-4o
-      openai_api_key: null
 """
 
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from aidrin.agentic.llm_factory import create_chat_model
+from aidrin.agentic.llm_factory import create_chat_model, resolve_provider_api_key
 
 
 _SYSTEM_PROMPT = (
@@ -171,24 +168,20 @@ class QueryComplexityScorer:
 
     def _get_llm(self) -> Any:
         if self._llm is None:
-            api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
-            self._llm = create_chat_model(self.model, api_key=api_key, temperature=0, base_url=self.base_url)
+            self._llm = create_chat_model(
+                self.model, api_key=self.api_key, temperature=0, base_url=self.base_url, component="complexity_scorer"
+            )
         return self._llm
 
     def _load_config(self, config_path: Path) -> dict[str, Any]:
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
         scorer_cfg = raw.get("complexity_scorer", {}) or {}
-        retrieval_cfg = raw.get("retrieval", {}) or {}
         llm_cfg = raw.get("llm", {}) or {}
         enabled = bool(scorer_cfg.get("enabled", True))
-        model = scorer_cfg.get("model") or retrieval_cfg.get("answer_model", "gpt-4o")
-        api_key = (
-            scorer_cfg.get("openai_api_key")
-            or retrieval_cfg.get("openai_api_key")
-            or llm_cfg.get("api_key")
-            or os.environ.get("OPENAI_API_KEY")
-        )
-        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
+        model = llm_cfg.get("model", "gpt-4o")
+        base_url = llm_cfg.get("base_url")
+        # One provider (llm.base_url) for the whole pipeline.
+        api_key = resolve_provider_api_key(base_url, llm_cfg.get("api_key"))
         return {"enabled": enabled, "model": model, "api_key": api_key, "base_url": base_url}
 
     @staticmethod
