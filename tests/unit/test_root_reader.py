@@ -97,6 +97,51 @@ class TestRootReader:
         assert list(df.columns) == ["id"]
         assert len(df) == 2
 
+    def test_jagged_branches_are_dropped_with_disclosure(self, tmp_path, logger):
+        """Regression test: jagged branches (variable-length per event, e.g.
+        vector<float>) load as object columns of arrays and crash any metric
+        that hashes cells (unhashable numpy.ndarray) — four readiness-report
+        sections died this way on the shipped ATLAS sample. The reader must
+        drop them, keep the scalar columns, and disclose the drop on df.attrs.
+        """
+        ak = pytest.importorskip("awkward")
+        path = tmp_path / "jagged.root"
+        with uproot.recreate(str(path)) as handle:
+            handle["events"] = {
+                "energy": np.array([10.0, 20.0, 30.0]),
+                "lep_pt": ak.Array([[1.0, 2.0], [], [3.0, 4.0, 5.0]]),
+            }
+        df = rootReader(str(path), logger).read()
+        assert list(df.columns) == ["energy"]
+        assert df.attrs["dropped_jagged_columns"] == ["lep_pt"]
+        # The surviving frame must be metric-safe: nunique() hashes cells.
+        assert df["energy"].nunique() == 3
+
+    def test_all_jagged_tree_raises_clear_error(self, tmp_path, logger):
+        ak = pytest.importorskip("awkward")
+        path = tmp_path / "alljagged.root"
+        with uproot.recreate(str(path)) as handle:
+            handle["events"] = {"lep_pt": ak.Array([[1.0], [2.0, 3.0]])}
+        with pytest.raises(ValueError, match="only array-valued"):
+            rootReader(str(path), logger).read()
+
+    def test_summarize_dataset_discloses_dropped_columns(self, tmp_path):
+        """The public API (CLI/MCP/remote all route through summarize_dataset)
+        must disclose reader-level exclusions, not just shrink the shape."""
+        ak = pytest.importorskip("awkward")
+        from aidrin.headless.api import summarize_dataset
+
+        path = tmp_path / "jagged.root"
+        with uproot.recreate(str(path)) as handle:
+            handle["events"] = {
+                "energy": np.array([10.0, 20.0, 30.0]),
+                "lep_pt": ak.Array([[1.0, 2.0], [], [3.0]]),
+            }
+        result = summarize_dataset(str(path))
+        assert result["shape"]["columns"] == 1
+        assert result["dropped_columns"]["columns"] == ["lep_pt"]
+        assert result["dropped_columns"]["reason"]
+
 
 def test_sample_root_if_present():
     from pathlib import Path

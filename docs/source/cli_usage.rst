@@ -21,7 +21,10 @@ Quick Start
    aidrin batch /path/to/my_project/batch_config.yaml
 
 ROOT (``.root``) files are supported via ``uproot`` (a core dependency). A single-TTree file
-loads like any other tabular format:
+loads like any other tabular format. Array-valued branches (per-event sequences such as
+``vector<float>``) cannot be represented as tabular columns: they are excluded from metrics,
+and the exclusion is disclosed in the summarize output (a ``dropped_columns`` entry, also
+printed by ``--summary``) and in the web readiness report:
 
 .. code-block:: bash
 

@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from typing import List
 
+import numpy as np
 import pandas as pd
 
 from aidrin.file_handling.readers.base_reader import BaseFileReader
 from aidrin.file_handling.readers.structured import (
+    DROPPED_COLUMNS_ATTR,
     INVENTORY_EMPTY,
     INVENTORY_SINGLE,
     INVENTORY_MULTI,
@@ -29,6 +31,28 @@ def _require_uproot():
             "Reinstall AIDRIN or run: pip install uproot"
         ) from exc
     return uproot
+
+
+def _is_jagged(series: pd.Series) -> bool:
+    """True when the column holds per-row sequences (array-valued branches).
+
+    uproot loads jagged branches (``vector<float>`` etc.) as object columns
+    whose cells are arrays; those are not tabular and break any metric that
+    hashes or aggregates cell values. An extension dtype (not a plain numpy
+    dtype, e.g. awkward-pandas) is inspected too, since those stacks hold
+    sequences under a non-object dtype. Cells are sampled rather than trusting
+    the first one, so a column whose early rows happen to be scalar still gets
+    caught.
+    """
+    if isinstance(series.dtype, np.dtype) and series.dtype.kind != "O":
+        return False
+    non_null = series.dropna()
+    if non_null.empty:
+        return False
+    return any(
+        hasattr(value, "__len__") and not isinstance(value, (str, bytes))
+        for value in non_null.head(50)
+    )
 
 
 def _strip_cycle(name: str) -> str:
@@ -149,4 +173,27 @@ class rootReader(BaseFileReader):
         if df.empty:
             raise ValueError(f"ROOT TTree '{tree_name}' produced an empty DataFrame.")
         df.columns = [str(c) for c in df.columns]
+
+        # Array-valued branches (per-event sequences, e.g. vector<float> or
+        # float[3]) are not representable as tabular columns: metrics that hash
+        # or aggregate cells crash on them (unhashable numpy.ndarray). Drop
+        # them, but keep the names on df.attrs so callers can disclose the
+        # exclusion.
+        jagged = [col for col in df.columns if _is_jagged(df[col])]
+        if jagged:
+            if len(jagged) == len(df.columns):
+                raise ValueError(
+                    f"ROOT TTree '{tree_name}' contains only array-valued branches "
+                    "(per-event sequences). AIDRIN metrics need scalar branches to "
+                    "build a tabular DataFrame."
+                )
+            self.logger.warning(
+                "Dropped %d array-valued ROOT branch(es) from '%s' (per-event "
+                "sequences, not representable as tabular columns): %s",
+                len(jagged),
+                tree_name,
+                ", ".join(jagged),
+            )
+            df = df.drop(columns=jagged)
+            df.attrs[DROPPED_COLUMNS_ATTR] = jagged
         return df
