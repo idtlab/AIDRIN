@@ -181,10 +181,12 @@ class TestReadFileWithLoader:
         assert "boom" in result
 
     def test_without_loader_unknown_ext_returns_none(self, tmp_path):
-        dataset = str(tmp_path / "data.root")
+        # .xyz, not .root: .root gained a real reader, so it no longer
+        # exercises the "no reader for this extension" path.
+        dataset = str(tmp_path / "data.xyz")
         with open(dataset, "wb") as handle:
             handle.write(b"x")
-        assert read_file((dataset, "data.root", ".root")) is None
+        assert read_file((dataset, "data.xyz", ".xyz")) is None
 
     def test_embedded_loader_in_file_info_works_without_context(self, tmp_path):
         """Celery packs custom_loader_spec into file_info; no Flask session."""

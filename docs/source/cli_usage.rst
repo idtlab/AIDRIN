@@ -20,6 +20,18 @@ Quick Start
    # Run a batch of metrics from a YAML config
    aidrin batch /path/to/my_project/batch_config.yaml
 
+ROOT (``.root``) files are supported via ``uproot`` (a core dependency). A single-TTree file
+loads like any other tabular format. Array-valued branches (per-event sequences such as
+``vector<float>``) cannot be represented as tabular columns: they are excluded from metrics,
+and the exclusion is disclosed in the summarize output (a ``dropped_columns`` entry, also
+printed by ``--summary``) and in the web readiness report:
+
+.. code-block:: bash
+
+   aidrin summarize examples/sample_data/root/sample.root --summary
+   aidrin data-quality examples/sample_data/root/sample.root
+   aidrin run completeness examples/sample_data/root/sample.root
+
    # HDF5 / Zarr: pick compatible 1D arrays (comma-separated paths)
    aidrin run completeness /path/to/store.zarr --selected-keys age,income
    aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
