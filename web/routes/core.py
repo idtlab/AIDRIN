@@ -1,11 +1,13 @@
 import logging
 import os
+import tempfile
 import time
 import uuid
 
 import pandas as pd
 from flask import (
     Blueprint,
+    abort,
     current_app,
     jsonify,
     redirect,
@@ -29,6 +31,7 @@ from web.routes.utils import (
     clear_all_user_cache,
     build_file_info,
     confine_to_upload_folder,
+    describe_loader_error,
     ensure_json_serializable,
     generate_metric_cache_key,
     get_current_user_id,
@@ -52,7 +55,11 @@ def homepage():
 def inspector():
     if request.method == "POST":
         file_upload_time_log.info("File upload initiated (workspace)")
-        file = request.files["file"]
+        file = request.files.get("file")
+        if (request.form.get("fileTypeSelector") or "").strip() == ".custom" and not current_app.config.get(
+            "ENABLE_WEB_CUSTOM_LOADERS"
+        ):
+            abort(403)
 
         if file:
             cleared_count = clear_all_user_cache()
@@ -72,18 +79,84 @@ def inspector():
                 return redirect(url_for("core.inspector"))
             file.save(file_path)
 
+            selected_type = (request.form.get("fileTypeSelector") or "").strip()
+            loader_code = (request.form.get("loader_code") or "").strip()
+            # ".custom" means: any extension + required user loader on upload.
+            if selected_type == ".custom":
+                _, ext = os.path.splitext(display_name or "")
+                file_type = (ext or "").lower() or ".custom"
+                if not loader_code:
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    session["upload_error"] = (
+                        "Custom loader code is required when using "
+                        "'Other / custom loader'. Define load(path, **kwargs) "
+                        "that returns a pandas DataFrame."
+                    )
+                    return redirect(url_for("core.inspector"))
+
+                from aidrin.file_handling.custom_loader import (
+                    CustomLoaderError,
+                    load_dataframe as load_via_custom_loader,
+                )
+
+                loaders_folder = current_app.config.get("CUSTOM_LOADERS_FOLDER")
+                if not loaders_folder:
+                    loaders_folder = os.path.join(
+                        tempfile.gettempdir(), "aidrin_custom_loaders",
+                    )
+                os.makedirs(loaders_folder, exist_ok=True)
+                # One script per upload: Celery tasks queued for an earlier
+                # dataset keep running the loader they were submitted with.
+                loader_path = os.path.join(
+                    loaders_folder, f"custom_loader_{uuid.uuid4().hex}.py"
+                )
+                with open(loader_path, "w", encoding="utf-8") as handle:
+                    handle.write(loader_code)
+                spec = f"{loader_path}:load"
+                try:
+                    load_via_custom_loader(spec, file_path)
+                except Exception as exc:
+                    # Remove only this attempt's files; the previous dataset
+                    # and its loader stay active.
+                    for path in (file_path, loader_path):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                    if isinstance(exc, CustomLoaderError):
+                        session["upload_error"] = describe_loader_error(exc, file_path, display_name)
+                    else:
+                        session["upload_error"] = (
+                            f"Custom loader failed for '{display_name}': "
+                            f"{type(exc).__name__}: {exc}"
+                        )
+                    file_upload_time_log.error(
+                        "Upload custom loader failed: %s", exc, exc_info=True
+                    )
+                    return redirect(url_for("core.inspector"))
+                session["custom_loader_spec"] = spec
+            else:
+                file_type = selected_type
+                loader_path = None
+                session.pop("custom_loader_spec", None)
+
             session["uploaded_file_name"] = display_name
             session["uploaded_file_path"] = file_path
-            session["uploaded_file_type"] = request.form.get("fileTypeSelector")
+            session["uploaded_file_type"] = file_type
             session.pop("selected_keys", None)
+            session.pop("upload_error", None)
             # This feature owns session["intent"], so a new dataset drops it.
             session.pop("intent", None)
 
             # Track files this session created so /clear removes only these,
             # never files belonging to other concurrent sessions.
             owned_files = session.get("owned_files", [])
-            if file_path not in owned_files:
-                owned_files.append(file_path)
+            for owned_path in (file_path, loader_path):
+                if owned_path and owned_path not in owned_files:
+                    owned_files.append(owned_path)
             session["owned_files"] = owned_files
 
             return redirect(url_for("core.inspector"))
@@ -162,12 +235,16 @@ def inspector():
     effective_file_type = file_type or globus_file_type
 
     try:
+        upload_error = session.pop("upload_error", None)
         return render_template(
             "inspector.html",
             uploaded_file_path=effective_file_path or "",
             uploaded_file_name=effective_file_name or "",
             file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
+            upload_file_types=list(SUPPORTED_FILE_TYPES),
+            custom_loaders_enabled=current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False),
+            upload_error=upload_error,
             globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],
             current_checked_keys=current_checked_keys

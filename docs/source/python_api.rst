@@ -223,6 +223,51 @@ Identifies values that fail user-defined valid-value criteria for a selected tar
 
 **Returns**: A dictionary with per-rule summaries, a compact outlier preview, CSV export rows, and per-rule errors when a target cannot be evaluated. HDF5 datasets are scanned in blocks so large native datasets do not need to be loaded fully into memory.
 
+Cross-variable consistency rules
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For tabular files, a ``compare`` condition checks the target against another
+column at the same row position. For example, two bounds may each pass their
+individual range checks while failing ``lower <= upper``:
+
+.. code-block:: python
+
+   rules = [{
+       "id": "ordered-bounds",
+       "target": "lower",
+       "target_type": "column",
+       "criteria": {"type": "compare", "operator": "<=", "other_target": "upper"},
+   }]
+   result = calculate_custom_outliers(file_info, rules)
+
+The supported operators are ``<``, ``<=``, ``>``, ``>=``, ``==``, and ``!=``.
+``other_target`` is an exact column name, including when ``target_match`` is
+``regex``. Comparison conditions can be nested under ``and``, ``or``, and
+``not``, and can be combined with existing range and regex conditions. All
+columns are read from the same table; alignment uses row positions rather than
+index labels. Native HDF5 comparisons are not supported.
+
+Operands must be finite numbers; numeric strings are accepted. Before evaluating
+the criteria tree, rows with a missing target or any referenced value are counted
+once as ``missing``. They are outliers unless ``allow_missing`` is true, in which
+case the entire row is valid without evaluating the tree. Other non-numeric or
+infinite operands produce ``invalid_comparison`` outliers even under ``or`` or
+``not``. A missing reference column produces a per-rule error before scanning;
+other rules still run. A failed comparison produces ``comparison_mismatch``.
+
+Equality is exact numeric equality, with no tolerance or automatic unit
+conversion. Numeric strings use pandas numeric parsing. Arithmetic expressions,
+date comparisons, and joins across files are not supported. Dataset values are
+never changed.
+
+Comparison summaries add ``reference_targets``. Preview and export rows add
+``reference_values`` with the original values of all referenced columns, alongside
+the existing target value and row location. Scan, preview, export, and early-stop
+limits keep their existing meanings. The web CSV download adds a
+``reference_values`` column containing JSON when comparison rows are present.
+Existing single-variable rule outputs retain their shape. See
+``examples/cross_variable_outlier_rules.json`` for a reusable rules file.
+
 calculate_statistical_rates
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

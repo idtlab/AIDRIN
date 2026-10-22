@@ -5,6 +5,7 @@ import base64
 import logging
 import math
 import os
+import re
 import threading
 import time
 import uuid
@@ -14,6 +15,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from flask import current_app, jsonify, redirect, request, session, url_for
 
+from aidrin.file_handling.custom_loader import CustomLoaderError
 from aidrin.file_handling.file_parser import (
     _SELECTION_FILE_TYPES,
     ReaderReturnedNone,
@@ -64,16 +66,25 @@ def confine_to_upload_folder(file_path):
 # ---------------------------------------------------------------------------
 
 def build_file_info(file_path, file_name, file_type, selected_keys=None):
-    """Build a file_info tuple, embedding dataset keys when needed.
+    """Build a file_info tuple, embedding HDF5 keys / custom loader when needed.
 
     Celery workers do not have Flask session context, so multi-dataset HDF5
-    ROOT trees, and multi-array Zarr sources must carry ``selected_keys`` in the tuple for
-    background tasks.
+    files, ROOT trees, and multi-array Zarr sources must carry ``selected_keys``
+    in the tuple for background tasks, and an active upload custom loader must
+    carry ``custom_loader_spec`` the same way.
+
+    Tuple shapes:
+      ``(path, name, type)``
+      ``(path, name, type, selected_keys)``
+      ``(path, name, type, loader_spec)``
+      ``(path, name, type, selected_keys, loader_spec)``
 
     The path is confined to the upload folder here so every ``read_file`` fed
     from a session value passes through the path-traversal barrier.
     """
     file_path = confine_to_upload_folder(file_path)
+    parts = [file_path, file_name, file_type]
+
     if file_type in _SELECTION_FILE_TYPES:
         if selected_keys is None:
             # HDF5 and ROOT pickers persist selections in the session.
@@ -86,8 +97,21 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
         elif not isinstance(selected_keys, list):
             selected_keys = []
         if selected_keys:
-            return (file_path, file_name, file_type, list(selected_keys))
-    return (file_path, file_name, file_type)
+            parts.append(list(selected_keys))
+
+    loader = None
+    try:
+        loader = session.get("custom_loader_spec")
+    except RuntimeError:
+        loader = None
+    if isinstance(loader, str):
+        loader = loader.strip() or None
+    else:
+        loader = None
+    if loader:
+        parts.append(loader)
+
+    return tuple(parts)
 
 
 def load_dataframe(file_info):
@@ -111,6 +135,11 @@ def load_dataframe(file_info):
         # Collapse it into the same failure shape as the rest of this wrapper,
         # which route handlers rely on, rather than letting it reach Flask.
         result = str(exc)
+    except CustomLoaderError as exc:
+        # The loader's message names the user's own error and holds no server
+        # paths, so it is more useful than the generic read error.
+        logger.error("Custom loader read failed: %s", exc)
+        return None, describe_loader_error(exc, file_info[0], file_info[1])
     if isinstance(result, pd.DataFrame):
         return result, None
     raw = result if isinstance(result, str) else None
@@ -118,6 +147,17 @@ def load_dataframe(file_info):
         # Keep the full, verbose detail in the logs; show the user a short message.
         logger.error("File read failed: %s", raw)
     return None, _friendly_read_error(raw, file_info)
+
+
+def describe_loader_error(exc, file_path, display_name):
+    """Show a custom loader error with the names the user uploaded, not the stored ones."""
+    message = str(exc)
+    if file_path:
+        message = message.replace(os.path.basename(file_path), display_name or "the file")
+    message = re.sub(r"Custom loader 'custom_loader_[0-9a-f]{32}\.py:load'", "Your custom loader", message)
+    message = re.sub(r"custom_loader_[0-9a-f]{32}\.py", "loader.py", message)
+    # The loader's own error stays in the server log (logged with its traceback).
+    return message.split(" Original error: ")[0]
 
 
 def _friendly_read_error(raw, file_info):

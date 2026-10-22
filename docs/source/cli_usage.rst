@@ -278,6 +278,23 @@ summary and preview rows. Use
 ``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
 or export rows.
 
+To check same-row consistency between numeric columns, use a JSON ``compare``
+condition. For a dataset containing ``lower`` and ``upper`` columns:
+
+.. code-block:: bash
+
+   aidrin run outliers-custom /path/to/bounds.csv \
+     --rules-file examples/cross_variable_outlier_rules.json
+
+The example requires ``lower <= upper``. Comparisons use an exact
+``other_target`` column name and support ``<``, ``<=``, ``>``, ``>=``, ``==``, and
+``!=``, including inside nested boolean criteria. They accept finite numbers and
+numeric strings in tabular files. Missing operands follow ``allow_missing``;
+other unusable operands are outliers. Use JSON rather than the ``--rule``
+shorthand for comparisons. The same file can be selected through the web
+inspector's **Select JSON file** option. See :ref:`python_api` for the Python
+API and detailed operand and result semantics.
+
 File-reference validation accepts a comma-separated target list for exact matching.
 With ``--target-match regex``, the target argument is one complete regular-expression
 pattern, so commas inside quantifiers such as ``{1,3}`` are preserved. Use a list in
@@ -433,6 +450,57 @@ or set explicitly with ``--file-type``:
 
 The remedy output is always saved as a CSV, regardless of the input format, to a ``remedy_data/``
 folder next to the module file (``/path/to/my_project/remedy_data/my_audit_remedy.csv``).
+
+``aidrin add-custom-loader``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Scaffolds a trusted user data loader that returns a ``pandas.DataFrame``. Use this for
+formats AIDRIN does not read natively yet (for example ROOT ``.root`` files via
+``uproot``), or when you need a custom reshape before metrics run.
+
+.. code-block:: bash
+
+   aidrin add-custom-loader my_ingest --dir /path/to/my_project/loaders
+
+This creates ``/path/to/my_project/loaders/my_ingest.py`` with a ``load(path, **kwargs)``
+stub. Implement the body so it returns a non-empty DataFrame, then pass the loader on any
+read command:
+
+.. code-block:: bash
+
+   aidrin run completeness /path/to/store.zarr --loader /path/to/my_project/loaders/my_ingest.py:load
+   aidrin summarize /path/to/sample.root --loader ./examples/custom_loaders/root_ttree_loader.py:load
+   aidrin data-quality /path/to/data.nc --loader ./loaders/nc.py:to_table
+
+Batch YAML accepts the same contract:
+
+.. code-block:: yaml
+
+   file-path: /path/to/sample.root
+   loader: ./examples/custom_loaders/root_ttree_loader.py:load
+   metrics:
+     - completeness
+
+Library API:
+
+.. code-block:: python
+
+   from aidrin.headless.api import run_metric, summarize_dataset
+
+   run_metric("completeness", "sample.root", loader="loaders/root_ttree_loader.py:load")
+   summarize_dataset("sample.root", loader="loaders/root_ttree_loader.py:load")
+
+**Security:** loader scripts execute in-process with full Python access (same trust model as
+custom metrics and the agentic ``paths.data_loader``). Only run trusted scripts. The web
+interface's Custom Loader tab is off by default; see :ref:`web_installation`.
+
+**Errors:** failures always name the loader file, dataset file, and cause (missing file,
+import error, exception inside ``load``, or non-DataFrame return). They never look like a
+silent built-in reader miss.
+
+**ROOT note:** AIDRIN's built-in ``rootReader`` is still a stub. Until a real ROOT reader
+ships, use a custom loader with ``uproot`` (install it yourself). See
+``examples/custom_loaders/root_ttree_loader.py``.
 
 ----
 

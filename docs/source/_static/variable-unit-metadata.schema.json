@@ -219,7 +219,7 @@
       ],
       "properties": {
         "kind": {
-          "enum": ["scale", "dimension", "classification"]
+          "enum": ["scale", "offset", "conversion", "dimension", "classification"]
         },
         "source": {
           "type": "string",
@@ -227,10 +227,11 @@
         },
         "observed_unit": {
           "type": "string",
-          "minLength": 1
+          "description": "Detected unit display; an empty string denotes a dimensionless unit."
         },
         "resolved_unit": {
-          "$ref": "#/$defs/nullableString"
+          "$ref": "#/$defs/nullableString",
+          "description": "Resolved unit display; an empty string denotes a dimensionless unit, and null denotes not applicable."
         },
         "conversion_factor": {
           "type": ["number", "null"]
