@@ -523,6 +523,22 @@ def create_custom_metric(name: str, directory: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _agentic_deps_error() -> str | None:
+    """
+    Narrow dependency probe, kept separate from the actual pipeline call
+    (mirrors _require_agentic_deps in aidrin/headless/cli.py): an ImportError
+    raised *during* a real run (e.g. a user's own data_loader.py importing a
+    package that isn't installed) must surface as that real error, not get
+    misdiagnosed as "agentic dependencies not installed" -- which would hide
+    the real traceback and discard already-completed (paid-for) LLM work.
+    """
+    try:
+        import langchain_openai  # noqa: F401 - cheapest reliable signal that aidrin[agentic] is installed
+    except ImportError:
+        return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
+    return None
+
+
 @mcp_server.tool()
 def agentic_build_index(config_path: str) -> str:
     """
@@ -533,11 +549,10 @@ def agentic_build_index(config_path: str) -> str:
     Args:
         config_path: Absolute path to the agentic YAML config file.
     """
-    try:
-        result = run_agentic_index(config_path)
-    except ImportError:
-        return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
-    return _dumps(result)
+    deps_error = _agentic_deps_error()
+    if deps_error:
+        return deps_error
+    return _dumps(run_agentic_index(config_path))
 
 
 @mcp_server.tool()
@@ -566,15 +581,15 @@ def agentic_run(
     if not resolved.exists():
         return _dumps({"error": f"Config file not found: {resolved}"})
 
-    try:
-        combined = run_agentic_pipeline(
-            str(resolved),
-            output_path=output_path,
-            skip_vector=skip_vector,
-        )
-    except ImportError:
-        return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
+    deps_error = _agentic_deps_error()
+    if deps_error:
+        return deps_error
 
+    combined = run_agentic_pipeline(
+        str(resolved),
+        output_path=output_path,
+        skip_vector=skip_vector,
+    )
     return _dumps(combined)
 
 

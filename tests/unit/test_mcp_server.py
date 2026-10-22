@@ -394,3 +394,38 @@ class TestMcpRemoteRouting(unittest.TestCase):
 
         out = server.list_remote_profiles()
         self.assertIn("profiles", json.loads(out))
+
+
+# ---------------------------------------------------------------------------
+# Agentic tools: ImportError diagnosis
+# ---------------------------------------------------------------------------
+
+
+def test_agentic_midrun_import_error_is_not_misdiagnosed(tmp_path):
+    """
+    Regression test (mirror of the CLI test in test_agentic.py): an
+    ImportError raised *during* a real pipeline run (e.g. the user's own
+    data_loader.py imports a package that isn't installed) must surface as
+    that real error, not be swallowed and reported as "Agentic dependencies
+    not installed" -- which would hide the real traceback and discard
+    already-completed (paid-for) LLM work.
+    """
+    pytest.importorskip("langchain_openai")
+    from aidrin.mcp import server
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("paths: {}\n", encoding="utf-8")
+
+    with patch.object(
+        server, "run_agentic_pipeline",
+        side_effect=ImportError("No module named 'some_definitely_missing_package_xyz'"),
+    ):
+        with pytest.raises(ImportError, match="some_definitely_missing_package_xyz"):
+            server.agentic_run(str(cfg))
+
+    with patch.object(
+        server, "run_agentic_index",
+        side_effect=ImportError("No module named 'some_definitely_missing_package_xyz'"),
+    ):
+        with pytest.raises(ImportError, match="some_definitely_missing_package_xyz"):
+            server.agentic_build_index(str(cfg))
