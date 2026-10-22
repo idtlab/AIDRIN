@@ -17,6 +17,7 @@ from flask import (
     session,
     url_for,
 )
+from aidrin.compute.remote import normalize_selected_keys
 from web.globus import (
     is_globus_available,
     get_auth_url,
@@ -26,12 +27,29 @@ from web.globus import (
     check_task,
     check_endpoint_compatibility,
 )
+from web.routes.utils import ensure_json_serializable, get_current_user_id
 
 logger = logging.getLogger(__name__)
 
 globus_bp = Blueprint("globus", __name__, url_prefix="/globus")
 
 NEGOTIATION_TTL_SECONDS = 300
+
+
+def _globus_summary_cache_key(endpoint_id, file_path, selected_keys):
+    keys = normalize_selected_keys(selected_keys)
+    suffix = ",".join(sorted(keys)) if keys else ""
+    return f"globus_summary:{endpoint_id}:{file_path}:{suffix}"
+
+
+def _resolve_globus_selected_keys(data, params, file_type):
+    """Merge selected HDF5 keys from the request body, params, and session."""
+    keys = normalize_selected_keys(data.get("selected_keys"))
+    if not keys:
+        keys = normalize_selected_keys(params.get("selected_keys"))
+    if not keys and file_type == ".h5":
+        keys = normalize_selected_keys(session.get("globus_selected_keys"))
+    return keys
 DEFAULT_ENDPOINT_PROBE_TIMEOUT = 30.0
 FILE_REFERENCE_CAPABILITY = "file_reference_validation_v1"
 FILE_REFERENCE_UPGRADE_MESSAGE = (
@@ -194,6 +212,68 @@ def _cancel_active_globus_tasks():
 
 
 # ---------------------------------------------------------------------------
+# HDF5 dataset selection (remote)
+# ---------------------------------------------------------------------------
+
+
+@globus_bp.route("/filter-datasets", methods=["POST"])
+def filter_globus_datasets():
+    """Persist HDF5 dataset keys chosen in the Globus workspace picker."""
+    if not session.get("globus_authenticated"):
+        return jsonify({"error": "Not authenticated with Globus"}), 401
+
+    if session.get("globus_file_type") != ".h5":
+        return jsonify({"success": False, "error": "No HDF5 remote file in session"}), 400
+
+    data = request.get_json() or {}
+    keys = normalize_selected_keys(data.get("keys") or data.get("selected_keys"))
+    if not keys:
+        return jsonify({"success": False, "error": "No keys provided"}), 400
+
+    session["globus_selected_keys"] = keys
+    session.pop("intent", None)
+    file_name = session.get("globus_file_name")
+    if file_name:
+        current_app.TEMP_RESULTS_CACHE.pop(
+            f"user:{get_current_user_id()}:file:{file_name}:intent",
+            None,
+        )
+    return jsonify({"success": True, "message": "Remote dataset selection updated"})
+
+
+@globus_bp.route("/clear-dataset-selection", methods=["POST"])
+def clear_globus_dataset_selection():
+    """Clear remote HDF5 dataset keys so the user can pick again."""
+    if not session.get("globus_authenticated"):
+        return jsonify({"error": "Not authenticated with Globus"}), 401
+
+    if session.get("globus_file_type") != ".h5":
+        return jsonify({"success": False, "message": "No HDF5 remote file in session"}), 400
+
+    previous = normalize_selected_keys(session.get("globus_selected_keys"))
+    session.pop("globus_selected_keys", None)
+    session.pop("intent", None)
+
+    endpoint_id = session.get("globus_endpoint_id", "")
+    file_path = session.get("globus_file_path", "")
+    if endpoint_id and file_path:
+        for key in list(current_app.TEMP_RESULTS_CACHE):
+            if key.startswith(f"globus_summary:{endpoint_id}:{file_path}"):
+                current_app.TEMP_RESULTS_CACHE.pop(key, None)
+
+    return jsonify(
+        ensure_json_serializable({
+            "success": True,
+            "needs_dataset_selection": True,
+            "current_checked_keys": previous,
+            "message": (
+                "HDF5 dataset selection cleared. Choose datasets again to analyze."
+            ),
+        })
+    )
+
+
+# ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 
@@ -285,6 +365,7 @@ def disconnect():
     session.pop("globus_file_path", None)
     session.pop("globus_file_name", None)
     session.pop("globus_file_type", None)
+    session.pop("globus_selected_keys", None)
     session.pop("globus_capabilities", None)
     session.pop("globus_active_tasks", None)
     session.pop("globus_task_contexts", None)
@@ -365,12 +446,28 @@ def submit():
     if not isinstance(params, dict):
         return jsonify({"error": "params must be a JSON object"}), 400
 
+    file_identity_changed = (
+        session.get("globus_file_name") != file_name
+        or session.get("globus_file_path") != file_path
+    )
+    if file_identity_changed:
+        session.pop("intent", None)
+        if not normalize_selected_keys(data.get("selected_keys")) and not normalize_selected_keys(
+            params.get("selected_keys")
+        ):
+            session.pop("globus_selected_keys", None)
+
+    selected_keys = _resolve_globus_selected_keys(data, params, file_type)
+    if selected_keys:
+        params["selected_keys"] = selected_keys
+        session["globus_selected_keys"] = selected_keys
+
     task_id = None
     try:
         # Check cache for summary_statistics first (avoid redundant remote
         # calls, including the endpoint negotiation probe, on page reload)
         if metric_name == "summary_statistics":
-            cache_key = f"globus_summary:{endpoint_id}:{file_path}"
+            cache_key = _globus_summary_cache_key(endpoint_id, file_path, selected_keys)
             cached = current_app.TEMP_RESULTS_CACHE.get(cache_key)
             if cached and cached.get("data"):
                 logger.info("Globus summary cache hit: %s", cache_key)
@@ -395,14 +492,6 @@ def submit():
             return jsonify({"error": FILE_REFERENCE_UPGRADE_MESSAGE}), 409
         if requires_file_reference and any(key in params for key in ("allowed_roots", "scan_limit")):
             return jsonify({"error": "Filesystem roots and scan limits are controlled by the Compute worker."}), 400
-
-        # Store endpoint info in session for subsequent metric submissions
-        # /globus/submit runs once per metric, so only a genuinely different remote
-        # file invalidates the recommendations. Popping unconditionally would discard
-        # the user's intent every time they ran a check.
-        if (session.get("globus_file_name") != file_name
-                or session.get("globus_file_path") != file_path):
-            session.pop("intent", None)
 
         session["globus_endpoint_id"] = endpoint_id
         session["globus_file_path"] = file_path
@@ -470,7 +559,8 @@ def cache_summary():
     if not endpoint_id or not file_path:
         return jsonify({"error": "No Globus file in session"}), 400
 
-    cache_key = f"globus_summary:{endpoint_id}:{file_path}"
+    selected_keys = normalize_selected_keys(session.get("globus_selected_keys"))
+    cache_key = _globus_summary_cache_key(endpoint_id, file_path, selected_keys)
     current_app.TEMP_RESULTS_CACHE[cache_key] = {
         "data": data,
         "timestamp": __import__("time").time(),

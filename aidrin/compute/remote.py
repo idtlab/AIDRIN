@@ -13,6 +13,51 @@ the endpoint stays cheap and side-effect free.
 """
 
 
+def normalize_selected_keys(value):
+    """Return a list of non-empty dataset key strings (HDF5 / Zarr selection)."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [key.strip() for key in value.split(",") if key.strip()]
+    if isinstance(value, (list, tuple)):
+        return [str(key).strip() for key in value if str(key).strip()]
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def build_remote_file_info(file_path, file_name, file_type, selected_keys=None):
+    """Build a ``file_info`` tuple for ``read_file`` on a Compute worker."""
+    keys = normalize_selected_keys(selected_keys)
+    if keys:
+        return (file_path, file_name, file_type, keys)
+    return (file_path, file_name, file_type)
+
+
+def remote_file_inventory(file_path, file_type=None):
+    """List HDF5 datasets on the remote filesystem (for the web key picker)."""
+    import logging
+
+    from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
+
+    normalized = (file_type or "").strip().lower()
+    if normalized == ".hdf5":
+        normalized = ".h5"
+    if normalized != ".h5":
+        return {
+            "success": False,
+            "error": f"Inventory is only supported for HDF5 files, not {file_type!r}.",
+        }
+
+    logger = logging.getLogger(__name__)
+    try:
+        inventory = hdf5Reader(file_path, logger).inventory()
+    except Exception as exc:
+        return {"success": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    inventory["success"] = True
+    return inventory
+
+
 def remote_metric_runner(metric_name, file_path, file_name, file_type, **params):
     """Execute an AIDRIN metric on the remote Globus Compute endpoint.
 
@@ -26,7 +71,13 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
 
     import aidrin
 
-    file_info = (file_path, file_name, file_type)
+    file_info = build_remote_file_info(
+        file_path,
+        file_name,
+        file_type,
+        params.get("selected_keys"),
+    )
+    selected_keys = normalize_selected_keys(params.get("selected_keys"))
 
     def _data_quality():
         """Run selected data quality sub-metrics and bundle results."""
@@ -190,11 +241,33 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         """Compute summary statistics + histograms on the remote file."""
         import io
         import base64
+        import logging
+
         import pandas as pd
         import matplotlib.pyplot as plt
         import seaborn as sns
         from aidrin.file_handling.file_parser import read_file as _read_file
         from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
+        from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
+
+        normalized_type = (file_type or "").strip().lower()
+        if normalized_type == ".hdf5":
+            normalized_type = ".h5"
+        if normalized_type == ".h5":
+            inv = hdf5Reader(file_path, logging.getLogger(__name__)).inventory()
+            if inv.get("type") == "multi_dataset" and not selected_keys:
+                return {
+                    "success": False,
+                    "needs_dataset_selection": True,
+                    "datasets": inv.get("datasets", []),
+                    "groups": inv.get("groups", []),
+                    "current_checked_keys": [],
+                    "message": (
+                        "This HDF5 file contains multiple datasets with "
+                        "different shapes. Select 1D datasets of the same "
+                        "length, or fields that share a grid, to analyze."
+                    ),
+                }
 
         df = _read_file(file_info)
         if isinstance(df, str):
@@ -287,7 +360,12 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             "class_imbalance_features": [
                 col for col in all_features if safe_nunique(df[col]) <= 30
             ],
+            "hdf5_multi_dataset": bool(selected_keys),
+            "selected_dataset_keys": selected_keys,
         }
+
+    def _file_inventory():
+        return remote_file_inventory(file_path, file_type)
 
     def _fairness():
         """Run selected fairness sub-metrics and bundle results (matching local route)."""
@@ -326,6 +404,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         return result
 
     dispatch = {
+        "file_inventory": _file_inventory,
         "summary_statistics": _summary_statistics,
         "data_quality": _data_quality,
         "data_structure": _data_structure,
@@ -492,6 +571,10 @@ def remote_headless_runner(command, kwargs):
         "summarize": api.summarize_dataset,
         "data_quality": api.run_data_quality,
         "batch": api.run_batch_metrics,
+        "inventory": lambda **kw: remote_file_inventory(
+            kw.get("file_path"),
+            kw.get("file_type"),
+        ),
     }
 
     fn = dispatch.get(command)

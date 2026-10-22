@@ -225,6 +225,7 @@ def inspector():
     globus_file_type = session.get("globus_file_type", "")
     globus_endpoint_id = session.get("globus_endpoint_id", "")
     globus_capabilities = session.get("globus_capabilities", [])
+    globus_selected_keys = session.get("globus_selected_keys", [])
     globus_mode = bool(globus_file_path and globus_authenticated)
 
     # If Globus mode, use globus file info for template (shows sidebar + panels)
@@ -245,12 +246,15 @@ def inspector():
             upload_error=upload_error,
             globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],
-            current_checked_keys=current_checked_keys
-            if current_checked_keys is not None
-            else [],
+            current_checked_keys=(
+                globus_selected_keys
+                if globus_mode
+                else (current_checked_keys if current_checked_keys is not None else [])
+            ),
             globus_available=globus_available,
             globus_authenticated=globus_authenticated,
             globus_mode=globus_mode,
+            globus_selected_keys=globus_selected_keys,
             globus_endpoint_id=globus_endpoint_id,
             globus_capabilities=globus_capabilities,
             llm_available=llm_available,
