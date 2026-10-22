@@ -243,9 +243,11 @@ class CodeExecutor:
         deadline = time.monotonic() + self.timeout_seconds
         status: str | None = None
         payload: Any = None
+        timed_out = False
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
+                timed_out = True
                 break
             try:
                 status, payload = result_queue.get(timeout=min(remaining, 0.2))
@@ -275,6 +277,20 @@ class CodeExecutor:
                     process.join()
             else:
                 process.join()
+            if not timed_out:
+                # Exited on its own, well before the deadline, without ever
+                # putting a result: a crash (segfault in a C extension, OOM
+                # kill, os._exit), not a timeout. Say so -- a fabricated
+                # "infinite loop" diagnosis would steer the repair prompt in
+                # the wrong direction. Negative exit codes are signals
+                # (-9 = SIGKILL/OOM, -11 = SIGSEGV).
+                raise RuntimeError(
+                    f"Code execution subprocess exited with code {process.exitcode} without returning "
+                    "a result. This usually means the generated code crashed the interpreter or was "
+                    "killed for exceeding memory (e.g. building a huge intermediate object). Rewrite "
+                    "it as a single vectorised pandas/numpy pass over the already-loaded `df`, "
+                    "avoiding large intermediate copies."
+                )
             raise TimeoutError(
                 f"Code execution exceeded the {self.timeout_seconds:g}s timeout and was terminated. "
                 "This usually means the generated code has an inefficient or infinite loop "

@@ -157,6 +157,25 @@ with open({str(marker)!r}, "w") as f:
         result = executor._execute(code, self.df_path)
         self.assertEqual(result["answer"], "x" * 2_000_000)
 
+    def test_child_crash_is_not_misreported_as_timeout(self):
+        """
+        Regression test: a child that dies without ever producing a result
+        (native crash in a C extension, OOM kill, os._exit) was reported as
+        a TimeoutError claiming an "inefficient or infinite loop" even when
+        it died in under a second -- feeding the self-healing repair prompt
+        a fabricated diagnosis. A crash must surface as a RuntimeError
+        naming the exit code, and promptly, not after waiting out the
+        deadline.
+        """
+        cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=15)
+        executor = self.CodeExecutor(cfg)
+        start = time.time()
+        with self.assertRaises(RuntimeError) as ctx:
+            executor._execute("import os\nos._exit(13)", self.df_path)
+        self.assertLess(time.time() - start, 10)
+        self.assertIn("exited with code 13", str(ctx.exception))
+        self.assertNotIn("timeout", str(ctx.exception).lower())
+
     def test_run_reports_timeout_as_last_error_without_crashing(self):
         cfg = _write_config(self.tmpdir, self.data_path, timeout_seconds=6, max_attempts=1)
         executor = self.CodeExecutor(cfg)
