@@ -35,7 +35,7 @@ Prerequisites
 
 Before installing AIDRIN locally, ensure you have:
 
-- `Python 3.10 <https://www.python.org/downloads/release/python-3100/>`_
+- `Python 3.11 <https://www.python.org/downloads/release/python-3110/>`_
 - `Conda <https://docs.conda.io/en/latest/miniconda.html>`_ (Anaconda or Miniconda)
 - `Git <https://git-scm.com/downloads>`_ for cloning the repository
 
@@ -52,7 +52,7 @@ Step 2: Set Up the Conda Environment
 
 .. code-block:: bash
 
-   conda create -n aidrin-env python=3.10 -y
+   conda create -n aidrin-env python=3.11 -y
    conda activate aidrin-env
    python -m pip install -e .
 

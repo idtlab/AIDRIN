@@ -18,7 +18,7 @@ library, and the agentic pipeline.
 
 1. **Verify before you claim.** Every command, flag, metric name, and code example you add (here, in
    docs, or in the UI) must actually work against the real code. Run it. Never invent APIs.
-2. **Keep the gates green.** CI runs tests (`pytest`, Python 3.10-3.13), `flake8`, Prettier, and a
+2. **Keep the gates green.** CI runs tests (`pytest`, Python 3.11-3.13), `flake8`, Prettier, and a
    wheel `build` on every push/PR. Run them locally first (see the checklist below). Do not weaken or
    delete a test to make a change pass: fix the cause.
 3. **Surgical changes.** Touch only what the task needs; match the surrounding style. Max line length
@@ -50,7 +50,7 @@ Three cooperating Python packages plus the web assets:
 
 ## Setup
 
-`uv` is the preferred toolchain (`uv.lock` is committed); plain pip also works. Python **3.10-3.13**.
+`uv` is the preferred toolchain (`uv.lock` is committed); plain pip also works. Python **3.11-3.13**.
 
 ```bash
 uv sync --group dev               # runtime + dev/test tools
