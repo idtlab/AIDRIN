@@ -100,6 +100,61 @@ class TestLoadDataframeErrors:
         assert "ValueError" in msg
         assert "tree 'foo' not found" in msg
 
+    def test_unrelated_server_path_is_reduced_to_a_name(self, tmp_path):
+        """A loader error naming some other server path must not carry the directories.
+
+        ``_format_loader_failure`` used to strip only the input file's and the
+        loader's own folder, so any other path the loader opened reached the web
+        response intact (CodeQL py/stack-trace-exposure).
+        """
+        path = _write_loader(
+            str(tmp_path),
+            "leaks.py",
+            """
+            def load(path, **kwargs):
+                raise FileNotFoundError(
+                    "[Errno 2] No such file or directory: "
+                    "'/srv/aidrin/private/secrets.yaml'"
+                )
+            """,
+        )
+        with pytest.raises(CustomLoaderError) as exc:
+            load_dataframe(f"{path}:load", "sample.csv")
+        msg = str(exc.value)
+        assert "/srv/aidrin/private" not in msg
+        assert "secrets.yaml" in msg          # the name still tells the user what failed
+        assert "FileNotFoundError" in msg
+
+    def test_windows_path_is_reduced_to_a_name(self, tmp_path):
+        """Backslash paths too: ``Path(...).name`` keeps them whole on Linux."""
+        path = _write_loader(
+            str(tmp_path),
+            "leaks_win.py",
+            r"""
+            def load(path, **kwargs):
+                raise FileNotFoundError("C:\\srv\\aidrin\\private\\secrets.yaml is missing")
+            """,
+        )
+        with pytest.raises(CustomLoaderError) as exc:
+            load_dataframe(f"{path}:load", "sample.csv")
+        msg = str(exc.value)
+        assert "srv" not in msg
+        assert "secrets.yaml is missing" in msg
+
+    def test_non_path_text_survives_redaction(self, tmp_path):
+        """Redaction must not mangle ordinary messages that merely contain a slash."""
+        path = _write_loader(
+            str(tmp_path),
+            "units.py",
+            """
+            def load(path, **kwargs):
+                raise ValueError("expected kg/m but got lb/ft")
+            """,
+        )
+        with pytest.raises(CustomLoaderError) as exc:
+            load_dataframe(f"{path}:load", "sample.csv")
+        assert "expected kg/m but got lb/ft" in str(exc.value)
+
     def test_non_dataframe_return(self, tmp_path):
         path = _write_loader(
             str(tmp_path),
