@@ -258,8 +258,9 @@ Once running, visit:
 
 .. note::
 
-   The **log viewer** (``/logs`` and ``/view-logs``) is off by default, because
-   it exposes the process-wide log, which mixes every user's activity. Enable it
+   The **log viewer** (``/logs`` and ``/view-logs``, linked from the ``application 
+   logs`` icon in the top-right corner of the web UI) is off by default, because it
+   exposes the process-wide log, which mixes every user's activity. Enable it
    only on trusted deployments by setting ``AIDRIN_ENABLE_LOG_VIEWER=1`` before
    starting the Flask server; otherwise the routes return HTTP 403.
 
