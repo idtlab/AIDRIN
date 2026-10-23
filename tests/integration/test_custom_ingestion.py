@@ -58,6 +58,38 @@ def test_upload_with_bad_custom_loader_fails(client, tmp_path):
     assert "custom loader" in html or "error" in html or "failed" in html
 
 
+def test_loader_failure_response_carries_no_server_paths(client, tmp_path):
+    """The loader's own error reaches the page, but without server directories.
+
+    An import-time failure is not behind ``describe_loader_error``'s
+    "Original error:" truncation, so its text is what the web user sees
+    (CodeQL py/stack-trace-exposure on the load_dataframe sinks).
+    """
+    leaky_loader = (
+        'raise ImportError("cannot open /srv/aidrin/private/model.pkl")\n'
+        "\n"
+        "def load(path, **kwargs):\n"
+        "    return None\n"
+    )
+    csv_path = tmp_path / "tiny.csv"
+    csv_path.write_text("a,b\n1,2\n", encoding="utf-8")
+    with open(csv_path, "rb") as handle:
+        response = client.post(
+            "/inspector",
+            data={
+                "file": (handle, "tiny.csv"),
+                "fileTypeSelector": ".custom",
+                "loader_code": leaky_loader,
+            },
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+    assert response.status_code == 200
+    body = response.data.decode()
+    assert "/srv/aidrin/private" not in body
+    assert "Traceback" not in body
+
+
 def test_inspector_has_custom_loader_tab_not_dropdown(client):
     response = client.get("/inspector")
     html = response.data.decode()

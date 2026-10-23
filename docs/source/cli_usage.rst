@@ -269,6 +269,23 @@ summary and preview rows. Use
 ``--max-outliers 0`` or ``--max-export-rows 0`` when you want unlimited preview
 or export rows.
 
+To check same-row consistency between numeric columns, use a JSON ``compare``
+condition. For a dataset containing ``lower`` and ``upper`` columns:
+
+.. code-block:: bash
+
+   aidrin run outliers-custom /path/to/bounds.csv \
+     --rules-file examples/cross_variable_outlier_rules.json
+
+The example requires ``lower <= upper``. Comparisons use an exact
+``other_target`` column name and support ``<``, ``<=``, ``>``, ``>=``, ``==``, and
+``!=``, including inside nested boolean criteria. They accept finite numbers and
+numeric strings in tabular files. Missing operands follow ``allow_missing``;
+other unusable operands are outliers. Use JSON rather than the ``--rule``
+shorthand for comparisons. The same file can be selected through the web
+inspector's **Select JSON file** option. See :ref:`python_api` for the Python
+API and detailed operand and result semantics.
+
 File-reference validation accepts a comma-separated target list for exact matching.
 With ``--target-match regex``, the target argument is one complete regular-expression
 pattern, so commas inside quantifiers such as ``{1,3}`` are preserved. Use a list in
@@ -624,7 +641,7 @@ directory can live anywhere on disk.
 
    **The embedding model must not change between** ``build-index`` **and** ``run``.
 
-   If a different ``vector_store.embedding_model`` is set in the config when ``run`` is executed,
+   If a different ``llm.embedding_model`` is set in the config when ``run`` is executed,
    AIDRIN will raise an error immediately. To switch models, re-run ``build-index`` with the new model before calling ``run``.
 
 
@@ -669,30 +686,42 @@ Your example project directory should then look like this:
        ├── paper1.pdf                            ← add one or more PDFs here
        └── ...
 
-Step 3: Configure your API key and endpoint
+Step 3: Configure your provider and API key
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The included ``config.yaml`` is pre-configured for the standard OpenAI API. Set the environment
-variable to the key your endpoint requires:
+The agentic pipeline is built around **one provider for the whole run — OpenRouter or LBL
+CBORG, never both**. A single ``llm`` block sets the endpoint, the chat model, and the
+embedding model; every stage (retrieval, execution, complexity scoring, remediation, and
+``build-index``) uses that same ``base_url``/``model``/``embedding_model``, so there's nothing
+to configure per stage.
+
+Pick one provider and export the matching key:
 
 .. code-block:: bash
 
-   export OPENAI_API_KEY="sk-..."
+   # OpenRouter
+   export OPENROUTER_API_KEY="sk-or-..."
 
-If you are using a different OpenAI compatible endpoint (e.g. LBL CBORG), update ``llm.base_url``
-in the config and ensure all ``model`` and ``embedding_model`` values are names available on that
-provider:
+   # — or — LBL CBORG
+   export CBORG_API_KEY="sk-cborg-..."
+
+AIDRIN infers which key to use from ``llm.base_url`` — ``OPENROUTER_API_KEY`` if it points at
+``openrouter.ai``, ``CBORG_API_KEY`` if it points at ``cborg.lbl.gov``. The included
+``config.yaml`` is pre-configured for OpenRouter; switch ``llm.base_url`` (and, if needed,
+``llm.model``/``llm.embedding_model`` to names available on that provider) to use CBORG instead:
 
 .. code-block:: yaml
 
    # examples/agentic/power_consumption/config.yaml
 
+   llm:
+     base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
+     model: "openai/gpt-oss-120b"                  # chat backend for every stage below
+     embedding_model: "openai/text-embedding-3-large"   # used by build-index + retrieval
+
    paths:
      data_loader: "./loader.py:load_dataset"
      metadata_csv: "./data/metadata.txt"
-
-   llm:
-     base_url: "https://api.openai.com/v1"   # replace with your OpenAI compatible endpoint, e.g. https://api.cborg.lbl.gov
 
    profiling:
      full_summary: false
@@ -700,7 +729,6 @@ provider:
    vector_store:
      sources:
        - ./sources
-     embedding_model: text-embedding-ada-002
      chunk_size: 1000
      chunk_overlap: 200
      vector_store_name: power_consumption_index
@@ -708,7 +736,6 @@ provider:
    retrieval:
      enabled: true
      max_workers: 4
-     answer_model: gpt-4o
      top_k: 3
      question:
        - "Which European Union regulation is cited as requiring that the consequences of profiling be informed to the data subject? Return the name of the regulation as a string."
@@ -717,20 +744,14 @@ provider:
    executor:
      enabled: true
      max_attempts: 5
-     model: gpt-4o
      temperature: 0.0
 
    complexity_scorer:
      enabled: true
-     model: gpt-4o
 
    remediation:
      enabled: true
-     model: gpt-4o
      context_chars: 3000
-
-   output:
-     save_log: true
 
 Step 4: Build the vector index
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -809,25 +830,30 @@ Step 3: Add domain literature
 
 Place your domain literature (PDFs, text files) in ``sources/`` and your dataset in ``data/``.
 
-Step 4: Configure your API key and write a config file
+Step 4: Configure your provider and write a config file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Set the environment variable to the key your endpoint requires:
+As in the quickstart above, pick **one** provider — OpenRouter or CBORG, not both — and export
+the matching key:
 
 .. code-block:: bash
 
-   export OPENAI_API_KEY="sk-..."
+   export OPENROUTER_API_KEY="sk-or-..."
+   # — or —
+   export CBORG_API_KEY="sk-cborg-..."
 
-Then create ``config.yaml``. If you are using a different OpenAI compatible endpoint (e.g. LBL CBORG), update
-``llm.base_url`` to point to it and ensure all ``model`` and ``embedding_model`` values are names
-available on that provider:
+Then create ``config.yaml``. The single ``llm`` block (``base_url``/``model``/``embedding_model``)
+is used by every stage — retrieval, execution, complexity scoring, remediation, and
+``build-index``:
 
 .. code-block:: yaml
 
    # ~/my_project/config.yaml
 
    llm:
-     base_url: "https://api.openai.com/v1"   # replace with your OpenAI-compatible endpoint, e.g. https://api.cborg.lbl.gov
+     base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
+     model: "openai/gpt-oss-120b"
+     embedding_model: "openai/text-embedding-3-large"
 
    paths:
      data_loader: "./loader.py:load_dataset"   # module:function relative to config dir
@@ -839,7 +865,6 @@ available on that provider:
    vector_store:
      sources:
        - ./sources
-     embedding_model: text-embedding-ada-002
      chunk_size: 1000
      chunk_overlap: 200
      vector_store_name: my_project_index # name for the FAISS index that will be created
@@ -847,7 +872,6 @@ available on that provider:
    retrieval:
      enabled: true
      max_workers: 8
-     answer_model: gpt-5.2
      top_k: 3
      question:
        - "Does the age feature satisfy the HIPAA Safe Harbor de-identification standard?"
@@ -855,16 +879,13 @@ available on that provider:
    executor:
      enabled: true
      max_attempts: 5
-     model: gpt-5.2
      temperature: 0.0
 
    complexity_scorer:
      enabled: true
-     model: gpt-5.2
 
    remediation:
      enabled: true
-     model: gpt-5.2
      context_chars: 3000
 
 Step 5: Build the index and run

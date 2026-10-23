@@ -35,7 +35,7 @@ Prerequisites
 
 Before installing AIDRIN locally, ensure you have:
 
-- `Python 3.10 <https://www.python.org/downloads/release/python-3100/>`_
+- `Python 3.11 <https://www.python.org/downloads/release/python-3110/>`_
 - `Conda <https://docs.conda.io/en/latest/miniconda.html>`_ (Anaconda or Miniconda)
 - `Git <https://git-scm.com/downloads>`_ for cloning the repository
 
@@ -52,7 +52,7 @@ Step 2: Set Up the Conda Environment
 
 .. code-block:: bash
 
-   conda create -n aidrin-env python=3.10 -y
+   conda create -n aidrin-env python=3.11 -y
    conda activate aidrin-env
    python -m pip install -e .
 
@@ -238,6 +238,15 @@ Once running, visit:
    set the ``AIDRIN_MAX_UPLOAD_MB`` environment variable (in megabytes) before
    starting the Flask server, e.g.
    ``AIDRIN_MAX_UPLOAD_MB=2048 flask --app 'web:create_app()' run``.
+
+.. note::
+
+   **Session signing key.** Flask signs session cookies with
+   ``AIDRIN_SECRET_KEY``. If it is unset, AIDRIN generates a random key per
+   process so local runs work out of the box, but sessions then reset on every
+   restart and cannot be shared across workers. Set ``AIDRIN_SECRET_KEY`` to a
+   long random value for any real or multi-worker deployment so sessions remain
+   valid and cannot be forged.
 
 .. note::
 

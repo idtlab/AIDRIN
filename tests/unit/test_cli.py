@@ -12,6 +12,7 @@ import sys
 import tempfile
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -335,6 +336,18 @@ class TestRunCommand(unittest.TestCase):
             _clean(rules_path)
         self.assertEqual(code, 0)
         self.assertIn("age-range", json.loads(stdout)["Rule summaries"])
+
+    def test_run_outliers_custom_compares_columns_from_rules_file(self):
+        csv_path = _write_csv(pd.DataFrame({"lower": [1, 3], "upper": [2, 2]}))
+        rules_path = str(Path(__file__).resolve().parents[2] / "examples" / "cross_variable_outlier_rules.json")
+        try:
+            stdout, stderr, code = _run_cli("run", "outliers-custom", csv_path, "--rules-file", rules_path)
+        finally:
+            _clean(csv_path)
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["Rule summaries"]["ordered-bounds"]["outlier"], 1)
+        self.assertEqual(result["Outlier export"]["ordered-bounds"][0]["reference_values"], {"upper": 2})
 
     def test_run_outliers_custom_rejects_rules_file_with_rule(self):
         rules_path = _write_json([])
