@@ -241,6 +241,15 @@ Once running, visit:
 
 .. note::
 
+   **Session signing key.** Flask signs session cookies with
+   ``AIDRIN_SECRET_KEY``. If it is unset, AIDRIN generates a random key per
+   process so local runs work out of the box, but sessions then reset on every
+   restart and cannot be shared across workers. Set ``AIDRIN_SECRET_KEY`` to a
+   long random value for any real or multi-worker deployment so sessions remain
+   valid and cannot be forged.
+
+.. note::
+
    The **Custom Loader** upload tab is off by default, because the pasted loader
    code runs inside the Flask process with full Python access. Enable it only on
    trusted deployments (e.g., a local, single-user install) by setting
