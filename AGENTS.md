@@ -85,8 +85,9 @@ Library metric keys use underscores (`class_imbalance`); CLI subcommands use hyp
 Run failures surface in the JSON output; do not rely on the exit code alone.
 
 ### Agentic pipeline (optional)
-Needs `[agentic]` installed and an LLM key (`OPENAI_API_KEY`, or `GOOGLE_API_KEY` for Gemini
-embeddings). Driven by a YAML config (see `examples/agentic/`):
+Needs `[agentic]` installed and a key for one provider — OpenRouter (`OPENROUTER_API_KEY`)
+or LBL CBORG (`CBORG_API_KEY`). No other provider is supported; don't mix the two in one
+run. Driven by a YAML config (see `examples/agentic/`):
 `aidrin agentic build-index -c config.yaml` then `aidrin agentic run -c config.yaml -o results.json`.
 
 ### MCP server

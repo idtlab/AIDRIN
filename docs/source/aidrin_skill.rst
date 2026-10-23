@@ -251,12 +251,21 @@ Point Claude at a dataset and describe your intent:
 Claude follows a structured workflow:
 
 1. Confirms AIDRIN is available and lists the metrics.
-2. Inspects the dataset schema and sample statistics.
-3. Proposes a metric plan matched to your intent and asks you to confirm column roles.
-4. Runs the metrics via MCP tools.
-5. Writes an interpreted markdown report with scores, their directional meaning, and suggested
-   next steps — without declaring a ready/not-ready verdict (that judgment is yours).
-6. Offers to evaluate custom metrics or apply remedies to the dataset.
+2. Asks whether you have domain literature (PDFs, standards, regulations) the dataset
+   should be evaluated against — see :ref:`aidrin_skill_agentic` below. If you say no,
+   this step is a no-op and the rest of the workflow is unchanged. If your dataset
+   isn't a plain CSV, Claude writes a small loader for it automatically (or asks for
+   one, if the format isn't one AIDRIN already parses).
+3. Inspects the dataset schema and sample statistics.
+4. Proposes a metric plan matched to your intent and asks you to confirm column roles —
+   plus, if you gave a literature path, the resource path and domain questions from
+   step 2, before any of it runs.
+5. Runs the metrics via MCP tools, and the agentic pipeline too if domain literature
+   was provided.
+6. Writes an interpreted markdown report with scores, their directional meaning, and
+   suggested next steps — without declaring a ready/not-ready verdict (that judgment
+   is yours).
+7. Offers to evaluate custom metrics or apply remedies to the dataset.
 
 Supported file formats: CSV, Excel (``.xls`` / ``.xlsx`` / ``.xlsb`` / ``.xlsm``), JSON,
 NumPy (``.npz``), HDF5 (``.h5``), Parquet.
@@ -271,13 +280,32 @@ Agentic Pipeline via MCP
 The agentic pipeline is also available through MCP, letting Claude orchestrate the full
 literature-grounded evaluation without you running any commands.
 
-**What it does:** Takes domain-specific questions you define in a YAML config, retrieves
-relevant passages from indexed PDFs (research papers, standards, regulations), generates
-Python analysis code and runs it against your dataset, scores complexity, and produces
-remediation recommendations — all grounded in your domain literature.
+**What it does:** Takes domain-specific questions, retrieves relevant passages from
+indexed PDFs (research papers, standards, regulations), generates Python analysis code
+and runs it against your dataset, scores complexity, and produces remediation
+recommendations — all grounded in your domain literature.
 
 **When to use it:** When you have domain PDFs and want to evaluate the dataset against
 field-specific standards rather than (or in addition to) generic quality metrics.
+
+There are two ways to run it:
+
+**Guided** (recommended for most cases)
+   During a normal assessment (see `Running an Assessment`_ above), Claude asks up
+   front whether you have domain literature. Give it a path and your domain questions,
+   and Claude writes the config itself — dataset path, a short metadata description
+   drawn from your stated intent and the inspected schema, your resource path, and your
+   questions — then builds the index and runs the pipeline as part of the same session.
+   No YAML to hand-write, and nothing runs before you've confirmed the plan.
+
+**Standalone**
+   Run it separately at any time, with full control over the config: point Claude at a
+   config file you've authored yourself, or skip Claude entirely and run
+   ``aidrin agentic build-index`` / ``aidrin agentic run`` from the command line (see
+   :ref:`agentic_integration`). Use this when you want to re-run with a different
+   config, tune settings the guided path doesn't ask about (retrieval ``top_k``, chunk
+   size), or evaluate a dataset outside a full AIDRIN assessment.
+   The rest of this section documents that config format.
 
 Setup
 ~~~~~
@@ -288,18 +316,24 @@ Setup
 
    pip install -e ".[agentic]"
 
-**Set your API key:**
+**Pick one provider — OpenRouter or LBL CBORG, not both — and set its key:**
 
 .. code-block:: bash
 
-   export OPENAI_API_KEY="sk-..."   # or the key for your OpenAI-compatible endpoint
+   export OPENROUTER_API_KEY="sk-or-..."
+   # — or —
+   export CBORG_API_KEY="sk-cborg-..."
 
-**Create an agentic config YAML.** All paths are resolved relative to the config file:
+**Create an agentic config YAML.** All paths are resolved relative to the config file. One
+``llm`` block sets the endpoint, chat model, and embedding model for the whole pipeline — every
+stage below uses it, so there's nothing to configure per stage:
 
 .. code-block:: yaml
 
    llm:
-     base_url: "https://api.openai.com/v1"   # any OpenAI-compatible endpoint
+     base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
+     model: "openai/gpt-oss-120b"
+     embedding_model: "openai/text-embedding-3-large"
 
    paths:
      data_loader: "./loader.py:load_dataset"  # Python function returning a DataFrame
@@ -309,14 +343,12 @@ Setup
    vector_store:
      sources:
        - ./sources                            # directory containing domain PDFs
-     embedding_model: text-embedding-ada-002
      vector_store_name: my_index
      chunk_size: 1000
      chunk_overlap: 200
 
    retrieval:
      enabled: true                            # false = skip RAG, use LLM knowledge only
-     answer_model: gpt-4o
      top_k: 3
      max_workers: 4                           # questions run in parallel
      question:
@@ -326,19 +358,13 @@ Setup
    executor:
      enabled: true
      max_attempts: 5
-     model: gpt-4o
      temperature: 0.0
 
    complexity_scorer:
      enabled: true
-     model: gpt-4o
 
    remediation:
      enabled: true
-     model: gpt-4o
-
-   output:
-     save_log: true
 
 .. note::
 
@@ -346,8 +372,8 @@ Setup
    (columns, units, provenance) — used to give the LLM structural context. Without it the
    pipeline will not start.
 
-Running
-~~~~~~~
+Running (standalone, with your own config)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Tell Claude to run it:
 
