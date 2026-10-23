@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import logging
-import os
+import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -63,16 +63,22 @@ def parse_loader_spec(spec: str) -> tuple[str, str]:
     return module_part, func_name
 
 
+# A multi-segment absolute path, POSIX or Windows, as it appears inside an
+# error message. Two segments minimum so that "kg/m" or a bare "/tmp" in prose
+# is left alone.
+_ABSOLUTE_PATH = re.compile(r"(?:[A-Za-z]:)?(?:[\\/][^\\/\s'\"]+){2,}")
+
+
 def _format_loader_failure(spec: str, file_path: str, cause: str) -> str:
     # File names only: these messages reach web users. Full paths stay in the logs.
     module_part, _, func_name = str(spec).rpartition(":")
     loader_name = f"{Path(module_part).name}:{func_name}" if module_part else spec
-    # The loader's own error text can repeat a path (e.g. uproot's "in file /...").
-    for path in (file_path, module_part if module_part.endswith(".py") else None):
-        if path:
-            for folder in {str(Path(path).parent), str(Path(path).resolve().parent)}:
-                if folder != ".":
-                    cause = cause.replace(folder + os.sep, "")
+    # The loader's own error text can carry any path, not just the input file's
+    # or the loader's (uproot's "in file /...", an errno message naming a path
+    # the loader opened itself). Keep the name, drop the directories.
+    # Split on both separators rather than via Path: a Windows path's ``name``
+    # is the whole string when AIDRIN runs on Linux.
+    cause = _ABSOLUTE_PATH.sub(lambda match: re.split(r"[\\/]", match.group(0))[-1], cause)
     return f"Custom loader '{loader_name}' failed for '{Path(file_path or '').name}': {cause}"
 
 

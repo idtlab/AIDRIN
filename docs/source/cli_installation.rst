@@ -21,7 +21,7 @@ Use this if you want the latest development version or plan to contribute:
 
    git clone https://github.com/idtlab/AIDRIN.git
    cd AIDRIN
-   conda create -n aidrin-env python=3.10 -y
+   conda create -n aidrin-env python=3.11 -y
    conda activate aidrin-env
    pip install -e .
 
