@@ -184,6 +184,13 @@ def create_app():
         "AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", ""
     ).strip().lower() in {"1", "true", "yes"}
 
+    # The log viewer exposes the process-wide log, which mixes every user's
+    # activity, so it is opt-in: set AIDRIN_ENABLE_LOG_VIEWER=1 for trusted
+    # deployments only.
+    app.config["ENABLE_LOG_VIEWER"] = os.environ.get(
+        "AIDRIN_ENABLE_LOG_VIEWER", ""
+    ).strip().lower() in {"1", "true", "yes"}
+
     remedy_folder = os.path.join(custom_metrics_folder, "remedy_data")
     os.makedirs(remedy_folder, exist_ok=True)
     app.config["REMEDY_FOLDER"] = remedy_folder

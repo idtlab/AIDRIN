@@ -249,6 +249,13 @@ Once running, visit:
 
 .. note::
 
+   The **log viewer** (``/logs`` and ``/view-logs``) is off by default, because
+   it exposes the process-wide log, which mixes every user's activity. Enable it
+   only on trusted deployments by setting ``AIDRIN_ENABLE_LOG_VIEWER=1`` before
+   starting the Flask server; otherwise the routes return HTTP 403.
+
+.. note::
+
    **Frame cache.** To avoid re-parsing the uploaded file for every metric, the
    first read of a dataset is materialised to an on-disk Arrow/Feather artifact
    (``<source>.aidrin.feather``) next to the upload; later metric tasks reload it
