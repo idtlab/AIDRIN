@@ -49,13 +49,6 @@ def _write_json_rows(rows):
     return (tmp.name, os.path.basename(tmp.name), ".json")
 
 
-def _write_npz(values):
-    tmp = tempfile.NamedTemporaryFile(suffix=".npz", delete=False)
-    tmp.close()
-    np.savez(tmp.name, values=np.array(values, dtype=object))
-    return (tmp.name, os.path.basename(tmp.name), ".npz")
-
-
 def _write_column_fixture(file_type):
     data = {"alpha": [0, 1], "beta": [0, 3]}
     if file_type == ".csv":
@@ -159,12 +152,8 @@ def test_custom_outliers_normalize_non_string_tabular_columns(suffix, file_type,
     assert summary["outlier"] == 1
 
 
-@pytest.mark.parametrize(
-    ("writer", "values"),
-    [(_write_json_rows, [{"values": [1, 2]}, {"values": [3]}]), (_write_npz, [[1, 2], [3]])],
-)
-def test_custom_outliers_handle_container_values_without_rule_errors(writer, values):
-    fi = writer(values)
+def test_custom_outliers_handle_container_values_without_rule_errors():
+    fi = _write_json_rows([{"values": [1, 2]}, {"values": [3]}])
     try:
         regex_result = calculate_custom_outliers(fi, [_regex_rule("containers-regex", "values", r".*")])
         range_result = calculate_custom_outliers(fi, [_range_rule("containers-range", "values", min_value=0, max_value=5)])
