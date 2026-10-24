@@ -18,7 +18,11 @@ from flask import (
     url_for,
 )
 from web.globus import (
+    GLOBUS_WEB_AUTH_SETUP_MESSAGE,
     is_globus_available,
+    is_globus_web_auth_configured,
+    globus_web_auth_uses_aidrin_default_client,
+    resolve_globus_redirect_uri,
     get_auth_url,
     exchange_code_for_tokens,
     get_compute_client,
@@ -204,11 +208,14 @@ def auth():
     if not is_globus_available():
         return jsonify({"error": "Globus SDK not installed"}), 400
 
-    import os
-    redirect_uri = os.environ.get(
-        "GLOBUS_REDIRECT_URI",
+    redirect_uri = resolve_globus_redirect_uri(
         url_for("globus.callback", _external=True),
     )
+    if not is_globus_web_auth_configured(redirect_uri):
+        return jsonify({
+            "error": GLOBUS_WEB_AUTH_SETUP_MESSAGE,
+            "code": "globus_web_auth_not_configured",
+        }), 400
 
     try:
         auth_url, state_key = get_auth_url(redirect_uri)
@@ -219,8 +226,11 @@ def auth():
         }
         return redirect(auth_url)
     except ValueError as e:
-        logger.error("Globus auth URL error: %s", e, exc_info=True)
-        return jsonify({"error": "An internal error occurred"}), 500
+        logger.warning("Globus auth URL error: %s", e)
+        return jsonify({
+            "error": str(e),
+            "code": "globus_web_auth_not_configured",
+        }), 400
 
 
 @globus_bp.route("/callback")
@@ -263,9 +273,15 @@ def callback():
 @globus_bp.route("/status")
 def status():
     """Check if the user is authenticated with Globus."""
+    redirect_uri = resolve_globus_redirect_uri(
+        url_for("globus.callback", _external=True),
+    )
     return jsonify({
         "authenticated": session.get("globus_authenticated", False),
         "globus_available": is_globus_available(),
+        "web_auth_configured": is_globus_web_auth_configured(redirect_uri),
+        "web_auth_uses_aidrin_default_client": globus_web_auth_uses_aidrin_default_client(),
+        "web_auth_uses_builtin_client": globus_web_auth_uses_aidrin_default_client(),
     })
 
 
