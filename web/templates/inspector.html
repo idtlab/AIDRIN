@@ -155,6 +155,8 @@
 
         // Serialize the automatic submissions so their session updates cannot conflict.
         loadInitialGlobusData();
+      {% else %}
+        initLandingFairTab();
       {% endif %}
     });
   </script>

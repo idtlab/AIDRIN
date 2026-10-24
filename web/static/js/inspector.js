@@ -2270,10 +2270,12 @@ function switchUploadTab(tab) {
   const customPanel = document.getElementById("custom-upload");
   const globusPanel = document.getElementById("globus-panel");
   const cliPanel = document.getElementById("cli-panel");
+  const fairPanel = document.getElementById("fair-tab-panel");
   const tabLocal = document.getElementById("tab-local");
   const tabCustom = document.getElementById("tab-custom");
   const tabGlobus = document.getElementById("tab-globus");
   const tabCli = document.getElementById("tab-cli");
+  const tabFair = document.getElementById("tab-fair");
 
   if (!localPanel) {
     console.error("switchUploadTab: localPanel not found");
@@ -2292,10 +2294,12 @@ function switchUploadTab(tab) {
   if (customPanel) customPanel.classList.add("hidden");
   if (globusPanel) globusPanel.classList.add("hidden");
   if (cliPanel) cliPanel.classList.add("hidden");
+  if (fairPanel) fairPanel.classList.add("hidden");
   if (tabLocal) tabLocal.className = `${base} ${inactiveClass}`;
   if (tabCustom) tabCustom.className = `${base} ${inactiveClass}`;
   if (tabGlobus) tabGlobus.className = `${base} ${inactiveClass}`;
   if (tabCli) tabCli.className = `${base} ${inactiveClass}`;
+  if (tabFair) tabFair.className = `${base} ${inactiveClass}`;
 
   // Activate the selected tab and panel
   if (tab === "custom" && customPanel) {
@@ -2309,6 +2313,12 @@ function switchUploadTab(tab) {
   } else if (tab === "cli" && cliPanel) {
     cliPanel.classList.remove("hidden");
     if (tabCli) tabCli.className = `${base} ${activeClass}`;
+  } else if (tab === "fair" && fairPanel) {
+    fairPanel.classList.remove("hidden");
+    document
+      .getElementById("panel-fair-assessment")
+      ?.classList.remove("hidden");
+    if (tabFair) tabFair.className = `${base} ${activeClass}`;
   } else {
     localPanel.classList.remove("hidden");
     if (tabLocal) tabLocal.className = `${base} ${activeClass}`;
@@ -5000,6 +5010,27 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
       }
       callbacks?.onError?.(error);
     });
+}
+
+/**
+ * Wire the landing page's Metadata tab (no dataset loaded). Like the dataset
+ * upload, it has no Submit button: choosing a file runs the check, and changing
+ * the metadata type re-runs it on the chosen file.
+ */
+function initLandingFairTab() {
+  const fileInput = document.getElementById("fair-file");
+  _wireFairFileInput(
+    fileInput,
+    document.getElementById("fairFileLabel"),
+    document.getElementById("fairUploadIcon"),
+  );
+  const runIfFileChosen = () => {
+    if (fileInput?.files.length) submitFairAssessment();
+  };
+  fileInput?.addEventListener("change", runIfFileChosen);
+  document
+    .getElementById("fair-metadata-type")
+    ?.addEventListener("change", runIfFileChosen);
 }
 
 function submitFairAssessment() {
