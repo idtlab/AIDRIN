@@ -1,0 +1,27 @@
+{
+  "name": "aidrin",
+  "version": "2026.09.1",
+  "description": "Assess and improve dataset AI-readiness: data quality, fairness and bias, privacy, and FAIRness metrics.",
+  "author": {
+    "name": "IDT Lab, The Ohio State University",
+    "url": "https://github.com/idtlab"
+  },
+  "homepage": "https://aidrin.readthedocs.io",
+  "repository": "https://github.com/idtlab/AIDRIN",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "data readiness",
+    "AI readiness",
+    "data quality",
+    "fairness",
+    "privacy"
+  ],
+  "skills": "./.claude/skills",
+  "mcpServers": {
+    "aidrin": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "aidrin[mcp]", "aidrin-mcp"]
+    }
+  }
+}

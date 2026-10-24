@@ -1,0 +1,17 @@
+{
+  "name": "idtlab",
+  "owner": {
+    "name": "IDT Lab, The Ohio State University",
+    "url": "https://github.com/idtlab"
+  },
+  "metadata": {
+    "description": "Claude Code plugin for AIDRIN, the AI Data Readiness Infrastructure."
+  },
+  "plugins": [
+    {
+      "name": "aidrin",
+      "source": "./",
+      "description": "Assess and improve dataset AI-readiness: data quality, fairness and bias, privacy, and FAIRness metrics."
+    }
+  ]
+}

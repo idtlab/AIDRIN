@@ -16,7 +16,7 @@ There are four ways to use it:
 - **Web interface**: an interactive dashboard, hosted at [aidrin.org](https://aidrin.org) or self-hosted.
 - **Command line**: `aidrin data-quality data.csv` and friends, for pipelines and CI. Includes an agentic evaluation component for domain-aware question answering and remediation.
 - **Python library**: `pip install aidrin`, for notebooks and scripts.
-- **Claude Code**: an MCP server (`aidrin-mcp`) and skill, to assess datasets in plain language.
+- **Claude Code**: an MCP server (`aidrin-mcp`) and skill, to assess datasets in plain language. Install with `/plugin install aidrin --marketplace idtlab/AIDRIN`.
 
 For installation, usage, and contribution guidelines, please refer to the [AIDRIN documentation](https://aidrin.readthedocs.io/en/latest/).
 
