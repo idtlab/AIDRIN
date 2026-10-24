@@ -55,11 +55,7 @@ from aidrin.structured_data_metrics.variable_unit_validation import (
     calculate_variable_unit_validation,
     unit_suggestion_catalog,
 )
-from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
-from aidrin.structured_data_metrics.FAIRness_dcat import (
-    categorize_metadata,
-    extract_keys_and_values,
-)
+from aidrin.structured_data_metrics.fair_metadata import calculate_fair_compliance
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
     pearson_correlation,
@@ -2599,14 +2595,8 @@ def _cache_readiness_fair_compliance(
 
 
 def _run_fair_assessment(data_dict, metadata_type):
-    """Run FAIR assessment for DCAT or Datacite metadata."""
-    if metadata_type == "DCAT":
-        extracted_json = extract_keys_and_values(data_dict)
-        fair_dict = categorize_metadata(extracted_json, data_dict)
-        return format_dict_values(fair_dict)
-    if metadata_type == "Datacite":
-        return categorize_keys_fair(data_dict)
-    raise ValueError("Unknown metadata type")
+    """Run FAIR assessment for DCAT-US 1.1 or DataCite metadata."""
+    return format_dict_values(calculate_fair_compliance(data_dict, metadata_type))
 
 
 def _get_or_build_readiness_visualizations(section, file_info):
