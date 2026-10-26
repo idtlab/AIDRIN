@@ -13,14 +13,14 @@ If you are using the `uv`-managed environment shipped with this repo (see
 
 ## Install
 
-### Standard (Python >= 3.10 required)
+### Standard (Python >= 3.11 required)
 
 From the AIDRIN repository root:
 
     pip install -e '.[mcp]'
 
-> **Note:** Python 3.9 (macOS system default) is not supported. Use Python
-> 3.10 or later.
+> **Note:** Python 3.10 and earlier (3.9 is the macOS system default) are not
+> supported. Use Python 3.11 or later.
 
 ### uv path
 
