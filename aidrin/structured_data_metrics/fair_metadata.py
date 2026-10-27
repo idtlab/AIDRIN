@@ -285,7 +285,7 @@ def _score(meta, profile):
         results[principle] = {}
         for label, check in checks.items():
             value = check(meta)
-            results[principle][label] = FAILED if value is None else value
+            results[principle][label] = value if _present(value) else FAILED
         passed[principle] = sum(1 for v in results[principle].values() if v != FAILED)
     totals = {p: len(profile[p]) for p in PRINCIPLES}
     summary = {f"{p} Checks": f"{passed[p]}/{totals[p]}" for p in PRINCIPLES}
@@ -358,7 +358,7 @@ def _assess_datacite(metadata):
     meta = {k: v for k, v in metadata.items() if k in DATACITE_PROPERTIES}
     results, summary, passed, totals = _score(meta, DATACITE_4)
     mandatory = {label: check(meta) for label, check in DATACITE_MANDATORY.items()}
-    missing = [label for label, value in mandatory.items() if value is None]
+    missing = [label for label, value in mandatory.items() if not _present(value)]
     return {
         **results,
         "Other": _other(meta, DATACITE_4),

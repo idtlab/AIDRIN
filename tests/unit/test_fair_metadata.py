@@ -150,6 +150,16 @@ def test_datacite_identifiers_need_doi_type():
     assert result["Conformance"]["Missing"].startswith("Identifier")
 
 
+def test_datacite_empty_values_count_as_missing():
+    # An empty string is a supplied-but-absent value: it must not pass a check.
+    metadata = {"identifiers": [{"identifierType": "DOI", "identifier": ""}], "types": {"resourceTypeGeneral": ""}}
+    result = calculate_fair_compliance(metadata, "Datacite")
+    assert result["Findable"]["identifier (DOI)"] == FAILED
+    assert result["Interoperable"]["types.resourceTypeGeneral"] == FAILED
+    assert result["FAIR Compliance Checks"]["Total Checks"] == "0/22"
+    assert result["Conformance"]["Mandatory properties present"] == "0/6"
+
+
 def test_datacite_contributors_score_under_reusable():
     result = calculate_fair_compliance({"contributors": [{"name": "A"}]}, "Datacite")
     assert result["Reusable"]["contributors"] == "A"
