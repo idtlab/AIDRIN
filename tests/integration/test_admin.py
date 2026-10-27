@@ -33,6 +33,20 @@ def test_view_logs_returns_json(client):
     assert data is not None
 
 
+def test_logs_page_forbidden_when_viewer_disabled(app):
+    """/logs is gated behind ENABLE_LOG_VIEWER."""
+    app.config["ENABLE_LOG_VIEWER"] = False
+    response = app.test_client().get("/logs")
+    assert response.status_code == 403
+
+
+def test_view_logs_forbidden_when_viewer_disabled(app):
+    """/view-logs is gated behind ENABLE_LOG_VIEWER."""
+    app.config["ENABLE_LOG_VIEWER"] = False
+    response = app.test_client().get("/view-logs")
+    assert response.status_code == 403
+
+
 # -------------------------------------------------
 # Doc redirects
 # -------------------------------------------------

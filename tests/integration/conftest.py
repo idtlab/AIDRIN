@@ -29,6 +29,7 @@ def app(tmp_path):
     custom_loaders_folder.mkdir()
     app.config["CUSTOM_LOADERS_FOLDER"] = str(custom_loaders_folder)
     app.config["ENABLE_WEB_CUSTOM_LOADERS"] = True
+    app.config["ENABLE_LOG_VIEWER"] = True
 
     remedy_folder = custom_metrics_folder / "remedy_data"
     remedy_folder.mkdir()

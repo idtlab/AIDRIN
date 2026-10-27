@@ -1082,6 +1082,128 @@ def run_privacy_assessment(
     return run_batch_metrics(config)
 
 
+def run_agentic_index(config_path: str) -> Dict[str, Any]:
+    """Build the FAISS vector index from domain-literature PDFs declared in an
+    agentic YAML config. Requires `pip install 'aidrin[agentic]'`."""
+    from aidrin.agentic.vector_db_builder import VectorDBBuilder
+
+    return VectorDBBuilder(Path(config_path).resolve()).build()
+
+
+def run_agentic_pipeline(
+    config_path: str,
+    output_path: Optional[str] = None,
+    skip_vector: bool = False,
+    verbose: bool = False,
+    **profiler_opts: Any,
+) -> Dict[str, Any]:
+    """Run the agentic evaluation pipeline: profile the dataset, build/reuse the
+    FAISS vector index, then for every question in the config retrieve context,
+    generate + self-heal analysis code, score complexity, and recommend
+    remediation. Requires `pip install 'aidrin[agentic]'`.
+
+    Writes the combined result to `output_path` when given; the saved path is
+    then returned under the `_saved_to` key. Nothing is written to disk
+    otherwise -- pass `output_path` (the CLI's `-o`) to save a copy.
+    """
+    import yaml
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from aidrin.agentic.data_profiler import DataProfiler
+    from aidrin.agentic.run import _json_safe, _run_query
+    from aidrin.agentic.token_tracker import get_tracker
+    from aidrin.agentic.vector_db_builder import VectorDBBuilder
+
+    resolved = Path(config_path).resolve()
+    get_tracker().reset()
+
+    profiler = DataProfiler(config_path=resolved, **profiler_opts)
+    profile_result = profiler.profile()
+
+    cfg = yaml.safe_load(resolved.read_text()) if resolved.exists() else {}
+    cfg = cfg or {}
+
+    # Always rebuilds unless skip_vector -- matching --skip-vector's documented
+    # meaning ("use the existing index") rather than silently reusing a stale
+    # one just because a directory of that name happens to exist (e.g. new
+    # PDFs added to sources/ since the last build would otherwise go
+    # unindexed with no warning). A build failure is recorded, not fatal: the
+    # rest of the pipeline (profile, retrieval with whatever index already
+    # exists or none, execution, scoring, remediation) still runs rather than
+    # aborting the whole call over a step that's allowed to be skipped.
+    vector_result = None
+    if not skip_vector and cfg.get("vector_store"):
+        try:
+            builder = VectorDBBuilder(resolved)
+            vector_result = builder.build()
+        except Exception as exc:
+            vector_result = {"error": str(exc)}
+        _log_progress(json.dumps(vector_result), verbose)
+
+    retrieval_cfg = cfg.get("retrieval", {}) or {}
+    questions_raw = retrieval_cfg.get("questions") or []
+    if not questions_raw:
+        single = retrieval_cfg.get("question", "")
+        questions_raw = single if isinstance(single, list) else ([single] if single else [])
+
+    def _parse_q(q: Any) -> Any:
+        return (q["text"], q.get("loader")) if isinstance(q, dict) else (q, None)
+
+    parsed_questions = [_parse_q(q) for q in questions_raw]
+
+    # Precompute one profile per unique data_loader in use (dedup across questions
+    # that share a loader), sequentially, before any threads start. Reuses the
+    # profile already computed above for the default loader. Without this, every
+    # question would be scored against the default dataset's profile even when its
+    # own loader points at a different dataset.
+    default_loader = (cfg.get("paths", {}) or {}).get("data_loader")
+    profiles_by_loader: Dict[Any, Dict[str, Any]] = {default_loader: profile_result}
+    for _, loader in parsed_questions:
+        if loader in profiles_by_loader:
+            continue
+        try:
+            profiles_by_loader[loader] = profiler.profile(data_loader_override=loader)
+        except Exception as exc:
+            profiles_by_loader[loader] = {"error": str(exc)}
+
+    max_workers = int(retrieval_cfg.get("max_workers", 4))
+    query_results: List[Dict[str, Any]] = []
+    if parsed_questions:
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
+            futures = {
+                pool.submit(_run_query, resolved, text, profiles_by_loader[loader], loader): text
+                for text, loader in parsed_questions
+            }
+            for future in as_completed(futures):
+                try:
+                    query_results.append(future.result())
+                except Exception as exc:
+                    query_results.append({"question": futures[future], "error": str(exc)})
+
+    combined = _json_safe({
+        "profile": profile_result,
+        "vector_store": vector_result,
+        "queries": query_results,
+        "token_usage": get_tracker().to_dict(),
+    })
+
+    # Nothing is written to disk unless output_path is explicitly given. A
+    # disk-write failure (e.g. an unwritable -o path) must never discard a
+    # result that already reflects completed, paid-for LLM calls -- record
+    # the error and still return combined rather than letting the exception
+    # propagate and lose everything.
+    if output_path:
+        try:
+            out = Path(output_path).resolve()
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
+            combined["_saved_to"] = str(out)
+        except OSError as exc:
+            combined["_save_error"] = str(exc)
+
+    return combined
+
+
 def generate_metric_template(metric_name: str, target_dir: str) -> str:
     """Creates the directory and the .py file with the CustomDR template."""
     # 1. Prepare directory

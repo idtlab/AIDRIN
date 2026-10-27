@@ -1,5 +1,6 @@
 import logging
 import os
+import secrets
 import tempfile
 import time
 from celery import Celery, Task
@@ -50,7 +51,18 @@ def create_app():
     def inject_version():
         return dict(app_version=__version__, demo_mode=demo_mode)
 
-    app.secret_key = os.environ.get("AIDRIN_SECRET_KEY", "aidrin")
+    # Never ship a constant signing key: a predictable secret lets anyone forge
+    # session cookies. Fall back to a random per-process key so dev/quickstart
+    # still works, and warn that sessions then reset on restart and cannot be
+    # shared across workers until AIDRIN_SECRET_KEY is set.
+    app.secret_key = os.environ.get("AIDRIN_SECRET_KEY")
+    if not app.secret_key:
+        app.secret_key = secrets.token_hex(32)
+        app.logger.warning(
+            "AIDRIN_SECRET_KEY is not set; using a random per-process key. "
+            "Sessions will not survive a restart or span multiple workers. "
+            "Set AIDRIN_SECRET_KEY for any real deployment."
+        )
 
     # Celery config
     app.config["CELERY"] = {
@@ -182,6 +194,13 @@ def create_app():
     # opt-in: set AIDRIN_ENABLE_WEB_CUSTOM_LOADERS=1 for trusted deployments only.
     app.config["ENABLE_WEB_CUSTOM_LOADERS"] = os.environ.get(
         "AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", ""
+    ).strip().lower() in {"1", "true", "yes"}
+
+    # The log viewer exposes the process-wide log, which mixes every user's
+    # activity, so it is opt-in: set AIDRIN_ENABLE_LOG_VIEWER=1 for trusted
+    # deployments only.
+    app.config["ENABLE_LOG_VIEWER"] = os.environ.get(
+        "AIDRIN_ENABLE_LOG_VIEWER", ""
     ).strip().lower() in {"1", "true", "yes"}
 
     remedy_folder = os.path.join(custom_metrics_folder, "remedy_data")

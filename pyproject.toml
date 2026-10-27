@@ -8,7 +8,7 @@ name = "aidrin"
 dynamic = ["version"]
 readme = "README.md"
 description = "A tool to evaluate the readiness of data for AI"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {file = "LICENSE.txt"}
 keywords = ["data readiness for AI", "AI readiness"]
 
