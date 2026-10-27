@@ -4570,8 +4570,16 @@ function renderReadinessFairResult(data, resultContainer) {
   return true;
 }
 
+// Choosing a file and changing the metadata type both submit, so an earlier request
+// can still be in flight. Only a form's newest submission may write its results.
+const _fairGenerations = new WeakMap();
+
 function submitFairAssessmentForm(form, resultContainer, callbacks) {
   if (!form) return Promise.resolve();
+
+  const generation = (_fairGenerations.get(form) || 0) + 1;
+  _fairGenerations.set(form, generation);
+  const superseded = () => _fairGenerations.get(form) !== generation;
 
   const formData = new FormData(form);
   if (resultContainer) {
@@ -4583,6 +4591,7 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
   return fetch("/fair-assessment", { method: "POST", body: formData })
     .then((response) => response.json())
     .then((data) => {
+      if (superseded()) return;
       const resultData = { ...data };
       delete resultData.cached;
       delete resultData.build_time_seconds;
@@ -4596,6 +4605,7 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
     })
     .catch((error) => {
       console.error("Error:", error);
+      if (superseded()) return;
       if (resultContainer) {
         resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">Error: ${escapeHtml(error.message)}</div>`;
       }
