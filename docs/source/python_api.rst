@@ -496,4 +496,4 @@ JSON, including DataCite REST API responses). See :ref:`web_usage` for the check
 in total, ``"Standard"``, ``"Other"``, ``"Original Metadata"``, and a base64
 ``"Pie chart"``. DataCite, Croissant and RO-Crate results also include ``"Conformance"``
 and ``"Structure"``; Croissant adds ``"RAI Documentation"`` (reported, not scored), and
-a local RO-Crate adds ``"Not applicable"`` for checks that need a web-based crate.
+an attached RO-Crate adds ``"Not applicable"`` for checks that need a web-based crate.

@@ -432,7 +432,13 @@ _ISO_8601 = re.compile(
     r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?"
     r"(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|([+-]\d{2}):?(\d{2}))?)?$"
 )
-_LOCAL_CRATE = "not applicable to a local crate (relative root @id)"
+_ABSOLUTE_URI = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
+_DOI_PREFIXES = ("https://doi.org/", "http://doi.org/", "doi:")
+# A persistent identifier names a crate without being a base URI its payload references
+# resolve against, so a DOI or handle root says nothing about how the crate is packaged.
+# RO-Crate 1.2 lets an attached package carry one.
+_PERSISTENT_ID = _DOI_PREFIXES + ("https://hdl.handle.net/", "http://hdl.handle.net/", "hdl:")
+_LOCAL_CRATE = "not applicable to an attached crate (the root @id is not a web base URI)"
 
 
 def _is_iso_8601(value):
@@ -475,7 +481,8 @@ class _Crate:
         by_id = {e.get("@id"): e for e in self.graph}
         self.descriptor = next((by_id[d] for d in _ROCRATE_DESCRIPTORS if d in by_id), {})
         self.root = by_id.get(_ref_id(self.descriptor.get("about")), {})
-        self.local = not re.match(r"^[a-z][a-z0-9+.-]*:", str(self.root.get("@id", "./")))
+        root_id = str(self.root.get("@id", "./"))
+        self.local = not _ABSOLUTE_URI.match(root_id) or root_id.startswith(_PERSISTENT_ID)
 
     def of_type(self, name):
         return [e for e in self.graph if name in _types(e)]
@@ -499,6 +506,16 @@ def _rocrate_profile(crate):
             return f"{found}/{len(files)} Files" if found else None
         return check
 
+    @_reads()
+    def files_with_location(_meta):
+        # RO-Crate 1.2 gives a directly downloadable web File an absolute @id and does
+        # not ask for a duplicate contentUrl.
+        found = sum(
+            1 for f in files
+            if _present(f.get("contentUrl")) or _ABSOLUTE_URI.match(str(f.get("@id", "")))
+        )
+        return f"{found}/{len(files)} Files" if found else None
+
     def descriptor_version(_meta):
         version = crate.version()
         return f"RO-Crate {version}" if version else None
@@ -510,7 +527,7 @@ def _rocrate_profile(crate):
     accessible = {"conditionsOfAccess": key("conditionsOfAccess")}
     if not crate.local:
         accessible["url or distribution"] = key("url", "distribution")
-        accessible["contentUrl (Files)"] = files_with("contentUrl")
+        accessible["contentUrl or absolute @id (Files)"] = files_with_location
     return {
         "Findable": {
             "name": key("name"),
@@ -549,7 +566,7 @@ def _rocrate_conformance(crate):
         "root description": _present(root.get("description")),
         "root license": _present(root.get("license")),
     }
-    if str(_ref_id(root.get("identifier")) or "").startswith(("https://doi.org/", "http://doi.org/", "doi:")):
+    if str(_ref_id(root.get("identifier")) or "").startswith(_DOI_PREFIXES):
         should["cite-as for a persistent identifier"] = _present(root.get("cite-as"))
     return {
         "Required (MUST) present": f"{sum(must.values())}/{len(must)}",
@@ -727,7 +744,10 @@ def _assess_rocrate(metadata):
         "Original Metadata": metadata,
     }
     if crate.local:
-        result["Not applicable"] = {"url or distribution": _LOCAL_CRATE, "contentUrl (Files)": _LOCAL_CRATE}
+        result["Not applicable"] = {
+            "url or distribution": _LOCAL_CRATE,
+            "contentUrl or absolute @id (Files)": _LOCAL_CRATE,
+        }
     return result
 
 

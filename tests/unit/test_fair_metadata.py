@@ -364,11 +364,63 @@ def test_rocrate_nested_names_match_with_or_without_prefix():
 def test_rocrate_web_only_checks_are_not_applicable_to_local_crates():
     local = calculate_fair_compliance(_load(ROCRATE_EXAMPLE), "rocrate")
     assert set(local["Accessible"]) == {"conditionsOfAccess"}
-    assert set(local["Not applicable"]) == {"url or distribution", "contentUrl (Files)"}
+    assert set(local["Not applicable"]) == {"url or distribution", "contentUrl or absolute @id (Files)"}
 
     web = calculate_fair_compliance(_load(ROCRATE_WEB), "rocrate")
     assert "Not applicable" not in web
-    assert web["Accessible"]["contentUrl (Files)"] == "1/2 Files"
+    # index.html is a relative reference, so only the absolute-@id File counts.
+    assert web["Accessible"]["contentUrl or absolute @id (Files)"] == "1/2 Files"
+
+
+@pytest.mark.parametrize(
+    "root_id, applicable",
+    [
+        ("https://doi.org/10.1234/example", False),
+        ("doi:10.1234/example", False),
+        ("https://hdl.handle.net/2027/example", False),
+        ("https://example.org/crate/", True),
+    ],
+)
+def test_rocrate_a_persistent_identifier_root_does_not_make_a_crate_web_based(root_id, applicable):
+    # RO-Crate 1.2 lets an attached package carry a DOI, which identifies the crate
+    # without being a base URI its payload resolves against.
+    crate = _load(ROCRATE_EXAMPLE)
+    for entity in crate["@graph"]:
+        if entity["@id"] == "./":
+            entity["@id"] = root_id
+        if entity["@id"] == "ro-crate-metadata.json":
+            entity["about"]["@id"] = root_id
+
+    result = calculate_fair_compliance(crate, "rocrate")
+    assert ("Not applicable" not in result) is applicable
+    assert result["FAIR Compliance Checks"]["Total Checks"] == ("7/16" if applicable else "7/14")
+
+
+def test_rocrate_a_web_file_declares_its_location_in_its_id():
+    # 1.2 gives a directly downloadable web File an absolute @id, with no duplicate
+    # contentUrl.
+    crate = {
+        "@context": "https://w3id.org/ro/crate/1.2/context",
+        "@graph": [
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.2"},
+                "about": {"@id": "https://example.org/crate/"},
+            },
+            {
+                "@id": "https://example.org/crate/",
+                "@type": "Dataset",
+                "name": "n",
+                "description": "d",
+                "datePublished": "2024-01-01",
+                "hasPart": [{"@id": "https://example.org/data.csv"}],
+            },
+            {"@id": "https://example.org/data.csv", "@type": "File", "encodingFormat": "text/csv"},
+        ],
+    }
+    result = calculate_fair_compliance(crate, "rocrate")
+    assert result["Accessible"]["contentUrl or absolute @id (Files)"] == "1/1 Files"
 
 
 def test_rocrate_provenance_counts_create_actions():

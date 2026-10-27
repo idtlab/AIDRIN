@@ -305,9 +305,10 @@ The checks run on the crate's root data entity, found through the metadata descr
 
 **Accessible** (FsF-A1-01M, FsF-A1-03D)
     - ``conditionsOfAccess``
-    - web-based crates only (root ``@id`` is an absolute URI): ``url`` or ``distribution``, and
-      ``contentUrl`` on File entities. For a local crate these are listed under **Not applicable**
-      and left out of the score.
+    - web-based crates only (the root ``@id`` is an absolute URI that is not a persistent
+      identifier such as a DOI): ``url`` or ``distribution``, and a download location on File
+      entities, either ``contentUrl`` or an absolute ``@id``. For an attached crate these are
+      listed under **Not applicable** and left out of the score.
 
 **Interoperable** (FsF-I1-01M, FsF-R1.3-01M)
     - the metadata descriptor's ``conformsTo`` names a versioned RO-Crate
