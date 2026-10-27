@@ -460,7 +460,9 @@ class _Crate:
     """An RO-Crate's @graph, with its descriptor and root data entity resolved."""
 
     def __init__(self, metadata):
-        self.graph = [e for e in _as_list(metadata.get("@graph")) if isinstance(e, dict)]
+        # Names are normalized once here, so a nested "sc:encodingFormat" matches
+        # "encodingFormat" for every lookup below.
+        self.graph = [_top_level(e) for e in _as_list(metadata.get("@graph")) if isinstance(e, dict)]
         by_id = {e.get("@id"): e for e in self.graph}
         self.descriptor = next((by_id[d] for d in _ROCRATE_DESCRIPTORS if d in by_id), {})
         self.root = by_id.get(_ref_id(self.descriptor.get("about")), {})

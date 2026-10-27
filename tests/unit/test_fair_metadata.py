@@ -342,6 +342,22 @@ def test_rocrate_date_published_components_are_validated(value, ok):
     assert conformance["Required (MUST) present"] == ("4/4" if ok else "3/4")
 
 
+def test_rocrate_nested_names_match_with_or_without_prefix():
+    # An RO-Crate is JSON-LD too, so "sc:encodingFormat" on a File must score like
+    # "encodingFormat".
+    plain = _load(ROCRATE_EXAMPLE)
+    prefixed = _load(ROCRATE_EXAMPLE)
+    for entity in prefixed["@graph"]:
+        for name in ("encodingFormat", "contentSize"):
+            if name in entity:
+                entity[f"sc:{name}"] = entity.pop(name)
+
+    scored = [calculate_fair_compliance(c, "rocrate") for c in (plain, prefixed)]
+    assert scored[0]["FAIR Compliance Checks"] == scored[1]["FAIR Compliance Checks"]
+    assert scored[0]["Structure"] == scored[1]["Structure"]
+    assert scored[1]["Interoperable"]["encodingFormat (Files)"] == "1/1 Files"
+
+
 def test_rocrate_web_only_checks_are_not_applicable_to_local_crates():
     local = calculate_fair_compliance(_load(ROCRATE_EXAMPLE), "rocrate")
     assert set(local["Accessible"]) == {"conditionsOfAccess"}
