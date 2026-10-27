@@ -303,6 +303,223 @@ def test_croissant_nested_description_does_not_satisfy_the_dataset_check():
 
 
 # ---------------------------------------------------------------------------
+# RO-Crate
+# ---------------------------------------------------------------------------
+
+# Real crates: the RO-Crate 1.2 spec's rainfall example (local), a Workflow Run
+# Crate (1.1, local, with CreateActions), and the Workflow Run Crate profile crate
+# (1.2-DRAFT, web-based: its root @id is an absolute URI).
+ROCRATE_EXAMPLE = FIXTURES / "rocrate_1.2_rainfall_example.json"
+ROCRATE_RUN = FIXTURES / "rocrate_1.1_workflow_run.json"
+ROCRATE_WEB = FIXTURES / "rocrate_1.2-draft_web_profile.json"
+
+
+@pytest.mark.parametrize(
+    "fixture, name, total, must",
+    [
+        (ROCRATE_EXAMPLE, "RO-Crate 1.2", "7/14", "4/4"),
+        (ROCRATE_RUN, "RO-Crate 1.1, assessed with 1.2 rules", "7/14", "4/4"),
+        (ROCRATE_WEB, "RO-Crate 1.2-DRAFT, assessed with 1.2 rules", "7/16", "3/4"),
+    ],
+)
+def test_rocrate_real_crates(fixture, name, total, must):
+    result = calculate_fair_compliance(_load(fixture), "rocrate")
+    assert result["Standard"]["Name"] == name
+    assert result["FAIR Compliance Checks"]["Total Checks"] == total
+    assert result["Conformance"]["Required (MUST) present"] == must
+    assert _scalar_values_only(result)
+
+
+def test_rocrate_root_is_found_through_the_descriptor_not_assumed():
+    # The profile crate's root is "https://w3id.org/ro/wfrun/workflow/0.5", not "./".
+    result = calculate_fair_compliance(_load(ROCRATE_WEB), "rocrate")
+    assert result["Findable"]["name"] == "Workflow Run Crate profile"
+    assert result["Structure"]["People with an ORCID"] == "41/41 people"
+
+
+def test_rocrate_missing_date_published_fails_conformance():
+    result = calculate_fair_compliance(_load(ROCRATE_WEB), "rocrate")
+    assert result["Conformance"]["Missing (MUST)"] == "datePublished is one ISO 8601 date"
+
+    crate = _load(ROCRATE_EXAMPLE)
+    root = next(e for e in crate["@graph"] if e["@id"] == "./")
+    root["datePublished"] = ["2024-01-01", "2025-01-01"]  # MUST be a single string
+    assert calculate_fair_compliance(crate, "rocrate")["Conformance"]["Required (MUST) present"] == "3/4"
+
+
+@pytest.mark.parametrize(
+    "value, ok",
+    [
+        ("2024", True),  # reduced precision the profile allows
+        ("2024-02", True),
+        ("2024-02-29", True),  # 2024 is a leap year
+        ("2024-01-01T10:30:00Z", True),
+        ("2024-01-01T10:30:00+01:00", True),
+        ("2024-01-01T10:30:00+0100", True),  # offset without a colon
+        ("2024-02T10:30", False),  # a time of day needs a full date
+        ("2024-01-01T10:30:00+99:00", False),
+        ("2024-02-30", False),  # no such day
+        ("2023-02-29", False),
+        ("2024-99-99", False),
+        ("2024-01-01T99:99", False),
+    ],
+)
+def test_rocrate_date_published_components_are_validated(value, ok):
+    crate = _load(ROCRATE_EXAMPLE)
+    root = next(e for e in crate["@graph"] if e["@id"] == "./")
+    root["datePublished"] = value
+    conformance = calculate_fair_compliance(crate, "rocrate")["Conformance"]
+    assert conformance["Required (MUST) present"] == ("4/4" if ok else "3/4")
+
+
+def test_rocrate_nested_names_match_with_or_without_prefix():
+    # An RO-Crate is JSON-LD too, so "sc:encodingFormat" on a File must score like
+    # "encodingFormat".
+    plain = _load(ROCRATE_EXAMPLE)
+    prefixed = _load(ROCRATE_EXAMPLE)
+    for entity in prefixed["@graph"]:
+        for name in ("encodingFormat", "contentSize"):
+            if name in entity:
+                entity[f"sc:{name}"] = entity.pop(name)
+
+    scored = [calculate_fair_compliance(c, "rocrate") for c in (plain, prefixed)]
+    assert scored[0]["FAIR Compliance Checks"] == scored[1]["FAIR Compliance Checks"]
+    assert scored[0]["Structure"] == scored[1]["Structure"]
+    assert scored[1]["Interoperable"]["encodingFormat (Files)"] == "1/1 Files"
+
+
+def test_rocrate_web_only_checks_are_not_applicable_to_local_crates():
+    local = calculate_fair_compliance(_load(ROCRATE_EXAMPLE), "rocrate")
+    assert set(local["Accessible"]) == {"conditionsOfAccess"}
+    assert set(local["Not applicable"]) == {"url or distribution", "contentUrl or absolute @id (Files)"}
+
+    web = calculate_fair_compliance(_load(ROCRATE_WEB), "rocrate")
+    assert "Not applicable" not in web
+    # index.html is a relative reference, so only the absolute-@id File counts.
+    assert web["Accessible"]["contentUrl or absolute @id (Files)"] == "1/2 Files"
+
+
+@pytest.mark.parametrize(
+    "root_id, applicable",
+    [
+        ("https://doi.org/10.1234/example", False),
+        ("doi:10.1234/example", False),
+        ("https://hdl.handle.net/2027/example", False),
+        ("https://example.org/crate/", True),
+    ],
+)
+def test_rocrate_a_persistent_identifier_root_does_not_make_a_crate_web_based(root_id, applicable):
+    # RO-Crate 1.2 lets an attached package carry a DOI, which identifies the crate
+    # without being a base URI its payload resolves against.
+    crate = _load(ROCRATE_EXAMPLE)
+    for entity in crate["@graph"]:
+        if entity["@id"] == "./":
+            entity["@id"] = root_id
+        if entity["@id"] == "ro-crate-metadata.json":
+            entity["about"]["@id"] = root_id
+
+    result = calculate_fair_compliance(crate, "rocrate")
+    assert ("Not applicable" not in result) is applicable
+    assert result["FAIR Compliance Checks"]["Total Checks"] == ("7/16" if applicable else "7/14")
+
+
+def test_rocrate_a_web_file_declares_its_location_in_its_id():
+    # 1.2 gives a directly downloadable web File an absolute @id, with no duplicate
+    # contentUrl.
+    crate = {
+        "@context": "https://w3id.org/ro/crate/1.2/context",
+        "@graph": [
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.2"},
+                "about": {"@id": "https://example.org/crate/"},
+            },
+            {
+                "@id": "https://example.org/crate/",
+                "@type": "Dataset",
+                "name": "n",
+                "description": "d",
+                "datePublished": "2024-01-01",
+                "hasPart": [{"@id": "https://example.org/data.csv"}],
+            },
+            {"@id": "https://example.org/data.csv", "@type": "File", "encodingFormat": "text/csv"},
+        ],
+    }
+    result = calculate_fair_compliance(crate, "rocrate")
+    assert result["Accessible"]["contentUrl or absolute @id (Files)"] == "1/1 Files"
+
+
+def test_rocrate_provenance_counts_create_actions():
+    result = calculate_fair_compliance(_load(ROCRATE_RUN), "rocrate")
+    assert result["Reusable"]["provenance (CreateAction or UpdateAction)"] == "3 actions"
+    assert result["Structure"]["Actions with agent and instrument"] == "0/3 actions"
+    assert result["Structure"]["Files with encodingFormat and contentSize"] == "12/12 Files"
+
+
+def test_rocrate_without_a_descriptor_is_rejected():
+    with pytest.raises(ValueError, match="Not an RO-Crate"):
+        calculate_fair_compliance({"@graph": [{"@id": "./", "@type": "Dataset"}]}, "rocrate")
+
+
+# ---------------------------------------------------------------------------
+# DCAT-US 3.0
+# ---------------------------------------------------------------------------
+
+# The example GSA ships in the DCAT-US 3.0 JSON Schema (Dataset.json, CC0).
+DCAT_US_3_EXAMPLE = FIXTURES / "dcat_us_3.0_gsa_schema_example.json"
+
+
+def test_dcat_us_3_gsa_example():
+    result = calculate_fair_compliance(_load(DCAT_US_3_EXAMPLE), "dcat-us-3.0")
+    checks = result["FAIR Compliance Checks"]
+    assert checks == {
+        "Findable Checks": "6/6",
+        "Accessible Checks": "5/6",
+        "Interoperable Checks": "2/5",
+        "Reusable Checks": "3/7",
+        "Total Checks": "16/24",
+    }
+    assert result["Conformance"] == {"Required properties present": "4/4", "Missing": "none"}
+    assert result["Standard"]["Name"] == "DCAT-US 3.0"
+    assert _scalar_values_only(result)
+
+
+def test_dcat_us_3_conformance_names_missing_required_properties():
+    metadata = _load(DCAT_US_3_EXAMPLE)
+    del metadata["contactPoint"]
+    result = calculate_fair_compliance(metadata, "dcat-us-3.0")
+    assert result["Conformance"]["Missing"] == "contactPoint"
+
+
+def test_dcat_us_3_license_may_sit_on_a_distribution():
+    metadata = _load(DCAT_US_3_EXAMPLE)
+    metadata["distribution"][0]["license"] = "https://creativecommons.org/publicdomain/zero/1.0/"
+    result = calculate_fair_compliance(metadata, "dcat-us-3.0")
+    assert result["Reusable"]["license (dataset or distribution)"] == "1/1 distributions"
+
+
+def test_dcat_us_3_does_not_score_1_1_only_keys():
+    metadata = _load(DCAT_US_3_EXAMPLE)
+    metadata.update({"bureauCode": ["019:20"], "programCode": ["019:023"], "accessLevel": "public"})
+    result = calculate_fair_compliance(metadata, "dcat-us-3.0")
+    assert result["FAIR Compliance Checks"]["Total Checks"] == "16/24"
+    assert {"bureauCode", "programCode", "accessLevel"} <= set(result["Other"])
+
+
+def test_a_dcat_us_1_1_record_scores_lower_under_3_0_rules():
+    # The same BUTTER-E record: 3.0 expects accessRights, qualifiedRelation, provenance and checksums.
+    metadata = _load(DCAT_SAMPLES / "BUTTER-E.json")
+    assert calculate_fair_compliance(metadata, "dcat-us-1.1")["FAIR Compliance Checks"]["Total Checks"] == "20/26"
+    assert calculate_fair_compliance(metadata, "dcat-us-3.0")["FAIR Compliance Checks"]["Total Checks"] == "15/24"
+
+
+def test_a_dcat_catalog_is_rejected_with_a_clear_message():
+    with pytest.raises(ValueError, match="catalog"):
+        detect_standard({"@type": "Catalog", "title": "c", "dataset": [_load(DCAT_US_3_EXAMPLE)]})
+
+
+# ---------------------------------------------------------------------------
 # Detection
 # ---------------------------------------------------------------------------
 
@@ -313,6 +530,11 @@ def test_croissant_nested_description_does_not_satisfy_the_dataset_check():
         (_load(CROISSANT_OPENML), "croissant"),
         ({"conformsTo": ["http://mlcommons.org/croissant/RAI/1.0", "http://mlcommons.org/croissant/1.1"]}, "croissant"),
         ({"@context": {"cr": "http://mlcommons.org/croissant/"}, "@type": "sc:Dataset"}, "croissant"),
+        (_load(ROCRATE_EXAMPLE), "rocrate"),
+        (_load(ROCRATE_RUN), "rocrate"),
+        (_load(ROCRATE_WEB), "rocrate"),
+        ({"@context": "https://w3id.org/ro/crate/1.2/context", "@graph": []}, "rocrate"),
+        (_load(DCAT_US_3_EXAMPLE), "dcat-us-3.0"),
         (_load(DCAT_SAMPLES / "BUTTER-E.json"), "dcat-us-1.1"),
         (_load(DCAT_SAMPLES / "EGS_Collab_Experiment.json"), "dcat-us-1.1"),
         (_load(FIXTURES / "datacite_rest_default.json"), "datacite"),
@@ -330,7 +552,9 @@ def test_croissant_version_ignores_the_rai_uri():
 
 def test_detection_fails_clearly_on_unknown_metadata():
     with pytest.raises(ValueError, match="Could not detect"):
-        detect_standard({"@type": "dcat:Dataset", "title": "x"})
+        detect_standard({"@type": "dcat:Dataset", "title": "x"})  # no contactPoint or distribution
+    with pytest.raises(ValueError, match="Could not detect"):
+        detect_standard({"@type": "Dataset", "name": "x", "distribution": []})  # schema.org, not DCAT
 
 
 def test_auto_is_the_default_and_is_reported():
