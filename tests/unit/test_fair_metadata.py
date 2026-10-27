@@ -225,7 +225,7 @@ CROISSANT_RAI = FIXTURES / "croissant_1.0_mlcommons_dices_rai.json"
 
 @pytest.mark.parametrize(
     "fixture, version, total, required",
-    [(CROISSANT_HF, "1.1", "13/20", "8/9"), (CROISSANT_OPENML, "1.0", "17/20", "9/9"), (CROISSANT_RAI, "1.0", "12/20", "8/9")],
+    [(CROISSANT_HF, "1.1", "13/20", "9/10"), (CROISSANT_OPENML, "1.0", "17/20", "10/10"), (CROISSANT_RAI, "1.0", "12/20", "9/10")],
 )
 def test_croissant_real_files(fixture, version, total, required):
     result = calculate_fair_compliance(_load(fixture), "croissant")
@@ -265,6 +265,33 @@ def test_croissant_rai_matches_with_or_without_prefix():
     plain = calculate_fair_compliance({"conformsTo": "http://mlcommons.org/croissant/1.1", "dataBiases": "x"}, "croissant")
     prefixed = calculate_fair_compliance({"conformsTo": "http://mlcommons.org/croissant/1.1", "rai:dataBiases": "x"}, "croissant")
     assert plain["RAI Documentation"] == prefixed["RAI Documentation"]
+
+
+def test_croissant_nested_names_match_with_or_without_prefix():
+    # The context declares sc: and cr: as equivalent names, so a nested "sc:contentUrl"
+    # must score exactly like "contentUrl".
+    plain = _load(CROISSANT_OPENML)
+    prefixed = _load(CROISSANT_OPENML)
+    for entry in prefixed["distribution"]:
+        for name in ("contentUrl", "encodingFormat", "md5"):
+            if name in entry:
+                entry[f"sc:{name}"] = entry.pop(name)
+    for record_set in prefixed["recordSet"]:
+        record_set["cr:field"] = record_set.pop("field")
+
+    scored = [calculate_fair_compliance(m, "croissant") for m in (plain, prefixed)]
+    assert scored[0]["FAIR Compliance Checks"] == scored[1]["FAIR Compliance Checks"]
+    assert scored[0]["Structure"] == scored[1]["Structure"]
+    assert scored[1]["Structure"]["Fields with dataType"] == "6/6 fields"
+
+
+def test_croissant_requires_distribution():
+    metadata = _load(CROISSANT_OPENML)
+    del metadata["distribution"]
+    assert calculate_fair_compliance(metadata, "croissant")["Conformance"] == {
+        "Required properties present": "9/10",
+        "Missing": "distribution",
+    }
 
 
 def test_croissant_nested_description_does_not_satisfy_the_dataset_check():
