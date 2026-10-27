@@ -45,6 +45,11 @@ def _top_level(metadata):
     return keys
 
 
+def _entities(value):
+    """The dicts of a JSON-LD list, each with normalized names, so "sc:contentUrl" matches "contentUrl"."""
+    return [_top_level(e) for e in _as_list(value) if isinstance(e, dict)]
+
+
 def _summary(value):
     """Reduce a metadata value to one displayable scalar."""
     if isinstance(value, dict):
@@ -90,7 +95,7 @@ def in_each(parent, child, noun):
     """Passes when at least one entry of the ``parent`` list carries ``child``."""
     @_reads(parent)
     def check(meta):
-        entries = [e for e in _as_list(meta.get(parent)) if isinstance(e, dict)]
+        entries = _entities(meta.get(parent))
         found = sum(1 for e in entries if _present(e.get(child)))
         return f"{found}/{len(entries)} {noun}" if found else None
     return check
@@ -278,10 +283,7 @@ def _datacite_structure(meta):
 # name, so "dct:conformsTo" and "conformsTo", or "rai:dataBiases" and "dataBiases", agree.
 @_reads("recordSet")
 def _croissant_field_types(meta):
-    fields = [
-        f for rs in _as_list(meta.get("recordSet")) if isinstance(rs, dict)
-        for f in _as_list(rs.get("field")) if isinstance(f, dict)
-    ]
+    fields = [f for rs in _entities(meta.get("recordSet")) for f in _entities(rs.get("field"))]
     typed = sum(1 for f in fields if _present(f.get("dataType")))
     return f"{typed}/{len(fields)} fields" if typed else None
 
@@ -320,6 +322,7 @@ CROISSANT = {
 # The properties Croissant 1.0 and 1.1 require of a dataset.
 CROISSANT_REQUIRED = (
     "@context", "@type", "conformsTo", "name", "description", "license", "url", "creator", "datePublished",
+    "distribution",
 )
 
 # Croissant RAI 1.0 (croissant_rai.ttl), grouped by what each property documents.
@@ -353,11 +356,11 @@ def _croissant_conformance(meta):
 
 def _croissant_structure(meta):
     files = [
-        d for d in _as_list(meta.get("distribution"))
-        if isinstance(d, dict) and "FileObject" in {_local_name(str(t)) for t in _as_list(d.get("@type"))}
+        d for d in _entities(meta.get("distribution"))
+        if "FileObject" in {_local_name(str(t)) for t in _as_list(d.get("@type"))}
     ]
-    record_sets = [rs for rs in _as_list(meta.get("recordSet")) if isinstance(rs, dict)]
-    fields = [f for rs in record_sets for f in _as_list(rs.get("field")) if isinstance(f, dict)]
+    record_sets = _entities(meta.get("recordSet"))
+    fields = [f for rs in record_sets for f in _entities(rs.get("field"))]
     return {
         "FileObjects with a checksum (sha256 or md5)": _ratio(
             sum(1 for d in files if _present(d.get("sha256")) or _present(d.get("md5"))), len(files), "FileObjects"
