@@ -291,6 +291,12 @@ def _print_summary_table(result: dict, file_path: str) -> None:
     if result.get("truncated"):
         print(f"\n[truncated to {result['max_features']} features — pass --max-features to adjust]")
 
+    dropped = result.get("dropped_columns") or {}
+    if dropped.get("columns"):
+        names = dropped["columns"]
+        reason = dropped.get("reason", "not representable as tabular columns")
+        print(f"\n[{len(names)} column(s) excluded ({reason}): {', '.join(names)}]")
+
 
 @contextlib.contextmanager
 def _implicit_session(executor, file_path):

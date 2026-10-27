@@ -69,8 +69,9 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
     """Build a file_info tuple, embedding HDF5 keys / custom loader when needed.
 
     Celery workers do not have Flask session context, so multi-dataset HDF5
-    files must carry ``selected_keys`` in the tuple for background tasks, and
-    an active upload custom loader must carry ``custom_loader_spec`` the same way.
+    files, ROOT trees, and multi-array Zarr sources must carry ``selected_keys``
+    in the tuple for background tasks, and an active upload custom loader must
+    carry ``custom_loader_spec`` the same way.
 
     Tuple shapes:
       ``(path, name, type)``
@@ -86,11 +87,9 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
 
     if file_type in _SELECTION_FILE_TYPES:
         if selected_keys is None:
-            # Only HDF5 has a key picker writing session["selected_keys"];
-            # reading it for another format would apply a stale HDF5
-            # selection to this source.
+            # HDF5 and ROOT pickers persist selections in the session.
             try:
-                selected_keys = session.get("selected_keys") or [] if file_type == ".h5" else []
+                selected_keys = session.get("selected_keys") or [] if file_type in {".h5", ".root"} else []
             except RuntimeError:
                 selected_keys = []
         if isinstance(selected_keys, str):

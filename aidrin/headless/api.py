@@ -516,7 +516,7 @@ def summarize_dataset(
                 "missing": int(missing[col]),
             }
 
-    return {
+    result = {
         "shape": {"rows": len(df), "columns": len(df.columns)},
         "columns": df.columns.tolist(),
         "numerical": numerical,
@@ -524,6 +524,17 @@ def summarize_dataset(
         "truncated": truncated,
         "max_features": max_features,
     }
+    from aidrin.file_handling.readers.structured import dropped_columns
+
+    dropped = dropped_columns(df)
+    if dropped:
+        # Reader-level exclusions (e.g. array-valued ROOT branches): disclose
+        # so the shape/columns above are not read as the whole dataset.
+        result["dropped_columns"] = {
+            "reason": "array-valued cells, not representable as tabular columns",
+            "columns": dropped,
+        }
+    return result
 
 
 def _safe_slug(value: str) -> str:
