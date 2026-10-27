@@ -334,20 +334,25 @@ def verify_file_references(
 
 
 @mcp_server.tool()
-def check_fair_compliance(metadata_path: str, standard: str) -> str:
+def check_fair_compliance(metadata_path: str, standard: str = "auto") -> str:
     """
     Score a dataset's metadata file against the FAIR principles (Findable,
     Accessible, Interoperable, Reusable). Reads only the metadata file, never a
     dataset, and runs locally (no endpoint or profile).
 
     Returns pass/fail per check under each principle, "n/m" counts per principle
-    and in total, and for DataCite also "Conformance" (mandatory properties) and
-    "Structure" (ORCID, ROR and other identifiers).
+    and in total, and the standard used ("Standard"). DataCite, Croissant and
+    RO-Crate add "Conformance" (required properties) and "Structure" (identifiers,
+    checksums, typed fields); Croissant adds "RAI Documentation", which is reported
+    but not scored because its values are free text.
 
     Args:
-        metadata_path: Absolute path to the JSON metadata file.
-        standard: "dcat-us-1.1" (Project Open Data) or "datacite" (DataCite 4.x
-                  JSON, including DataCite REST API responses).
+        metadata_path: Absolute path to the JSON or JSON-LD metadata file.
+        standard: "auto" (detect it, the default), "croissant" (MLCommons
+                  Croissant 1.0/1.1), "rocrate" (RO-Crate 1.2 ro-crate-metadata.json),
+                  "dcat-us-3.0" (one DCAT-US 3.0 dataset record),
+                  "dcat-us-1.1" (Project Open Data) or
+                  "datacite" (DataCite 4.x JSON, including REST API responses).
     """
     try:
         return _dumps(calculate_fair_compliance(metadata_path, standard))
