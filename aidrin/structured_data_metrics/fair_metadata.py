@@ -10,6 +10,7 @@ import base64
 import io
 import json
 import re
+from datetime import date, datetime
 
 import matplotlib.pyplot as plt
 
@@ -431,6 +432,22 @@ _ISO_8601 = re.compile(r"^\d{4}(-\d{2}){0,2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-
 _LOCAL_CRATE = "not applicable to a local crate (relative root @id)"
 
 
+def _is_iso_8601(value):
+    """One ISO 8601 date, allowing the reduced precision (year, year-month) the profile permits."""
+    if not isinstance(value, str) or not _ISO_8601.match(value):
+        return False
+    day_part, time_part, _ = value.partition("T")
+    fields = [int(f) for f in day_part.split("-")]
+    try:
+        if time_part:
+            datetime.fromisoformat(value)
+        else:
+            date(*fields, *[1] * (3 - len(fields)))
+    except ValueError:
+        return False
+    return True
+
+
 def _types(entity):
     return {_local_name(str(t)) for t in _as_list(entity.get("@type"))}
 
@@ -513,8 +530,7 @@ def _rocrate_conformance(crate):
         "metadata descriptor (CreativeWork)": "CreativeWork" in _types(descriptor),
         "root data entity found through about": bool(root),
         "root @type includes Dataset": "Dataset" in _types(root),
-        "datePublished is one ISO 8601 date": isinstance(root.get("datePublished"), str)
-        and bool(_ISO_8601.match(root["datePublished"])),
+        "datePublished is one ISO 8601 date": _is_iso_8601(root.get("datePublished")),
     }
     should = {
         "descriptor conformsTo a versioned RO-Crate": crate.version() is not None,

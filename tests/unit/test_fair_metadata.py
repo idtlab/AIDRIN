@@ -320,6 +320,28 @@ def test_rocrate_missing_date_published_fails_conformance():
     assert calculate_fair_compliance(crate, "rocrate")["Conformance"]["Required (MUST) present"] == "3/4"
 
 
+@pytest.mark.parametrize(
+    "value, ok",
+    [
+        ("2024", True),  # reduced precision the profile allows
+        ("2024-02", True),
+        ("2024-02-29", True),  # 2024 is a leap year
+        ("2024-01-01T10:30:00Z", True),
+        ("2024-01-01T10:30:00+01:00", True),
+        ("2024-02-30", False),  # no such day
+        ("2023-02-29", False),
+        ("2024-99-99", False),
+        ("2024-01-01T99:99", False),
+    ],
+)
+def test_rocrate_date_published_components_are_validated(value, ok):
+    crate = _load(ROCRATE_EXAMPLE)
+    root = next(e for e in crate["@graph"] if e["@id"] == "./")
+    root["datePublished"] = value
+    conformance = calculate_fair_compliance(crate, "rocrate")["Conformance"]
+    assert conformance["Required (MUST) present"] == ("4/4" if ok else "3/4")
+
+
 def test_rocrate_web_only_checks_are_not_applicable_to_local_crates():
     local = calculate_fair_compliance(_load(ROCRATE_EXAMPLE), "rocrate")
     assert set(local["Accessible"]) == {"conditionsOfAccess"}
