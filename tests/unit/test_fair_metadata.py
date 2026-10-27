@@ -328,6 +328,9 @@ def test_rocrate_missing_date_published_fails_conformance():
         ("2024-02-29", True),  # 2024 is a leap year
         ("2024-01-01T10:30:00Z", True),
         ("2024-01-01T10:30:00+01:00", True),
+        ("2024-01-01T10:30:00+0100", True),  # offset without a colon
+        ("2024-02T10:30", False),  # a time of day needs a full date
+        ("2024-01-01T10:30:00+99:00", False),
         ("2024-02-30", False),  # no such day
         ("2023-02-29", False),
         ("2024-99-99", False),

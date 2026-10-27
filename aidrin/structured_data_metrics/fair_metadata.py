@@ -10,7 +10,7 @@ import base64
 import io
 import json
 import re
-from datetime import date, datetime
+from datetime import date
 
 import matplotlib.pyplot as plt
 
@@ -428,24 +428,33 @@ def _croissant_rai(meta):
 # data entity, found through the metadata descriptor's "about" as the spec prescribes.
 _ROCRATE_DESCRIPTORS = ("ro-crate-metadata.json", "ro-crate-metadata.jsonld")
 _ROCRATE_URI = re.compile(r"w3id\.org/ro/crate/(\d+\.\d+(?:-DRAFT)?)")
-_ISO_8601 = re.compile(r"^\d{4}(-\d{2}){0,2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$")
+_ISO_8601 = re.compile(
+    r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?"
+    r"(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|([+-]\d{2}):?(\d{2}))?)?$"
+)
 _LOCAL_CRATE = "not applicable to a local crate (relative root @id)"
 
 
 def _is_iso_8601(value):
-    """One ISO 8601 date, allowing the reduced precision (year, year-month) the profile permits."""
-    if not isinstance(value, str) or not _ISO_8601.match(value):
+    """One ISO 8601 date, allowing the reduced precision (year, year-month) the profile permits.
+
+    The components are range-checked here rather than handed to datetime.fromisoformat,
+    which accepts different spellings on each supported Python version.
+    """
+    match = _ISO_8601.match(value) if isinstance(value, str) else None
+    if not match:
         return False
-    day_part, time_part, _ = value.partition("T")
-    fields = [int(f) for f in day_part.split("-")]
+    year, month, day, hour, minute, second, offset_hour, offset_minute = match.groups()
+    if hour and not day:
+        return False  # a time of day needs a full calendar date
     try:
-        if time_part:
-            datetime.fromisoformat(value)
-        else:
-            date(*fields, *[1] * (3 - len(fields)))
+        date(int(year), int(month or 1), int(day or 1))
     except ValueError:
         return False
-    return True
+    return (
+        int(hour or 0) < 24 and int(minute or 0) < 60 and int(second or 0) < 60
+        and abs(int(offset_hour or 0)) < 24 and int(offset_minute or 0) < 60
+    )
 
 
 def _types(entity):
