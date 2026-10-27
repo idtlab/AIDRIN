@@ -6,7 +6,9 @@ from aidrin.file_handling.readers.base_reader import BaseFileReader
 
 class npzReader(BaseFileReader):
     def read(self):
-        npz_data = np.load(self.file_path, allow_pickle=True)
+        # allow_pickle stays False (NumPy default): uploaded archives are
+        # untrusted, and unpickling object arrays would execute arbitrary code.
+        npz_data = np.load(self.file_path)
 
         # Convert numpy arrays to Python native types
         data_dict = {}

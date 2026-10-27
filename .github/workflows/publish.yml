@@ -1,0 +1,108 @@
+name: Publish to PyPI
+
+# Manual release: Actions > Publish to PyPI > Run workflow, then choose the target index.
+#   pypi:     pick the release tag (e.g. v2026.09.1) as the ref; publishes that exact version.
+#   testpypi: any branch or tag; publishes <version>.dev<UTC timestamp>, so every run gets a
+#             new version and nothing is ever overwritten.
+# Uses trusted publishing (OIDC), so no API token is stored in the repo. Each index needs its own
+# trusted publisher configured for this workflow file, with the environment name matching the
+# target (testpypi / pypi).
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to publish
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+permissions:
+  contents: read
+
+# Queue overlapping dispatches instead of racing them to the upload; never
+# cancel a publish that may already be mid-upload.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: python -m pip install --upgrade uv
+
+      - name: Check the ref is a tag matching the package version
+        if: inputs.target == 'pypi'
+        run: |
+          version=$(python -c "exec(open('aidrin/_version.py').read()); print(__version__)")
+          if [ "$GITHUB_REF" != "refs/tags/v$version" ]; then
+            echo "::error::Run this from tag v$version (got $GITHUB_REF)"
+            exit 1
+          fi
+
+      - name: Run the test suite
+        run: |
+          uv sync --group dev
+          PYTHONPATH=. uv run pytest tests/
+
+      - name: Add a unique dev suffix for TestPyPI
+        if: inputs.target == 'testpypi'
+        run: |
+          python - <<'EOF'
+          import pathlib, time
+          path = pathlib.Path("aidrin/_version.py")
+          src = path.read_text()
+          ns = {}
+          exec(src, ns)
+          old = ns["__version__"]
+          new = f"{old}.dev{time.strftime('%Y%m%d%H%M%S', time.gmtime())}"
+          path.write_text(src.replace(old, new, 1))
+          print(f"Building {new}")
+          EOF
+
+      - name: Build sdist and wheel
+        run: |
+          uv build
+          uvx twine check --strict dist/*
+
+      - name: Smoke-test the wheel in a clean environment
+        run: |
+          uv venv /tmp/smoke
+          uv pip install -p /tmp/smoke/bin/python dist/*.whl
+          cd /tmp
+          printf 'age,income\n25,<=50K\n40,>50K\n,<=50K\n33,>50K\n' > smoke.csv
+          /tmp/smoke/bin/python -c "import aidrin; print('aidrin', aidrin.__version__)"
+          /tmp/smoke/bin/aidrin list
+          # The CLI reports metric failures inside its output and still exits 0,
+          # so assert on the output, not the exit code (see AGENTS.md).
+          /tmp/smoke/bin/aidrin data-quality smoke.csv | tee dq.txt
+          grep -Eq 'Completeness: +[0-9]' dq.txt
+          /tmp/smoke/bin/aidrin run class-imbalance smoke.csv income | tee ci.json
+          /tmp/smoke/bin/python -c "import json; r = json.load(open('ci.json')); assert 'Error' not in r and 'Imbalance degree' in r, r"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.target }}
+      url: ${{ inputs.target == 'pypi' && 'https://pypi.org/project/aidrin/' || 'https://test.pypi.org/project/aidrin/' }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.target == 'pypi' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
