@@ -74,6 +74,58 @@ def test_fair_assessment_post_scores_metadata(client, path, metadata_type, total
     assert body["Pie chart"]
 
 
+def test_fair_assessment_detects_croissant_from_a_jsonld_upload(client):
+    """A Croissant file uploaded as .jsonld with "auto" is detected and scored."""
+    with open(ROOT / "tests/fixtures/fair_metadata/croissant_1.0_openml_iris.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "iris.jsonld"), "metadata type": "auto"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["Standard"] == {"Name": "Croissant 1.0", "Detected automatically": "yes"}
+    assert body["FAIR Compliance Checks"]["Total Checks"] == "17/20"
+    assert "RAI Documentation" in body
+
+
+def test_fair_assessment_detects_an_rocrate_upload(client):
+    """An ro-crate-metadata.json uploaded with "auto" is detected and scored."""
+    with open(ROOT / "tests/fixtures/fair_metadata/rocrate_1.2_rainfall_example.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "ro-crate-metadata.json"), "metadata type": "auto"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["Standard"] == {"Name": "RO-Crate 1.2", "Detected automatically": "yes"}
+    assert body["FAIR Compliance Checks"]["Total Checks"] == "7/14"
+
+
+def test_fair_assessment_scores_dcat_us_3_by_form_value(client):
+    """The dropdown's dcat-us-3.0 value scores a DCAT-US 3.0 record."""
+    with open(ROOT / "tests/fixtures/fair_metadata/dcat_us_3.0_gsa_schema_example.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "dataset.json"), "metadata type": "dcat-us-3.0"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    assert response.get_json()["FAIR Compliance Checks"]["Total Checks"] == "16/24"
+
+
+def test_fair_assessment_auto_reports_undetectable_metadata(client):
+    """When detection fails the user is told to pick the standard, not shown a stack trace."""
+    response = client.post(
+        "/fair-assessment",
+        data={"metadata": (io.BytesIO(b'{"title": "x"}'), "meta.json"), "metadata type": "auto"},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Could not detect the metadata standard. Choose it in the Metadata type list."}
+
+
 def test_fair_assessment_post_rejects_unknown_type(client):
     """An unknown metadata type is a 400, not a crash."""
     response = client.post(
