@@ -680,7 +680,7 @@ The file itself is a small JSON object::
 
     {
       "profile_version": 1,
-      "aidrin_version": "2026.09.1",
+      "aidrin_version": "2026.10.1",
       "name": "Lab intake QC",
       "critical": ["completeness", "row_level_completeness"],
       "recommended": ["outliers"]

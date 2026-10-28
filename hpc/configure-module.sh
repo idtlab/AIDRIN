@@ -4,8 +4,8 @@
 #   configure-module.sh SITE VERSION IMAGE ROOT
 #
 #   SITE     perlmutter (Shifter) or expanse (Singularity; experimental, not yet tested on Expanse)
-#   VERSION  module version, e.g. 2026.09.1, or 2026.09.1-mcp to also expose aidrin-mcp
-#   IMAGE    perlmutter: the Shifter image, e.g. docker:aidrin/aidrin:v2026.09.1
+#   VERSION  module version, e.g. 2026.10.1, or 2026.10.1-mcp to also expose aidrin-mcp
+#   IMAGE    perlmutter: the Shifter image, e.g. docker:aidrin/aidrin:v2026.10.1
 #            expanse:    absolute path to the .sif
 #   ROOT     where to put it: your own dir (e.g. ~/aidrin-modules) or a shared, world-readable one
 #
