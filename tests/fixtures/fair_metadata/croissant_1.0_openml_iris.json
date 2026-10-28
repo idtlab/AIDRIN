@@ -1,0 +1,222 @@
+{
+  "@context": {
+    "@language": "en",
+    "@vocab": "https://schema.org/",
+    "citeAs": "cr:citeAs",
+    "column": "cr:column",
+    "conformsTo": "dct:conformsTo",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "data": {
+      "@id": "cr:data",
+      "@type": "@json"
+    },
+    "dataType": {
+      "@id": "cr:dataType",
+      "@type": "@vocab"
+    },
+    "dct": "http://purl.org/dc/terms/",
+    "examples": {
+      "@id": "cr:examples",
+      "@type": "@json"
+    },
+    "extract": "cr:extract",
+    "field": "cr:field",
+    "fileProperty": "cr:fileProperty",
+    "fileObject": "cr:fileObject",
+    "fileSet": "cr:fileSet",
+    "format": "cr:format",
+    "includes": "cr:includes",
+    "isLiveDataset": "cr:isLiveDataset",
+    "jsonPath": "cr:jsonPath",
+    "key": "cr:key",
+    "md5": "cr:md5",
+    "parentField": "cr:parentField",
+    "path": "cr:path",
+    "recordSet": "cr:recordSet",
+    "references": "cr:references",
+    "regex": "cr:regex",
+    "repeated": "cr:repeated",
+    "replace": "cr:replace",
+    "sc": "https://schema.org/",
+    "separator": "cr:separator",
+    "source": "cr:source",
+    "subField": "cr:subField",
+    "transform": "cr:transform"
+  },
+  "@type": "sc:Dataset",
+  "citeAs": "http://digital.library.adelaide.edu.au/dspace/handle/2440/15227",
+  "conformsTo": "http://mlcommons.org/croissant/1.0",
+  "creator": [
+    {
+      "@type": "sc:Person",
+      "name": "R.A. Fisher"
+    }
+  ],
+  "dateCreated": "2014-04-06T23:23:39",
+  "datePublished": "1936-01-01",
+  "description": "**Author**: R.A. Fisher  \n**Source**: [UCI](https://archive.ics.uci.edu/ml/datasets/Iris) - 1936 - Donated by Michael Marshall  \n**Please cite**:   \n\n**Iris Plants Database**  \nThis is perhaps the best known database to be found in the pattern recognition literature.  Fisher's paper is a classic in the field and is referenced frequently to this day.  (See Duda & Hart, for example.)  The data set contains 3 classes of 50 instances each, where each class refers to a type of iris plant.  One class is     linearly separable from the other 2; the latter are NOT linearly separable from each other.\n\nPredicted attribute: class of iris plant.  \nThis is an exceedingly simple domain.  \n \n### Attribute Information:\n    1. sepal length in cm\n    2. sepal width in cm\n    3. petal length in cm\n    4. petal width in cm\n    5. class: \n       -- Iris Setosa\n       -- Iris Versicolour\n       -- Iris Virginica",
+  "inLanguage": "en",
+  "isAccessibleForFree": true,
+  "keywords": [
+    "Botany",
+    "Ecology",
+    "Kaggle",
+    "Machine Learning",
+    "study_1",
+    "study_25",
+    "study_4",
+    "study_41",
+    "study_50",
+    "study_52",
+    "study_7",
+    "study_86",
+    "study_88",
+    "study_89",
+    "uci"
+  ],
+  "license": "Public",
+  "name": "iris",
+  "sameAs": "https://archive.ics.uci.edu/ml/datasets/Iris",
+  "url": "https://www.openml.org/d/61",
+  "version": 1,
+  "distribution": [
+    {
+      "@type": "cr:FileObject",
+      "@id": "data-file",
+      "name": "data-file",
+      "description": "Data file belonging to the dataset.",
+      "contentUrl": "https://data.openml.org/datasets/0000/0061/dataset_61.pq",
+      "encodingFormat": "application/x-parquet",
+      "md5": "31faf6a51af0fb5d6be5fc4f08e21704"
+    }
+  ],
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "enumerations/class",
+      "name": "class",
+      "description": "Possible values for class",
+      "dataType": "sc:Enumeration",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "enumerations/class/value",
+          "name": "value",
+          "description": "The value of class.",
+          "dataType": "sc:Text"
+        }
+      ],
+      "data": [
+        {
+          "enumerations/class/value": "Iris-setosa"
+        },
+        {
+          "enumerations/class/value": "Iris-versicolor"
+        },
+        {
+          "enumerations/class/value": "Iris-virginica"
+        }
+      ]
+    },
+    {
+      "@type": "cr:RecordSet",
+      "name": "data-file-description",
+      "description": "Listing the fields of the data.",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "features/0-sepallength",
+          "name": "sepallength",
+          "description": "sepallength - a field.",
+          "dataType": [
+            "sc:Float",
+            "sc:Integer"
+          ],
+          "source": {
+            "fileObject": {
+              "@id": "data-file"
+            },
+            "extract": {
+              "column": "sepallength"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "features/1-sepalwidth",
+          "name": "sepalwidth",
+          "description": "sepalwidth - a field.",
+          "dataType": [
+            "sc:Float",
+            "sc:Integer"
+          ],
+          "source": {
+            "fileObject": {
+              "@id": "data-file"
+            },
+            "extract": {
+              "column": "sepalwidth"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "features/2-petallength",
+          "name": "petallength",
+          "description": "petallength - a field.",
+          "dataType": [
+            "sc:Float",
+            "sc:Integer"
+          ],
+          "source": {
+            "fileObject": {
+              "@id": "data-file"
+            },
+            "extract": {
+              "column": "petallength"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "features/3-petalwidth",
+          "name": "petalwidth",
+          "description": "petalwidth - a field.",
+          "dataType": [
+            "sc:Float",
+            "sc:Integer"
+          ],
+          "source": {
+            "fileObject": {
+              "@id": "data-file"
+            },
+            "extract": {
+              "column": "petalwidth"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "features/4-class",
+          "name": "class",
+          "description": "class - the default target field.",
+          "dataType": "sc:Text",
+          "references": {
+            "field": {
+              "@id": "enumerations/class/value"
+            }
+          },
+          "source": {
+            "fileObject": {
+              "@id": "data-file"
+            },
+            "extract": {
+              "column": "class"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

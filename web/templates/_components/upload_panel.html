@@ -33,6 +33,10 @@
         Remote (Globus)
       </button>
       {% endif %}
+      <button type="button" onclick="switchUploadTab('fair')" id="tab-fair"
+              class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400">
+        Metadata
+      </button>
       <button type="button" onclick="switchUploadTab('cli')" id="tab-cli"
               class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400">
         CLI
@@ -101,9 +105,12 @@
             <select id="fileTypeSelect" class="w-full" style="max-width: none;">
               <option value="">All Files</option>
               <option value="csv">CSV</option>
+              <option value="croissant">Croissant</option>
+              <option value="datacite">DataCite</option>
               <option value="dcat">DCAT</option>
               <option value="json">JSON</option>
               <option value="npz">NPZ</option>
+              <option value="rocrate">RO-Crate</option>
               <option value="xlsx">Excel</option>
               <option value="h5">HDF5</option>
               <option value="parquet">Parquet</option>
@@ -171,6 +178,11 @@ def load(path: str, **kwargs) -> pd.DataFrame:
       {% include '_components/globus_panel.html' %}
     </div>
     {% endif %}
+
+    <!-- FAIR metadata panel: the FAIR check reads only a metadata file, so it needs no dataset -->
+    <div id="fair-tab-panel" class="hidden">
+      {% with compact=true %}{% include '_panels/_fair_assessment.html' %}{% endwith %}
+    </div>
 
     <!-- CLI panel -->
     <div id="cli-panel" class="hidden">

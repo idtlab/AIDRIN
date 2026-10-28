@@ -22,3 +22,5 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
+        # Fixtures are third-party metadata kept verbatim (e.g. "Hart" in Duda & Hart).
+        exclude: ^tests/fixtures/
