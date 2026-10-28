@@ -145,7 +145,7 @@ class VectorDBBuilder:
         suffix = path.suffix.lower()
         if suffix == ".pdf":
             try:
-                import fitz  # PyMuPDF
+                import pymupdf as fitz
             except ImportError:
                 raise ImportError(
                     "PyMuPDF is required for PDF parsing. Install with: pip install pymupdf"

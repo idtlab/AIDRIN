@@ -90,7 +90,7 @@ mcp = [
     "langchain-community>=0.3.0",
     "langchain-text-splitters>=0.3.0",
     "faiss-cpu>=1.7.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.26.0",
 ]
 agentic = [
     "openai>=1.6.0",
@@ -101,7 +101,7 @@ agentic = [
     "numpy>=1.26.4",
     "pandas>=2.0.0",
     "pyyaml>=6.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.26.0",
 ]
 dev = [
     "pytest>=7.0",
@@ -174,7 +174,7 @@ agentic = [
     "numpy>=1.26.4",
     "pandas>=2.0.0",
     "pyyaml>=6.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.26.0",
 ]
 mcp = [
     "mcp>=2.0,<3.0",
@@ -183,7 +183,7 @@ mcp = [
     "langchain-community>=0.3.0",
     "langchain-text-splitters>=0.3.0",
     "faiss-cpu>=1.7.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.26.0",
 ]
 mlflow = [
     # Pinned to the 3.x line, and tested against 3.15.2.
