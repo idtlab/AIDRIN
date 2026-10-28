@@ -1,6 +1,7 @@
 <!-- FAIR Assessment panel (has its own file upload for JSON metadata) -->
 <div id="panel-fair-assessment" class="metric-panel hidden">
   <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
+    {% if not compact %}
     <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">FAIR Compliance Evaluation</h2>
     <p class="text-sm mb-4 text-gray-500 dark:text-gray-400">Upload a JSON metadata file (DCAT or Datacite) to evaluate FAIR compliance.</p>
 
@@ -17,6 +18,7 @@
         </li>
       </ul>
     </div>
+    {% endif %}
 
     <form id="form-fair-assessment" method="post" enctype="multipart/form-data">
       <!-- Metadata type selector (before upload) -->
@@ -42,12 +44,22 @@
         </label>
       </div>
 
+      {% if compact %}
+      <div class="p-4 mt-4 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+        <h4 class="font-semibold text-gray-900 dark:text-white mb-2">Supported formats</h4>
+        <ul class="list-disc pl-5 space-y-1">
+          <li><a href="https://resources.data.gov/resources/dcat-us/" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">DCAT-US 1.1</a> (Project Open Data)</li>
+          <li><a href="https://schema.datacite.org/" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">DataCite 4.x</a> JSON</li>
+        </ul>
+      </div>
+      {% else %}
       <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
         <button type="button" onclick="withSubmitGuard(this, submitFairAssessment);"
                 class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
           Submit
         </button>
       </div>
+      {% endif %}
     </form>
   </div>
 
