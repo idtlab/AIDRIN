@@ -29,5 +29,8 @@ def test_globus_docs_cover_worker_and_interface_boundaries():
     assert "``aidrin remote`` commands" in contributing
     assert "MCP calls that pass ``endpoint`` or ``profile``" in contributing
     assert "Globus Compute worker" in usage
+    assert "aidrin_globus_defaults.py" in usage
+    assert (REPO_ROOT / "examples" / "globus" / "web-oauth-local-app.rst").is_file()
+    assert "web/aidrin_globus_defaults.py" in contributing
     assert "MCP calls" in usage
     assert "with ``endpoint`` or ``profile`` check the selected Compute endpoint" in usage
