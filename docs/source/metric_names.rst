@@ -42,7 +42,8 @@ Metrics are grouped into categories. ``aidrin list --category`` accepts five:
 The web interface groups capabilities into **six** dimensions. It presents
 variable-unit validation under Understandability and Usability while retaining
 its ``data-structure`` registry category. The FAIR checks in that web dimension
-have no CLI category.
+score a metadata file rather than a dataset, so they have no registry category and
+no ``aidrin run`` name; run them with ``aidrin fair`` (see :ref:`cli_fair`).
 
 Naming conventions
 ------------------
@@ -236,9 +237,9 @@ server, which dispatches on the same registry as the command line.
      - |no|
    * - FAIR Compliance Report
      - |no|
+     - ``calculate_fair_compliance``
      - |no|
-     - |no|
-     - |no|
+     - |yes|
 
 .. [#unexported] Importable as ``from aidrin import calculate_custom_outliers``,
    but absent from ``aidrin.__all__``, so ``import *`` will not pick it up.
