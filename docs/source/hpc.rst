@@ -20,9 +20,9 @@ On a login node:
 
 .. code-block:: bash
 
-   shifterimg pull aidrin/aidrin:v2026.10.1
+   shifterimg pull aidrin/aidrin:|AIDRIN_VERSION_TAG|
    curl -sL https://raw.githubusercontent.com/idtlab/AIDRIN/develop/hpc/configure-module.sh \
-       | bash -s perlmutter 2026.10.1 docker:aidrin/aidrin:v2026.10.1 ~/aidrin-modules
+       | bash -s perlmutter |AIDRIN_VERSION| docker:aidrin/aidrin:|AIDRIN_VERSION_TAG| ~/aidrin-modules
 
 Then load the module, and add the ``module use`` line to your ``~/.bashrc`` so it is available
 in every session:
@@ -74,12 +74,12 @@ New Versions
 ------------
 
 Run the same setup commands with the new version number. Image tags match the AIDRIN release
-tags (``v2026.10.1``); module versions are the same number without the ``v``. Older versions stay available until
+tags (``|AIDRIN_VERSION_TAG|``); module versions are the same number without the ``v``. Older versions stay available until
 you remove them, and ``module load aidrin/<version>`` selects a specific one. ``configure-module.sh``
 does not overwrite a version that is already configured.
 
 To also get the MCP server (``aidrin-mcp``, see :ref:`aidrin_skill`), use the ``-mcp`` image and
-version, for example ``aidrin/aidrin:v2026.10.1-mcp`` and ``2026.10.1-mcp``. That image is larger
+version, for example ``aidrin/aidrin:|AIDRIN_VERSION_TAG|-mcp`` and ``|AIDRIN_VERSION|-mcp``. That image is larger
 because it includes the agentic stack.
 
 ----
