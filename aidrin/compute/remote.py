@@ -92,14 +92,14 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
                 )
                 r["Description"] = (
                     "Custom criteria outliers are values that violate user-defined range "
-                    "or regex rules on selected columns or native HDF5 datasets."
+                    "or regex rules on selected columns or native HDF5 datasets, or same-row column comparisons."
                 )
             except Exception as e:
                 r = {
                     "Error": f"{type(e).__name__}: {e}",
                     "Description": (
                         "Custom criteria outliers are values that violate user-defined range "
-                        "or regex rules on selected columns or native HDF5 datasets."
+                        "or regex rules on selected columns or native HDF5 datasets, or same-row column comparisons."
                     ),
                 }
             result["Custom Criteria Outliers"] = r

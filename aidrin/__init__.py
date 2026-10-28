@@ -214,6 +214,8 @@ def calculate_custom_outliers(
         ``(file_path, file_name, file_type)``.
     rules : list of dict
         Custom criteria rules with required stable ``id`` values.
+        Tabular ``compare`` leaves use ``operator`` and ``other_target`` to
+        compare finite numbers at the same row position in two columns.
     max_outliers : int, optional
         Maximum detailed preview records to keep per rule.
     scan_limit : int, optional

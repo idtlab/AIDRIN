@@ -1,5 +1,7 @@
 import logging
 import os
+import secrets
+import tempfile
 import time
 from celery import Celery, Task
 from flask import Flask
@@ -49,7 +51,18 @@ def create_app():
     def inject_version():
         return dict(app_version=__version__, demo_mode=demo_mode)
 
-    app.secret_key = os.environ.get("AIDRIN_SECRET_KEY", "aidrin")
+    # Never ship a constant signing key: a predictable secret lets anyone forge
+    # session cookies. Fall back to a random per-process key so dev/quickstart
+    # still works, and warn that sessions then reset on restart and cannot be
+    # shared across workers until AIDRIN_SECRET_KEY is set.
+    app.secret_key = os.environ.get("AIDRIN_SECRET_KEY")
+    if not app.secret_key:
+        app.secret_key = secrets.token_hex(32)
+        app.logger.warning(
+            "AIDRIN_SECRET_KEY is not set; using a random per-process key. "
+            "Sessions will not survive a restart or span multiple workers. "
+            "Set AIDRIN_SECRET_KEY for any real deployment."
+        )
 
     # Celery config
     app.config["CELERY"] = {
@@ -72,6 +85,10 @@ def create_app():
         "result_expires": 600,
     }
     app.config.from_prefixed_env()
+    # Local UI demos without Redis: set AIDRIN_CELERY_EAGER=1 (after env merge)
+    if os.environ.get("AIDRIN_CELERY_EAGER", "").strip().lower() in {"1", "true", "yes"}:
+        app.config["CELERY"]["task_always_eager"] = True
+        app.config["CELERY"]["task_eager_propagates"] = True
 
     # Maximum upload size (default 1 GB; override per deployment via AIDRIN_MAX_UPLOAD_MB).
     # Set after from_prefixed_env so AIDRIN_MAX_UPLOAD_MB takes precedence. Flask rejects
@@ -165,6 +182,26 @@ def create_app():
     os.makedirs(custom_metrics_folder, exist_ok=True)
     app.config["CUSTOM_METRICS_FOLDER"] = custom_metrics_folder
     app.config["CUSTOM_ALLOWED_EXTENSIONS"] = {"py"}
+
+    # Session loaders live outside the repo tree so the Flask debug reloader
+    # does not restart mid-request when Apply writes the script file.
+    custom_loaders_folder = app.config.get("CUSTOM_LOADERS_FOLDER") or os.path.join(
+        tempfile.gettempdir(), "aidrin_custom_loaders"
+    )
+    os.makedirs(custom_loaders_folder, exist_ok=True)
+    app.config["CUSTOM_LOADERS_FOLDER"] = custom_loaders_folder
+    # Pasted loader code runs inside this process, so the web Custom Loader is
+    # opt-in: set AIDRIN_ENABLE_WEB_CUSTOM_LOADERS=1 for trusted deployments only.
+    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = os.environ.get(
+        "AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", ""
+    ).strip().lower() in {"1", "true", "yes"}
+
+    # The log viewer exposes the process-wide log, which mixes every user's
+    # activity, so it is opt-in: set AIDRIN_ENABLE_LOG_VIEWER=1 for trusted
+    # deployments only.
+    app.config["ENABLE_LOG_VIEWER"] = os.environ.get(
+        "AIDRIN_ENABLE_LOG_VIEWER", ""
+    ).strip().lower() in {"1", "true", "yes"}
 
     remedy_folder = os.path.join(custom_metrics_folder, "remedy_data")
     os.makedirs(remedy_folder, exist_ok=True)

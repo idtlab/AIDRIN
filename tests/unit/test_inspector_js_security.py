@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import re
 import shutil
@@ -525,7 +527,11 @@ def test_custom_outlier_rules_are_serialized_for_local_and_globus_submission():
     assert 'data-section="target-exact"' in source
     assert 'data-section="target-regex"' in source
     assert 'aria-label="Target pattern (regular expression)"' in source
-    assert 'md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]' in source
+    assert 'custom-outlier-rule-header grid gap-2 pr-7' in source
+    css = (INSPECTOR_JS.parents[1] / "css/theme.css").read_text(encoding="utf-8")
+    assert "container-type: inline-size" in css
+    assert "@container (min-width: 52rem)" in css
+    assert "grid-template-columns: minmax(9rem, 0.6fr) minmax(16rem, 1.4fr) auto" in css
     assert 'class="absolute right-2 top-2' in source
     assert 'aria-label="Remove rule"' in source
     assert "function customOutlierRegexTargetType(row)" in source
@@ -637,6 +643,44 @@ def test_custom_outlier_preview_cap_placeholder_documents_default():
     assert 'name="max_outliers" placeholder="default: 100"' in source
 
 
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the frontend formatter")
+@pytest.mark.parametrize(("operator", "other_target", "target_type", "valid"), [
+    ("<=", "upper", "column", True), ("!=", "upper", "column", True),
+    ("=", "upper", "column", False), ("<=", "", "column", False),
+    ("<=", 1, "column", False), ("<=", "upper", "hdf5_dataset", False),
+])
+def test_cross_variable_json_file_validation(operator, other_target, target_type, valid):
+    rules = [{
+        "id": "ordered-bounds", "target": "lower", "target_type": target_type,
+        "criteria": {"op": "and", "conditions": [
+            {"type": "range", "min": 0},
+            {"type": "compare", "operator": operator, "other_target": other_target},
+        ]},
+    }]
+    assert _parse_rules_file_in_browser(json.dumps(rules))["ok"] is valid
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the frontend formatter")
+def test_cross_variable_csv_export_preserves_reference_values():
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    start = source.index("function downloadCustomOutlierExportCsv()")
+    end = source.index("// ==================== Checkbox Helpers", start)
+    script = """
+let csv;
+const lastMetricResult = {};
+function findCustomOutlierExport() { return {}; }
+function flattenOutlierExportRows() {
+  return [{rule_id: 'bounds', reference_values: {'upper,limit': 2}, location: {row_index: 1}}];
+}
+class Blob { constructor(parts) { csv = parts.join(''); } }
+const URL = {createObjectURL: () => 'blob:test', revokeObjectURL: () => {}};
+const document = {createElement: () => ({click: () => {}}), body: {appendChild: () => {}, removeChild: () => {}}};
+""" + source[start:end] + "\ndownloadCustomOutlierExportCsv(); process.stdout.write(csv);"
+    completed = subprocess.run(["node", "-e", script], text=True, capture_output=True, check=True)
+    rows = list(csv.DictReader(io.StringIO(completed.stdout)))
+    assert json.loads(rows[0]["reference_values"]) == {"upper,limit": 2}
+
+
 def test_custom_outlier_export_downloads_csv_without_inline_row_rendering():
     source = INSPECTOR_JS.read_text(encoding="utf-8")
     assert 'key === "Outlier export"' in source
@@ -660,8 +704,8 @@ def test_custom_outlier_preview_uses_compact_overview_table():
     assert "Preview rows failed a valid-value condition." in source
     assert "Why flagged" in source
     assert "formatOutlierFlagFallback(reason)" in source
-    assert 'below_min: "< min"' in source
-    assert 'above_max: "> max"' in source
+    assert 'below_min: "Below the allowed minimum"' in source
+    assert 'above_max: "Above the allowed maximum"' in source
 
 
 def test_custom_outlier_ui_explains_valid_value_semantics():
@@ -930,3 +974,23 @@ def test_update_intent_submit_state_only_clears_validation_messages():
     assert "delete status.dataset.kind;" in submit_body
     assert 'status.dataset.kind = "error";' in submit_body
     assert 'status.dataset.kind = "validation";' in submit_body
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required for the result renderer")
+def test_outlier_explanation_wraps_and_escapes_column_names(tmp_path):
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    preview = source[source.index("function flattenOutlierPreviewRows("):source.index("function findCustomOutlierExport(")]
+    helpers = source[source.index("function formatValue("):source.index("// ==================== FAIR Assessment")]
+    flag = "lower<script> is 3, exceeds upper 2"
+    payload = {"rule": [{"rule_name": "Rule 1", "target": "lower<script>", "value": 3,
+                         "flag": flag, "location": {"display": "row 1"}}]}
+    script = tmp_path / "preview.cjs"
+    script.write_text(preview + helpers + "\nprocess.stdout.write(renderCustomOutlierPreviewTable(JSON.parse(process.argv[2])));")
+    html = subprocess.run(["node", str(script), json.dumps(payload)], text=True, capture_output=True, check=True).stdout
+    assert "lower&lt;script&gt; is 3, exceeds upper 2" in html
+    assert "<script>" not in html
+    why_cell = re.search(r'<td class="([^"]+)">lower&lt;script&gt; is 3, exceeds upper 2</td>', html)
+    assert why_cell
+    assert "whitespace-normal" in why_cell[1]
+    assert "break-words" in why_cell[1]
+    assert "whitespace-nowrap" not in why_cell[1]

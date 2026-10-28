@@ -1,6 +1,6 @@
 import os
 
-from flask import Blueprint, jsonify, redirect, render_template, send_from_directory
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, send_from_directory
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -30,11 +30,15 @@ def publications():
 
 @admin_bp.route("/logs")
 def logs_page():
+    if not current_app.config.get("ENABLE_LOG_VIEWER"):
+        abort(403)
     return render_template("logs.html")
 
 
 @admin_bp.route("/view-logs")
 def view_logs():
+    if not current_app.config.get("ENABLE_LOG_VIEWER"):
+        abort(403)
     # data/logs/ lives at the project root (two levels above web/routes/)
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     log_path = os.path.join(project_root, "data", "logs", "aidrin.log")

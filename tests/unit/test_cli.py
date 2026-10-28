@@ -12,6 +12,7 @@ import sys
 import tempfile
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -335,6 +336,18 @@ class TestRunCommand(unittest.TestCase):
             _clean(rules_path)
         self.assertEqual(code, 0)
         self.assertIn("age-range", json.loads(stdout)["Rule summaries"])
+
+    def test_run_outliers_custom_compares_columns_from_rules_file(self):
+        csv_path = _write_csv(pd.DataFrame({"lower": [1, 3], "upper": [2, 2]}))
+        rules_path = str(Path(__file__).resolve().parents[2] / "examples" / "cross_variable_outlier_rules.json")
+        try:
+            stdout, stderr, code = _run_cli("run", "outliers-custom", csv_path, "--rules-file", rules_path)
+        finally:
+            _clean(csv_path)
+        self.assertEqual(code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["Rule summaries"]["ordered-bounds"]["outlier"], 1)
+        self.assertEqual(result["Outlier export"]["ordered-bounds"][0]["reference_values"], {"upper": 2})
 
     def test_run_outliers_custom_rejects_rules_file_with_rule(self):
         rules_path = _write_json([])
@@ -829,6 +842,100 @@ class TestCustomMetricMultiFormat(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         result = json.loads(stdout)
         self.assertEqual(result["row_count"], 5)
+
+
+# ===========================================================================
+# Custom loader (--loader / add-custom-loader)
+# ===========================================================================
+
+
+class TestCustomLoaderCLI(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.csv_path = _write_csv(_sample_df(20))
+        self.loader_path = os.path.join(self.tmpdir, "fake_loader.py")
+        with open(self.loader_path, "w", encoding="utf-8") as handle:
+            handle.write(
+                "import pandas as pd\n"
+                "def load(path, **kwargs):\n"
+                "    return pd.DataFrame({'loader_col': [1, 2, 3], 'y': [0.1, 0.2, 0.3]})\n"
+            )
+
+    def tearDown(self):
+        import shutil
+        _clean(self.csv_path)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_add_custom_loader_creates_template(self):
+        out, err, code = _run_cli(
+            "add-custom-loader", "my_ingest", "--dir", self.tmpdir
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        path = os.path.join(self.tmpdir, "my_ingest.py")
+        self.assertTrue(os.path.exists(path))
+        with open(path, encoding="utf-8") as handle:
+            body = handle.read()
+        self.assertIn("def load", body)
+
+    def test_run_completeness_with_loader(self):
+        out, err, code = _run_cli(
+            "run",
+            "completeness",
+            self.csv_path,
+            "--loader",
+            f"{self.loader_path}:load",
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        payload = json.loads(out)
+        blob = json.dumps(payload)
+        self.assertIn("loader_col", blob)
+
+    def test_loader_format_mismatch_reports_input_and_original_error(self):
+        loader = os.path.join(self.tmpdir, "json_loader.py")
+        with open(loader, "w", encoding="utf-8") as handle:
+            handle.write(
+                "import pandas as pd\n"
+                "def load(path, **kwargs):\n"
+                "    return pd.read_json(path)\n"
+            )
+        matching = os.path.join(self.tmpdir, "data.json")
+        with open(matching, "w", encoding="utf-8") as handle:
+            json.dump([{"value": 1}, {"value": 2}], handle)
+        out, err, code = _run_cli(
+            "run", "completeness", matching, "--loader", f"{loader}:load"
+        )
+        self.assertEqual(code, 0, msg=err or out)
+        out, err, code = _run_cli(
+            "run", "completeness", self.csv_path, "--loader", f"{loader}:load"
+        )
+        self.assertNotEqual(code, 0)
+        # Loader errors name files, not absolute paths (they also reach web users).
+        self.assertIn(os.path.basename(self.csv_path), err)
+        self.assertIn("json_loader.py:load", err)
+        self.assertNotIn(self.tmpdir, err)
+        self.assertIn("Check that the file format matches what this loader expects", err)
+        self.assertIn("Original error: ValueError:", err)
+
+    def test_failed_loader_exits_nonzero(self):
+        bad = os.path.join(self.tmpdir, "bad_loader.py")
+        with open(bad, "w", encoding="utf-8") as handle:
+            handle.write("def load(path, **kwargs):\n    return None\n")
+        # Use an unsupported extension so success cannot come from a built-in reader.
+        weird = os.path.join(self.tmpdir, "data.weird")
+        with open(weird, "w", encoding="utf-8") as handle:
+            handle.write("x")
+        out, err, code = _run_cli(
+            "run",
+            "completeness",
+            weird,
+            "--loader",
+            f"{bad}:load",
+        )
+        self.assertNotEqual(code, 0)
+        combined = (err or "") + (out or "")
+        self.assertIn("Custom loader", combined)
+        self.assertIn("None", combined)
 
 
 # ===========================================================================
