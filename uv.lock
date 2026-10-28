@@ -167,8 +167,8 @@ requires-dist = [
     { name = "pgeocode", specifier = ">=0.5.0" },
     { name = "pint", specifier = ">=0.24.4,<0.26" },
     { name = "pyarrow", specifier = ">=15.0.0" },
-    { name = "pymupdf", marker = "extra == 'agentic'", specifier = ">=1.24.0" },
-    { name = "pymupdf", marker = "extra == 'mcp'", specifier = ">=1.24.0" },
+    { name = "pymupdf", marker = "extra == 'agentic'", specifier = ">=1.26.0" },
+    { name = "pymupdf", marker = "extra == 'mcp'", specifier = ">=1.26.0" },
     { name = "pypdf", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
@@ -195,7 +195,7 @@ agentic = [
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "openai", specifier = ">=1.6.0" },
     { name = "pandas", specifier = ">=2.0.0" },
-    { name = "pymupdf", specifier = ">=1.24.0" },
+    { name = "pymupdf", specifier = ">=1.26.0" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
 dev = [
@@ -216,7 +216,7 @@ mcp = [
     { name = "langchain-text-splitters", specifier = ">=0.3.0" },
     { name = "mcp", specifier = ">=2.0,<3.0" },
     { name = "openai", specifier = ">=1.6.0" },
-    { name = "pymupdf", specifier = ">=1.24.0" },
+    { name = "pymupdf", specifier = ">=1.26.0" },
 ]
 mlflow = [{ name = "mlflow-skinny", specifier = ">=3.15,<4" }]
 zarr = [{ name = "zarr", marker = "python_full_version >= '3.11'", specifier = ">=3.0.8,<3.2" }]

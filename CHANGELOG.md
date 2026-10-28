@@ -5,6 +5,8 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ## [Unreleased]
 
+## [2026.10.1] - 2026-10-28
+
 ### Changed (breaking)
 
 - **FAIR metadata assessment: DCAT-US 1.1 and DataCite scores change.** Both
