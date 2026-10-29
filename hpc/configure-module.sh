@@ -3,7 +3,7 @@
 #
 #   configure-module.sh SITE VERSION IMAGE ROOT
 #
-#   SITE     perlmutter (Shifter) or expanse (Singularity; experimental, not yet tested on Expanse)
+#   SITE     perlmutter (Shifter) or expanse (Singularity; in testing on Expanse)
 #   VERSION  module version, e.g. 2026.10.1, or 2026.10.1-mcp to also expose aidrin-mcp
 #   IMAGE    perlmutter: the Shifter image, e.g. docker:aidrin/aidrin:v2026.10.1
 #            expanse:    absolute path to the .sif
@@ -32,7 +32,7 @@ case $site in
         [ -f "$image" ] || { echo "error: $image not found" >&2; exit 1; }
         run="singularity exec --bind /expanse $(printf %q "$image")"
         load='load("singularitypro")'
-        echo "note: expanse support is experimental and not yet tested on Expanse itself" >&2
+        echo "note: expanse support is in testing; report problems at https://github.com/idtlab/AIDRIN/issues" >&2
         ;;
     *)
         echo "error: unknown site '$site' (perlmutter or expanse)" >&2

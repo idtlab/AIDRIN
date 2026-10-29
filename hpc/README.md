@@ -1,7 +1,7 @@
 # AIDRIN as an HPC module
 
-The `aidrin` CLI as `module load aidrin` on NERSC Perlmutter (Shifter), with experimental
-support for SDSC Expanse (Singularity). The module is a one-line wrapper around the public `cli` image
+The `aidrin` CLI as `module load aidrin` on NERSC Perlmutter (Shifter), with SDSC Expanse
+(Singularity) support in testing. The module is a one-line wrapper around the public `cli` image
 (`aidrin/aidrin` on Docker Hub), built from `docker/NERSC/Dockerfile`. Nothing is installed
 into a Python environment, and each user configures the module for themselves.
 
@@ -17,19 +17,35 @@ module use ~/aidrin-modules/modulefiles    # add this line to ~/.bashrc
 module load aidrin
 ```
 
-### Expanse (experimental)
+### Expanse (in testing)
 
-Not yet tested on Expanse itself, only against a local Apptainer + Lmod setup. The user docs
-cover NERSC only until it is.
+Tested so far only against a local Apptainer + Lmod setup; SDSC is testing it on Expanse. Build
+the image in an interactive job, not on a login node:
 
 ```bash
+srun --account=<account> --partition=debug --nodes=1 --ntasks-per-node=4 --mem=16G \
+    -t 00:30:00 --pty /bin/bash
 module load singularitypro
+export SINGULARITY_CACHEDIR=/scratch/$USER/job_$SLURM_JOB_ID
 singularity pull ~/aidrin-2026.10.1.sif docker://aidrin/aidrin:v2026.10.1
 curl -sL https://raw.githubusercontent.com/idtlab/AIDRIN/develop/hpc/configure-module.sh \
     | bash -s expanse 2026.10.1 ~/aidrin-2026.10.1.sif ~/aidrin-modules
 module use ~/aidrin-modules/modulefiles    # add this line to ~/.bashrc
 module load aidrin
 ```
+
+#### Testing checklist for Expanse
+
+1. Run the commands above. Note any step that fails, for example `module load singularitypro`
+   not being found (then `module spider singularitypro`) or the `singularity pull`.
+2. With the module loaded, from a directory on Lustre (for example
+   `/expanse/lustre/scratch/$USER/temp_project`), run
+   `curl -sLO https://raw.githubusercontent.com/idtlab/AIDRIN/develop/hpc/smoke-test.sh && bash smoke-test.sh`
+   on a login node and inside an `srun` session. It prints `PASS`/`FAIL` per check.
+3. Optional: repeat with the `-mcp` image (`v2026.10.1-mcp`, module version `2026.10.1-mcp`),
+   which adds an `aidrin-mcp` check.
+4. Report the full output of steps 1 and 2, plus `module list`, `singularity --version` and
+   `time aidrin list`, in the GitHub issue or PR.
 
 For a new release, run the same commands with the new version. Older versions stay available
 until you delete their `~/aidrin-modules/aidrin/<ver>` and `modulefiles/aidrin/<ver>.lua`.
