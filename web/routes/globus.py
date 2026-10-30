@@ -34,6 +34,12 @@ logger = logging.getLogger(__name__)
 globus_bp = Blueprint("globus", __name__, url_prefix="/globus")
 
 NEGOTIATION_TTL_SECONDS = 300
+DEFAULT_ENDPOINT_PROBE_TIMEOUT = 30.0
+FILE_REFERENCE_CAPABILITY = "file_reference_validation_v1"
+FILE_REFERENCE_UPGRADE_MESSAGE = (
+    "File-reference validation is unavailable on this endpoint. Upgrade AIDRIN "
+    "in every Globus Compute worker environment and restart the endpoint."
+)
 
 
 def _globus_summary_cache_key(endpoint_id, file_path, selected_keys):
@@ -50,12 +56,6 @@ def _resolve_globus_selected_keys(data, params, file_type):
     if not keys and file_type == ".h5":
         keys = normalize_selected_keys(session.get("globus_selected_keys"))
     return keys
-DEFAULT_ENDPOINT_PROBE_TIMEOUT = 30.0
-FILE_REFERENCE_CAPABILITY = "file_reference_validation_v1"
-FILE_REFERENCE_UPGRADE_MESSAGE = (
-    "File-reference validation is unavailable on this endpoint. Upgrade AIDRIN "
-    "in every Globus Compute worker environment and restart the endpoint."
-)
 
 
 def _negotiation_fingerprint(record):

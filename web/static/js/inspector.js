@@ -2709,7 +2709,13 @@ function loadGlobusDataset() {
       }
       // Step 2: endpoint is compatible — proceed to load the dataset.
       if (fileType === ".h5" && _globusSelectedKeysList().length === 0) {
-        _globusPrepareHdf5Load(endpointId, filePath, fileName, fileType, loadBtn);
+        _globusPrepareHdf5Load(
+          endpointId,
+          filePath,
+          fileName,
+          fileType,
+          loadBtn,
+        );
         return;
       }
       if (loadBtn) _globusBtnLoading(loadBtn, "Connecting...");
@@ -2722,7 +2728,13 @@ function loadGlobusDataset() {
     });
 }
 
-function _globusPrepareHdf5Load(endpointId, filePath, fileName, fileType, loadBtn) {
+function _globusPrepareHdf5Load(
+  endpointId,
+  filePath,
+  fileName,
+  fileType,
+  loadBtn,
+) {
   if (loadBtn) _globusBtnLoading(loadBtn, "Reading HDF5 inventory...");
   _globusRunRemoteMetric(
     endpointId,
@@ -2734,7 +2746,9 @@ function _globusPrepareHdf5Load(endpointId, filePath, fileName, fileType, loadBt
   )
     .then((inv) => {
       if (!inv?.success) {
-        throw new Error(inv?.error || "Failed to read HDF5 inventory on endpoint");
+        throw new Error(
+          inv?.error || "Failed to read HDF5 inventory on endpoint",
+        );
       }
       if (inv.type === "multi_dataset" && inv.datasets?.length) {
         _reEnableGlobusForm();
@@ -2757,7 +2771,10 @@ function _globusPrepareHdf5Load(endpointId, filePath, fileName, fileType, loadBt
           });
         }
         if (typeof showToast === "function") {
-          showToast("Select HDF5 datasets, then click Load selected datasets", "info");
+          showToast(
+            "Select HDF5 datasets, then click Load selected datasets",
+            "info",
+          );
         }
         return;
       }
