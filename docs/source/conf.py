@@ -58,3 +58,23 @@ linkcheck_ignore = [
 html_logo = "_static/logo.png"
 html_static_path = ['_static']
 html_css_files = ['css/aidrin.css']
+
+# -- Version placeholders -----------------------------------------------------
+# ``|release|`` and friends are not expanded inside ``code-block`` directives,
+# which is where version numbers tend to live (image tags, CLI examples). This
+# does a plain text substitution on the raw source before it's parsed, so it
+# works everywhere, code blocks included.
+
+_version_placeholders = {
+    "|AIDRIN_VERSION|": release,
+    "|AIDRIN_VERSION_TAG|": f"v{release}",
+}
+
+
+def _replace_version_placeholders(app, docname, source):
+    for placeholder, value in _version_placeholders.items():
+        source[0] = source[0].replace(placeholder, value)
+
+
+def setup(app):
+    app.connect("source-read", _replace_version_placeholders)

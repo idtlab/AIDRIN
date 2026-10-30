@@ -13,6 +13,7 @@ import pytest
 pytest.importorskip("mcp")
 
 from aidrin.mcp.server import (  # noqa: E402
+    check_fair_compliance,
     run_aidrin_metric,
     run_custom_metric,
     run_custom_outlier_check,
@@ -50,6 +51,23 @@ def _remove(path: str) -> None:
         os.unlink(path)
     except OSError:
         pass
+
+
+def test_fair_compliance_tool_scores_a_metadata_file():
+    path = Path(__file__).resolve().parents[2] / "examples" / "sample_data" / "dcat" / "BUTTER-E.json"
+    payload = json.loads(check_fair_compliance(str(path), "dcat-us-1.1"))
+    assert payload["FAIR Compliance Checks"]["Total Checks"] == "20/26"
+    assert "Pie chart" not in payload
+
+
+def test_fair_compliance_tool_returns_errors_as_json(tmp_path):
+    assert "File not found" in json.loads(check_fair_compliance(str(tmp_path / "none.json"), "datacite"))["error"]
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json")
+    assert "error" in json.loads(check_fair_compliance(str(bad), "datacite"))
+    empty = tmp_path / "empty.json"
+    empty.write_text("{}")
+    assert "Unknown metadata type" in json.loads(check_fair_compliance(str(empty), "iso19115"))["error"]
 
 
 def test_dedicated_mcp_tool_accepts_rules_file():
@@ -160,6 +178,22 @@ def test_run_custom_metric_accepts_non_csv_format(tmp_path):
     parquet_path = _write_parquet(str(tmp_path))
     result = json.loads(run_custom_metric(script_path, parquet_path, file_type="parquet"))
     assert result["row_count"] == 3
+
+
+def test_mcp_tools_read_custom_formats_with_a_loader(tmp_path):
+    from aidrin.mcp.server import run_data_quality_check, summarize_dataset
+
+    data = tmp_path / "data.weird"
+    data.write_text("a|b\n1|x\n2|\n3|z\n", encoding="utf-8")
+    script = tmp_path / "pipe_loader.py"
+    script.write_text("import pandas as pd\ndef load(path, **kwargs):\n    return pd.read_csv(path, sep='|')\n", encoding="utf-8")
+    loader = f"{script}:load"
+
+    assert json.loads(summarize_dataset(str(data), loader=loader))["shape"] == {"rows": 3, "columns": 2}
+    quality = json.loads(run_data_quality_check(str(data), loader=loader))
+    assert quality["completeness"]["Completeness scores"]["b"] == pytest.approx(2 / 3)
+    metric = json.loads(run_aidrin_metric(str(data), "completeness", loader=loader))
+    assert metric["Completeness scores"]["a"] == 1.0
 
 
 def test_run_custom_remedy_saves_csv_for_non_csv_input(tmp_path):
@@ -378,3 +412,38 @@ class TestMcpRemoteRouting(unittest.TestCase):
 
         out = server.list_remote_profiles()
         self.assertIn("profiles", json.loads(out))
+
+
+# ---------------------------------------------------------------------------
+# Agentic tools: ImportError diagnosis
+# ---------------------------------------------------------------------------
+
+
+def test_agentic_midrun_import_error_is_not_misdiagnosed(tmp_path):
+    """
+    Regression test (mirror of the CLI test in test_agentic.py): an
+    ImportError raised *during* a real pipeline run (e.g. the user's own
+    data_loader.py imports a package that isn't installed) must surface as
+    that real error, not be swallowed and reported as "Agentic dependencies
+    not installed" -- which would hide the real traceback and discard
+    already-completed (paid-for) LLM work.
+    """
+    pytest.importorskip("langchain_openai")
+    from aidrin.mcp import server
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("paths: {}\n", encoding="utf-8")
+
+    with patch.object(
+        server, "run_agentic_pipeline",
+        side_effect=ImportError("No module named 'some_definitely_missing_package_xyz'"),
+    ):
+        with pytest.raises(ImportError, match="some_definitely_missing_package_xyz"):
+            server.agentic_run(str(cfg))
+
+    with patch.object(
+        server, "run_agentic_index",
+        side_effect=ImportError("No module named 'some_definitely_missing_package_xyz'"),
+    ):
+        with pytest.raises(ImportError, match="some_definitely_missing_package_xyz"):
+            server.agentic_build_index(str(cfg))

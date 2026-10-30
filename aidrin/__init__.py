@@ -214,6 +214,8 @@ def calculate_custom_outliers(
         ``(file_path, file_name, file_type)``.
     rules : list of dict
         Custom criteria rules with required stable ``id`` values.
+        Tabular ``compare`` leaves use ``operator`` and ``other_target`` to
+        compare finite numbers at the same row position in two columns.
     max_outliers : int, optional
         Maximum detailed preview records to keep per rule.
     scan_limit : int, optional
@@ -591,6 +593,25 @@ def calculate_variable_unit_validation(file_info, unit_metadata=None):
     return _calculate(file_info, unit_metadata)
 
 
+def calculate_fair_compliance(metadata, standard="auto"):
+    """Score a metadata file against the FAIR principles.
+
+    ``metadata`` is the path to a JSON or JSON-LD metadata file, or the parsed
+    dict. ``standard`` is ``"auto"`` (detect it), ``"croissant"``,
+    ``"rocrate"``, ``"dcat-us-3.0"``, ``"dcat-us-1.1"`` or ``"datacite"``. Only the metadata is read; no dataset
+    is needed.
+    """
+    import json
+
+    from aidrin.structured_data_metrics.fair_metadata import (
+        calculate_fair_compliance as _calculate,
+    )
+    if not isinstance(metadata, dict):
+        with open(metadata, encoding="utf-8") as f:
+            metadata = json.load(f)
+    return _calculate(metadata, standard)
+
+
 __all__ = [
     "__version__",
     # Data Quality
@@ -620,4 +641,6 @@ __all__ = [
     "calculate_skewness",
     "calculate_kurtosis",
     "calculate_variable_unit_validation",
+    # Understandability and Usability
+    "calculate_fair_compliance",
 ]
