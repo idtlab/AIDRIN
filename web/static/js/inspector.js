@@ -2325,6 +2325,93 @@ function switchUploadTab(tab) {
   }
 }
 
+function _globusSelectedKeysList(override) {
+  const keys = override ?? window.AIDRIN_GLOBUS_SELECTED_KEYS ?? [];
+  return Array.isArray(keys) ? keys.filter((k) => k) : [];
+}
+
+function _globusSubmitPayload(
+  endpointId,
+  filePath,
+  fileName,
+  fileType,
+  metricName,
+  params,
+  selectedKeys,
+) {
+  const keys = _globusSelectedKeysList(selectedKeys);
+  const payload = {
+    endpoint_id: endpointId,
+    file_path: filePath,
+    file_name: fileName,
+    file_type: fileType,
+    metric_name: metricName,
+    params: { ...(params || {}) },
+  };
+  if (keys.length) {
+    payload.selected_keys = keys;
+    payload.params.selected_keys = keys;
+  }
+  return payload;
+}
+
+function _globusPollTaskResult(taskId) {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    const maxAttempts = 120;
+    const poll = () => {
+      fetch(`/globus/check-task/${taskId}`)
+        .then((r) => r.json())
+        .then((response) => {
+          if (response.status === "completed" && response.result) {
+            resolve(response.result);
+          } else if (response.status === "failed") {
+            reject(new Error(response.error || "Remote task failed"));
+          } else if (attempts++ < maxAttempts) {
+            setTimeout(poll, 2000);
+          } else {
+            reject(new Error("Timed out waiting for the remote endpoint"));
+          }
+        })
+        .catch(reject);
+    };
+    setTimeout(poll, 500);
+  });
+}
+
+function _globusRunRemoteMetric(
+  endpointId,
+  filePath,
+  fileName,
+  fileType,
+  metricName,
+  params,
+  selectedKeys,
+) {
+  return fetch("/globus/submit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      _globusSubmitPayload(
+        endpointId,
+        filePath,
+        fileName,
+        fileType,
+        metricName,
+        params,
+        selectedKeys,
+      ),
+    ),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.error) throw new Error(data.error);
+      if (data.status === "completed" && data.result) return data.result;
+      if (data.task_id) return _globusPollTaskResult(data.task_id);
+      return data;
+    });
+}
+
 /** Fetch summary statistics via Globus Compute and render in data overview. */
 function fetchGlobusSummary() {
   const endpointId = window.AIDRIN_GLOBUS_ENDPOINT;
@@ -2339,14 +2426,16 @@ function fetchGlobusSummary() {
   fetch("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint_id: endpointId,
-      file_path: filePath,
-      file_name: fileName,
-      file_type: fileType,
-      metric_name: "summary_statistics",
-      params: {},
-    }),
+    body: JSON.stringify(
+      _globusSubmitPayload(
+        endpointId,
+        filePath,
+        fileName,
+        fileType,
+        "summary_statistics",
+        {},
+      ),
+    ),
   })
     .then((r) => r.json())
     .then((data) => {
@@ -2380,8 +2469,16 @@ function fetchGlobusSummary() {
 /** Render Globus summary data (used by both cached and polled paths). */
 function renderGlobusSummary(data) {
   const loading = document.getElementById("globus-summary-loading");
-  const content = document.getElementById("globus-summary-content");
+  const content =
+    document.getElementById("globus-summary-content") ||
+    document.getElementById("workspace-summary");
   if (loading) loading.style.display = "none";
+
+  if (data.needs_dataset_selection && data.datasets?.length && content) {
+    renderHdf5DatasetPicker(content, data);
+    _unlockGlobusSidebar();
+    return;
+  }
 
   if (data.error) {
     if (content)
@@ -2391,7 +2488,22 @@ function renderGlobusSummary(data) {
   }
 
   if (content) {
-    let html = `
+    let html = "";
+    if (data.hdf5_multi_dataset) {
+      const keys = (data.selected_dataset_keys || []).join(", ");
+      const keysDisplay = keys.length > 80 ? `${keys.slice(0, 77)}...` : keys;
+      html += `
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          HDF5 datasets:
+          <span class="font-mono text-xs text-gray-800 dark:text-gray-200" title="${escapeHtml(keys)}">${escapeHtml(keysDisplay || "selected")}</span>
+        </p>
+        <button type="button" onclick="returnToHdf5DatasetPicker()" class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+          Change dataset selection
+        </button>
+      </div>`;
+    }
+    html += `
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
           <div class="text-3xl font-bold text-gray-900 dark:text-white">${(data.records_count || 0).toLocaleString()}</div>
@@ -2596,6 +2708,16 @@ function loadGlobusDataset() {
         return;
       }
       // Step 2: endpoint is compatible — proceed to load the dataset.
+      if (fileType === ".h5" && _globusSelectedKeysList().length === 0) {
+        _globusPrepareHdf5Load(
+          endpointId,
+          filePath,
+          fileName,
+          fileType,
+          loadBtn,
+        );
+        return;
+      }
       if (loadBtn) _globusBtnLoading(loadBtn, "Connecting...");
       _submitGlobusDataset(endpointId, filePath, fileName, fileType);
     })
@@ -2606,22 +2728,93 @@ function loadGlobusDataset() {
     });
 }
 
+function _globusPrepareHdf5Load(
+  endpointId,
+  filePath,
+  fileName,
+  fileType,
+  loadBtn,
+) {
+  if (loadBtn) _globusBtnLoading(loadBtn, "Reading HDF5 inventory...");
+  _globusRunRemoteMetric(
+    endpointId,
+    filePath,
+    fileName,
+    fileType,
+    "file_inventory",
+    {},
+  )
+    .then((inv) => {
+      if (!inv?.success) {
+        throw new Error(
+          inv?.error || "Failed to read HDF5 inventory on endpoint",
+        );
+      }
+      if (inv.type === "multi_dataset" && inv.datasets?.length) {
+        _reEnableGlobusForm();
+        window._globusPendingConnect = {
+          endpointId,
+          filePath,
+          fileName,
+          fileType,
+        };
+        const picker = document.getElementById("globus-hdf5-picker");
+        if (picker) {
+          picker.classList.remove("hidden");
+          renderHdf5DatasetPicker(picker, {
+            needs_dataset_selection: true,
+            datasets: inv.datasets,
+            groups: inv.groups || [],
+            current_checked_keys: [],
+            message:
+              "This remote HDF5 file contains multiple datasets. Select compatible datasets to analyze.",
+          });
+        }
+        if (typeof showToast === "function") {
+          showToast(
+            "Select HDF5 datasets, then click Load selected datasets",
+            "info",
+          );
+        }
+        return;
+      }
+      if (loadBtn) _globusBtnLoading(loadBtn, "Connecting...");
+      _submitGlobusDataset(endpointId, filePath, fileName, fileType);
+    })
+    .catch((err) => {
+      _reEnableGlobusForm();
+      if (typeof showToast === "function") showToast(err.message, "error");
+    });
+}
+
 // Submit the initial metric once the endpoint has been verified compatible.
-function _submitGlobusDataset(endpointId, filePath, fileName, fileType) {
+function _submitGlobusDataset(
+  endpointId,
+  filePath,
+  fileName,
+  fileType,
+  selectedKeys,
+) {
   if (typeof showToast === "function")
     showToast("Connecting to remote endpoint...", "info");
+
+  const keys = _globusSelectedKeysList(selectedKeys);
+  if (keys.length) window.AIDRIN_GLOBUS_SELECTED_KEYS = keys;
 
   fetch("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint_id: endpointId,
-      file_path: filePath,
-      file_name: fileName,
-      file_type: fileType,
-      metric_name: "completeness",
-      params: {},
-    }),
+    body: JSON.stringify(
+      _globusSubmitPayload(
+        endpointId,
+        filePath,
+        fileName,
+        fileType,
+        "completeness",
+        {},
+        keys,
+      ),
+    ),
   })
     .then((r) => r.json())
     .then((data) => {
@@ -2786,14 +2979,16 @@ function submitGlobusMetric(metricName, params, displayName) {
   fetch("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint_id: endpointId,
-      file_path: filePath,
-      file_name: fileName,
-      file_type: fileType,
-      metric_name: metricName,
-      params: params || {},
-    }),
+    body: JSON.stringify(
+      _globusSubmitPayload(
+        endpointId,
+        filePath,
+        fileName,
+        fileType,
+        metricName,
+        params,
+      ),
+    ),
   })
     .then((r) => r.json())
     .then((data) => {
@@ -2958,14 +3153,16 @@ function loadGlobusTargetDiscovery() {
   entry.promise = fetch("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint_id: endpointId,
-      file_path: filePath,
-      file_name: fileName,
-      file_type: fileType,
-      metric_name: "custom_outlier_targets",
-      params: {},
-    }),
+    body: JSON.stringify(
+      _globusSubmitPayload(
+        endpointId,
+        filePath,
+        fileName,
+        fileType,
+        "custom_outlier_targets",
+        {},
+      ),
+    ),
   })
     .then((response) =>
       response.json().then((data) => ({ ok: response.ok, data })),
@@ -5721,6 +5918,67 @@ function renderHdf5DatasetPicker(container, data) {
 }
 
 function selectHdf5Datasets(paths) {
+  if (window._globusPendingConnect) {
+    const pending = window._globusPendingConnect;
+    window._globusPendingConnect = null;
+    const picker = document.getElementById("globus-hdf5-picker");
+    if (picker) picker.classList.add("hidden");
+    const loadBtn = document.querySelector(
+      '#globusForm button[onclick*="loadGlobusDataset"]',
+    );
+    if (loadBtn) {
+      loadBtn.disabled = true;
+      loadBtn.classList.add("opacity-50", "cursor-not-allowed");
+    }
+    _submitGlobusDataset(
+      pending.endpointId,
+      pending.filePath,
+      pending.fileName,
+      pending.fileType,
+      paths,
+    );
+    return;
+  }
+
+  if (window.AIDRIN_GLOBUS_MODE) {
+    const container = document.getElementById("workspace-summary");
+    if (container) {
+      container.innerHTML = `
+      <div role="status" class="inline-block">
+        <svg class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+      </div>
+      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading selected remote dataset(s)...</p>`;
+    }
+    fetch("/globus/filter-datasets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys: paths }),
+    })
+      .then((r) => r.json())
+      .then((resp) => {
+        if (resp.success) {
+          window.AIDRIN_GLOBUS_SELECTED_KEYS = paths;
+          window.AIDRIN_INTENT_ASKED = false;
+          clearGlobusDiscoveryCache();
+          fetchGlobusSummary();
+        } else if (container) {
+          const p = document.createElement("p");
+          p.className = "text-sm text-red-600 dark:text-red-400";
+          p.textContent = resp.error || "Failed to select remote dataset(s).";
+          container.replaceChildren(p);
+        }
+      })
+      .catch((err) => {
+        if (container) {
+          const p = document.createElement("p");
+          p.className = "text-sm text-red-600 dark:text-red-400";
+          p.textContent = "Error: " + err.message;
+          container.replaceChildren(p);
+        }
+      });
+    return;
+  }
+
   const container = document.getElementById("workspace-summary");
   if (container) {
     container.innerHTML = `
@@ -5779,6 +6037,31 @@ function returnToHdf5DatasetPicker() {
   const container = document.getElementById("workspace-summary");
   const hist = document.getElementById("workspace-histograms");
   if (hist) hist.innerHTML = "";
+  if (window.AIDRIN_GLOBUS_MODE) {
+    clearWorkspaceFeatureDropdowns();
+    if (container) {
+      container.innerHTML = `
+      <div role="status" class="inline-block">
+        <svg class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+      </div>
+      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Returning to dataset selection...</p>`;
+    }
+    fetch("/globus/clear-dataset-selection", { method: "POST" })
+      .then(() => {
+        window.AIDRIN_GLOBUS_SELECTED_KEYS = [];
+        clearGlobusDiscoveryCache();
+        fetchGlobusSummary();
+      })
+      .catch((err) => {
+        if (container) {
+          const p = document.createElement("p");
+          p.className = "text-sm text-red-600 dark:text-red-400";
+          p.textContent = "Error: " + err.message;
+          container.replaceChildren(p);
+        }
+      });
+    return;
+  }
   if (container) {
     container.innerHTML = `
       <div role="status" class="inline-block">
