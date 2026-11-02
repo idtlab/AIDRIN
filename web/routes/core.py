@@ -247,9 +247,7 @@ def inspector():
             globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],
             current_checked_keys=(
-                globus_selected_keys
-                if globus_mode
-                else (current_checked_keys if current_checked_keys is not None else [])
+                current_checked_keys if current_checked_keys is not None else []
             ),
             globus_available=globus_available,
             globus_authenticated=globus_authenticated,

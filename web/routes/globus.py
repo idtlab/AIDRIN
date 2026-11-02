@@ -48,12 +48,17 @@ def _globus_summary_cache_key(endpoint_id, file_path, selected_keys):
     return f"globus_summary:{endpoint_id}:{file_path}:{suffix}"
 
 
-def _resolve_globus_selected_keys(data, params, file_type):
-    """Merge selected HDF5 keys from the request body, params, and session."""
+def _resolve_globus_selected_keys(data, params, file_type, allow_session=True):
+    """Merge selected HDF5 keys from the request body, params, and session.
+
+    ``allow_session`` is False when the request names a different file than the
+    session holds: the stored keys belong to the previous file, so they must not
+    be carried over to this one.
+    """
     keys = normalize_selected_keys(data.get("selected_keys"))
     if not keys:
         keys = normalize_selected_keys(params.get("selected_keys"))
-    if not keys and file_type == ".h5":
+    if not keys and allow_session and file_type == ".h5":
         keys = normalize_selected_keys(session.get("globus_selected_keys"))
     return keys
 
@@ -446,21 +451,19 @@ def submit():
     if not isinstance(params, dict):
         return jsonify({"error": "params must be a JSON object"}), 400
 
+    # Resolve the selection now (the cache key and params need it), but do not
+    # touch the session until the submission is accepted: a 409 from the
+    # negotiation below must not destroy a working selection for the file the
+    # session still points at.
     file_identity_changed = (
         session.get("globus_file_name") != file_name
         or session.get("globus_file_path") != file_path
     )
-    if file_identity_changed:
-        session.pop("intent", None)
-        if not normalize_selected_keys(data.get("selected_keys")) and not normalize_selected_keys(
-            params.get("selected_keys")
-        ):
-            session.pop("globus_selected_keys", None)
-
-    selected_keys = _resolve_globus_selected_keys(data, params, file_type)
+    selected_keys = _resolve_globus_selected_keys(
+        data, params, file_type, allow_session=not file_identity_changed
+    )
     if selected_keys:
         params["selected_keys"] = selected_keys
-        session["globus_selected_keys"] = selected_keys
 
     task_id = None
     try:
@@ -493,10 +496,20 @@ def submit():
         if requires_file_reference and any(key in params for key in ("allowed_roots", "scan_limit")):
             return jsonify({"error": "Filesystem roots and scan limits are controlled by the Compute worker."}), 400
 
-        session["globus_endpoint_id"] = endpoint_id
-        session["globus_file_path"] = file_path
-        session["globus_file_name"] = file_name
-        session["globus_file_type"] = file_type
+        # file_inventory only reads a candidate file's dataset list, so it must
+        # not make the inspector claim that file is the loaded one on reload.
+        if metric_name != "file_inventory":
+            if file_identity_changed:
+                session.pop("intent", None)
+                if not selected_keys:
+                    session.pop("globus_selected_keys", None)
+            if selected_keys:
+                session["globus_selected_keys"] = selected_keys
+
+            session["globus_endpoint_id"] = endpoint_id
+            session["globus_file_path"] = file_path
+            session["globus_file_name"] = file_name
+            session["globus_file_type"] = file_type
 
         task_id = submit_metric(
             client, endpoint_id, metric_name,
@@ -559,7 +572,12 @@ def cache_summary():
     if not endpoint_id or not file_path:
         return jsonify({"error": "No Globus file in session"}), 400
 
-    selected_keys = normalize_selected_keys(session.get("globus_selected_keys"))
+    # The task reports the keys it ran with. Re-reading the session here would
+    # file an in-flight result under a selection the user has since changed to.
+    if "selected_dataset_keys" in data:
+        selected_keys = normalize_selected_keys(data.get("selected_dataset_keys"))
+    else:
+        selected_keys = normalize_selected_keys(session.get("globus_selected_keys"))
     cache_key = _globus_summary_cache_key(endpoint_id, file_path, selected_keys)
     current_app.TEMP_RESULTS_CACHE[cache_key] = {
         "data": data,

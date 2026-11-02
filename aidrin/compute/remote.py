@@ -20,9 +20,33 @@ def normalize_selected_keys(value):
     if isinstance(value, str):
         return [key.strip() for key in value.split(",") if key.strip()]
     if isinstance(value, (list, tuple)):
-        return [str(key).strip() for key in value if str(key).strip()]
+        return [str(key).strip() for key in value if key and str(key).strip()]
     text = str(value).strip()
     return [text] if text else []
+
+
+def _hdf5_selection_error(file_path, file_type, selected_keys):
+    """Return why a remote HDF5 selection is unusable, or ``None`` if it is fine.
+
+    The reader owns what a usable selection is (``validate_selection``), and the
+    web server cannot run it: the file only exists on the endpoint. Without this
+    the reader refuses the read much later with its generic "needs an explicit
+    dataset selection" text, which reports an invalid selection as a missing one.
+    """
+    import logging
+
+    from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
+
+    normalized = (file_type or "").strip().lower()
+    if normalized == ".hdf5":
+        normalized = ".h5"
+    if normalized != ".h5" or not selected_keys:
+        return None
+    try:
+        reader = hdf5Reader(file_path, logging.getLogger(__name__))
+        return reader.validate_selection(selected_keys)
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
 
 
 def build_remote_file_info(file_path, file_name, file_type, selected_keys=None):
@@ -254,7 +278,12 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
         if normalized_type == ".hdf5":
             normalized_type = ".h5"
         if normalized_type == ".h5":
-            inv = hdf5Reader(file_path, logging.getLogger(__name__)).inventory()
+            try:
+                inv = hdf5Reader(file_path, logging.getLogger(__name__)).inventory()
+            except Exception:
+                # Unreadable/missing file: let _read_file below report it, so the
+                # message stays "File not found: ..." rather than h5py internals.
+                inv = {}
             if inv.get("type") == "multi_dataset" and not selected_keys:
                 return {
                     "success": False,
@@ -470,6 +499,13 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     fn = dispatch.get(metric_name)
     if fn is None:
         return {"error": f"Unknown metric: {metric_name}"}
+
+    # file_inventory is how the picker learns the dataset list, so it must not
+    # be gated on having made a selection yet.
+    if metric_name != "file_inventory":
+        selection_error = _hdf5_selection_error(file_path, file_type, selected_keys)
+        if selection_error:
+            return {"error": selection_error}
 
     try:
         result = fn()
