@@ -593,8 +593,8 @@ see :ref:`python_api`.
 
 .. _agentic_integration:
 
-Agentic Evaluation
-------------------
+Agentic Evaluation (ADROIT: Agentic Data Readiness via Orchestrated Intelligent Toolkit)
+-------------------------------------------------------------------------------------------
 
 The **agentic evaluation** component extends the AIDRIN CLI with a question-answering layer for
 domain-aware data readiness assessment. Where the ``aidrin`` CLI runs quantitative, metric-driven
