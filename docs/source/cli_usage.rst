@@ -929,3 +929,9 @@ Step 5: Build the index and run
 
    aidrin agentic build-index -c ~/my_project/config.yaml
    aidrin agentic run -c ~/my_project/config.yaml -o ~/my_project/results.json
+
+Grouped time-series auditing
+----------------------------
+
+See :ref:`grouped_time_series` for numeric elapsed-time and datetime examples,
+sequence parameters, output fields, and scope.

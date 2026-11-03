@@ -44,6 +44,7 @@ from aidrin.structured_data_metrics.row_level_completeness import row_level_comp
 from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
 from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
+from aidrin.structured_data_metrics.grouped_time_series import grouped_time_series
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
 from aidrin.structured_data_metrics.kurtosis import kurtosis
@@ -155,7 +156,7 @@ def data_quality():
         selected = [
             m for m in (
                 "completeness", "row level completeness", "feature coverage ratio",
-                "temporal completeness", "null count trend",
+                "temporal completeness", "null count trend", "grouped time series",
                 "outliers", "duplicity", "duplicate detection by features",
                 "custom_outliers",
             ) if request.form.get(m) == "yes"
@@ -224,6 +225,22 @@ def data_quality():
                         metric_time_log.info(
                             "Feature Coverage Ratio took %.2f seconds", time.time() - t0
                         )
+
+                if "grouped time series" in selected:
+                    try:
+                        final_dict["Grouped Time Series"] = grouped_time_series(
+                            file_info,
+                            request.form.getlist("group columns for grouped time series"),
+                            request.form.get("timestamp column for grouped time series"),
+                            request.form.get("cadence for grouped time series"),
+                            request.form.get("time kind for grouped time series", "numeric"),
+                            request.form.get("tolerance for grouped time series") or 0.0,
+                            request.form.get("max findings for grouped time series") or 100,
+                            request.form.get("expected count for grouped time series") or None,
+                            request.form.get("expected duration for grouped time series") or None,
+                        )
+                    except ValueError as exc:
+                        final_dict["Grouped Time Series"] = {"Error": str(exc)}
 
                 if "temporal completeness" in selected:
                     timestamp_column = request.form.get("timestamp column for temporal completeness")

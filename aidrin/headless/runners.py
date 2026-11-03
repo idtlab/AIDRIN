@@ -30,6 +30,7 @@ from aidrin.structured_data_metrics.row_level_completeness import row_level_comp
 from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
 from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
+from aidrin.structured_data_metrics.grouped_time_series import grouped_time_series
 from aidrin.structured_data_metrics.variable_unit_validation import variable_unit_validation
 from aidrin.structured_data_metrics.privacy_measure import (
     compute_entropy_risk,
@@ -531,3 +532,10 @@ def run_differential_privacy(
         )
     except Exception as exc:
         return _dp_error_payload(str(exc))
+
+
+def run_grouped_time_series(file_path, file_type, file_name, group_columns, timestamp_column, expected_cadence,
+                            time_kind="numeric", tolerance=0.0, max_findings=100, expected_count=None, expected_duration=None):
+    file_info = _build_file_info(file_path, file_type, file_name)
+    return _call_task(grouped_time_series, file_info, group_columns, timestamp_column, expected_cadence,
+                      time_kind, tolerance, max_findings, expected_count, expected_duration)

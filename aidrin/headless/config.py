@@ -44,6 +44,13 @@ class HeadlessConfig:
     threshold: Optional[float] = None
     frequency: Optional[str] = None
     timestamp_column: Optional[str] = None
+    group_columns: Optional[List[str]] = field(default_factory=list)
+    expected_cadence: Optional[float] = None
+    time_kind: str = "numeric"
+    tolerance: float = 0.0
+    max_findings: int = 100
+    expected_count: Optional[int] = None
+    expected_duration: Optional[float] = None
     batch_column: Optional[str] = None
     target_columns: Optional[List[str]] = field(default_factory=list)
     loader: Optional[str] = None
@@ -114,6 +121,7 @@ class HeadlessConfig:
             "cat_columns",
             "num_columns",
             "required_columns",
+            "group_columns",
             "duplicate_columns",
             "target_columns",
             "selected_keys",

@@ -1170,6 +1170,7 @@ async function workspaceSubmit(targetUrl) {
       duplicity_by_features: "Duplicates by Selected Features",
       feature_coverage_ratio: "Feature Coverage Ratio",
       temporal_completeness: "Temporal Completeness",
+      grouped_time_series: "Grouped Time Series",
       null_count_trend: "Null Count Trend",
       representation_rate: "Representation Rate",
       statistical_rates: "Statistical Rate",
@@ -1221,6 +1222,34 @@ async function workspaceSubmit(targetUrl) {
           gFormData.get("threshold for feature coverage ratio"),
         );
         remoteParams.threshold = isNaN(thr) ? 0.9 : thr;
+      }
+      if (gFormData.get("grouped time series") === "yes") {
+        selected.push("grouped_time_series");
+        selectedNames.push("Grouped Time Series");
+        remoteParams.group_columns = gFormData.getAll(
+          "group columns for grouped time series",
+        );
+        remoteParams.sequence_timestamp_column = gFormData.get(
+          "timestamp column for grouped time series",
+        );
+        remoteParams.expected_cadence = Number(
+          gFormData.get("cadence for grouped time series"),
+        );
+        remoteParams.time_kind =
+          gFormData.get("time kind for grouped time series") || "numeric";
+        remoteParams.tolerance = Number(
+          gFormData.get("tolerance for grouped time series") || 0,
+        );
+        remoteParams.max_findings = Number(
+          gFormData.get("max findings for grouped time series") || 100,
+        );
+        const expectedCount = gFormData.get("expected count for grouped time series");
+        const expectedDuration = gFormData.get(
+          "expected duration for grouped time series",
+        );
+        if (expectedCount) remoteParams.expected_count = Number(expectedCount);
+        if (expectedDuration)
+          remoteParams.expected_duration = Number(expectedDuration);
       }
       if (gFormData.get("temporal completeness") === "yes") {
         selected.push("temporal_completeness");
@@ -2118,6 +2147,21 @@ function renderBeforeAfterTable(before, after) {
   return html;
 }
 
+function renderGroupedTimeSeriesResults(result) {
+  const summary = result.summary || {};
+  let html = `<p class="mb-3 text-sm">${escapeHtml(String(summary.group_count ?? 0))} groups; ${escapeHtml(String(summary.groups_with_findings ?? 0))} with findings; ${escapeHtml(String(summary.unassigned_rows ?? 0))} rows missing group keys.</p>`;
+  html += `<p class="mb-3 text-xs">Row positions start at 0 in the parsed input. Sequences retain input order. Relative times do not establish synchronization.</p>`;
+  if (summary.unassigned_rows) {
+    html += `<p class="mb-3 text-sm">Unassigned row positions: ${escapeHtml(JSON.stringify(result.unassigned_row_positions))}${result.unassigned_rows_truncated ? " (detail capped)" : ""}</p>`;
+  }
+  for (const group of result.groups || []) {
+    html += `<details class="mb-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3"><summary class="cursor-pointer text-sm font-medium">${escapeHtml(JSON.stringify(group.group))}: ${escapeHtml(String(group.row_count))} rows, ${escapeHtml(String(group.valid_time_count))} valid times, span ${escapeHtml(String(group.observed_duration ?? "unknown"))}</summary>`;
+    html += `<p class="mt-2 text-xs">${escapeHtml(JSON.stringify(group.finding_counts))}${group.findings_truncated ? " (detail capped; counts cover all rows)" : ""}</p>`;
+    html += `<pre class="mt-2 text-xs overflow-auto" style="max-height: 300px; white-space: pre-wrap;">${escapeHtml(JSON.stringify(group.findings, null, 2))}</pre></details>`;
+  }
+  return html;
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
@@ -2128,6 +2172,8 @@ function renderBeforeAfterTable(before, after) {
  *   side-by-side comparison table instead of two stacked sections
  */
 function renderScoresSection(scores, depth) {
+  if (scores.format === "aidrin.grouped-time-series")
+    return renderGroupedTimeSeriesResults(scores);
   depth = depth || 0;
   let html = "";
 
@@ -4050,6 +4096,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
     duplicity_by_features: "Duplicates by Selected Features",
     feature_coverage_ratio: "Feature Coverage Ratio",
     temporal_completeness: "Temporal Completeness",
+    grouped_time_series: "Grouped Time Series",
     null_count_trend: "Null Count Trend",
     correlations: "Correlation Analysis",
     feature_relevance: "Feature Relevance",
@@ -8338,6 +8385,12 @@ function populateWorkspaceDropdowns(data) {
     "duplicateFeaturesCheckbox",
     allFeatures,
     "features for duplicate detection",
+  );
+  fillDropdown("groupedTimeSeriesTimeDropdown", allFeatures);
+  fillCheckboxContainer(
+    "groupedTimeSeriesColumnsCheckbox",
+    allFeatures,
+    "group columns for grouped time series",
   );
   fillDropdown("temporalCompletenessColumnDropdown", allFeatures);
   fillDropdown("nullCountTrendBatchDropdown", allFeatures);

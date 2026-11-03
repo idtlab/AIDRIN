@@ -166,6 +166,13 @@ def run_aidrin_metric(
     threshold: float | None = None,
     frequency: str | None = None,
     timestamp_column: str | None = None,
+    group_columns: str | None = None,
+    expected_cadence: float | None = None,
+    time_kind: str = "numeric",
+    tolerance: float = 0.0,
+    max_findings: int = 100,
+    expected_count: int | None = None,
+    expected_duration: float | None = None,
     batch_column: str | None = None,
     target_columns: str | None = None,
     path_targets: str | list[str] | None = None,
@@ -212,7 +219,14 @@ def run_aidrin_metric(
         frequency: Interval frequency for temporal_completeness (default "D").
             One of: min (minute), h (hourly), D (daily), W (weekly),
             ME (month-end), QE (quarter-end), YE (year-end).
-        timestamp_column: Datetime column (temporal_completeness).
+        timestamp_column: Time column (datetime for temporal_completeness).
+        group_columns: Comma-separated sequence keys (grouped_time_series).
+        expected_cadence: Positive interval, numeric input units or datetime seconds.
+        time_kind: numeric elapsed time or datetime, explicitly selected.
+        tolerance: Absolute cadence tolerance, less than half the cadence.
+        max_findings: Per-group detail cap; 0 means unlimited. Counts always cover every row.
+        expected_count: Optional expected rows per group.
+        expected_duration: Optional expected span per group, in cadence units.
         batch_column: Batch/partition column (null_count_trend).
         target_columns: Comma-separated columns to count nulls in (null_count_trend, optional).
         path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
@@ -253,6 +267,13 @@ def run_aidrin_metric(
             ("threshold", threshold),
             ("frequency", frequency),
             ("timestamp_column", timestamp_column),
+            ("group_columns", group_columns),
+            ("expected_cadence", expected_cadence),
+            ("time_kind", time_kind),
+            ("tolerance", tolerance),
+            ("max_findings", max_findings),
+            ("expected_count", expected_count),
+            ("expected_duration", expected_duration),
             ("batch_column", batch_column),
             ("target_columns", target_columns),
             ("path_targets", path_targets),

@@ -48,6 +48,7 @@ from .runners import (
     run_statistical_rates,
     run_t_closeness,
     run_temporal_completeness,
+    run_grouped_time_series,
     run_variable_unit_validation,
 )
 
@@ -118,6 +119,12 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Percentage of features whose non-null rate meets a threshold.",
         "runner": run_feature_coverage_ratio,
         "required_args": ["threshold"],
+    },
+    "grouped_time_series": {
+        "category": "data-quality",
+        "description": "Per-group timestamp ordering, duplicates, cadence gaps, counts and duration in input order.",
+        "runner": run_grouped_time_series,
+        "required_args": ["group-columns", "timestamp-column", "expected-cadence"],
     },
     "temporal_completeness": {
         "category": "data-quality",
@@ -624,7 +631,7 @@ def _maybe_save_images(
 _RESULT_AFFECTING_ARGS = frozenset({
     "epsilon", "threshold", "frequency", "distance_metric", "scan_limit",
     "rules_file", "rules_json", "unit_metadata_file", "unit_metadata_json",
-    "unit_metadata",
+    "unit_metadata", "time_kind", "tolerance", "expected_count", "expected_duration",
 })
 
 
@@ -792,6 +799,15 @@ def _run_registry_metric(
         if threshold is None:
             threshold = 0.9
         result = metric["runner"](file_path, file_type, file_name, float(threshold))
+        return _finalize(result)
+
+    if metric_key == "grouped_time_series":
+        result = metric["runner"](
+            file_path, file_type, file_name,
+            _normalize_list(kwargs.get("group_columns")), kwargs.get("timestamp_column"),
+            kwargs.get("expected_cadence"), kwargs.get("time_kind", "numeric"), kwargs.get("tolerance", 0.0),
+            kwargs.get("max_findings", 100), kwargs.get("expected_count"), kwargs.get("expected_duration"),
+        )
         return _finalize(result)
 
     if metric_key == "temporal_completeness":
@@ -994,6 +1010,13 @@ def run_batch_metrics(
         "threshold": config_obj.threshold,
         "frequency": config_obj.frequency,
         "timestamp_column": config_obj.timestamp_column,
+        "group_columns": config_obj.group_columns,
+        "expected_cadence": config_obj.expected_cadence,
+        "time_kind": config_obj.time_kind,
+        "tolerance": config_obj.tolerance,
+        "max_findings": config_obj.max_findings,
+        "expected_count": config_obj.expected_count,
+        "expected_duration": config_obj.expected_duration,
         "batch_column": config_obj.batch_column,
         "target_columns": config_obj.target_columns,
         "loader": config_obj.loader,

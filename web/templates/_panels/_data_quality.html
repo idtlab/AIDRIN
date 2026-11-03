@@ -7,6 +7,45 @@
       <div id="checkboxContainer_quality" class="checkboxContainer">
         <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
+            <input type="checkbox" name="grouped time series" onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check grouped time series
+            <span class="info-icon">i<span class="info-text">Check each sequence in its original order for duplicate times, reversed intervals and cadence gaps. Relative time does not establish synchronization.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            <div class="text-sm">
+              <p>Group columns (for example station and component):</p>
+              <div id="groupedTimeSeriesColumnsCheckbox" class="w-full"></div>
+            </div>
+            <label class="block text-sm">Time column:
+              <select name="timestamp column for grouped time series" id="groupedTimeSeriesTimeDropdown" required class="w-full"><option value="" disabled selected>Select a feature</option></select>
+            </label>
+            <label class="block text-sm">Time kind:
+              <select name="time kind for grouped time series" class="w-full">
+                <option value="numeric">Numeric elapsed time (cadence in input units)</option>
+                <option value="datetime">Datetime (cadence in seconds)</option>
+              </select>
+            </label>
+            <label class="block text-sm">Expected cadence:
+              <input name="cadence for grouped time series" type="number" min="0" step="any" required class="w-full" />
+            </label>
+            <label class="block text-sm">Absolute tolerance (less than half the cadence):
+              <input name="tolerance for grouped time series" type="number" min="0" step="any" value="0" class="w-full" />
+            </label>
+            <label class="block text-sm">Expected rows per group (optional):
+              <input name="expected count for grouped time series" type="number" min="1" step="1" class="w-full" />
+            </label>
+            <label class="block text-sm">Expected duration per group (optional, same units as cadence):
+              <input name="expected duration for grouped time series" type="number" min="0" step="any" class="w-full" />
+            </label>
+            <label class="block text-sm">Maximum findings per group (0 for all):
+              <input name="max findings for grouped time series" type="number" min="0" step="1" value="100" class="w-full" />
+            </label>
+          </div>
+        </div>
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
             <input type="checkbox" name="completeness" id="toggleButton_completeness" onchange="toggleValue(this)" />
             <span class="checkmark"></span>
             Check column-level completeness

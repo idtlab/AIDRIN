@@ -956,3 +956,14 @@ Data and Code Storage Rules
 - Your custom metric code is stored temporarily for **1 hour**.
 - The (optional) remedied dataset is also stored for **1 hour**.
 - After expiration, all artifacts are safely removed.
+
+Grouped Time Series
+-------------------
+
+In Data Quality, select **Check grouped time series**, choose group keys and
+a time column, and enter the expected cadence. Select numeric elapsed time or
+datetime explicitly. Numeric cadence uses the input time unit; datetime uses
+seconds. Optionally declare expected count/duration, tolerance and a detail cap.
+Results show each group with exact source row positions and failing intervals;
+the JSON download retains the structured findings. No rows are reordered or
+repaired. See :ref:`grouped_time_series` for interpretation and limitations.
