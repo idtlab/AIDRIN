@@ -153,3 +153,51 @@ findings. Value/rate-of-change bounds, flatline detection and automatic repair
 are outside this first version. No conclusion about scientific accuracy follows
 from a clean sequence audit. MT period grids are spectral coordinates, not
 sample timestamps, and should not use this cadence audit.
+
+Separate component files and a pilot protocol
+--------------------------------------------------
+
+The trusted example loader ``examples/grouped_time_series/multi_file_loader.py``
+reads an explicit JSON manifest through the custom-loader interface. Each record
+declares ``record_id``, ``station``, ``component``, ``path`` and
+``timestamp_column`` as non-empty strings. Record IDs must be unique. Member
+paths are relative to the manifest; ``file_type`` optionally overrides the path
+extension for an existing AIDRIN reader. Each member must already expose a time
+column in an unambiguous table. Missing, empty or ambiguous members fail the
+load rather than silently disappearing from the inventory.
+
+Run the entirely synthetic two-file control from the repository root:
+
+.. code-block:: bash
+
+   AIDRIN_FRAME_CACHE=0 aidrin run grouped-time-series \
+     examples/grouped_time_series/multi_file_manifest.json \
+     --loader examples/grouped_time_series/multi_file_loader.py:load \
+     --group-columns record_id,station,component --timestamp-column time \
+     --expected-cadence 0.01 --tolerance 0.000001 \
+     --expected-count 5 --expected-duration 0.04
+
+H1 has five samples and no findings. H2 starts at 0.01 and contains three
+regular samples; it reports count and duration mismatches. The 0.01 difference
+between component origins is visible in ``first_time`` but is not itself an
+audit finding. A pair of equally long regular sequences with different origins
+can both pass this audit. Neither result proves synchronization.
+
+The loader projects time and identity only; amplitude values are not assessed.
+It preserves manifest order and each member's parsed row order. Group by all
+three identity columns so repeated station/component records remain separate.
+Audit row positions refer to the concatenated projection; each record occupies
+a contiguous block in manifest order. Its ``source_row_position`` column starts
+at zero within the member. Disabling the ordinary frame cache in this example
+avoids writing cache sidecars beside scientific inputs.
+
+For a real Parkfield pilot, retain the original files and build a manifest with
+verified station/component identities. Confirm cadence and units from source
+metadata before setting expectations. Keep absolute-start availability,
+orientation, free-field classification and intended-analysis membership in a
+separate inventory; this loader does not infer them or generate missing time
+axes. First run independent sequence checks, then compare component counts and
+time origins against that inventory. Decide alignment or exclusion explicitly
+before any truncation, resampling or waveform comparison. Preserve clean,
+shortened and shifted controls alongside the real-data report. The supplied
+controls are synthetic; a real Parkfield run remains pending.
