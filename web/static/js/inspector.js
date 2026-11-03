@@ -2330,6 +2330,18 @@ function _globusSelectedKeysList(override) {
   return Array.isArray(keys) ? keys.filter((k) => k) : [];
 }
 
+/** Drop cached HDF5 keys when the Globus form targets a different file than the loaded session. */
+function _globusResetSelectionIfFileChanged(filePath, fileType) {
+  const loadedPath = window.AIDRIN_GLOBUS_FILE_PATH || "";
+  const loadedType = window.AIDRIN_GLOBUS_FILE_TYPE || "";
+  if (filePath !== loadedPath || fileType !== loadedType || fileType !== ".h5") {
+    window.AIDRIN_GLOBUS_SELECTED_KEYS = [];
+    window._globusPendingConnect = null;
+    const panelPicker = document.getElementById("globus-hdf5-picker");
+    if (panelPicker) panelPicker.classList.add("hidden");
+  }
+}
+
 function _globusSubmitPayload(
   endpointId,
   filePath,
@@ -2360,6 +2372,7 @@ function _globusPollTaskResult(taskId) {
     let attempts = 0;
     const maxAttempts = 120;
     const poll = () => {
+      attempts++;
       fetch(`/globus/check-task/${taskId}`)
         .then((r) => r.json())
         .then((response) => {
@@ -2367,13 +2380,16 @@ function _globusPollTaskResult(taskId) {
             resolve(response.result);
           } else if (response.status === "failed") {
             reject(new Error(response.error || "Remote task failed"));
-          } else if (attempts++ < maxAttempts) {
+          } else if (attempts < maxAttempts) {
             setTimeout(poll, 2000);
           } else {
             reject(new Error("Timed out waiting for the remote endpoint"));
           }
         })
-        .catch(reject);
+        .catch(() => {
+          if (attempts < maxAttempts) setTimeout(poll, 3000);
+          else reject(new Error("Timed out waiting for the remote endpoint"));
+        });
     };
     setTimeout(poll, 500);
   });
@@ -2476,7 +2492,7 @@ function renderGlobusSummary(data) {
 
   if (data.needs_dataset_selection && data.datasets?.length && content) {
     renderHdf5DatasetPicker(content, data);
-    _unlockGlobusSidebar();
+    _lockGlobusSidebar();
     return;
   }
 
@@ -2594,6 +2610,12 @@ function renderGlobusSummary(data) {
   maybeShowIntentModal();
 }
 
+function _lockGlobusSidebar() {
+  var sidebarMetrics = document.getElementById("sidebar-metrics");
+  if (sidebarMetrics)
+    sidebarMetrics.classList.add("opacity-50", "pointer-events-none");
+}
+
 function _unlockGlobusSidebar() {
   var sidebarMetrics = document.getElementById("sidebar-metrics");
   if (sidebarMetrics)
@@ -2682,6 +2704,7 @@ function loadGlobusDataset() {
   });
 
   const fileName = filePath.split("/").pop();
+  _globusResetSelectionIfFileChanged(filePath, fileType);
 
   if (loadBtn) _globusBtnLoading(loadBtn, "Checking endpoint...");
   if (typeof showToast === "function")
@@ -2757,6 +2780,7 @@ function _globusPrepareHdf5Load(
           filePath,
           fileName,
           fileType,
+          pickerId: "globus-hdf5-picker",
         };
         const picker = document.getElementById("globus-hdf5-picker");
         if (picker) {
@@ -5731,9 +5755,9 @@ function renderHdf5DatasetPicker(container, data) {
     <p id="hdf5-selection-error" class="mt-2 text-sm text-red-600 dark:text-red-400 hidden"></p>`;
   container.innerHTML = html;
 
-  const loadBtn = document.getElementById("hdf5-load-selected");
-  const hint = document.getElementById("hdf5-selection-hint");
-  const errorEl = document.getElementById("hdf5-selection-error");
+  const loadBtn = container.querySelector("#hdf5-load-selected");
+  const hint = container.querySelector("#hdf5-selection-hint");
+  const errorEl = container.querySelector("#hdf5-selection-error");
 
   function getSelectedCheckboxes() {
     return Array.from(
@@ -5911,33 +5935,41 @@ function renderHdf5DatasetPicker(container, data) {
       container.querySelectorAll(".hdf5-dataset-checkbox:checked"),
     ).map((cb) => cb.value);
     if (paths.length === 0) return;
-    selectHdf5Datasets(paths);
+    selectHdf5Datasets(paths, container);
   });
 
   syncHdf5PickerState();
 }
 
-function selectHdf5Datasets(paths) {
-  if (window._globusPendingConnect) {
-    const pending = window._globusPendingConnect;
-    window._globusPendingConnect = null;
-    const picker = document.getElementById("globus-hdf5-picker");
-    if (picker) picker.classList.add("hidden");
-    const loadBtn = document.querySelector(
-      '#globusForm button[onclick*="loadGlobusDataset"]',
+function selectHdf5Datasets(paths, sourceContainer) {
+  const pending = window._globusPendingConnect;
+  if (pending) {
+    const expectedPicker = document.getElementById(
+      pending.pickerId || "globus-hdf5-picker",
     );
-    if (loadBtn) {
-      loadBtn.disabled = true;
-      loadBtn.classList.add("opacity-50", "cursor-not-allowed");
+    const fromPendingPicker =
+      expectedPicker &&
+      sourceContainer &&
+      sourceContainer === expectedPicker;
+    if (fromPendingPicker) {
+      window._globusPendingConnect = null;
+      expectedPicker.classList.add("hidden");
+      const loadBtn = document.querySelector(
+        '#globusForm button[onclick*="loadGlobusDataset"]',
+      );
+      if (loadBtn) {
+        loadBtn.disabled = true;
+        loadBtn.classList.add("opacity-50", "cursor-not-allowed");
+      }
+      _submitGlobusDataset(
+        pending.endpointId,
+        pending.filePath,
+        pending.fileName,
+        pending.fileType,
+        paths,
+      );
+      return;
     }
-    _submitGlobusDataset(
-      pending.endpointId,
-      pending.filePath,
-      pending.fileName,
-      pending.fileType,
-      paths,
-    );
-    return;
   }
 
   if (window.AIDRIN_GLOBUS_MODE) {
@@ -6047,7 +6079,15 @@ function returnToHdf5DatasetPicker() {
       <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Returning to dataset selection...</p>`;
     }
     fetch("/globus/clear-dataset-selection", { method: "POST" })
-      .then(() => {
+      .then((r) =>
+        r.json().then((data) => ({ ok: r.ok, data: data || {} })),
+      )
+      .then(({ ok, data }) => {
+        if (!ok || data.success === false) {
+          throw new Error(
+            data.error || data.message || "Failed to clear dataset selection",
+          );
+        }
         window.AIDRIN_GLOBUS_SELECTED_KEYS = [];
         clearGlobusDiscoveryCache();
         fetchGlobusSummary();
