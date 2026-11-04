@@ -1122,18 +1122,19 @@ function removeVisualizationKey(data) {
 
 // Documentation button function for privacy metrics (your approach)
 function getDocsButton(title) {
-  const anchorMap = {
-    "DP Statistics": "#differential-privacy",
-    "Single attribute risk scoring": "#single-attribute-risk",
-    "Multiple attribute risk scoring": "#multiple-attribute-risk",
-    "Entropy Risk": "#entropy-risk",
-    "k-Anonymity": "#k-anonymity",
-    "l-Diversity": "#l-diversity",
-    "t-Closeness": "#t-closeness",
-  };
-  const anchor = anchorMap[title] || "";
-  if (!anchor) return "";
-  return `<a href="/privacy-metrics-docs${anchor}" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a>`;
+  // Metrics whose popup offers a documentation link. The route resolves the
+  // page and section, so the link carries no anchor of its own.
+  const documented = [
+    "DP Statistics",
+    "Single attribute risk scoring",
+    "Multiple attribute risk scoring",
+    "Entropy Risk",
+    "k-Anonymity",
+    "l-Diversity",
+    "t-Closeness",
+  ];
+  if (!documented.includes(title)) return "";
+  return `<a href="/privacy-metrics-docs" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a>`;
 }
 
 // Distance metric name function for Class Imbalance (your approach)
