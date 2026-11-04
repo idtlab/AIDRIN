@@ -3469,7 +3469,7 @@ def privacy_preservation():
                         calculate_single_attribute_risk_score,
                         final_dict,
                         "Single attribute risk scoring",
-                        file.to_json(),
+                        file_info,
                         id_feature,
                         eval_features,
                     )
@@ -3502,7 +3502,7 @@ def privacy_preservation():
                         calculate_multiple_attribute_risk_score,
                         final_dict,
                         "Multiple attribute risk scoring",
-                        file.to_json(),
+                        file_info,
                         id_feature,
                         eval_features,
                     )
