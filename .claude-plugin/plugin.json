@@ -1,0 +1,27 @@
+{
+  "name": "aidrin",
+  "version": "2026.10.1",
+  "description": "Assess and improve dataset AI-readiness across six dimensions: data quality, impact of data on AI, fairness and bias, data governance, understandability and usability, and data structure.",
+  "author": {
+    "name": "The AIDRIN authors (IDT Lab, The Ohio State University; LBNL; ANL)",
+    "url": "https://github.com/idtlab/AIDRIN/blob/develop/CITATION.cff"
+  },
+  "homepage": "https://aidrin.readthedocs.io",
+  "repository": "https://github.com/idtlab/AIDRIN",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "data readiness",
+    "AI readiness",
+    "data quality",
+    "fairness",
+    "privacy"
+  ],
+  "skills": "./.claude/skills",
+  "mcpServers": {
+    "aidrin": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "aidrin[mcp]", "aidrin-mcp"]
+    }
+  }
+}
