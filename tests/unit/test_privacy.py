@@ -5,7 +5,9 @@ The generate_single_attribute_MM_risk_scores function is a plain Python
 function (not a Celery task) so it is called directly with DataFrames.
 """
 
+import os
 import sys
+import tempfile
 import types
 import unittest
 from unittest import mock
@@ -40,6 +42,7 @@ _celery_app.set_default()
 # Imports under test
 # ---------------------------------------------------------------------------
 
+from aidrin.file_handling.file_parser import read_file  # noqa: E402
 from aidrin.structured_data_metrics.privacy_measure import (  # noqa: E402
     calculate_single_attribute_risk_score,
     calculate_multiple_attribute_risk_score,
@@ -725,49 +728,126 @@ class TestGroupbyMatchesLoopImplementation(unittest.TestCase):
         self.assertLess(timings[1], max(timings[0] * 8, 0.5))
 
 # ---------------------------------------------------------------------------
-# Celery task wrappers: DataFrame is handed over as a literal JSON string
+# Celery task wrappers
+#
+# The tasks receive a (path, name, type) file_info tuple and re-read the
+# dataset in the worker, so the broker never carries the data and no dtype is
+# coerced on the way.  Celery's JSON serializer turns the tuple into a list.
 # ---------------------------------------------------------------------------
 
 
-class TestRiskScoreTasksAcceptJsonPayload(unittest.TestCase):
-    """The web route passes ``file.to_json()`` straight into these tasks."""
+class TestRiskScoreTasks(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
 
-    def _make_df(self):
+    def _csv(self, df, name="data.csv"):
+        path = os.path.join(self._tmp.name, name)
+        df.to_csv(path, index=False)
+        return (path, name, ".csv")
+
+    def _frame(self, n=40):
         return pd.DataFrame(
             {
-                "id": range(1, 11),
-                "gender": ["M", "F"] * 5,
-                "education": ["BS", "MS", "PhD", "BS", "MS"] * 2,
+                "id": range(1, n + 1),
+                "gender": ["M", "F"] * (n // 2),
+                "education": ["BS", "MS", "PhD", "BS"] * (n // 4),
             }
         )
 
-    def test_single_attribute_task_scores_json_payload(self):
+    def test_single_attribute_task_reads_from_file_info(self):
         result = calculate_single_attribute_risk_score.apply(
-            args=(self._make_df().to_json(), "id", ["gender", "education"])
+            args=(self._csv(self._frame()), "id", ["gender", "education"])
         ).get()
         self.assertNotIn("Error", result)
-        stats = result["Descriptive statistics of the risk scores"]
-        self.assertEqual(set(stats), {"gender", "education"})
+        self.assertEqual(
+            set(result["Descriptive statistics of the risk scores"]),
+            {"gender", "education"},
+        )
 
-    def test_multiple_attribute_task_scores_json_payload(self):
+    def test_multiple_attribute_task_reads_from_file_info(self):
         result = calculate_multiple_attribute_risk_score.apply(
-            args=(self._make_df().to_json(), "id", ["gender", "education"])
+            args=(self._csv(self._frame()), "id", ["gender", "education"])
         ).get()
         self.assertNotIn("Error", result)
         self.assertIn("Descriptive statistics of the risk scores", result)
 
+    def test_file_info_arriving_as_a_list_is_accepted(self):
+        """Celery's JSON serializer delivers the tuple as a list."""
+        result = calculate_single_attribute_risk_score.apply(
+            args=(list(self._csv(self._frame())), "id", ["gender"])
+        ).get()
+        self.assertNotIn("Error", result)
+
+    def _parquet(self, df, name="data.parquet"):
+        path = os.path.join(self._tmp.name, name)
+        df.to_parquet(path, index=False)
+        return (path, name, ".parquet")
+
+    def test_zero_padded_quasi_identifier_is_not_retyped(self):
+        """Parquet carries real dtypes, so a '02139' zip reaches the metric as a
+        string.  Serializing the frame turned it into int 2139, which tripped
+        the "numerical with too many unique values" guard and rejected a
+        textbook quasi-identifier."""
+        n = 300
+        df = pd.DataFrame(
+            {
+                "id": [f"{i:05d}" for i in range(n)],
+                "zipcode": [f"{2000 + (i % 150):05d}" for i in range(n)],
+                "sex": ["M", "F"] * (n // 2),
+            }
+        )
+        result = calculate_single_attribute_risk_score.apply(
+            args=(self._parquet(df), "id", ["zipcode", "sex"])
+        ).get()
+        self.assertNotIn("Error", result)
+        self.assertIn("zipcode", result["Descriptive statistics of the risk scores"])
+
+    def test_date_named_column_stays_categorical(self):
+        """read_json coerces any date-ish column name to datetime64 regardless
+        of the source format; read_file leaves it alone."""
+        n = 40
+        df = pd.DataFrame(
+            {
+                "id": range(n),
+                "date": ["2021-01-05", "2021-02-06"] * (n // 2),
+                "sex": ["M", "F"] * (n // 2),
+            }
+        )
+        file_info = self._csv(df)
+        self.assertEqual(read_file(file_info)["date"].dtype, df["date"].dtype)
+        result = calculate_single_attribute_risk_score.apply(
+            args=(file_info, "id", ["date", "sex"])
+        ).get()
+        self.assertNotIn("Error", result)
+
+    def test_missing_upload_reports_a_clean_error(self):
+        """The upload folder is pruned on a schedule, so the file can vanish
+        between dispatch and execution."""
+        missing = (os.path.join(self._tmp.name, "gone.csv"), "gone.csv", ".csv")
+        result = calculate_single_attribute_risk_score.apply(
+            args=(missing, "id", ["gender"])
+        ).get()
+        self.assertIn("File not found", result["Error"])
+        self.assertEqual(result["ErrorType"], "Processing Error")
+        self.assertNotIn("Traceback", result["Error"])
+
+    def test_dataframe_is_still_accepted_directly(self):
+        result = calculate_single_attribute_risk_score.apply(
+            args=(self._frame(), "id", ["gender"])
+        ).get()
+        self.assertNotIn("Error", result)
+
     def test_tasks_use_the_groupby_implementations(self):
         """Guard against a revert to the O(n^2) loop variants."""
-        for task, fn_name, args in (
+        for task, fn_name in (
             (
                 calculate_single_attribute_risk_score,
                 "generate_single_attribute_MM_risk_scores_groupby",
-                ("id", ["gender", "education"]),
             ),
             (
                 calculate_multiple_attribute_risk_score,
                 "generate_multiple_attribute_MM_risk_scores_groupby",
-                ("id", ["gender", "education"]),
             ),
         ):
             with self.subTest(task=task.name):
@@ -775,7 +855,9 @@ class TestRiskScoreTasksAcceptJsonPayload(unittest.TestCase):
                     f"aidrin.structured_data_metrics.privacy_measure.{fn_name}"
                 ) as fast_path:
                     fast_path.return_value = {"ok": True}
-                    result = task.apply(args=(self._make_df().to_json(), *args)).get()
+                    result = task.apply(
+                        args=(self._csv(self._frame()), "id", ["gender", "education"])
+                    ).get()
                 self.assertTrue(fast_path.called)
                 self.assertEqual(result, {"ok": True})
 

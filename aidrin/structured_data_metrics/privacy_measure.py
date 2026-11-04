@@ -1362,11 +1362,37 @@ def compute_entropy_risk(quasi_identifiers, file_info, include_visualization=Tru
     return result_dict
 
 
+def _load_task_frame(file_info):
+    """Resolve a risk-score task's dataset reference to a DataFrame.
+
+    The web layer hands over a ``(path, name, type, ...)`` tuple rather than a
+    serialized frame: the broker message stays a few dozen bytes instead of
+    carrying the whole dataset, and column dtypes reach the worker exactly as
+    the reader produced them.  Celery's JSON serializer delivers the tuple as a
+    list.  A DataFrame is accepted directly for programmatic use, matching
+    :func:`compute_k_anonymity`.
+    """
+    if not isinstance(file_info, (tuple, list)):
+        return file_info
+
+    data = read_file(file_info)
+    # read_file reports a missing upload as a message string and an
+    # unsupported file type as None.
+    if isinstance(data, str):
+        raise ValueError(data)
+    if data is None:
+        raise ValueError(
+            "Could not read the uploaded dataset. The file may have been removed "
+            "or is not a supported format."
+        )
+    return data
+
+
 # Celery tasks for async processing
 try:
 
     @shared_task(bind=True, time_limit=1200, soft_time_limit=900)
-    def calculate_single_attribute_risk_score(self, df_data, id_col, eval_cols):
+    def calculate_single_attribute_risk_score(self, file_info, id_col, eval_cols):
         """
         Celery task for calculating single attribute MM risk scores.
         """
@@ -1377,8 +1403,8 @@ try:
                 meta={'current': 0, 'total': 100, 'status': 'Starting single attribute risk calculation...'}
             )
 
-            # Convert DataFrame from JSON back to pandas DataFrame
-            df = pd.read_json(io.StringIO(df_data))
+            # Read the dataset in the worker; file_info travels, the data does not
+            df = _load_task_frame(file_info)
 
             # Update progress
             self.update_state(
@@ -1410,7 +1436,7 @@ try:
             return error_result
 
     @shared_task(bind=True, time_limit=1200, soft_time_limit=900)
-    def calculate_multiple_attribute_risk_score(self, df_data, id_col, eval_cols):
+    def calculate_multiple_attribute_risk_score(self, file_info, id_col, eval_cols):
         """
         Celery task for calculating multiple attribute MM risk scores.
         """
@@ -1421,8 +1447,8 @@ try:
                 meta={'current': 0, 'total': 100, 'status': 'Starting multiple attribute risk calculation...'}
             )
 
-            # Convert DataFrame from JSON back to pandas DataFrame
-            df = pd.read_json(io.StringIO(df_data))
+            # Read the dataset in the worker; file_info travels, the data does not
+            df = _load_task_frame(file_info)
 
             # Update progress
             self.update_state(
