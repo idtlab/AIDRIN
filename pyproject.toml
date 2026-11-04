@@ -36,6 +36,7 @@ dependencies = [
     "pyarrow>=15.0.0",
     "weasyprint>=62.0",
     "pint>=0.24.4,<0.26",
+    "mlcroissant>=1.1.1",
 ]
 
 [project.urls]
