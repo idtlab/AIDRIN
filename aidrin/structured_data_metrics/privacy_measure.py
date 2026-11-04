@@ -1378,7 +1378,7 @@ try:
             )
 
             # Convert DataFrame from JSON back to pandas DataFrame
-            df = pd.read_json(df_data)
+            df = pd.read_json(io.StringIO(df_data))
 
             # Update progress
             self.update_state(
@@ -1422,7 +1422,7 @@ try:
             )
 
             # Convert DataFrame from JSON back to pandas DataFrame
-            df = pd.read_json(df_data)
+            df = pd.read_json(io.StringIO(df_data))
 
             # Update progress
             self.update_state(

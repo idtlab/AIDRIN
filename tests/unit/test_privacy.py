@@ -26,10 +26,22 @@ if "pkg_resources" not in sys.modules:
     sys.modules["pkg_resources"] = _pkg
 
 # ---------------------------------------------------------------------------
+# Minimal always-eager Celery app so the shared_task wrappers resolve cleanly
+# ---------------------------------------------------------------------------
+
+from celery import Celery  # noqa: E402
+
+_celery_app = Celery("tests")
+_celery_app.conf.update(task_always_eager=True, task_eager_propagates=True)
+_celery_app.set_default()
+
+# ---------------------------------------------------------------------------
 # Imports under test
 # ---------------------------------------------------------------------------
 
 from aidrin.structured_data_metrics.privacy_measure import (  # noqa: E402
+    calculate_single_attribute_risk_score,
+    calculate_multiple_attribute_risk_score,
     generate_single_attribute_MM_risk_scores,
     generate_single_attribute_MM_risk_scores_groupby,
     generate_multiple_attribute_MM_risk_scores,
@@ -610,6 +622,39 @@ class TestEntropyRisk(unittest.TestCase):
         vis = result.get("Entropy Risk Visualization", "")
         if vis:
             base64.b64decode(vis)
+
+
+# ---------------------------------------------------------------------------
+# Celery task wrappers: DataFrame is handed over as a literal JSON string
+# ---------------------------------------------------------------------------
+
+
+class TestRiskScoreTasksAcceptJsonPayload(unittest.TestCase):
+    """The web route passes ``file.to_json()`` straight into these tasks."""
+
+    def _make_df(self):
+        return pd.DataFrame(
+            {
+                "id": range(1, 11),
+                "gender": ["M", "F"] * 5,
+                "education": ["BS", "MS", "PhD", "BS", "MS"] * 2,
+            }
+        )
+
+    def test_single_attribute_task_scores_json_payload(self):
+        result = calculate_single_attribute_risk_score.apply(
+            args=(self._make_df().to_json(), "id", ["gender", "education"])
+        ).get()
+        self.assertNotIn("Error", result)
+        stats = result["Descriptive statistics of the risk scores"]
+        self.assertEqual(set(stats), {"gender", "education"})
+
+    def test_multiple_attribute_task_scores_json_payload(self):
+        result = calculate_multiple_attribute_risk_score.apply(
+            args=(self._make_df().to_json(), "id", ["gender", "education"])
+        ).get()
+        self.assertNotIn("Error", result)
+        self.assertIn("Descriptive statistics of the risk scores", result)
 
 
 if __name__ == "__main__":
