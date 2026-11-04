@@ -95,6 +95,48 @@ class TestBinCount(unittest.TestCase):
         self.assertEqual(_bin_count(pd.Series([4.0] * 10)), 1)
 
 
+class TestHostileNumericColumns(unittest.TestCase):
+    """Columns that are small but pathological must not take the overview down."""
+
+    def test_far_outlier_does_not_ask_for_billions_of_bins(self):
+        # numpy's "auto" rule sizes bins from the IQR, so 1000 values in [0, 1]
+        # plus one at 1e9 asks for ~1e10 edges: about 80 GB if they are
+        # materialized before the cap applies. The count must be derived, and
+        # it must land inside the band like any other column.
+        values = pd.Series(np.append(np.linspace(0, 1, 1000), 1e9))
+        self.assertLessEqual(_bin_count(values), 50)
+        self.assertGreaterEqual(_bin_count(values), 30)
+
+    def test_far_outlier_still_renders(self):
+        frame = pd.DataFrame({"skewed": np.append(np.linspace(0, 1, 1000), 1e9)})
+        charts = continuous_bars(frame)
+        self.assertTrue(base64.b64decode(charts["skewed_light"]).startswith(PNG_MAGIC))
+
+    def test_infinities_do_not_reach_matplotlib(self):
+        # dropna() keeps inf, and an infinite axis range raised ValueError out
+        # of ax.hist, failing the whole Data Overview rather than one chart.
+        frames = (
+            # Few distinct values: the early cardinality return used to hide it.
+            pd.DataFrame({"small": [1.0, 2.0, np.inf]}),
+            # More distinct values than the cap, so bin selection runs too.
+            pd.DataFrame({"wide": np.append(np.linspace(0, 1, 200), [np.inf, -np.inf])}),
+        )
+        for frame in frames:
+            column = f"{frame.columns[0]}_light"
+            for charts in (summary_histograms(frame), continuous_bars(frame)):
+                self.assertEqual(set(charts), {column})
+                self.assertTrue(base64.b64decode(charts[column]).startswith(PNG_MAGIC))
+
+    def test_bin_count_ignores_infinities(self):
+        finite = pd.Series(np.linspace(0, 1, 200))
+        with_infinities = pd.Series(np.append(finite.values, [np.inf, -np.inf]))
+        self.assertEqual(_bin_count(with_infinities), _bin_count(finite))
+
+    def test_column_of_only_infinities_is_treated_as_empty(self):
+        self.assertEqual(_bin_count(pd.Series([np.inf, -np.inf])), 1)
+        self.assertIsNone(_reflected_kde(pd.Series([np.inf, -np.inf])))
+
+
 class TestCurveAndBarsAgree(unittest.TestCase):
     """A per-chart toggle is only safe if both views support one conclusion."""
 

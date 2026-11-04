@@ -392,6 +392,51 @@ def ensure_json_serializable(obj):
     return obj
 
 
+def _finite_values(series):
+    """Numeric values with NaN *and* infinities removed.
+
+    ``dropna()`` keeps infinities and they reach matplotlib as an infinite axis
+    range, so a single ``inf`` in a column raised ``ValueError`` out of
+    ``ax.hist`` and took the whole Data Overview down with it. seaborn used to
+    filter them before this module began drawing its own charts.
+    """
+    values = pd.to_numeric(pd.Series(series), errors="coerce").to_numpy(dtype=float)
+    return values[np.isfinite(values)]
+
+
+# Beyond this nothing is distinguishable on a chart, and the caller clamps far
+# below it; the ceiling only stops a pathological rule result from overflowing.
+_MAX_RULE_BINS = 10_000
+
+
+def _auto_bin_count(values):
+    """numpy's "auto" rule as a count, without materializing the bin edges.
+
+    ``np.histogram_bin_edges(bins="auto")`` builds the complete edge array
+    before any cap can be applied to it. One far outlier makes the rule ask for
+    billions of edges: 1000 values in [0, 1] plus a single 1e9 wants about 1e10
+    of them, roughly 80 GB, which the web process would try to allocate on
+    every uncached overview request. The count is only arithmetic, so derive it
+    and let the caller clamp before anything is allocated.
+    """
+    n = values.size
+    sturges = int(np.ceil(np.log2(n))) + 1 if n > 1 else 1
+    span = float(values.max() - values.min())
+    if span <= 0:
+        return sturges
+
+    first, third = np.percentile(values, [25, 75])
+    iqr = float(third - first)
+    if iqr <= 0:
+        return sturges
+
+    # Freedman-Diaconis; numpy's "auto" takes whichever of the two is finer.
+    fd_width = 2.0 * iqr / n ** (1.0 / 3.0)
+    if fd_width <= 0:
+        return sturges
+    return max(sturges, int(min(span / fd_width, _MAX_RULE_BINS)))
+
+
 def _reflected_kde(values, bw_adjust=0.5, grid_size=256):
     """Estimate a density that keeps all of its mass inside ``[min, max]``.
 
@@ -406,8 +451,7 @@ def _reflected_kde(values, bw_adjust=0.5, grid_size=256):
     Returns ``(grid, density)``, or ``None`` when the column cannot support an
     estimate (fewer than two values, or no spread).
     """
-    x = np.asarray(values, dtype=float)
-    x = x[np.isfinite(x)]
+    x = _finite_values(values)
     if x.size < 2:
         return None
     low, high = x.min(), x.max()
@@ -428,7 +472,7 @@ def _reflected_kde(values, bw_adjust=0.5, grid_size=256):
     return grid, kde(grid) * 3.0
 
 
-def _bin_count(series, floor=30, cap=50):
+def _bin_count(values, floor=30, cap=50):
     """Choose a histogram bin count that does not alias against the data.
 
     Values recorded on a regular grid (a depth profile sampled every 200 m, a
@@ -438,7 +482,12 @@ def _bin_count(series, floor=30, cap=50):
     renders flat. Two views of one column must not support different
     conclusions, so a regular grid picks a count it divides evenly.
     """
-    nunique = series.nunique()
+    values = _finite_values(values)
+    if values.size == 0:
+        return 1
+
+    unique = np.unique(values)  # np.unique returns them sorted
+    nunique = unique.size
     if nunique <= 1:
         return 1
     if nunique <= cap:
@@ -446,15 +495,13 @@ def _bin_count(series, floor=30, cap=50):
         # (a 1-5 rating) gets five bars rather than fifty slivers.
         return int(nunique)
 
-    values = np.sort(series.unique())
-    step = np.diff(values)
+    step = np.diff(unique)
     if step.size and np.allclose(step, step[0], rtol=1e-6):
         divisors = [b for b in range(floor, cap + 1) if nunique % b == 0]
         if divisors:
             return max(divisors)
 
-    edges = np.histogram_bin_edges(values, bins="auto")
-    return int(min(max(len(edges) - 1, floor), cap, nunique))
+    return int(min(max(_auto_bin_count(values), floor), cap, nunique))
 
 
 def _style_distribution_axes(ax, ylabel, text_color="#6b7280"):
@@ -529,11 +576,11 @@ def continuous_bars(df, figsize=(4, 3), dpi=150):
             fig.patch.set_alpha(0)
             ax.set_facecolor("none")
 
-            series = pd.to_numeric(df[column], errors="coerce").dropna()
-            if not series.empty:
+            values = _finite_values(df[column])
+            if values.size:
                 ax.hist(
-                    series,
-                    bins=_bin_count(series),
+                    values,
+                    bins=_bin_count(values),
                     color=bar_color,
                     edgecolor="white",
                     linewidth=0.5,
