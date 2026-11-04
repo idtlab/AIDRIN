@@ -1387,7 +1387,7 @@ try:
             )
 
             # Calculate risk scores using existing function
-            result = generate_single_attribute_MM_risk_scores(df, id_col, eval_cols, self)
+            result = generate_single_attribute_MM_risk_scores_groupby(df, id_col, eval_cols, self)
 
             # Update progress
             self.update_state(
@@ -1431,7 +1431,7 @@ try:
             )
 
             # Calculate risk scores using existing function
-            result = generate_multiple_attribute_MM_risk_scores(df, id_col, eval_cols, self)
+            result = generate_multiple_attribute_MM_risk_scores_groupby(df, id_col, eval_cols, self)
 
             # Update progress
             self.update_state(
