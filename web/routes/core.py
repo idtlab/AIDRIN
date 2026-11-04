@@ -35,6 +35,7 @@ from web.routes.utils import (
     get_current_user_id,
     is_metric_cache_valid,
     load_dataframe,
+    continuous_bars,
     summary_histograms,
 )
 
@@ -602,6 +603,7 @@ def summary_statistics():
             ).to_dict()
 
         histograms = summary_histograms(df)
+        histogram_bars = continuous_bars(df)
 
         # Booleans are treated as categorical (they're excluded from describe()
         # and select_dtypes("number") above, so they belong with the categorical
@@ -656,6 +658,7 @@ def summary_statistics():
             "summary_statistics": summary_statistics,
             "categorical_summary": categorical_summary,
             "histograms": histograms,
+            "histogram_bars": histogram_bars,
             "hdf5_multi_dataset": hdf5_multi_dataset,
             "selected_dataset_keys": selected_dataset_keys,
         })
