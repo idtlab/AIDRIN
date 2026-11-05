@@ -2270,10 +2270,12 @@ function switchUploadTab(tab) {
   const customPanel = document.getElementById("custom-upload");
   const globusPanel = document.getElementById("globus-panel");
   const cliPanel = document.getElementById("cli-panel");
+  const fairPanel = document.getElementById("fair-tab-panel");
   const tabLocal = document.getElementById("tab-local");
   const tabCustom = document.getElementById("tab-custom");
   const tabGlobus = document.getElementById("tab-globus");
   const tabCli = document.getElementById("tab-cli");
+  const tabFair = document.getElementById("tab-fair");
 
   if (!localPanel) {
     console.error("switchUploadTab: localPanel not found");
@@ -2292,10 +2294,12 @@ function switchUploadTab(tab) {
   if (customPanel) customPanel.classList.add("hidden");
   if (globusPanel) globusPanel.classList.add("hidden");
   if (cliPanel) cliPanel.classList.add("hidden");
+  if (fairPanel) fairPanel.classList.add("hidden");
   if (tabLocal) tabLocal.className = `${base} ${inactiveClass}`;
   if (tabCustom) tabCustom.className = `${base} ${inactiveClass}`;
   if (tabGlobus) tabGlobus.className = `${base} ${inactiveClass}`;
   if (tabCli) tabCli.className = `${base} ${inactiveClass}`;
+  if (tabFair) tabFair.className = `${base} ${inactiveClass}`;
 
   // Activate the selected tab and panel
   if (tab === "custom" && customPanel) {
@@ -2309,6 +2313,12 @@ function switchUploadTab(tab) {
   } else if (tab === "cli" && cliPanel) {
     cliPanel.classList.remove("hidden");
     if (tabCli) tabCli.className = `${base} ${activeClass}`;
+  } else if (tab === "fair" && fairPanel) {
+    fairPanel.classList.remove("hidden");
+    document
+      .getElementById("panel-fair-assessment")
+      ?.classList.remove("hidden");
+    if (tabFair) tabFair.className = `${base} ${activeClass}`;
   } else {
     localPanel.classList.remove("hidden");
     if (tabLocal) tabLocal.className = `${base} ${activeClass}`;
@@ -2459,7 +2469,13 @@ function renderGlobusSummary(data) {
     var wh = document.getElementById("workspace-histograms");
     if (wh) {
       wh.style.display = "block";
-      renderWorkspaceHistograms(data.histograms);
+      renderWorkspaceHistograms(
+        data.histograms,
+        null,
+        false,
+        null,
+        data.histogram_bars,
+      );
     }
   }
 
@@ -4969,8 +4985,16 @@ function renderReadinessFairResult(data, resultContainer) {
   return true;
 }
 
+// Choosing a file and changing the metadata type both submit, so an earlier request
+// can still be in flight. Only a form's newest submission may write its results.
+const _fairGenerations = new WeakMap();
+
 function submitFairAssessmentForm(form, resultContainer, callbacks) {
   if (!form) return Promise.resolve();
+
+  const generation = (_fairGenerations.get(form) || 0) + 1;
+  _fairGenerations.set(form, generation);
+  const superseded = () => _fairGenerations.get(form) !== generation;
 
   const formData = new FormData(form);
   if (resultContainer) {
@@ -4982,6 +5006,7 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
   return fetch("/fair-assessment", { method: "POST", body: formData })
     .then((response) => response.json())
     .then((data) => {
+      if (superseded()) return;
       const resultData = { ...data };
       delete resultData.cached;
       delete resultData.build_time_seconds;
@@ -4995,11 +5020,33 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
     })
     .catch((error) => {
       console.error("Error:", error);
+      if (superseded()) return;
       if (resultContainer) {
         resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">Error: ${escapeHtml(error.message)}</div>`;
       }
       callbacks?.onError?.(error);
     });
+}
+
+/**
+ * Wire the landing page's Metadata tab (no dataset loaded). Like the dataset
+ * upload, it has no Submit button: choosing a file runs the check, and changing
+ * the metadata type re-runs it on the chosen file.
+ */
+function initLandingFairTab() {
+  const fileInput = document.getElementById("fair-file");
+  _wireFairFileInput(
+    fileInput,
+    document.getElementById("fairFileLabel"),
+    document.getElementById("fairUploadIcon"),
+  );
+  const runIfFileChosen = () => {
+    if (fileInput?.files.length) submitFairAssessment();
+  };
+  fileInput?.addEventListener("change", runIfFileChosen);
+  document
+    .getElementById("fair-metadata-type")
+    ?.addEventListener("change", runIfFileChosen);
 }
 
 function submitFairAssessment() {
@@ -5306,11 +5353,59 @@ function buildCategoricalSummaryTable(summary) {
  * @param {boolean} [skipHeading]
  * @param {string} [layout] - "compact" (default) or "large" for readiness report
  */
+function chartsByColumn(charts) {
+  // Always use the light variant — CSS filter handles dark mode
+  const columns = {};
+  for (const [key, base64] of Object.entries(charts || {})) {
+    if (key.endsWith("_light")) {
+      columns[key.slice(0, -"_light".length)] = base64;
+    }
+  }
+  return columns;
+}
+
+/**
+ * Swap one distribution card between its curve and its bars (issue #212).
+ * Both PNGs arrive with the summary, so this is a src swap, not a refetch.
+ * The curve is read back off the <img> rather than mirrored into a data
+ * attribute: these run 15-30 KB of base64 each, and duplicating them into the
+ * markup doubles the rendered size of the section for no gain.
+ * @param {HTMLElement} button - the clicked Curve/Bars button
+ * @param {string} kind - "curve" or "bars"
+ */
+function toggleDistributionChart(button, kind) {
+  const card = button.closest("[data-chart-card]");
+  if (!card) return;
+  const img = card.querySelector("img");
+  if (!img) return;
+  // Captured once, before the first swap replaces it.
+  if (card._chartCurveSrc === undefined) {
+    card._chartCurveSrc = img.getAttribute("src");
+  }
+  const next =
+    kind === "bars"
+      ? card.dataset.chartBars &&
+        `data:image/png;base64,${card.dataset.chartBars}`
+      : card._chartCurveSrc;
+  if (!next) return;
+  img.src = next;
+
+  card.querySelectorAll("[data-chart-toggle]").forEach((btn) => {
+    const active = btn.dataset.chartToggle === kind;
+    btn.classList.toggle("bg-blue-600", active);
+    btn.classList.toggle("text-white", active);
+    btn.classList.toggle("text-gray-600", !active);
+    btn.classList.toggle("dark:text-gray-300", !active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+}
+
 function renderWorkspaceHistograms(
   histograms,
   containerId,
   skipHeading,
   layout,
+  bars,
 ) {
   const container = document.getElementById(
     containerId || "workspace-histograms",
@@ -5323,14 +5418,8 @@ function renderWorkspaceHistograms(
     : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
   const imgClass = isLarge ? "w-full h-auto object-contain" : "w-full";
 
-  // Always use the light variant — CSS filter handles dark mode
-  const columns = {};
-  for (const [key, base64] of Object.entries(histograms)) {
-    if (key.endsWith("_light")) {
-      const colName = key.slice(0, -"_light".length);
-      columns[colName] = base64;
-    }
-  }
+  const columns = chartsByColumn(histograms);
+  const barColumns = chartsByColumn(bars);
 
   if (Object.keys(columns).length === 0) {
     container.innerHTML = "";
@@ -5345,10 +5434,22 @@ function renderWorkspaceHistograms(
   html += `<div class="${gridClass}">`;
 
   for (const [colName, base64] of Object.entries(columns)) {
+    const barChart = barColumns[colName];
+    const safeName = escapeHtml(colName);
     html += `
-      <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-        <img src="data:image/png;base64,${base64}" alt="Distribution of ${escapeHtml(colName)}" class="${imgClass}" />
-        <div class="px-3 py-2 text-xs text-center font-medium text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600">${escapeHtml(colName)}</div>
+      <div data-chart-card${barChart ? ` data-chart-bars="${barChart}"` : ""} class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${safeName}" class="${imgClass}" />
+        <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs border-t border-gray-200 dark:border-gray-600">
+          <span class="font-medium text-gray-600 dark:text-gray-400 truncate" title="${safeName}">${safeName}</span>
+          ${
+            barChart
+              ? `<span class="shrink-0 inline-flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden" role="group" aria-label="Chart type for ${safeName}">
+            <button type="button" data-chart-toggle="curve" aria-pressed="true" onclick="toggleDistributionChart(this, 'curve')" class="px-2 py-0.5 text-xs font-medium bg-blue-600 text-white">Curve</button>
+            <button type="button" data-chart-toggle="bars" aria-pressed="false" onclick="toggleDistributionChart(this, 'bars')" class="px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300">Bars</button>
+          </span>`
+              : ""
+          }
+        </div>
       </div>
     `;
   }
@@ -5927,7 +6028,13 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
 
         // Render histograms below the summary table
         if (data.histograms) {
-          renderWorkspaceHistograms(data.histograms, histogramsId);
+          renderWorkspaceHistograms(
+            data.histograms,
+            histogramsId,
+            false,
+            null,
+            data.histogram_bars,
+          );
         }
 
         maybeShowIntentModal();
@@ -6127,6 +6234,7 @@ function _applyReadinessVisualizations(section, root, vizMap) {
           "readiness-histograms-inner",
           true,
           "large",
+          vizMap.histogram_bars,
         );
       }
     }

@@ -18,6 +18,12 @@ try:
 except ImportError:
     HAS_AGENTIC_DEPS = False
 
+try:
+    import pymupdf  # noqa: F401
+    HAS_PYMUPDF = True
+except ImportError:
+    HAS_PYMUPDF = False
+
 import numpy as np
 import pandas as pd
 
@@ -273,6 +279,28 @@ class TestAgenticCLI(unittest.TestCase):
         self.assertIn("_save_error", data)
         self.assertNotIn("_saved_to", data)
         self.assertFalse(out.exists())
+
+
+@unittest.skipUnless(HAS_AGENTIC_DEPS and HAS_PYMUPDF, "agentic extras not installed (pip install 'aidrin[agentic]')")
+class TestVectorDBBuilderPdfText(unittest.TestCase):
+    """Covers the one PyMuPDF call site, which only the extras install provides."""
+
+    def test_read_text_extracts_a_pdf_page(self):
+        import pymupdf
+
+        from aidrin.agentic.vector_db_builder import VectorDBBuilder
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf = Path(tmpdir) / "doc.pdf"
+            document = pymupdf.open()
+            page = document.new_page()
+            page.insert_text((72, 72), "readiness assessment")
+            document.save(str(pdf))
+            document.close()
+
+            text = VectorDBBuilder._read_text(object.__new__(VectorDBBuilder), pdf)
+
+        self.assertIn("readiness assessment", text)
 
 
 if __name__ == "__main__":

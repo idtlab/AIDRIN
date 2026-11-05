@@ -10,9 +10,9 @@ into a Python environment, and each user configures the module for themselves.
 ### Perlmutter
 
 ```bash
-shifterimg pull aidrin/aidrin:v2026.09.1
+shifterimg pull aidrin/aidrin:v2026.10.1
 curl -sL https://raw.githubusercontent.com/idtlab/AIDRIN/develop/hpc/configure-module.sh \
-    | bash -s perlmutter 2026.09.1 docker:aidrin/aidrin:v2026.09.1 ~/aidrin-modules
+    | bash -s perlmutter 2026.10.1 docker:aidrin/aidrin:v2026.10.1 ~/aidrin-modules
 module use ~/aidrin-modules/modulefiles    # add this line to ~/.bashrc
 module load aidrin
 ```
@@ -24,16 +24,16 @@ cover NERSC only until it is.
 
 ```bash
 module load singularitypro
-singularity pull ~/aidrin-2026.09.1.sif docker://aidrin/aidrin:v2026.09.1
+singularity pull ~/aidrin-2026.10.1.sif docker://aidrin/aidrin:v2026.10.1
 curl -sL https://raw.githubusercontent.com/idtlab/AIDRIN/develop/hpc/configure-module.sh \
-    | bash -s expanse 2026.09.1 ~/aidrin-2026.09.1.sif ~/aidrin-modules
+    | bash -s expanse 2026.10.1 ~/aidrin-2026.10.1.sif ~/aidrin-modules
 module use ~/aidrin-modules/modulefiles    # add this line to ~/.bashrc
 module load aidrin
 ```
 
 For a new release, run the same commands with the new version. Older versions stay available
 until you delete their `~/aidrin-modules/aidrin/<ver>` and `modulefiles/aidrin/<ver>.lua`.
-Use a `-mcp` version (image tag `v2026.09.1-mcp`, module version `2026.09.1-mcp`) to also get
+Use a `-mcp` version (image tag `v2026.10.1-mcp`, module version `2026.10.1-mcp`) to also get
 `aidrin-mcp`.
 
 A shared install works the same way: point `ROOT` at a world-readable directory, for example
@@ -48,13 +48,13 @@ Apple Silicon laptops):
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 -f docker/NERSC/Dockerfile --target cli \
-    -t aidrin/aidrin:v2026.09.1 --push .
+    -t aidrin/aidrin:v2026.10.1 --push .
 docker buildx build --platform linux/amd64,linux/arm64 -f docker/NERSC/Dockerfile --target cli \
-    --build-arg AIDRIN_CLI_EXTRAS="--extra mcp" -t aidrin/aidrin:v2026.09.1-mcp --push .
+    --build-arg AIDRIN_CLI_EXTRAS="--extra mcp" -t aidrin/aidrin:v2026.10.1-mcp --push .
 ```
 
-Image tags are the git release tag (`v2026.09.1`, plus `-mcp`), the same as the images in the
-NERSC registry. Module versions drop the `v` (`2026.09.1`), matching `aidrin/_version.py`.
+Image tags are the git release tag (`v2026.10.1`, plus `-mcp`), the same as the images in the
+NERSC registry. Module versions drop the `v` (`2026.10.1`), matching `aidrin/_version.py`.
 The `-mcp` image adds `aidrin-mcp` and the agentic stack (langchain, faiss, pymupdf). Never
 retag a published version.
 

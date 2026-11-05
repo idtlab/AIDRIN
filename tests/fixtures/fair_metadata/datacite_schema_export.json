@@ -1,0 +1,109 @@
+{
+  "identifiers": [
+    {
+      "identifier": "10.5281/zenodo.12168626",
+      "identifierType": "DOI"
+    }
+  ],
+  "alternateIdentifiers": [
+    {
+      "alternateIdentifierType": "oai",
+      "alternateIdentifier": "oai:zenodo.org:12168626"
+    }
+  ],
+  "creators": [
+    {
+      "name": "Habermann, Ted",
+      "nameType": "Personal",
+      "givenName": "Ted",
+      "familyName": "Habermann",
+      "affiliation": [
+        {
+          "name": "Metadata Game Changers (United States)",
+          "affiliationIdentifier": "https://ror.org/05bp8ka05",
+          "affiliationIdentifierScheme": "ROR"
+        }
+      ],
+      "nameIdentifiers": [
+        {
+          "nameIdentifier": "0000-0003-3585-6733",
+          "nameIdentifierScheme": "ORCID"
+        }
+      ]
+    }
+  ],
+  "titles": [
+    {
+      "title": "FAIR Metadata Concepts in DataCite Metadata Schema"
+    }
+  ],
+  "publisher": {
+    "name": "Zenodo"
+  },
+  "publicationYear": 2024,
+  "types": {
+    "ris": "DATA",
+    "bibtex": "misc",
+    "citeproc": "dataset",
+    "schemaOrg": "Dataset",
+    "resourceType": "",
+    "resourceTypeGeneral": "Dataset"
+  },
+  "subjects": [
+    {
+      "subject": "Metadata"
+    },
+    {
+      "subject": "FAIR Principles"
+    },
+    {
+      "subject": "DataCite"
+    },
+    {
+      "subject": "Metadata Crosswalk"
+    }
+  ],
+  "contributors": [],
+  "dates": [
+    {
+      "date": "2024-06-19",
+      "dateType": "Issued"
+    }
+  ],
+  "language": null,
+  "relatedIdentifiers": [
+    {
+      "relationType": "IsVersionOf",
+      "relatedIdentifier": "10.5281/zenodo.12168625",
+      "relatedIdentifierType": "DOI"
+    }
+  ],
+  "sizes": [],
+  "formats": [],
+  "version": null,
+  "rightsList": [
+    {
+      "rights": "Creative Commons Attribution 4.0 International",
+      "rightsUri": "https://creativecommons.org/licenses/by/4.0/legalcode",
+      "schemeUri": "https://spdx.org/licenses/",
+      "rightsIdentifier": "cc-by-4.0",
+      "rightsIdentifierScheme": "SPDX"
+    }
+  ],
+  "descriptions": [
+    {
+      "description": "Documentation Concepts that support the FAIR Principles are mapped to the DataCite Metadata Schema using json Paths.",
+      "descriptionType": "Abstract"
+    }
+  ],
+  "fundingReferences": [
+    {
+      "awardTitle": "Beyond Data Discovery: Shared Services for Community Metadata Improvement",
+      "funderName": "National Science Foundation",
+      "awardNumber": "1443062",
+      "funderIdentifier": "10.13039/100000001",
+      "funderIdentifierType": "Crossref Funder ID"
+    }
+  ],
+  "schemaVersion": "http://datacite.org/schema/kernel-4"
+}

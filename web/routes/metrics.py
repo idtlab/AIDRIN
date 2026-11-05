@@ -56,11 +56,7 @@ from aidrin.structured_data_metrics.variable_unit_validation import (
     calculate_variable_unit_validation,
     unit_suggestion_catalog,
 )
-from aidrin.structured_data_metrics.FAIRness_datacite import categorize_keys_fair
-from aidrin.structured_data_metrics.FAIRness_dcat import (
-    categorize_metadata,
-    extract_keys_and_values,
-)
+from aidrin.structured_data_metrics.fair_metadata import calculate_fair_compliance
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
     pearson_correlation,
@@ -93,6 +89,7 @@ from web.routes.utils import (
     get_result_or_default,
     is_metric_cache_valid,
     store_result,
+    continuous_bars,
     summary_histograms,
     categorical_distribution_charts,
 )
@@ -690,6 +687,7 @@ def _build_dataset_overview_section(file_info, include_visualizations=False):
         chart_df = _dataframe_for_overview_detail_charts(df, display_profiles)
         overview["categorical_charts"] = categorical_distribution_charts(chart_df)
         overview["histograms"] = summary_histograms(chart_df, figsize=(7, 4.5))
+        overview["histogram_bars"] = continuous_bars(chart_df, figsize=(7, 4.5))
     return overview
 
 
@@ -2303,6 +2301,7 @@ def _build_dataset_overview_visualizations(file_info):
     return {
         "categorical_charts": categorical_distribution_charts(chart_df),
         "histograms": summary_histograms(chart_df, figsize=(7, 4.5)),
+        "histogram_bars": continuous_bars(chart_df, figsize=(7, 4.5)),
     }
 
 
@@ -2604,14 +2603,8 @@ def _cache_readiness_fair_compliance(
 
 
 def _run_fair_assessment(data_dict, metadata_type):
-    """Run FAIR assessment for DCAT or Datacite metadata."""
-    if metadata_type == "DCAT":
-        extracted_json = extract_keys_and_values(data_dict)
-        fair_dict = categorize_metadata(extracted_json, data_dict)
-        return format_dict_values(fair_dict)
-    if metadata_type == "Datacite":
-        return categorize_keys_fair(data_dict)
-    raise ValueError("Unknown metadata type")
+    """Run FAIR assessment for Croissant, RO-Crate, DCAT-US 3.0 or 1.1, or DataCite metadata ("auto" detects it)."""
+    return format_dict_values(calculate_fair_compliance(data_dict, metadata_type))
 
 
 def _get_or_build_readiness_visualizations(section, file_info):
@@ -3668,8 +3661,8 @@ def fair_assessment():
             file = request.files["metadata"]
             if file.filename == "":
                 return jsonify({"error": "No selected file"}), 400
-            if not file.filename.endswith(".json"):
-                return jsonify({"error": "Invalid file format. Please upload a JSON file."}), 400
+            if not file.filename.endswith((".json", ".jsonld")):
+                return jsonify({"error": "Invalid file format. Please upload a JSON or JSON-LD file."}), 400
 
             json_data = file.read()
             metadata_type = request.form.get("metadata type", "")
@@ -3713,6 +3706,8 @@ def fair_assessment():
                 try:
                     result = _run_fair_assessment(data_dict, metadata_type)
                 except ValueError:
+                    if metadata_type == "auto":
+                        return jsonify({"error": "Could not detect the metadata standard. Choose it in the Metadata type list."}), 400
                     return jsonify({"error": "Unknown metadata type"}), 400
                 except json.JSONDecodeError:
                     metric_time_log.warning(
@@ -3725,6 +3720,7 @@ def fair_assessment():
                 metric_time_log.info("FAIR Assessment completed in %.2f seconds", duration)
                 span.set_attribute("metric.duration_ms", duration * 1000)
                 span.set_attribute("metadata.type", metadata_type)
+                span.set_attribute("metadata.detected", result["Standard"]["Name"])
 
             result = ensure_json_serializable(result)
             if readiness_context and dataset_file_name:
