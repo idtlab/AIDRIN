@@ -46,7 +46,9 @@ class TestReadinessPdfContext(unittest.TestCase):
         )
         self.assertEqual(overview["other_count"], 3)
         self.assertEqual(overview["profiles"][0]["type_abbr"], "N")
-        self.assertEqual(overview["profiles"][0]["status_label"], "Good")
+        self.assertNotIn("poor_count", overview)
+        self.assertNotIn("warn_count", overview)
+        self.assertNotIn("status_label", overview["profiles"][0])
 
     def test_build_pdf_context_includes_overview(self):
         sections = {

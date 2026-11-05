@@ -66,11 +66,6 @@
 
     <div class="profile-header">
       <h3>Per-feature readiness profile{{ fn('feature_profile') }}</h3>
-      <span class="profile-counts">
-        {% if overview.poor_count %}<span class="text-poor">{{ overview.poor_count }} poor</span>{% endif %}
-        {% if overview.warn_count %}{% if overview.poor_count %} · {% endif %}<span class="text-warning">{{ overview.warn_count }} warning</span>{% endif %}
-        {% if not overview.poor_count and not overview.warn_count %}all good{% endif %}
-      </span>
     </div>
     {% if overview.profile_meta.truncated %}
     <p class="muted">Showing {{ '{:,}'.format(overview.profile_meta.shown) }} of {{ '{:,}'.format(overview.profile_meta.total) }} features (prioritized: poor → warning → good).</p>
@@ -85,7 +80,6 @@
           <th class="num">% missing{{ fn('pct_missing') }}</th>
           <th class="num"># unique{{ fn('n_unique') }}</th>
           <th class="num">% dominant{{ fn('pct_dominant') }}</th>
-          <th>Status{{ fn('profile_status') }}</th>
           <th>Summary</th>
         </tr>
       </thead>
@@ -98,7 +92,6 @@
           <td class="num">{{ fmt_pct(p.pct_missing) }}</td>
           <td class="num">{{ p.n_unique }}</td>
           <td class="num">{{ fmt_pct(p.pct_dominant) }}</td>
-          <td><span class="badge badge-{{ p.status or 'unknown' }}">{{ p.status_label }}</span></td>
           <td>{{ p.summary or '—' }}</td>
         </tr>
         {% endfor %}

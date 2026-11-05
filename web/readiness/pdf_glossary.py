@@ -2,8 +2,8 @@
 
 READINESS_METRIC_GLOSSARY = {
     "feature_profile": (
-        "A per-column snapshot of whether each feature is usable for modeling. "
-        "Combines missingness, cardinality, and value balance into a readiness status."
+        "A per-column snapshot of structural characteristics useful for modeling. "
+        "Combines missingness, cardinality, and value balance."
     ),
     "feature_type_codes": (
         "Feature type abbreviations in the profile table: "
@@ -20,10 +20,6 @@ READINESS_METRIC_GLOSSARY = {
     "pct_dominant": (
         "Share of rows taken by the most frequent value (the mode). "
         "Values near 100% mean the column is almost constant."
-    ),
-    "profile_status": (
-        "Readiness verdict for this feature. Poor: high missingness, constant, or ID-like. "
-        "Warning: moderate issues. Good: no major issues detected."
     ),
     "overall_dq_grade": (
         "Average of the data-quality KPIs (completeness, uniqueness, outlier-cleanliness). "
@@ -136,7 +132,6 @@ FOOTNOTE_LABELS = {
     "pct_missing": "% missing",
     "n_unique": "# unique",
     "pct_dominant": "% dominant",
-    "profile_status": "Status",
     "overall_dq_grade": "Overall data quality grade",
     "analysis_scope": "Analysis scope",
     "completeness": "Completeness",
@@ -178,10 +173,4 @@ _FEATURE_TYPE_ABBR = {
     "categorical": "C",
     "datetime": "D",
     "boolean": "B",
-}
-
-_STATUS_LABELS = {
-    "good": "Good",
-    "warning": "Warning",
-    "poor": "Poor",
 }
