@@ -136,6 +136,7 @@
         window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
         window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};
         window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
+        window.AIDRIN_GLOBUS_SELECTED_KEYS = {{ globus_selected_keys | tojson }};
         initFileReferenceTargetPicker();
         showPanel('data-overview');
         // Show Globus info banner + loading spinner for summary stats

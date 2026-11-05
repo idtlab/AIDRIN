@@ -627,6 +627,32 @@ those headless remote runs do not use this web worker-root policy.
 6. Run metrics as usual. Computation happens on the endpoint; only results
    come back.
 
+**Multi-dataset HDF5 files**
+
+Some HDF5 files store several datasets (or grid fields) that cannot be read as
+one table until you choose which paths to combine. On a **local upload**, the
+Data Overview panel shows a dataset picker after you select the file. The
+**Remote (Globus)** path works the same way:
+
+1. Set the file type to **``.h5``** and enter the path as it exists on the
+   endpoint.
+2. When you click **Load Remote Dataset**, AIDRIN runs a small **inventory**
+   task on the endpoint to list HDF5 datasets (no full file transfer).
+3. If the file is multi-dataset, choose one or more compatible datasets in the
+   picker—the same rules as locally (matching lengths for 1D columns, or
+   fields that share a grid).
+4. After selection, summary statistics and metrics run remotely with your
+   ``selected_keys``; the Data Overview panel shows which datasets are active
+   and lets you **Change dataset selection** without re-entering the endpoint
+   path.
+
+The web app sends ``selected_keys`` on every Globus metric submission and
+builds the same 4-tuple ``file_info`` that ``read_file`` expects locally. The
+``aidrin remote`` CLI and MCP remote runs already accept ``selected_keys`` on
+``summarize`` / ``data_quality``; only the web Globus UI needed this wiring.
+Multi-array **Zarr** stores on Globus are handled separately (see the project
+issue tracker); this flow is **HDF5** for now.
+
 Intent & Recommendations
 -------------------------
 
