@@ -1,0 +1,14 @@
+[
+  {
+    "id": "ordered-bounds",
+    "name": "Lower bound does not exceed upper bound",
+    "target": "lower",
+    "target_type": "column",
+    "allow_missing": false,
+    "criteria": {
+      "type": "compare",
+      "operator": "<=",
+      "other_target": "upper"
+    }
+  }
+]

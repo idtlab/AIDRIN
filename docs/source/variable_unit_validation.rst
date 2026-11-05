@@ -49,9 +49,10 @@ Every variable has one resolution:
 - unresolved when review remains necessary.
 
 A user resolution overrides detected metadata while preserving the observations.
-When the units differ, the result records whether their scale or physical
-dimension differs and states that values were not converted. The editor never
-embeds a correction in the source file.
+When the units differ, the result records whether their scale, offset, or physical
+dimension differs, or that no conversion formula is available, and states that
+values were not converted.
+The editor never embeds a correction in the source file.
 
 Canonical sidecar
 -----------------
@@ -171,7 +172,29 @@ The same ambiguity rule applies to a column ending in ``_g``.
 For an override, equivalent spellings remain neutral. Convertible units with a
 different scale and units with different dimensions are recorded separately.
 For example, changing detected ``kg/m³`` to ``g/m³`` reports a 1000-fold scale
-difference and does not convert dataset values.
+difference with the formula ``g/m³ = kg/m³ × 1000``. Scale conversions use mismatch
+kind ``scale`` and a numeric ``conversion_factor``.
+Convertible units with distinct dimensionless roots, such as ``count`` and
+``radian``, retain their scale factor, including 1.0 for a 1:1 conversion.
+Dimensionless units retain an empty string in the mismatch's ``observed_unit``
+or ``resolved_unit`` field; formulas label that unit as ``dimensionless``.
+
+Affine conversions with different zero points use mismatch kind ``offset`` and
+set ``conversion_factor`` to null. The message shows the full formula, including
+both scaling and offset: for example, ``°F = °C × 1.8 + 32`` or
+``°C = K × 1 - 273.15``. This applies to any supported Pint scale/offset definition,
+regardless of the variable's name or physical dimension. Formulas describe numeric
+values in the displayed units. Rounded coefficients use ``≈`` rather than ``=``;
+for example, the reverse conversion is ``°C ≈ °F × 0.555556 - 17.7778``.
+
+Logarithmic and other unrecognized converter types are not assumed to be affine.
+When a scale/offset formula cannot be established or Pint cannot perform the
+conversion, mismatch kind ``conversion`` reports that the formula is unavailable
+and sets ``conversion_factor`` to null. The audit never converts dataset values.
+
+The version-1 sidecar schema accepts the additional ``offset`` and ``conversion`` mismatch kinds;
+existing sidecars remain importable. Consumers validating against a cached schema
+should refresh it before validating results containing these mismatch kinds.
 
 Interfaces
 ----------

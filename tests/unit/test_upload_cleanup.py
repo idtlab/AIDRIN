@@ -105,5 +105,47 @@ class PruneCustomMetricsFolderTestCase(unittest.TestCase):
         self.assertEqual(removed, 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class DeleteOldUploadsTaskTestCase(unittest.TestCase):
+    """Web custom loader scripts live outside UPLOAD_FOLDER, so the scheduled
+    reaper must prune CUSTOM_LOADERS_FOLDER too or abandoned sessions leave
+    user-supplied code behind indefinitely."""
+
+    def setUp(self):
+        self.uploads = tempfile.mkdtemp()
+        self.loaders = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.uploads, ignore_errors=True)
+        shutil.rmtree(self.loaders, ignore_errors=True)
+
+    def test_prunes_aged_custom_loader_scripts(self):
+        import time
+
+        from flask import Flask
+
+        from worker.tasks import delete_old_uploads
+
+        cache = os.path.join(self.loaders, "__pycache__")
+        os.makedirs(cache)
+        old_loader = os.path.join(self.loaders, f"custom_loader_{'a' * 32}.py")
+        old_bytecode = os.path.join(cache, f"custom_loader_{'a' * 32}.cpython-312.pyc")
+        fresh_loader = os.path.join(self.loaders, f"custom_loader_{'b' * 32}.py")
+        unrelated = os.path.join(self.loaders, "notes.txt")
+        aged = time.time() - 7200
+        for path in (old_loader, old_bytecode, fresh_loader, unrelated):
+            with open(path, "w") as fh:
+                fh.write("def load(path): ...")
+        for path in (old_loader, old_bytecode, unrelated):
+            os.utime(path, (aged, aged))
+
+        app = Flask(__name__)
+        app.config.update(UPLOAD_FOLDER=self.uploads, CUSTOM_LOADERS_FOLDER=self.loaders)
+        with app.app_context():
+            # .run() skips the Celery task wrapper, which would push the web app's
+            # context (and folders) once create_app() has run elsewhere in the suite.
+            delete_old_uploads.run()
+
+        self.assertFalse(os.path.exists(old_loader))
+        self.assertFalse(os.path.exists(old_bytecode))
+        self.assertTrue(os.path.exists(fresh_loader))
+        self.assertTrue(os.path.exists(unrelated))

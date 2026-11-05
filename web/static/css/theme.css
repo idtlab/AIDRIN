@@ -708,3 +708,45 @@ select:focus {
   margin-left: 8px;
   font-size: 12px;
 }
+
+/* Use the editor's available width: the sidebar narrows tablet layouts. */
+#custom-outlier-editor {
+  container-type: inline-size;
+}
+
+.custom-outlier-rule-header > *,
+.custom-outlier-condition-fields > *,
+.custom-outlier-range-fields > *,
+.custom-outlier-compare-fields > * {
+  min-width: 0;
+}
+
+.custom-outlier-range-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@container (min-width: 28rem) {
+  .custom-outlier-range-fields {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .custom-outlier-compare-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 40rem) {
+  .custom-outlier-limits {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 52rem) {
+  .custom-outlier-rule-header {
+    grid-template-columns: minmax(9rem, 0.6fr) minmax(16rem, 1.4fr) auto;
+  }
+
+  .custom-outlier-condition-fields {
+    grid-template-columns: minmax(9rem, 0.7fr) minmax(0, 1fr) auto;
+  }
+}

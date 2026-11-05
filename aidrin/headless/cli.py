@@ -17,6 +17,7 @@ from .api import (
     METRIC_REGISTRY,
     list_available_metrics,
     generate_metric_template,
+    generate_loader_template,
     run_custom_metric_remedy,
 )
 from .config import HeadlessConfig
@@ -260,6 +261,27 @@ def _summarize_metric(metric_name: str, result: dict) -> None:
                 print(f"{k}: {_fmt(v)}")
 
 
+def _print_fair_summary(result: dict, metadata_path: str) -> None:
+    """Print per-principle FAIR scores and the checks that failed."""
+    from aidrin.structured_data_metrics.fair_metadata import FAILED, PRINCIPLES
+
+    checks = result["FAIR Compliance Checks"]
+    print(f"{Path(metadata_path).name} ({result['Standard']['Name']}): {checks['Total Checks']} FAIR checks passed")
+    for principle in PRINCIPLES:
+        failed = [label for label, value in result[principle].items() if value == FAILED]
+        missing = f"  missing: {', '.join(failed)}" if failed else ""
+        print(f"  {principle:<14}{checks[f'{principle} Checks']:>6}{missing}")
+    for section in ("Conformance", "Structure"):
+        if section in result:
+            print(f"\n{section}:")
+            for label, value in result[section].items():
+                print(f"  {label}: {value}")
+    if "RAI Documentation" in result:
+        declared = [p for group in result["RAI Documentation"].values() for p, v in group.items() if v != "Not declared"]
+        print("\nRAI documentation (reported, not scored):")
+        print(f"  declared: {', '.join(declared) or 'none'}")
+
+
 def _print_summary_table(result: dict, file_path: str) -> None:
     """Print a human-readable summary of summarize_dataset output."""
     import os
@@ -350,6 +372,7 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "timestamp_column": getattr(args, "timestamp_column", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
+        "loader": getattr(args, "loader", None),
         "selected_keys": _parse_list(getattr(args, "selected_keys", None)),
         "path_targets": _parse_path_targets(getattr(args, "path_targets", None), target_match),
         "base_dir": getattr(args, "base_dir", None),
@@ -377,6 +400,12 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
 
 def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
     parser.add_argument("--save-images", dest="save_images", action="store_true", help="Save visualizations to disk")
     parser.add_argument("--no-save-images", dest="save_images", action="store_false", help="Do not save visualizations")
     parser.set_defaults(save_images=True)
@@ -389,6 +418,12 @@ def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
 def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
     """Lightweight args for top-level metric shortcuts."""
     parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
     parser.add_argument(
         "--selected-keys",
         dest="selected_keys",
@@ -519,81 +554,42 @@ def _skill_install(args: argparse.Namespace) -> None:
         print(f"Skill installed at: {target}")
 
 
-def _agentic_build_index(args: argparse.Namespace) -> None:
+def _require_agentic_deps() -> None:
+    """
+    Narrow dependency probe, kept separate from the actual pipeline call: an
+    ImportError raised *during* a real run (e.g. a user's own data_loader.py
+    importing a package that isn't installed) must surface as that real
+    error, not get misdiagnosed as "agentic dependencies not installed" --
+    which would hide the real traceback and, for `run`, discard already-
+    completed (paid-for) LLM work instead of returning what succeeded.
+    """
     try:
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
+        import langchain_openai  # noqa: F401 - cheapest reliable signal that aidrin[agentic] is installed
     except ImportError:
         sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
         sys.exit(1)
-    result = VectorDBBuilder(Path(args.config).resolve()).build()
+
+
+def _agentic_build_index(args: argparse.Namespace) -> None:
+    _require_agentic_deps()
+    result = _local_api.run_agentic_index(args.config)
     print(json.dumps(result, indent=2))
 
 
 def _agentic_run(args: argparse.Namespace) -> None:
-    try:
-        import yaml
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        from aidrin.agentic.data_profiler import DataProfiler
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
-        from aidrin.agentic.run import _run_query, _json_safe
-        from aidrin.agentic.token_tracker import get_tracker
-    except ImportError:
-        sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
-        sys.exit(1)
+    _require_agentic_deps()
+    result = _local_api.run_agentic_pipeline(
+        args.config,
+        output_path=args.output,
+        skip_vector=args.skip_vector,
+        verbose=getattr(args, "verbose", False),
+    )
 
-    config_path = Path(args.config).resolve()
-    get_tracker().reset()
+    saved_to = result.pop("_saved_to", None)
+    if saved_to:
+        sys.stderr.write(f"Results written to: {saved_to}\n")
 
-    profiler = DataProfiler(config_path=config_path)
-    profile_result = profiler.profile()
-
-    cfg = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
-
-    if not args.skip_vector and cfg.get("vector_store"):
-        builder = VectorDBBuilder(config_path)
-        if not builder.exists():
-            vector_result = builder.build()
-            if getattr(args, "verbose", False):
-                sys.stderr.write(json.dumps(vector_result, indent=2) + "\n")
-
-    retrieval_cfg = cfg.get("retrieval", {}) or {}
-    questions_raw = retrieval_cfg.get("questions") or []
-    if not questions_raw:
-        single = retrieval_cfg.get("question", "")
-        questions_raw = single if isinstance(single, list) else ([single] if single else [])
-
-    def _parse_q(q):
-        return (q["text"], q.get("loader")) if isinstance(q, dict) else (q, None)
-
-    parsed_questions = [_parse_q(q) for q in questions_raw]
-
-    max_workers = int(retrieval_cfg.get("max_workers", 4))
-    query_results = []
-    if parsed_questions:
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
-            futures = {
-                pool.submit(_run_query, config_path, text, profile_result, loader): text
-                for text, loader in parsed_questions
-            }
-            for future in as_completed(futures):
-                try:
-                    query_results.append(future.result())
-                except Exception as exc:
-                    query_results.append({"question": futures[future], "error": str(exc)})
-
-    combined = _json_safe({
-        "profile": profile_result,
-        "queries": query_results,
-        "token_usage": get_tracker().to_dict(),
-    })
-
-    if args.output:
-        out = Path(args.output).resolve()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
-        sys.stderr.write(f"Results written to: {out}\n")
-
-    print(json.dumps(combined, indent=2, ensure_ascii=False))
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------------------
@@ -606,7 +602,7 @@ REMOTE_MANAGEMENT = {
 
 # Commands that cannot run on an endpoint: they need files or credentials that
 # live on the client machine.
-REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory"}
+REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory", "fair"}
 
 
 REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
@@ -875,6 +871,21 @@ def main() -> None:
         help="Directory to create the module in (e.g. --dir /path/to/my_project)",
     )
 
+    loader_parser = subparsers.add_parser(
+        "add-custom-loader",
+        help="Create a custom data-loader template (load(path) -> DataFrame)",
+    )
+    loader_parser.add_argument(
+        "name",
+        help="Name of the loader module (e.g. 'root_ttree'). No spaces or special characters.",
+    )
+    loader_parser.add_argument(
+        "--dir",
+        dest="loader_dir",
+        required=True,
+        help="Directory to create the loader in (e.g. --dir ./loaders)",
+    )
+
     list_parser = subparsers.add_parser("list", help="List available metrics")
     list_parser.add_argument("--category", default=None)
     list_parser.add_argument(
@@ -1002,6 +1013,12 @@ def main() -> None:
     dq_parser.add_argument("file_path")
     dq_parser.add_argument("--file-type", dest="file_type", default=None)
     dq_parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
+    dq_parser.add_argument(
         "--selected-keys",
         dest="selected_keys",
         default=None,
@@ -1019,6 +1036,12 @@ def main() -> None:
         dest="file_type",
         default=None,
         help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
+    )
+    summarize_parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
     )
     summarize_parser.add_argument(
         "--selected-keys",
@@ -1041,6 +1064,21 @@ def main() -> None:
     inventory_parser.add_argument("file_path", help="Path to the HDF5 (.h5) or Zarr (.zarr) file")
     inventory_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
     inventory_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+
+    # FAIR assessment of a metadata file (reads no dataset)
+    from aidrin.structured_data_metrics.fair_metadata import STANDARDS as FAIR_STANDARDS
+
+    fair_parser = subparsers.add_parser(
+        "fair",
+        help="Score a metadata file (Croissant, RO-Crate, DCAT-US 3.0 or 1.1, or DataCite JSON) against the FAIR principles",
+    )
+    fair_parser.add_argument("metadata_path", help="Path to the JSON or JSON-LD metadata file")
+    fair_parser.add_argument(
+        "--standard", default="auto", choices=("auto", *FAIR_STANDARDS),
+        help="Metadata standard the file follows (default: detect it)",
+    )
+    fair_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print a per-principle table instead of JSON")
+    fair_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
     # Agentic evaluation commands
     agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
@@ -1116,6 +1154,18 @@ def main() -> None:
                 print(f"Run the metric via: aidrin run custom {path} <dataset> metric")
                 print(f"Run the remedy via: aidrin run custom {path} <dataset> remedy")
             except FileExistsError as e:
+                print(f"{e}")
+            return
+        if args.command == "add-custom-loader":
+            target_dir = args.loader_dir or os.getcwd()
+            try:
+                path = generate_loader_template(args.name, target_dir)
+                print(f"Loader template created at: {path}")
+                print("Implement load(path, **kwargs) to return a pandas DataFrame.")
+                print(
+                    f"Run via: aidrin run completeness <dataset> --loader {path}:load"
+                )
+            except (FileExistsError, ValueError) as e:
                 print(f"{e}")
             return
         if args.command == "list":
@@ -1240,6 +1290,7 @@ def main() -> None:
                 args.file_path,
                 file_type=args.file_type,
                 max_features=args.max_features,
+                loader=getattr(args, "loader", None),
                 selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
@@ -1257,6 +1308,7 @@ def main() -> None:
                 file_type=args.file_type,
                 verbose=args.verbose,
                 strip_visualizations=True,
+                loader=getattr(args, "loader", None),
                 selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
@@ -1272,6 +1324,15 @@ def main() -> None:
             result = _local_api.inventory(args.file_path, file_type=args.file_type)
             _write_output_file(result, getattr(args, "output", None))
             _dump_result(result)
+            return
+
+        if args.command == "fair":
+            result = _local_api.calculate_fair_compliance(args.metadata_path, args.standard)
+            _write_output_file(result, args.output)
+            if args.human_readable:
+                _print_fair_summary(result, args.metadata_path)
+            else:
+                _dump_result(result)
             return
 
         if args.command == "agentic":

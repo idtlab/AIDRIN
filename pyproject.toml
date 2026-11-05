@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==84.0.0"]
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 
@@ -8,7 +8,7 @@ name = "aidrin"
 dynamic = ["version"]
 readme = "README.md"
 description = "A tool to evaluate the readiness of data for AI"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {file = "LICENSE.txt"}
 keywords = ["data readiness for AI", "AI readiness"]
 
@@ -90,7 +90,7 @@ mcp = [
     "langchain-community>=0.3.0",
     "langchain-text-splitters>=0.3.0",
     "faiss-cpu>=1.7.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.26.0",
 ]
 agentic = [
     "openai>=1.6.0",
@@ -101,7 +101,7 @@ agentic = [
     "numpy>=1.26.4",
     "pandas>=2.0.0",
     "pyyaml>=6.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.26.0",
 ]
 dev = [
     "pytest>=7.0",
@@ -113,7 +113,7 @@ dev = [
     "jsonschema>=4.0",
 ]
 docs = [
-    "sphinx==8.1.3",
+    "sphinx==9.0.4",
     "sphinx-rtd-theme==3.1.0",
 ]
 
@@ -162,7 +162,7 @@ dev = [
     "jsonschema>=4.0",
 ]
 docs = [
-    "sphinx==8.1.3",
+    "sphinx==9.0.4",
     "sphinx-rtd-theme==3.1.0",
 ]
 agentic = [
@@ -174,7 +174,7 @@ agentic = [
     "numpy>=1.26.4",
     "pandas>=2.0.0",
     "pyyaml>=6.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.26.0",
 ]
 mcp = [
     "mcp>=2.0,<3.0",
@@ -183,7 +183,7 @@ mcp = [
     "langchain-community>=0.3.0",
     "langchain-text-splitters>=0.3.0",
     "faiss-cpu>=1.7.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.26.0",
 ]
 mlflow = [
     # Pinned to the 3.x line, and tested against 3.15.2.

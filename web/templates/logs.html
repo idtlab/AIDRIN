@@ -90,6 +90,15 @@
       renderLogs();
     }
 
+    // Log lines come from the shared log file and can contain attacker-supplied
+    // text (e.g. an uploaded file-type value), so escape before injecting as HTML.
+    function esc(value) {
+      return String(value).replace(
+        /[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+      );
+    }
+
     function renderLogs() {
       const tbody = document.getElementById('log-tbody');
       const wrapper = document.getElementById('log-table-wrapper');
@@ -125,10 +134,10 @@
         }[row.level] || 'text-gray-500';
 
         return `<tr class="${stripe} border-b dark:border-gray-700">
-          <td class="px-4 py-2 font-mono text-xs whitespace-nowrap text-gray-900 dark:text-white">${row.timestamp || '—'}</td>
-          <td class="px-4 py-2 text-xs whitespace-nowrap">${row.logger || '—'}</td>
-          <td class="px-4 py-2 text-xs whitespace-nowrap ${levelColor} font-medium">${row.level || '—'}</td>
-          <td class="px-4 py-2 text-xs">${row.message || '—'}</td>
+          <td class="px-4 py-2 font-mono text-xs whitespace-nowrap text-gray-900 dark:text-white">${esc(row.timestamp || '—')}</td>
+          <td class="px-4 py-2 text-xs whitespace-nowrap">${esc(row.logger || '—')}</td>
+          <td class="px-4 py-2 text-xs whitespace-nowrap ${levelColor} font-medium">${esc(row.level || '—')}</td>
+          <td class="px-4 py-2 text-xs">${esc(row.message || '—')}</td>
         </tr>`;
       }).join('');
     }

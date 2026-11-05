@@ -2,27 +2,24 @@
 RemediationGenerator: synthesises actionable remediation recommendations for
 detected data readiness gaps, grounded in retrieved domain literature.
 
-Optional config section (falls back to retrieval.answer_model if absent):
+Uses the single shared ``llm.model``/``llm.base_url`` (see executor.py):
 
 .. code-block:: yaml
 
     remediation:
       enabled: true
-      model: gpt-4o
-      openai_api_key: null
       context_chars: 3000
 """
 
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from aidrin.agentic.llm_factory import create_chat_model
+from aidrin.agentic.llm_factory import create_chat_model, resolve_provider_api_key
 
 
 _CONTEXT_CHARS = 3000
@@ -129,24 +126,20 @@ class RemediationGenerator:
 
     def _get_llm(self) -> Any:
         if self._llm is None:
-            api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
-            self._llm = create_chat_model(self.model, api_key=api_key, temperature=0, base_url=self.base_url)
+            self._llm = create_chat_model(
+                self.model, api_key=self.api_key, temperature=0, base_url=self.base_url, component="remediation"
+            )
         return self._llm
 
     def _load_config(self, config_path: Path) -> dict[str, Any]:
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
         rem_cfg = raw.get("remediation", {}) or {}
-        retrieval_cfg = raw.get("retrieval", {}) or {}
         llm_cfg = raw.get("llm", {}) or {}
         enabled = bool(rem_cfg.get("enabled", True))
-        model = rem_cfg.get("model") or retrieval_cfg.get("answer_model", "gpt-4o")
-        api_key = (
-            rem_cfg.get("openai_api_key")
-            or retrieval_cfg.get("openai_api_key")
-            or llm_cfg.get("api_key")
-            or os.environ.get("OPENAI_API_KEY")
-        )
-        base_url = llm_cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
+        model = llm_cfg.get("model", "gpt-4o")
+        base_url = llm_cfg.get("base_url")
+        # One provider (llm.base_url) for the whole pipeline.
+        api_key = resolve_provider_api_key(base_url, llm_cfg.get("api_key"))
         context_chars = int(rem_cfg.get("context_chars", _CONTEXT_CHARS))
         return {
             "enabled": enabled,

@@ -1,7 +1,10 @@
 """Tests for metric submission from the inspector."""
 
+import io
 import json
 from pathlib import Path
+
+import pytest
 
 import web.routes.metrics as metrics_routes
 
@@ -230,6 +233,44 @@ def test_understandability_variable_unit_validation_uses_request_local_sidecar(u
     assert result["summary"]["counts"]["not_applicable"] == 2
 
 
+@pytest.mark.parametrize(
+    ("observed", "resolved", "kind", "formula"),
+    [
+        ("degC", "kelvin", "offset", "K = °C × 1 + 273.15"),
+        ("degC", "degF", "offset", "°F = °C × 1.8 + 32"),
+        ("degF", "degC", "offset", "°C ≈ °F × 0.555556 - 17.7778"),
+        ("kPa", "Pa", "scale", "Pa = kPa × 1000"),
+        ("dBm", "watt", "conversion", "conversion formula unavailable for these units"),
+    ],
+)
+def test_variable_unit_web_override_preserves_conversion_reporting(client, observed, resolved, kind, formula):
+    response = client.post(
+        "/inspector",
+        data={
+            "file": (io.BytesIO(f"measurement ({observed})\n0\n25\n".encode()), "measurement.csv"),
+            "fileTypeSelector": ".csv",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    metadata = client.post("/custom-outlier-targets").get_json()["unit_metadata"]
+    metadata["variables"][0]["resolution"] = {
+        "kind": "unit", "unit": resolved, "source": "user",
+    }
+
+    response = client.post(
+        "/variable-unit-validation?return_type=json",
+        data={"variable_unit_validation": "yes", "variable_unit_metadata": json.dumps(metadata)},
+    )
+    result = response.get_json()["Variable Unit Validation"]
+    mismatch = result["variables"][0]["finding"]["override_mismatches"][0]
+
+    assert mismatch["kind"] == kind
+    assert mismatch["conversion_factor"] == (1000.0 if kind == "scale" else None)
+    assert formula in mismatch["message"]
+    assert result["summary"]["all_variables_ready"] == 1
+
+
 def test_variable_unit_error_is_metric_scoped(uploaded_client):
     response = uploaded_client.post(
         "/variable-unit-validation?return_type=json",
@@ -452,6 +493,32 @@ def test_data_quality_custom_outlier_error_is_metric_scoped(uploaded_client):
     assert "error" not in data
     assert "Custom Criteria Outliers" in data
     assert "Error" in data["Custom Criteria Outliers"]
+
+
+def test_data_quality_cross_variable_rules(client):
+    uploaded = client.post("/inspector", data={
+        "file": (io.BytesIO(b"lower,upper\n1,2\n3,2\n1,\n"), "bounds.csv"),
+        "fileTypeSelector": ".csv",
+    }, content_type="multipart/form-data", follow_redirects=True)
+    assert uploaded.status_code == 200
+    rules = [{
+        "id": "ordered-bounds", "target": "lower", "target_type": "column",
+        "criteria": {"type": "compare", "operator": "<=", "other_target": "upper"},
+    }]
+    response = client.post("/data-quality?return_type=json", data={
+        "custom_outliers": "yes", "custom_outlier_rules": json.dumps(rules),
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    result = response.get_json()["Custom Criteria Outliers"]
+    summary = result["Rule summaries"]["ordered-bounds"]
+    assert "Errors" not in result
+    assert summary["total"] == 3
+    assert summary["valid"] == 1
+    assert summary["outlier"] == 2
+    assert summary["missing"] == 1
+    row = result["Outlier export"]["ordered-bounds"][0]
+    assert row["reference_values"] == {"upper": 2}
+    assert row["location"]["source_line"] == 3
 
 
 def test_data_quality_custom_outlier_missing_target_is_actionable(uploaded_client):

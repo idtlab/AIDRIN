@@ -105,3 +105,27 @@ def test_summary_statistics_different_file_not_cached(client, tmp_path):
     assert second["numerical_features"] == []
     assert second["summary_statistics"] == {}
     assert sorted(second["categorical_features"]) == ["department", "level", "name"]
+
+
+def test_summary_statistics_survives_infinite_values(client, tmp_path):
+    """One inf must not fail the whole panel.
+
+    dropna() keeps infinities, so they reached ax.hist as an infinite axis
+    range and raised ValueError, which the blanket handler turned into a failed
+    Data Overview for the entire dataset.
+    """
+    _upload(
+        client,
+        tmp_path,
+        "label,ratio,score\na,inf,1\nb,0.5,2\nc,-inf,3\n",
+        name="infinite.csv",
+    )
+
+    resp = client.get("/summary-statistics")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    # Both renderings are present for every numeric column, so the per-chart
+    # Curve/Bars switch still has a twin to swap to.
+    assert set(data["histograms"]) == set(data["histogram_bars"])
+    assert "ratio_light" in data["histogram_bars"]

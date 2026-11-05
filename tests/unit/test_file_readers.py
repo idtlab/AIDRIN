@@ -234,6 +234,16 @@ class TestNpzReaderRead(unittest.TestCase):
         with self.assertRaises(Exception):
             npzReader("/nonexistent/path/file.npz", _log).read()
 
+    def test_pickled_object_array_rejected(self):
+        # Object arrays are stored as pickles, which would execute arbitrary
+        # code on load; the reader must refuse them (allow_pickle=False).
+        path = _write_npz(values=np.array([[1, 2], [3]], dtype=object))
+        try:
+            with self.assertRaises(ValueError):
+                npzReader(path, _log).read()
+        finally:
+            _clean(path)
+
 
 if __name__ == "__main__":
     unittest.main()
