@@ -36,6 +36,19 @@ USER_FACING_INVENTORY_TYPES = frozenset(
     {INVENTORY_EMPTY, INVENTORY_SINGLE, INVENTORY_MULTI}
 )
 
+# Frame attribute naming the columns a reader excluded to produce a tabular
+# frame (e.g. array-valued ROOT branches). Mirrors the row_units.py pattern:
+# one constant plus one accessor, so consumers cannot drift on the key name.
+DROPPED_COLUMNS_ATTR = "dropped_jagged_columns"
+
+
+def dropped_columns(frame) -> list:
+    """Columns a reader excluded to produce a tabular frame, or []."""
+    try:
+        return list(frame.attrs.get(DROPPED_COLUMNS_ATTR) or [])
+    except AttributeError:
+        return []
+
 
 class DatasetEntry(TypedDict):
     path: str
