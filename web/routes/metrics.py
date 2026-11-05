@@ -88,6 +88,7 @@ from web.routes.utils import (
     get_result_or_default,
     is_metric_cache_valid,
     store_result,
+    continuous_bars,
     summary_histograms,
     categorical_distribution_charts,
 )
@@ -681,6 +682,7 @@ def _build_dataset_overview_section(file_info, include_visualizations=False):
         chart_df = _dataframe_for_overview_detail_charts(df, display_profiles)
         overview["categorical_charts"] = categorical_distribution_charts(chart_df)
         overview["histograms"] = summary_histograms(chart_df, figsize=(7, 4.5))
+        overview["histogram_bars"] = continuous_bars(chart_df, figsize=(7, 4.5))
     return overview
 
 
@@ -2294,6 +2296,7 @@ def _build_dataset_overview_visualizations(file_info):
     return {
         "categorical_charts": categorical_distribution_charts(chart_df),
         "histograms": summary_histograms(chart_df, figsize=(7, 4.5)),
+        "histogram_bars": continuous_bars(chart_df, figsize=(7, 4.5)),
     }
 
 
