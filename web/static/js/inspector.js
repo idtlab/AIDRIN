@@ -6669,15 +6669,13 @@ function _renderReadinessNeedsAttentionPanel(naItems, emptyMessage) {
 /** Readiness metric definitions shown in info-icon tooltips. */
 const _READINESS_METRIC_INFO = {
   feature_profile:
-    "A per-column snapshot of whether each feature is usable for modeling. Combines missingness, cardinality, and value balance into a readiness status (Good / Warning / Poor).",
+    "A per-column snapshot of structural characteristics useful for modeling. Combines missingness, cardinality, and value balance.",
   pct_missing:
     "Share of rows where this feature is missing (null/NaN). High missingness reduces reliability and may require imputation or dropping the column.",
   n_unique:
     "Number of distinct non-missing values. Very low values suggest constants; very high values relative to row count may indicate IDs or free text.",
   pct_dominant:
     "Share of rows taken by the most frequent value (the mode). Values near 100% mean the column is almost constant and usually carries little signal.",
-  profile_status:
-    "Readiness verdict for this feature. Poor: high missingness, constant, or ID-like. Warning: moderate issues. Good: no major issues detected.",
   overall_dq_grade:
     "Average of the data-quality KPIs (completeness, uniqueness, outlier-cleanliness). Higher is better — indicates how clean the dataset is overall.",
   analysis_scope:
@@ -6770,20 +6768,6 @@ function _formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Badge HTML for per-feature readiness status. */
-function _profileStatusBadge(status) {
-  const cls = _dqStatusClasses(status);
-  const label =
-    status === "good"
-      ? "Good"
-      : status === "warning"
-        ? "Warning"
-        : status === "poor"
-          ? "Poor"
-          : "—";
-  return `<span class="px-2 py-0.5 rounded text-xs font-medium ${cls.badge}">${label}</span>`;
-}
-
 /**
  * Render the dataset overview: file metadata, KPI tiles, per-feature readiness
  * profile, and collapsible detailed statistics / distributions / histograms.
@@ -6797,12 +6781,6 @@ function renderReadinessDatasetOverview(container, overview) {
   const meta = overview.file_metadata || {};
   const profiles = overview.feature_profiles || [];
   const profileMeta = overview.feature_profiles_meta || {};
-  const statusCounts = profileMeta.status_counts || {};
-  const poorCount =
-    statusCounts.poor ?? profiles.filter((p) => p.status === "poor").length;
-  const warnCount =
-    statusCounts.warning ??
-    profiles.filter((p) => p.status === "warning").length;
 
   // --- File metadata ---
   let html = `
@@ -6843,13 +6821,8 @@ function renderReadinessDatasetOverview(container, overview) {
 
   // --- Per-feature readiness profile ---
   html += `
-    <div class="flex items-center justify-between mb-2">
+    <div class="mb-2">
       <p class="text-sm font-semibold text-gray-900 dark:text-white inline-flex items-center">Per-feature readiness profile${_readinessInfoIcon("feature_profile")}</p>
-      <span class="text-xs text-gray-500 dark:text-gray-400">
-        ${poorCount ? `<span class="text-red-600 dark:text-red-400">${poorCount} poor</span>` : ""}
-        ${warnCount ? `${poorCount ? " · " : ""}<span class="text-amber-600 dark:text-amber-400">${warnCount} warning</span>` : ""}
-        ${!poorCount && !warnCount ? "all good" : ""}
-      </span>
     </div>`;
 
   if (profileMeta.truncated) {
@@ -6863,7 +6836,6 @@ function renderReadinessDatasetOverview(container, overview) {
   html += _readinessTh("% missing", "pct_missing", true);
   html += _readinessTh("# unique", "n_unique", true);
   html += _readinessTh("% dominant", "pct_dominant", true);
-  html += _readinessTh("Status", "profile_status", false);
   html += `<th class="px-3 py-2">Summary</th>`;
   html += `</tr></thead><tbody>`;
 
@@ -6884,7 +6856,6 @@ function renderReadinessDatasetOverview(container, overview) {
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${fmtProfilePct(p.pct_missing)}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.n_unique}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.pct_dominant != null ? fmtProfilePct(p.pct_dominant) : "—"}</td>`;
-    html += `<td class="px-3 py-2">${_profileStatusBadge(p.status)}</td>`;
     html += `<td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title="${escapeHtml(p.summary || "")}">${escapeHtml(p.summary || "—")}</td>`;
     html += `</tr>`;
   });
