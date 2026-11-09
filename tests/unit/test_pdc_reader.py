@@ -6,6 +6,7 @@ Fakes stand in for PDCpy and the PDC server, so these run without either.
 import json
 import logging
 import os
+import socket
 import sys
 import tempfile
 import types
@@ -288,6 +289,40 @@ class TestPDCClient(unittest.TestCase):
         with mock.patch.object(pdc_reader, "_require_pdcpy", return_value=fake):
             with self.assertRaisesRegex(PDCError, "Could not connect to a PDC server"):
                 pdc_reader.PDCClient.get()
+
+
+class TestCheckServer(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = tmp.name
+
+    def _cfg(self, address):
+        with open(os.path.join(self.tmp, "server.cfg"), "w") as fh:
+            fh.write(f"1\n{address}\n")
+
+    def test_missing_cfg(self):
+        with self.assertRaisesRegex(PDCError, "No PDC server found"):
+            pdc_reader.check_server(self.tmp)
+
+    def test_listening_server_passes(self):
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            self._cfg(f"ofi+tcp;ofi_rxm://127.0.0.1:{listener.getsockname()[1]}")
+            pdc_reader.check_server(self.tmp)
+
+    def test_stale_cfg_is_refused(self):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        self._cfg(f"ofi+tcp;ofi_rxm://127.0.0.1:{port}")
+        with self.assertRaisesRegex(PDCError, f"No PDC server is listening at 127.0.0.1:{port}"):
+            pdc_reader.check_server(self.tmp, timeout=1.0)
+
+    def test_non_tcp_transport_not_probed(self):
+        self._cfg("ofi+cxi://0x12345")
+        pdc_reader.check_server(self.tmp)
 
 
 if __name__ == "__main__":

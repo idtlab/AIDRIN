@@ -32,6 +32,8 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import re
+import socket
 import threading
 from typing import Any
 
@@ -97,7 +99,42 @@ def load_descriptor(path: str) -> dict[str, Any]:
     return {"objects": list(objects), "container": container, "pdc_tmpdir": tmpdir}
 
 
-def _route_logs_to_stderr(pdc):
+_TCP_ADDRESS = re.compile(r"^(?P<transport>[^:]+)://\[?(?P<host>[^\]/]+?)\]?:(?P<port>\d+)$")
+
+
+def check_server(tmpdir: str, timeout: float = 2.0) -> None:
+    """Raise PDCError unless a PDC server looks reachable through ``tmpdir``.
+
+    ``pdc.init()`` blocks and then kills the process when no server answers, so
+    this runs first. It needs ``server.cfg`` (a server count, then one address
+    per line) and, for TCP-based transports, connects to the first address; a
+    leftover ``server.cfg`` from a stopped server fails here instead of in
+    ``pdc.init()``. Other transports (e.g. ``ofi+cxi``) are not probed.
+    """
+    cfg = os.path.join(tmpdir, "server.cfg")
+    try:
+        with open(cfg, encoding="utf-8") as fh:
+            lines = [line.strip() for line in fh if line.strip()]
+    except OSError:
+        raise PDCError(
+            f"No PDC server found: '{cfg}' does not exist. "
+            "Start pdc_server with this PDC_TMPDIR, or fix \"pdc_tmpdir\" in the descriptor."
+        ) from None
+    match = _TCP_ADDRESS.match(lines[1]) if len(lines) > 1 else None
+    if not match or not any(t in match["transport"] for t in ("tcp", "sockets")):
+        return
+    host, port = match["host"], int(match["port"])
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            pass
+    except OSError as exc:
+        raise PDCError(
+            f"No PDC server is listening at {host}:{port} (from '{cfg}'): {exc}. "
+            "The server may have stopped and left server.cfg behind."
+        ) from None
+
+
+def route_logs_to_stderr(pdc):
     """Send PDC's log output to stderr so it never mixes with AIDRIN's JSON on stdout.
 
     The PDC C library logs every level to stdout by default. PDCpy does not
@@ -144,17 +181,12 @@ class PDCClient:
             pdc = _require_pdcpy()
             effective = tmpdir or os.environ.get("PDC_TMPDIR")
             if not pdc.ready():
-                # pdc.init() blocks and then kills the process when no server is
-                # listening, so check for the server's config file first.
-                if effective and not os.path.exists(os.path.join(effective, "server.cfg")):
-                    raise PDCError(
-                        f"No PDC server found: '{os.path.join(effective, 'server.cfg')}' does not exist. "
-                        "Start pdc_server with this PDC_TMPDIR, or fix \"pdc_tmpdir\" in the descriptor."
-                    )
+                if effective:
+                    check_server(effective)
                 if tmpdir:
                     # The client library reads PDC_TMPDIR at init to find server.cfg.
                     os.environ["PDC_TMPDIR"] = tmpdir
-                _route_logs_to_stderr(pdc)
+                route_logs_to_stderr(pdc)
                 try:
                     pdc.init()
                 except pdc.PDCError as exc:

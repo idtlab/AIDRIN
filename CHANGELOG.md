@@ -13,7 +13,9 @@ All notable changes to AIDRIN are documented here. This project loosely follows
   separately against the local PDC build. Objects map to columns like Zarr
   arrays, `--selected-keys` picks
   objects, and `aidrin inventory` lists their shapes and types. CLI and
-  library only. See the PDC section of the CLI usage docs.
+  library only. `examples/sample_data/pdc/` loads the adult sample into a PDC
+  server, and `tests/unit/test_pdc_live.py` runs against a real server when one
+  is available. See the PDC section of the CLI usage docs.
 
 ## [2026.10.1] - 2026-10-28
 

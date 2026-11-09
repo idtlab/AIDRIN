@@ -1,0 +1,12 @@
+{
+    "objects": [
+        "adult_ID",
+        "adult_age",
+        "adult_fnlwgt",
+        "adult_education_num",
+        "adult_capital_gain",
+        "adult_capital_loss",
+        "adult_hours_per_week"
+    ],
+    "container": "aidrin_adult"
+}

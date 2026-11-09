@@ -65,7 +65,18 @@ Use ``--selected-keys`` to choose objects from the descriptor.
    aidrin inventory /path/to/census.pdc
    aidrin data-quality /path/to/census.pdc --selected-keys age,income
 
-``.pdc`` descriptors are CLI/library only; local web upload does not offer them.
+To try it on the bundled adult dataset, load its numeric columns into your PDC server, then read
+them back through the ``adult.pdc`` descriptor next to the script:
+
+.. code-block:: bash
+
+   export PDC_TMPDIR=/path/to/pdc_tmp
+   python examples/sample_data/pdc/load_adult.py
+   aidrin data-quality examples/sample_data/pdc/adult.pdc
+
+``.pdc`` descriptors are CLI/library only; local web upload does not offer them. Only one PDC
+client can run per host at a time unless it is launched with MPI (each non-MPI client binds port
+8000), so do not read from PDC in two AIDRIN processes on the same machine at once.
 
 ----
 
