@@ -42,6 +42,16 @@ A plain ``.[dev]`` install skips a handful of tests whose optional dependencies
 are absent, notably the agentic and HDF5 sample suites. Install the extras you
 want to exercise.
 
+``tests/unit/test_pdc_live.py`` runs against a real PDC server and skips unless
+PDCpy is installed and ``PDC_TMPDIR`` points at a running ``pdc_server`` (see
+:ref:`cli_pdc`). It writes its own objects and deletes them afterwards. No other
+PDC client may run on the same host while it does, since non-MPI PDC clients all
+bind port 8000.
+
+.. code-block:: bash
+
+   PDC_TMPDIR=/path/to/pdc_tmp PYTHONPATH=. pytest tests/unit/test_pdc_live.py -v
+
 Running a Specific Test File
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

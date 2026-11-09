@@ -8,6 +8,7 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
 from aidrin.file_handling.readers.parquet_reader import parquetReader
+from aidrin.file_handling.readers.pdc_reader import PDCError, pdcReader
 from aidrin.file_handling.readers.zarr_reader import zarrReader
 
 # Notes:
@@ -18,6 +19,8 @@ from aidrin.file_handling.readers.zarr_reader import zarrReader
 # - Add a display name and extension to SUPPORTED_FILE_TYPES for the front end.
 # - Formats that are CLI/library/Globus-only (e.g. Zarr directories) go in
 #   GLOBUS_FILE_TYPES but not SUPPORTED_FILE_TYPES (local upload dropdown).
+# - PDC (.pdc descriptors naming objects on a running PDC server) is
+#   CLI/library-only: it needs a reachable server, so it is in neither list.
 
 # Reader Map. Used to create file type specific parsing
 READER_MAP = {
@@ -28,6 +31,7 @@ READER_MAP = {
     ".h5": hdf5Reader,
     ".parquet": parquetReader,
     ".zarr": zarrReader,
+    ".pdc": pdcReader,
     # Add additional file types here
 }
 
@@ -64,7 +68,7 @@ GLOBUS_FILE_TYPES = SUPPORTED_FILE_TYPES + [
 ]
 
 # File types that accept selected_keys for multi-array / multi-dataset selection.
-_SELECTION_FILE_TYPES = {".h5", ".zarr"}
+_SELECTION_FILE_TYPES = {".h5", ".zarr", ".pdc"}
 
 
 class ReaderReturnedNone(RuntimeError):
@@ -79,7 +83,7 @@ class ReaderReturnedNone(RuntimeError):
 # HDF5/Zarr store needing selected_keys). Returning None there is
 # indistinguishable from "unsupported type", so raise instead and let the
 # CLI print one error.
-_RAISE_ON_EMPTY_FILE_TYPES = {".h5", ".zarr"}
+_RAISE_ON_EMPTY_FILE_TYPES = {".h5", ".zarr", ".pdc"}
 
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
@@ -412,6 +416,10 @@ def read_file(file_info, columns=None, loader=None):
         # A missing optional reader dependency (e.g. aidrin[zarr]) is a setup
         # problem, not an unreadable file. Its message carries the install
         # command, so let it through rather than flattening it.
+        raise
+    except PDCError:
+        # Bad descriptor, unreachable server or missing object: the message
+        # says which, so let it through rather than flattening it.
         raise
     except Exception as e:
         file_upload_time_log.error(f"Error while Reading File: {e}", exc_info=True)

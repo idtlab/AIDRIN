@@ -5,6 +5,18 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- **PDC (Proactive Data Containers) input.** A `.pdc` JSON descriptor names
+  objects on a running [PDC](https://github.com/hpc-io/pdc) server, and AIDRIN
+  reads them with [PDCpy](https://github.com/hpc-io/PDCpy), installed
+  separately against the local PDC build. Objects map to columns like Zarr
+  arrays, `--selected-keys` picks
+  objects, and `aidrin inventory` lists their shapes and types. CLI and
+  library only. `examples/sample_data/pdc/` loads the adult sample into a PDC
+  server, and `tests/unit/test_pdc_live.py` runs against a real server when one
+  is available. See the PDC section of the CLI usage docs.
+
 ## [2026.10.1] - 2026-10-28
 
 ### Changed (breaking)

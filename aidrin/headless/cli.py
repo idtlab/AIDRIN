@@ -428,7 +428,7 @@ def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
         "--selected-keys",
         dest="selected_keys",
         default=None,
-        help="Comma-separated HDF5/Zarr array paths to read",
+        help="Comma-separated HDF5/Zarr array paths or PDC object names to read",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
@@ -1022,7 +1022,7 @@ def main() -> None:
         "--selected-keys",
         dest="selected_keys",
         default=None,
-        help="Comma-separated HDF5/Zarr array paths to read",
+        help="Comma-separated HDF5/Zarr array paths or PDC object names to read",
     )
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
@@ -1035,7 +1035,7 @@ def main() -> None:
         "--file-type",
         dest="file_type",
         default=None,
-        help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
+        help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr, pdc)",
     )
     summarize_parser.add_argument(
         "--loader",
@@ -1047,7 +1047,7 @@ def main() -> None:
         "--selected-keys",
         dest="selected_keys",
         default=None,
-        help="Comma-separated HDF5/Zarr array paths to read",
+        help="Comma-separated HDF5/Zarr array paths or PDC object names to read",
     )
     summarize_parser.add_argument(
         "--max-features", dest="max_features", type=int, default=None,
@@ -1059,9 +1059,9 @@ def main() -> None:
     # HDF5/Zarr layout inspection
     inventory_parser = subparsers.add_parser(
         "inventory",
-        help="Classify an HDF5/Zarr file's on-disk layout and list its datasets, without reading it as a table",
+        help="Classify an HDF5/Zarr file's on-disk layout, or a PDC descriptor's objects, without reading it as a table",
     )
-    inventory_parser.add_argument("file_path", help="Path to the HDF5 (.h5) or Zarr (.zarr) file")
+    inventory_parser.add_argument("file_path", help="Path to the HDF5 (.h5), Zarr (.zarr) or PDC descriptor (.pdc) file")
     inventory_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
     inventory_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 

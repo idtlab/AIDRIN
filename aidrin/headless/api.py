@@ -433,7 +433,7 @@ def inventory(file_path: str, file_type: Optional[str] = None) -> Dict[str, Any]
     normalized = _normalize_file_type(file_type, file_path)
     if normalized not in _SELECTION_FILE_TYPES:
         raise ValueError(
-            "'aidrin inventory' only applies to HDF5 (.h5) and Zarr (.zarr) "
+            "'aidrin inventory' only applies to HDF5 (.h5), Zarr (.zarr) and PDC (.pdc) "
             f"files; got {normalized or '(unrecognized)'}. Every other "
             "supported format is always read as a single table."
         )
