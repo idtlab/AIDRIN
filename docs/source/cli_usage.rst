@@ -74,6 +74,9 @@ them back through the ``adult.pdc`` descriptor next to the script:
    python examples/sample_data/pdc/load_adult.py
    aidrin data-quality examples/sample_data/pdc/adult.pdc
 
+PDC's own log output goes to stderr, limited to warnings and errors; set ``PDC_DEBUG=1`` to see
+its full INFO logging as well.
+
 ``.pdc`` descriptors are CLI/library only; local web upload does not offer them. Only one PDC
 client can run per host at a time unless it is launched with MPI (each non-MPI client binds port
 8000), so do not read from PDC in two AIDRIN processes on the same machine at once.

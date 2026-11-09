@@ -134,22 +134,42 @@ def check_server(tmpdir: str, timeout: float = 2.0) -> None:
         ) from None
 
 
-def route_logs_to_stderr(pdc):
-    """Send PDC's log output to stderr so it never mixes with AIDRIN's JSON on stdout.
+# PDC_LogLevel (pdc_logger.h)
+_LOG_LEVEL_WARNING = 1
+_LOG_LEVELS = range(4)  # LOG_LEVEL_ERROR .. LOG_LEVEL_DEBUG
 
-    The PDC C library logs every level to stdout by default. PDCpy does not
-    expose its logger, so call ``setLogFile`` (pdc_logger.h) through the
-    already-loaded PDCpy extension, whose dependencies include libpdc. Older
-    PDC releases lack ``setLogFile``; logging is then left alone.
+
+def _pdc_debug_enabled() -> bool:
+    try:
+        return int(os.environ.get("PDC_DEBUG", "0")) != 0
+    except ValueError:
+        return False
+
+
+def configure_pdc_logging(pdc):
+    """Route PDC's C logging to stderr and, unless ``PDC_DEBUG`` is set, drop its INFO lines.
+
+    The PDC C library logs every level to stdout by default, which would mix
+    with AIDRIN's JSON output, and prints INFO lines on every object access.
+    PDCpy does not expose the logger, so call ``setLogFile`` and
+    ``setLogLevel`` (pdc_logger.h) through the already-loaded PDCpy
+    extension, whose dependencies include libpdc. Warnings and errors are
+    kept; set ``PDC_DEBUG=1`` to see everything. Call before ``pdc.init()``.
+    Older PDC releases lack these functions; logging is then left alone.
     """
     try:
-        set_log_file = ctypes.CDLL(pdc.main.__file__).setLogFile
+        lib = ctypes.CDLL(pdc.main.__file__)
+        set_log_file, set_log_level = lib.setLogFile, lib.setLogLevel
     except (AttributeError, OSError):
         return
     set_log_file.restype = None
     set_log_file.argtypes = [ctypes.c_int, ctypes.c_char_p]
-    for level in range(4):  # LOG_LEVEL_ERROR .. LOG_LEVEL_DEBUG
+    for level in _LOG_LEVELS:
         set_log_file(level, b"stderr")
+    if not _pdc_debug_enabled():
+        set_log_level.restype = None
+        set_log_level.argtypes = [ctypes.c_int]
+        set_log_level(_LOG_LEVEL_WARNING)
 
 
 class PDCClient:
@@ -186,7 +206,7 @@ class PDCClient:
                 if tmpdir:
                     # The client library reads PDC_TMPDIR at init to find server.cfg.
                     os.environ["PDC_TMPDIR"] = tmpdir
-                route_logs_to_stderr(pdc)
+                configure_pdc_logging(pdc)
                 try:
                     pdc.init()
                 except pdc.PDCError as exc:

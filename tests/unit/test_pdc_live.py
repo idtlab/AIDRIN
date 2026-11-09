@@ -41,9 +41,9 @@ _WRITER = textwrap.dedent(
     import sys
     import numpy as np
     import pdc
-    from aidrin.file_handling.readers.pdc_reader import route_logs_to_stderr
+    from aidrin.file_handling.readers.pdc_reader import configure_pdc_logging
 
-    route_logs_to_stderr(pdc)
+    configure_pdc_logging(pdc)
     pdc.init()
     container = pdc.Container(sys.argv[2])
     with np.load(sys.argv[1]) as arrays:

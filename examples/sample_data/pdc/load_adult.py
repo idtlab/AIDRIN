@@ -43,7 +43,7 @@ def main(argv=None) -> int:
     except ImportError:
         sys.exit("PDCpy is not installed. See https://github.com/hpc-io/PDCpy.")
 
-    from aidrin.file_handling.readers.pdc_reader import PDCError, route_logs_to_stderr, check_server
+    from aidrin.file_handling.readers.pdc_reader import PDCError, configure_pdc_logging, check_server
 
     tmpdir = os.environ.get("PDC_TMPDIR")
     if not tmpdir:
@@ -55,8 +55,8 @@ def main(argv=None) -> int:
 
     df = pd.read_csv(args.csv)
     numeric = df.select_dtypes(include="number")
-    # PDC logs to stdout; its "not found" errors from the existence checks below are expected.
-    route_logs_to_stderr(pdc)
+    # Quiets PDC's INFO logging; the "not found" errors from the existence checks below are expected.
+    configure_pdc_logging(pdc)
     pdc.init()
     try:
         container = pdc.Container.get(CONTAINER)

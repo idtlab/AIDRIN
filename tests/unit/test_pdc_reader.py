@@ -291,6 +291,28 @@ class TestPDCClient(unittest.TestCase):
                 pdc_reader.PDCClient.get()
 
 
+class TestConfigurePdcLogging(unittest.TestCase):
+    def _configure(self, env):
+        lib = mock.MagicMock()
+        with mock.patch.object(pdc_reader.ctypes, "CDLL", return_value=lib), mock.patch.dict(os.environ, env):
+            pdc_reader.configure_pdc_logging(_fake_pdcpy())
+        return lib
+
+    def test_logs_go_to_stderr_and_info_is_dropped(self):
+        lib = self._configure({"PDC_DEBUG": "0"})
+        self.assertEqual([c.args for c in lib.setLogFile.call_args_list], [(level, b"stderr") for level in range(4)])
+        lib.setLogLevel.assert_called_once_with(1)  # LOG_LEVEL_WARNING
+
+    def test_pdc_debug_keeps_info(self):
+        lib = self._configure({"PDC_DEBUG": "1"})
+        self.assertEqual(lib.setLogFile.call_count, 4)
+        lib.setLogLevel.assert_not_called()
+
+    def test_missing_library_is_ignored(self):
+        with mock.patch.object(pdc_reader.ctypes, "CDLL", side_effect=OSError("no such file")):
+            pdc_reader.configure_pdc_logging(_fake_pdcpy())
+
+
 class TestCheckServer(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
