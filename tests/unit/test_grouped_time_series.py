@@ -212,7 +212,7 @@ def test_renderer_preserves_precision_and_escapes_group_values():
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is unavailable')
-    source = (Path(__file__).parents[2] / 'web/static/js/inspector.js').read_text()
+    source = (Path(__file__).parents[2] / 'web/static/js/inspector.js').read_text(encoding='utf-8')
     render = re.search(r'function renderGroupedTimeSeriesResults\(result\) \{[\s\S]*?\n\}', source).group()
     escape = re.search(r'function escapeHtml\(str\) \{[\s\S]*?\n\}', source).group()
     result = {
