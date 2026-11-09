@@ -157,6 +157,11 @@ sample timestamps, and should not use this cadence audit.
 Separate component files and a pilot protocol
 --------------------------------------------------
 
+For a shared collection input that retains measurement columns and supports
+independent or stacked analysis with other metrics, see :ref:`file_collections`.
+The time-only example adapter below remains available for its explicit
+record/station/component manifest.
+
 The trusted example loader ``examples/grouped_time_series/multi_file_loader.py``
 reads an explicit JSON manifest through the custom-loader interface. Each record
 declares ``record_id``, ``station``, ``component``, ``path`` and

@@ -1,0 +1,53 @@
+{% extends '_base.html' %}
+{% block title %}File collection - AIDRIN{% endblock %}
+{% block body %}
+<main class="max-w-5xl mx-auto p-6 space-y-6">
+  <a href="{{ url_for('core.inspector') }}" class="underline">Back to workspace</a>
+  <h1 class="text-2xl font-semibold">File collection <span class="text-sm font-normal">Pilot</span></h1>
+  <p>Select files, choose independent or stacked analysis, then configure checks. Original files and row order are preserved.</p>
+  <form id="collection-upload" class="space-y-3 p-4 border rounded-lg">
+    <label for="collection-input" class="block font-medium">Add table files</label>
+    <input id="collection-input" name="file" type="file" multiple required accept=".csv,.parquet,.json,.npz,.h5,.hdf5,.xls,.xlsx,.xlsb,.xlsm" />
+    <button type="submit" class="px-4 py-2 rounded bg-blue-600 text-white">Upload files</button>
+  </form>
+  <button id="collection-clear" type="button" class="px-4 py-2 border rounded">Clear collection uploads</button>
+  <form id="collection-assess" class="space-y-4">
+    <fieldset class="p-4 border rounded-lg space-y-3">
+      <legend class="font-medium">1. Select files and their order</legend>
+      <p class="text-sm">Use the arrows to set stacking order. Files are identified separately even when names repeat.</p>
+      <div id="collection-files" class="space-y-2">No files uploaded.</div>
+    </fieldset>
+    <fieldset class="p-4 border rounded-lg space-y-3">
+      <legend class="font-medium">2. Choose analysis mode</legend>
+      <label class="block"><input name="mode" type="radio" value="independent" checked /> Analyze each selected file independently</label>
+      <label class="block"><input name="mode" type="radio" value="stacked" /> Stack selected files into one table</label>
+      <p class="text-sm">Stacking requires matching column names and parsed types. It retains selected file order and each file's row order.</p>
+    </fieldset>
+    <fieldset class="p-4 border rounded-lg space-y-3">
+      <legend class="font-medium">3. Choose checks</legend>
+      {% for name, metric in metrics.items() %}
+      <label class="block"><input name="metric" type="checkbox" value="{{ name }}" /> {{ name.replace('_', ' ').title() }}: {{ metric.description }}</label>
+      {% endfor %}
+      <div id="collection-sequence-options" class="hidden space-y-3 p-3 border rounded">
+        <label class="block">Grouping columns (comma separated; optional when keeping file boundaries)
+          <input id="collection-groups" type="text" class="block w-full rounded" list="collection-columns" />
+        </label>
+        <label class="block">Time column <input id="collection-time" type="text" list="collection-columns" class="block w-full rounded" /></label>
+        <datalist id="collection-columns"></datalist>
+        <label class="block">Time kind <select id="collection-time-kind" class="rounded"><option value="numeric">Numeric (input units)</option><option value="datetime">Datetime (seconds)</option></select></label>
+        <label class="block">Expected cadence <input id="collection-cadence" type="number" min="0" step="any" class="rounded" /></label>
+        <label class="block">Absolute tolerance <input id="collection-tolerance" type="number" min="0" step="any" value="0" class="rounded" /></label>
+        <label class="block">Expected rows per group (optional) <input id="collection-count" type="number" min="1" step="1" class="rounded" /></label>
+        <label class="block">Expected duration (optional, in cadence units) <input id="collection-duration" type="number" min="0" step="any" class="rounded" /></label>
+        <label class="block"><input id="collection-boundaries" type="checkbox" checked /> Keep each file's sequences separate</label>
+        <p class="text-sm">Uncheck only when matching groups should continue across files. The audit will compare samples across their boundary in selected order. This does not establish synchronization.</p>
+      </div>
+    </fieldset>
+    <button type="submit" class="px-4 py-2 rounded bg-blue-600 text-white">Run selected checks</button>
+  </form>
+  <p id="collection-message" role="status" aria-live="polite"></p>
+  <section id="collection-results" class="space-y-4" aria-label="Collection results"></section>
+  <button id="collection-download" type="button" class="hidden px-4 py-2 border rounded">Download results JSON</button>
+</main>
+{% endblock %}
+{% block scripts_extra %}<script src="{{ url_for('static', filename='js/collections.js') }}"></script>{% endblock %}

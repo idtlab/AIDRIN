@@ -1,0 +1,22 @@
+{
+  "files": [
+    {"id": "H1", "path": "components/h1.csv"},
+    {"id": "H2", "path": "components/h2.csv"}
+  ],
+  "mode": "stacked",
+  "metrics": [
+    {
+      "name": "grouped_time_series",
+      "source_columns": ["__aidrin_source_id"],
+      "parameters": {
+        "group_columns": ["__aidrin_source_id"],
+        "timestamp_column": "elapsed_s",
+        "expected_cadence": 0.01,
+        "tolerance": 0.000001,
+        "expected_count": 5,
+        "expected_duration": 0.04
+      }
+    },
+    {"name": "duplicity"}
+  ]
+}

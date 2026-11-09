@@ -3,6 +3,9 @@
 Library Usage
 =============
 
+The :ref:`file_collections` pilot exposes ``aidrin.headless.run_collection_metrics``
+for explicit multi-file selections, with independent and stacked modes.
+
 AIDRIN exposes **two** Python surfaces, and which one you want depends on the
 job:
 

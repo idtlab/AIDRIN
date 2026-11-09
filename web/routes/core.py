@@ -321,6 +321,8 @@ def clear_file():
                 file_upload_time_log.warning("Failed to cancel Globus tasks on clear: %s", e)
 
     # Capture this session's own files before clearing the session.
+    from web.routes.collections import clear_collection_uploads
+    clear_collection_uploads()
     owned_files = session.get("owned_files", [])
 
     # State that belongs to the user rather than to the dataset being cleared,

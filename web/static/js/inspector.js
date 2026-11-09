@@ -1243,7 +1243,9 @@ async function workspaceSubmit(targetUrl) {
         remoteParams.max_findings = Number(
           gFormData.get("max findings for grouped time series") || 100,
         );
-        const expectedCount = gFormData.get("expected count for grouped time series");
+        const expectedCount = gFormData.get(
+          "expected count for grouped time series",
+        );
         const expectedDuration = gFormData.get(
           "expected duration for grouped time series",
         );
