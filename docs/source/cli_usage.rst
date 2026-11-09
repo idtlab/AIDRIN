@@ -29,6 +29,44 @@ grids are not auto-flattened — select 1D (or a single 2D) arrays only. Unsure 
 file is really one table? Run ``aidrin inventory <file>`` first — see :ref:`cli_inventory`. See
 :ref:`cli_installation` to install Zarr support.
 
+.. _cli_pdc:
+
+PDC (Proactive Data Containers)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+`PDC <https://github.com/hpc-io/pdc>`_ is a server-backed object store, so AIDRIN reads it
+through a small JSON descriptor with the ``.pdc`` extension that names objects on a running PDC
+server:
+
+.. code-block:: json
+
+   {
+       "objects": ["age", "income", "score"],
+       "container": "census",
+       "pdc_tmpdir": "/path/to/pdc_tmp"
+   }
+
+``objects`` is required. ``container`` is optional and only checked for existence.
+``pdc_tmpdir`` is the directory holding the server's ``server.cfg`` (the ``PDC_TMPDIR`` the
+server was started with); a relative path is resolved against the descriptor's directory, and
+when it is omitted the ``PDC_TMPDIR`` environment variable is used.
+
+AIDRIN reads the objects with `PDCpy <https://github.com/hpc-io/PDCpy>`_, PDC's official Python
+interface. PDCpy compiles against your PDC installation, so install it with ``PDC_DIR`` and
+``MERCURY_DIR`` set and PDC's ``lib`` directory on ``LD_LIBRARY_PATH``. Objects become columns
+under the same rules as Zarr: one object of up to 2 dimensions, or 1D objects of equal length.
+Use ``--selected-keys`` to choose objects from the descriptor.
+
+.. code-block:: bash
+
+   export PDC_DIR=/path/to/pdc/install MERCURY_DIR=/path/to/mercury/install
+   export LD_LIBRARY_PATH=$PDC_DIR/lib:$MERCURY_DIR/lib:$LD_LIBRARY_PATH
+   pip install PDCpy
+   aidrin inventory /path/to/census.pdc
+   aidrin data-quality /path/to/census.pdc --selected-keys age,income
+
+``.pdc`` descriptors are CLI/library only; local web upload does not offer them.
+
 ----
 
 Sample Dataset
@@ -127,14 +165,16 @@ and cardinality. Useful for deciding which columns to feed to other metrics.
 ~~~~~~~~~~~~~~~~~~~~
 
 Classifies an HDF5 (``.h5``) or Zarr (``.zarr``) file's on-disk layout and lists its
-datasets/arrays, without reading the file as a table. Every other supported format (CSV,
-Parquet, Excel, JSON, NumPy) is always read as a single table and has no ambiguous layout to
-vet, so ``inventory`` only applies to HDF5/Zarr.
+datasets/arrays, without reading the file as a table. For a PDC descriptor (``.pdc``, see
+:ref:`cli_pdc`) it lists the shape and type of each object the descriptor names. Every other
+supported format (CSV, Parquet, Excel, JSON, NumPy) is always read as a single table and has no
+ambiguous layout to vet, so ``inventory`` only applies to HDF5/Zarr/PDC.
 
 .. code-block:: bash
 
    aidrin inventory /path/to/file.h5
    aidrin inventory /path/to/store.zarr
+   aidrin inventory /path/to/census.pdc
 
    # Write the JSON report to a file (in addition to stdout)
    aidrin inventory /path/to/file.h5 -o /path/to/reports/inventory.json
