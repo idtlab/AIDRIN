@@ -639,7 +639,7 @@ Data Overview panel shows a dataset picker after you select the file. The
 2. When you click **Load Remote Dataset**, AIDRIN runs a small **inventory**
    task on the endpoint to list HDF5 datasets (no full file transfer).
 3. If the file is multi-dataset, choose one or more compatible datasets in the
-   picker—the same rules as locally (matching lengths for 1D columns, or
+   picker, with the same rules as locally (matching lengths for 1D columns, or
    fields that share a grid).
 4. After selection, summary statistics and metrics run remotely with your
    ``selected_keys``; the Data Overview panel shows which datasets are active

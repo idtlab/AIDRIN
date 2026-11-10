@@ -2358,22 +2358,42 @@ function _globusSubmitPayload(
 function _globusPollTaskResult(taskId) {
   return new Promise((resolve, reject) => {
     let attempts = 0;
+    let consecutiveErrors = 0;
     const maxAttempts = 120;
+    const maxConsecutiveErrors = 3;
     const poll = () => {
       fetch(`/globus/check-task/${taskId}`)
         .then((r) => r.json())
         .then((response) => {
+          consecutiveErrors = 0;
           if (response.status === "completed" && response.result) {
             resolve(response.result);
           } else if (response.status === "failed") {
             reject(new Error(response.error || "Remote task failed"));
+          } else if (response.error) {
+            // No status alongside it: the request itself was refused (401),
+            // so polling it another 120 times only delays the message.
+            reject(new Error(response.error));
           } else if (attempts++ < maxAttempts) {
             setTimeout(poll, 2000);
           } else {
             reject(new Error("Timed out waiting for the remote endpoint"));
           }
         })
-        .catch(reject);
+        .catch((err) => {
+          // A single dropped request shouldn't end a poll that may run for
+          // minutes, but a server that is actually down should surface before
+          // the whole budget elapses with the form still disabled.
+          consecutiveErrors++;
+          if (
+            consecutiveErrors <= maxConsecutiveErrors &&
+            attempts++ < maxAttempts
+          ) {
+            setTimeout(poll, 3000);
+          } else {
+            reject(err);
+          }
+        });
     };
     setTimeout(poll, 500);
   });
@@ -2440,9 +2460,7 @@ function fetchGlobusSummary() {
     .then((r) => r.json())
     .then((data) => {
       if (data.error) {
-        const loading = document.getElementById("globus-summary-loading");
-        if (loading)
-          loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
+        _showGlobusSummaryError(data.error);
         _endServerProcessing();
         return;
       }
@@ -2459,11 +2477,25 @@ function fetchGlobusSummary() {
       }
     })
     .catch((err) => {
-      const loading = document.getElementById("globus-summary-loading");
-      if (loading)
-        loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${escapeHtml(err.message)}</div>`;
+      _showGlobusSummaryError(`Failed to connect: ${err.message}`);
       _endServerProcessing();
     });
+}
+
+/**
+ * Show an error where the Globus summary would have gone. #globus-summary-loading
+ * is rendered inside #workspace-summary and a dataset selection replaces it, so
+ * fall back to whichever container is still mounted or the message is lost and
+ * the locked sidebar has nothing to explain it.
+ */
+function _showGlobusSummaryError(message) {
+  const target =
+    document.getElementById("globus-summary-loading") ||
+    document.getElementById("globus-summary-content") ||
+    document.getElementById("workspace-summary");
+  if (!target) return;
+  target.style.display = "";
+  target.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(message)}</div>`;
 }
 
 /** Render Globus summary data (used by both cached and polled paths). */
@@ -2476,7 +2508,8 @@ function renderGlobusSummary(data) {
 
   if (data.needs_dataset_selection && data.datasets?.length && content) {
     renderHdf5DatasetPicker(content, data);
-    _unlockGlobusSidebar();
+    // Nothing is selected yet, so no metric can run: keep them locked.
+    _setGlobusSidebarLocked(true);
     return;
   }
 
@@ -2594,12 +2627,19 @@ function renderGlobusSummary(data) {
   maybeShowIntentModal();
 }
 
-function _unlockGlobusSidebar() {
+/** Enable or disable the metric list, and drop the loading placeholder. */
+function _setGlobusSidebarLocked(locked) {
   var sidebarMetrics = document.getElementById("sidebar-metrics");
-  if (sidebarMetrics)
-    sidebarMetrics.classList.remove("opacity-50", "pointer-events-none");
+  if (sidebarMetrics) {
+    sidebarMetrics.classList.toggle("opacity-50", locked);
+    sidebarMetrics.classList.toggle("pointer-events-none", locked);
+  }
   var loadingMsg = document.getElementById("sidebar-loading-msg");
   if (loadingMsg) loadingMsg.remove();
+}
+
+function _unlockGlobusSidebar() {
+  _setGlobusSidebarLocked(false);
 }
 
 /** Poll for Globus summary statistics and render when complete. */
@@ -2622,9 +2662,7 @@ function pollGlobusSummary(taskId) {
             body: JSON.stringify(response.result),
           }).catch(() => {}); // Best-effort cache
         } else if (response.status === "failed") {
-          const loading = document.getElementById("globus-summary-loading");
-          if (loading)
-            loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(response.error || "Failed to load summary")}</div>`;
+          _showGlobusSummaryError(response.error || "Failed to load summary");
           _unlockGlobusSidebar();
           _endServerProcessing();
         } else if (attempts < maxAttempts) {
@@ -2663,6 +2701,30 @@ function loadGlobusDataset() {
     if (typeof showToast === "function")
       showToast("Please fill in endpoint UUID and file path", "error");
     return;
+  }
+
+  // A picker from an earlier attempt is still live: it sits outside
+  // #globusForm, so disabling the form leaves its "Load selected" clickable,
+  // and during the async endpoint check below it would submit the old file and
+  // leave that file's keys for the gate to pick up.
+  window._globusPendingConnect = null;
+  const stalePicker = document.getElementById("globus-hdf5-picker");
+  if (stalePicker) {
+    stalePicker.classList.add("hidden");
+    stalePicker.innerHTML = "";
+  }
+
+  // Keys belong to the file they were picked for. Loading a different
+  // endpoint/path/type must not inherit them, or the picker is skipped and the
+  // old dataset paths are sent with the new file.
+  const keysOwner = window._globusSelectedKeysFor;
+  if (
+    !keysOwner ||
+    endpointId !== keysOwner.endpointId ||
+    filePath !== keysOwner.filePath ||
+    fileType !== keysOwner.fileType
+  ) {
+    window.AIDRIN_GLOBUS_SELECTED_KEYS = [];
   }
 
   // Disable the form to prevent double-clicking
@@ -2799,7 +2861,10 @@ function _submitGlobusDataset(
     showToast("Connecting to remote endpoint...", "info");
 
   const keys = _globusSelectedKeysList(selectedKeys);
-  if (keys.length) window.AIDRIN_GLOBUS_SELECTED_KEYS = keys;
+  if (keys.length) {
+    window.AIDRIN_GLOBUS_SELECTED_KEYS = keys;
+    window._globusSelectedKeysFor = { endpointId, filePath, fileType };
+  }
 
   fetch("/globus/submit", {
     method: "POST",
@@ -5731,9 +5796,12 @@ function renderHdf5DatasetPicker(container, data) {
     <p id="hdf5-selection-error" class="mt-2 text-sm text-red-600 dark:text-red-400 hidden"></p>`;
   container.innerHTML = html;
 
-  const loadBtn = document.getElementById("hdf5-load-selected");
-  const hint = document.getElementById("hdf5-selection-hint");
-  const errorEl = document.getElementById("hdf5-selection-error");
+  // Scoped to the container: two pickers can be mounted at once (workspace
+  // and the pre-connect Globus one), so a document-wide lookup would wire the
+  // wrong picker's button.
+  const loadBtn = container.querySelector("#hdf5-load-selected");
+  const hint = container.querySelector("#hdf5-selection-hint");
+  const errorEl = container.querySelector("#hdf5-selection-error");
 
   function getSelectedCheckboxes() {
     return Array.from(
@@ -5911,18 +5979,24 @@ function renderHdf5DatasetPicker(container, data) {
       container.querySelectorAll(".hdf5-dataset-checkbox:checked"),
     ).map((cb) => cb.value);
     if (paths.length === 0) return;
-    selectHdf5Datasets(paths);
+    selectHdf5Datasets(paths, container);
   });
 
   syncHdf5PickerState();
 }
 
-function selectHdf5Datasets(paths) {
-  if (window._globusPendingConnect) {
+function selectHdf5Datasets(paths, sourceContainer) {
+  const pendingPicker = document.getElementById("globus-hdf5-picker");
+  // Only the pre-connect picker's own button may complete a pending connect;
+  // another picker's selection belongs to the file already in session.
+  if (
+    window._globusPendingConnect &&
+    sourceContainer &&
+    pendingPicker?.contains(sourceContainer)
+  ) {
     const pending = window._globusPendingConnect;
     window._globusPendingConnect = null;
-    const picker = document.getElementById("globus-hdf5-picker");
-    if (picker) picker.classList.add("hidden");
+    pendingPicker.classList.add("hidden");
     const loadBtn = document.querySelector(
       '#globusForm button[onclick*="loadGlobusDataset"]',
     );
@@ -6038,7 +6112,6 @@ function returnToHdf5DatasetPicker() {
   const hist = document.getElementById("workspace-histograms");
   if (hist) hist.innerHTML = "";
   if (window.AIDRIN_GLOBUS_MODE) {
-    clearWorkspaceFeatureDropdowns();
     if (container) {
       container.innerHTML = `
       <div role="status" class="inline-block">
@@ -6047,7 +6120,21 @@ function returnToHdf5DatasetPicker() {
       <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Returning to dataset selection...</p>`;
     }
     fetch("/globus/clear-dataset-selection", { method: "POST" })
-      .then(() => {
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || data.success === false) {
+          if (container) {
+            const p = document.createElement("p");
+            p.className = "text-sm text-red-600 dark:text-red-400";
+            p.textContent =
+              data.error ||
+              data.message ||
+              "Failed to return to dataset selection.";
+            container.replaceChildren(p);
+          }
+          return;
+        }
+        clearWorkspaceFeatureDropdowns();
         window.AIDRIN_GLOBUS_SELECTED_KEYS = [];
         clearGlobusDiscoveryCache();
         fetchGlobusSummary();
