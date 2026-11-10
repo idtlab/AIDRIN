@@ -1,0 +1,16 @@
+[
+  {
+    "record_id": "synthetic-A-H1",
+    "station": "S_A",
+    "component": "H1",
+    "path": "components/h1.csv",
+    "timestamp_column": "elapsed_s"
+  },
+  {
+    "record_id": "synthetic-A-H2",
+    "station": "S_A",
+    "component": "H2",
+    "path": "components/h2.csv",
+    "timestamp_column": "elapsed_s"
+  }
+]

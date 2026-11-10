@@ -1,0 +1,13 @@
+station,component,elapsed_s,acceleration_m_per_s2
+S_A,H1,0.00,0
+S_A,H2,0.00,0
+S_A,H1,0.01,0.1
+S_A,H2,0.01,0.1
+S_A,H1,0.02,0
+S_A,H2,0.02,0
+S_A,H1,0.03,-0.1
+S_A,H1,0.04,0
+S_B,H1,0.00,0
+S_B,H1,0.02,0.1
+S_B,H1,0.01,0
+S_B,H1,0.01,0
