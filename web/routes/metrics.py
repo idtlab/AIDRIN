@@ -25,17 +25,17 @@ from aidrin.file_handling.file_reference_policy import (
     resolve_base_dir,
     scan_limit,
 )
-from aidrin.readiness.common import (
+from aidrin.report.common import (
     READINESS_MAX_DETAIL_LIST_ITEMS as _READINESS_MAX_DETAIL_LIST_ITEMS,
     cap_detail_list as _cap_detail_list,
     classify_feature_type as _classify_feature_type,
     finite_kpi_values as _finite_kpi_values,
     grade_label as _grade_label,
 )
-from aidrin.readiness.data_quality import (
+from aidrin.report.data_quality import (
     build_data_quality_section as _build_data_quality_section_impl,
 )
-from aidrin.readiness.overview import (
+from aidrin.report.overview import (
     build_dataset_overview_section as _build_dataset_overview_section_impl,
     build_feature_profiles as _build_feature_profiles,
     dataframe_for_overview_detail_charts as _dataframe_for_overview_detail_charts,
@@ -381,7 +381,7 @@ def data_quality():
 # ---------------------------------------------------------------------------
 # Readiness Report (aggregated, non-interactive)
 # ---------------------------------------------------------------------------
-# Section builders and shared helpers live in aidrin.readiness.*; this module
+# Section builders and shared helpers live in aidrin.report.*; this module
 # re-exports underscore names and injects web chart renderers where needed.
 
 

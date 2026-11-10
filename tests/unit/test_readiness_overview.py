@@ -4,8 +4,8 @@ import unittest
 
 import pandas as pd
 
-from aidrin.readiness import cap_detail_list
-from aidrin.readiness.overview import (
+from aidrin.report import cap_detail_list
+from aidrin.report.overview import (
     build_categorical_distributions,
     build_numerical_summary_for_overview,
     dataframe_for_overview_detail_charts,

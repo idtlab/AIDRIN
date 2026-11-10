@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from aidrin.readiness import finite_kpi_values, grade_label
+from aidrin.report import finite_kpi_values, grade_label
 from web.routes.utils import ensure_json_serializable
 
 

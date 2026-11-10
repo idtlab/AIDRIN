@@ -7,7 +7,7 @@ import os
 import pandas as pd
 
 from aidrin.file_handling.file_parser import read_file
-from aidrin.readiness.common import classify_feature_type
+from aidrin.report.common import classify_feature_type
 
 # Dataset-overview readiness thresholds (per-feature profile)
 OVERVIEW_MISSING_WARNING = 0.05

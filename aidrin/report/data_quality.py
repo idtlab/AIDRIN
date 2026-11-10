@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from aidrin.readiness.common import finite_kpi_values, grade_label
+from aidrin.report.common import finite_kpi_values, grade_label
 from aidrin.structured_data_metrics.completeness import completeness
 from aidrin.structured_data_metrics.duplicity import duplicity
 from aidrin.structured_data_metrics.outliers import outliers
