@@ -770,8 +770,20 @@ STANDARD_NAMES = {
     "datacite": "DataCite 4.x",
 }
 
-# The web form's values, which predate the names above.
+# Legacy web form values (kept so old clients/bookmarks still score correctly).
 _FORM_VALUES = {"DCAT": "dcat-us-1.1", "Datacite": "datacite"}
+
+
+def normalize_fair_standard(standard: str) -> str:
+    """Map a form/CLI standard name to the canonical assessor key.
+
+    ``"auto"`` and already-canonical names are returned unchanged. Unknown
+    values are also returned unchanged so ``calculate_fair_compliance`` can
+    raise ``ValueError`` with its usual message.
+    """
+    if not standard or standard == "auto":
+        return standard or "auto"
+    return _FORM_VALUES.get(standard, standard)
 
 
 # ---------------------------------------------------------------------------
@@ -858,7 +870,7 @@ def calculate_fair_compliance(metadata, standard="auto"):
     if not isinstance(metadata, dict):
         raise ValueError("Metadata must be a JSON object")
     detected = standard == "auto"
-    standard = detect_standard(metadata) if detected else _FORM_VALUES.get(standard, standard)
+    standard = detect_standard(metadata) if detected else normalize_fair_standard(standard)
     if standard not in _ASSESSORS:
         raise ValueError(f"Unknown metadata type: {standard}")
     result = _ASSESSORS[standard](metadata)

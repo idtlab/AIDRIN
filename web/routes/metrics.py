@@ -59,7 +59,6 @@ from aidrin.structured_data_metrics.variable_unit_validation import (
     calculate_variable_unit_validation,
     unit_suggestion_catalog,
 )
-from aidrin.structured_data_metrics.fair_metadata import calculate_fair_compliance
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
     pearson_correlation,
@@ -488,11 +487,18 @@ def _readiness_fair_cache_key(file_name):
 
 
 def _fair_metadata_fingerprint(json_bytes, metadata_type):
-    """Stable fingerprint for readiness FAIR cache invalidation."""
+    """Stable fingerprint for readiness FAIR cache invalidation.
+
+    Uses the canonical standard name so legacy form values (``DCAT``,
+    ``Datacite``) share a cache entry with CLI-style names.
+    """
+    from aidrin.structured_data_metrics.fair_metadata import normalize_fair_standard
+
+    canonical = normalize_fair_standard(metadata_type or "auto")
     digest = hashlib.sha256()
     digest.update(json_bytes)
     digest.update(b"|")
-    digest.update(metadata_type.encode("utf-8"))
+    digest.update(canonical.encode("utf-8"))
     return digest.hexdigest()
 
 
@@ -550,8 +556,19 @@ def _cache_readiness_fair_compliance(
 
 
 def _run_fair_assessment(data_dict, metadata_type):
-    """Run FAIR assessment for Croissant, RO-Crate, DCAT-US 3.0 or 1.1, or DataCite metadata ("auto" detects it)."""
-    return format_dict_values(calculate_fair_compliance(data_dict, metadata_type))
+    """Score metadata with the same engine as ``aidrin fair`` / CLI readiness.
+
+    Thin web adapter around ``calculate_fair_compliance`` (Croissant, RO-Crate,
+    DCAT-US 3.0/1.1, DataCite; ``auto`` detects). Legacy form values ``DCAT``
+    and ``Datacite`` remain accepted. Numeric rounding matches other web
+    metric tables; the underlying checks are identical to the headless path.
+    """
+    import aidrin
+
+    from aidrin.structured_data_metrics.fair_metadata import normalize_fair_standard
+
+    standard = normalize_fair_standard(metadata_type or "auto")
+    return format_dict_values(aidrin.calculate_fair_compliance(data_dict, standard))
 
 
 def _get_or_build_readiness_visualizations(section, file_info):
@@ -1620,7 +1637,14 @@ def fair_assessment():
                 return jsonify({"error": "Invalid file format. Please upload a JSON or JSON-LD file."}), 400
 
             json_data = file.read()
-            metadata_type = request.form.get("metadata type", "")
+            from aidrin.structured_data_metrics.fair_metadata import (
+                normalize_fair_standard,
+            )
+
+            # Canonicalize so readiness cache/fingerprint match CLI standard names.
+            metadata_type = normalize_fair_standard(
+                request.form.get("metadata type", "") or "auto"
+            )
             readiness_context = request.form.get("readiness_context") == "1"
             dataset_file_name = (
                 session.get("uploaded_file_name")
