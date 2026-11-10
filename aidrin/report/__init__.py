@@ -8,6 +8,7 @@ from aidrin.report.common import (
     grade_label,
 )
 from aidrin.report.data_quality import build_data_quality_section
+from aidrin.report.fairness import build_fairness_bias_section
 from aidrin.report.impact import build_impact_on_ai_section
 from aidrin.report.overview import build_dataset_overview_section
 
@@ -15,6 +16,7 @@ __all__ = [
     "READINESS_MAX_DETAIL_LIST_ITEMS",
     "build_data_quality_section",
     "build_dataset_overview_section",
+    "build_fairness_bias_section",
     "build_impact_on_ai_section",
     "cap_detail_list",
     "classify_feature_type",
