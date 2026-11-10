@@ -138,14 +138,15 @@ and cardinality. Useful for deciding which columns to feed to other metrics.
 ``aidrin inventory``
 ~~~~~~~~~~~~~~~~~~~~
 
-Classifies an HDF5 (``.h5``) or Zarr (``.zarr``) file's on-disk layout and lists its
-datasets/arrays, without reading the file as a table. Every other supported format (CSV,
-Parquet, Excel, JSON, NumPy) is always read as a single table and has no ambiguous layout to
-vet, so ``inventory`` only applies to HDF5/Zarr.
+Classifies an HDF5 (``.h5``), ROOT (``.root``) or Zarr (``.zarr``) file's on-disk layout and
+lists its datasets/arrays/trees, without reading the file as a table. Every other supported
+format (CSV, Parquet, Excel, JSON, NumPy) is always read as a single table and has no
+ambiguous layout to vet, so ``inventory`` only applies to HDF5/ROOT/Zarr.
 
 .. code-block:: bash
 
    aidrin inventory /path/to/file.h5
+   aidrin inventory /path/to/file.root
    aidrin inventory /path/to/store.zarr
 
    # Write the JSON report to a file (in addition to stdout)
