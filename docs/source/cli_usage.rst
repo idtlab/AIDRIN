@@ -23,6 +23,18 @@ Quick Start
    # Full AI Data Readiness Report (JSON; optional PDF)
    aidrin readiness-report /path/to/sample_dataset.csv -o report.json
 
+ROOT (``.root``) files are supported via ``uproot`` (a core dependency). A single-TTree file
+loads like any other tabular format. Array-valued branches (per-event sequences such as
+``vector<float>``) cannot be represented as tabular columns: they are excluded from metrics,
+and the exclusion is disclosed in the summarize output (a ``dropped_columns`` entry, also
+printed by ``--summary``) and in the web readiness report:
+
+.. code-block:: bash
+
+   aidrin summarize examples/sample_data/root/sample.root --summary
+   aidrin data-quality examples/sample_data/root/sample.root
+   aidrin run completeness examples/sample_data/root/sample.root
+
    # HDF5 / Zarr: pick compatible 1D arrays (comma-separated paths)
    aidrin run completeness /path/to/store.zarr --selected-keys age,income
    aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
@@ -129,14 +141,15 @@ and cardinality. Useful for deciding which columns to feed to other metrics.
 ``aidrin inventory``
 ~~~~~~~~~~~~~~~~~~~~
 
-Classifies an HDF5 (``.h5``) or Zarr (``.zarr``) file's on-disk layout and lists its
-datasets/arrays, without reading the file as a table. Every other supported format (CSV,
-Parquet, Excel, JSON, NumPy) is always read as a single table and has no ambiguous layout to
-vet, so ``inventory`` only applies to HDF5/Zarr.
+Classifies an HDF5 (``.h5``), ROOT (``.root``) or Zarr (``.zarr``) file's on-disk layout and
+lists its datasets/arrays/trees, without reading the file as a table. Every other supported
+format (CSV, Parquet, Excel, JSON, NumPy) is always read as a single table and has no
+ambiguous layout to vet, so ``inventory`` only applies to HDF5/ROOT/Zarr.
 
 .. code-block:: bash
 
    aidrin inventory /path/to/file.h5
+   aidrin inventory /path/to/file.root
    aidrin inventory /path/to/store.zarr
 
    # Write the JSON report to a file (in addition to stdout)
