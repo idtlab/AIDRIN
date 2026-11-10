@@ -91,7 +91,8 @@ def test_clear_shows_upload_panel(uploaded_client):
 
 
 def test_upload_tracks_owned_files(client, sample_csv):
-    """Upload should record the saved path in session['owned_files']."""
+    """The active upload belongs to the session's workspace."""
+    import json
     with open(sample_csv, "rb") as f:
         client.post(
             "/inspector",
@@ -100,8 +101,11 @@ def test_upload_tracks_owned_files(client, sample_csv):
             follow_redirects=True,
         )
     with client.session_transaction() as sess:
-        owned = sess.get("owned_files", [])
-        assert sess.get("uploaded_file_path") in owned
+        with open(sess["collection_manifest"], encoding="utf-8") as handle:
+            owned = json.load(handle)
+        assert len(owned) == 1
+        assert owned[0]["id"] == sess["active_workspace_file_id"]
+        assert owned[0]["path"] == sess["uploaded_file_path"]
 
 
 def test_clear_only_removes_session_owned_files(uploaded_client, app):

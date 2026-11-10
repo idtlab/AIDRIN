@@ -1,0 +1,48 @@
+<div id="panel-batch-overview" class="metric-panel hidden" data-summary-url="{{ url_for('core.workspace_summary') }}">
+  <div class="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+    <h2 class="mb-3 text-lg font-semibold">Batch Overview</h2>
+    <p id="workspace-batch-status" class="mb-3 text-sm text-gray-600 dark:text-gray-400" role="status">
+      {{ workspace_files|length }} {{ 'file' if workspace_files|length == 1 else 'files' }}
+    </p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th scope="col" class="p-2">File</th>
+            <th scope="col" class="p-2 text-right">Rows</th>
+            <th scope="col" class="p-2 text-right">Features</th>
+            <th scope="col" class="p-2 text-right">Numerical</th>
+            <th scope="col" class="p-2 text-right">Categorical</th>
+            <th scope="col" class="p-2 text-right">Size</th>
+            <th scope="col" class="p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for file in workspace_files %}
+          <tr data-workspace-file="{{ file.id }}" class="border-t border-gray-200 dark:border-gray-700">
+            <th scope="row" class="break-words p-2">
+              {{ file.name }}
+              {% if file.source == 'globus' %}<span class="text-xs font-normal">via Globus</span>{% endif %}
+              {% if file.id == active_file_id %}<span class="text-xs font-normal">(active)</span>{% endif %}
+              <span class="block text-xs font-normal" data-workspace-column="error"></span>
+            </th>
+            {% for column in ('records', 'features', 'numerical', 'categorical', 'size') %}
+            <td class="whitespace-nowrap p-2 text-right tabular-nums" data-workspace-column="{{ column }}">—</td>
+            {% endfor %}
+            <td class="whitespace-nowrap p-2">
+              <div class="flex flex-wrap gap-2">
+                <form method="post" action="{{ url_for('core.inspector') }}">
+                  <button type="submit" name="active_file_id" value="{{ file.id }}" aria-label="Open {{ file.name }}" class="underline">Open</button>
+                </form>
+                <form method="post" action="{{ url_for('core.remove_file', file_id=file.id) }}">
+                  <button type="submit" aria-label="Remove {{ file.name }}" class="text-red-700 underline dark:text-red-400">Remove</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
