@@ -19,6 +19,11 @@ DESCRIPTION = (
     "establish synchronization. No sorting, interpolation, or repair is applied."
 )
 _ISO_DATE_PREFIX = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[Tt ]|$)")
+_TIME_UNIT_SUFFIX = re.compile(r"_(?:s|secs?|seconds?|ms|milliseconds?|us|microseconds?|ns|nanoseconds?|minutes?|hours?|utc)$")
+_TIME_COLUMN_NAMES = {
+    "t", "time", "timestamp", "time_stamp", "datetime", "date", "elapsed", "elapsed_time", "sample_time", "event_time",
+    "epoch", "unix_time", "recorded_at",
+}
 _FORMAT_SAMPLE_LIMIT = 256
 _INTERVAL_ROUNDOFF = 1e-9
 
@@ -128,6 +133,40 @@ def _detect_time_kind(series):
     if detected is None:
         raise ValueError("Could not detect the time format. Choose Numeric time or Date and time to continue.")
     return detected
+
+
+def suggest_time_column(frame, features, datetime_features, text_features):
+    """Suggest an unambiguous time column using metadata and at most 16 sampled rows."""
+    if frame.empty or not frame.columns.is_unique:
+        return None
+    sampled_rows = slice(None, None, max(1, (len(frame) + 15) // 16))
+    candidates = {name for name in datetime_features if isinstance(name, str)}
+    for name in features:
+        if isinstance(name, str):
+            base = _TIME_UNIT_SUFFIX.sub("", re.sub(r"[^a-z0-9]+", "_", name.casefold()).strip("_"))
+            if base in _TIME_COLUMN_NAMES or base.endswith(("_timestamp", "_datetime")):
+                candidates.add(name)
+    if len(candidates) == 1:
+        name = next(iter(candidates))
+        sample = frame[name].iloc[sampled_rows]
+        try:
+            kind = _detect_time_kind(sample)
+        except ValueError:
+            return None
+        if any(_time(value, kind, iso_dates_only=True)[3] is None for value in sample):
+            return name
+    if candidates or len(text_features) > 16:
+        return None
+
+    # Without a name or dtype hint, require distinct, fully dated text values.
+    for name in text_features:
+        if not isinstance(name, str):
+            continue
+        times = [_time(value, "datetime", iso_dates_only=True) for value in frame[name].iloc[sampled_rows]]
+        valid = {value for value, _, _, error in times if error is None}
+        if len(valid) >= 2 and all(error in {None, "missing_time"} for _, _, _, error in times):
+            candidates.add(name)
+    return next(iter(candidates)) if len(candidates) == 1 else None
 
 
 def _group_positions(frame, group_columns):

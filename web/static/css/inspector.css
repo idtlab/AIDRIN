@@ -25,6 +25,10 @@
   text-align: left;
 }
 
+#grouped-file-boundaries-label[hidden] {
+  display: none;
+}
+
 /* Smooth panel transitions */
 .metric-panel {
   animation: fadeInPanel 0.2s ease-out;

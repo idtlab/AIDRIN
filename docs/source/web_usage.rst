@@ -965,7 +965,10 @@ Use **One series per file** for files that each contain one sequence. If a file
 contains several series, choose **Identify series by columns** and select the
 columns that distinguish them, such as station and channel.
 
-Choose the **Time column** and enter the **Expected time between samples**.
+The Inspector preselects the **Time column** when it finds one clear match in
+the active file. It checks column names and types and samples a few values.
+You can change the selection or choose the column yourself when there is no
+clear match. Enter the **Expected time between samples**.
 **Time format** defaults to **Auto-detect**, which recognizes numbers and
 ISO-style dates such as ``2026-01-31`` or ``2026-01-31T09:30:00Z``. You can
 select **Numeric time** or **Date and time** manually. Use the column's units

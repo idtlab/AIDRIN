@@ -1003,6 +1003,14 @@ function _restoreFormState(panelId, state) {
     // Select dropdowns
     const select = panel.querySelector(`select[name="${key}"]`);
     if (select) {
+      if (
+        select.id === "groupedTimeSeriesTimeDropdown" &&
+        !Array.from(select.options).some((option) => option.value === value)
+      ) {
+        // The feature list may still be loading on an Inspector reload.
+        if (select.options.length === 1) select.dataset.pendingValue = value;
+        continue;
+      }
       // Handle multi-select
       if (select.multiple) {
         const values = typeof value === "string" ? value.split(",") : [value];
@@ -1015,9 +1023,9 @@ function _restoreFormState(panelId, state) {
       continue;
     }
 
-    // Text/hidden inputs
+    // Text/hidden inputs. Browsers do not let scripts restore file inputs.
     const input = panel.querySelector(
-      `input[name="${key}"]:not([type="checkbox"])`,
+      `input[name="${key}"]:not([type="checkbox"]):not([type="file"])`,
     );
     if (input) {
       input.value = value;
@@ -1768,6 +1776,7 @@ async function workspaceSubmit(targetUrl) {
   try {
     const formState = {};
     for (const [key, value] of formData.entries()) {
+      if (value instanceof File) continue;
       if (formState[key]) {
         // Multi-value: convert to array
         if (!Array.isArray(formState[key])) formState[key] = [formState[key]];
@@ -8637,10 +8646,17 @@ function populateWorkspaceDropdowns(data) {
     allFeatures,
     "features for duplicate detection",
   );
-  fillDropdown("groupedTimeSeriesTimeDropdown", [
-    ...allFeatures,
-    ...(data.datetime_features || []),
-  ]);
+  const timeFeatures = [...allFeatures, ...(data.datetime_features || [])];
+  const timeColumn = document.getElementById("groupedTimeSeriesTimeDropdown");
+  if (timeColumn) {
+    const previous = timeColumn.value || timeColumn.dataset.pendingValue;
+    fillDropdown(timeColumn.id, timeFeatures);
+    delete timeColumn.dataset.pendingValue;
+    const choice = timeFeatures.includes(previous)
+      ? previous
+      : data.suggested_time_column;
+    if (timeFeatures.includes(choice)) timeColumn.value = choice;
+  }
   fillCheckboxContainer(
     "groupedTimeSeriesColumnsCheckbox",
     allFeatures,

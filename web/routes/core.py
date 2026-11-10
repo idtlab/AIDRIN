@@ -25,6 +25,7 @@ from aidrin.file_handling.file_parser import (
 )
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
+from aidrin.structured_data_metrics.grouped_time_series import suggest_time_column
 from web.routes.grouped_interval import remember_interval_sample
 from web.routes.utils import (
     build_file_info,
@@ -724,6 +725,7 @@ def extract_features():
             col for col, dtype in df.dtypes.items() if pd.api.types.is_string_dtype(dtype)
         ]
         all_features = numerical_columns + categorical_columns
+        datetime_features = [col for col, dtype in df.dtypes.items() if pd.api.types.is_datetime64_any_dtype(dtype)]
 
         class_imbalance_features = [
             col for col in all_features if safe_nunique(df[col]) <= 30
@@ -737,7 +739,8 @@ def extract_features():
             "categorical_features": list(categorical_columns),
             "numerical_features": list(numerical_columns),
             "all_features": all_features,
-            "datetime_features": [col for col, dtype in df.dtypes.items() if pd.api.types.is_datetime64_any_dtype(dtype)],
+            "datetime_features": datetime_features,
+            "suggested_time_column": suggest_time_column(df, all_features, datetime_features, categorical_columns),
             "class_imbalance_features": class_imbalance_features,
         }
         return jsonify(response_data)

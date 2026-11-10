@@ -6,6 +6,23 @@ import pandas as pd
 import pytest
 
 
+@pytest.mark.parametrize(('content', 'suggested'), [
+    (b'elapsed_s,value\n0,4\n0.01,5\n0.02,6\n', 'elapsed_s'),
+    (b'observed,value\n2026-01-01T00:00:00Z,4\n2026-01-01T00:00:01Z,5\n', 'observed'),
+    (b'timestamp,elapsed_s\n2026-01-01T00:00:00Z,0\n2026-01-01T00:00:01Z,1\n', None),
+    (b'index,value\n0,4\n1,5\n2,6\n', None),
+    (b'timestamp,value\n0,4\n2026-01-01T00:00:01Z,5\n', None),
+])
+def test_feature_set_suggests_time_column_only_with_a_clear_match(client, content, suggested):
+    assert client.post('/inspector', data={
+        'file': (io.BytesIO(content), 'series.csv'),
+        'fileTypeSelector': '.csv',
+    }).status_code == 302
+    features = client.post('/feature-set').get_json()
+    assert features['success']
+    assert features['suggested_time_column'] == suggested
+
+
 def suggest_interval(client, **fields):
     return client.post('/data-quality', data={
         'action': 'suggest_grouped_interval',
