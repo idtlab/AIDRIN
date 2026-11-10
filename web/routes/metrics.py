@@ -27,6 +27,8 @@ from aidrin.file_handling.file_reference_policy import (
     scan_limit,
 )
 from aidrin.file_handling.value_iterators import iter_targets
+from aidrin.headless.collection import run_collection_metrics
+from web.routes.workspace_files import workspace_collection_members
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import (
     calc_imbalance_degree,
@@ -142,6 +144,17 @@ def custom_outlier_targets():
         return jsonify({"success": False, "message": "Custom outlier target discovery failed."}), 200
 
 
+def _data_quality_collection_requests(selected, form):
+    if form.get("collection_scope") not in {"all", "selected"}:
+        return []
+    return [{"name": name} for name in selected if name in {"completeness", "duplicity", "outliers"}]
+
+
+def _run_data_quality_collection(form, requests):
+    members = workspace_collection_members(form)
+    return run_collection_metrics(members, requests, mode=form.get("collection_mode", "independent"))
+
+
 @metrics_bp.route("/data-quality", methods=["GET", "POST"])
 def data_quality():
     final_dict = {}
@@ -170,6 +183,18 @@ def data_quality():
             span.set_attribute("file.type", file_type or "")
 
             try:
+                collection_requests = _data_quality_collection_requests(selected, request.form)
+                if collection_requests:
+                    try:
+                        final_dict["Cross-file Data Quality"] = _run_data_quality_collection(request.form, collection_requests)
+                    except ValueError as exc:
+                        final_dict["Cross-file Data Quality"] = {"Error": str(exc)}
+                    except OSError:
+                        metric_time_log.warning("Unable to read workspace inventory", exc_info=True)
+                        final_dict["Cross-file Data Quality"] = {"Error": "Unable to read the uploaded files."}
+                    collection_names = {metric["name"] for metric in collection_requests}
+                    selected = [name for name in selected if name not in collection_names]
+
                 if "completeness" in selected:
                     t0 = time.time()
                     with tracer.start_as_current_span("metric.completeness"):

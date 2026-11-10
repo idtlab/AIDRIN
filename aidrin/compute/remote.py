@@ -20,6 +20,11 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     imports ``aidrin`` locally and dispatches to the requested metric.
     The remote environment must have ``pip install aidrin`` completed.
     """
+    if metric_name == "workspace_directory":
+        from aidrin.file_handling.workspace_summary import summarize_workspace_directory
+
+        return summarize_workspace_directory(file_path, params["limit"])
+
     # Ensure matplotlib uses non-interactive backend on remote endpoint
     import matplotlib
     matplotlib.use("Agg")
@@ -445,7 +450,7 @@ def remote_env_probe():
     except Exception as exc:
         headless_import = f"{type(exc).__name__}: {exc}"
 
-    capabilities = ["file_reference_validation_v1"]
+    capabilities = ["file_reference_validation_v1", "workspace_directory_v1"]
     if hasattr(aidrin, "calculate_variable_unit_validation"):
         capabilities.append("variable_unit_metadata_v1")
 

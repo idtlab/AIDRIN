@@ -1,6 +1,9 @@
 import logging
 import os
 import tempfile
+from contextlib import contextmanager
+from contextvars import ContextVar
+import uuid
 
 from aidrin.file_handling.readers.csv_reader import csvReader
 from aidrin.file_handling.readers.excel_reader import excelReader
@@ -9,6 +12,25 @@ from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
 from aidrin.file_handling.readers.parquet_reader import parquetReader
 from aidrin.file_handling.readers.zarr_reader import zarrReader
+
+
+_loaded_table = ContextVar("aidrin_loaded_table", default=None)
+
+
+@contextmanager
+def using_loaded_table(frame):
+    """Bind one in-memory table to a unique input for synchronous metric calls.
+
+    Each read gets a private copy, as when reading an ordinary cached file.
+    This context never substitutes a table for an existing filesystem path.
+    """
+    file_info = (f"collection:{uuid.uuid4().hex}", "Collection", ".collection")
+    token = _loaded_table.set((file_info, frame))
+    try:
+        yield file_info
+    finally:
+        _loaded_table.reset(token)
+
 
 # Notes:
 # To add support for new file types:
@@ -284,6 +306,11 @@ def read_file(file_info, columns=None, loader=None):
     For Zarr, an empty read raises ``ReaderReturnedNone`` so callers can
     supply ``selected_keys``.
     """
+    loaded = _loaded_table.get()
+    if loaded is not None and tuple(file_info[:3]) == loaded[0]:
+        frame = loaded[1]
+        return (frame if columns is None else frame[columns]).copy(deep=True)
+
     from aidrin.file_handling.custom_loader import (
         CustomLoaderError,
         _format_loader_failure,

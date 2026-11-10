@@ -291,6 +291,8 @@ def disconnect():
     # This feature owns session["intent"]; the file identity ends here.
     session.pop("intent", None)
     _clear_negotiation()
+    from web.routes.workspace_files import clear_workspace_uploads
+    clear_workspace_uploads(source="globus")
     return jsonify({"success": True})
 
 
@@ -330,6 +332,65 @@ def check_endpoint():
 # ---------------------------------------------------------------------------
 # Task submission + polling
 # ---------------------------------------------------------------------------
+
+
+@globus_bp.post("/import-directory")
+def import_directory():
+    """Start discovery on the authenticated Compute endpoint."""
+    if not session.get("globus_authenticated"):
+        return jsonify({"error": "Not authenticated with Globus"}), 401
+    data = request.get_json(silent=True)
+    endpoint_id = data.get("endpoint_id") if isinstance(data, dict) else None
+    directory = data.get("directory") if isinstance(data, dict) else None
+    if not all(isinstance(value, str) and value.strip() for value in (endpoint_id, directory)):
+        return jsonify({"error": "Enter an endpoint and a directory path."}), 400
+
+    from web.routes.workspace_files import init_workspace, workspace_file_limit
+
+    try:
+        client = get_compute_client(session.get("globus_tokens", {}))
+        negotiation, _ = _submission_negotiation(client, endpoint_id, False)
+        if not negotiation or "workspace_directory_v1" not in negotiation["capabilities"]:
+            return jsonify({"error": "Update AIDRIN on the Compute endpoint to import a directory."}), 409
+        init_workspace()
+        limit = workspace_file_limit()
+        task_id = submit_metric(client, endpoint_id, "workspace_directory", directory, "", "", limit=limit)
+        session["globus_active_tasks"] = [*session.get("globus_active_tasks", []), task_id]
+        contexts = session.get("globus_task_contexts", {})
+        contexts[task_id] = {"endpoint_id": endpoint_id, "operation": "workspace_directory", "limit": limit}
+        session["globus_task_contexts"] = contexts
+        return jsonify({"task_id": task_id, "status": "processing"})
+    except Exception:
+        logger.exception("Unable to submit workspace directory discovery")
+        return jsonify({"error": "Unable to start directory discovery on the Compute endpoint."}), 500
+
+
+def _finish_directory_import(context, result):
+    from aidrin.file_handling.file_parser import GLOBUS_FILE_TYPES
+    from web.routes.workspace_files import activate_workspace_file, add_globus_files
+
+    payload = result.get("result")
+    if not isinstance(payload, dict):
+        raise ValueError("The endpoint returned an invalid file list.")
+    if payload.get("Error"):
+        raise ValueError(str(payload["Error"]))
+    rows = payload.get("files")
+    if not isinstance(rows, list) or not 0 < len(rows) <= context["limit"]:
+        raise ValueError("The endpoint returned an invalid file list.")
+    allowed_types = {file_type for file_type, _ in GLOBUS_FILE_TYPES}
+    files = []
+    for row in rows:
+        if (not isinstance(row, dict) or not all(isinstance(row.get(key), str) and row[key] for key in ("path", "name", "file_type"))
+                or row["file_type"] not in allowed_types or not isinstance(row.get("summary"), dict)):
+            raise ValueError("The endpoint returned an invalid file entry.")
+        summary = {key: row["summary"][key] for key in ("records", "features", "numerical", "categorical", "size")
+                   if type(row["summary"].get(key)) is int and row["summary"][key] >= 0}
+        if isinstance(row["summary"].get("error"), str):
+            summary["error"] = row["summary"]["error"]
+        files.append({"path": row["path"], "name": row["name"], "file_type": row["file_type"], "summary": summary})
+    entry = add_globus_files(context["endpoint_id"], files)
+    activate_workspace_file(entry)
+    return {"status": "completed", "file_count": len(files)}
 
 
 @globus_bp.route("/submit", methods=["POST"])
@@ -404,6 +465,8 @@ def submit():
                 or session.get("globus_file_path") != file_path):
             session.pop("intent", None)
 
+        if (session.get("globus_endpoint_id"), session.get("globus_file_path")) != (endpoint_id, file_path):
+            session.pop("active_workspace_file_id", None)
         session["globus_endpoint_id"] = endpoint_id
         session["globus_file_path"] = file_path
         session["globus_file_name"] = file_name
@@ -511,6 +574,16 @@ def check_task_status(task_id):
                 "message": FILE_REFERENCE_UPGRADE_MESSAGE,
             }
             result["capability_invalidated"] = invalidated
+
+        payload = result.get("result")
+        if (isinstance(payload, dict) and payload.get("format") == "aidrin.workspace-directory"
+                and context.get("operation") != "workspace_directory"):
+            return jsonify({"status": "failed", "error": "Directory import is unavailable."}), 404
+        if result.get("status") == "completed" and context.get("operation") == "workspace_directory":
+            try:
+                result = _finish_directory_import(context, result)
+            except (OSError, ValueError) as exc:
+                result = {"status": "failed", "error": str(exc)}
 
         # Remove from active tasks if done
         if result.get("status") in ("completed", "failed"):

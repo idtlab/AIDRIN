@@ -847,8 +847,11 @@ function showPanel(panelId, pushHistory) {
   const buttonsContainer = document.getElementById("buttonsContainer");
   if (buttonsContainer) buttonsContainer.style.display = "none";
 
+  if (panelId === "batch-overview") loadWorkspaceOverview();
+
   // Check for cached results and restore them
   _restoreCachedResult(panelId);
+  if (panelId === "data-quality") syncCollectionSelection();
 
   if (panelId === "intent" && !_intentRestored) {
     _intentRestored = true;
@@ -981,7 +984,7 @@ function _restoreFormState(panelId, state) {
   if (!panel) return;
 
   for (const [key, value] of Object.entries(state)) {
-    if (!value) continue;
+    if (!value || key === "collection_file_order") continue;
     if (
       panelId === "variable-unit-validation" &&
       key === "variable_unit_metadata"
@@ -1017,12 +1020,13 @@ function _restoreFormState(panelId, state) {
 
     // Text/hidden inputs
     const input = panel.querySelector(
-      `input[name="${key}"]:not([type="checkbox"])`,
+      `input[name="${key}"]:not([type="checkbox"]):not([type="file"])`,
     );
     if (input) {
       input.value = value;
     }
   }
+  if (panelId === "data-quality") restoreCollectionSelection(state);
 }
 
 // Handle browser back/forward buttons
@@ -1797,7 +1801,11 @@ function renderWorkspaceResults(data, options) {
       }
 
       // AI Explanation placeholder (filled async if LLM is configured)
-      if (window.AIDRIN_LLM_ENABLED && (hasViz || hasScores)) {
+      if (
+        window.AIDRIN_LLM_ENABLED &&
+        results.format !== "aidrin.collection-assessment" &&
+        (hasViz || hasScores)
+      ) {
         const llmId = "llm-" + pairId;
         html += `<div id="${llmId}" class="mt-3"></div>`;
         if (!skipLLM) {
@@ -1818,17 +1826,19 @@ function renderWorkspaceResults(data, options) {
         }
       }
 
-      // Raw JSON toggle
-      const rawJson = {};
-      for (const [k, v] of Object.entries(displayResults)) {
-        if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
+      if (results.format !== "aidrin.collection-assessment") {
+        // Raw JSON toggle
+        const rawJson = {};
+        for (const [k, v] of Object.entries(displayResults)) {
+          if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
+        }
+        html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
+        html += `<summary class="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">`;
+        html += `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>`;
+        html += `View raw JSON</summary>`;
+        html += `<pre class="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-700 dark:text-gray-300 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(rawJson, null, 2))}</pre>`;
+        html += `</details>`;
       }
-      html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
-      html += `<summary class="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">`;
-      html += `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>`;
-      html += `View raw JSON</summary>`;
-      html += `<pre class="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-700 dark:text-gray-300 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(rawJson, null, 2))}</pre>`;
-      html += `</details>`;
     }
 
     html += `</div>`; // close card
@@ -2128,6 +2138,8 @@ function renderBeforeAfterTable(before, after) {
  *   side-by-side comparison table instead of two stacked sections
  */
 function renderScoresSection(scores, depth) {
+  if (scores.format === "aidrin.collection-assessment")
+    return renderWorkspaceCollection(scores);
   depth = depth || 0;
   let html = "";
 
@@ -2711,7 +2723,7 @@ function _setSubmitButtonsDisabled(disabled) {
     });
 }
 
-/** Disable or enable Clear session buttons in the top bar and mobile file chip. */
+/** Disable or enable the New session action in the top bar. */
 function _setClearSessionButtonsDisabled(disabled) {
   document.querySelectorAll('button[onclick="clearFile()"]').forEach((btn) => {
     btn.disabled = disabled;
@@ -2730,13 +2742,7 @@ function _setClearSessionButtonsDisabled(disabled) {
         "pointer-events-none",
       );
       btn.removeAttribute("aria-disabled");
-      if (btn.getAttribute("aria-label") === "Clear uploaded file") {
-        btn.title = "Clear file";
-      } else if (btn.getAttribute("aria-label") === "New session") {
-        btn.title = "Clear session and start over";
-      } else {
-        btn.removeAttribute("title");
-      }
+      btn.title = "Clear session and start over";
     }
   });
 }

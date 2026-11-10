@@ -227,7 +227,7 @@ def test_clear_without_session(client):
 
 
 def test_stale_session_missing_type(client, sample_csv, app):
-    """If file_type is missing from session, inspector should clear it."""
+    """Recover the active file's type from the session-owned inventory."""
     # Upload a file
     with open(sample_csv, "rb") as f:
         client.post(
@@ -241,10 +241,11 @@ def test_stale_session_missing_type(client, sample_csv, app):
     with client.session_transaction() as sess:
         sess.pop("uploaded_file_type", None)
 
-    # Inspector should detect stale session
     response = client.get("/inspector")
-    html = response.data.decode()
-    assert 'id="sidebar"' not in html
+    assert 'id="sidebar"' in response.get_data(as_text=True)
+    with client.session_transaction() as sess:
+        assert sess["uploaded_file_type"] == ".csv"
+    assert client.get("/retrieve-uploaded-file").data == sample_csv.read_bytes()
 
 
 # -------------------------------------------------

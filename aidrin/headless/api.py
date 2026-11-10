@@ -50,22 +50,28 @@ from .runners import (
     run_temporal_completeness,
     run_variable_unit_validation,
 )
+from .collection import run_collection_metrics  # noqa: F401 - public headless API
 
 
+# collection_modes opts a runner into request-local table inputs. Native-file
+# and metadata-dependent metrics require their own contract before opting in.
 METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
     "completeness": {
+        "collection_modes": ("independent", "stacked"),
         "category": "data-quality",
         "description": "Column completeness scores and overall completeness.",
         "runner": run_completeness,
         "required_args": [],
     },
     "duplicity": {
+        "collection_modes": ("independent", "stacked"),
         "category": "data-quality",
         "description": "Dataset duplicates ratio.",
         "runner": run_duplicity,
         "required_args": [],
     },
     "outliers": {
+        "collection_modes": ("independent", "stacked"),
         "category": "data-quality",
         "description": "Outlier proportions for numerical columns.",
         "runner": run_outliers,
