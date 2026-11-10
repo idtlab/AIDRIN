@@ -25,6 +25,12 @@ def app(tmp_path):
     custom_metrics_folder.mkdir()
     app.config["CUSTOM_METRICS_FOLDER"] = str(custom_metrics_folder)
 
+    custom_loaders_folder = tmp_path / "custom_loaders"
+    custom_loaders_folder.mkdir()
+    app.config["CUSTOM_LOADERS_FOLDER"] = str(custom_loaders_folder)
+    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = True
+    app.config["ENABLE_LOG_VIEWER"] = True
+
     remedy_folder = custom_metrics_folder / "remedy_data"
     remedy_folder.mkdir()
     app.config["REMEDY_FOLDER"] = str(remedy_folder)
@@ -59,6 +65,38 @@ def uploaded_client(client, sample_csv, app):
             data={
                 "file": (f, "test_data.csv"),
                 "fileTypeSelector": ".csv",
+            },
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+    assert response.status_code == 302
+    return client
+
+
+@pytest.fixture
+def sample_json(tmp_path):
+    """Create a temporary JSON file (list of records) for upload tests."""
+    import json
+
+    records = [
+        {"age": 25, "income": 50000, "education": "Bachelor", "gender": "M"},
+        {"age": 30, "income": 60000, "education": "Master", "gender": "F"},
+        {"age": 35, "income": 70000, "education": "PhD", "gender": "M"},
+    ]
+    json_path = tmp_path / "test_data.json"
+    json_path.write_text(json.dumps(records))
+    return json_path
+
+
+@pytest.fixture
+def uploaded_client_json(client, sample_json, app):
+    """A test client with a JSON file already uploaded in session."""
+    with open(sample_json, "rb") as f:
+        response = client.post(
+            "/inspector",
+            data={
+                "file": (f, "test_data.json"),
+                "fileTypeSelector": ".json",
             },
             content_type="multipart/form-data",
             follow_redirects=False,

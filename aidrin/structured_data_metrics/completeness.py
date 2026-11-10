@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, ignore_result=False)
-def completeness(self: Task, file_info):
+def completeness(self: Task, file_info, include_visualization=True):
     """Compute per-column and overall completeness (non-missing rate) for a dataset.
 
     Reads the file, calculates the proportion of non-null values for every
@@ -70,46 +70,47 @@ def completeness(self: Task, file_info):
         result_dict["Completeness scores"] = completeness_scores
         result_dict["Overall Completeness"] = overall_completeness
 
-        # Horizontal bar chart — grows vertically with feature count
-        labels = list(completeness_scores.keys())
-        values = list(completeness_scores.values())
-        n = len(labels)
-        text_color = "#6b7280"
+        if include_visualization:
+            # Horizontal bar chart — grows vertically with feature count
+            labels = list(completeness_scores.keys())
+            values = list(completeness_scores.values())
+            n = len(labels)
+            text_color = "#6b7280"
 
-        fig_height = max(3, n * 0.3)
-        fig, ax = plt.subplots(figsize=(8, fig_height))
-        fig.patch.set_alpha(0)
-        ax.set_facecolor("none")
+            fig_height = max(3, n * 0.3)
+            fig, ax = plt.subplots(figsize=(8, fig_height))
+            fig.patch.set_alpha(0)
+            ax.set_facecolor("none")
 
-        bars = ax.barh(range(n), values, color="#4485F4", height=0.7)
-        ax.set_xlabel("Completeness Score", fontsize=10, color=text_color)
-        ax.set_yticks(range(n))
-        ax.set_yticklabels(labels, fontsize=9, color=text_color)
-        ax.tick_params(axis="x", colors=text_color, labelsize=8)
-        ax.set_xlim(0, 1.12)
-        ax.invert_yaxis()
-        ax.set_ylim(n - 0.5, -0.5)
+            bars = ax.barh(range(n), values, color="#4485F4", height=0.7)
+            ax.set_xlabel("Completeness Score", fontsize=10, color=text_color)
+            ax.set_yticks(range(n))
+            ax.set_yticklabels(labels, fontsize=9, color=text_color)
+            ax.tick_params(axis="x", colors=text_color, labelsize=8)
+            ax.set_xlim(0, 1.12)
+            ax.invert_yaxis()
+            ax.set_ylim(n - 0.5, -0.5)
 
-        for spine in ax.spines.values():
-            spine.set_color(text_color)
+            for spine in ax.spines.values():
+                spine.set_color(text_color)
 
-        for bar, val in zip(bars, values):
-            if val > 0.15:
-                ax.text(val - 0.01, bar.get_y() + bar.get_height() / 2,
-                        f'{val:.2f}', ha='right', va='center', fontsize=8, color='white', fontweight='bold')
-            else:
-                ax.text(val + 0.01, bar.get_y() + bar.get_height() / 2,
-                        f'{val:.2f}', ha='left', va='center', fontsize=8, color=text_color)
+            for bar, val in zip(bars, values):
+                if val > 0.15:
+                    ax.text(val - 0.01, bar.get_y() + bar.get_height() / 2,
+                            f'{val:.3f}', ha='right', va='center', fontsize=8, color='white', fontweight='bold')
+                else:
+                    ax.text(val + 0.01, bar.get_y() + bar.get_height() / 2,
+                            f'{val:.3f}', ha='left', va='center', fontsize=8, color=text_color)
 
-        fig.tight_layout(pad=0.5)
+            fig.tight_layout(pad=0.5)
 
-        img_buf = io.BytesIO()
-        fig.savefig(img_buf, format="png", dpi=150, transparent=True)
-        img_buf.seek(0)
+            img_buf = io.BytesIO()
+            fig.savefig(img_buf, format="png", dpi=150, transparent=True)
+            img_buf.seek(0)
 
-        img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
-        result_dict["Completeness Visualization"] = img_base64
-        plt.close(fig)
+            img_base64 = base64.b64encode(img_buf.read()).decode("utf-8")
+            result_dict["Completeness Visualization"] = img_base64
+            plt.close(fig)
 
         logger.info("Completeness task completed: %d columns, overall=%.4f", len(completeness_scores), overall_completeness)
         return result_dict

@@ -33,7 +33,10 @@ To use the AIDRIN web application:
    - A JSON report summarizing the results is available for download.
    - Return to the homepage to select another dimension or upload a new dataset.
 
-5. **AI Explanations (Optional)**:
+5. **Tell AIDRIN What You Plan to Do (Optional)**:
+   - After a dataset loads, a modal asks what you are preparing it for and suggests which checks matter most. See `Intent & Recommendations`_ below.
+
+6. **AI Explanations (Optional)**:
    - With the ``llm`` extra installed, each metric result can carry a short AI-generated interpretation. See `AI Explanations`_ below.
 
 Data Readiness Dimensions and Metrics
@@ -98,9 +101,31 @@ as well as row-level completeness, feature coverage, temporal completeness, and 
 
 - **Custom Criteria Outliers**:
 
-  - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, missing-value handling, and nested ``and``/``or``/``not`` conditions.
-  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. The exact-name picker is searchable. In the manual editor, choose **Regex** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Manually entered rules can be saved as a reusable JSON file; the browser reads selected JSON files without uploading or saving them.
-  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target.
+  - **Method**: Evaluates user-defined valid-value criteria against selected columns or HDF5 datasets. Values that do not satisfy those criteria are flagged as outliers. Criteria can use numeric ranges, regular expressions, same-row column comparisons, missing-value handling, and nested ``and``/``or``/``not`` conditions.
+  - **Parameters**: Choose either manually entered rules or a JSON file containing the same top-level rules array used by the CLI and MCP server, plus maximum preview/export rows, optional scan limit, and whether to stop scanning after the preview limit is reached. Rules use exact target matching by default. The exact-name picker is searchable. In the manual editor, choose **Regex** and enter a **Target pattern** to apply a rule to every complete column or HDF5-dataset name that matches it. The target category is inferred from the loaded file; it is shown only if the file exposes more than one category. JSON rules use ``"target_match": "regex"``. Rules from either source can be saved as a reusable JSON file; the browser reads the selected source file without uploading it.
+  - **Result**: Per-rule counts, compact outlier preview rows with locations and values, downloadable CSV export rows, and HDF5 aggregate summaries when applicable. A regex target produces separate results for each resolved target. Comparison violations include both operand values in previews and exports.
+
+  In **Define conditions**, select a target and choose **Range**, **Regex**, or
+  **Compare columns** for each condition. For example, select ``lower``, choose
+  **Compare columns**, select **Less than or equal to**, and choose ``upper`` as
+  the **Comparison column**. The summary shows ``lower <= upper``. Comparisons
+  require exact column names within the same parsed table and compatible units;
+  units are not converted. Finite numeric strings are accepted. Non-numeric or
+  infinite operands are invalid even inside **Any** or **No** groups. Missing
+  operands follow **Allow missing values**. HDF5 datasets retain Range/Regex
+  controls; column comparisons are unavailable for them.
+
+  **All**, **Any**, and **No** combine conditions as ``and``, ``or``, and
+  ``not(or(...))`` respectively. **Save rules to JSON** downloads the canonical
+  rules array from either manual or file mode for reuse by the web inspector,
+  Python API, CLI, and MCP server. The source file is read in the browser.
+
+  To edit an existing file, choose **Select JSON file**, select the file, then
+  click **Edit file in builder**. This replaces the current manual rules after
+  validating every rule. Flat All/Any groups, single conditions, and No groups
+  can be edited. More deeply nested groups or advanced fields are refused with
+  a visible message; the selected file and existing manual rules remain intact.
+  Continue in file mode to run or save those rules without dropping any fields.
 
 Impact of Data on AI
 ^^^^^^^^^^^^^^^^^^^^
@@ -205,26 +230,161 @@ Focuses on privacy preservation through metrics that assess anonymity and disclo
 Understandability and Usability
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This feature evaluates dataset metadata for compliance with the **FAIR principles** — *Findable*, *Accessible*, *Interoperable*, and *Reusable*.
-It ensures your dataset is well-documented, discoverable, and reusable by others.
+This dimension checks whether dataset variables have usable unit metadata and
+evaluates dataset metadata for compliance with the **FAIR principles** —
+*Findable*, *Accessible*, *Interoperable*, and *Reusable*.
+
+Unit Metadata Audit and Repair
+''''''''''''''''''''''''''''''
+
+- **Method**: Audits every logical variable for a Pint-recognized unit, dimensionless ``1``, or an explicit not-applicable resolution. Native HDF5/Parquet metadata and trailing name annotations, including compact suffixes such as ``vp_m_per_s``, are preserved as observations; user resolutions can correct them without changing the dataset.
+- **Parameters**: Open **Unit Metadata Audit** under Understandability. Review every unresolved, invalid, ambiguous, or conflicting variable; select **Has a physical unit**, **Dimensionless**, or **No unit applies**; and validate the edited sidecar. For a recognized physical quantity, choose from the matching common units; unrecognized variable names show the full common-unit list. Free-form entry accepts Pint-compatible expressions. Suggestions do not assign units automatically. A complete canonical sidecar can also be imported.
+- **Result**: Separate classification coverage, applicable-unit coverage, and metadata-validity scores; deterministic per-variable findings; and a complete downloadable ``.units.json`` sidecar, including unresolved variables. Results use green for valid or dimensionless variables, amber for missing or ambiguous metadata, red for invalid, conflicting, or overridden mismatches, and neutral styling for not-applicable variables. Mismatch messages state whether the scale or physical dimension differs; source values are not converted.
+
+This checks metadata syntax and coverage only. It does not infer units from
+values, validate expected physical dimensions, convert data, or prove that a
+syntactically valid unit is correct. See :ref:`variable_unit_validation` for
+supported metadata, resolution behavior, ``g`` ambiguity, and Globus compatibility.
 
 FAIR Compliance Report
 '''''''''''''''''''''''
 
-The **FAIR Compliance Report** analyzes your dataset's metadata file (in **DCAT** or **DataCite JSON** format)
-and provides a detailed assessment against the FAIR criteria.
+The **FAIR Compliance Report** analyzes your dataset's metadata file (in **Croissant**, **RO-Crate**,
+**DCAT-US 3.0**, **DCAT-US 1.1** or **DataCite JSON** format) and provides a detailed assessment against the FAIR criteria.
 
 How it Works
 ''''''''''''''
 
 1. Open the **FAIR Assessment** panel from the sidebar of the `inspector page <https://demo.aidrin.org/inspector>`__.
-2. Upload your metadata file (**DCAT** or **DataCite JSON**).
+2. Upload your metadata file (``.json`` or ``.jsonld``). **Metadata type** defaults to *Detect
+   automatically*; choose a standard explicitly if detection picks the wrong one or fails.
 3. The system evaluates the file against the FAIR principles and generates a structured report.
+   The report's **Standard** section names the standard used and whether it was detected.
 
-FAIR Principles and Criteria
-'''''''''''''''''''''''''''''
+Detection reads what the file declares: Croissant files carry ``conformsTo`` (or a ``cr`` context)
+naming their Croissant version; an RO-Crate has an ``ro-crate-metadata.json`` entity in its
+``@graph`` or an RO-Crate context; DataCite JSON uses ``titles`` and ``creators``, including REST API
+responses; DCAT-US 1.1 files carry ``accessLevel``, ``bureauCode`` or a Project Open Data
+``conformsTo``; a DCAT-US 3.0 record has ``title`` with ``contactPoint`` or ``distribution`` and none
+of the 1.1 keys. A file that matches none of these is reported as undetected.
 
-The evaluation checks for the presence and quality of specific metadata elements grouped under each FAIR principle:
+A check passes when the element is present and not empty. Dataset-level elements are read from the
+top level of the file only, so a title or description on a distribution never stands in for the
+dataset's own. Elements written with a namespace prefix (``dct:title``) or as a full IRI match their
+plain name.
+
+FAIR Principles and Criteria: Croissant
+''''''''''''''''''''''''''''''''''''''''
+
+`Croissant <https://docs.mlcommons.org/croissant/docs/croissant-spec.html>`__ 1.0 and 1.1 are the
+MLCommons JSON-LD metadata formats for machine-learning datasets, published by Hugging Face, Kaggle and
+OpenML. MLCommons offers syntax validation for Croissant but no FAIR assessment; this mapping is
+AIDRIN's, with each check tied to an F-UJI FAIRsFAIR metric.
+
+**Findable** (FsF-F1-01D, FsF-F2-01M)
+    - ``name``, ``description``, ``keywords``, ``url``, ``version``, ``citeAs``
+    - ``identifier`` or ``sameAs``
+
+**Accessible** (FsF-A1-01M, FsF-A1-03D)
+    - ``isAccessibleForFree`` or ``conditionsOfAccess``
+    - ``contentUrl`` and ``encodingFormat`` *(distribution)*
+
+**Interoperable** (FsF-I1-01M, FsF-R1.3-01M)
+    - ``conformsTo``, ``@context``, ``recordSet``
+
+**Reusable** (FsF-R1.1-01M, FsF-R1.2-01M, FsF-R1-01MD)
+    - ``license``, ``creator``, ``publisher``, ``datePublished``, ``dateModified``
+    - provenance: ``wasDerivedFrom`` or ``wasGeneratedBy``
+    - ``dataType`` on the fields of each ``recordSet``
+
+The Croissant report also shows:
+
+- **Conformance**: which of the nine properties Croissant requires (``@context``, ``@type`` of
+  Dataset, ``conformsTo``, ``name``, ``description``, ``license``, ``url``, ``creator``,
+  ``datePublished``) are present.
+- **Structure**: FileObjects with a checksum (``sha256`` or ``md5``), fields with a ``dataType``, and
+  RecordSets with a ``key``.
+- **RAI Documentation**: the 20 properties of the `Croissant Responsible AI vocabulary
+  <https://docs.mlcommons.org/croissant/docs/croissant-rai-spec.html>`__ (data collection, labeling,
+  biases, limitations, sensitive information and so on), each shown as declared, with its text, or
+  *Not declared*. They are reported, never scored: the values are free text that AIDRIN cannot verify.
+
+FAIR Principles and Criteria: RO-Crate
+'''''''''''''''''''''''''''''''''''''''
+
+`RO-Crate 1.2 <https://www.researchobject.org/ro-crate/specification/1.2/>`__ packages research data
+with its metadata in an ``ro-crate-metadata.json`` file (JSON-LD on schema.org). It is used by workflow
+systems and repositories such as WorkflowHub, and by the Workflow Run Crate profiles. Upload the
+``ro-crate-metadata.json`` itself; zipped crates are not read. Other RO-Crate versions are assessed
+with the 1.2 rules, and the report says so.
+
+The checks run on the crate's root data entity, found through the metadata descriptor's ``about``
+(the root's ``@id`` is often ``./`` but need not be).
+
+**Findable** (FsF-F1-01D, FsF-F2-01M)
+    - ``name``, ``description``, ``keywords``
+    - ``identifier`` or ``cite-as``
+
+**Accessible** (FsF-A1-01M, FsF-A1-03D)
+    - ``conditionsOfAccess``
+    - web-based crates only (the root ``@id`` is an absolute URI that is not a persistent
+      identifier such as a DOI): ``url`` or ``distribution``, and a download location on File
+      entities, either ``contentUrl`` or an absolute ``@id``. For an attached crate these are
+      listed under **Not applicable** and left out of the score.
+
+**Interoperable** (FsF-I1-01M, FsF-R1.3-01M)
+    - the metadata descriptor's ``conformsTo`` names a versioned RO-Crate
+    - ``conformsTo`` on the root (the profiles the crate follows)
+    - ``encodingFormat`` on File entities
+
+**Reusable** (FsF-R1.1-01M, FsF-R1.2-01M)
+    - ``license``, ``author``, ``publisher``, ``funder``, ``datePublished``
+    - provenance: a ``CreateAction`` or ``UpdateAction`` with an ``object``
+
+The RO-Crate report also shows:
+
+- **Conformance**: the 1.2 requirements (MUST: a ``CreativeWork`` metadata descriptor, a root entity
+  found through ``about``, a root ``@type`` including ``Dataset``, and ``datePublished`` as one ISO 8601
+  date) and recommendations (SHOULD: a versioned ``conformsTo``, root ``name``, ``description`` and
+  ``license``, and ``cite-as`` when the ``identifier`` is a DOI), each with what is missing.
+- **Structure**: Files with ``encodingFormat`` and ``contentSize``, people with an ORCID, organizations
+  with a ROR, and actions with both ``agent`` and ``instrument``.
+
+FAIR Principles and Criteria: DCAT-US 3.0
+''''''''''''''''''''''''''''''''''''''''''
+
+`DCAT-US 3.0 <https://resources.data.gov/resources/dcat-us3/>`__ is the current US federal data
+catalog schema (GSA), based on W3C DCAT 3 and published as JSON Schema with plain keys. Upload one
+dataset record; a whole catalog (a ``dataset`` array) is rejected with a message saying so.
+``bureauCode``, ``programCode`` and ``accessLevel`` are not part of 3.0 and are not scored.
+
+**Findable**
+    - ``identifier``, ``title``, ``description``, ``keyword``, ``theme``, ``landingPage``
+
+**Accessible**
+    - ``accessRights``, ``issued``, ``modified``
+    - ``accessURL`` or ``downloadURL``, and ``mediaType`` *(distribution)*
+
+**Interoperable**
+    - ``conformsTo``, ``spatial``, ``temporal``, ``qualifiedRelation``
+    - ``format`` *(distribution)*
+
+**Reusable**
+    - ``license`` on the dataset or a distribution
+    - ``rights``, ``publisher``, ``contactPoint``, ``version``
+    - provenance: ``wasGeneratedBy`` or ``provenance``
+    - ``checksum`` *(distribution)*
+
+**Conformance** reports the four properties DCAT-US 3.0 requires of a dataset: ``title``,
+``description``, ``contactPoint`` and ``identifier``. DCAT 3 versioning and series properties
+(``hasVersion``, ``previousVersion``, ``inSeries`` and so on) appear under **Other**, unscored.
+
+FAIR Principles and Criteria: DCAT-US 1.1
+''''''''''''''''''''''''''''''''''''''''''
+
+`DCAT-US 1.1 <https://resources.data.gov/resources/dcat-us/>`__ (Project Open Data) is the metadata
+schema of US federal data catalogs. Elements marked *(distribution)* pass when at least one entry of
+``distribution`` carries them, and the report shows how many do.
 
 **Findable**
     - ``identifier``
@@ -236,9 +396,9 @@ The evaluation checks for the presence and quality of specific metadata elements
 
 **Accessible**
     - ``accessLevel``
-    - ``downloadURL``
-    - ``mediaType``
-    - ``accessURL``
+    - ``downloadURL`` *(distribution)*
+    - ``mediaType`` *(distribution)*
+    - ``accessURL`` *(distribution)*
     - ``issued``
     - ``modified``
 
@@ -246,7 +406,7 @@ The evaluation checks for the presence and quality of specific metadata elements
     - ``conformsTo``
     - ``references``
     - ``language``
-    - ``format``
+    - ``format`` *(distribution)*
     - ``spatial``
     - ``temporal``
 
@@ -255,10 +415,47 @@ The evaluation checks for the presence and quality of specific metadata elements
     - ``rights``
     - ``publisher``
     - ``description``
-    - ``format``
+    - ``format`` *(distribution)*
     - ``programCode``
     - ``bureauCode``
     - ``contactPoint``
+
+FAIR Principles and Criteria: DataCite
+'''''''''''''''''''''''''''''''''''''''
+
+`DataCite Metadata Schema 4.x <https://schema.datacite.org/>`__ JSON, either as exported by your
+repository or as returned by the `DataCite REST API <https://support.datacite.org/docs/api-get-doi>`__
+(the ``data.attributes`` wrapper is removed automatically). DataCite does not publish a FAIR mapping;
+this one follows the F-UJI assessment tool's DataCite mapping and
+`Habermann (2024) <https://doi.org/10.5281/zenodo.12168626>`__.
+
+**Findable**
+    - identifier: ``doi``, or an ``identifiers`` entry whose ``identifierType`` is ``DOI``
+    - ``creators``, ``titles``, ``publisher``, ``publicationYear``, ``subjects``, ``alternateIdentifiers``
+    - ``descriptions`` with ``descriptionType`` ``Abstract``
+
+**Accessible**
+    - ``url`` or ``contentUrl`` (registration fields: present in REST API responses, usually absent from schema exports)
+    - an access-rights entry in ``rightsList`` (``rightsUri`` starting with ``info:eu-repo/semantics/``)
+
+**Interoperable**
+    - ``types.resourceTypeGeneral``
+    - ``relatedIdentifiers`` with ``relationType``
+    - ``subjects`` with ``valueUri``
+    - ``language``
+
+**Reusable**
+    - a license: a ``rightsList`` entry with a ``rightsUri`` other than the access-rights entry
+    - ``contributors``, ``fundingReferences``, ``dates``, ``version``, ``formats``, ``sizes``, ``relatedItems``
+
+The DataCite report also shows:
+
+- **Conformance**: how many of the six mandatory properties (Identifier, Creator, Title, Publisher,
+  PublicationYear, ResourceType) are present.
+- **Structure**: creators with an ORCID, affiliations with a ROR identifier, a publisher identifier,
+  subjects with a ``valueUri``, and funders with a ``funderIdentifier``. The REST API returns
+  affiliations and the publisher as plain names unless the record is requested with
+  ``?affiliation=true&publisher=true``; for plain names these rows read *not assessable* instead of 0.
 
 Output
 ''''''
@@ -346,7 +543,7 @@ Notes
 
 - **File Formats**: The web application supports CSV, Excel, JSON, NumPy (``.npz``),
   HDF5 (``.h5``), and Parquet (``.parquet``) files for data uploads, and
-  DCAT/DataCite JSON for metadata
+  DCAT-US 1.1/DataCite JSON for metadata
   in the Understandability and Usability dimension.  For HDF5 files, fill-value
   sentinels (``_FillValue``, ``missing_value``, and the HDF5 native fill value) are
   automatically converted to ``NaN`` so that all metrics — completeness, outliers,
@@ -384,6 +581,14 @@ This is optional. Install the extra to enable it:
 
    Set ``GLOBUS_CLIENT_SECRET`` as well if you registered a confidential client.
 
+   Scheduler-backed endpoints may need longer than the default 30 seconds to
+   start a worker for the compatibility probe. Configure the server timeout in
+   seconds before starting AIDRIN, for example:
+
+   .. code-block:: bash
+
+      export AIDRIN_GLOBUS_ENDPOINT_PROBE_TIMEOUT=900
+
 **Set up an endpoint on the machine holding your data**
 
 .. code-block:: bash
@@ -402,6 +607,15 @@ testing you can run an endpoint on the same machine under a different name.
 The endpoint machine needs ``aidrin`` installed, network access to
 authenticate with Globus, and the dataset reachable at the path you enter.
 
+For file-reference validation, the endpoint must expose a **Globus Compute worker**
+with ``AIDRIN_FILE_REFERENCE_ALLOWED_ROOTS`` and
+``AIDRIN_FILE_REFERENCE_WEB_SCAN_LIMIT`` configured in ``worker_init``. The
+worker reads paths already visible on its filesystem; Globus Connect and Globus
+Transfer are not used. Direct Python API calls and local CLI or MCP runs check
+the host running those interfaces. ``aidrin remote`` commands and MCP calls
+with ``endpoint`` or ``profile`` check the selected Compute endpoint instead;
+those headless remote runs do not use this web worker-root policy.
+
 **Running a remote analysis**
 
 1. Select the **Remote (Globus)** tab.
@@ -412,6 +626,103 @@ authenticate with Globus, and the dataset reachable at the path you enter.
 5. Choose the file type and click **Load Remote Dataset**.
 6. Run metrics as usual. Computation happens on the endpoint; only results
    come back.
+
+Intent & Recommendations
+-------------------------
+
+After a dataset loads, AIDRIN asks what you plan to do with it — train or
+fine-tune a model, run inference, publish or archive the dataset, and so on
+— and suggests which readiness checks are worth running for that goal.
+
+This runs nothing. It computes no metric, reads no additional data, and
+scores nothing; it is advisory only. Its entire output is a prioritised list
+of which checks to look at and why, each with a link that jumps straight to
+the relevant panel and highlights the specific checkbox.
+
+**Setup**
+
+1. When the modal opens, select one or more goals (e.g. *Training or
+   fine-tuning a model*, *Publishing, sharing, or archiving*) and optionally
+   describe your plan in a few words. Alternatively, tick *Other / load a
+   custom profile* to skip the goals and load a profile file you saved
+   earlier (see **Custom profiles** below) instead.
+2. Click **Get recommendations**, or **Skip** to dismiss it for this session.
+3. Recommendations appear grouped into **Check these first** (critical) and
+   **Worth checking** (recommended), each with a short rationale and a link
+   to its panel.
+4. Revisit your goal any time from the **Intent & Recommendations** panel's
+   **Change goal** card, which repeats the same goal checklist and notes box
+   inline and updates the recommendations above without reopening the modal.
+   The same card's action row also has a **Build profile** button, next to
+   **Update recommendations**, that opens the profile-builder page described
+   below.
+
+**Custom profiles**
+
+A profile is an explicit list of checks (with a critical/recommended
+priority each) saved to a JSON file, for cases the curated goal list does
+not cover, or to reuse the same check list across datasets.
+
+- **Build one** on the profile-builder page: click **Build profile** in the
+  Intent & Recommendations panel's **Change goal** card, tick any of the 29
+  readiness checks (grouped by pillar) with a priority for each, and click
+  **Download profile JSON** to save the file. Metrics already recommended
+  for your current goal start pre-ticked. This page has no sidebar entry —
+  it is reached only from that button, and its own **Back to Intent &
+  Recommendations** control returns you to the panel above.
+- **Load one** from the intent modal: tick *Other / load a custom profile*
+  and choose the file. It is read in your browser and never uploaded; the
+  resulting recommendations show *From: Custom profile – <name>* on each
+  card. Loading a profile is only available from this modal — not from the
+  profile-builder page.
+
+The file itself is a small JSON object::
+
+    {
+      "profile_version": 1,
+      "aidrin_version": "|AIDRIN_VERSION|",
+      "name": "Lab intake QC",
+      "critical": ["completeness", "row_level_completeness"],
+      "recommended": ["outliers"]
+    }
+
+``profile_version`` is the file-format compatibility gate: AIDRIN rejects a
+file whose ``profile_version`` it does not recognise. ``aidrin_version`` is
+informational only — which AIDRIN release produced the file — and never
+blocks a load; if it differs from the version you are running, AIDRIN loads
+the profile anyway and shows a small note about the difference.
+
+**Without an LLM**
+
+Recommendations come from a fixed, hand-curated mapping of goals to metrics
+built into AIDRIN, so this feature needs no API key and no network access.
+It works the same whether or not the ``llm`` extra is installed.
+
+**With an LLM connected**
+
+With the same OpenAI-compatible connection used for `AI Explanations`_
+(configured via the sparkle icon), the model — not the curated map — decides
+the checks: it is given the same catalog of available checks, your stated
+goal and notes, the dataset's structure, and the curated mapping as a
+starting point it may agree with, extend, trim, or reprioritise. Its own
+selection is what you see, with a short explanation of why each check
+matters for your stated goal.
+
+Because the model has more context than a fixed mapping — your goals, your
+free-text notes, and the dataset's actual shape — it may leave out checks
+the curated map would have included, including compliance-flavoured checks
+such as HIPAA Compliance or k-Anonymity for a publishing goal, if it judges
+them unnecessary for your situation. A check it omits simply does not
+appear; there is no guaranteed-minimum set layered underneath its choice.
+The dataset's structure can still veto a pick the model makes (for example,
+a categorical-only check is dropped for a dataset with no categorical
+columns), but that is the only floor.
+
+If the model is unavailable, unreachable, or its reply cannot be used at
+all, AIDRIN silently falls back to the curated list described above — the
+feature never depends on the LLM being reachable.
+
+----
 
 AI Explanations
 ---------------
@@ -472,23 +783,26 @@ always clear what produced the text.
 Custom Metrics and Remedies
 ----------------------------
 
-This section explains how to define custom metrics and remediation logic for your uploaded CSV files
-using the **CustomDR** class inside the CodeMirror editor. After uploading a dataset, you
-will navigate to a page where you can write Python code that extends the platform's data-review logic.
+This section explains how to define custom metrics and remediation logic for your uploaded dataset
+using the **CustomDR** class inside the CodeMirror editor. Custom metrics work with any file
+format AIDRIN supports (CSV, Excel, JSON, NumPy ``.npz``, HDF5, Parquet). After uploading a
+dataset, you will navigate to a page where you can write Python code that extends the platform's
+data-review logic.
 
 Workflow
 ~~~~~~~~
 
-1. Navigate to the file upload page and upload a CSV file.
-2. After upload, click the **Define Custom Metrics** button. You will be redirected to ``/customMetrics``.
+1. Navigate to the file upload page and upload a dataset.
+2. In the left sidebar, click the **Custom Metrics** tab (a standalone top-level tab, alongside Data Overview and the metric pillars — it is not nested inside another category).
 3. A CodeMirror Python editor appears, preloaded with an editable ``CustomDR`` class that inherits from ``BaseDRAgent`` and contains two methods:
    - ``metric()``: returns a dictionary of metric results.
-   - ``remedy()``: returns a modified dataset based on your remediation logic.
+   - ``remedy()``: returns a modified dataset, as a **pandas DataFrame**, based on your remediation logic.
 4. Write or modify your code inside the editor.
-5. Press **Save** to store your custom logic on the server (temporary, 1-hour expiration).
-6. Press **Submit** to execute your ``metric()`` function, and optionally your ``remedy()`` function if you have checked the **Apply Remedy** box.
+5. Press **Save** to store your custom logic on the server (temporary, 1-hour expiration). **Submit stays disabled — and shows "Unsaved changes" — until you Save**; it always runs the last saved version, not whatever is currently typed in the editor.
+6. If you want a downloadable remedied dataset, check the **Apply Remedy** box *before* clicking Submit — it is unchecked by default on every run, and ``remedy()`` will not run at all if it is left unchecked, even if you implemented it.
+7. Press **Submit** to execute your ``metric()`` function, and (if Apply Remedy was checked) your ``remedy()`` function.
 
-The platform will display your computed metric dictionary, any remediated dataset to download (if remedy is enabled), and any warnings or errors raised by your code.
+The platform will display your computed metric dictionary, any remediated dataset to download (if remedy was applied), and any errors raised by your code — including the specific line number for a syntax error, or which of ``metric()``/``remedy()`` raised an exception.
 
 Understanding the ``CustomDR`` Base Class
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -499,7 +813,7 @@ Below is the template initially shown in CodeMirror:
 
     from aidrin.custom_metrics.base_dr import BaseDRAgent
     from typing import Any
-    from typing import Dict, Union, Any
+    import pandas as pd
 
     class CustomDR(BaseDRAgent):
         def __init__(self, dataset: Any, **kwargs):
@@ -520,12 +834,14 @@ Below is the template initially shown in CodeMirror:
 
             return {"message": "Placeholder metric. Implement your logic here."}
 
-        def remedy(self, **kwargs**):
+        def remedy(self, **kwargs) -> pd.DataFrame:
             """
             Applies custom remediation logic based on the calculated metrics.
+            Access metric results via kwargs.get("metric_results", {}).
             """
 
             # IMPLEMENT YOUR REMEDIATION LOGIC BELOW
+            # metric_results = kwargs.get("metric_results", {})
             # For example, filling null values with a default value
 
             # df_remedied: pd.DataFrame = self.dataset.copy()
@@ -622,6 +938,9 @@ When you click **Submit**:
 3. The system calls your ``metric()`` method to compute metrics.
 4. If **Apply Remedy** is checked, the system calls your ``remedy()`` method to get the modified dataset.
 5. Metrics and (optionally) the remedied data preview are displayed on the results section of the page.
+   The remedied dataset is always saved as CSV for download, regardless of the original file's
+   format, since formats like JSON/NPZ/HDF5 don't round-trip losslessly back to their original
+   structure.
 
 Best Practices for Writing Custom Metrics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

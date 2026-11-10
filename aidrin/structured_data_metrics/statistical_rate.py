@@ -20,7 +20,7 @@ plt.ioff()  # Turn off interactive mode
 
 @shared_task(bind=True, ignore_result=False)
 def calculate_statistical_rates(
-    self: Task, y_true_column, sensitive_attribute_column, file_info
+    self: Task, y_true_column, sensitive_attribute_column, file_info, include_visualization=True
 ):
     try:
         logger.info("Statistical Rate task started: target=%r, sensitive=%r", y_true_column, sensitive_attribute_column)
@@ -71,59 +71,60 @@ def calculate_statistical_rates(
         for class_label, proportion in tsd.items():
             tsd[class_label] = np.std(proportion)
 
-        # Set up the plot
-        fig, ax = plt.subplots(figsize=(8, 8))
+        if include_visualization:
+            # Set up the plot
+            fig, ax = plt.subplots(figsize=(8, 8))
 
-        # Calculate the total number of classes and sensitive attribute values
-        num_classes = len(unique_class_labels)
-        num_sensitive_values = len(unique_sensitive_values)
+            # Calculate the total number of classes and sensitive attribute values
+            num_classes = len(unique_class_labels)
+            num_sensitive_values = len(unique_sensitive_values)
 
-        # Calculate the width of each bar and the total width of each group
-        bar_width = 0.1
-        group_width = bar_width * num_classes
+            # Calculate the width of each bar and the total width of each group
+            bar_width = 0.1
+            group_width = bar_width * num_classes
 
-        # Calculate the offset for each bar within a group
-        bar_offset = np.arange(num_sensitive_values) * group_width - (
-            group_width * (num_classes - 1) / 2
-        )
-
-        # Iterate through each unique class label
-        for i, class_label in enumerate(unique_class_labels):
-            # Extract proportions for the current class label
-            proportions = [
-                class_proportions[sensitive_value].get(class_label, 0)
-                for sensitive_value in unique_sensitive_values
-            ]
-
-            # Plot the bars for each sensitive attribute value with the adjusted position
-            bar_positions = bar_offset + i * bar_width
-            ax.bar(
-                bar_positions,
-                proportions,
-                width=bar_width,
-                label=f"Class: {class_label}",
+            # Calculate the offset for each bar within a group
+            bar_offset = np.arange(num_sensitive_values) * group_width - (
+                group_width * (num_classes - 1) / 2
             )
 
-        # Set up labels and title
-        ax.set_xticks(bar_offset + (num_classes - 1) * bar_width / 2)
-        # Adjust fontsize and rotation
-        ax.set_xticklabels(unique_sensitive_values, rotation=30, ha="right", fontsize=8)
-        ax.set_xlabel("Sensitive Attribute")
-        ax.set_ylabel("Proportion")
-        ax.set_title("Class Proportions for Each Sensitive Attribute")
-        ax.legend()
+            # Iterate through each unique class label
+            for i, class_label in enumerate(unique_class_labels):
+                # Extract proportions for the current class label
+                proportions = [
+                    class_proportions[sensitive_value].get(class_label, 0)
+                    for sensitive_value in unique_sensitive_values
+                ]
 
-        # Adjust the bottom margin to avoid xticks being cropped
-        plt.subplots_adjust(bottom=0.25)
+                # Plot the bars for each sensitive attribute value with the adjusted position
+                bar_positions = bar_offset + i * bar_width
+                ax.bar(
+                    bar_positions,
+                    proportions,
+                    width=bar_width,
+                    label=f"Class: {class_label}",
+                )
 
-        # Save the plot as a base64 string
-        buffer = io.BytesIO()
-        plt.savefig(buffer, format="png")
-        buffer.seek(0)
-        base64_plot = base64.b64encode(buffer.read()).decode("utf-8")
-        # Close the figure and BytesIO stream to free memory
-        plt.close(fig)
-        buffer.close()
+            # Set up labels and title
+            ax.set_xticks(bar_offset + (num_classes - 1) * bar_width / 2)
+            # Adjust fontsize and rotation
+            ax.set_xticklabels(unique_sensitive_values, rotation=30, ha="right", fontsize=8)
+            ax.set_xlabel("Sensitive Attribute")
+            ax.set_ylabel("Proportion")
+            ax.set_title("Class Proportions for Each Sensitive Attribute")
+            ax.legend()
+
+            # Adjust the bottom margin to avoid xticks being cropped
+            fig.subplots_adjust(bottom=0.25)
+
+            # Save the plot as a base64 string
+            buffer = io.BytesIO()
+            fig.savefig(buffer, format="png")
+            buffer.seek(0)
+            base64_plot = base64.b64encode(buffer.read()).decode("utf-8")
+            # Close the figure and BytesIO stream to free memory
+            plt.close(fig)
+            buffer.close()
 
         # Full disclosure: This workaround is from stackoverflow.
         # Recasts all numpy types to their native Python types so Celery can pass the data correctly.
@@ -137,23 +138,24 @@ def calculate_statistical_rates(
             else:
                 return obj
 
-        cleaned_payload = to_serializable(
-            {
-                "Statistical Rates": class_proportions,
-                "TSD scores": tsd,
-                "Description": "The TSD values are calculated by getting the standard deviation of the "
-                "proportions of each group across the different classes...",
-                "Statistical Rate Visualization": base64_plot,
-            }
-        )
+        serializable_payload = {
+            "Statistical Rates": class_proportions,
+            "TSD scores": tsd,
+            "Description": "The TSD values are calculated by getting the standard deviation of the "
+            "proportions of each group across the different classes...",
+        }
+        if include_visualization:
+            serializable_payload["Statistical Rate Visualization"] = base64_plot
+        cleaned_payload = to_serializable(serializable_payload)
         result = {
             "Statistical Rates": cleaned_payload["Statistical Rates"],
             "TSD scores": cleaned_payload["TSD scores"],
             "Description": cleaned_payload["Description"],
-            "Statistical Rate Visualization": cleaned_payload[
-                "Statistical Rate Visualization"
-            ],
         }
+        if include_visualization:
+            result["Statistical Rate Visualization"] = cleaned_payload[
+                "Statistical Rate Visualization"
+            ]
         logger.info("Statistical Rate task completed: %d sensitive groups, %d classes", len(unique_sensitive_values), len(unique_class_labels))
         return result
     except SoftTimeLimitExceeded:

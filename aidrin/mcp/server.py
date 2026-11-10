@@ -3,22 +3,29 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from aidrin.headless.api import (
+    calculate_fair_compliance,
     generate_metric_template,
     list_available_metrics,
+    run_agentic_index,
+    run_agentic_pipeline,
     run_custom_metric_logic,
     run_custom_metric_remedy,
     run_metric,
 )
 from aidrin.headless.config import HeadlessConfig
+from aidrin.telemetry import mlflow_sink
 
-mcp_server = FastMCP("aidrin")
+# Importing this module means the process is serving MCP, so sessions opened
+# implicitly inside run_batch_metrics are attributed to the right interface.
+mlflow_sink.set_default_interface("mcp")
+
+mcp_server = MCPServer("aidrin")
 
 
 def _dumps(obj: Any) -> str:
@@ -47,6 +54,7 @@ def summarize_dataset(
     file_path: str,
     file_type: str | None = None,
     max_features: int | None = None,
+    loader: str | None = None,
     endpoint: str | None = None,
     profile: str | None = None,
 ) -> str:
@@ -63,13 +71,15 @@ def summarize_dataset(
                       and categorical. All column names still appear in 'columns'.
                       If one type has fewer columns than its share, the remainder goes
                       to the other type.
+        loader: Optional custom data loader as path.py:function returning a pandas DataFrame,
+                for formats AIDRIN cannot read natively. Runs local Python: trusted scripts only.
         endpoint: Optional Globus Compute endpoint UUID. When set, the summary runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
     return _dumps(
         _executor(endpoint, profile).summarize_dataset(
-            file_path, file_type=file_type, max_features=max_features
+            file_path, file_type=file_type, max_features=max_features, loader=loader
         )
     )
 
@@ -89,13 +99,22 @@ def list_metrics(category: str | None = None) -> str:
                   impact-of-data-on-AI, fairness-and-bias, data-governance,
                   custom_metrics. Omit for all.
     """
-    return _dumps(list_available_metrics(category=category))
+    # The catalogue is wrapped rather than extended: the model is told to iterate
+    # the category mapping, so a stray boolean beside the category keys would be
+    # read as a category.
+    return _dumps(
+        {
+            "metrics": list_available_metrics(category=category),
+            "mlflow_enabled": mlflow_sink.is_enabled(),
+        }
+    )
 
 
 @mcp_server.tool()
 def run_data_quality_check(
     file_path: str,
     file_type: str | None = None,
+    loader: str | None = None,
     endpoint: str | None = None,
     profile: str | None = None,
 ) -> str:
@@ -106,12 +125,14 @@ def run_data_quality_check(
     Args:
         file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
         file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
+        loader: Optional custom data loader as path.py:function returning a pandas DataFrame,
+                for formats AIDRIN cannot read natively. Runs local Python: trusted scripts only.
         endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
     """
     result = _executor(endpoint, profile).run_data_quality(
-        file_path, file_type=file_type, strip_visualizations=True
+        file_path, file_type=file_type, strip_visualizations=True, loader=loader
     )
     return _dumps(result)
 
@@ -150,8 +171,12 @@ def run_aidrin_metric(
     path_targets: str | list[str] | None = None,
     base_dir: str | None = None,
     target_match: str = "exact",
+    unit_metadata_json: str | None = None,
+    unit_metadata_file: str | None = None,
+    loader: str | None = None,
     endpoint: str | None = None,
     profile: str | None = None,
+    session_id: str | None = None,
 ) -> str:
     """
     Run a single AIDRIN built-in metric against a dataset.
@@ -193,6 +218,10 @@ def run_aidrin_metric(
         path_targets: Comma-separated exact targets or one regex string. Use a list for multiple regex patterns.
         base_dir: Server-local directory used to resolve relative file references.
         target_match: Interpret path_targets as exact names or full-match regular expressions.
+        unit_metadata_json: Inline canonical sidecar JSON for variable-unit-validation.
+        unit_metadata_file: Execution-host path to a canonical sidecar JSON file.
+        loader: Optional custom data loader as path.py:function returning a pandas DataFrame,
+                for formats AIDRIN cannot read natively. Runs local Python: trusted scripts only.
         endpoint: Optional Globus Compute endpoint UUID. When set, the metric runs
                   on that endpoint and file_path must be a path visible there.
         profile: Optional configured endpoint profile name (see list_remote_profiles).
@@ -229,9 +258,15 @@ def run_aidrin_metric(
             ("path_targets", path_targets),
             ("base_dir", base_dir),
             ("target_match", target_match),
+            ("unit_metadata_json", unit_metadata_json),
+            ("unit_metadata_file", unit_metadata_file),
+            ("loader", loader),
         ]
         if v is not None
     }
+    if session_id and not endpoint and not profile:
+        kwargs["session_id"] = session_id
+
     result = _executor(endpoint, profile).run_metric(
         metric,
         file_path,
@@ -239,6 +274,33 @@ def run_aidrin_metric(
         strip_visualizations=True,
         save_images=False,
         **kwargs,
+    )
+    return _dumps(result)
+
+
+@mcp_server.tool()
+def verify_variable_units(
+    file_path: str,
+    file_type: str | None = None,
+    unit_metadata_json: str | None = None,
+    unit_metadata_file: str | None = None,
+    endpoint: str | None = None,
+    profile: str | None = None,
+) -> str:
+    """Audit or resolve unit metadata and return the canonical sidecar.
+
+    Provide at most one sidecar source. ``unit_metadata_file`` is resolved on
+    the execution host, including a selected Globus endpoint. With no sidecar,
+    this performs a read-only audit of metadata already associated with the data.
+    """
+    result = _executor(endpoint, profile).run_metric(
+        "variable-unit-validation",
+        file_path,
+        file_type=file_type,
+        unit_metadata_json=unit_metadata_json,
+        unit_metadata_file=unit_metadata_file,
+        strip_visualizations=True,
+        save_images=False,
     )
     return _dumps(result)
 
@@ -283,6 +345,33 @@ def verify_file_references(
 
 
 @mcp_server.tool()
+def check_fair_compliance(metadata_path: str, standard: str = "auto") -> str:
+    """
+    Score a dataset's metadata file against the FAIR principles (Findable,
+    Accessible, Interoperable, Reusable). Reads only the metadata file, never a
+    dataset, and runs locally (no endpoint or profile).
+
+    Returns pass/fail per check under each principle, "n/m" counts per principle
+    and in total, and the standard used ("Standard"). DataCite, Croissant and
+    RO-Crate add "Conformance" (required properties) and "Structure" (identifiers,
+    checksums, typed fields); Croissant adds "RAI Documentation", which is reported
+    but not scored because its values are free text.
+
+    Args:
+        metadata_path: Absolute path to the JSON or JSON-LD metadata file.
+        standard: "auto" (detect it, the default), "croissant" (MLCommons
+                  Croissant 1.0/1.1), "rocrate" (RO-Crate 1.2 ro-crate-metadata.json),
+                  "dcat-us-3.0" (one DCAT-US 3.0 dataset record),
+                  "dcat-us-1.1" (Project Open Data) or
+                  "datacite" (DataCite 4.x JSON, including REST API responses).
+    """
+    try:
+        return _dumps(calculate_fair_compliance(metadata_path, standard))
+    except (OSError, ValueError) as exc:
+        return _dumps({"error": str(exc)})
+
+
+@mcp_server.tool()
 def run_custom_outlier_check(
     file_path: str,
     rules_json: str | None = None,
@@ -300,8 +389,10 @@ def run_custom_outlier_check(
     allow_missing, and target_match. Set target_match to regex to apply a rule
     to every target whose complete name matches target.
     Criteria define expected valid values and support numeric ranges, regex
-    patterns, and nested and/or/not operators. Values that do not satisfy the
-    rule are flagged as outliers.
+    patterns, and nested and/or/not operators. A compare leaf uses operator
+    (<, <=, >, >=, ==, !=) and an exact other_target column name to compare
+    finite numeric values at the same row in tabular files. Values that do
+    not satisfy the rule are flagged as outliers.
 
     Args:
         file_path: Absolute path to the dataset.
@@ -367,16 +458,21 @@ def list_remote_profiles() -> str:
 
 
 @mcp_server.tool()
-def run_custom_metric(metric_name_or_path: str, file_path: str) -> str:
+def run_custom_metric(
+    metric_name_or_path: str,
+    file_path: str,
+    file_type: str | None = None,
+) -> str:
     """
     Run the metric() method of a CustomDR class defined in a .py file.
 
     Args:
         metric_name_or_path: Full path to the custom .py file, OR a metric name that
                              resolves to aidrin/custom_metrics/<name>.py relative to cwd.
-        file_path: Absolute path to the dataset CSV.
+        file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
+        file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
     """
-    result = run_custom_metric_logic(metric_name_or_path, file_path)
+    result = run_custom_metric_logic(metric_name_or_path, file_path, file_type=file_type)
     return _dumps(result)
 
 
@@ -385,22 +481,39 @@ def run_custom_remedy(
     metric_name_or_path: str,
     file_path: str,
     output_dir: str | None = None,
+    file_type: str | None = None,
+    diff: bool = False,
 ) -> str:
     """
     Run the remedy() method of a CustomDR class, apply it to the dataset,
-    and save the remedied data as a CSV file.
+    and save the remedied data as a CSV file. The remedied output is always
+    CSV regardless of the input format, since JSON/NPZ/HDF5 are flattened on
+    read and don't round-trip losslessly back into their original structure.
 
     Args:
         metric_name_or_path: Full path to the custom .py file, or metric name.
-        file_path: Absolute path to the dataset CSV.
+        file_path: Absolute path to the dataset (CSV, Parquet, Excel, HDF5, JSON, NPZ).
         output_dir: Directory to write the remedied CSV.
                     Defaults to <script_dir>/remedy_data/.
+        file_type: Optional file-type override (csv, parquet, xlsx, hdf5, json, npz).
+        diff: If true, also re-run metric() on the remedied data and include
+              "before"/"after" results in the response.
     """
-    saved_path = run_custom_metric_remedy(
+    result = run_custom_metric_remedy(
         metric_name_or_path,
         file_path,
         output_dir=output_dir,
+        file_type=file_type,
+        diff=diff,
     )
+    if diff:
+        saved_path = result.pop("_saved_to")
+        return _dumps({
+            **result,
+            "remedied_file": saved_path,
+            "message": f"Remedied dataset saved to {saved_path}",
+        })
+    saved_path = result
     return _dumps({
         "remedied_file": saved_path,
         "message": f"Remedied dataset saved to {saved_path}",
@@ -438,6 +551,22 @@ def create_custom_metric(name: str, directory: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _agentic_deps_error() -> str | None:
+    """
+    Narrow dependency probe, kept separate from the actual pipeline call
+    (mirrors _require_agentic_deps in aidrin/headless/cli.py): an ImportError
+    raised *during* a real run (e.g. a user's own data_loader.py importing a
+    package that isn't installed) must surface as that real error, not get
+    misdiagnosed as "agentic dependencies not installed" -- which would hide
+    the real traceback and discard already-completed (paid-for) LLM work.
+    """
+    try:
+        import langchain_openai  # noqa: F401 - cheapest reliable signal that aidrin[agentic] is installed
+    except ImportError:
+        return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
+    return None
+
+
 @mcp_server.tool()
 def agentic_build_index(config_path: str) -> str:
     """
@@ -448,13 +577,10 @@ def agentic_build_index(config_path: str) -> str:
     Args:
         config_path: Absolute path to the agentic YAML config file.
     """
-    try:
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
-    except ImportError:
-        return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
-
-    result = VectorDBBuilder(Path(config_path).resolve()).build()
-    return _dumps(result)
+    deps_error = _agentic_deps_error()
+    if deps_error:
+        return deps_error
+    return _dumps(run_agentic_index(config_path))
 
 
 @mcp_server.tool()
@@ -479,73 +605,63 @@ def agentic_run(
         output_path: Optional path to also write the full JSON results to disk.
         skip_vector: If true, skip rebuilding the vector index and use the existing one.
     """
-    try:
-        import yaml
-        from aidrin.agentic.data_profiler import DataProfiler
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
-        from aidrin.agentic.run import _run_query, _json_safe
-        from aidrin.agentic.token_tracker import get_tracker
-    except ImportError:
-        return _dumps({"error": "Agentic dependencies not installed. Run: pip install 'aidrin[agentic]'"})
-
     resolved = Path(config_path).resolve()
     if not resolved.exists():
         return _dumps({"error": f"Config file not found: {resolved}"})
 
-    get_tracker().reset()
-    profiler = DataProfiler(config_path=resolved)
-    profile_result = profiler.profile()
+    deps_error = _agentic_deps_error()
+    if deps_error:
+        return deps_error
 
-    cfg = yaml.safe_load(resolved.read_text()) or {}
-
-    if not skip_vector and cfg.get("vector_store"):
-        builder = VectorDBBuilder(resolved)
-        if not builder.exists():
-            builder.build()
-
-    retrieval_cfg = cfg.get("retrieval", {}) or {}
-    questions_raw = retrieval_cfg.get("questions") or []
-    if not questions_raw:
-        single = retrieval_cfg.get("question", "")
-        questions_raw = single if isinstance(single, list) else ([single] if single else [])
-
-    def _parse_q(q):
-        return (q["text"], q.get("loader")) if isinstance(q, dict) else (q, None)
-
-    parsed_questions = [_parse_q(q) for q in questions_raw]
-    max_workers = int(retrieval_cfg.get("max_workers", 4))
-    query_results = []
-
-    if parsed_questions:
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
-            futures = {
-                pool.submit(_run_query, resolved, text, profile_result, loader): text
-                for text, loader in parsed_questions
-            }
-            for future in as_completed(futures):
-                try:
-                    query_results.append(future.result())
-                except Exception as exc:
-                    query_results.append({"question": futures[future], "error": str(exc)})
-
-    combined = _json_safe({
-        "profile": profile_result,
-        "queries": query_results,
-        "token_usage": get_tracker().to_dict(),
-    })
-
-    if output_path:
-        out = Path(output_path).resolve()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
-        combined["_saved_to"] = str(out)
-
+    combined = run_agentic_pipeline(
+        str(resolved),
+        output_path=output_path,
+        skip_vector=skip_vector,
+    )
     return _dumps(combined)
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Assessment tracking (MLflow)
+# ---------------------------------------------------------------------------
+
+
+@mcp_server.tool()
+def start_assessment(file_path: str) -> str:
+    """
+    Open an MLflow-tracked assessment and return its session_id.
+
+    Only useful when list_metrics reports mlflow_enabled: true. Pass the returned
+    session_id to each run_aidrin_metric call, then call end_assessment. Each
+    metric becomes its own MLflow run nested under one parent run carrying the
+    dataset's aggregated readiness scores.
+
+    Args:
+        file_path: Absolute path to the dataset being assessed.
+    """
+    session = mlflow_sink.start_session(file_path=file_path, interface="mcp")
+    if session is None:
+        return _dumps({"tracking": "disabled", "session_id": None})
+    return _dumps({"tracking": "enabled", "session_id": session.session_id})
+
+
+@mcp_server.tool()
+def end_assessment(session_id: str, report_path: str | None = None) -> str:
+    """
+    Close a tracked assessment, writing its aggregated readiness scores.
+
+    Args:
+        session_id: The id returned by start_assessment.
+        report_path: Optional path to the finished markdown report, attached to
+                     the parent run as an artifact.
+    """
+    mlflow_sink.end_session(session_id, report_path=report_path)
+    return _dumps({"session_id": session_id, "closed": True})
 
 
 def main() -> None:

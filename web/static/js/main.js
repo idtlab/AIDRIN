@@ -22,6 +22,30 @@ function togglePillarDropdown(id) {
 }
 
 //for uploads
+let customLoaderEditor = null;
+
+function initCustomLoaderEditor() {
+  const textarea = document.getElementById("uploadLoaderCode");
+  if (!textarea || customLoaderEditor || typeof CodeMirror === "undefined")
+    return;
+
+  customLoaderEditor = CodeMirror.fromTextArea(textarea, {
+    mode: "python",
+    lineNumbers: true,
+    theme: "eclipse",
+    indentUnit: 4,
+    tabSize: 4,
+    indentWithTabs: false,
+    lineWrapping: false,
+    matchBrackets: true,
+    autofocus: false,
+  });
+  customLoaderEditor.setOption("extraKeys", {
+    Tab: (editor) => editor.execCommand("indentMore"),
+    "Shift-Tab": (editor) => editor.execCommand("indentLess"),
+  });
+}
+
 function uploadForm() {
   const form = document.getElementById("uploadForm");
   const fileTypeSelector = document.getElementById("fileTypeSelector");
@@ -56,6 +80,41 @@ function uploadForm() {
   }
 
   // Submit the form normally
+  form.submit();
+}
+
+function uploadCustomForm() {
+  const form = document.getElementById("uploadCustomForm");
+  const fileInput = document.getElementById("file-custom");
+  const loaderCode = document.getElementById("uploadLoaderCode");
+
+  customLoaderEditor?.save();
+
+  if (!loaderCode || !loaderCode.value.trim()) {
+    if (typeof showToast === "function")
+      showToast("Paste a custom load() function before uploading", "error");
+    return;
+  }
+
+  if (!fileInput.files || fileInput.files.length === 0) {
+    if (typeof showToast === "function")
+      showToast("Please select a file to upload", "error");
+    return;
+  }
+
+  const maxBytes = parseInt(form.dataset.maxUploadBytes, 10);
+  if (maxBytes && fileInput.files[0].size > maxBytes) {
+    const maxMb =
+      form.dataset.maxUploadMb || Math.round(maxBytes / (1024 * 1024));
+    if (typeof showToast === "function")
+      showToast(
+        `File too large. The maximum upload size is ${maxMb} MB.`,
+        "error",
+      );
+    fileInput.value = "";
+    return;
+  }
+
   form.submit();
 }
 
@@ -100,13 +159,21 @@ function updateFileInputBasedOnType(
   fileUploadMessage,
 ) {
   const fileType = fileTypeElement.value;
+  // One format can ship under several extensions (HDF5 as .h5 or .hdf5), so the
+  // option carries the full accept list from the backend. Filtering on the
+  // canonical extension alone greys the others out in the file dialog.
+  const selectedOption = fileTypeElement.selectedOptions
+    ? fileTypeElement.selectedOptions[0]
+    : null;
+  const acceptList =
+    (selectedOption && selectedOption.dataset.accept) || fileType;
   //if a filetype is present, set to that filetype only, otherwise disable
   if (fileType) {
     fileInput.disabled = false;
-    fileInput.setAttribute("accept", fileType);
-    debugLog("USER SELECTED FILETYPE: " + fileType);
+    fileInput.setAttribute("accept", acceptList);
     fileUploadMessage.style.opacity = "1";
     fileUploadMessage.textContent = "Click to upload or drag and drop";
+    debugLog("USER SELECTED FILETYPE: " + fileType);
   } else {
     fileInput.disabled = true;
     fileInput.removeAttribute("accept");
@@ -1055,18 +1122,19 @@ function removeVisualizationKey(data) {
 
 // Documentation button function for privacy metrics (your approach)
 function getDocsButton(title) {
-  const anchorMap = {
-    "DP Statistics": "#differential-privacy",
-    "Single attribute risk scoring": "#single-attribute-risk",
-    "Multiple attribute risk scoring": "#multiple-attribute-risk",
-    "Entropy Risk": "#entropy-risk",
-    "k-Anonymity": "#k-anonymity",
-    "l-Diversity": "#l-diversity",
-    "t-Closeness": "#t-closeness",
-  };
-  const anchor = anchorMap[title] || "";
-  if (!anchor) return "";
-  return `<a href="/privacy-metrics-docs${anchor}" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a>`;
+  // Metrics whose popup offers a documentation link. The route resolves the
+  // page and section, so the link carries no anchor of its own.
+  const documented = [
+    "DP Statistics",
+    "Single attribute risk scoring",
+    "Multiple attribute risk scoring",
+    "Entropy Risk",
+    "k-Anonymity",
+    "l-Diversity",
+    "t-Closeness",
+  ];
+  if (!documented.includes(title)) return "";
+  return `<a href="/privacy-metrics-docs" target="_blank" style="margin-left:10px; color:#4a90e2; font-style:italic;">See documentation</a>`;
 }
 
 // Distance metric name function for Class Imbalance (your approach)

@@ -13,9 +13,16 @@ import pytest
 pytest.importorskip("mcp")
 
 from aidrin.mcp.server import (  # noqa: E402
+    check_fair_compliance,
     run_aidrin_metric,
+    run_custom_metric,
     run_custom_outlier_check,
+    run_custom_remedy,
     verify_file_references,
+    verify_variable_units,
+)
+from aidrin.structured_data_metrics.variable_unit_validation import (  # noqa: E402
+    calculate_variable_unit_validation,
 )
 
 
@@ -46,6 +53,23 @@ def _remove(path: str) -> None:
         pass
 
 
+def test_fair_compliance_tool_scores_a_metadata_file():
+    path = Path(__file__).resolve().parents[2] / "examples" / "sample_data" / "dcat" / "BUTTER-E.json"
+    payload = json.loads(check_fair_compliance(str(path), "dcat-us-1.1"))
+    assert payload["FAIR Compliance Checks"]["Total Checks"] == "20/26"
+    assert "Pie chart" not in payload
+
+
+def test_fair_compliance_tool_returns_errors_as_json(tmp_path):
+    assert "File not found" in json.loads(check_fair_compliance(str(tmp_path / "none.json"), "datacite"))["error"]
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json")
+    assert "error" in json.loads(check_fair_compliance(str(bad), "datacite"))
+    empty = tmp_path / "empty.json"
+    empty.write_text("{}")
+    assert "Unknown metadata type" in json.loads(check_fair_compliance(str(empty), "iso19115"))["error"]
+
+
 def test_dedicated_mcp_tool_accepts_rules_file():
     csv_path = _write_csv()
     rules_path = _write_rules()
@@ -70,6 +94,45 @@ def test_generic_mcp_tool_accepts_rules_file():
     assert "valid-age" in result["Rule summaries"]
 
 
+def test_variable_unit_mcp_tools_are_equivalent(tmp_path):
+    dataset = tmp_path / "data.csv"
+    pd.DataFrame({"speed": [1.0]}).to_csv(dataset, index=False)
+    sidecar = calculate_variable_unit_validation((str(dataset), dataset.name, ".csv"))
+    sidecar["variables"][0]["resolution"] = {
+        "kind": "unit",
+        "unit": "m/s",
+        "source": "user",
+    }
+    metadata_json = json.dumps(sidecar)
+
+    dedicated = json.loads(verify_variable_units(str(dataset), unit_metadata_json=metadata_json))
+    generic = json.loads(run_aidrin_metric(
+        str(dataset),
+        "variable-unit-validation",
+        unit_metadata_json=metadata_json,
+    ))
+
+    assert dedicated == generic
+    assert dedicated["summary"]["all_variables_ready"] is True
+
+
+def test_variable_unit_mcp_rejects_multiple_sources(tmp_path):
+    dataset = tmp_path / "data.csv"
+    metadata = tmp_path / "data.units.json"
+    pd.DataFrame({"speed": [1.0]}).to_csv(dataset, index=False)
+    metadata.write_text(
+        json.dumps(calculate_variable_unit_validation((str(dataset), dataset.name, ".csv"))),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="at most one variable-unit metadata source"):
+        verify_variable_units(
+            str(dataset),
+            unit_metadata_json="{}",
+            unit_metadata_file=str(metadata),
+        )
+
+
 def test_dedicated_mcp_tool_rejects_multiple_rule_sources():
     csv_path = _write_csv()
     rules_path = _write_rules()
@@ -79,6 +142,116 @@ def test_dedicated_mcp_tool_rejects_multiple_rule_sources():
     finally:
         _remove(csv_path)
         _remove(rules_path)
+
+
+# ---------------------------------------------------------------------------
+# Custom metrics — multi-format support
+# ---------------------------------------------------------------------------
+
+_CUSTOM_SCRIPT = """
+from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+class CustomDR(BaseDRAgent):
+    def metric(self, **kwargs):
+        return {"row_count": len(self.dataset)}
+
+    def remedy(self, **kwargs):
+        return self.dataset.copy()
+"""
+
+
+def _write_script(tmp_path) -> str:
+    path = os.path.join(tmp_path, "my_audit.py")
+    with open(path, "w") as f:
+        f.write(_CUSTOM_SCRIPT)
+    return path
+
+
+def _write_parquet(tmp_path) -> str:
+    path = os.path.join(tmp_path, "data.parquet")
+    pd.DataFrame({"age": [18, 30, 70]}).to_parquet(path)
+    return path
+
+
+def test_run_custom_metric_accepts_non_csv_format(tmp_path):
+    script_path = _write_script(str(tmp_path))
+    parquet_path = _write_parquet(str(tmp_path))
+    result = json.loads(run_custom_metric(script_path, parquet_path, file_type="parquet"))
+    assert result["row_count"] == 3
+
+
+def test_mcp_tools_read_custom_formats_with_a_loader(tmp_path):
+    from aidrin.mcp.server import run_data_quality_check, summarize_dataset
+
+    data = tmp_path / "data.weird"
+    data.write_text("a|b\n1|x\n2|\n3|z\n", encoding="utf-8")
+    script = tmp_path / "pipe_loader.py"
+    script.write_text("import pandas as pd\ndef load(path, **kwargs):\n    return pd.read_csv(path, sep='|')\n", encoding="utf-8")
+    loader = f"{script}:load"
+
+    assert json.loads(summarize_dataset(str(data), loader=loader))["shape"] == {"rows": 3, "columns": 2}
+    quality = json.loads(run_data_quality_check(str(data), loader=loader))
+    assert quality["completeness"]["Completeness scores"]["b"] == pytest.approx(2 / 3)
+    metric = json.loads(run_aidrin_metric(str(data), "completeness", loader=loader))
+    assert metric["Completeness scores"]["a"] == 1.0
+
+
+def test_run_custom_remedy_saves_csv_for_non_csv_input(tmp_path):
+    script_path = _write_script(str(tmp_path))
+    parquet_path = _write_parquet(str(tmp_path))
+    output_dir = str(tmp_path / "remedy_out")
+    result = json.loads(
+        run_custom_remedy(script_path, parquet_path, output_dir=output_dir, file_type="parquet")
+    )
+    assert result["remedied_file"].endswith(".csv")
+    assert os.path.exists(result["remedied_file"])
+
+
+_NULL_COUNT_SCRIPT = """
+from aidrin.custom_metrics.base_dr import BaseDRAgent
+
+class CustomDR(BaseDRAgent):
+    def metric(self, **kwargs):
+        return {"null_count": int(self.dataset.isna().sum().sum())}
+
+    def remedy(self, **kwargs):
+        return self.dataset.fillna(0)
+"""
+
+
+def test_run_custom_remedy_with_diff_returns_before_and_after(tmp_path):
+    script_path = os.path.join(str(tmp_path), "null_count_audit.py")
+    with open(script_path, "w") as f:
+        f.write(_NULL_COUNT_SCRIPT)
+    csv_path = os.path.join(str(tmp_path), "data.csv")
+    pd.DataFrame({"age": [18, None, 70]}).to_csv(csv_path, index=False)
+    output_dir = str(tmp_path / "remedy_out")
+
+    result = json.loads(
+        run_custom_remedy(script_path, csv_path, output_dir=output_dir, diff=True)
+    )
+
+    assert result["before"] == {"null_count": 1}
+    assert result["after"] == {"null_count": 0}
+    assert result["remedied_file"].endswith(".csv")
+    assert os.path.exists(result["remedied_file"])
+
+
+def test_run_custom_remedy_without_diff_keeps_original_response_shape(tmp_path):
+    script_path = _write_script(str(tmp_path))
+    parquet_path = _write_parquet(str(tmp_path))
+    output_dir = str(tmp_path / "remedy_out")
+
+    result = json.loads(
+        run_custom_remedy(script_path, parquet_path, output_dir=output_dir, file_type="parquet")
+    )
+
+    assert set(result.keys()) == {"remedied_file", "message"}
+
+
+# ---------------------------------------------------------------------------
+# File reference validation
+# ---------------------------------------------------------------------------
 
 
 def test_file_reference_tools_return_equivalent_results(tmp_path):
@@ -218,8 +391,59 @@ class TestMcpRemoteRouting(unittest.TestCase):
         self.assertEqual(payload["path_targets"], "file_path")
         self.assertEqual(payload["base_dir"], "/data/project")
 
+    def test_variable_unit_tool_routes_metadata_file_to_endpoint(self):
+        from aidrin.mcp import server
+
+        with patch("aidrin.compute.client.get_client", return_value="stub"), \
+             patch("aidrin.compute.client.submit", return_value="task-1") as submit, \
+             patch("aidrin.compute.client.poll", return_value={"summary": {"all_variables_ready": True}}):
+            server.verify_variable_units(
+                file_path="/scratch/data.csv",
+                unit_metadata_file="/scratch/data.units.json",
+                endpoint="uuid-9",
+            )
+
+        payload = submit.call_args[0][3]
+        self.assertEqual(payload["metric_name"], "variable-unit-validation")
+        self.assertEqual(payload["unit_metadata_file"], "/scratch/data.units.json")
+
     def test_list_remote_profiles_returns_json(self):
         from aidrin.mcp import server
 
         out = server.list_remote_profiles()
         self.assertIn("profiles", json.loads(out))
+
+
+# ---------------------------------------------------------------------------
+# Agentic tools: ImportError diagnosis
+# ---------------------------------------------------------------------------
+
+
+def test_agentic_midrun_import_error_is_not_misdiagnosed(tmp_path):
+    """
+    Regression test (mirror of the CLI test in test_agentic.py): an
+    ImportError raised *during* a real pipeline run (e.g. the user's own
+    data_loader.py imports a package that isn't installed) must surface as
+    that real error, not be swallowed and reported as "Agentic dependencies
+    not installed" -- which would hide the real traceback and discard
+    already-completed (paid-for) LLM work.
+    """
+    pytest.importorskip("langchain_openai")
+    from aidrin.mcp import server
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("paths: {}\n", encoding="utf-8")
+
+    with patch.object(
+        server, "run_agentic_pipeline",
+        side_effect=ImportError("No module named 'some_definitely_missing_package_xyz'"),
+    ):
+        with pytest.raises(ImportError, match="some_definitely_missing_package_xyz"):
+            server.agentic_run(str(cfg))
+
+    with patch.object(
+        server, "run_agentic_index",
+        side_effect=ImportError("No module named 'some_definitely_missing_package_xyz'"),
+    ):
+        with pytest.raises(ImportError, match="some_definitely_missing_package_xyz"):
+            server.agentic_build_index(str(cfg))

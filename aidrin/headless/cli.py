@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import json
 import re
 import sys
@@ -9,12 +10,14 @@ import os
 from aidrin.file_handling.file_parser import clear_frame_cache
 
 from aidrin.headless import api as _local_api
+from aidrin.telemetry import mlflow_sink
 from aidrin.compute.executor import AsyncSubmitted
 
 from .api import (
     METRIC_REGISTRY,
     list_available_metrics,
     generate_metric_template,
+    generate_loader_template,
     run_custom_metric_remedy,
 )
 from .config import HeadlessConfig
@@ -102,6 +105,21 @@ def _parse_custom_outlier_rule_texts(rule_texts: Optional[List[str]]) -> Optiona
 def _dump_result(result: object) -> None:
     sys.stdout.write(json.dumps(result, indent=2))
     sys.stdout.write("\n")
+
+
+def _write_output_file(result: object, output_path: Optional[str]) -> None:
+    """Write a report to disk, same semantics as ``agentic run -o``.
+
+    Making the report path an explicit argument of the command (rather than a
+    shell redirect) is what lets provenance tooling that records the command
+    line see it as an output of that command.
+    """
+    if not output_path:
+        return
+    out = Path(output_path).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    sys.stderr.write(f"Results written to: {out}\n")
 
 
 def _fail_on_remote_error(result: object, remote_opts) -> None:
@@ -243,6 +261,27 @@ def _summarize_metric(metric_name: str, result: dict) -> None:
                 print(f"{k}: {_fmt(v)}")
 
 
+def _print_fair_summary(result: dict, metadata_path: str) -> None:
+    """Print per-principle FAIR scores and the checks that failed."""
+    from aidrin.structured_data_metrics.fair_metadata import FAILED, PRINCIPLES
+
+    checks = result["FAIR Compliance Checks"]
+    print(f"{Path(metadata_path).name} ({result['Standard']['Name']}): {checks['Total Checks']} FAIR checks passed")
+    for principle in PRINCIPLES:
+        failed = [label for label, value in result[principle].items() if value == FAILED]
+        missing = f"  missing: {', '.join(failed)}" if failed else ""
+        print(f"  {principle:<14}{checks[f'{principle} Checks']:>6}{missing}")
+    for section in ("Conformance", "Structure"):
+        if section in result:
+            print(f"\n{section}:")
+            for label, value in result[section].items():
+                print(f"  {label}: {value}")
+    if "RAI Documentation" in result:
+        declared = [p for group in result["RAI Documentation"].values() for p, v in group.items() if v != "Not declared"]
+        print("\nRAI documentation (reported, not scored):")
+        print(f"  declared: {', '.join(declared) or 'none'}")
+
+
 def _print_summary_table(result: dict, file_path: str) -> None:
     """Print a human-readable summary of summarize_dataset output."""
     import os
@@ -272,6 +311,32 @@ def _print_summary_table(result: dict, file_path: str) -> None:
 
     if result.get("truncated"):
         print(f"\n[truncated to {result['max_features']} features — pass --max-features to adjust]")
+
+
+@contextlib.contextmanager
+def _implicit_session(executor, file_path):
+    """Wrap a single-metric run in a one-off tracked session.
+
+    ``aidrin batch`` and ``aidrin data-quality`` get their session from
+    ``run_batch_metrics``; a bare ``aidrin run <metric>`` would otherwise be the
+    one local path that produced no MLflow run at all.
+
+    Remote execution is skipped: ``run_metric`` executes on the Globus endpoint,
+    so there is nothing for a client-side session to record.
+    """
+    if executor is not _local_api:
+        yield None
+        return
+
+    session = mlflow_sink.start_session(file_path=file_path, interface="cli")
+    try:
+        yield session
+    finally:
+        mlflow_sink.end_session(session)
+
+
+def _session_kwargs(session):
+    return {"session_id": session.session_id} if session is not None else {}
 
 
 def _build_run_kwargs(args: argparse.Namespace) -> dict:
@@ -307,16 +372,22 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "timestamp_column": getattr(args, "timestamp_column", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
+        "loader": getattr(args, "loader", None),
+        "selected_keys": _parse_list(getattr(args, "selected_keys", None)),
         "path_targets": _parse_path_targets(getattr(args, "path_targets", None), target_match),
         "base_dir": getattr(args, "base_dir", None),
         "max_results": getattr(args, "max_results", 100),
         "rules": parsed_rules,
         "rules_json": rules_json,
         "rules_file": rules_file,
+        "unit_metadata_json": getattr(args, "unit_metadata_json", None),
+        "unit_metadata_file": getattr(args, "unit_metadata_file", None),
         "max_outliers": getattr(args, "max_outliers", 100),
         "max_export_rows": getattr(args, "max_export_rows", 10000),
         "scan_limit": getattr(args, "scan_limit", None),
         "target_match": target_match,
+        "noisy_output": getattr(args, "noisy_output", None),
+        "skip_noisy_output": getattr(args, "skip_noisy_output", False),
         "stop_after_outliers": getattr(args, "stop_after_outliers", False),
         # Default to no image generation/saving for headless usage
         "save_images": getattr(args, "save_images", False),
@@ -329,6 +400,12 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
 
 def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
     parser.add_argument("--save-images", dest="save_images", action="store_true", help="Save visualizations to disk")
     parser.add_argument("--no-save-images", dest="save_images", action="store_false", help="Do not save visualizations")
     parser.set_defaults(save_images=True)
@@ -340,7 +417,21 @@ def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
 
 def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
     """Lightweight args for top-level metric shortcuts."""
+    parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
+    parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
+    parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
 
 def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: List[str]) -> None:
@@ -420,81 +511,85 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
                                 help="Comma-separated columns to count nulls in (optional)")
 
 
-def _agentic_build_index(args: argparse.Namespace) -> None:
+# Where agents look for project skills; Claude Code uses the first, most others the second.
+SKILL_DIRS = (Path(".claude/skills"), Path(".agents/skills"))
+
+
+def _skill_install(args: argparse.Namespace) -> None:
+    """Copy the bundled agent skill into ``<dir>/aidrin``, overwriting what is there.
+
+    The skill ships inside the package so ``pip install -U aidrin`` is also
+    the skill update channel: re-running this command after an upgrade
+    refreshes the copy in place. ``--dir`` is the agent's skills folder
+    (``.claude/skills`` for Claude Code, ``.agents/skills`` for most others).
+    """
+    import shutil
+    from importlib.resources import files
+
+    source = Path(str(files("aidrin") / "skill"))
+    if args.skills_dir:
+        skills_dirs = [Path(args.skills_dir)]
+    else:
+        # No --dir: install wherever an agent already keeps skills here.
+        skills_dirs = [d for d in SKILL_DIRS if d.is_dir()]
+        if not skills_dirs:
+            sys.stderr.write(
+                "Error: no skills folder found in the current directory "
+                f"(looked for {', '.join(str(d) for d in SKILL_DIRS)}). "
+                "Pass --dir <skills-folder> to choose one.\n"
+            )
+            sys.exit(2)
+    for skills_dir in skills_dirs:
+        target = skills_dir / "aidrin"
+        if target.is_symlink():
+            # Installed by the `skills` CLI (or a repo checkout); overwriting through
+            # the link would clobber the link target, not this project's copy.
+            sys.stderr.write(
+                f"Error: {target} is a symlink. Remove it first, or update the skill "
+                "with: npx skills update aidrin\n"
+            )
+            sys.exit(2)
+        # ponytail: dirs_exist_ok leaves files the new version no longer ships; rmtree first if that bites
+        shutil.copytree(source, target, dirs_exist_ok=True)
+        print(f"Skill installed at: {target}")
+
+
+def _require_agentic_deps() -> None:
+    """
+    Narrow dependency probe, kept separate from the actual pipeline call: an
+    ImportError raised *during* a real run (e.g. a user's own data_loader.py
+    importing a package that isn't installed) must surface as that real
+    error, not get misdiagnosed as "agentic dependencies not installed" --
+    which would hide the real traceback and, for `run`, discard already-
+    completed (paid-for) LLM work instead of returning what succeeded.
+    """
     try:
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
+        import langchain_openai  # noqa: F401 - cheapest reliable signal that aidrin[agentic] is installed
     except ImportError:
         sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
         sys.exit(1)
-    result = VectorDBBuilder(Path(args.config).resolve()).build()
+
+
+def _agentic_build_index(args: argparse.Namespace) -> None:
+    _require_agentic_deps()
+    result = _local_api.run_agentic_index(args.config)
     print(json.dumps(result, indent=2))
 
 
 def _agentic_run(args: argparse.Namespace) -> None:
-    try:
-        import yaml
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        from aidrin.agentic.data_profiler import DataProfiler
-        from aidrin.agentic.vector_db_builder import VectorDBBuilder
-        from aidrin.agentic.run import _run_query, _json_safe
-        from aidrin.agentic.token_tracker import get_tracker
-    except ImportError:
-        sys.stderr.write("Error: agentic dependencies not installed. Run: pip install 'aidrin[agentic]'\n")
-        sys.exit(1)
+    _require_agentic_deps()
+    result = _local_api.run_agentic_pipeline(
+        args.config,
+        output_path=args.output,
+        skip_vector=args.skip_vector,
+        verbose=getattr(args, "verbose", False),
+    )
 
-    config_path = Path(args.config).resolve()
-    get_tracker().reset()
+    saved_to = result.pop("_saved_to", None)
+    if saved_to:
+        sys.stderr.write(f"Results written to: {saved_to}\n")
 
-    profiler = DataProfiler(config_path=config_path)
-    profile_result = profiler.profile()
-
-    cfg = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
-
-    if not args.skip_vector and cfg.get("vector_store"):
-        builder = VectorDBBuilder(config_path)
-        if not builder.exists():
-            vector_result = builder.build()
-            if getattr(args, "verbose", False):
-                sys.stderr.write(json.dumps(vector_result, indent=2) + "\n")
-
-    retrieval_cfg = cfg.get("retrieval", {}) or {}
-    questions_raw = retrieval_cfg.get("questions") or []
-    if not questions_raw:
-        single = retrieval_cfg.get("question", "")
-        questions_raw = single if isinstance(single, list) else ([single] if single else [])
-
-    def _parse_q(q):
-        return (q["text"], q.get("loader")) if isinstance(q, dict) else (q, None)
-
-    parsed_questions = [_parse_q(q) for q in questions_raw]
-
-    max_workers = int(retrieval_cfg.get("max_workers", 4))
-    query_results = []
-    if parsed_questions:
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(parsed_questions))) as pool:
-            futures = {
-                pool.submit(_run_query, config_path, text, profile_result, loader): text
-                for text, loader in parsed_questions
-            }
-            for future in as_completed(futures):
-                try:
-                    query_results.append(future.result())
-                except Exception as exc:
-                    query_results.append({"question": futures[future], "error": str(exc)})
-
-    combined = _json_safe({
-        "profile": profile_result,
-        "queries": query_results,
-        "token_usage": get_tracker().to_dict(),
-    })
-
-    if args.output:
-        out = Path(args.output).resolve()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(combined, indent=2, ensure_ascii=False), encoding="utf-8")
-        sys.stderr.write(f"Results written to: {out}\n")
-
-    print(json.dumps(combined, indent=2, ensure_ascii=False))
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +602,7 @@ REMOTE_MANAGEMENT = {
 
 # Commands that cannot run on an endpoint: they need files or credentials that
 # live on the client machine.
-REMOTE_FORBIDDEN = {"add-custom-module", "agentic"}
+REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory", "fair"}
 
 
 REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
@@ -776,8 +871,28 @@ def main() -> None:
         help="Directory to create the module in (e.g. --dir /path/to/my_project)",
     )
 
+    loader_parser = subparsers.add_parser(
+        "add-custom-loader",
+        help="Create a custom data-loader template (load(path) -> DataFrame)",
+    )
+    loader_parser.add_argument(
+        "name",
+        help="Name of the loader module (e.g. 'root_ttree'). No spaces or special characters.",
+    )
+    loader_parser.add_argument(
+        "--dir",
+        dest="loader_dir",
+        required=True,
+        help="Directory to create the loader in (e.g. --dir ./loaders)",
+    )
+
     list_parser = subparsers.add_parser("list", help="List available metrics")
     list_parser.add_argument("--category", default=None)
+    list_parser.add_argument(
+        "--capabilities",
+        action="store_true",
+        help="Wrap the catalogue as {metrics, mlflow_enabled, experiment}",
+    )
 
     run_parser = subparsers.add_parser("run", help="Run a metric (per-metric help via: aidrin run <metric> -h)")
     run_subparsers = run_parser.add_subparsers(dest="metric", required=True)
@@ -810,6 +925,21 @@ def main() -> None:
             mparser.add_argument("--max-export-rows", type=int, default=10000, help="Export row cap per rule; 0 means unlimited")
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum values to scan per rule")
             mparser.add_argument("--stop-after-outliers", action="store_true", help="Stop scanning after preview cap is reached")
+        if metric_name == "differential_privacy":
+            mparser.add_argument(
+                "--noisy-output",
+                dest="noisy_output",
+                default=None,
+                help="Write the noisy CSV to this path instead of ./noisy/noisy_data.csv "
+                     "(the resolved path is always echoed in the JSON result as "
+                     "'Noisy file path')",
+            )
+            mparser.add_argument(
+                "--no-noisy-output",
+                dest="skip_noisy_output",
+                action="store_true",
+                help="Do not write the noisy CSV to disk",
+            )
         if metric_name == "file_reference_validation":
             mparser.add_argument(
                 "--target-match",
@@ -820,6 +950,16 @@ def main() -> None:
             mparser.add_argument("--base-dir", default=None, help="Directory used to resolve relative file references")
             mparser.add_argument("--max-results", type=int, default=100, help="Maximum invalid and metadata detail records; 0 means unlimited")
             mparser.add_argument("--scan-limit", type=int, default=None, help="Maximum reference values to scan; 0 means unlimited")
+        if metric_name == "variable_unit_validation":
+            metadata_group = mparser.add_mutually_exclusive_group()
+            metadata_group.add_argument(
+                "--unit-metadata-json",
+                help="Inline canonical variable-unit sidecar JSON",
+            )
+            metadata_group.add_argument(
+                "--unit-metadata-file",
+                help="Path to a canonical variable-unit sidecar resolved on the execution host",
+            )
         _configure_minimal_run_args(mparser)
         mparser.set_defaults(_metric_key=metric_name, _action="metric")
 
@@ -829,13 +969,36 @@ def main() -> None:
         help="Run a custom metric or remedy from a .py file",
     )
     custom_parser.add_argument("name", help="Path to the custom module file (e.g. /path/to/my_audit.py)")
-    custom_parser.add_argument("file_path", help="Path to the dataset CSV")
-    custom_parser.add_argument("action", nargs="?", choices=["metric", "remedy"], default="metric", help="Run metric (default) or remedy")
+    custom_parser.add_argument(
+        "file_path",
+        help="Path to the dataset (CSV, Parquet, Excel, HDF5, JSON, or NPZ; use --file-type to override detection)",
+    )
+    custom_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["metric", "remedy"],
+        default="metric",
+        help="Run metric (default) or remedy; remedy output is always saved as CSV",
+    )
+    custom_parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="With the remedy action, also re-run metric() on the remedied data and print before/after results",
+    )
     _configure_minimal_run_args(custom_parser)
 
     batch_parser = subparsers.add_parser("batch", help="Run metrics from config file (JSON or YAML)")
     batch_parser.add_argument("config_path")
     batch_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
+    batch_parser.add_argument(
+        "--report",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Attach a finished report to the tracked assessment. Ignored when "
+            "MLflow tracking is not enabled."
+        ),
+    )
     batch_parser.add_argument(
         "--viz",
         dest="no_viz",
@@ -843,23 +1006,79 @@ def main() -> None:
         help="Include visualization data in output",
         default=True,
     )
+    batch_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
     # Fast data quality command
     dq_parser = subparsers.add_parser("data-quality", help="Run fast data quality metrics (completeness, duplicity, outliers)")
     dq_parser.add_argument("file_path")
     dq_parser.add_argument("--file-type", dest="file_type", default=None)
+    dq_parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
+    dq_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     dq_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
     dq_parser.add_argument("--detail", action="store_true", help="Output full per-feature JSON instead of summary")
+    dq_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
     # Dataset summary command
     summarize_parser = subparsers.add_parser("summarize", help="Describe numerical and categorical features of a dataset")
     summarize_parser.add_argument("file_path", help="Path to the dataset")
-    summarize_parser.add_argument("--file-type", dest="file_type", default=None, help="File type override (csv, parquet, xlsx, hdf5, json, npz)")
+    summarize_parser.add_argument(
+        "--file-type",
+        dest="file_type",
+        default=None,
+        help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
+    )
+    summarize_parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
+    summarize_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
     summarize_parser.add_argument(
         "--max-features", dest="max_features", type=int, default=None,
         help="Limit stats to N features (split evenly between numerical and categorical)"
     )
     summarize_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print human-readable table instead of JSON")
+    summarize_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+
+    # HDF5/Zarr layout inspection
+    inventory_parser = subparsers.add_parser(
+        "inventory",
+        help="Classify an HDF5/Zarr file's on-disk layout and list its datasets, without reading it as a table",
+    )
+    inventory_parser.add_argument("file_path", help="Path to the HDF5 (.h5) or Zarr (.zarr) file")
+    inventory_parser.add_argument("--file-type", dest="file_type", default=None, help="Input file type override")
+    inventory_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+
+    # FAIR assessment of a metadata file (reads no dataset)
+    from aidrin.structured_data_metrics.fair_metadata import STANDARDS as FAIR_STANDARDS
+
+    fair_parser = subparsers.add_parser(
+        "fair",
+        help="Score a metadata file (Croissant, RO-Crate, DCAT-US 3.0 or 1.1, or DataCite JSON) against the FAIR principles",
+    )
+    fair_parser.add_argument("metadata_path", help="Path to the JSON or JSON-LD metadata file")
+    fair_parser.add_argument(
+        "--standard", default="auto", choices=("auto", *FAIR_STANDARDS),
+        help="Metadata standard the file follows (default: detect it)",
+    )
+    fair_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print a per-principle table instead of JSON")
+    fair_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
     # Agentic evaluation commands
     agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
@@ -875,6 +1094,19 @@ def main() -> None:
     agentic_run_parser.add_argument("--skip-vector", dest="skip_vector", action="store_true",
                                     help="Skip rebuilding the vector index; use existing one")
     agentic_run_parser.add_argument("-v", "--verbose", action="store_true", help="Print vector build info to stderr")
+
+    skill_parser = subparsers.add_parser("skill", help="Manage the bundled agent skill")
+    skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
+    skill_install_parser = skill_sub.add_parser(
+        "install",
+        help="Copy the skill into an agent's skills folder (re-run after pip upgrade to update)",
+    )
+    skill_install_parser.add_argument(
+        "--dir",
+        dest="skills_dir",
+        default=None,
+        help="Skills folder to install into (default: every existing .claude/skills and .agents/skills)",
+    )
 
     # argv was computed at the top of main() so the `remote` prefix could be
     # stripped before the local parser ever sees it.
@@ -924,8 +1156,27 @@ def main() -> None:
             except FileExistsError as e:
                 print(f"{e}")
             return
+        if args.command == "add-custom-loader":
+            target_dir = args.loader_dir or os.getcwd()
+            try:
+                path = generate_loader_template(args.name, target_dir)
+                print(f"Loader template created at: {path}")
+                print("Implement load(path, **kwargs) to return a pandas DataFrame.")
+                print(
+                    f"Run via: aidrin run completeness <dataset> --loader {path}:load"
+                )
+            except (FileExistsError, ValueError) as e:
+                print(f"{e}")
+            return
         if args.command == "list":
-            _dump_result(_round_floats(list_available_metrics(category=args.category)))
+            catalogue = _round_floats(list_available_metrics(category=args.category))
+            if getattr(args, "capabilities", False):
+                # Wrapped, not merged: the bare catalogue is a mapping of
+                # category -> metrics, and a sibling key would read as a
+                # category. Off by default so existing scripts parsing this
+                # output are unaffected.
+                catalogue = {"metrics": catalogue, **mlflow_sink.capabilities()}
+            _dump_result(catalogue)
             return
 
         if args.command == "run":
@@ -937,30 +1188,46 @@ def main() -> None:
                         "Error: provide at least one of categorical-columns or numerical-columns\n"
                     )
                     sys.exit(2)
-                result = executor.run_metric(
-                    metric_key,
-                    args.file_path,
-                    file_type=getattr(args, "file_type", None),
-                    **_build_run_kwargs(args),
-                )
+                with _implicit_session(executor, args.file_path) as session:
+                    result = executor.run_metric(
+                        metric_key,
+                        args.file_path,
+                        file_type=getattr(args, "file_type", None),
+                        **_session_kwargs(session),
+                        **_build_run_kwargs(args),
+                    )
                 _fail_on_remote_error(result, remote_opts)
+                rounded = _round_floats(result)
+                _write_output_file(rounded, getattr(args, "output", None))
                 if getattr(args, "detail", True):
-                    _dump_result(_round_floats(result))
+                    _dump_result(rounded)
                 else:
                     _summarize_metric(metric_key, result)
                 return
 
             # Custom metrics/remedies
             if args.metric == "custom":
+                diff = getattr(args, "diff", False)
+                if diff and args.action != "remedy":
+                    sys.stderr.write("Error: --diff is only valid with the remedy action\n")
+                    sys.exit(2)
                 if args.action == "remedy":
-                    output_path = run_custom_metric_remedy(
+                    result = run_custom_metric_remedy(
                         args.name,
                         args.file_path,
                         output_dir=None,
                         file_type=getattr(args, "file_type", None),
+                        diff=diff,
                         **_build_run_kwargs(args),
                     )
-                    print(f"Remedied data saved to: {output_path}")
+                    if diff:
+                        result["remedied_file"] = result.pop("_saved_to")
+                        rounded = _round_floats(result)
+                        _write_output_file(rounded, getattr(args, "output", None))
+                        _dump_result(rounded)
+                        sys.stderr.write(f"Remedied data saved to: {result['remedied_file']}\n")
+                    else:
+                        print(f"Remedied data saved to: {result}")
                     return
                 result = executor.run_metric(
                     args.name,
@@ -968,8 +1235,10 @@ def main() -> None:
                     file_type=getattr(args, "file_type", None),
                     **_build_run_kwargs(args),
                 )
+                rounded = _round_floats(result)
+                _write_output_file(rounded, getattr(args, "output", None))
                 if getattr(args, "detail", True):
-                    _dump_result(_round_floats(result))
+                    _dump_result(rounded)
                 else:
                     _summarize_metric(args.name.strip().lower(), result)
                 return
@@ -981,12 +1250,14 @@ def main() -> None:
                     "Error: provide at least one of categorical-columns or numerical-columns\n"
                 )
                 sys.exit(2)
-            result = executor.run_metric(
-                args.command,
-                args.file_path,
-                file_type=getattr(args, "file_type", None),
-                **_build_run_kwargs(args),
-            )
+            with _implicit_session(executor, args.file_path) as session:
+                result = executor.run_metric(
+                    args.command,
+                    args.file_path,
+                    file_type=getattr(args, "file_type", None),
+                    **_session_kwargs(session),
+                    **_build_run_kwargs(args),
+                )
             _fail_on_remote_error(result, remote_opts)
             if getattr(args, "detail", True):
                 _dump_result(_round_floats(result))
@@ -997,13 +1268,21 @@ def main() -> None:
         if args.command == "batch":
             config = HeadlessConfig.from_file(args.config_path)
             cleanup_path = config.file_path
+            # Remote batches execute on the endpoint and are not tracked, so
+            # the report flag has nothing to attach to there.
+            batch_kwargs = {}
+            if executor is _local_api and getattr(args, "report", None):
+                batch_kwargs["report_path"] = args.report
             result = executor.run_batch_metrics(
                 config,
                 verbose=args.verbose,
                 strip_visualizations=args.no_viz,
+                **batch_kwargs,
             )
             _fail_on_remote_error(result, remote_opts)
-            _dump_result(_round_floats(result))
+            rounded = _round_floats(result)
+            _write_output_file(rounded, getattr(args, "output", None))
+            _dump_result(rounded)
             return
 
         if args.command == "summarize":
@@ -1011,12 +1290,16 @@ def main() -> None:
                 args.file_path,
                 file_type=args.file_type,
                 max_features=args.max_features,
+                loader=getattr(args, "loader", None),
+                selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
+            rounded = _round_floats(result)
+            _write_output_file(rounded, getattr(args, "output", None))
             if args.human_readable:
                 _print_summary_table(result, args.file_path)
             else:
-                _dump_result(_round_floats(result))
+                _dump_result(rounded)
             return
 
         if args.command == "data-quality":
@@ -1025,12 +1308,31 @@ def main() -> None:
                 file_type=args.file_type,
                 verbose=args.verbose,
                 strip_visualizations=True,
+                loader=getattr(args, "loader", None),
+                selected_keys=_parse_list(getattr(args, "selected_keys", None)),
             )
             _fail_on_remote_error(result, remote_opts)
+            rounded = _round_floats(result)
+            _write_output_file(rounded, getattr(args, "output", None))
             if args.detail:
-                _dump_result(_round_floats(result))
+                _dump_result(rounded)
             else:
                 _summarize_data_quality(result)
+            return
+
+        if args.command == "inventory":
+            result = _local_api.inventory(args.file_path, file_type=args.file_type)
+            _write_output_file(result, getattr(args, "output", None))
+            _dump_result(result)
+            return
+
+        if args.command == "fair":
+            result = _local_api.calculate_fair_compliance(args.metadata_path, args.standard)
+            _write_output_file(result, args.output)
+            if args.human_readable:
+                _print_fair_summary(result, args.metadata_path)
+            else:
+                _dump_result(result)
             return
 
         if args.command == "agentic":
@@ -1038,6 +1340,9 @@ def main() -> None:
                 _agentic_build_index(args)
             elif args.agentic_command == "run":
                 _agentic_run(args)
+            return
+        if args.command == "skill":
+            _skill_install(args)
             return
     except AsyncSubmitted as submitted:
         _dump_result({"task_id": submitted.task_id})

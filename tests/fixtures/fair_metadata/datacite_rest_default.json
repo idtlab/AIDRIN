@@ -1,0 +1,203 @@
+{
+  "data": {
+    "id": "10.5281/zenodo.12168626",
+    "type": "dois",
+    "attributes": {
+      "doi": "10.5281/zenodo.12168626",
+      "prefix": "10.5281",
+      "suffix": "zenodo.12168626",
+      "identifiers": [
+        {
+          "identifier": "oai:zenodo.org:12168626",
+          "identifierType": "oai"
+        }
+      ],
+      "alternateIdentifiers": [
+        {
+          "alternateIdentifierType": "oai",
+          "alternateIdentifier": "oai:zenodo.org:12168626"
+        }
+      ],
+      "creators": [
+        {
+          "name": "Habermann, Ted",
+          "nameType": "Personal",
+          "givenName": "Ted",
+          "familyName": "Habermann",
+          "affiliation": [
+            "Metadata Game Changers (United States)"
+          ],
+          "nameIdentifiers": [
+            {
+              "nameIdentifier": "0000-0003-3585-6733",
+              "nameIdentifierScheme": "ORCID"
+            }
+          ]
+        }
+      ],
+      "titles": [
+        {
+          "title": "FAIR Metadata Concepts in DataCite Metadata Schema"
+        }
+      ],
+      "publisher": "Zenodo",
+      "container": {},
+      "publicationYear": 2024,
+      "subjects": [
+        {
+          "subject": "Metadata"
+        },
+        {
+          "subject": "FAIR Principles"
+        },
+        {
+          "subject": "DataCite"
+        },
+        {
+          "subject": "Metadata Crosswalk"
+        }
+      ],
+      "contributors": [],
+      "dates": [
+        {
+          "date": "2024-06-19",
+          "dateType": "Issued"
+        }
+      ],
+      "language": null,
+      "types": {
+        "ris": "DATA",
+        "bibtex": "misc",
+        "citeproc": "dataset",
+        "schemaOrg": "Dataset",
+        "resourceType": "",
+        "resourceTypeGeneral": "Dataset"
+      },
+      "relatedIdentifiers": [
+        {
+          "relationType": "IsVersionOf",
+          "relatedIdentifier": "10.5281/zenodo.12168625",
+          "relatedIdentifierType": "DOI"
+        }
+      ],
+      "relatedItems": [],
+      "sizes": [],
+      "formats": [],
+      "version": null,
+      "rightsList": [
+        {
+          "rights": "Creative Commons Attribution 4.0 International",
+          "rightsUri": "https://creativecommons.org/licenses/by/4.0/legalcode",
+          "schemeUri": "https://spdx.org/licenses/",
+          "rightsIdentifier": "cc-by-4.0",
+          "rightsIdentifierScheme": "SPDX"
+        }
+      ],
+      "descriptions": [
+        {
+          "description": "Documentation Concepts that support the FAIR Principles are mapped to the DataCite Metadata Schema using json Paths.",
+          "descriptionType": "Abstract"
+        }
+      ],
+      "geoLocations": [],
+      "fundingReferences": [
+        {
+          "awardTitle": "Beyond Data Discovery: Shared Services for Community Metadata Improvement",
+          "funderName": "National Science Foundation",
+          "awardNumber": "1443062",
+          "funderIdentifier": "10.13039/100000001",
+          "funderIdentifierType": "Crossref Funder ID"
+        }
+      ],
+      "xml": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHJlc291cmNlIHhtbG5zOnhzaT0iaHR0cDovL3d3dy53My5vcmcvMjAwMS9YTUxTY2hlbWEtaW5zdGFuY2UiIHhtbG5zPSJodHRwOi8vZGF0YWNpdGUub3JnL3NjaGVtYS9rZXJuZWwtNCIgeHNpOnNjaGVtYUxvY2F0aW9uPSJodHRwOi8vZGF0YWNpdGUub3JnL3NjaGVtYS9rZXJuZWwtNCBodHRwOi8vc2NoZW1hLmRhdGFjaXRlLm9yZy9tZXRhL2tlcm5lbC00L21ldGFkYXRhLnhzZCI+CiAgPGlkZW50aWZpZXIgaWRlbnRpZmllclR5cGU9IkRPSSI+MTAuNTI4MS9aRU5PRE8uMTIxNjg2MjY8L2lkZW50aWZpZXI+CiAgPGNyZWF0b3JzPgogICAgPGNyZWF0b3I+CiAgICAgIDxjcmVhdG9yTmFtZSBuYW1lVHlwZT0iUGVyc29uYWwiPkhhYmVybWFubiwgVGVkPC9jcmVhdG9yTmFtZT4KICAgICAgPGdpdmVuTmFtZT5UZWQ8L2dpdmVuTmFtZT4KICAgICAgPGZhbWlseU5hbWU+SGFiZXJtYW5uPC9mYW1pbHlOYW1lPgogICAgICA8bmFtZUlkZW50aWZpZXIgbmFtZUlkZW50aWZpZXJTY2hlbWU9Ik9SQ0lEIiBzY2hlbWVVUkk9IiI+MDAwMC0wMDAzLTM1ODUtNjczMzwvbmFtZUlkZW50aWZpZXI+CiAgICAgIDxhZmZpbGlhdGlvbiBhZmZpbGlhdGlvbklkZW50aWZpZXI9Imh0dHBzOi8vcm9yLm9yZy8wNWJwOGthMDUiIGFmZmlsaWF0aW9uSWRlbnRpZmllclNjaGVtZT0iUk9SIj5NZXRhZGF0YSBHYW1lIENoYW5nZXJzIChVbml0ZWQgU3RhdGVzKTwvYWZmaWxpYXRpb24+CiAgICA8L2NyZWF0b3I+CiAgPC9jcmVhdG9ycz4KICA8dGl0bGVzPgogICAgPHRpdGxlPkZBSVIgTWV0YWRhdGEgQ29uY2VwdHMgaW4gRGF0YUNpdGUgTWV0YWRhdGEgU2NoZW1hPC90aXRsZT4KICA8L3RpdGxlcz4KICA8cHVibGlzaGVyPlplbm9kbzwvcHVibGlzaGVyPgogIDxwdWJsaWNhdGlvblllYXI+MjAyNDwvcHVibGljYXRpb25ZZWFyPgogIDxyZXNvdXJjZVR5cGUgcmVzb3VyY2VUeXBlR2VuZXJhbD0iRGF0YXNldCIvPgogIDxzdWJqZWN0cz4KICAgIDxzdWJqZWN0Pk1ldGFkYXRhPC9zdWJqZWN0PgogICAgPHN1YmplY3Q+RkFJUiBQcmluY2lwbGVzPC9zdWJqZWN0PgogICAgPHN1YmplY3Q+RGF0YUNpdGU8L3N1YmplY3Q+CiAgICA8c3ViamVjdD5NZXRhZGF0YSBDcm9zc3dhbGs8L3N1YmplY3Q+CiAgPC9zdWJqZWN0cz4KICA8ZGF0ZXM+CiAgICA8ZGF0ZSBkYXRlVHlwZT0iSXNzdWVkIj4yMDI0LTA2LTE5PC9kYXRlPgogIDwvZGF0ZXM+CiAgPGFsdGVybmF0ZUlkZW50aWZpZXJzPgogICAgPGFsdGVybmF0ZUlkZW50aWZpZXIgYWx0ZXJuYXRlSWRlbnRpZmllclR5cGU9Im9haSI+b2FpOnplbm9kby5vcmc6MTIxNjg2MjY8L2FsdGVybmF0ZUlkZW50aWZpZXI+CiAgPC9hbHRlcm5hdGVJZGVudGlmaWVycz4KICA8cmVsYXRlZElkZW50aWZpZXJzPgogICAgPHJlbGF0ZWRJZGVudGlmaWVyIHJlbGF0ZWRJZGVudGlmaWVyVHlwZT0iRE9JIiByZWxhdGlvblR5cGU9IklzVmVyc2lvbk9mIj4xMC41MjgxL3plbm9kby4xMjE2ODYyNTwvcmVsYXRlZElkZW50aWZpZXI+CiAgPC9yZWxhdGVkSWRlbnRpZmllcnM+CiAgPHNpemVzLz4KICA8Zm9ybWF0cy8+CiAgPHZlcnNpb24vPgogIDxyaWdodHNMaXN0PgogICAgPHJpZ2h0cyByaWdodHNVUkk9Imh0dHBzOi8vY3JlYXRpdmVjb21tb25zLm9yZy9saWNlbnNlcy9ieS80LjAvbGVnYWxjb2RlIiByaWdodHNJZGVudGlmaWVyPSJjYy1ieS00LjAiIHJpZ2h0c0lkZW50aWZpZXJTY2hlbWU9InNwZHgiPkNyZWF0aXZlIENvbW1vbnMgQXR0cmlidXRpb24gNC4wIEludGVybmF0aW9uYWw8L3JpZ2h0cz4KICA8L3JpZ2h0c0xpc3Q+CiAgPGRlc2NyaXB0aW9ucz4KICAgIDxkZXNjcmlwdGlvbiBkZXNjcmlwdGlvblR5cGU9IkFic3RyYWN0Ij5Eb2N1bWVudGF0aW9uIENvbmNlcHRzIHRoYXQgc3VwcG9ydCB0aGUgRkFJUiBQcmluY2lwbGVzIGFyZSBtYXBwZWQgdG8gdGhlIERhdGFDaXRlIE1ldGFkYXRhIFNjaGVtYSB1c2luZyBqc29uIFBhdGhzLjwvZGVzY3JpcHRpb24+CiAgPC9kZXNjcmlwdGlvbnM+CiAgPGZ1bmRpbmdSZWZlcmVuY2VzPgogICAgPGZ1bmRpbmdSZWZlcmVuY2U+CiAgICAgIDxmdW5kZXJOYW1lPk5hdGlvbmFsIFNjaWVuY2UgRm91bmRhdGlvbjwvZnVuZGVyTmFtZT4KICAgICAgPGZ1bmRlcklkZW50aWZpZXIgZnVuZGVySWRlbnRpZmllclR5cGU9IkNyb3NzcmVmIEZ1bmRlciBJRCI+MTAuMTMwMzkvMTAwMDAwMDAxPC9mdW5kZXJJZGVudGlmaWVyPgogICAgICA8YXdhcmROdW1iZXI+MTQ0MzA2MjwvYXdhcmROdW1iZXI+CiAgICAgIDxhd2FyZFRpdGxlPkJleW9uZCBEYXRhIERpc2NvdmVyeTogU2hhcmVkIFNlcnZpY2VzIGZvciBDb21tdW5pdHkgTWV0YWRhdGEgSW1wcm92ZW1lbnQ8L2F3YXJkVGl0bGU+CiAgICA8L2Z1bmRpbmdSZWZlcmVuY2U+CiAgPC9mdW5kaW5nUmVmZXJlbmNlcz4KPC9yZXNvdXJjZT4K",
+      "url": "https://zenodo.org/doi/10.5281/zenodo.12168626",
+      "contentUrl": null,
+      "metadataVersion": 0,
+      "schemaVersion": "http://datacite.org/schema/kernel-4",
+      "source": "api",
+      "isActive": true,
+      "state": "findable",
+      "reason": null,
+      "viewCount": 0,
+      "viewsOverTime": [],
+      "downloadCount": 0,
+      "downloadsOverTime": [],
+      "referenceCount": 0,
+      "citationCount": 3,
+      "citationsOverTime": [
+        {
+          "year": "2025",
+          "total": 1
+        },
+        {
+          "year": "2026",
+          "total": 2
+        }
+      ],
+      "partCount": 0,
+      "partOfCount": 0,
+      "versionCount": 0,
+      "versionOfCount": 1,
+      "created": "2024-06-19T15:32:16.000Z",
+      "registered": "2024-06-19T15:32:16.000Z",
+      "published": "2024",
+      "updated": "2024-06-22T14:56:19.000Z"
+    },
+    "relationships": {
+      "client": {
+        "data": {
+          "id": "cern.zenodo",
+          "type": "clients"
+        }
+      },
+      "provider": {
+        "data": {
+          "id": "cern",
+          "type": "providers"
+        }
+      },
+      "media": {
+        "data": {
+          "id": "10.5281/zenodo.12168626",
+          "type": "media"
+        }
+      },
+      "references": {
+        "data": []
+      },
+      "citations": {
+        "data": [
+          {
+            "id": "10.59350/pqhkv-caa32",
+            "type": "dois"
+          },
+          {
+            "id": "10.59350/ejd15-gvd72",
+            "type": "dois"
+          },
+          {
+            "id": "10.59350/vn78n-xqq48",
+            "type": "dois"
+          }
+        ]
+      },
+      "parts": {
+        "data": []
+      },
+      "partOf": {
+        "data": []
+      },
+      "versions": {
+        "data": []
+      },
+      "versionOf": {
+        "data": [
+          {
+            "id": "10.5281/zenodo.12168625",
+            "type": "dois"
+          }
+        ]
+      }
+    }
+  }
+}

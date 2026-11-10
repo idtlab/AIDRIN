@@ -5,7 +5,35 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ## [Unreleased]
 
+## [2026.10.1] - 2026-10-28
+
 ### Changed (breaking)
+
+- **FAIR metadata assessment: DCAT-US 1.1 and DataCite scores change.** Both
+  standards are now scored by one checker,
+  `aidrin.structured_data_metrics.fair_metadata.calculate_fair_compliance`,
+  which replaces `FAIRness_dcat.py` and `FAIRness_datacite.py`.
+
+  **DCAT-US 1.1** (labelled "DCAT" before; the check was always DCAT-US 1.1 /
+  Project Open Data, not W3C DCAT): the old matcher flattened nested keys and
+  matched by suffix. Object-valued `publisher` and `contactPoint` always
+  failed, and `title`, `description` and `format` could be taken from a
+  distribution instead of the dataset. Dataset-level keys are now read from
+  the top level only, and `downloadURL`, `accessURL`, `mediaType` and `format`
+  from `distribution[]`. On the bundled samples, BUTTER-E goes from 18/26 to
+  20/26 and EGS_Collab_Experiment from 17/26 to 19/26.
+
+  **DataCite** (now 4.x, checked against 4.7): REST API responses
+  (`data.attributes`) are unwrapped instead of failing every check; the DOI is
+  read from `doi` or a DOI-typed `identifiers` entry; `contributors` moves from
+  Accessible to Reusable; Accessible now checks `url`/`contentUrl` and access
+  rights; checks move from 10/1/1/7 to 8/2/4/8. New `Conformance` (mandatory
+  properties) and `Structure` (ORCID, ROR, publisher, subject and funder
+  identifiers) sections are added. REST bookkeeping fields (`xml`, view and
+  citation counts) no longer appear in the report.
+
+  Principle values are now short summaries (a publisher's name, a keyword
+  list, "7/7 distributions") rather than raw objects.
 
 - **Completeness — `Overall Completeness` is now column-wise.** The
   `completeness` metric's `Overall Completeness` value changed from a *row-wise*
@@ -33,6 +61,35 @@ All notable changes to AIDRIN are documented here. This project loosely follows
   removed in favor of the single `Overall Completeness` key.
 
 ### Added
+
+- **DCAT-US 3.0 support in the FAIR metadata assessment.** Single DCAT-US 3.0
+  dataset records (GSA's JSON Schema) are detected and scored, with
+  `Conformance` for the four required properties. Versioning and series
+  properties are shown under `Other`, unscored. A DCAT catalog is rejected
+  with a message to upload one dataset record.
+
+- **RO-Crate support in the FAIR metadata assessment.** RO-Crate 1.2
+  `ro-crate-metadata.json` files are detected and scored on the root data
+  entity (found through the descriptor's `about`), with `Conformance` (the
+  1.2 MUSTs and SHOULDs) and `Structure` (typed Files, ORCID and ROR
+  identifiers, provenance actions). Web-only checks are reported as
+  `Not applicable` for local crates instead of failing. Other versions are
+  assessed with the 1.2 rules and labelled as such.
+
+- **Croissant support and auto-detection in the FAIR metadata assessment.**
+  MLCommons Croissant 1.0 and 1.1 files (from Hugging Face, Kaggle, OpenML)
+  are scored for FAIR, with `Conformance` (the nine required properties),
+  `Structure` (checksums, typed fields, record-set keys) and a `RAI
+  Documentation` section that lists the 20 Responsible AI properties as
+  declared or not, without scoring them. The standard is now detected by
+  default (`auto` in the web form, `aidrin fair`, the library and MCP), and
+  every result reports it under `Standard`. The web form accepts `.jsonld`.
+
+- **FAIR metadata assessment from the CLI, Python library and MCP server.** The
+  FAIR check was web-only. It is now `aidrin fair <metadata.json> --standard
+  dcat-us-1.1|datacite [--summary] [-o path]` (local-only),
+  `aidrin.calculate_fair_compliance(path_or_dict, standard)`, and the MCP tool
+  `check_fair_compliance`. It reads only the metadata file, never a dataset.
 
 - **New data-quality completeness metrics** (CLI, Python library, batch, MCP,
   Globus, and web UI):
@@ -69,6 +126,26 @@ All notable changes to AIDRIN are documented here. This project loosely follows
   `max_pairwise_correlation`, `skewness`, and `kurtosis` operate on the
   numeric, non-constant columns.
 
+- **`-o`/`--output` on `run`, `batch`, `data-quality`, and `summarize`.**
+  Previously only `agentic run` could write its JSON report to a file; the
+  other commands only wrote to stdout, so a report path had to come from a
+  shell redirect (`aidrin data-quality f.csv --detail > audit/pre.json`) —
+  invisible to any tool that records the command line, and therefore not a
+  recorded output of the run. `-o`/`--output` writes the same result to disk
+  (creating parent directories as needed) while still printing to stdout,
+  with the same semantics as `agentic run -o`.
+
+- **`aidrin inventory <file>`** classifies an HDF5/Zarr file's on-disk layout
+  (`empty` / `single_dataset` / `multi_dataset` / `legacy`) and lists its
+  datasets/arrays, without reading the file as a table. Useful before trusting
+  `data-quality`/`run`/`summarize` on a structured file whose datasets might
+  not actually represent one table (e.g. simulation fields on a mesh that
+  happen to share a length). `run`, `data-quality`, and `summarize` now also
+  refuse (non-zero exit, naming the layout and pointing at `aidrin inventory`)
+  instead of silently flattening an HDF5 file classified `multi_dataset` when
+  no `--selected-keys` was given — previously only Zarr refused this way; HDF5
+  returned an empty result silently.
+
 ### Fixed
 
 - **Datasets with array-valued columns no longer break the summary or
@@ -85,3 +162,20 @@ All notable changes to AIDRIN are documented here. This project loosely follows
   web summary route. Values are converted to nested tuples, which preserves
   equality so distinct-counting and duplicate detection stay correct.
   `duplicity._make_hashable` remains as an alias for backwards compatibility.
+
+- **`differential-privacy`'s noisy CSV write is now visible and controllable.**
+  `add_laplace_noise`/`return_noisy_stats` wrote `noisy/noisy_data.csv`
+  relative to the process's working directory on every run, with no CLI
+  option and no mention of the path in the result — silent for any tool that
+  only records the command. The result now always includes the resolved
+  `"Noisy file path"` when a file is written, and `aidrin run
+  differential-privacy` gained `--noisy-output <path>` (write there instead)
+  and `--no-noisy-output` (skip the write). The library default
+  (`save_output=True`, writing to `./noisy/noisy_data.csv`) is unchanged for
+  existing callers.
+
+- **The agent skill's metrics index no longer contradicts its own
+  reference entry.** `reference/metrics.md` listed `differential-privacy` as
+  "(currently unavailable)" in the category index while documenting its full
+  syntax and a working example further down — an agent that only read the
+  index would skip a metric the CLI actually runs.

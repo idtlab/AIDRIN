@@ -10,7 +10,7 @@ import shutil
 import tempfile
 import unittest
 
-from worker.tasks import prune_upload_folder
+from worker.tasks import prune_upload_folder, prune_custom_metrics_folder
 
 
 class PruneUploadFolderTestCase(unittest.TestCase):
@@ -59,5 +59,93 @@ class PruneUploadFolderTestCase(unittest.TestCase):
         self.assertEqual(removed, 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class PruneCustomMetricsFolderTestCase(unittest.TestCase):
+    """CUSTOM_METRICS_FOLDER holds both permanent package source
+    (__init__.py, base_dr.py, template.py) and session-generated scripts
+    (customDR_<uuid>.py). Only the latter should ever be pruned — a prior
+    version used an exclude-list of "known good" filenames instead of
+    matching the generated-file pattern, and it silently deleted
+    template.py because nobody had added it to the list."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _make(self, name, age_seconds, now):
+        path = os.path.join(self.dir, name)
+        with open(path, "w") as fh:
+            fh.write("x")
+        mtime = now - age_seconds
+        os.utime(path, (mtime, mtime))
+        return path
+
+    def test_prunes_stale_generated_scripts_only(self):
+        now = 1_000_000.0
+        old_generated = self._make("customDR_11111111-1111-1111-1111-111111111111.py", 7200, now)
+        fresh_generated = self._make("customDR_22222222-2222-2222-2222-222222222222.py", 10, now)
+        old_init = self._make("__init__.py", 7200, now)
+        old_base_dr = self._make("base_dr.py", 7200, now)
+        old_template = self._make("template.py", 7200, now)
+
+        removed = prune_custom_metrics_folder(self.dir, max_age_seconds=3600, now=now)
+
+        self.assertFalse(os.path.exists(old_generated))
+        self.assertTrue(os.path.exists(fresh_generated))
+        self.assertTrue(os.path.exists(old_init))
+        self.assertTrue(os.path.exists(old_base_dr))
+        self.assertTrue(os.path.exists(old_template))
+        self.assertEqual(removed, 1)
+
+    def test_missing_folder_is_noop(self):
+        removed = prune_custom_metrics_folder(
+            os.path.join(self.dir, "does-not-exist"), max_age_seconds=3600, now=1.0
+        )
+        self.assertEqual(removed, 0)
+
+
+class DeleteOldUploadsTaskTestCase(unittest.TestCase):
+    """Web custom loader scripts live outside UPLOAD_FOLDER, so the scheduled
+    reaper must prune CUSTOM_LOADERS_FOLDER too or abandoned sessions leave
+    user-supplied code behind indefinitely."""
+
+    def setUp(self):
+        self.uploads = tempfile.mkdtemp()
+        self.loaders = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.uploads, ignore_errors=True)
+        shutil.rmtree(self.loaders, ignore_errors=True)
+
+    def test_prunes_aged_custom_loader_scripts(self):
+        import time
+
+        from flask import Flask
+
+        from worker.tasks import delete_old_uploads
+
+        cache = os.path.join(self.loaders, "__pycache__")
+        os.makedirs(cache)
+        old_loader = os.path.join(self.loaders, f"custom_loader_{'a' * 32}.py")
+        old_bytecode = os.path.join(cache, f"custom_loader_{'a' * 32}.cpython-312.pyc")
+        fresh_loader = os.path.join(self.loaders, f"custom_loader_{'b' * 32}.py")
+        unrelated = os.path.join(self.loaders, "notes.txt")
+        aged = time.time() - 7200
+        for path in (old_loader, old_bytecode, fresh_loader, unrelated):
+            with open(path, "w") as fh:
+                fh.write("def load(path): ...")
+        for path in (old_loader, old_bytecode, unrelated):
+            os.utime(path, (aged, aged))
+
+        app = Flask(__name__)
+        app.config.update(UPLOAD_FOLDER=self.uploads, CUSTOM_LOADERS_FOLDER=self.loaders)
+        with app.app_context():
+            # .run() skips the Celery task wrapper, which would push the web app's
+            # context (and folders) once create_app() has run elsewhere in the suite.
+            delete_old_uploads.run()
+
+        self.assertFalse(os.path.exists(old_loader))
+        self.assertFalse(os.path.exists(old_bytecode))
+        self.assertTrue(os.path.exists(fresh_loader))
+        self.assertTrue(os.path.exists(unrelated))

@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
         extras: [""]
         include:
           # Test optional dependencies on a single fast combination
@@ -23,10 +23,28 @@ jobs:
             extras: "[telemetry]"
           - os: ubuntu-latest
             python-version: "3.12"
+            extras: "[mlflow]"
+          - os: ubuntu-latest
+            python-version: "3.12"
             extras: "[globus]"
           - os: ubuntu-latest
             python-version: "3.12"
             extras: "[agentic]"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: "[mcp]"
+          # Zarr needs Python >=3.11; without this the Zarr reader tests
+          # importorskip on every other matrix entry and never run.
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: "[zarr]"
+          # WeasyPrint's native libraries are installed only here, so the
+          # real PDF render tests actually execute. Every other job skips
+          # them, and the rest of the suite keeps mocking WeasyPrint.
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: ""
+            render: "true"
 
     steps:
     - uses: actions/checkout@v4
@@ -49,6 +67,12 @@ jobs:
       shell: bash -l {0}
       run: |
         conda install -n aidrin -c conda-forge pip -y
+
+    - name: Install WeasyPrint native libraries
+      if: matrix.render == 'true'
+      shell: bash -l {0}
+      run: |
+        conda install -n aidrin -c conda-forge pango cairo glib -y
 
     - name: Install Dependencies
       shell: bash -l {0}

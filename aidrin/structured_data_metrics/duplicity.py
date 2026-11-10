@@ -5,6 +5,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from aidrin.file_handling.file_parser import read_file
 from aidrin.file_handling.hashable_utils import hashable_frame, make_hashable
+from aidrin.file_handling.row_units import row_unit
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,18 @@ def duplicity(self: Task, file_info):
         dup_dict["Duplicity scores"] = {
             "Overall duplicity of the dataset": duplicate_proportions
         }
+
+        # A duplicity of 0 reads as "no repeated records", which is not what it
+        # means when a row is a cell of a grid: repeated readings of a
+        # continuous field are neither expected nor a defect. Say what a row is
+        # rather than let the number be read as a record count.
+        unit = row_unit(file)
+        if unit:
+            dup_dict["Duplicity scores"]["Row unit"] = unit
+            dup_dict["Note"] = (
+                f"Each row is one {unit}, not a record, so this counts repeated "
+                "values rather than duplicate records."
+            )
 
         logger.info("Duplicity task completed: overall score=%.4f", duplicate_proportions)
         return dup_dict

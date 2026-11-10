@@ -1,6 +1,13 @@
 """Tests for the inspector page routes and rendering."""
 
+import io
+from pathlib import Path
+
+import pytest
+
 from aidrin._version import __version__
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 # -------------------------------------------------
@@ -46,6 +53,90 @@ def test_fair_assessment_get_redirects(client):
     assert "/inspector" in response.headers["Location"]
 
 
+@pytest.mark.parametrize(
+    "path, metadata_type, total",
+    [
+        ("examples/sample_data/dcat/BUTTER-E.json", "DCAT", "20/26"),
+        ("tests/fixtures/fair_metadata/datacite_rest_default.json", "Datacite", "14/22"),
+    ],
+)
+def test_fair_assessment_post_scores_metadata(client, path, metadata_type, total):
+    """/fair-assessment POST scores an uploaded metadata file with the chosen standard."""
+    with open(ROOT / path, "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, Path(path).name), "metadata type": metadata_type},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["FAIR Compliance Checks"]["Total Checks"] == total
+    assert body["Pie chart"]
+
+
+def test_fair_assessment_detects_croissant_from_a_jsonld_upload(client):
+    """A Croissant file uploaded as .jsonld with "auto" is detected and scored."""
+    with open(ROOT / "tests/fixtures/fair_metadata/croissant_1.0_openml_iris.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "iris.jsonld"), "metadata type": "auto"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["Standard"] == {"Name": "Croissant 1.0", "Detected automatically": "yes"}
+    assert body["FAIR Compliance Checks"]["Total Checks"] == "17/20"
+    assert "RAI Documentation" in body
+
+
+def test_fair_assessment_detects_an_rocrate_upload(client):
+    """An ro-crate-metadata.json uploaded with "auto" is detected and scored."""
+    with open(ROOT / "tests/fixtures/fair_metadata/rocrate_1.2_rainfall_example.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "ro-crate-metadata.json"), "metadata type": "auto"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["Standard"] == {"Name": "RO-Crate 1.2", "Detected automatically": "yes"}
+    assert body["FAIR Compliance Checks"]["Total Checks"] == "7/14"
+
+
+def test_fair_assessment_scores_dcat_us_3_by_form_value(client):
+    """The dropdown's dcat-us-3.0 value scores a DCAT-US 3.0 record."""
+    with open(ROOT / "tests/fixtures/fair_metadata/dcat_us_3.0_gsa_schema_example.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "dataset.json"), "metadata type": "dcat-us-3.0"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    assert response.get_json()["FAIR Compliance Checks"]["Total Checks"] == "16/24"
+
+
+def test_fair_assessment_auto_reports_undetectable_metadata(client):
+    """When detection fails the user is told to pick the standard, not shown a stack trace."""
+    response = client.post(
+        "/fair-assessment",
+        data={"metadata": (io.BytesIO(b'{"title": "x"}'), "meta.json"), "metadata type": "auto"},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Could not detect the metadata standard. Choose it in the Metadata type list."}
+
+
+def test_fair_assessment_post_rejects_unknown_type(client):
+    """An unknown metadata type is a 400, not a crash."""
+    response = client.post(
+        "/fair-assessment",
+        data={"metadata": (io.BytesIO(b"{}"), "meta.json"), "metadata type": "ISO19115"},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Unknown metadata type"}
+
+
 def test_nonexistent_route(client):
     """Non-existent route should return 404."""
     response = client.get("/non-existent")
@@ -88,6 +179,44 @@ def test_inspector_no_sidebar_without_file(client):
     assert 'id="sidebar"' not in html
 
 
+def test_upload_panel_has_fair_metadata_tab(client):
+    """The landing page offers the FAIR check as a tab, without a dataset."""
+    html = client.get("/inspector").data.decode()
+    assert 'id="tab-fair"' in html
+    assert 'id="fair-tab-panel"' in html
+    assert 'id="form-fair-assessment"' in html
+    assert "initLandingFairTab();" in html
+    assert 'id="sidebar"' not in html
+    # The landing tab shows only the type selector and upload, not the panel's intro.
+    assert "Supported Metadata Standards" not in html
+    assert ">Supported formats</h4>" in html
+    assert 'href="https://resources.data.gov/resources/dcat-us/"' in html
+    assert 'href="https://schema.datacite.org/"' in html
+    assert "submitFairAssessment);" not in html  # no Submit button: choosing a file runs the check
+
+
+def test_fair_metadata_tab_is_not_on_the_workspace(uploaded_client):
+    """With a dataset loaded, FAIR lives in the sidebar, not in a landing tab."""
+    html = uploaded_client.get("/inspector").data.decode()
+    assert 'id="tab-fair"' not in html
+    assert "initLandingFairTab();" not in html
+    assert html.count('id="panel-fair-assessment"') == 1
+    assert "Supported Metadata Standards" in html
+    assert "withSubmitGuard(this, submitFairAssessment);" in html
+
+
+def test_fair_assessment_post_needs_no_dataset(client):
+    """The FAIR check reads only the metadata file; no dataset is in this session."""
+    with open(ROOT / "examples/sample_data/dcat/BUTTER-E.json", "rb") as f:
+        response = client.post(
+            "/fair-assessment",
+            data={"metadata": (f, "BUTTER-E.json"), "metadata type": "DCAT"},
+            content_type="multipart/form-data",
+        )
+    assert response.status_code == 200
+    assert "Total Checks" in response.get_json()["FAIR Compliance Checks"]
+
+
 # -------------------------------------------------
 # Inspector page rendering (file uploaded)
 # -------------------------------------------------
@@ -124,6 +253,8 @@ def test_inspector_with_file_loads_panels(uploaded_client):
     html = response.data.decode()
     panels = [
         "panel-data-overview",
+        "panel-intent",
+        "panel-profile-builder",
         "panel-data-quality",
         "panel-feature-relevance",
         "panel-correlation-analysis",
@@ -135,3 +266,32 @@ def test_inspector_with_file_loads_panels(uploaded_client):
     ]
     for panel_id in panels:
         assert panel_id in html, f"Panel '{panel_id}' not found in DOM"
+
+
+def test_profile_builder_panel_has_no_sidebar_entry(uploaded_client):
+    """The profile-builder page is reachable only via the "Build profile"
+    button in the Intent panel -- it must never appear in the sidebar's
+    metric-item list."""
+    response = uploaded_client.get("/inspector")
+    html = response.data.decode()
+    assert "showPanel('profile-builder')" not in html
+    assert "showPanel(\"profile-builder\")" not in html
+
+
+def test_intent_panel_build_profile_button_precedes_update_recommendations(uploaded_client):
+    """The Change goal action row must show "Build profile" (secondary)
+    before "Update recommendations" (primary, unchanged classes)."""
+    response = uploaded_client.get("/inspector")
+    html = response.data.decode()
+    build_idx = html.index("Build profile")
+    update_idx = html.index("Update recommendations")
+    assert build_idx < update_idx
+
+    # "Update recommendations" keeps the standard primary button classes.
+    assert 'bg-blue-700 hover:bg-blue-800' in html
+
+    # The old inline "Profiles" card and its ids are gone entirely.
+    assert "intent-profile-save-open" not in html
+    assert 'id="intent-profile-editor"' not in html
+    assert "intent-profile-save-message" not in html
+    assert ">Profiles<" not in html

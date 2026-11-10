@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Readiness Report — {{ file_name }}</title>
+</head>
+<body>
+
+  <div class="pdf-running-footer" aria-hidden="true">
+    <img src="{{ logo_url }}" alt="AIDRIN" class="pdf-footer-logo-img" />
+  </div>
+
+  <header class="pdf-first-page-header">
+    <img src="{{ logo_url }}" alt="AIDRIN" class="pdf-header-logo-img" />
+  </header>
+
+  <div class="intro">
+    <h1>{% if include_details %}AI Data Readiness Report (Full){% else %}AI Data Readiness Report{% endif %}</h1>
+    <p><strong>Dataset:</strong> {{ file_name }}</p>
+    <p class="muted">Generated {{ generated_at }} · AIDRIN {{ app_version }}</p>
+    <p style="margin-top: 8pt;">
+      {% if include_details %}
+      Full readiness report including scorecard summaries and detailed charts &amp; tables
+      (the same content as each section’s “Show details” panel in the interactive report).
+      {% else %}
+      Automated scorecard for the uploaded dataset. Five pillars are computed without user column selection.
+      {% endif %}
+      Overall grades use the mean of available KPI values on a 0–1 scale.
+      <strong>Good</strong> ≥ 90%, <strong>Warning</strong> ≥ 70%, <strong>Poor</strong> &lt; 70%.
+      Higher KPI values indicate better readiness unless noted otherwise.
+    </p>
+  </div>
+
+  {# --- Dataset Overview --- #}
+  <div class="section-card">
+    {% set fn = footnotes.section('overview').ref %}
+    <h2>Dataset Overview</h2>
+    {% if section_errors.get('dataset-overview') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['dataset-overview'] }}</p>
+    {% else %}
+    {% set meta = overview.meta %}
+    <div class="box-blue">
+      <p class="meta-title"><strong>{{ meta.file_name or file_name }}</strong></p>
+      <table class="meta-grid">
+        <tr>
+          <td><span class="meta-label">Type:</span> {{ meta.file_type or '—' }}</td>
+          <td><span class="meta-label">Size:</span> {{ fmt_bytes(meta.file_size_bytes) }}</td>
+          <td><span class="meta-label">Memory:</span> {{ fmt_bytes(meta.memory_bytes) }}</td>
+          <td><span class="meta-label">Rows:</span> {{ '{:,}'.format(meta.rows or 0) }}</td>
+        </tr>
+        <tr>
+          <td><span class="meta-label">Columns:</span> {{ meta.columns or 0 }}</td>
+          <td><span class="meta-label">Numerical:</span> {{ meta.numerical_count or 0 }}</td>
+          <td><span class="meta-label">Categorical:</span> {{ meta.categorical_count or 0 }}</td>
+          <td><span class="meta-label">Other:</span> {{ overview.other_count }}</td>
+        </tr>
+      </table>
+    </div>
+
+    <table class="kpi-grid kpi-grid-4"><tr>
+      <td><div class="kpi-value">{{ '{:,}'.format(meta.rows or 0) }}</div><div class="kpi-label">Records</div></td>
+      <td><div class="kpi-value">{{ meta.columns or 0 }}</div><div class="kpi-label">Features</div></td>
+      <td><div class="kpi-value">{{ meta.numerical_count or 0 }}</div><div class="kpi-label">Numerical</div></td>
+      <td><div class="kpi-value">{{ meta.categorical_count or 0 }}</div><div class="kpi-label">Categorical</div></td>
+    </tr></table>
+
+    <div class="profile-header">
+      <h3>Per-feature readiness profile{{ fn('feature_profile') }}</h3>
+      <span class="profile-counts">
+        {% if overview.poor_count %}<span class="text-poor">{{ overview.poor_count }} poor</span>{% endif %}
+        {% if overview.warn_count %}{% if overview.poor_count %} · {% endif %}<span class="text-warning">{{ overview.warn_count }} warning</span>{% endif %}
+        {% if not overview.poor_count and not overview.warn_count %}all good{% endif %}
+      </span>
+    </div>
+    {% if overview.profile_meta.truncated %}
+    <p class="muted">Showing {{ '{:,}'.format(overview.profile_meta.shown) }} of {{ '{:,}'.format(overview.profile_meta.total) }} features (prioritized: poor → warning → good).</p>
+    {% endif %}
+
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Type{{ fn('feature_type_codes') }}</th>
+          <th>Dtype</th>
+          <th class="num">% missing{{ fn('pct_missing') }}</th>
+          <th class="num"># unique{{ fn('n_unique') }}</th>
+          <th class="num">% dominant{{ fn('pct_dominant') }}</th>
+          <th>Status{{ fn('profile_status') }}</th>
+          <th>Summary</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in overview.profiles %}
+        <tr>
+          <td class="mono">{{ p.feature }}</td>
+          <td>{{ p.type_abbr }}</td>
+          <td class="mono">{{ p.dtype }}</td>
+          <td class="num">{{ fmt_pct(p.pct_missing) }}</td>
+          <td class="num">{{ p.n_unique }}</td>
+          <td class="num">{{ fmt_pct(p.pct_dominant) }}</td>
+          <td><span class="badge badge-{{ p.status or 'unknown' }}">{{ p.status_label }}</span></td>
+          <td>{{ p.summary or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% set section_name = 'overview' %}
+    {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.overview %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
+    {% endif %}
+  </div>
+
+  {# --- Data Quality --- #}
+  <div class="section-card">
+    {% set fn = footnotes.section('data_quality').ref %}
+    <h2>Data Quality</h2>
+    {% if section_errors.get('data-quality') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['data-quality'] }}</p>
+    {% else %}
+    <div class="box-criteria">
+      <p class="criteria-title">Auto-selection criteria</p>
+      <ul class="criteria-list">
+        <li>
+          <span class="criteria-label">Analysis scope:</span> {{ data_quality.auto_selection.selected or 'all columns' }}{{ fn('analysis_scope') }}
+          <span class="criteria-rule">{{ data_quality.auto_selection.rule or 'All columns are evaluated automatically.' }}</span>
+        </li>
+      </ul>
+    </div>
+    <div class="grade-row">
+      <span class="grade-label">Overall data quality grade{{ fn('overall_dq_grade') }}</span>
+      <span class="badge badge-{{ data_quality.grade_status or 'unknown' }}">{{ fmt_pct(data_quality.grade) }}</span>
+    </div>
+    <table class="kpi-grid"><tr>
+      {% for kpi in data_quality.kpis %}
+      <td>
+        <div class="kpi-label">{{ kpi.label }}{{ fn(kpi.id) }}</div>
+        <div class="kpi-value kpi-value-{{ kpi.status }}">{{ kpi.display }}</div>
+        <div class="bar-track"><div class="bar-fill bar-{{ kpi.status }}" style="width: {{ kpi.width_pct }}%;"></div></div>
+        <p class="muted">{{ kpi.hint }}</p>
+      </td>
+      {% if loop.index % 3 == 0 and not loop.last %}</tr><tr>{% endif %}
+      {% endfor %}
+    </tr></table>
+    {% set needs_attention = data_quality.needs_attention %}
+    {% set empty_message = data_quality.empty_message %}
+    {% include "readiness_report/_pdf_needs_attention.html" %}
+    {% set section_name = 'data_quality' %}
+    {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.data_quality %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
+    {% endif %}
+  </div>
+
+  {# --- Impact on AI --- #}
+  <div class="section-card">
+    {% set fn = footnotes.section('impact').ref %}
+    <h2>Impact on AI</h2>
+    {% if section_errors.get('impact-on-ai') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['impact-on-ai'] }}</p>
+    {% else %}
+    <p class="muted">Automated all-pairs correlation across features to surface redundancy, leakage risk, and uninformative features.</p>
+    <div class="box-criteria">
+      <p class="criteria-title">Auto-selection criteria</p>
+      <ul class="criteria-list">
+        <li>
+          <span class="criteria-label">Columns analyzed ({{ impact.columns_analyzed }}):</span> {{ impact.columns_preview }}{{ fn('features_analyzed') }}
+          <span class="criteria-rule">{{ impact.columns_rule }}</span>
+        </li>
+        <li><span class="criteria-label">Excluded columns:</span> {{ impact.excluded_count }}</li>
+        <li>
+          <span class="criteria-label">Thresholds:</span>
+          redundant |score| ≥ {{ fmt_num(impact.thresholds.redundant_threshold) }},
+          leakage |score| ≥ {{ fmt_num(impact.thresholds.leakage_threshold) }},
+          isolated max |score| &lt; {{ fmt_num(impact.thresholds.isolated_threshold) }}
+        </li>
+      </ul>
+    </div>
+    <div class="grade-row">
+      <span class="grade-label">Overall impact grade{{ fn('overall_impact_grade') }}</span>
+      <span class="badge badge-{{ impact.grade_status or 'unknown' }}">{{ fmt_pct(impact.grade) }}</span>
+    </div>
+    <table class="kpi-grid"><tr>
+      {% for kpi in impact.kpis %}
+      <td>
+        <div class="kpi-label">{{ kpi.label }}{{ fn(kpi.id) }}</div>
+        <div class="kpi-value kpi-value-{{ kpi.status }}">{{ kpi.display }}</div>
+        <div class="bar-track"><div class="bar-fill bar-{{ kpi.status }}" style="width: {{ kpi.width_pct }}%;"></div></div>
+        <p class="muted">{{ kpi.hint }}</p>
+      </td>
+      {% if loop.index % 3 == 0 and not loop.last %}</tr><tr>{% endif %}
+      {% endfor %}
+    </tr></table>
+    {% set needs_attention = impact.needs_attention %}
+    {% set empty_message = impact.empty_message %}
+    {% include "readiness_report/_pdf_needs_attention.html" %}
+    {% set section_name = 'impact' %}
+    {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.impact %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
+    {% endif %}
+  </div>
+
+  {# --- Fairness & Bias --- #}
+  <div class="section-card">
+    {% set fn = footnotes.section('fairness').ref %}
+    <h2>Fairness &amp; Bias</h2>
+    {% if section_errors.get('fairness-bias') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['fairness-bias'] }}</p>
+    {% else %}
+    <div class="box-criteria">
+      <p class="criteria-title">Auto-selection criteria</p>
+      <ul class="criteria-list">
+        <li>
+          <span class="criteria-label">Sensitive attributes:</span>
+          {{ fairness.sensitive_attributes.selected | join(', ') if fairness.sensitive_attributes.selected else 'none' }}
+          <span class="criteria-rule">{{ fairness.sensitive_attributes.rule or '' }}</span>
+        </li>
+        <li>
+          <span class="criteria-label">Target column:</span>
+          {{ fairness.target_column.selected or 'none' }}{% if fairness.target_column.reason %} ({{ fairness.target_column.reason }}){% endif %}
+          <span class="criteria-rule">{{ fairness.target_column.rule or '' }}</span>
+        </li>
+        <li>
+          <span class="criteria-label">CDD positive class:</span>
+          {{ fairness.positive_class.selected if fairness.positive_class.selected is not none else 'none' }}{% if fairness.positive_class.reason %} ({{ fairness.positive_class.reason }}){% endif %}
+          <span class="criteria-rule">{{ fairness.positive_class.rule or '' }}</span>
+        </li>
+        <li><span class="criteria-label">Primary sensitive (statistical rate &amp; CDD):</span> {{ fairness.primary_sensitive or 'none' }}</li>
+        <li>
+          <span class="criteria-label">Flags:</span>
+          representation ratio ≥ {{ fmt_num(fairness.thresholds.representation_ratio_flag) }},
+          minority class &lt; {{ fmt_pct(fairness.thresholds.minority_class_share) }},
+          TSD ≥ {{ fmt_num(fairness.thresholds.tsd_disparity_flag) }},
+          imbalance degree good/warning &lt; {{ fmt_num(fairness.thresholds.imbalance_degree_good) }} / {{ fmt_num(fairness.thresholds.imbalance_degree_warning) }}
+        </li>
+      </ul>
+    </div>
+    <div class="grade-row">
+      <span class="grade-label">Overall fairness grade{{ fn('overall_fairness_grade') }}</span>
+      <span class="badge badge-{{ fairness.grade_status or 'unknown' }}">{{ fmt_pct(fairness.grade) }}</span>
+    </div>
+    <table class="kpi-grid"><tr>
+      {% for kpi in fairness.kpis %}
+      <td>
+        <div class="kpi-label">{{ kpi.label }}{{ fn(kpi.id) }}</div>
+        <div class="kpi-value kpi-value-{{ kpi.status }}">{{ kpi.display }}</div>
+        <div class="bar-track"><div class="bar-fill bar-{{ kpi.status }}" style="width: {{ kpi.width_pct }}%;"></div></div>
+        <p class="muted">{{ kpi.hint }}</p>
+      </td>
+      {% if loop.index % 3 == 0 and not loop.last %}</tr><tr>{% endif %}
+      {% endfor %}
+    </tr></table>
+    {% set needs_attention = fairness.needs_attention %}
+    {% set empty_message = fairness.empty_message %}
+    {% include "readiness_report/_pdf_needs_attention.html" %}
+    {% set section_name = 'fairness' %}
+    {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.fairness %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
+    {% endif %}
+  </div>
+
+  {# --- Data Governance --- #}
+  <div class="section-card">
+    {% set fn = footnotes.section('governance').ref %}
+    <h2>Data Governance</h2>
+    {% if section_errors.get('data-governance') %}
+      <p class="na-row-secondary">Not available for this dataset: {{ section_errors['data-governance'] }}</p>
+    {% else %}
+    <div class="box-criteria">
+      <p class="criteria-title">Auto-selection criteria</p>
+      <ul class="criteria-list">
+        <li>
+          <span class="criteria-label">Quasi-identifiers:</span>
+          {{ governance.quasi_identifiers.selected | join(', ') if governance.quasi_identifiers.selected else 'none' }}
+          <span class="criteria-rule">{{ governance.quasi_identifiers.rule or '' }}</span>
+        </li>
+        <li>
+          <span class="criteria-label">Sensitive attribute:</span> {{ governance.sensitive_attribute.selected or 'none' }}
+          <span class="criteria-rule">{{ governance.sensitive_attribute.rule or '' }}</span>
+        </li>
+        <li>
+          <span class="criteria-label">ID column:</span>
+          {{ governance.id_column.selected or 'none' }}{% if governance.id_column.synthetic %} (synthetic row index){% endif %}
+          <span class="criteria-rule">{{ governance.id_column.rule or '' }}</span>
+        </li>
+        <li>
+          <span class="criteria-label">HIPAA scan columns:</span>
+          {{ governance.hipaa_scan | length }} column(s){% if governance.hipaa_scan %} — {{ governance.hipaa_scan[:5] | join(', ') }}{% if governance.hipaa_scan | length > 5 %}…{% endif %}{% endif %}
+        </li>
+        <li>
+          <span class="criteria-label">Thresholds:</span>
+          k ≥ {{ governance.thresholds.k_good | default('—') }}/{{ governance.thresholds.k_warning | default('—') }},
+          l ≥ {{ governance.thresholds.l_good | default('—') }}/{{ governance.thresholds.l_warning | default('—') }},
+          t ≤ {{ governance.thresholds.t_good | default('—') }}/{{ governance.thresholds.t_warning | default('—') }},
+          MM single &lt; {{ governance.thresholds.mm_single_good | default('—') }}/{{ governance.thresholds.mm_single_warning | default('—') }},
+          MM combined &lt; {{ governance.thresholds.mm_multi_good | default('—') }}/{{ governance.thresholds.mm_multi_warning | default('—') }}
+        </li>
+        {% if governance.small_sample_warning %}
+        <li><span class="criteria-label criteria-note">Note:</span> small dataset (&lt; {{ governance.thresholds.small_sample_rows | default(30) }} rows) — privacy metrics may be unstable.</li>
+        {% endif %}
+      </ul>
+    </div>
+    <div class="grade-row">
+      <span class="grade-label">Overall governance grade{{ fn('overall_governance_grade') }}</span>
+      <span class="badge badge-{{ governance.grade_status or 'unknown' }}">{{ fmt_pct(governance.grade) }}</span>
+    </div>
+    <table class="kpi-grid"><tr>
+      {% for kpi in governance.kpis %}
+      <td>
+        <div class="kpi-label">{{ kpi.label }}{{ fn(kpi.id) }}</div>
+        <div class="kpi-value kpi-value-{{ kpi.status }}">{{ kpi.display }}</div>
+        <div class="bar-track"><div class="bar-fill bar-{{ kpi.status }}" style="width: {{ kpi.width_pct }}%;"></div></div>
+        <p class="muted">{{ kpi.hint }}</p>
+      </td>
+      {% if loop.index % 2 == 0 and not loop.last %}</tr><tr>{% endif %}
+      {% endfor %}
+    </tr></table>
+    {% set needs_attention = governance.needs_attention %}
+    {% set empty_message = governance.empty_message %}
+    {% include "readiness_report/_pdf_needs_attention.html" %}
+    {% set section_name = 'governance' %}
+    {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.governance %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
+    {% endif %}
+  </div>
+
+  {% if fair_compliance %}
+  <div class="section-card">
+    {% set fn = footnotes.section('fair').ref %}
+    <h2>FAIR Compliance{{ fn('fair_compliance') }} <span class="muted">(optional metadata assessment)</span></h2>
+    <div class="grade-row">
+      <span class="grade-label">{{ fair_compliance.total_passed }}/{{ fair_compliance.total_expected }} checks passed</span>
+      <span class="badge badge-good">{{ fair_compliance.total_pct }}%</span>
+    </div>
+    <div class="fair-progress-track">
+      <div class="fair-progress-fill" style="width: {{ fair_compliance.total_pct }}%;"></div>
+    </div>
+    <table class="fair-principles"><tr>
+      {% for p in fair_compliance.principles %}
+      <td>
+        <div class="kpi-label">{{ p.name }}</div>
+        <div class="kpi-value">{{ p.passed }}/{{ p.total }}</div>
+        <div class="bar-track"><div class="bar-fill bar-fair" style="width: {{ p.pct }}%;"></div></div>
+      </td>
+      {% endfor %}
+    </tr></table>
+    {% include "readiness_report/_pdf_fair_details.html" %}
+    {% set section_name = 'fair' %}
+    {% include "readiness_report/_pdf_section_footnotes.html" %}
+    {% if include_details %}
+      {% set detail_block = section_details.fair %}
+      {% include "readiness_report/_pdf_section_details.html" %}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="page-break"></div>
+  <h2>Metric glossary</h2>
+  <p class="muted">Definitions for metrics appearing in this report.</p>
+  <table class="glossary-table">
+    <colgroup>
+      <col class="glossary-col-term" />
+      <col class="glossary-col-definition" />
+    </colgroup>
+    <thead><tr><th class="glossary-term">Term</th><th class="glossary-definition">Definition</th></tr></thead>
+    <tbody>
+      {% for item in glossary %}
+      <tr><td class="glossary-term">{{ item.term }}</td><td class="glossary-definition">{{ item.definition }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="margin-top: 10pt;">
+    HIPAA and PHI findings are automated pattern scans and do not constitute regulatory certification.
+    FAIR compliance evaluates uploaded metadata JSON, not the tabular dataset file.
+  </p>
+
+</body>
+</html>

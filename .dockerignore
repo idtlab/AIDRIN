@@ -41,6 +41,7 @@ metadata
 
 # Docs build artifacts
 docs/_build
+docs/build
 docs/superpowers
 
 # Editor / OS cruft
@@ -52,4 +53,6 @@ docs/superpowers
 # Session / agent scratch
 claude.session
 tasks
+.private-journal
+.claude/settings.local.json
 AIDRIN-gtag

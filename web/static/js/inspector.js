@@ -10,8 +10,45 @@
 let activePanel = "data-overview";
 let codeMirrorEditor = null;
 let lastMetricResult = null; // Store last result for JSON download
+let _readinessReportLoaded = false; // Lazy-load guard for the Readiness Report panel
+let _intentRestored = false; // Lazy-load guard for restoring cached intent recommendations
+let _intentSubmitInFlight = false; // Re-entrancy guard: one /intent/recommend request at a time
+let _lastIntentPayload = null; // Last /intent/recommend or /intent/profile response, for the profile save editor
+
+const _READINESS_REPORT_SECTIONS = [
+  "dataset-overview",
+  "data-quality",
+  "impact-on-ai",
+  "fairness-bias",
+  "data-governance",
+];
+const _readinessSectionStatus = {};
+/** Optional FAIR Compliance state for the readiness report appendix. */
+let _readinessFairCompliance = { status: "idle", data: null };
+const _READINESS_MAX_DETAIL_LIST_ITEMS = 50;
+const _READINESS_MAX_DETAIL_TABLE_ROWS = 500;
+
+/** Render up to *maxItems* list entries plus a “+N more” tail when truncated. */
+function _readinessTruncatedListItems(items, maxItems, renderItem) {
+  const total = items.length;
+  const shown = items.slice(0, maxItems);
+  let html = shown.map(renderItem).join("");
+  const more = total - shown.length;
+  if (more > 0) {
+    html += `<li class="text-xs text-gray-400 dark:text-gray-500">+${more} more not shown</li>`;
+  }
+  return { html, total, shownCount: shown.length };
+}
+
 let customOutlierTargets = [];
 let fileReferenceTargets = [];
+const globusDiscoveryCache = new Map();
+let variableUnitMetadata = null;
+let variableUnitCatalog = [];
+let variableUnitDraftKinds = {};
+let variableUnitMetadataDirty = false;
+let variableUnitPage = 0;
+const VARIABLE_UNIT_PAGE_SIZE = 10;
 let customOutlierRuleCounter = 0;
 let targetPickerDocumentHandlerRegistered = false;
 
@@ -62,9 +99,11 @@ function setTargetPickerOpen(picker, open) {
   const { button, menu, search } = targetPickerElements(picker);
   if (!button || !menu) return;
   const shouldOpen = Boolean(open) && !button.disabled;
+  const restoreFocus = !shouldOpen && menu.contains(document.activeElement);
   menu.classList.toggle("hidden", !shouldOpen);
   button.setAttribute("aria-expanded", String(shouldOpen));
   if (shouldOpen) search?.focus();
+  else if (restoreFocus && !button.disabled) button.focus();
 }
 
 function setTargetPickerEnabled(picker, enabled) {
@@ -279,79 +318,500 @@ function toggleFileReferenceTargetControl(enabled) {
     );
 }
 
+function applyFileReferenceOptions(data, executionLocation) {
+  const checkbox = document.getElementById(
+    "toggleButton_file_reference_validation",
+  );
+  const message = document.getElementById("file-reference-message");
+  if (!checkbox) return;
+  const config = data.file_reference || {
+    enabled: false,
+    roots: [],
+    message: window.AIDRIN_GLOBUS_MODE
+      ? "This Globus Compute worker does not support file-reference validation. Upgrade AIDRIN on the endpoint."
+      : "File-reference validation is unavailable on this AIDRIN server.",
+  };
+  checkbox.disabled = true;
+
+  if (!data.success || !config.enabled) {
+    checkbox.checked = false;
+    toggleFileReferenceTargetControl(false);
+    if (message) {
+      message.textContent =
+        (!data.success && (data.message || data.error)) ||
+        config.message ||
+        "File-reference validation is unavailable.";
+    }
+    return;
+  }
+
+  const targets = (data.targets || []).filter(isFileReferenceTarget);
+  const suggestedName = /(path|file|filename|filepath|location)/i;
+  targets.sort((left, right) => {
+    const leftSuggested = suggestedName.test(left.name) ? 0 : 1;
+    const rightSuggested = suggestedName.test(right.name) ? 0 : 1;
+    return leftSuggested - rightSuggested;
+  });
+
+  fileReferenceTargets = targets;
+  renderTargetPicker(
+    document.getElementById("file-reference-target-picker"),
+    targets,
+    { inputName: "file_reference_targets", suggested: suggestedName },
+  );
+  updateFileReferenceTargetMode();
+
+  const rootSelect = document.getElementById("file-reference-root");
+  if (rootSelect) {
+    rootSelect.replaceChildren();
+    if ((config.roots || []).length !== 1) {
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Select a configured root";
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      rootSelect.appendChild(placeholder);
+    }
+    (config.roots || []).forEach((root) => {
+      const option = document.createElement("option");
+      option.value = root.id;
+      option.textContent = root.label;
+      rootSelect.appendChild(option);
+    });
+  }
+
+  if (!targets.length) {
+    if (message)
+      message.textContent =
+        "No string-valued targets are available in this dataset.";
+    return;
+  }
+  checkbox.disabled = false;
+  toggleFileReferenceTargetControl(checkbox.checked);
+  if (message) {
+    message.textContent = `Paths are checked on ${executionLocation}. Scans are capped at ${Number(config.scan_limit).toLocaleString()} values by the administrator.`;
+  }
+}
+
 function loadFileReferenceOptions() {
   const checkbox = document.getElementById(
     "toggleButton_file_reference_validation",
   );
   const message = document.getElementById("file-reference-message");
-  if (!checkbox || window.AIDRIN_GLOBUS_MODE) return Promise.resolve();
+  if (!checkbox) return Promise.resolve();
 
-  return fetch("/custom-outlier-targets", { method: "POST" })
-    .then((response) => response.json())
-    .then((data) => {
-      const config = data.file_reference || {};
-      if (!data.success || !config.enabled) {
-        if (message) {
-          message.textContent =
-            config.message ||
-            data.message ||
-            "File-reference validation is unavailable.";
-        }
-        return;
+  if (window.AIDRIN_GLOBUS_MODE) {
+    const capabilities = window.AIDRIN_GLOBUS_CAPABILITIES || [];
+    const unitMessage = document.getElementById("variable-unit-message");
+    if (!capabilities.includes("variable_unit_metadata_v1")) {
+      setVariableUnitEditorEnabled(false);
+      if (unitMessage) {
+        unitMessage.textContent =
+          "Unit metadata audit is unavailable on this endpoint. Upgrade and restart its AIDRIN worker.";
       }
+    }
+  }
 
-      const targets = (data.targets || []).filter(isFileReferenceTarget);
-      const suggestedName = /(path|file|filename|filepath|location)/i;
-      targets.sort((left, right) => {
-        const leftSuggested = suggestedName.test(left.name) ? 0 : 1;
-        const rightSuggested = suggestedName.test(right.name) ? 0 : 1;
-        return leftSuggested - rightSuggested;
-      });
-
-      fileReferenceTargets = targets;
-      renderTargetPicker(
-        document.getElementById("file-reference-target-picker"),
-        targets,
-        { inputName: "file_reference_targets", suggested: suggestedName },
+  const request = window.AIDRIN_GLOBUS_MODE
+    ? loadGlobusTargetDiscovery()
+    : fetch("/custom-outlier-targets", { method: "POST" }).then((response) =>
+        response.json(),
       );
-      updateFileReferenceTargetMode();
 
-      const rootSelect = document.getElementById("file-reference-root");
-      if (rootSelect) {
-        rootSelect.replaceChildren();
-        if ((config.roots || []).length !== 1) {
-          const placeholder = document.createElement("option");
-          placeholder.value = "";
-          placeholder.textContent = "Select a configured root";
-          placeholder.disabled = true;
-          placeholder.selected = true;
-          rootSelect.appendChild(placeholder);
-        }
-        (config.roots || []).forEach((root) => {
-          const option = document.createElement("option");
-          option.value = root.id;
-          option.textContent = root.label;
-          rootSelect.appendChild(option);
-        });
+  return request
+    .then((data) => {
+      const capabilities = window.AIDRIN_GLOBUS_CAPABILITIES || [];
+      if (
+        !window.AIDRIN_GLOBUS_MODE ||
+        capabilities.includes("variable_unit_metadata_v1")
+      ) {
+        setVariableUnitCatalog(data.unit_catalog || []);
+        setVariableUnitMetadata(data.unit_metadata || null);
       }
-
-      if (!targets.length) {
-        if (message)
-          message.textContent =
-            "No string-valued targets are available in this dataset.";
-        return;
-      }
-      checkbox.disabled = false;
-      toggleFileReferenceTargetControl(checkbox.checked);
-      if (message) {
-        message.textContent = `Paths are checked on this AIDRIN server. Web scans are capped at ${Number(config.scan_limit).toLocaleString()} values; use CLI or MCP for larger complete scans.`;
-      }
+      applyFileReferenceOptions(
+        data,
+        window.AIDRIN_GLOBUS_MODE
+          ? "the Globus Compute worker"
+          : "this AIDRIN server",
+      );
     })
     .catch((error) => {
-      if (message)
+      checkbox.checked = false;
+      checkbox.disabled = true;
+      toggleFileReferenceTargetControl(false);
+      if (window.AIDRIN_GLOBUS_MODE) clearGlobusDiscoveryCache();
+      if (message) {
         message.textContent =
           "Unable to load file-reference options: " + error.message;
+      }
     });
+}
+
+async function loadInitialGlobusData() {
+  await loadFileReferenceOptions();
+  fetchGlobusSummary();
+}
+
+function setVariableUnitMetadata(metadata) {
+  if (
+    !metadata ||
+    metadata.format !== "aidrin.variable-unit-metadata" ||
+    metadata.version !== 1 ||
+    !Array.isArray(metadata.variables)
+  ) {
+    setVariableUnitEditorEnabled(false);
+    const message = document.getElementById("variable-unit-message");
+    if (message)
+      message.textContent = "Unable to load the unit metadata audit.";
+    return;
+  }
+  variableUnitMetadata = metadata;
+  variableUnitDraftKinds = {};
+  variableUnitMetadataDirty = false;
+  variableUnitPage = 0;
+  syncVariableUnitMetadata();
+  renderVariableUnitEditor();
+  setVariableUnitEditorEnabled(true);
+  updateVariableUnitAuditSummary();
+}
+
+function setVariableUnitCatalog(catalog) {
+  variableUnitCatalog = Array.isArray(catalog)
+    ? catalog.filter(
+        (group) =>
+          group &&
+          typeof group.quantity === "string" &&
+          Array.isArray(group.variable_terms) &&
+          Array.isArray(group.units),
+      )
+    : [];
+}
+
+function variableUnitChoices(variableName) {
+  const normalizedName = String(variableName || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+  const tokens = new Set(normalizedName.split(/[^a-z0-9]+/).filter(Boolean));
+  const matched = variableUnitCatalog.filter((group) =>
+    group.variable_terms.some((term) => tokens.has(String(term).toLowerCase())),
+  );
+  const recognized = matched.length > 0;
+  const visibleGroups = recognized ? matched : variableUnitCatalog;
+  const seen = new Set();
+  const choices = [];
+  visibleGroups.forEach((group) => {
+    group.units.forEach((item) => {
+      if (!item || typeof item.unit !== "string" || seen.has(item.unit)) return;
+      seen.add(item.unit);
+      choices.push({
+        unit: item.unit,
+        label: `${recognized ? "Suggested" : group.quantity}: ${item.label || item.unit}`,
+      });
+    });
+  });
+  return choices;
+}
+
+function syncVariableUnitMetadata() {
+  const input = document.getElementById("variable-unit-metadata");
+  if (input)
+    input.value = variableUnitMetadata
+      ? JSON.stringify(variableUnitMetadata)
+      : "";
+}
+
+function updateVariableUnitAuditSummary() {
+  const summary = variableUnitMetadata?.summary || {};
+  const counts = summary.counts || {};
+  const total = Number(counts.total || 0);
+  const unresolved = Number(counts.missing || 0);
+  const problems =
+    Number(counts.invalid || 0) +
+    Number(counts.ambiguous || 0) +
+    Number(counts.conflicting || 0);
+  const message = document.getElementById("variable-unit-message");
+  if (message) {
+    if (variableUnitMetadataDirty) {
+      message.textContent = "Unit metadata changes are pending validation.";
+    } else if (!total) {
+      message.textContent = "No logical variables were discovered.";
+    } else if (summary.all_variables_ready) {
+      message.textContent = `All ${total} variables have ready unit metadata.`;
+    } else {
+      message.textContent = `Audit found ${unresolved} unresolved and ${problems} problematic variable${unresolved + problems === 1 ? "" : "s"}.`;
+    }
+  }
+  const progress = document.getElementById("variable-unit-progress");
+  if (progress && variableUnitMetadataDirty) {
+    progress.textContent =
+      "Validate to refresh findings and enable Download JSON.";
+  } else if (progress && total) {
+    const accounted = total - unresolved;
+    progress.textContent = `${accounted} of ${total} variables accounted for. Source data has not been changed.`;
+  }
+  const download = document.getElementById("variable-unit-download");
+  if (download) download.disabled = variableUnitMetadataDirty;
+}
+
+function variableUnitResolutionKind(variable) {
+  return (
+    variableUnitDraftKinds[variable.name] ||
+    variable.resolution?.kind ||
+    "unresolved"
+  );
+}
+
+function updateVariableUnitResolution(name, kind, unit) {
+  const variable = variableUnitMetadata?.variables?.find(
+    (candidate) => candidate.name === name,
+  );
+  if (!variable) return;
+  const normalizedUnit = String(unit || "").trim();
+  if (kind === "unit" && !normalizedUnit) {
+    variableUnitDraftKinds[name] = "unit";
+    variable.resolution = { kind: "unresolved", source: "none" };
+  } else if (kind === "unit") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = {
+      kind: "unit",
+      unit: normalizedUnit,
+      source: "user",
+    };
+  } else if (kind === "dimensionless") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = {
+      kind: "dimensionless",
+      unit: "1",
+      source: "user",
+    };
+  } else if (kind === "not_applicable") {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = { kind: "not_applicable", source: "user" };
+  } else {
+    delete variableUnitDraftKinds[name];
+    variable.resolution = { kind: "unresolved", source: "none" };
+  }
+  variableUnitMetadataDirty = true;
+  syncVariableUnitMetadata();
+  renderVariableUnitEditor();
+  updateVariableUnitAuditSummary();
+  if (kind === "unit" && !normalizedUnit) {
+    Array.from(document.querySelectorAll("input[data-variable-unit-name]"))
+      .find((input) => input.dataset.variableUnitName === name)
+      ?.focus();
+  }
+}
+
+function renderVariableUnitEditor() {
+  const body = document.getElementById("variable-unit-editor-body");
+  if (!body) return;
+  const query = String(
+    document.getElementById("variable-unit-search")?.value || "",
+  )
+    .trim()
+    .toLowerCase();
+  const variables = variableUnitMetadata?.variables || [];
+  const filtered = variables.filter((variable) =>
+    `${variable.name} ${variable.dtype || ""}`.toLowerCase().includes(query),
+  );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filtered.length / VARIABLE_UNIT_PAGE_SIZE),
+  );
+  variableUnitPage = Math.min(variableUnitPage, pageCount - 1);
+  const pageTargets = filtered.slice(
+    variableUnitPage * VARIABLE_UNIT_PAGE_SIZE,
+    (variableUnitPage + 1) * VARIABLE_UNIT_PAGE_SIZE,
+  );
+  body.replaceChildren();
+
+  pageTargets.forEach((variable, rowIndex) => {
+    const row = document.createElement("tr");
+    row.className = "border-t border-gray-200 dark:border-gray-700";
+    const kind = variableUnitResolutionKind(variable);
+    const resolution = variable.resolution || {};
+    const observed = (variable.observed || [])
+      .map((item) => `${item.unit} (${item.source})`)
+      .join(", ");
+
+    const addCell = (text, className) => {
+      const cell = document.createElement("td");
+      cell.className = className || "px-2 py-2";
+      cell.textContent = text;
+      row.appendChild(cell);
+      return cell;
+    };
+    addCell(
+      variable.name,
+      "min-w-0 break-words px-2 py-2 font-medium text-gray-900 dark:text-white",
+    );
+    addCell(variable.dtype || "unknown");
+    addCell(observed || "None");
+
+    const resolutionCell = addCell("");
+    const select = document.createElement("select");
+    select.setAttribute(
+      "aria-label",
+      `Unit metadata resolution for ${variable.name}`,
+    );
+    select.className =
+      "w-full min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800";
+    [
+      ["unresolved", "Needs review"],
+      ["unit", "Has a physical unit"],
+      ["dimensionless", "Dimensionless (1)"],
+      ["not_applicable", "No unit applies"],
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === kind;
+      select.appendChild(option);
+    });
+    resolutionCell.appendChild(select);
+
+    const unitCell = addCell("");
+    const unitInput = document.createElement("input");
+    unitInput.type = "text";
+    unitInput.setAttribute("aria-label", `Unit for ${variable.name}`);
+    unitInput.setAttribute("aria-autocomplete", "list");
+    unitInput.autocomplete = "off";
+    unitInput.value = kind === "unit" ? resolution.unit || "" : "";
+    unitInput.placeholder = "Choose or type a unit";
+    unitInput.title =
+      "Choose a common unit. If needed, type a Pint-compatible unit expression; units unknown to Pint are flagged.";
+    unitInput.disabled = kind !== "unit";
+    unitInput.dataset.variableUnitName = variable.name;
+    unitInput.className =
+      "w-full min-w-0 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-xs disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800";
+    const choices = variableUnitChoices(variable.name);
+    if (choices.length) {
+      const list = document.createElement("datalist");
+      list.id = `variable-unit-choices-${variableUnitPage}-${rowIndex}`;
+      choices.forEach((choice) => {
+        const option = document.createElement("option");
+        option.value = choice.unit;
+        option.label = choice.label;
+        list.appendChild(option);
+      });
+      unitInput.setAttribute("list", list.id);
+      unitCell.appendChild(list);
+    }
+    unitCell.appendChild(unitInput);
+    const finding =
+      kind === "unit" && !String(unitInput.value).trim()
+        ? "Enter a unit"
+        : variableUnitMetadataDirty
+          ? "Pending validation"
+          : variable.finding?.message || "Needs review";
+    addCell(finding);
+
+    select.addEventListener("change", () =>
+      updateVariableUnitResolution(
+        variable.name,
+        select.value,
+        unitInput.value,
+      ),
+    );
+    unitInput.addEventListener("change", () =>
+      updateVariableUnitResolution(variable.name, "unit", unitInput.value),
+    );
+    body.appendChild(row);
+  });
+
+  const summary = document.getElementById("variable-unit-page-summary");
+  if (summary) {
+    const start = filtered.length
+      ? variableUnitPage * VARIABLE_UNIT_PAGE_SIZE + 1
+      : 0;
+    const end = Math.min(
+      filtered.length,
+      (variableUnitPage + 1) * VARIABLE_UNIT_PAGE_SIZE,
+    );
+    summary.textContent = `${start}-${end} of ${filtered.length} variables`;
+  }
+  const previous = document.getElementById("variable-unit-prev");
+  const next = document.getElementById("variable-unit-next");
+  if (previous) previous.disabled = variableUnitPage === 0;
+  if (next) next.disabled = variableUnitPage >= pageCount - 1;
+}
+
+function setVariableUnitEditorEnabled(enabled) {
+  document
+    .querySelectorAll(
+      "#variable-unit-validation-control input, #variable-unit-validation-control select, #variable-unit-validation-control button",
+    )
+    .forEach((element) => {
+      if (!enabled) {
+        element.disabled = true;
+      } else if (element.dataset.variableUnitName) {
+        const variable = variableUnitMetadata?.variables?.find(
+          (candidate) => candidate.name === element.dataset.variableUnitName,
+        );
+        element.disabled =
+          !variable || variableUnitResolutionKind(variable) !== "unit";
+      } else {
+        element.disabled = false;
+      }
+    });
+  const submit = document.getElementById("variable-unit-validate");
+  if (submit) submit.disabled = !enabled;
+}
+
+function downloadVariableUnitMetadata() {
+  if (!variableUnitMetadata || variableUnitMetadataDirty) return;
+  const blob = new Blob([JSON.stringify(variableUnitMetadata, null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  const datasetName =
+    String(variableUnitMetadata.dataset?.name || "dataset").replace(
+      /\.[^.]+$/,
+      "",
+    ) || "dataset";
+  link.download = `${datasetName}.units.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
+function importVariableUnitMetadata(file) {
+  if (!file) return;
+  file
+    .text()
+    .then((text) => {
+      const parsed = JSON.parse(text);
+      if (
+        !parsed ||
+        parsed.format !== "aidrin.variable-unit-metadata" ||
+        parsed.version !== 1 ||
+        !Array.isArray(parsed.variables)
+      ) {
+        throw new Error(
+          "Select an AIDRIN unit metadata JSON file (version 1).",
+        );
+      }
+      setVariableUnitMetadata(parsed);
+      variableUnitMetadataDirty = true;
+      syncVariableUnitMetadata();
+      updateVariableUnitAuditSummary();
+    })
+    .catch((error) => {
+      if (typeof showToast === "function") showToast(error.message, "error");
+    });
+}
+
+function adoptValidatedVariableUnitMetadata(result) {
+  const metadata =
+    result?.["Variable Unit Validation"]?.format ===
+    "aidrin.variable-unit-metadata"
+      ? result["Variable Unit Validation"]
+      : result?.format === "aidrin.variable-unit-metadata"
+        ? result
+        : null;
+  if (metadata) setVariableUnitMetadata(metadata);
 }
 
 /**
@@ -390,6 +850,11 @@ function showPanel(panelId, pushHistory) {
   // Check for cached results and restore them
   _restoreCachedResult(panelId);
 
+  if (panelId === "intent" && !_intentRestored) {
+    _intentRestored = true;
+    _restoreIntentFromCache();
+  }
+
   // Highlight active sidebar item
   document.querySelectorAll(".sidebar-metric-item").forEach((btn) => {
     btn.classList.remove("bg-black/10", "dark:bg-white/10", "font-semibold");
@@ -405,6 +870,21 @@ function showPanel(panelId, pushHistory) {
     initCodeMirror();
   }
 
+  // Lazy load the readiness report on first open; restore from server cache when available
+  if (panelId === "readiness-report" && !_readinessReportLoaded) {
+    _readinessReportLoaded = true;
+    _restoreCachedReadinessReport().then((restored) => {
+      // Navigating away mid-flight must clear the guard so a later visit can load.
+      if (activePanel !== "readiness-report") {
+        _readinessReportLoaded = false;
+        return;
+      }
+      if (!restored) {
+        loadReadinessReport();
+      }
+    });
+  }
+
   // Close mobile sidebar after selection
   const sidebar = document.getElementById("sidebar");
   if (sidebar && window.innerWidth < 640) {
@@ -416,6 +896,7 @@ function showPanel(panelId, pushHistory) {
 const _panelCacheMap = {
   "data-quality": "data_quality",
   "data-structure": "data_structure",
+  "variable-unit-validation": "variable_unit_validation",
   fairness: "fairness",
   "correlation-analysis": "correlation_analysis",
   "feature-relevance": "feature_relevance",
@@ -446,6 +927,9 @@ function _restoreCachedResult(panelId) {
     .then((resp) => {
       if (resp.cached && resp.data && activePanel === panelId) {
         lastMetricResult = resp.data;
+        if (panelId === "variable-unit-validation") {
+          adoptValidatedVariableUnitMetadata(resp.data);
+        }
         const resultsSection = document.getElementById("results-section");
         if (resultsSection) resultsSection.style.display = "block";
         const hasLLMCache =
@@ -498,6 +982,11 @@ function _restoreFormState(panelId, state) {
 
   for (const [key, value] of Object.entries(state)) {
     if (!value) continue;
+    if (
+      panelId === "variable-unit-validation" &&
+      key === "variable_unit_metadata"
+    )
+      continue;
 
     // Checkboxes with name matching the key
     const checkboxes = panel.querySelectorAll(
@@ -652,6 +1141,7 @@ async function workspaceSubmit(targetUrl) {
         "skewness",
         "kurtosis",
       ],
+      "/variable-unit-validation": ["variable_unit_validation"],
       "/fairness": ["representation_rate", "statistical_rates"],
       "/feature-relevance": ["feature_relevance"],
       "/correlation-analysis": ["correlations"],
@@ -779,7 +1269,10 @@ async function workspaceSubmit(targetUrl) {
       }
       remoteParams.selected = selected;
       remoteDisplayName = selectedNames.join(", ");
-    } else if (targetUrl === "/data-structure") {
+    } else if (
+      targetUrl === "/data-structure" ||
+      targetUrl === "/variable-unit-validation"
+    ) {
       remoteName = "data_structure";
       const selected = [];
       const selectedNames = [];
@@ -798,6 +1291,45 @@ async function workspaceSubmit(targetUrl) {
       if (gFormData.get("kurtosis") === "yes") {
         selected.push("kurtosis");
         selectedNames.push("Kurtosis");
+      }
+      if (gFormData.get("file_reference_validation") === "yes") {
+        const targetMatch =
+          gFormData.get("file_reference_target_match") || "exact";
+        const pathTargets = Array.from(
+          gFormData.getAll("file_reference_targets"),
+        )
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+        const rootId = gFormData.get("file_reference_root_id");
+        if (!pathTargets.length || !rootId) {
+          if (typeof showToast === "function") {
+            showToast(
+              !pathTargets.length
+                ? targetMatch === "regex"
+                  ? "Enter a target pattern."
+                  : "Select at least one path-bearing target."
+                : "Select an allowed filesystem root.",
+              "error",
+            );
+          }
+          return;
+        }
+        selected.push("file_reference_validation");
+        selectedNames.push("File Reference Validation");
+        remoteParams.path_targets = pathTargets;
+        remoteParams.target_match = targetMatch;
+        remoteParams.root_id = rootId;
+        remoteParams.base_subdirectory =
+          gFormData.get("file_reference_base_subdirectory") || "";
+        remoteParams.max_results = customOutlierLimitValue(
+          gFormData.get("file_reference_max_results"),
+          100,
+        );
+      }
+      if (gFormData.get("variable_unit_validation") === "yes") {
+        selected.push("variable_unit_validation");
+        selectedNames.push("Unit Metadata Audit");
+        remoteParams.unit_metadata = variableUnitMetadata;
       }
       if (selected.length === 0) {
         if (typeof showToast === "function")
@@ -1059,6 +1591,9 @@ async function workspaceSubmit(targetUrl) {
     .then((data) => {
       // Store for download
       lastMetricResult = data;
+      if (targetUrl === "/variable-unit-validation") {
+        adoptValidatedVariableUnitMetadata(data);
+      }
 
       // Handle special error formats from some endpoints (feature relevance, correlation)
       if (data.trigger === "correlationError") {
@@ -1066,7 +1601,7 @@ async function workspaceSubmit(targetUrl) {
         console.error("[inspector] correlationError:", msg);
         const m = document.getElementById("metrics");
         if (m)
-          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${msg}</div>`;
+          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(msg)}</div>`;
         _setSubmitButtonsDisabled(false);
         _endServerProcessing();
         return;
@@ -1095,7 +1630,7 @@ async function workspaceSubmit(targetUrl) {
       console.error("Error:", error);
       const m = document.getElementById("metrics");
       if (m)
-        m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error.message || String(error)}</div>`;
+        m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error.message || String(error))}</div>`;
       _setSubmitButtonsDisabled(false);
       _endServerProcessing();
     });
@@ -1113,6 +1648,39 @@ function prettyResultTitle(key) {
   return RESULT_TITLE_OVERRIDES[key] || key;
 }
 
+function isVariableUnitResult(type) {
+  return (
+    String(type || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, "_") === "variable_unit_validation"
+  );
+}
+
+function variableUnitResultsForDisplay(type, results) {
+  if (!isVariableUnitResult(type) || !isObject(results)) return results;
+  const displayResults = { ...results };
+  delete displayResults.$schema;
+  delete displayResults.format;
+  delete displayResults.version;
+  delete displayResults.unit_vocabulary;
+  if (isObject(results.dataset)) {
+    displayResults.dataset = { ...results.dataset };
+    delete displayResults.dataset.schema_fingerprint;
+  }
+  return displayResults;
+}
+
+function variableUnitErrorForDisplay(type, error) {
+  if (
+    isVariableUnitResult(type) &&
+    String(error).includes("schema fingerprint does not match")
+  ) {
+    return "Imported unit metadata does not match this dataset.";
+  }
+  return error;
+}
+
 function renderWorkspaceResults(data, options) {
   const skipLLM = options && options.skipLLM;
   const metrics = document.getElementById("metrics");
@@ -1127,12 +1695,13 @@ function renderWorkspaceResults(data, options) {
     if (results.is_async && results.task_id) continue;
 
     // Extract parts
+    const displayResults = variableUnitResultsForDisplay(type, results);
     const description = results.Description || "";
-    const error = results.Error || "";
+    const error = variableUnitErrorForDisplay(type, results.Error || "");
     const visualizations = [];
     const scores = {};
 
-    for (const [key, value] of Object.entries(results)) {
+    for (const [key, value] of Object.entries(displayResults)) {
       if (
         key === "Description" ||
         key === "Error" ||
@@ -1197,7 +1766,7 @@ function renderWorkspaceResults(data, options) {
             const imgStyle = isHeatmap
               ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
               : "";
-            html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
+            html += `<img src="${viz.src}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${pairId}" onload="syncScoresHeight('${pairId}')" />`;
           }
           html += `</div>`;
         }
@@ -1251,7 +1820,7 @@ function renderWorkspaceResults(data, options) {
 
       // Raw JSON toggle
       const rawJson = {};
-      for (const [k, v] of Object.entries(results)) {
+      for (const [k, v] of Object.entries(displayResults)) {
         if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
       }
       html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
@@ -1362,18 +1931,219 @@ function renderFileReferenceMetadataTable(rows) {
   return html + `</tbody></table></div></div>`;
 }
 
+function variableUnitResultPresentation(status, hasMismatch) {
+  if (hasMismatch || ["invalid", "conflicting"].includes(status)) {
+    return {
+      row: "border-t border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20",
+      badge: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+    };
+  }
+  if (["missing", "ambiguous"].includes(status)) {
+    return {
+      row: "border-t border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20",
+      badge:
+        "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    };
+  }
+  if (["valid", "dimensionless"].includes(status)) {
+    return {
+      row: "border-t border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20",
+      badge:
+        "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+    };
+  }
+  return {
+    row: "border-t border-gray-200 dark:border-gray-700",
+    badge: "font-semibold text-gray-700 dark:text-gray-300",
+  };
+}
+
+function renderVariableUnitResultTable(rows) {
+  let html = `<div class="mb-4">`;
+  html += `<div class="mb-2 flex flex-wrap items-center justify-between gap-2">`;
+  html += `<h4 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Variables (${rows.length})</h4>`;
+  html += `<label class="text-xs text-gray-600 dark:text-gray-300">Filter `;
+  html += `<select onchange="filterVariableUnitResults(this)" class="ml-1 rounded border border-gray-300 bg-white px-2 py-1 dark:border-gray-600 dark:bg-gray-800">`;
+  [
+    "all",
+    "missing",
+    "invalid",
+    "ambiguous",
+    "conflicting",
+    "mismatches",
+    "overrides",
+  ].forEach((status) => {
+    html += `<option value="${status}">${status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)}</option>`;
+  });
+  html += `</select></label></div>`;
+  html += `<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"><table class="w-full table-auto text-left text-xs text-gray-600 dark:text-gray-300">`;
+  html += `<thead class="bg-gray-50 uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-300"><tr>`;
+  [
+    "Variable",
+    "Type",
+    "Observed",
+    "Resolution",
+    "Unit",
+    "Normalized unit",
+    "Dimensionality",
+    "Finding",
+  ].forEach((heading) => {
+    html += `<th class="${heading === "Finding" ? "w-1/6 " : ""}px-2 py-2">${escapeHtml(heading)}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+  rows.forEach((row) => {
+    const finding = row.finding || {};
+    const resolution = row.resolution || {};
+    const status = String(finding.status || "");
+    const warnings = Array.isArray(finding.warnings) ? finding.warnings : [];
+    const mismatches = Array.isArray(finding.override_mismatches)
+      ? finding.override_mismatches
+      : [];
+    const hasOverride =
+      resolution.source === "user" && (row.observed || []).length > 0;
+    const hasMismatch = mismatches.length > 0;
+    const observed = (row.observed || [])
+      .map((item) => `${item.unit} (${item.source})`)
+      .join(", ");
+    const presentation = variableUnitResultPresentation(status, hasMismatch);
+    html += `<tr data-variable-unit-result data-status="${escapeHtml(status)}" data-override="${hasOverride ? "true" : "false"}" data-mismatch="${hasMismatch ? "true" : "false"}" class="${presentation.row}">`;
+    const values = [
+      row.name,
+      row.dtype,
+      observed || "None",
+      resolution.kind || "unresolved",
+      resolution.unit || "—",
+      finding.normalized_unit || "—",
+      finding.dimensionality || "—",
+    ];
+    values.forEach((value) => {
+      const displayValue = formatValue(value);
+      html += `<td class="px-2 py-2 align-top"><span class="whitespace-nowrap" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span></td>`;
+    });
+    if (hasMismatch) {
+      const mismatchMessage = mismatches
+        .map((mismatch) => mismatch.message)
+        .filter(Boolean)
+        .join(" ");
+      html += `<td class="w-1/6 px-2 py-2 align-top"><div class="max-w-48 whitespace-normal"><span class="mr-1 inline-flex rounded px-1.5 py-0.5 font-semibold ${presentation.badge}">Unit mismatch</span><span class="break-words">${escapeHtml(mismatchMessage)}</span></div></td>`;
+    } else {
+      const findingText = [finding.message, ...warnings]
+        .filter(Boolean)
+        .join(" ");
+      const statusLabel = (status || "unknown").replaceAll("_", " ");
+      html += `<td class="w-1/6 px-2 py-2 align-top"><div class="max-w-48 whitespace-normal"><span class="mr-1 inline-flex rounded px-1.5 py-0.5 capitalize ${presentation.badge}">${escapeHtml(statusLabel)}</span><span class="break-words">${escapeHtml(formatValue(findingText))}</span></div></td>`;
+    }
+    html += `</tr>`;
+  });
+  return html + `</tbody></table></div></div>`;
+}
+
+function filterVariableUnitResults(select) {
+  const filter = select?.value || "all";
+  const container = select?.closest(".mb-4");
+  container?.querySelectorAll("[data-variable-unit-result]").forEach((row) => {
+    const visible =
+      filter === "all" ||
+      (filter === "overrides" && row.dataset.override === "true") ||
+      (filter === "mismatches" && row.dataset.mismatch === "true") ||
+      row.dataset.status === filter;
+    row.classList.toggle("hidden", !visible);
+  });
+}
+
+function resultScoreName(groupName, itemName) {
+  if (groupName !== "counts") return itemName;
+  return (
+    {
+      conflicting: "Unresolved conflicts",
+      unit_mismatches: "Override mismatches",
+    }[itemName] || itemName
+  );
+}
+
+// Flattens a nested metric dict into {"outer / inner": value} so before/after
+// dicts with matching shapes can be compared row-by-row in one table.
+function flattenMetricDict(obj, prefix) {
+  const result = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    const label = prefix ? `${prefix} | ${k}` : k;
+    if (isObject(v) && Object.keys(v).length > 0) {
+      Object.assign(result, flattenMetricDict(v, label));
+    } else {
+      result[label] = v;
+    }
+  }
+  return result;
+}
+
+// Renders the custom-metric remedy "before" and "after" dicts as a single
+// Metric | Before | After comparison table instead of two stacked sections.
+function renderBeforeAfterTable(before, after) {
+  const beforeFlat = flattenMetricDict(before);
+  const afterFlat = flattenMetricDict(after);
+
+  const keys = [];
+  const seen = new Set();
+  for (const k of [...Object.keys(beforeFlat), ...Object.keys(afterFlat)]) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      keys.push(k);
+    }
+  }
+
+  let html = `<div class="mb-4">`;
+  html += `<h4 class="text-xs font-semibold mb-2 uppercase tracking-wider text-gray-500 dark:text-gray-400">Before / After Remedy</h4>`;
+  html += `<div class="relative overflow-x-auto rounded-lg shadow-sm">`;
+  html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  html += `<th scope="col" class="px-4 py-2.5">Metric</th>`;
+  html += `<th scope="col" class="px-4 py-2.5 text-right">Before</th>`;
+  html += `<th scope="col" class="px-4 py-2.5 text-right">After</th>`;
+  html += `</tr></thead><tbody>`;
+  keys.forEach((key, idx) => {
+    const stripe =
+      idx % 2 === 0
+        ? "bg-white dark:bg-gray-800"
+        : "bg-gray-50 dark:bg-gray-700/50";
+    const hasBefore = Object.prototype.hasOwnProperty.call(beforeFlat, key);
+    const hasAfter = Object.prototype.hasOwnProperty.call(afterFlat, key);
+    const changed = hasBefore && hasAfter && beforeFlat[key] !== afterFlat[key];
+    html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+    html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(key)}</td>`;
+    html += `<td class="px-4 py-2 text-right font-mono text-xs">${hasBefore ? escapeHtml(formatValue(beforeFlat[key])) : "—"}</td>`;
+    html += `<td class="px-4 py-2 text-right font-mono text-xs${changed ? " text-green-600 dark:text-green-400 font-semibold" : ""}">${hasAfter ? escapeHtml(formatValue(afterFlat[key])) : "—"}</td>`;
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  return html;
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
  * - Nested dict → collapsible tree with indented sections
  * - Array → numbered list
  * - Scalar → inline value
+ * - Sibling "before"/"after" dicts (custom-metric remedy comparison) → one
+ *   side-by-side comparison table instead of two stacked sections
  */
 function renderScoresSection(scores, depth) {
   depth = depth || 0;
   let html = "";
 
+  const hasBeforeAfter =
+    isObject(scores.before) &&
+    isObject(scores.after) &&
+    Object.keys(scores.before).length > 0;
+
   for (const [key, value] of Object.entries(scores)) {
+    if (hasBeforeAfter && key === "before") {
+      html += renderBeforeAfterTable(scores.before, scores.after);
+      continue;
+    }
+    if (hasBeforeAfter && key === "after") {
+      continue; // merged into the before/after table above
+    }
     // Flat dict of {feature: number} → Flowbite striped table
     if (isObject(value) && isFlatDict(value) && Object.keys(value).length > 0) {
       const count = Object.keys(value).length;
@@ -1389,12 +2159,18 @@ function renderScoresSection(scores, depth) {
       html += `</tr></thead><tbody>`;
       let rowIdx = 0;
       for (const [k, v] of Object.entries(value)) {
-        const stripe =
-          rowIdx % 2 === 0
-            ? "bg-white dark:bg-gray-800"
-            : "bg-gray-50 dark:bg-gray-700/50";
-        html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(k)}</td>`;
+        const needsAttention =
+          key === "counts" &&
+          ["conflicting", "unit_mismatches"].includes(k) &&
+          Number(v) > 0;
+        const rowClasses = needsAttention
+          ? "border-b border-red-300 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-900/20 dark:text-red-200"
+          : `${rowIdx % 2 === 0 ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-gray-700/50"} border-b dark:border-gray-700`;
+        const labelClasses = needsAttention
+          ? ""
+          : "text-gray-900 dark:text-white";
+        html += `<tr class="${rowClasses}">`;
+        html += `<td class="px-4 py-2 font-medium whitespace-nowrap ${labelClasses}">${escapeHtml(resultScoreName(key, k))}</td>`;
         html += `<td class="px-4 py-2 text-right font-mono text-xs">${escapeHtml(formatValue(v))}</td>`;
         html += `</tr>`;
         rowIdx++;
@@ -1436,7 +2212,9 @@ function renderScoresSection(scores, depth) {
       }
     }
     // Array
-    else if (key === "Invalid references" && Array.isArray(value)) {
+    else if (key === "variables" && Array.isArray(value)) {
+      html += renderVariableUnitResultTable(value);
+    } else if (key === "Invalid references" && Array.isArray(value)) {
       html += renderFileReferenceInvalidTable(value);
     } else if (key === "File metadata" && Array.isArray(value)) {
       html += renderFileReferenceMetadataTable(value);
@@ -1486,14 +2264,18 @@ function renderScoresSection(scores, depth) {
 
 // ==================== Globus Compute ====================
 
-/** Switch between Upload, Globus, and CLI tabs on the landing page. */
+/** Switch between Upload, Custom Loader, Globus, and CLI tabs on the landing page. */
 function switchUploadTab(tab) {
   const localPanel = document.getElementById("local-upload");
+  const customPanel = document.getElementById("custom-upload");
   const globusPanel = document.getElementById("globus-panel");
   const cliPanel = document.getElementById("cli-panel");
+  const fairPanel = document.getElementById("fair-tab-panel");
   const tabLocal = document.getElementById("tab-local");
+  const tabCustom = document.getElementById("tab-custom");
   const tabGlobus = document.getElementById("tab-globus");
   const tabCli = document.getElementById("tab-cli");
+  const tabFair = document.getElementById("tab-fair");
 
   if (!localPanel) {
     console.error("switchUploadTab: localPanel not found");
@@ -1509,19 +2291,34 @@ function switchUploadTab(tab) {
 
   // Hide all panels and deactivate all tabs
   localPanel.classList.add("hidden");
+  if (customPanel) customPanel.classList.add("hidden");
   if (globusPanel) globusPanel.classList.add("hidden");
   if (cliPanel) cliPanel.classList.add("hidden");
+  if (fairPanel) fairPanel.classList.add("hidden");
   if (tabLocal) tabLocal.className = `${base} ${inactiveClass}`;
+  if (tabCustom) tabCustom.className = `${base} ${inactiveClass}`;
   if (tabGlobus) tabGlobus.className = `${base} ${inactiveClass}`;
   if (tabCli) tabCli.className = `${base} ${inactiveClass}`;
+  if (tabFair) tabFair.className = `${base} ${inactiveClass}`;
 
   // Activate the selected tab and panel
-  if (tab === "globus" && globusPanel) {
+  if (tab === "custom" && customPanel) {
+    customPanel.classList.remove("hidden");
+    initCustomLoaderEditor();
+    customLoaderEditor?.refresh();
+    if (tabCustom) tabCustom.className = `${base} ${activeClass}`;
+  } else if (tab === "globus" && globusPanel) {
     globusPanel.classList.remove("hidden");
     if (tabGlobus) tabGlobus.className = `${base} ${activeClass}`;
   } else if (tab === "cli" && cliPanel) {
     cliPanel.classList.remove("hidden");
     if (tabCli) tabCli.className = `${base} ${activeClass}`;
+  } else if (tab === "fair" && fairPanel) {
+    fairPanel.classList.remove("hidden");
+    document
+      .getElementById("panel-fair-assessment")
+      ?.classList.remove("hidden");
+    if (tabFair) tabFair.className = `${base} ${activeClass}`;
   } else {
     localPanel.classList.remove("hidden");
     if (tabLocal) tabLocal.className = `${base} ${activeClass}`;
@@ -1556,7 +2353,7 @@ function fetchGlobusSummary() {
       if (data.error) {
         const loading = document.getElementById("globus-summary-loading");
         if (loading)
-          loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+          loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
         _endServerProcessing();
         return;
       }
@@ -1575,7 +2372,7 @@ function fetchGlobusSummary() {
     .catch((err) => {
       const loading = document.getElementById("globus-summary-loading");
       if (loading)
-        loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${err.message}</div>`;
+        loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${escapeHtml(err.message)}</div>`;
       _endServerProcessing();
     });
 }
@@ -1588,7 +2385,7 @@ function renderGlobusSummary(data) {
 
   if (data.error) {
     if (content)
-      content.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${data.error}</div>`;
+      content.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
     _unlockGlobusSidebar();
     return;
   }
@@ -1653,9 +2450,9 @@ function renderGlobusSummary(data) {
             ? "bg-white dark:bg-gray-800"
             : "bg-gray-50 dark:bg-gray-700/50";
         html += `<tr class="${stripe} border-b dark:border-gray-700">`;
-        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${feat}</td>`;
+        html += `<td class="px-4 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(feat)}</td>`;
         statKeys.forEach((s) => {
-          html += `<td class="px-4 py-2 font-mono text-xs text-right">${data.summary_statistics[feat][s] ?? "—"}</td>`;
+          html += `<td class="px-4 py-2 font-mono text-xs text-right">${escapeHtml(formatValue(data.summary_statistics[feat][s] ?? "—"))}</td>`;
         });
         html += "</tr>";
       });
@@ -1668,11 +2465,17 @@ function renderGlobusSummary(data) {
   }
 
   // Render histograms if available
-  if (data.histograms && typeof renderWorkspaceHistograms === "function") {
+  if (data.histograms && typeof renderWorkspaceHistogramsInto === "function") {
     var wh = document.getElementById("workspace-histograms");
     if (wh) {
       wh.style.display = "block";
-      renderWorkspaceHistograms(data.histograms);
+      renderWorkspaceHistogramsInto(
+        data.histograms,
+        null,
+        false,
+        null,
+        data.histogram_bars,
+      );
     }
   }
 
@@ -1682,6 +2485,7 @@ function renderGlobusSummary(data) {
   }
 
   _unlockGlobusSidebar();
+  maybeShowIntentModal();
 }
 
 function _unlockGlobusSidebar() {
@@ -1714,7 +2518,7 @@ function pollGlobusSummary(taskId) {
         } else if (response.status === "failed") {
           const loading = document.getElementById("globus-summary-loading");
           if (loading)
-            loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${response.error || "Failed to load summary"}</div>`;
+            loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(response.error || "Failed to load summary")}</div>`;
           _unlockGlobusSidebar();
           _endServerProcessing();
         } else if (attempts < maxAttempts) {
@@ -1734,6 +2538,7 @@ function pollGlobusSummary(taskId) {
 
 /** Disconnect from Globus — clear tokens. */
 function disconnectGlobus() {
+  clearGlobusDiscoveryCache();
   fetch("/globus/disconnect", { method: "POST" })
     .then(() => window.location.reload())
     .catch((err) => console.error("Globus disconnect error:", err));
@@ -1741,6 +2546,7 @@ function disconnectGlobus() {
 
 /** Load a remote dataset via Globus Compute. */
 function loadGlobusDataset() {
+  clearGlobusDiscoveryCache();
   const endpointId = document
     .getElementById("globus-endpoint-id")
     ?.value?.trim();
@@ -2001,7 +2807,7 @@ function submitGlobusMetric(metricName, params, displayName) {
         _globusTaskDone();
         const m = document.getElementById("metrics");
         if (m)
-          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${data.error}</div>`;
+          m.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
         return;
       }
       if (data.task_id && data.is_async) {
@@ -2034,6 +2840,9 @@ function initCustomOutlierEditor() {
   if (saveButton) {
     saveButton.addEventListener("click", downloadCustomOutlierRules);
   }
+  document
+    .getElementById("custom-outlier-edit-file")
+    ?.addEventListener("click", importCustomOutlierRulesIntoBuilder);
   const checkbox = document.getElementById("toggleButton_custom_outliers");
   document
     .querySelectorAll('input[name="custom_outlier_rule_source"]')
@@ -2102,43 +2911,57 @@ function loadCustomOutlierTargets() {
     return loadGlobusCustomOutlierTargets(message);
   }
   return fetch("/custom-outlier-targets", { method: "POST" })
-    .then((r) => r.json())
-    .then((data) => {
-      if (data.success) {
-        customOutlierTargets = data.targets || [];
-        updateCustomOutlierTargetOptions();
-        if (message) message.classList.add("hidden");
-      } else if (message) {
-        message.textContent = data.message || "Unable to load targets.";
-        message.classList.remove("hidden");
-      }
+    .then((response) =>
+      response.json().then((data) => ({ ok: response.ok, data })),
+    )
+    .then(({ ok, data }) => {
+      if (!ok || !data.success)
+        throw new Error(data.message || "Unable to load targets.");
+      customOutlierTargets = data.targets || [];
+      updateCustomOutlierTargetOptions();
+      if (message) message.classList.add("hidden");
+      return true;
     })
     .catch((err) => {
+      customOutlierTargets = [];
       if (message) {
         message.textContent = "Unable to load targets: " + err.message;
         message.classList.remove("hidden");
       }
+      return false;
     });
 }
 
-function loadGlobusCustomOutlierTargets(message) {
+function globusDiscoveryKey() {
+  return JSON.stringify([
+    window.AIDRIN_GLOBUS_ENDPOINT || "",
+    window.AIDRIN_GLOBUS_FILE_PATH || "",
+    window.AIDRIN_GLOBUS_FILE_TYPE || "",
+  ]);
+}
+
+function clearGlobusDiscoveryCache() {
+  globusDiscoveryCache.clear();
+}
+
+function loadGlobusTargetDiscovery() {
   const endpointId = window.AIDRIN_GLOBUS_ENDPOINT || "";
   const filePath = window.AIDRIN_GLOBUS_FILE_PATH || "";
   const fileName = window.AIDRIN_GLOBUS_FILE_NAME || "";
   const fileType = window.AIDRIN_GLOBUS_FILE_TYPE || "";
   if (!endpointId || !filePath) {
-    if (message) {
-      message.textContent =
-        "Remote target discovery requires a loaded Globus file.";
-      message.classList.remove("hidden");
-    }
-    return Promise.resolve();
+    return Promise.reject(
+      new Error("Remote target discovery requires a loaded Globus file."),
+    );
   }
-  if (message) {
-    message.textContent = "Loading remote targets...";
-    message.classList.remove("hidden");
-  }
-  return fetch("/globus/submit", {
+
+  const key = globusDiscoveryKey();
+  const cached = globusDiscoveryCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return cached.promise;
+  if (cached) globusDiscoveryCache.delete(key);
+
+  const entry = { expiresAt: Infinity, promise: null };
+  entry.promise = fetch("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2150,29 +2973,57 @@ function loadGlobusCustomOutlierTargets(message) {
       params: {},
     }),
   })
-    .then((r) => r.json())
-    .then((data) => {
-      if (data.error) throw new Error(data.error);
+    .then((response) =>
+      response.json().then((data) => ({ ok: response.ok, data })),
+    )
+    .then(({ ok, data }) => {
+      if (!ok || data.error)
+        throw new Error(data.error || "Remote target discovery was rejected.");
+      entry.expiresAt = Number(data.negotiation_expires_at || 0) * 1000;
       if (!data.task_id) return data.result || data;
       return pollGlobusCustomOutlierTargets(data.task_id);
     })
     .then((result) => {
-      if (result && result.success) {
-        customOutlierTargets = result.targets || [];
-        updateCustomOutlierTargetOptions();
-        if (message) message.classList.add("hidden");
-      } else if (message) {
-        message.textContent =
-          (result && (result.message || result.error)) ||
-          "Remote target discovery failed.";
-        message.classList.remove("hidden");
+      if (!result?.success || Date.now() >= entry.expiresAt) {
+        globusDiscoveryCache.delete(key);
       }
+      return result;
     })
     .catch((err) => {
+      globusDiscoveryCache.delete(key);
+      throw err;
+    });
+  globusDiscoveryCache.set(key, entry);
+  return entry.promise;
+}
+
+function loadGlobusCustomOutlierTargets(message) {
+  if (message) {
+    message.textContent = "Loading remote targets...";
+    message.classList.remove("hidden");
+  }
+  return loadGlobusTargetDiscovery()
+    .then((result) => {
+      if (!result?.success) {
+        clearGlobusDiscoveryCache();
+        throw new Error(
+          result?.message || result?.error || "Remote target discovery failed.",
+        );
+      }
+      customOutlierTargets = result.targets || [];
+      setVariableUnitCatalog(result.unit_catalog || []);
+      setVariableUnitMetadata(result.unit_metadata);
+      updateCustomOutlierTargetOptions();
+      if (message) message.classList.add("hidden");
+      return true;
+    })
+    .catch((err) => {
+      customOutlierTargets = [];
       if (message) {
         message.textContent = "Remote target discovery failed: " + err.message;
         message.classList.remove("hidden");
       }
+      return false;
     });
 }
 
@@ -2185,6 +3036,7 @@ function pollGlobusCustomOutlierTargets(taskId) {
         .then((r) => r.json())
         .then((data) => {
           if (data.status === "completed") {
+            if (data.capability_invalidated) clearGlobusDiscoveryCache();
             resolve(data.result);
           } else if (data.status === "failed") {
             reject(new Error(data.error || "Task failed"));
@@ -2203,13 +3055,19 @@ function pollGlobusCustomOutlierTargets(taskId) {
 function addCustomOutlierRuleRow() {
   const list = document.getElementById("custom-outlier-rule-list");
   if (!list) return;
-  customOutlierRuleCounter += 1;
+  do {
+    customOutlierRuleCounter += 1;
+  } while (
+    Array.from(list.children).some(
+      (row) => row.dataset.ruleId === `custom-rule-${customOutlierRuleCounter}`,
+    )
+  );
   const row = document.createElement("div");
   row.className =
     "custom-outlier-rule relative rounded-lg border border-gray-200 dark:border-gray-700 p-2";
   row.dataset.ruleId = `custom-rule-${customOutlierRuleCounter}`;
   row.innerHTML = `
-    <div class="grid gap-2 pr-7 md:grid-cols-[minmax(9rem,0.6fr)_minmax(16rem,1.4fr)_auto]">
+    <div class="custom-outlier-rule-header grid gap-2 pr-7">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Rule name
         <input type="text" data-field="name" value="Rule ${customOutlierRuleCounter}"
                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
@@ -2300,7 +3158,12 @@ function addCustomOutlierRuleRow() {
     .addEventListener("change", () => updateCustomOutlierRegexPreview(row));
   row
     .querySelector('[data-field="target"][data-target-picker]')
-    .addEventListener("target-picker-change", serializeCustomOutlierRules);
+    .addEventListener("target-picker-change", () => {
+      row
+        .querySelectorAll(".custom-outlier-condition")
+        .forEach(updateCustomOutlierComparisonControls);
+      serializeCustomOutlierRules();
+    });
   row.addEventListener("input", serializeCustomOutlierRules);
   row.addEventListener("change", serializeCustomOutlierRules);
 
@@ -2308,6 +3171,7 @@ function addCustomOutlierRuleRow() {
   updateCustomOutlierTargetOptions(row);
   updateCustomOutlierTargetMatch(row);
   serializeCustomOutlierRules();
+  return row;
 }
 
 function addCustomOutlierConditionRow(ruleRow) {
@@ -2317,15 +3181,16 @@ function addCustomOutlierConditionRow(ruleRow) {
   condition.className =
     "custom-outlier-condition rounded-md bg-white p-1.5 shadow-sm dark:bg-gray-800";
   condition.innerHTML = `
-    <div class="grid gap-2 md:grid-cols-[minmax(9rem,0.7fr)_1fr_auto]">
+    <div class="custom-outlier-condition-fields grid gap-2">
       <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Type
         <select data-field="condition_type"
                 class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
           <option value="range">Range</option>
           <option value="regex">Regex</option>
+          <option value="compare">Compare columns</option>
         </select>
       </label>
-      <div data-section="condition-range" class="grid gap-2 sm:grid-cols-4">
+      <div data-section="condition-range" class="custom-outlier-range-fields grid gap-2">
         <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Min
           <input type="number" step="any" data-field="condition_min"
                  class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
@@ -2349,8 +3214,29 @@ function addCustomOutlierConditionRow(ruleRow) {
                  class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
         </label>
       </div>
+      <div data-section="condition-compare" class="hidden space-y-2">
+        <div class="custom-outlier-compare-fields grid gap-2">
+          <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Target must be
+            <select data-field="condition_operator"
+                    class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+              <option value="&lt;=">≤ Less than or equal to</option>
+              <option value="&gt;=">≥ Greater than or equal to</option>
+              <option value="&lt;">&lt; Less than</option>
+              <option value="&gt;">&gt; Greater than</option>
+              <option value="==">= Equal to</option>
+              <option value="!=">≠ Not equal to</option>
+            </select>
+          </label>
+          <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Comparison column
+            <select data-field="condition_other_target"
+                    class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"></select>
+          </label>
+        </div>
+        <p data-section="comparison-summary" role="status" aria-live="polite" class="text-xs text-gray-600 dark:text-gray-300"></p>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Compare values on the same row, using compatible units. Numeric text is accepted; other non-numeric values are flagged. Missing values follow “Allow missing values”.</p>
+      </div>
       <button type="button" data-action="remove-condition"
-              class="self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
+              class="justify-self-end self-end px-2.5 py-1 text-xs font-medium text-red-700 rounded-lg border border-red-200 hover:bg-red-50 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-900/20">
         Remove
       </button>
     </div>`;
@@ -2367,6 +3253,10 @@ function addCustomOutlierConditionRow(ruleRow) {
       serializeCustomOutlierRules();
     });
   updateCustomOutlierConditionSections(condition);
+  condition.addEventListener("change", () =>
+    updateCustomOutlierComparisonControls(condition),
+  );
+  return condition;
 }
 
 function updateCustomOutlierTargetOptions(scope) {
@@ -2394,6 +3284,9 @@ function updateCustomOutlierTargetOptions(scope) {
   root
     .querySelectorAll(".custom-outlier-rule")
     .forEach(updateCustomOutlierRegexPreview);
+  root
+    .querySelectorAll(".custom-outlier-condition")
+    .forEach(updateCustomOutlierComparisonControls);
 }
 
 function updateCustomOutlierTargetMatch(row) {
@@ -2412,6 +3305,9 @@ function updateCustomOutlierTargetMatch(row) {
     .querySelector('[data-section="target-type"]')
     ?.classList.toggle("hidden", !isRegex || targetTypes.length <= 1);
   updateCustomOutlierRegexPreview(row);
+  row
+    .querySelectorAll(".custom-outlier-condition")
+    .forEach(updateCustomOutlierComparisonControls);
 }
 
 function updateCustomOutlierRegexPreview(row) {
@@ -2421,6 +3317,9 @@ function updateCustomOutlierRegexPreview(row) {
     customOutlierTargets,
     customOutlierRegexTargetType(row),
   );
+  row
+    .querySelectorAll(".custom-outlier-condition")
+    .forEach(updateCustomOutlierComparisonControls);
 }
 
 function customOutlierRegexTargetType(row) {
@@ -2445,12 +3344,11 @@ function serializeCustomOutlierRules() {
       targetMatch === "regex"
         ? row.querySelector('[data-field="target_regex"]')?.value.trim()
         : selectedTarget?.value;
-    if (!target) return;
     const id = row.dataset.ruleId || `custom-rule-${index + 1}`;
     const rule = {
       id,
       name: row.querySelector('[data-field="name"]')?.value || id,
-      target,
+      target: target || "",
       target_type:
         targetMatch === "regex"
           ? customOutlierRegexTargetType(row)
@@ -2468,9 +3366,9 @@ function serializeCustomOutlierRules() {
   return rules;
 }
 
-function downloadCustomOutlierRules() {
-  const rules = serializeCustomOutlierRules();
-  if (!validateCustomOutlierRuleSelection(rules)) return;
+async function downloadCustomOutlierRules() {
+  const rules = await resolveCustomOutlierRules();
+  if (!rules) return;
 
   const blob = new Blob([JSON.stringify(rules, null, 2)], {
     type: "application/json",
@@ -2563,8 +3461,24 @@ function validateCustomOutlierRulesFile(rules) {
     }
     const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
     if (error) return error;
+    if (
+      String(rule.target_type).trim() !== "column" &&
+      customOutlierHasComparisons(rule.criteria)
+    ) {
+      return `${ruleName}: compare criteria support tabular columns only.`;
+    }
   }
   return null;
+}
+
+function customOutlierHasComparisons(criteria) {
+  const op = String(criteria.op || "")
+    .trim()
+    .toLowerCase();
+  if (op === "not") return customOutlierHasComparisons(criteria.condition);
+  if (op === "and" || op === "or")
+    return criteria.conditions.some(customOutlierHasComparisons);
+  return criteria.type === "compare";
 }
 
 async function resolveCustomOutlierRules() {
@@ -2592,6 +3506,234 @@ async function resolveCustomOutlierRules() {
   }
 }
 
+function customOutlierComparisonTargets(criteria) {
+  const op = String(criteria.op || "")
+    .trim()
+    .toLowerCase();
+  if (op === "not") return customOutlierComparisonTargets(criteria.condition);
+  if (op === "and" || op === "or")
+    return criteria.conditions.flatMap(customOutlierComparisonTargets);
+  return criteria.type === "compare" ? [criteria.other_target] : [];
+}
+
+function validateCustomOutlierBuilderTargets(rule) {
+  const name = rule.name || rule.id;
+  if (
+    rule.target_match !== "regex" &&
+    !customOutlierTargets.some(
+      (target) =>
+        target.name === rule.target && target.target_type === rule.target_type,
+    )
+  ) {
+    return `${name}: target ${rule.target} is not available in this file. Choose a target from the list.`;
+  }
+  const references = customOutlierComparisonTargets(rule.criteria);
+  if (references.length && rule.target_type !== "column")
+    return `${name}: compare conditions require tabular columns.`;
+  for (const reference of references) {
+    if (
+      !customOutlierTargets.some(
+        (target) =>
+          target.name === reference && target.target_type === "column",
+      )
+    ) {
+      return `${name}: comparison column ${reference} is not available in this file. Choose a column from the list.`;
+    }
+  }
+  return null;
+}
+
+function customOutlierBuilderPlan(rules) {
+  const error = validateCustomOutlierRulesFile(rules);
+  if (error) throw new Error(error);
+  const unsupported = (name) =>
+    new Error(
+      `${name}: this file uses nested groups or advanced fields that the simple builder cannot edit. Keep Select JSON file to run or save it unchanged.`,
+    );
+  const checkFields = (value, fields, name) => {
+    if (Object.keys(value).some((key) => !fields.includes(key)))
+      throw unsupported(name);
+  };
+  const leaf = (criteria, name) => {
+    const fields = {
+      range: ["type", "min", "max", "min_inclusive", "max_inclusive"],
+      regex: ["type", "pattern"],
+      compare: ["type", "operator", "other_target"],
+    }[criteria.type];
+    if (!fields) throw unsupported(name);
+    checkFields(criteria, fields, name);
+    if (criteria.type === "regex" && typeof criteria.pattern !== "string")
+      throw unsupported(name);
+    for (const field of ["min", "max"]) {
+      const value = criteria[field];
+      if (value == null || value === "") continue;
+      if (
+        !["number", "string"].includes(typeof value) ||
+        (typeof value === "string" &&
+          !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value.trim()))
+      )
+        throw unsupported(name);
+    }
+    for (const field of ["min_inclusive", "max_inclusive"]) {
+      if (field in criteria && typeof criteria[field] !== "boolean")
+        throw unsupported(name);
+    }
+    return criteria;
+  };
+  return rules.map((rule) => {
+    const name = rule.name || rule.id;
+    if (
+      typeof rule.id !== "string" ||
+      typeof rule.target !== "string" ||
+      ("name" in rule && typeof rule.name !== "string") ||
+      !["column", "hdf5_dataset"].includes(rule.target_type) ||
+      (String(rule.target_match || "exact")
+        .trim()
+        .toLowerCase() === "regex" &&
+        rule.target !== rule.target.trim()) ||
+      ("allow_missing" in rule && typeof rule.allow_missing !== "boolean")
+    )
+      throw unsupported(name);
+    checkFields(
+      rule,
+      [
+        "id",
+        "name",
+        "target",
+        "target_type",
+        "target_match",
+        "allow_missing",
+        "criteria",
+      ],
+      name,
+    );
+    const criteria = rule.criteria;
+    const op = String(criteria.op || "and")
+      .trim()
+      .toLowerCase();
+    let conditions;
+    if (!criteria.op) conditions = [leaf(criteria, name)];
+    else if (op === "not") {
+      checkFields(criteria, ["op", "condition"], name);
+      if (
+        String(criteria.condition.op || "")
+          .trim()
+          .toLowerCase() === "or"
+      ) {
+        checkFields(criteria.condition, ["op", "conditions"], name);
+        conditions = criteria.condition.conditions.map((condition) =>
+          leaf(condition, name),
+        );
+      } else conditions = [leaf(criteria.condition, name)];
+    } else {
+      checkFields(criteria, ["op", "conditions"], name);
+      conditions = criteria.conditions.map((condition) =>
+        leaf(condition, name),
+      );
+    }
+    return { rule, op, conditions };
+  });
+}
+
+async function importCustomOutlierRulesIntoBuilder() {
+  const file = document.getElementById("custom-outlier-rules-file")?.files?.[0];
+  if (!file)
+    return showCustomOutlierFileError("Choose a JSON rules file to edit.");
+  const button = document.getElementById("custom-outlier-edit-file");
+  if (button) button.disabled = true;
+  try {
+    const plan = customOutlierBuilderPlan(
+      parseCustomOutlierRulesJson(await file.text()),
+    );
+    if (!(await loadCustomOutlierTargets()))
+      throw new Error("Unable to load targets. Existing rules were kept.");
+    for (const { rule } of plan) {
+      const targetError = validateCustomOutlierBuilderTargets(rule);
+      if (targetError) throw new Error(targetError);
+    }
+    const list = document.getElementById("custom-outlier-rule-list");
+    list.replaceChildren();
+    for (const { rule, op, conditions } of plan) {
+      const row = addCustomOutlierRuleRow();
+      row.dataset.ruleId = String(rule.id).trim();
+      row.querySelector('[data-field="name"]').value = rule.name || rule.id;
+      row.querySelector('[data-field="allow_missing"]').checked = Boolean(
+        rule.allow_missing,
+      );
+      row.querySelector('[data-field="target_match"]').value = String(
+        rule.target_match || "exact",
+      )
+        .trim()
+        .toLowerCase();
+      row.querySelector('[data-field="target_regex"]').value = rule.target;
+      row.querySelector('[data-field="target_type"]').value = rule.target_type;
+      const picker = row.querySelector(
+        '[data-field="target"][data-target-picker]',
+      );
+      picker
+        .querySelectorAll("[data-target-picker-option-input]")
+        .forEach((input) => {
+          input.checked =
+            input.value === rule.target &&
+            input.dataset.targetType === rule.target_type;
+          setTargetPickerOptionSelected(
+            input.closest("[data-target-picker-option]"),
+            input.checked,
+          );
+        });
+      updateTargetPickerSummary(picker);
+      row.querySelector('[data-field="criteria_op"]').value = op;
+      row
+        .querySelector('[data-section="criteria-conditions"]')
+        .replaceChildren();
+      conditions.forEach((criteria) => {
+        const condition = addCustomOutlierConditionRow(row);
+        condition.querySelector('[data-field="condition_type"]').value =
+          criteria.type;
+        const values = {
+          min:
+            criteria.min == null || criteria.min === ""
+              ? ""
+              : Number(criteria.min),
+          max:
+            criteria.max == null || criteria.max === ""
+              ? ""
+              : Number(criteria.max),
+          pattern: criteria.pattern ?? ".*",
+          operator: criteria.operator ?? "<=",
+          other_target: criteria.other_target ?? "",
+        };
+        for (const [field, value] of Object.entries(values))
+          condition.querySelector(`[data-field="condition_${field}"]`).value =
+            value;
+        condition.querySelector(
+          '[data-field="condition_min_inclusive"]',
+        ).checked = criteria.min_inclusive !== false;
+        condition.querySelector(
+          '[data-field="condition_max_inclusive"]',
+        ).checked = criteria.max_inclusive !== false;
+        updateCustomOutlierConditionSections(condition);
+      });
+      updateCustomOutlierTargetMatch(row);
+    }
+    document.querySelector(
+      'input[name="custom_outlier_rule_source"][value="manual"]',
+    ).checked = true;
+    clearCustomOutlierResults();
+    clearCustomOutlierFileError();
+    updateCustomOutlierRuleSource();
+    serializeCustomOutlierRules();
+    const message = document.getElementById("custom-outlier-message");
+    message.textContent =
+      "Rules loaded. Edit the conditions, then save them to JSON or submit.";
+    message.classList.remove("hidden");
+  } catch (error) {
+    showCustomOutlierFileError(error.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function updateCustomOutlierConditionSections(condition) {
   const type = condition.querySelector('[data-field="condition_type"]')?.value;
   condition
@@ -2600,6 +3742,70 @@ function updateCustomOutlierConditionSections(condition) {
   condition
     .querySelector('[data-section="condition-regex"]')
     ?.classList.toggle("hidden", type !== "regex");
+  condition
+    .querySelector('[data-section="condition-compare"]')
+    ?.classList.toggle("hidden", type !== "compare");
+  updateCustomOutlierComparisonControls(condition);
+}
+
+function updateCustomOutlierComparisonControls(condition) {
+  const row = condition.closest(".custom-outlier-rule");
+  const select = condition.querySelector(
+    '[data-field="condition_other_target"]',
+  );
+  if (!row || !select) return;
+  const columns = customOutlierTargets.filter(
+    (target) => target.target_type === "column",
+  );
+  const selected = select.value;
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = columns.length
+    ? "Select a column…"
+    : "No tabular columns available";
+  select.appendChild(placeholder);
+  columns.forEach((target) => {
+    const option = document.createElement("option");
+    option.value = target.name;
+    option.textContent = target.display_label || target.name;
+    select.appendChild(option);
+  });
+  if (selected && !columns.some((target) => target.name === selected)) {
+    const unavailable = document.createElement("option");
+    unavailable.value = selected;
+    unavailable.textContent = `${selected} (not available)`;
+    unavailable.disabled = true;
+    select.appendChild(unavailable);
+  }
+  select.value = selected;
+  select.disabled = columns.length === 0;
+  const isRegex =
+    row.querySelector('[data-field="target_match"]')?.value === "regex";
+  const target = selectedTargetPickerInputs(
+    row.querySelector('[data-field="target"][data-target-picker]'),
+  )[0];
+  const targetType = isRegex
+    ? customOutlierRegexTargetType(row)
+    : target?.dataset.targetType;
+  const supported = columns.length > 0 && targetType !== "hdf5_dataset";
+  condition.querySelector(
+    '[data-field="condition_type"] option[value="compare"]',
+  ).disabled = !supported;
+  const summary = condition.querySelector(
+    '[data-section="comparison-summary"]',
+  );
+  const left = isRegex
+    ? row.querySelector('[data-field="target_regex"]')?.value
+    : target?.value;
+  const operator = condition.querySelector(
+    '[data-field="condition_operator"]',
+  )?.value;
+  summary.textContent = !supported
+    ? "Column comparisons require a tabular target. Use Range or Regex for HDF5 datasets."
+    : left && selected
+      ? `Valid when ${left} ${operator} ${selected}.`
+      : "Choose the target above and a comparison column.";
 }
 
 function serializeCustomOutlierCriteria(row) {
@@ -2632,6 +3838,17 @@ function serializeCustomOutlierCondition(condition) {
         "",
     };
   }
+  if (type === "compare") {
+    return {
+      type: "compare",
+      operator:
+        condition.querySelector('[data-field="condition_operator"]')?.value ||
+        "<=",
+      other_target:
+        condition.querySelector('[data-field="condition_other_target"]')
+          ?.value || "",
+    };
+  }
 
   const min = condition.querySelector('[data-field="condition_min"]')?.value;
   const max = condition.querySelector('[data-field="condition_max"]')?.value;
@@ -2662,9 +3879,18 @@ function validateCustomOutlierRuleSelection(rules) {
   }
   for (const rule of rules) {
     const ruleName = rule.name || rule.id || "Custom outlier rule";
+    if (!rule.target)
+      return showCustomOutlierValidationError(
+        `${ruleName}: select a target before submitting or saving.`,
+      );
     const error = validateCustomOutlierCriteria(rule.criteria, ruleName);
     if (error) return showCustomOutlierValidationError(error);
+    const targetError = validateCustomOutlierBuilderTargets(rule);
+    if (targetError) return showCustomOutlierValidationError(targetError);
   }
+  const fileError = validateCustomOutlierRulesFile(rules);
+  if (fileError) return showCustomOutlierValidationError(fileError);
+  document.getElementById("custom-outlier-message")?.classList.add("hidden");
   return true;
 }
 
@@ -2720,6 +3946,18 @@ function validateCustomOutlierCriteria(criteria, ruleName) {
     return null;
   }
   if (criteria.type === "regex") return null;
+  if (criteria.type === "compare") {
+    if (!["<", "<=", ">", ">=", "==", "!="].includes(criteria.operator)) {
+      return `${ruleName} compare condition requires operator <, <=, >, >=, ==, or !=.`;
+    }
+    if (
+      typeof criteria.other_target !== "string" ||
+      !criteria.other_target.trim()
+    ) {
+      return `${ruleName}: select a comparison column.`;
+    }
+    return null;
+  }
   return `${ruleName} has an unsupported condition type.`;
 }
 
@@ -2730,7 +3968,7 @@ function showCustomOutlierValidationError(text) {
     message.classList.remove("hidden");
   }
   if (typeof showToast === "function") {
-    showToast(text, "error");
+    showToast(text, "error", 5000);
   }
   return false;
 }
@@ -2879,6 +4117,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
           // {Completeness: {...}, Outliers: {...}, Duplicity: {...}})
           // vs a single metric result (has Description/Visualization at top level)
           const result = response.result;
+          adoptValidatedVariableUnitMetadata(result);
           const isBundle =
             typeof result === "object" &&
             result !== null &&
@@ -2892,6 +4131,9 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
             );
 
           const tempDiv = document.createElement("div");
+          const executionNote = checkUrlBase.includes("globus")
+            ? '<p class="mb-3 text-xs text-gray-500 dark:text-gray-400">Execution location: Globus Compute worker</p>'
+            : "";
           if (isBundle) {
             // Render each sub-metric as its own card (matches local renderWorkspaceResults)
             let html = "";
@@ -2900,9 +4142,10 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
                 html += buildResultCard(subType, subResult);
               }
             }
-            tempDiv.innerHTML = html;
+            tempDiv.innerHTML = executionNote + html;
           } else {
-            tempDiv.innerHTML = buildResultCard(metricName, result);
+            tempDiv.innerHTML =
+              executionNote + buildResultCard(metricName, result);
           }
 
           // Replace placeholder with all rendered cards
@@ -2913,9 +4156,9 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
         } else if (response.status === "failed") {
           _globusTaskDone();
           card.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${metricName}</h3>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">${escapeHtml(metricName)}</h3>
             <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">
-              ${response.error || "Task failed"}
+              ${escapeHtml(response.error || "Task failed")}
             </div>`;
         } else if (response.status === "processing") {
           // Update progress bar
@@ -2962,13 +4205,14 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
 function buildResultCard(type, results) {
   if (typeof results !== "object" || results === null) return "";
 
+  const displayResults = variableUnitResultsForDisplay(type, results);
   const description = results.Description || "";
-  const error = results.Error || "";
+  const error = variableUnitErrorForDisplay(type, results.Error || "");
   const interpretation = results["Graph interpretation"];
   const visualizations = [];
   const scores = {};
 
-  for (const [key, value] of Object.entries(results)) {
+  for (const [key, value] of Object.entries(displayResults)) {
     if (
       key === "Description" ||
       key === "Error" ||
@@ -3015,7 +4259,7 @@ function buildResultCard(type, results) {
           const imgStyle = isHeatmap
             ? ' style="max-width:500px; max-height:500px; object-fit:contain;"'
             : "";
-          html += `<img src="${viz.src}" alt="${viz.key}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
+          html += `<img src="${viz.src}" alt="${escapeHtml(viz.key)}" class="rounded-lg ${isHeatmap ? "" : "w-full"}"${imgStyle} data-pair="${asyncPairId}" onload="syncScoresHeight('${asyncPairId}')" />`;
         }
         html += `</div>`;
       }
@@ -3096,7 +4340,7 @@ function showToast(message, type, duration) {
     <div class="inline-flex items-center justify-center shrink-0 w-8 h-8 ${c.text} ${c.bg} rounded-lg">
       <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">${c.icon}</svg>
     </div>
-    <div class="ml-3 text-sm font-normal">${message}</div>
+    <div class="ml-3 text-sm font-normal">${escapeHtml(message)}</div>
     <button type="button" class="ml-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex items-center justify-center h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700" onclick="this.parentElement.remove()">
       <svg class="w-3 h-3" fill="none" viewBox="0 0 14 14"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/></svg>
     </button>
@@ -3238,7 +4482,7 @@ function renderCustomOutlierPreviewTable(previewByRule) {
     html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${escapeHtml(row.rule_name)}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">${escapeHtml(formatValue(locationDisplay))}</td>`;
     html += `<td class="px-3 py-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300">${escapeHtml(formatValue(row.value))}</td>`;
-    html += `<td class="px-3 py-2 font-mono text-xs text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(row.flag)}</td>`;
+    html += `<td class="px-3 py-2 min-w-48 max-w-md text-sm text-gray-900 dark:text-white whitespace-normal break-words">${escapeHtml(row.flag)}</td>`;
     html += `<td class="px-3 py-2 text-right">`;
     html += `<details class="inline-block text-left">`;
     html += `<summary class="cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">Expand</summary>`;
@@ -3254,11 +4498,15 @@ function renderCustomOutlierPreviewTable(previewByRule) {
 
 function formatOutlierFlagFallback(reason) {
   const labels = {
-    below_min: "< min",
-    above_max: "> max",
-    regex_mismatch: "!=",
-    non_numeric: "NaN",
-    missing: "missing",
+    below_min: "Below the allowed minimum",
+    above_max: "Above the allowed maximum",
+    regex_mismatch: "Does not match the required pattern",
+    non_numeric: "A numeric value is required",
+    missing: "A required value is missing",
+    comparison_mismatch: "Does not satisfy the column comparison",
+    invalid_comparison: "Comparison requires finite numbers",
+    or_mismatch: "Matches none of the alternatives",
+    not_mismatch: "Matches an excluded condition",
   };
   return labels[reason] || reason || "";
 }
@@ -3278,6 +4526,7 @@ function findCustomOutlierExport(result) {
 function downloadCustomOutlierExportCsv() {
   const exportByRule = findCustomOutlierExport(lastMetricResult);
   const rows = flattenOutlierExportRows(exportByRule);
+  const includeReferences = rows.some((row) => row.reference_values);
   const headers = [
     "rule_key",
     "rule_id",
@@ -3292,6 +4541,7 @@ function downloadCustomOutlierExportCsv() {
     "source_line",
     "row_index",
   ];
+  if (includeReferences) headers.push("reference_values");
   const csvRows = [headers.join(",")];
   for (const row of rows) {
     const location = row.location || {};
@@ -3309,6 +4559,8 @@ function downloadCustomOutlierExportCsv() {
       location.source_line ?? "",
       location.row_index ?? "",
     ];
+    if (includeReferences)
+      values.push(JSON.stringify(row.reference_values || {}));
     csvRows.push(values.map(csvEscape).join(","));
   }
   const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
@@ -3367,8 +4619,11 @@ function isFlatDict(obj) {
 function formatValue(v) {
   if (v === null || v === undefined) return "—";
   if (typeof v === "boolean") return v ? "Yes" : "No";
+  // Results are rounded to 3 decimals server-side (format_dict_values), which
+  // is also what the charts label their bars with — so a 4th decimal here only
+  // ever appended a meaningless zero and made the table disagree with the plot.
   if (typeof v === "number")
-    return Number.isInteger(v) ? v.toString() : v.toFixed(4);
+    return Number.isInteger(v) ? v.toString() : v.toFixed(3);
   if (Array.isArray(v)) return v.length ? v.map(formatValue).join(", ") : "—";
   if (typeof v === "object")
     return Object.keys(v).length ? JSON.stringify(v) : "—";
@@ -3385,123 +4640,184 @@ function escapeHtml(str) {
 
 // ==================== FAIR Assessment ====================
 
-function submitFairAssessment() {
-  const form = document.getElementById("form-fair-assessment");
-  if (!form) return;
-
-  const formData = new FormData(form);
-  const resultContainer = document.getElementById("fair-result-container");
-  if (resultContainer)
-    resultContainer.innerHTML = '<p class="text-center">Processing...</p>';
-
-  // Return the promise so withSubmitGuard re-enables the button when it settles.
-  return fetch("/fair-assessment", { method: "POST", body: formData })
-    .then((response) => response.json())
-    .then((data) => {
-      if (!resultContainer) return;
-
-      // Check for error response
-      if (data.error) {
-        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${data.error}</div>`;
-        return;
+function _wireFairFileInput(fileInput, labelEl, iconEl) {
+  if (!fileInput || !labelEl) return;
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length) {
+      labelEl.textContent = fileInput.files[0].name;
+      if (iconEl) {
+        iconEl.innerHTML =
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+        iconEl.classList.remove("text-gray-400");
+        iconEl.classList.add("text-green-500");
       }
-
-      let html = "";
-
-      // Compliance summary bar — extract from FAIR Compliance Checks
-      const checks = data["FAIR Compliance Checks"] || {};
-      const totalCheck = checks["Total Checks"] || "";
-      const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
-      const totalPassed = totalMatch ? parseInt(totalMatch[1]) : 0;
-      const totalExpected = totalMatch ? parseInt(totalMatch[2]) : 1;
-      const totalPct = Math.round((totalPassed / totalExpected) * 100);
-
-      html += `<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-base font-semibold text-gray-900 dark:text-white">FAIR Compliance</h3>
-          <span class="text-sm font-medium text-gray-500 dark:text-gray-400">${totalPassed}/${totalExpected} checks passed</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
-          <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
-        </div>
-        <div class="grid grid-cols-4 gap-3">`;
-
-      // Per-principle mini bars
-      const fairKeys = ["Findable", "Accessible", "Interoperable", "Reusable"];
-      fairKeys.forEach((k) => {
-        const checkStr = checks[`${k} Checks`] || "0/0";
-        const m = checkStr.match(/(\d+)\/(\d+)/);
-        const passed = m ? parseInt(m[1]) : 0;
-        const total = m ? parseInt(m[2]) : 1;
-        const pct = Math.round((passed / total) * 100);
-        html += `<div class="text-center">
-          <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
-          <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
-          <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
-            <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
-          </div>
-        </div>`;
-      });
-      html += "</div></div>";
-
-      // FAIR principle details as collapsible accordions
-      html += '<div class="space-y-2 mb-4">';
-      fairKeys.forEach((k) => {
-        let val = "—";
-        let checkStr = checks[`${k} Checks`] || "";
-        if (data[k] !== undefined && typeof data[k] === "object") {
-          val = renderFairValue(data[k]);
-        } else if (data[k] !== undefined) {
-          val = `<div class="py-2 text-sm text-gray-700 dark:text-gray-300">${data[k]}</div>`;
-        }
-        html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <summary class="cursor-pointer flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-            <span>${k}</span>
-            <span class="text-xs text-gray-400 dark:text-gray-500">${checkStr}</span>
-          </summary>
-          <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">${val}</div>
-        </details>`;
-      });
-      html += "</div>";
-
-      // Other data (FAIR Compliance Checks, Other, Original Metadata)
-      const extraKeys = Object.keys(data).filter(
-        (k) => !fairKeys.includes(k) && k !== "Pie chart",
-      );
-      if (extraKeys.length > 0) {
-        html +=
-          '<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4">';
-        html +=
-          '<h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Detailed Results</h3>';
-        extraKeys.forEach((k) => {
-          const val = data[k];
-          if (typeof val === "object" && val !== null) {
-            html += `<details class="mb-2 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-              <summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                ${k}
-                <svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>
-              </summary>
-              <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-                <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
-              </div>
-            </details>`;
-          } else {
-            html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">
-              <span class="font-medium text-gray-900 dark:text-white">${k}</span>
-              <span class="text-gray-500 dark:text-gray-400">${val ?? "—"}</span>
-            </div>`;
-          }
-        });
-        html += "</div>";
+    } else {
+      labelEl.textContent = "JSON metadata file";
+      if (iconEl) {
+        iconEl.innerHTML =
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
+        iconEl.classList.remove("text-green-500");
+        iconEl.classList.add("text-gray-400");
       }
+    }
+  });
+}
 
-      resultContainer.innerHTML = html;
-    })
-    .catch((error) => {
-      console.error("Error:", error);
-      if (resultContainer)
-        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">Error: ${error.message}</div>`;
+const _FAIR_PRINCIPLE_KEYS = [
+  "Findable",
+  "Accessible",
+  "Interoperable",
+  "Reusable",
+];
+
+function _fairCheckFailed(value) {
+  if (value === false) return true;
+  const s = String(value);
+  return s === "Fail" || s === "No" || s.includes("CHECK FAILED");
+}
+
+/** Flatten a FAIR principle detail object into table rows (mirrors PDF _fair_value_rows). */
+function _fairValueRows(obj) {
+  const rows = [];
+  if (!obj || typeof obj !== "object") return rows;
+  for (const [key, val] of Object.entries(obj)) {
+    if (val && typeof val === "object") {
+      rows.push({ label: key, isGroup: true });
+      rows.push(..._fairValueRows(val));
+    } else {
+      const failed = _fairCheckFailed(val);
+      rows.push({
+        label: key,
+        isGroup: false,
+        found: !failed,
+        statusLabel: failed ? "Missing" : "Found",
+      });
+    }
+  }
+  return rows;
+}
+
+function _fairPrincipleStats(data, principle, checks) {
+  const checkStr = checks[`${principle} Checks`] || "0/0";
+  const m = checkStr.match(/(\d+)\/(\d+)/);
+  const passed = m ? parseInt(m[1], 10) : 0;
+  const total = m ? parseInt(m[2], 10) : 1;
+  const pct = Math.round((passed / total) * 100);
+  const detail = data[principle];
+  const rows =
+    typeof detail === "object" && detail !== null ? _fairValueRows(detail) : [];
+  return { name: principle, checkStr, passed, total, pct, rows };
+}
+
+function _renderFairCheckBadge(found) {
+  if (found) {
+    return '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Found</span>';
+  }
+  return '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Missing</span>';
+}
+
+function _renderFairPrincipleCardHtml(principle) {
+  let tableHtml = "";
+  if (principle.rows.length) {
+    tableHtml = '<table class="w-full text-xs"><tbody>';
+    principle.rows.forEach((row) => {
+      if (row.isGroup) {
+        tableHtml += `<tr><td colspan="2" class="px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/40 border-b border-gray-100 dark:border-gray-700">${escapeHtml(row.label)}</td></tr>`;
+      } else {
+        tableHtml += `<tr class="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+          <td class="px-3 py-1.5 text-gray-600 dark:text-gray-400">${escapeHtml(row.label)}</td>
+          <td class="px-3 py-1.5 text-right">${_renderFairCheckBadge(row.found)}</td>
+        </tr>`;
+      }
     });
+    tableHtml += "</tbody></table>";
+  } else {
+    tableHtml =
+      '<p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">No detail available.</p>';
+  }
+
+  return `<div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+      <span class="text-sm font-semibold text-gray-900 dark:text-white">${escapeHtml(principle.name)}</span>
+      <span class="text-xs text-gray-400 dark:text-gray-500">${escapeHtml(principle.checkStr)}</span>
+    </div>
+    ${tableHtml}
+  </div>`;
+}
+
+function _renderFairPrincipleCardsGridHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const cards = _FAIR_PRINCIPLE_KEYS.map((name) =>
+    _renderFairPrincipleCardHtml(_fairPrincipleStats(data, name, checks)),
+  );
+  return `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${cards.join("")}</div>`;
+}
+
+function _fairSupplementaryDetailKeys(data) {
+  const reserved = new Set([..._FAIR_PRINCIPLE_KEYS, "Pie chart"]);
+  return Object.keys(data).filter((k) => !reserved.has(k));
+}
+
+function _renderFairSupplementaryDetailsHtml(data) {
+  const extraKeys = _fairSupplementaryDetailKeys(data);
+  if (!extraKeys.length) return "";
+
+  let html = '<div class="space-y-2">';
+  extraKeys.forEach((k) => {
+    const val = data[k];
+    if (typeof val === "object" && val !== null) {
+      html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <summary class="cursor-pointer flex items-center justify-start px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+          ${escapeHtml(k)}
+        </summary>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+          <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
+        </div>
+      </details>`;
+    } else {
+      html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg">
+        <span class="font-medium text-gray-900 dark:text-white">${escapeHtml(k)}</span>
+        <span class="text-gray-500 dark:text-gray-400">${escapeHtml(val ?? "—")}</span>
+      </div>`;
+    }
+  });
+  html += "</div>";
+  return html;
+}
+
+function _renderFairComplianceSummaryHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const totalCheck = checks["Total Checks"] || "";
+  const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
+  const totalPassed = totalMatch ? parseInt(totalMatch[1], 10) : 0;
+  const totalExpected = totalMatch ? parseInt(totalMatch[2], 10) : 1;
+  const totalPct = Math.round((totalPassed / totalExpected) * 100);
+
+  let html = `<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">${totalPassed}/${totalExpected} checks passed</span>
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-sm font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">${totalPct}%</span>
+  </div>
+  <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+    <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
+  </div>
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">`;
+
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
+    const checkStr = checks[`${k} Checks`] || "0/0";
+    const m = checkStr.match(/(\d+)\/(\d+)/);
+    const passed = m ? parseInt(m[1], 10) : 0;
+    const total = m ? parseInt(m[2], 10) : 1;
+    const pct = Math.round((passed / total) * 100);
+    html += `<div>
+      <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
+      <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
+        <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
+      </div>
+    </div>`;
+  });
+  html += "</div>";
+  return html;
 }
 
 /** Render a FAIR value object as readable HTML with pass/fail badges */
@@ -3510,7 +4826,7 @@ function renderFairValue(obj) {
   let html = "";
   for (const [k, v] of Object.entries(obj)) {
     if (typeof v === "object" && v !== null) {
-      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${k}</span>${renderFairValue(v)}</div>`;
+      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${escapeHtml(k)}</span>${renderFairValue(v)}</div>`;
     } else {
       const strVal = String(v);
       const isFail =
@@ -3523,16 +4839,327 @@ function renderFairValue(obj) {
         badge =
           '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">&#10007; Missing</span>';
       } else {
-        // Truncate long values
-        const display =
-          strVal.length > 60 ? strVal.substring(0, 57) + "..." : strVal;
         badge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" title="${escapeHtml(strVal)}">&#10003; Found</span>`;
       }
       html += `<div class="flex items-center justify-between py-1.5 text-xs border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-        <span class="text-gray-600 dark:text-gray-400 mr-2">${k}</span>${badge}</div>`;
+        <span class="text-gray-600 dark:text-gray-400 mr-2">${escapeHtml(k)}</span>${badge}</div>`;
     }
   }
   return html;
+}
+
+/** Build FAIR assessment result HTML for Understandability / FAIR Assessment. */
+function buildFairAssessmentResultHtml(data) {
+  const checks = data["FAIR Compliance Checks"] || {};
+  const totalCheck = checks["Total Checks"] || "";
+  const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
+  const totalPassed = totalMatch ? parseInt(totalMatch[1], 10) : 0;
+  const totalExpected = totalMatch ? parseInt(totalMatch[2], 10) : 1;
+  const totalPct = Math.round((totalPassed / totalExpected) * 100);
+
+  let html = `<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5 mb-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white">FAIR Compliance</h3>
+      <span class="text-sm font-medium text-gray-500 dark:text-gray-400">${totalPassed}/${totalExpected} checks passed</span>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+      <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${totalPct}%"></div>
+    </div>
+    <div class="grid grid-cols-4 gap-3">`;
+
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
+    const checkStr = checks[`${k} Checks`] || "0/0";
+    const m = checkStr.match(/(\d+)\/(\d+)/);
+    const passed = m ? parseInt(m[1], 10) : 0;
+    const total = m ? parseInt(m[2], 10) : 1;
+    const pct = Math.round((passed / total) * 100);
+    html += `<div class="text-center">
+      <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">${k}</div>
+      <div class="text-lg font-bold text-gray-900 dark:text-white">${passed}/${total}</div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
+        <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
+      </div>
+    </div>`;
+  });
+  html += "</div></div>";
+
+  html += '<div class="space-y-2 mb-4">';
+  _FAIR_PRINCIPLE_KEYS.forEach((k) => {
+    let val = "—";
+    const checkStr = checks[`${k} Checks`] || "";
+    if (data[k] !== undefined && typeof data[k] === "object") {
+      val = renderFairValue(data[k]);
+    } else if (data[k] !== undefined) {
+      val = `<div class="py-2 text-sm text-gray-700 dark:text-gray-300">${data[k]}</div>`;
+    }
+    html += `<details class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <summary class="cursor-pointer flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+        <span>${k}</span>
+        <span class="text-xs text-gray-400 dark:text-gray-500">${checkStr}</span>
+      </summary>
+      <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">${val}</div>
+    </details>`;
+  });
+  html += "</div>";
+
+  const extraKeys = Object.keys(data).filter(
+    (k) => !_FAIR_PRINCIPLE_KEYS.includes(k) && k !== "Pie chart",
+  );
+  if (extraKeys.length > 0) {
+    html +=
+      '<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4">';
+    html +=
+      '<h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Detailed Results</h3>';
+    extraKeys.forEach((k) => {
+      const val = data[k];
+      if (typeof val === "object" && val !== null) {
+        html += `<details class="mb-2 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <summary class="cursor-pointer flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+            ${k}
+            <svg class="w-3 h-3 shrink-0 ml-2" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l4 4 4-4"/></svg>
+          </summary>
+          <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+            <pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(val, null, 2))}</pre>
+          </div>
+        </details>`;
+      } else {
+        html += `<div class="flex justify-between items-center px-4 py-2.5 text-sm border-b border-gray-200 dark:border-gray-700">
+          <span class="font-medium text-gray-900 dark:text-white">${k}</span>
+          <span class="text-gray-500 dark:text-gray-400">${val ?? "—"}</span>
+        </div>`;
+      }
+    });
+    html += "</div>";
+  }
+
+  return html;
+}
+
+/** Build readiness-report FAIR result HTML (PDF-style cards + on-demand extras). */
+function buildReadinessFairResultHtml(data) {
+  let html = _renderFairComplianceSummaryHtml(data);
+  html += `<div class="mt-4">${_renderFairPrincipleCardsGridHtml(data)}</div>`;
+  if (_fairSupplementaryDetailKeys(data).length) {
+    html += `
+    <details class="group border-t border-gray-200 dark:border-gray-700 pt-3 mt-4" data-fair-details="1">
+      <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+        Show detailed results
+      </summary>
+      <div class="mt-4 fair-compliance-details-content"></div>
+    </details>`;
+  }
+  return html;
+}
+
+function _wireFairComplianceDetails(detailsEl, data) {
+  if (!detailsEl || detailsEl.dataset.fairDetailsWired === "1") return;
+  detailsEl.dataset.fairDetailsWired = "1";
+  detailsEl.addEventListener("toggle", () => {
+    if (!detailsEl.open) return;
+    const target = detailsEl.querySelector(".fair-compliance-details-content");
+    if (!target || target.dataset.rendered === "1") return;
+    target.dataset.rendered = "1";
+    target.innerHTML = _renderFairSupplementaryDetailsHtml(data);
+  });
+}
+
+function renderFairAssessmentResult(data, resultContainer) {
+  if (!resultContainer) return false;
+  if (data.error) {
+    resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
+    return false;
+  }
+  resultContainer.innerHTML = buildFairAssessmentResultHtml(data);
+  return true;
+}
+
+function renderReadinessFairResult(data, resultContainer) {
+  if (!resultContainer) return false;
+  if (data.error) {
+    resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
+    return false;
+  }
+  resultContainer.innerHTML = buildReadinessFairResultHtml(data);
+  const detailsEl = resultContainer.querySelector("[data-fair-details]");
+  if (detailsEl) _wireFairComplianceDetails(detailsEl, data);
+  return true;
+}
+
+// Choosing a file and changing the metadata type both submit, so an earlier request
+// can still be in flight. Only a form's newest submission may write its results.
+const _fairGenerations = new WeakMap();
+
+function submitFairAssessmentForm(form, resultContainer, callbacks) {
+  if (!form) return Promise.resolve();
+
+  const generation = (_fairGenerations.get(form) || 0) + 1;
+  _fairGenerations.set(form, generation);
+  const superseded = () => _fairGenerations.get(form) !== generation;
+
+  const formData = new FormData(form);
+  if (resultContainer) {
+    resultContainer.classList.remove("hidden");
+    resultContainer.innerHTML =
+      '<p class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">Processing…</p>';
+  }
+
+  return fetch("/fair-assessment", { method: "POST", body: formData })
+    .then((response) => response.json())
+    .then((data) => {
+      if (superseded()) return;
+      const resultData = { ...data };
+      delete resultData.cached;
+      delete resultData.build_time_seconds;
+      const render = callbacks?.render || renderFairAssessmentResult;
+      const ok = render(resultData, resultContainer);
+      if (ok) {
+        callbacks?.onSuccess?.(resultData, data);
+      } else {
+        callbacks?.onError?.(data);
+      }
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      if (superseded()) return;
+      if (resultContainer) {
+        resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">Error: ${escapeHtml(error.message)}</div>`;
+      }
+      callbacks?.onError?.(error);
+    });
+}
+
+/**
+ * Wire the landing page's Metadata tab (no dataset loaded). Like the dataset
+ * upload, it has no Submit button: choosing a file runs the check, and changing
+ * the metadata type re-runs it on the chosen file.
+ */
+function initLandingFairTab() {
+  const fileInput = document.getElementById("fair-file");
+  _wireFairFileInput(
+    fileInput,
+    document.getElementById("fairFileLabel"),
+    document.getElementById("fairUploadIcon"),
+  );
+  const runIfFileChosen = () => {
+    if (fileInput?.files.length) submitFairAssessment();
+  };
+  fileInput?.addEventListener("change", runIfFileChosen);
+  document
+    .getElementById("fair-metadata-type")
+    ?.addEventListener("change", runIfFileChosen);
+}
+
+function submitFairAssessment() {
+  return submitFairAssessmentForm(
+    document.getElementById("form-fair-assessment"),
+    document.getElementById("fair-result-container"),
+  );
+}
+
+function submitReadinessFairAssessment() {
+  _readinessFairCompliance = { status: "computing", data: null };
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  if (resultsEl) resultsEl.classList.remove("hidden");
+
+  return submitFairAssessmentForm(
+    document.getElementById("form-readiness-fair"),
+    resultsEl,
+    {
+      render: renderReadinessFairResult,
+      onSuccess(data) {
+        _readinessFairCompliance = { status: "ok", data };
+        uploadEl?.classList.add("hidden");
+      },
+      onError() {
+        _readinessFairCompliance = { status: "error", data: null };
+      },
+    },
+  );
+}
+
+function _restoreReadinessFairFromCache(fairPayload) {
+  const data = fairPayload?.data;
+  if (!data || data.error) return false;
+
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  if (!resultsEl) return false;
+
+  _readinessFairCompliance = { status: "ok", data };
+  uploadEl?.classList.add("hidden");
+  resultsEl.classList.remove("hidden");
+  renderReadinessFairResult(data, resultsEl);
+
+  const metadataType = fairPayload.metadata_type;
+  if (metadataType) {
+    const select = document.getElementById("readiness-fair-metadata-type");
+    if (select) select.value = metadataType;
+  }
+  const metadataFilename = fairPayload.metadata_filename;
+  if (metadataFilename) {
+    const label = document.getElementById("readinessFairFileLabel");
+    const icon = document.getElementById("readinessFairUploadIcon");
+    if (label) label.textContent = metadataFilename;
+    if (icon) {
+      icon.classList.remove("text-gray-400");
+      icon.classList.add("text-green-500");
+    }
+  }
+  return true;
+}
+
+/** Restore optional FAIR compliance from server cache (separate lightweight fetch). */
+function _tryRestoreCachedReadinessFair() {
+  return fetch("/cached-result/readiness_report_fair")
+    .then((r) => r.json())
+    .then((resp) => {
+      if (
+        !resp.cached ||
+        !resp.fair_compliance ||
+        activePanel !== "readiness-report"
+      ) {
+        return false;
+      }
+      return _restoreReadinessFairFromCache(resp.fair_compliance);
+    })
+    .catch((err) => {
+      debugLog("Readiness FAIR cache restore error:", err);
+      return false;
+    });
+}
+
+function _resetReadinessFairSection() {
+  _readinessFairCompliance = { status: "idle", data: null };
+  const uploadEl = document.getElementById("readiness-fair-upload");
+  const resultsEl = document.getElementById("readiness-fair-results");
+  const form = document.getElementById("form-readiness-fair");
+  uploadEl?.classList.remove("hidden");
+  if (resultsEl) {
+    resultsEl.classList.add("hidden");
+    resultsEl.innerHTML = "";
+  }
+  form?.reset();
+  const label = document.getElementById("readinessFairFileLabel");
+  const icon = document.getElementById("readinessFairUploadIcon");
+  if (label) label.textContent = "JSON metadata file";
+  if (icon) {
+    icon.innerHTML =
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
+    icon.classList.remove("text-green-500");
+    icon.classList.add("text-gray-400");
+  }
+}
+
+function initReadinessFairSection() {
+  const form = document.getElementById("form-readiness-fair");
+  if (!form || form.dataset.wired === "1") return;
+  form.dataset.wired = "1";
+  _wireFairFileInput(
+    document.getElementById("readiness-fair-file"),
+    document.getElementById("readinessFairFileLabel"),
+    document.getElementById("readinessFairUploadIcon"),
+  );
 }
 
 // ==================== Custom Metrics ====================
@@ -3556,8 +5183,42 @@ function initCodeMirror() {
   // Load existing code
   fetch("/load-custom-metric")
     .then((r) => r.text())
-    .then((code) => codeMirrorEditor.setValue(code))
+    .then((code) => {
+      codeMirrorEditor.setValue(code);
+      // Submit always runs the last *saved* file on disk, not whatever is
+      // currently in the editor — so any edit past this point must force a
+      // fresh Save before Submit is usable again. Attached after setValue()
+      // so the programmatic initial load doesn't itself count as an edit.
+      codeMirrorEditor.on("change", () => _markCustomMetricUnsaved());
+    })
     .catch((err) => console.error("Error loading custom metric:", err));
+}
+
+/**
+ * Reflect whether the editor's current content matches what's saved on the
+ * server. Submit is disabled while unsaved, since it reads the saved file,
+ * not the live editor — silently running stale code otherwise.
+ */
+function _setCustomMetricSaveState(state) {
+  const submitBtn = document.getElementById("custom-metrics-submit");
+  const status = document.getElementById("custom-metrics-save-status");
+  if (submitBtn) submitBtn.disabled = state !== "saved";
+  if (!status) return;
+  if (state === "unsaved") {
+    status.textContent = "Unsaved changes: click Save before Submit";
+    status.className =
+      "flex-1 text-xs font-medium text-amber-600 dark:text-amber-400";
+  } else if (state === "saved") {
+    status.textContent = "Saved";
+    status.className =
+      "flex-1 text-xs font-medium text-green-600 dark:text-green-400";
+  } else {
+    status.textContent = "";
+  }
+}
+
+function _markCustomMetricUnsaved() {
+  _setCustomMetricSaveState("unsaved");
 }
 
 function saveCustomMetricFile() {
@@ -3574,13 +5235,7 @@ function saveCustomMetricFile() {
   fetch("/save-custom-metric-text", { method: "POST", body: formData })
     .then((r) => r.json())
     .then((data) => {
-      if (data.message) {
-        // Enable submit button after successful save
-        const submitBtn = document.getElementById("custom-metrics-submit");
-        if (submitBtn) {
-          submitBtn.disabled = false;
-        }
-      }
+      _setCustomMetricSaveState(data.message ? "saved" : "unsaved");
       showToast(data.message || data.error, data.error ? "error" : "success");
     })
     .catch((err) => showToast("Error saving file: " + err, "error"));
@@ -3616,7 +5271,18 @@ function submitCustomMetric() {
   })
     .then((response) => {
       if (response.ok) return response.json();
-      throw new Error(`Server error (${response.status})`);
+      // The backend always returns a JSON body with a specific {error: ...}
+      // message (e.g. a syntax error in the user's code, with file/line
+      // info) — parse it instead of discarding it in favor of a generic
+      // "Server error (500)".
+      return response
+        .json()
+        .catch(() => null)
+        .then((data) => {
+          throw new Error(
+            (data && data.error) || `Server error (${response.status})`,
+          );
+        });
     })
     .then((data) => {
       lastMetricResult = data;
@@ -3625,7 +5291,7 @@ function submitCustomMetric() {
     .catch((error) => {
       console.error("Error:", error);
       if (metricsDiv)
-        metricsDiv.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${error.message}</div>`;
+        metricsDiv.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(error.message)}</div>`;
     });
 }
 
@@ -3681,12 +5347,6 @@ function buildCategoricalSummaryTable(summary) {
 // ==================== Histograms ====================
 
 /**
- * Build one distribution section (heading + image grid). Returns "" when the
- * histogram dict is empty so callers can concatenate sections unconditionally.
- * @param {Object} histograms - Dict of {column_theme: base64_img}
- * @param {string} title - Section heading
- */
-/**
  * Strip the "_light" suffix the server keys chart images with.
  * @param {Object} charts - {`${column}_light`: base64}
  * @returns {Object} {column: base64}
@@ -3741,26 +5401,33 @@ function toggleDistributionChart(button, kind) {
 /**
  * Build one distribution-chart grid.
  * @param {Object} histograms - {`${column}_light`: base64} shown by default
- * @param {string} title - section heading
+ * @param {string} [title] - section heading; omitted when falsy
  * @param {Object} [altBars] - optional bar-chart twin per column; when a column
  *   has one, the card gets a Line/Bar toggle
+ * @param {boolean} [large] - bigger, two-column layout for the readiness report
  */
-function buildHistogramSection(histograms, title, altBars) {
+function buildHistogramSection(histograms, title, altBars, large) {
   if (!histograms) return "";
   // Always use the light variant — CSS filter handles dark mode
   const columns = _chartsByColumn(histograms);
   if (Object.keys(columns).length === 0) return "";
   const bars = _chartsByColumn(altBars);
 
-  let html = `<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">${title}</h3>`;
-  html +=
-    '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">';
+  const gridClass = large
+    ? "grid grid-cols-1 sm:grid-cols-2 gap-6"
+    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
+  const imgClass = large ? "w-full h-auto object-contain" : "w-full";
+
+  let html = title
+    ? `<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">${title}</h3>`
+    : "";
+  html += `<div class="${gridClass} mb-6">`;
   for (const [colName, base64] of Object.entries(columns)) {
     const bar = bars[colName];
     const safeName = escapeHtml(colName);
     html += `
       <div data-chart-card${bar ? ` data-chart-bar="${bar}"` : ""} class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-        <img src="data:image/png;base64,${base64}" alt="Distribution of ${safeName}" class="w-full" />
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${safeName}" class="${imgClass}" />
         <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs border-t border-gray-200 dark:border-gray-600">
           <span class="font-medium text-gray-600 dark:text-gray-400 truncate" title="${safeName}">${safeName}</span>
           ${
@@ -3805,6 +5472,35 @@ function renderWorkspaceHistograms(
       categoricalHistograms,
       "Categorical Feature Distributions",
     );
+}
+
+/**
+ * Render continuous-distribution charts into an arbitrary container, for
+ * reuse outside the main Data Overview panel (the Globus Compute summary,
+ * and the Readiness Report's embedded overview).
+ * @param {Object} histograms - continuous KDE plots
+ * @param {string} [containerId] - defaults to "workspace-histograms"
+ * @param {boolean} [skipHeading]
+ * @param {string} [layout] - "large" for the readiness report, else compact
+ * @param {Object} [bars] - binned twin of each KDE, enabling the Line/Bar toggle
+ */
+function renderWorkspaceHistogramsInto(
+  histograms,
+  containerId,
+  skipHeading,
+  layout,
+  bars,
+) {
+  const container = document.getElementById(
+    containerId || "workspace-histograms",
+  );
+  if (!container) return;
+  container.innerHTML = buildHistogramSection(
+    histograms,
+    skipHeading ? null : "Numerical Feature Distributions",
+    bars,
+    layout === "large",
+  );
 }
 
 /**
@@ -4088,7 +5784,29 @@ function renderWorkspaceSummary(data) {
   );
 }
 
-// ==================== Workspace Init ====================
+/**
+ * Render categorical distribution pie charts (base64 PNG per column).
+ */
+function renderCategoricalPieCharts(charts, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || !charts) return;
+
+  const entries = Object.entries(charts);
+  if (entries.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  let html = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">';
+  for (const [colName, base64] of entries) {
+    html += `
+      <div class="bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden p-2">
+        <img src="data:image/png;base64,${base64}" alt="Distribution of ${escapeHtml(colName)}" class="w-full h-auto object-contain mx-auto" style="max-width: 420px;" />
+      </div>`;
+  }
+  html += "</div>";
+  container.innerHTML = html;
+}
 
 /**
  * Show dataset picker for multi-dataset HDF5 files.
@@ -4107,7 +5825,9 @@ function renderHdf5DatasetPicker(container, data) {
     return String(text)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
-      .replace(/"/g, "&quot;");
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function datasetLength(ds) {
@@ -4404,6 +6124,11 @@ function selectHdf5Datasets(paths) {
     .then((r) => r.json())
     .then((resp) => {
       if (resp.success) {
+        // The server cleared session["intent"] for this dataset switch, but
+        // this re-runs initWorkspace() without a page reload, so the
+        // page-load "already asked" flag would otherwise stay stuck true and
+        // the modal would never reopen for the new dataset.
+        window.AIDRIN_INTENT_ASKED = false;
         initWorkspace();
       } else if (container) {
         const p = document.createElement("p");
@@ -4476,10 +6201,2153 @@ function returnToHdf5DatasetPicker() {
 }
 
 /**
+ * Fetch summary statistics from the backend and render the stat cards,
+ * summary table, and feature-distribution histograms into the given
+ * containers. Reused by both the Data Overview panel and the
+ * Readiness Report panel.
+ *
+ * @param {string} summaryContainerId - element ID for the stats/table.
+ * @param {string} histogramsContainerId - element ID for the histograms.
+ */
+function loadDataOverview(summaryContainerId, histogramsContainerId) {
+  const summaryId = summaryContainerId || "workspace-summary";
+  const histogramsId = histogramsContainerId || "workspace-histograms";
+
+  return fetch("/summary-statistics")
+    .then((r) => r.json())
+    .then((data) => renderWorkspaceSummary(data))
+    .catch((err) => {
+      const container = document.getElementById(summaryId);
+      if (container) {
+        const p = document.createElement("p");
+        p.className = "text-sm";
+        p.style.color = "red";
+        p.textContent = "Error loading summary: " + err.message;
+        container.replaceChildren(p);
+      }
+    });
+}
+
+/**
+ * Map a readiness status string to Tailwind color classes.
+ */
+function _dqStatusClasses(status) {
+  switch (status) {
+    case "good":
+      return {
+        text: "text-green-700 dark:text-green-400",
+        bar: "bg-green-500",
+        badge:
+          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      };
+    case "warning":
+      return {
+        text: "text-amber-700 dark:text-amber-400",
+        bar: "bg-amber-500",
+        badge:
+          "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+      };
+    case "poor":
+      return {
+        text: "text-red-700 dark:text-red-400",
+        bar: "bg-red-500",
+        badge: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      };
+    default:
+      return {
+        text: "text-gray-500 dark:text-gray-400",
+        bar: "bg-gray-400",
+        badge: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+      };
+  }
+}
+
+/** Coerce readiness metric values to finite numbers. */
+function _readinessNums(values) {
+  return (values || [])
+    .map((v) => (typeof v === "number" ? v : parseFloat(v)))
+    .filter((v) => !Number.isNaN(v));
+}
+
+/**
+ * Decimal places for a group: default 2; if every value rounds to 0.00, use more
+ * (up to maxDecimals) so small non-zero values remain visible. Same precision
+ * is used for every value in the group.
+ */
+function _readinessDecimalPlaces(
+  values,
+  { minDecimals = 2, maxDecimals = 6 } = {},
+) {
+  const nums = _readinessNums(values);
+  if (!nums.length) return minDecimals;
+  if (nums.every((v) => v === 0)) return minDecimals;
+
+  for (let d = minDecimals; d <= maxDecimals; d++) {
+    const allRoundedZero = nums.every((v) => Number(v.toFixed(d)) === 0);
+    if (!allRoundedZero) return d;
+  }
+  return maxDecimals;
+}
+
+/** Decimal places for 0–1 ratios shown as percentages (value × 100). */
+function _readinessPctDecimals(values, options) {
+  return _readinessDecimalPlaces(
+    _readinessNums(values).map((v) => v * 100),
+    options,
+  );
+}
+
+/** Format a number with fixed decimals; integers omit the fractional part. */
+function _readinessNum(value, decimals = 2) {
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "N/A";
+  if (typeof value !== "number") return String(value);
+  if (Number.isInteger(value)) return value.toLocaleString();
+  return value.toFixed(decimals);
+}
+
+/** Build a formatter that uses one decimal precision for every value in *values*. */
+function _readinessNumFormatter(values, options) {
+  const nums = _readinessNums(values);
+  if (nums.length && nums.every((v) => Number.isInteger(v))) {
+    return (value) => {
+      if (value === null || value === undefined || Number.isNaN(value))
+        return "N/A";
+      return Number(value).toLocaleString();
+    };
+  }
+  const decimals = _readinessDecimalPlaces(nums, options);
+  return (value) => _readinessNum(value, decimals);
+}
+
+/** Build a percentage formatter (0–1 input) with group-consistent decimals. */
+function _readinessPctFormatter(values, options) {
+  const decimals = _readinessPctDecimals(values, options);
+  return (value) => _pct(value, decimals);
+}
+
+/** Format a 0–1 ratio as a percentage, or "N/A" if missing. */
+function _pct(value, decimals = 2) {
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "N/A";
+  return `${(value * 100).toFixed(decimals)}%`;
+}
+
+/** Show an error message inside one readiness section container. */
+function _readinessSectionError(container, message) {
+  if (!container) return;
+  container.classList.add("text-center", "py-8");
+  container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">${escapeHtml(message)}</p>`;
+}
+
+/** Human-readable section build duration (matches server log precision). */
+function _formatReadinessBuildTime(seconds) {
+  if (
+    seconds === null ||
+    seconds === undefined ||
+    Number.isNaN(Number(seconds))
+  ) {
+    return "";
+  }
+  return `Prepared in ${Number(seconds).toFixed(2)} seconds`;
+}
+
+/** Append build-time footer at the bottom of a readiness section container. */
+function _appendReadinessBuildTimeFooter(container, seconds) {
+  if (!container) return;
+  const label = _formatReadinessBuildTime(seconds);
+  if (!label) return;
+  container.querySelector(".readiness-build-time")?.remove();
+  const el = document.createElement("p");
+  el.className =
+    "readiness-build-time text-xs text-gray-400 dark:text-gray-500 mt-4 pt-3 border-t border-gray-200 dark:border-gray-700 text-right";
+  el.textContent = label;
+  container.appendChild(el);
+}
+
+const _readinessVizCache = {};
+
+/** Placeholder for a chart that loads when the details panel is opened. */
+function _readinessVizSlot(section, vizKey, title) {
+  return `<div class="readiness-viz-slot mb-4" data-readiness-section="${_escapeHtml(section)}" data-readiness-viz="${_escapeHtml(vizKey)}">
+    <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${_escapeHtml(title)}</p>
+    <div class="readiness-viz-content text-sm text-gray-500 dark:text-gray-400 py-4 text-center">Open this section to load chart…</div>
+  </div>`;
+}
+
+function _readinessVizSpinnerHtml() {
+  return `<div class="flex justify-center py-6" role="status">
+    <svg class="w-6 h-6 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101"><path d="M100 50.59c0 27.61-22.39 50-50 50S0 78.2 0 50.59 22.39.59 50 .59s50 22.39 50 50zm-90.92 0c0 22.6 18.32 40.92 40.92 40.92s40.92-18.32 40.92-40.92S72.6 9.67 50 9.67 9.08 28 9.08 50.59z" fill="currentColor"/><path d="M93.97 39.04c2.43-.64 3.93-3.13 3.04-5.5A50 50 0 0048.44.58c-2.5.23-4.21 2.53-3.73 5l.02.1a3.89 3.89 0 004.57 3.13A41.1 41.1 0 0188.18 37.2a3.88 3.88 0 005.79 1.84z" fill="currentFill"/></svg>
+  </div>`;
+}
+
+function _applyReadinessVisualizations(section, root, vizMap) {
+  if (!root || !vizMap) return;
+
+  if (section === "dataset-overview") {
+    if (vizMap.categorical_charts) {
+      const catHost = root.querySelector("#readiness-categorical-charts");
+      if (catHost) {
+        renderCategoricalPieCharts(
+          vizMap.categorical_charts,
+          "readiness-categorical-charts",
+        );
+      }
+    }
+    if (vizMap.histograms) {
+      const histHost = root.querySelector("#readiness-histograms-inner");
+      if (histHost) {
+        renderWorkspaceHistogramsInto(
+          vizMap.histograms,
+          "readiness-histograms-inner",
+          true,
+          "large",
+          vizMap.histogram_bars,
+        );
+      }
+    }
+    return;
+  }
+
+  root.querySelectorAll(".readiness-viz-slot").forEach((slot) => {
+    const key = slot.dataset.readinessViz;
+    const target = slot.querySelector(".readiness-viz-content");
+    if (!target || !key) return;
+    const b64 = vizMap[key];
+    if (b64) {
+      target.innerHTML = `<img src="data:image/png;base64,${b64}" alt="${_escapeHtml(key)}" class="w-full max-w-2xl" />`;
+    } else {
+      target.innerHTML = `<p class="text-sm text-gray-500 dark:text-gray-400">Chart unavailable.</p>`;
+    }
+  });
+}
+
+function _loadReadinessSectionVisualizations(section, root) {
+  if (!root) return Promise.resolve();
+  const slots = root.querySelectorAll(".readiness-viz-slot");
+  if (!section || (!slots.length && section !== "dataset-overview")) {
+    return Promise.resolve();
+  }
+
+  if (_readinessVizCache[section]) {
+    _applyReadinessVisualizations(section, root, _readinessVizCache[section]);
+    return Promise.resolve();
+  }
+
+  slots.forEach((slot) => {
+    const target = slot.querySelector(".readiness-viz-content");
+    if (target) target.innerHTML = _readinessVizSpinnerHtml();
+  });
+  const catHost = root.querySelector("#readiness-categorical-charts");
+  const histHost = root.querySelector("#readiness-histograms-inner");
+  if (catHost && !catHost.childElementCount)
+    catHost.innerHTML = _readinessVizSpinnerHtml();
+  if (histHost && !histHost.childElementCount)
+    histHost.innerHTML = _readinessVizSpinnerHtml();
+
+  return fetch(`/readiness-report/${section}/visualizations`)
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.success) {
+        const msg = resp.message || "Could not load charts";
+        slots.forEach((slot) => {
+          const target = slot.querySelector(".readiness-viz-content");
+          if (target)
+            target.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${_escapeHtml(msg)}</p>`;
+        });
+        return;
+      }
+      _readinessVizCache[section] = resp.visualizations || {};
+      _applyReadinessVisualizations(section, root, _readinessVizCache[section]);
+    })
+    .catch((err) => {
+      slots.forEach((slot) => {
+        const target = slot.querySelector(".readiness-viz-content");
+        if (target) {
+          target.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">${_escapeHtml(err.message)}</p>`;
+        }
+      });
+    });
+}
+
+/** Fetch charts the first time a readiness details panel is expanded. */
+function _wireReadinessDetailsViz(detailsEl, section) {
+  if (!detailsEl || detailsEl.dataset.vizWired === "1") return;
+  detailsEl.dataset.vizWired = "1";
+  detailsEl.addEventListener("toggle", () => {
+    if (!detailsEl.open) return;
+    _loadReadinessSectionVisualizations(section, detailsEl);
+  });
+}
+
+/**
+ * Fetch one readiness-report section and render it when ready.
+ * @param {string} section - URL slug (e.g. "data-quality")
+ * @param {HTMLElement} container
+ * @param {Function} renderFn - (container, data) => void
+ * @returns {Promise<void>}
+ */
+function _getReadinessSectionRenderers() {
+  return [
+    {
+      section: "dataset-overview",
+      container: document.getElementById("readiness-summary"),
+      render: renderReadinessDatasetOverview,
+    },
+    {
+      section: "data-quality",
+      container: document.getElementById("readiness-data-quality"),
+      render: renderReadinessDataQuality,
+    },
+    {
+      section: "impact-on-ai",
+      container: document.getElementById("readiness-impact"),
+      render: renderReadinessImpact,
+    },
+    {
+      section: "fairness-bias",
+      container: document.getElementById("readiness-fairness"),
+      render: renderReadinessFairness,
+    },
+    {
+      section: "data-governance",
+      container: document.getElementById("readiness-governance"),
+      render: renderReadinessGovernance,
+    },
+  ];
+}
+
+function _initReadinessReportShell() {
+  _wireReadinessExportButton();
+  _resetReadinessFairSection();
+  initReadinessFairSection();
+  _READINESS_REPORT_SECTIONS.forEach((section) => {
+    _readinessSectionStatus[section] = "pending";
+  });
+  _updateReadinessExportButton();
+}
+
+function _applyReadinessSection(
+  container,
+  section,
+  data,
+  renderFn,
+  buildTimeSeconds,
+) {
+  if (!container) {
+    _readinessSectionStatus[section] = "error";
+    return false;
+  }
+  if (data.error) {
+    _readinessSectionStatus[section] = "error";
+    _readinessSectionError(container, data.error);
+    return false;
+  }
+  _readinessSectionStatus[section] = "ok";
+  container.classList.remove("text-center", "py-8");
+  renderFn(container, data);
+  _appendReadinessBuildTimeFooter(
+    container,
+    buildTimeSeconds ?? data.build_time_seconds,
+  );
+  return true;
+}
+
+function _fetchReadinessSection(section, container, renderFn) {
+  if (!container) {
+    _readinessSectionStatus[section] = "error";
+    _updateReadinessExportButton();
+    return Promise.resolve();
+  }
+  return fetch(`/readiness-report/${section}`)
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp.success) {
+        _readinessSectionStatus[section] = "error";
+        _readinessSectionError(
+          container,
+          `Could not load ${section.replace(/-/g, " ")}: ${resp.message || "unknown error"}`,
+        );
+        return;
+      }
+      const data = resp.data || {};
+      _applyReadinessSection(
+        container,
+        section,
+        data,
+        renderFn,
+        resp.build_time_seconds,
+      );
+    })
+    .catch((err) => {
+      _readinessSectionStatus[section] = "error";
+      _readinessSectionError(
+        container,
+        `Error loading section: ${err.message}`,
+      );
+    })
+    .finally(() => {
+      _updateReadinessExportButton();
+    });
+}
+
+/**
+ * Restore the readiness report from the aggregated server cache (one request).
+ * @returns {Promise<boolean>} true when all sections were restored from cache
+ */
+function _restoreCachedReadinessReport() {
+  return fetch("/cached-result/readiness_report")
+    .then((r) => r.json())
+    .then((resp) => {
+      if (
+        !resp.cached ||
+        !resp.sections ||
+        activePanel !== "readiness-report"
+      ) {
+        return false;
+      }
+      _initReadinessReportShell();
+      let allOk = true;
+      _getReadinessSectionRenderers().forEach(
+        ({ section, container, render }) => {
+          const data = resp.sections[section];
+          if (!data) {
+            _readinessSectionStatus[section] = "error";
+            allOk = false;
+            return;
+          }
+          if (
+            !_applyReadinessSection(
+              container,
+              section,
+              data,
+              render,
+              data.build_time_seconds,
+            )
+          ) {
+            allOk = false;
+          }
+        },
+      );
+      _updateReadinessExportButton();
+      if (resp.fair_compliance) {
+        _restoreReadinessFairFromCache(resp.fair_compliance);
+      }
+      return allOk;
+    })
+    .catch((err) => {
+      debugLog("Readiness cache restore error:", err);
+      return false;
+    });
+}
+
+/**
+ * Load the readiness report with hybrid progressive rendering:
+ * dataset overview first, then remaining sections in parallel.
+ */
+function loadReadinessReport() {
+  _initReadinessReportShell();
+  _tryRestoreCachedReadinessFair();
+
+  const overviewEntry = _getReadinessSectionRenderers().find(
+    ({ section }) => section === "dataset-overview",
+  );
+  const parallelSections = _getReadinessSectionRenderers().filter(
+    ({ section }) => section !== "dataset-overview",
+  );
+
+  const loadParallelSections = () => {
+    Promise.all(
+      parallelSections.map(({ section, container, render }) =>
+        _fetchReadinessSection(section, container, render),
+      ),
+    );
+  };
+
+  if (!overviewEntry?.container) {
+    loadParallelSections();
+    return;
+  }
+
+  // Hybrid: overview first, then parallel for the rest (spinners stay until each resolves).
+  _fetchReadinessSection(
+    overviewEntry.section,
+    overviewEntry.container,
+    overviewEntry.render,
+  ).finally(loadParallelSections);
+}
+
+function _readinessAllSectionsReady() {
+  return _READINESS_REPORT_SECTIONS.every(
+    (section) => _readinessSectionStatus[section] === "ok",
+  );
+}
+
+function _updateReadinessExportButton() {
+  const bar = document.getElementById("readiness-export-bar");
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  if (!bar) return;
+  bar.classList.remove("hidden");
+  [scorecardBtn, fullBtn].forEach((btn) => {
+    if (btn && !btn.hasAttribute("aria-busy")) {
+      btn.disabled = false;
+    }
+  });
+}
+
+function _wireReadinessExportButton() {
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  if (scorecardBtn && scorecardBtn.dataset.wired !== "1") {
+    scorecardBtn.dataset.wired = "1";
+    scorecardBtn.addEventListener("click", () => {
+      exportReadinessReportPdf("scorecard");
+    });
+  }
+  if (fullBtn && fullBtn.dataset.wired !== "1") {
+    fullBtn.dataset.wired = "1";
+    fullBtn.addEventListener("click", () => {
+      exportReadinessReportPdf("full");
+    });
+  }
+}
+
+function _readinessPdfFilename() {
+  const panel = document.getElementById("panel-readiness-report");
+  const raw =
+    panel?.dataset?.datasetName || window.AIDRIN_DATASET_NAME || "dataset";
+  const stem = String(raw)
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^\w.-]+/g, "_");
+  const date = new Date().toISOString().slice(0, 10);
+  return `readiness-report-${stem || "dataset"}-${date}.pdf`;
+}
+
+function _filenameFromContentDisposition(header) {
+  if (!header) return null;
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1].replace(/"/g, ""));
+  } catch (_e) {
+    return match[1].replace(/"/g, "");
+  }
+}
+
+/** Download readiness report PDF from the server (sync build-on-miss). */
+function exportReadinessReportPdf(mode = "scorecard") {
+  const isFull = mode === "full";
+  const scorecardBtn = document.getElementById(
+    "readiness-export-scorecard-pdf-btn",
+  );
+  const fullBtn = document.getElementById("readiness-export-full-pdf-btn");
+  const scorecardLabel = document.getElementById(
+    "readiness-export-scorecard-pdf-label",
+  );
+  const fullLabel = document.getElementById("readiness-export-full-pdf-label");
+  const buttons = [scorecardBtn, fullBtn].filter(Boolean);
+
+  buttons.forEach((el) => {
+    el.disabled = true;
+    el.setAttribute("aria-busy", "true");
+  });
+  if (isFull && fullLabel) fullLabel.textContent = "Preparing full PDF…";
+  if (!isFull && scorecardLabel) scorecardLabel.textContent = "Preparing PDF…";
+
+  const url = isFull
+    ? "/readiness-report/pdf?mode=full"
+    : "/readiness-report/pdf";
+
+  return fetch(url)
+    .then(async (response) => {
+      if (!response.ok) {
+        let message = `PDF export failed (${response.status})`;
+        try {
+          const data = await response.json();
+          if (data?.message) message = data.message;
+        } catch (_e) {
+          /* ignore */
+        }
+        throw new Error(message);
+      }
+      const filename =
+        _filenameFromContentDisposition(
+          response.headers.get("Content-Disposition"),
+        ) || _readinessPdfFilename();
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    })
+    .catch((err) => {
+      console.error("Readiness PDF export failed:", err);
+      alert(err.message || "Could not generate PDF.");
+    })
+    .finally(() => {
+      buttons.forEach((el) => {
+        el.disabled = false;
+        el.removeAttribute("aria-busy");
+      });
+      if (scorecardLabel) scorecardLabel.textContent = "Scorecard PDF";
+      if (fullLabel) fullLabel.textContent = "Full report PDF";
+    });
+}
+
+function _exportReadinessReportPdf() {
+  return exportReadinessReportPdf("scorecard");
+}
+
+/** Escape text for safe inclusion in HTML (alias of escapeHtml). */
+function _escapeHtml(s) {
+  return escapeHtml(s);
+}
+
+/** Format quasi-identifier key/value pairs for display. */
+function _formatQiValues(qiValues) {
+  if (!qiValues || typeof qiValues !== "object") return "";
+  return Object.entries(qiValues)
+    .map(([k, v]) => `${escapeHtml(k)}=${escapeHtml(v)}`)
+    .join(", ");
+}
+
+/**
+ * One needs-attention list row with optional secondary line (context/detail).
+ * *primary* and *secondary* may contain safe HTML built by callers; user text
+ * must be escaped before passing in.
+ */
+function _readinessNaRow(primary, secondary, value) {
+  const valHtml = value
+    ? `<span class="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">${_escapeHtml(value)}</span>`
+    : "";
+  const sub = secondary
+    ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 pl-0">${secondary}</p>`
+    : "";
+  return `<li>
+    <div class="flex justify-between gap-3 items-start">
+      <span class="text-sm text-gray-700 dark:text-gray-300 min-w-0">${primary}</span>
+      ${valHtml}
+    </div>${sub}
+  </li>`;
+}
+
+/** Needs-attention subsection with title and list body. */
+function _readinessNaBlock(title, infoKey, contextHtml, listHtml, tone) {
+  const titleCls =
+    tone === "red"
+      ? "text-red-700 dark:text-red-400"
+      : tone === "amber"
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-gray-600 dark:text-gray-300";
+  const ctx = contextHtml
+    ? `<p class="text-xs text-gray-500 dark:text-gray-400 mb-1.5">${contextHtml}</p>`
+    : "";
+  return `<div>
+    <p class="text-xs font-semibold ${titleCls} uppercase tracking-wide mb-1.5 inline-flex items-center">${title}${infoKey ? _readinessInfoIcon(infoKey) : ""}</p>
+    ${ctx}
+    <ul class="space-y-2">${listHtml}</ul>
+  </div>`;
+}
+
+/** Wrap needs-attention blocks in the standard amber/green panel. */
+function _renderReadinessNeedsAttentionPanel(naItems, emptyMessage) {
+  if (naItems.length) {
+    return `<div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+      <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
+    </div>`;
+  }
+  return `<div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+    <p class="text-sm text-green-800 dark:text-green-400">${emptyMessage}</p>
+  </div>`;
+}
+
+/** Readiness metric definitions shown in info-icon tooltips. */
+const _READINESS_METRIC_INFO = {
+  feature_profile:
+    "A per-column snapshot of whether each feature is usable for modeling. Combines missingness, cardinality, and value balance into a readiness status (Good / Warning / Poor).",
+  pct_missing:
+    "Share of rows where this feature is missing (null/NaN). High missingness reduces reliability and may require imputation or dropping the column.",
+  n_unique:
+    "Number of distinct non-missing values. Very low values suggest constants; very high values relative to row count may indicate IDs or free text.",
+  pct_dominant:
+    "Share of rows taken by the most frequent value (the mode). Values near 100% mean the column is almost constant and usually carries little signal.",
+  profile_status:
+    "Readiness verdict for this feature. Poor: high missingness, constant, or ID-like. Warning: moderate issues. Good: no major issues detected.",
+  overall_dq_grade:
+    "Average of the data-quality KPIs (completeness, uniqueness, outlier-cleanliness). Higher is better — indicates how clean the dataset is overall.",
+  analysis_scope:
+    "This section evaluates every column automatically; no features or targets are chosen by the user.",
+  completeness:
+    "Overall share of non-missing values across all features. Same measure as the Completeness metric on the Data Quality tab.",
+  uniqueness:
+    "1 minus the proportion of duplicate rows. Low uniqueness means many exact duplicate records, which can bias models and inflate metrics.",
+  outlier_cleanliness:
+    "1 minus the mean outlier proportion across numerical features (IQR method). Lower values mean more extreme values that may need review.",
+  features_analyzed:
+    "Number of columns included in the automated correlation scan after pruning constants, ID-like fields, and high-cardinality categoricals.",
+  leakage_risk_pairs:
+    "Feature pairs with correlation |score| ≥ 0.95 — nearly duplicate or derived from each other. Can inflate model performance or indicate redundant inputs (not necessarily target leakage).",
+  redundant_pairs:
+    "Feature pairs with correlation |score| between 0.8 and 0.95 — strongly related and likely redundant. Consider keeping only one from each pair.",
+  isolated_features:
+    "Features whose strongest correlation to any other feature is below 0.1. May be uninformative noise, identifiers, or weakly related fields worth reviewing.",
+  most_related_pairs:
+    "The feature pairs with the highest absolute correlation scores from the automated scan — quick view of the strongest relationships in the data.",
+  overall_impact_grade:
+    "Average of impact KPIs (leakage safety, redundancy, informativeness). Higher suggests healthier feature structure for modeling.",
+  leakage_safety:
+    "Whether any feature pairs exceed the leakage-risk correlation threshold (|score| ≥ 0.95). Fewer or no pairs is better.",
+  redundancy:
+    "Derived from the count of highly correlated redundant pairs (|score| ≥ 0.8). Lower redundancy is generally preferable.",
+  informativeness:
+    "Share of analyzed features that have at least one meaningful correlation to another feature — flags isolated or uninformative columns.",
+  overall_fairness_grade:
+    "Average of fairness KPIs (representation balance, label balance, outcome parity). Higher suggests more balanced representation and outcomes under the automated checks.",
+  representation_balance:
+    "1 divided by the worst group probability ratio across auto-selected sensitive attributes. Low values mean some groups are much more represented than others.",
+  label_balance:
+    "Derived from the Imbalance Degree of the auto-selected target column. 0 means perfectly balanced classes; higher imbalance degree means a skewed label distribution.",
+  outcome_parity:
+    "1 minus the maximum TSD (standard deviation of class rates across sensitive groups). Flags when outcome rates differ substantially by group.",
+  representation_imbalance:
+    "Sensitive attributes where the largest group probability ratio exceeds the threshold — one category dominates representation.",
+  minority_classes:
+    "Target classes that make up less than 5% of rows. Rare classes are harder to learn and can hurt model fairness and recall.",
+  outcome_disparities:
+    "Target classes whose outcome rates vary most across sensitive groups (high TSD). Suggests uneven outcomes by group.",
+  cdd_disparities:
+    "Sensitive groups flagged by Conditional Demographic Disparity — rejected outcomes outweigh accepted ones disproportionately (positive class is auto-selected as the most frequent target value).",
+  overall_governance_grade:
+    "Average of governance KPIs (anonymity, diversity, distribution leakage, linkage risk, PHI exposure). Higher suggests lower privacy and compliance risk under automated checks.",
+  anonymity_k:
+    "Minimum equivalence-class size (k) on auto-selected quasi-identifiers. Higher k means each QI combination appears in at least k rows — harder to re-identify individuals.",
+  diversity_l:
+    "Minimum l-diversity on the auto-selected sensitive attribute within QI groups. Higher l means more distinct sensitive values per group — harder to infer a specific sensitive value.",
+  distribution_t:
+    "Maximum t-closeness (TVD) between group and global sensitive-attribute distributions. Lower t means groups do not reveal unusually skewed sensitive information.",
+  single_linkage_risk:
+    "Worst mean Marketer/Prosecutor re-identification risk across single quasi-identifiers. Higher risk means one field alone can identify many individuals.",
+  linkage_risk:
+    "Mean MM re-identification risk when all auto-selected quasi-identifiers are combined — the realistic linkage-attack scenario.",
+  phi_exposure:
+    "HIPAA-style pattern scan on auto-selected text columns. Flags potential SSNs, medical IDs, postal codes, emails, etc. Not a full regulatory certification.",
+  low_anonymity:
+    "Privacy metrics (e.g. k-Anonymity) below warning thresholds — small equivalence classes increase re-identification risk.",
+  hipaa_phi:
+    "Columns where HIPAA-like identifier patterns were detected during the automated scan.",
+  high_linkage_risk:
+    "Quasi-identifiers or QI combinations with high Marketer/Prosecutor re-identification risk scores.",
+  attribute_disclosure:
+    "l-Diversity or t-Closeness signals suggesting sensitive-attribute values may be inferable within QI groups.",
+};
+
+/**
+ * Info-icon tooltip matching existing metric panels (see theme.css .info-icon).
+ * @param {string} key - key in _READINESS_METRIC_INFO
+ */
+function _readinessInfoIcon(key) {
+  const text = _READINESS_METRIC_INFO[key];
+  if (!text) return "";
+  return `<span class="info-icon info-icon--below" tabindex="0" role="button" aria-label="More information">i<span class="info-text">${_escapeHtml(text)}</span></span>`;
+}
+
+/** Table header cell with label + info tooltip. */
+function _readinessTh(label, infoKey, alignRight) {
+  const align = alignRight ? " text-right" : "";
+  return `<th class="px-3 py-2 relative whitespace-nowrap${align}"><span class="inline-flex items-center${alignRight ? " justify-end w-full" : ""}">${label}${_readinessInfoIcon(infoKey)}</span></th>`;
+}
+
+/** Format byte count as a human-readable size string. */
+function _formatBytes(bytes) {
+  if (bytes == null || isNaN(bytes)) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Badge HTML for per-feature readiness status. */
+function _profileStatusBadge(status) {
+  const cls = _dqStatusClasses(status);
+  const label =
+    status === "good"
+      ? "Good"
+      : status === "warning"
+        ? "Warning"
+        : status === "poor"
+          ? "Poor"
+          : "—";
+  return `<span class="px-2 py-0.5 rounded text-xs font-medium ${cls.badge}">${label}</span>`;
+}
+
+/**
+ * Render the dataset overview: file metadata, KPI tiles, per-feature readiness
+ * profile, and collapsible detailed statistics / distributions / histograms.
+ */
+function renderReadinessDatasetOverview(container, overview) {
+  if (overview.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Dataset overview unavailable: ${escapeHtml(overview.error)}</p>`;
+    return;
+  }
+
+  const meta = overview.file_metadata || {};
+  const profiles = overview.feature_profiles || [];
+  const profileMeta = overview.feature_profiles_meta || {};
+  const statusCounts = profileMeta.status_counts || {};
+  const poorCount =
+    statusCounts.poor ?? profiles.filter((p) => p.status === "poor").length;
+  const warnCount =
+    statusCounts.warning ??
+    profiles.filter((p) => p.status === "warning").length;
+
+  // --- File metadata ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-sm">
+      <p class="font-semibold text-gray-900 dark:text-white mb-2">${escapeHtml(meta.file_name || "Dataset")}</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-gray-600 dark:text-gray-300">
+        <div><span class="text-gray-500 dark:text-gray-400">Type:</span> ${escapeHtml(meta.file_type || "—")}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Size:</span> ${_formatBytes(meta.file_size_bytes)}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Memory:</span> ${_formatBytes(meta.memory_bytes)}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Rows:</span> ${(meta.rows || 0).toLocaleString()}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Columns:</span> ${meta.columns || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Numerical:</span> ${meta.numerical_count || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Categorical:</span> ${meta.categorical_count || 0}</div>
+        <div><span class="text-gray-500 dark:text-gray-400">Other:</span> ${(meta.datetime_count || 0) + (meta.boolean_count || 0)}</div>
+      </div>
+    </div>`;
+
+  // --- KPI tiles ---
+  html += `
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${(meta.rows || 0).toLocaleString()}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Records</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.columns || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Features</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.numerical_count || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Numerical</div>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">${meta.categorical_count || 0}</div>
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">Categorical</div>
+      </div>
+    </div>`;
+
+  // --- Per-feature readiness profile ---
+  html += `
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-sm font-semibold text-gray-900 dark:text-white inline-flex items-center">Per-feature readiness profile${_readinessInfoIcon("feature_profile")}</p>
+      <span class="text-xs text-gray-500 dark:text-gray-400">
+        ${poorCount ? `<span class="text-red-600 dark:text-red-400">${poorCount} poor</span>` : ""}
+        ${warnCount ? `${poorCount ? " · " : ""}<span class="text-amber-600 dark:text-amber-400">${warnCount} warning</span>` : ""}
+        ${!poorCount && !warnCount ? "all good" : ""}
+      </span>
+    </div>`;
+
+  if (profileMeta.truncated) {
+    html += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing ${profileMeta.shown.toLocaleString()} of ${profileMeta.total.toLocaleString()} features (prioritized: poor → warning → good).</p>`;
+  }
+
+  html += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4">`;
+  html += `<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+  html += `<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>`;
+  html += `<th class="px-3 py-2">Feature</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Dtype</th>`;
+  html += _readinessTh("% missing", "pct_missing", true);
+  html += _readinessTh("# unique", "n_unique", true);
+  html += _readinessTh("% dominant", "pct_dominant", true);
+  html += _readinessTh("Status", "profile_status", false);
+  html += `<th class="px-3 py-2">Summary</th>`;
+  html += `</tr></thead><tbody>`;
+
+  const profilePctValues = profiles.flatMap((p) =>
+    [p.pct_missing, p.pct_dominant].filter((v) => v != null),
+  );
+  const fmtProfilePct = _readinessPctFormatter(profilePctValues);
+
+  profiles.forEach((p, i) => {
+    const stripe =
+      i % 2 === 0
+        ? "bg-white dark:bg-gray-800"
+        : "bg-gray-50 dark:bg-gray-700/50";
+    html += `<tr class="${stripe} border-b dark:border-gray-700">`;
+    html += `<td class="px-3 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHtml(p.feature)}</td>`;
+    html += `<td class="px-3 py-2 capitalize">${escapeHtml(p.type)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs">${escapeHtml(p.dtype)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${fmtProfilePct(p.pct_missing)}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.n_unique}</td>`;
+    html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.pct_dominant != null ? fmtProfilePct(p.pct_dominant) : "—"}</td>`;
+    html += `<td class="px-3 py-2">${_profileStatusBadge(p.status)}</td>`;
+    html += `<td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title="${escapeHtml(p.summary || "")}">${escapeHtml(p.summary || "—")}</td>`;
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  // --- Collapsible detailed statistics ---
+  let detailsInner = "";
+
+  const numSummary = overview.numerical_summary || {};
+  const numMeta = overview.numerical_summary_meta || {};
+  const allNumFeatures = Object.keys(numSummary);
+  const numFeatures = allNumFeatures.slice(0, _READINESS_MAX_DETAIL_TABLE_ROWS);
+  if (numFeatures.length > 0) {
+    const allStats = Object.keys(numSummary[numFeatures[0]] || {});
+    const preferredOrder = [
+      "count",
+      "min",
+      "25th percentile",
+      "50th percentile",
+      "mean",
+      "75th percentile",
+      "max",
+      "std",
+    ];
+    const statKeys = preferredOrder
+      .filter((s) => allStats.includes(s))
+      .concat(allStats.filter((s) => !preferredOrder.includes(s)));
+
+    const statFormatters = {};
+    statKeys.forEach((s) => {
+      const colVals = numFeatures.map((feat) => numSummary[feat][s]);
+      statFormatters[s] = _readinessNumFormatter(colVals);
+    });
+
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical summary statistics</p>`;
+    detailsInner += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">`;
+    detailsInner += `<thead class="text-xs uppercase bg-gray-50 dark:bg-gray-700"><tr><th class="px-3 py-2">Feature</th>`;
+    statKeys.forEach((s) => {
+      detailsInner += `<th class="px-3 py-2 text-right">${s}</th>`;
+    });
+    detailsInner += `</tr></thead><tbody>`;
+    numFeatures.forEach((feat, i) => {
+      const stripe =
+        i % 2 === 0
+          ? "bg-white dark:bg-gray-800"
+          : "bg-gray-50 dark:bg-gray-700/50";
+      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-900 dark:text-white">${escapeHtml(feat)}</td>`;
+      statKeys.forEach((s) => {
+        const raw = numSummary[feat][s];
+        const display =
+          raw === null || raw === undefined
+            ? "—"
+            : typeof raw === "number"
+              ? statFormatters[s](raw)
+              : escapeHtml(String(raw));
+        detailsInner += `<td class="px-3 py-2 font-mono text-xs text-right">${display}</td>`;
+      });
+      detailsInner += `</tr>`;
+    });
+    detailsInner += `</tbody></table></div>`;
+    if (numMeta.truncated || allNumFeatures.length > numFeatures.length) {
+      const total = numMeta.total || allNumFeatures.length;
+      const shown = numMeta.shown || numFeatures.length;
+      detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Showing first ${shown} of ${total} numerical features. Profile table lists prioritized features.</p>`;
+    }
+  }
+
+  const catCharts = overview.categorical_charts || {};
+  const catChartCols = Object.keys(catCharts);
+  const hasHistograms =
+    overview.histograms && Object.keys(overview.histograms).length > 0;
+  const vizDeferred = overview.visualizations_deferred;
+  const profileNumericalCount = profiles.filter(
+    (p) => p.type === "numerical",
+  ).length;
+  const profileCategoricalCount = profiles.filter(
+    (p) => p.type === "categorical",
+  ).length;
+  const showCatCharts =
+    catChartCols.length > 0 || (vizDeferred && profileCategoricalCount > 0);
+  const showHistograms =
+    hasHistograms || (vizDeferred && profileNumericalCount > 0);
+
+  if ((showCatCharts || showHistograms) && profileMeta.truncated) {
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Distribution charts use the same ${profileMeta.shown.toLocaleString()} features shown in the profile table above (prioritized: poor → warning → good).</p>`;
+  }
+
+  if (showCatCharts) {
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical value distributions</p>`;
+    detailsInner += `<div id="readiness-categorical-charts" class="mb-4"></div>`;
+  }
+
+  if (showHistograms) {
+    detailsInner += `<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 mt-4">Feature distributions (numerical)</p>`;
+    detailsInner += `<div id="readiness-histograms-inner" class="mb-4"></div>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed statistics &amp; distributions
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl && (showCatCharts || showHistograms)) {
+      _wireReadinessDetailsViz(detailsEl, "dataset-overview");
+    }
+  } else {
+    if (catChartCols.length > 0) {
+      renderCategoricalPieCharts(
+        overview.categorical_charts,
+        "readiness-categorical-charts",
+      );
+    }
+    if (hasHistograms) {
+      renderWorkspaceHistogramsInto(
+        overview.histograms,
+        "readiness-histograms-inner",
+        true,
+        "large",
+      );
+    }
+  }
+}
+
+/**
+ * Render the Data Quality scorecard into the given container.
+ */
+function renderReadinessDataQuality(container, dq) {
+  if (dq.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data quality unavailable: ${escapeHtml(dq.error)}</p>`;
+    return;
+  }
+  const kpis = dq.kpis || [];
+  const gradeCls = _dqStatusClasses(dq.grade_status);
+  const scopeCrit =
+    (dq.auto_selection || {}).selection_criteria?.analysis_scope || {};
+  const dqPctValues = [dq.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
+  const fmtDqPct = _readinessPctFormatter(dqPctValues);
+
+  // --- Analysis scope (no column auto-selection required) ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Analysis scope:</span> ${escapeHtml(scopeCrit.selected || "all columns")}${_readinessInfoIcon("analysis_scope")}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(scopeCrit.rule || "All columns are evaluated automatically.")}</span></li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall data quality grade${_readinessInfoIcon("overall_dq_grade")}</span>
+          <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtDqPct(dq.grade)}</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+          <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+            <div class="flex items-baseline justify-between">
+              <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
+              <span class="text-2xl font-bold ${cls.text}">${fmtDqPct(k.value)}</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+              <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+            </div>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
+          </div>`;
+  });
+  html += "</div>";
+
+  // --- Needs attention ---
+  const na = dq.needs_attention || {};
+  const incomplete = na.incomplete_features || [];
+  const outlierFeats = na.outlier_features || [];
+  const dupRows = na.duplicate_rows || 0;
+  const naPctValues = [
+    ...incomplete.map((f) => f.completeness),
+    ...outlierFeats.map((f) => f.outlier_proportion),
+    dupRows > 0 ? dupRows : null,
+  ].filter((v) => v != null);
+  const fmtNaPct = _readinessPctFormatter(naPctValues);
+
+  const naItems = [];
+  if (incomplete.length) {
+    const top = incomplete
+      .slice(0, 6)
+      .map(
+        (f) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(f.feature)}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.completeness)} complete</span></li>`,
+      )
+      .join("");
+    const more =
+      incomplete.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${incomplete.length - 6} more</li>`
+        : "";
+    naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Incomplete features (${incomplete.length})${_readinessInfoIcon("completeness")}</p>
+            <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${top}${more}</ul>
+          </div>`);
+  }
+  if (outlierFeats.length) {
+    const top = outlierFeats
+      .slice(0, 6)
+      .map(
+        (f) =>
+          `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(f.feature)}</span><span class="font-mono text-xs text-gray-500 dark:text-gray-400">${fmtNaPct(f.outlier_proportion)} outliers</span></li>`,
+      )
+      .join("");
+    const more =
+      outlierFeats.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${outlierFeats.length - 6} more</li>`
+        : "";
+    naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Features with outliers (${outlierFeats.length})${_readinessInfoIcon("outlier_cleanliness")}</p>
+            <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${top}${more}</ul>
+          </div>`);
+  }
+  if (dupRows && dupRows > 0) {
+    naItems.push(`
+          <div>
+            <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5 inline-flex items-center">Duplicate rows${_readinessInfoIcon("uniqueness")}</p>
+            <p class="text-sm text-gray-700 dark:text-gray-300">${fmtNaPct(dupRows)} of rows are exact duplicates.</p>
+          </div>`);
+  }
+
+  if (naItems.length) {
+    html += `
+          <div class="p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+            <p class="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-3">Needs attention</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${naItems.join("")}</div>
+          </div>`;
+  } else {
+    html += `
+          <div class="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+            <p class="text-sm text-green-800 dark:text-green-400">No data quality issues detected — all features complete, no duplicates, no outliers.</p>
+          </div>`;
+  }
+
+  // --- Collapsible details (original charts) ---
+  const det = dq.details || {};
+  const vizDeferred = dq.visualizations_deferred;
+  let detailsInner = "";
+  if (det.completeness) {
+    if (det.completeness.visualization) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Completeness by feature</p>
+          <img src="data:image/png;base64,${det.completeness.visualization}" alt="Completeness chart" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (vizDeferred || det.completeness.visualization_deferred) {
+      detailsInner += _readinessVizSlot(
+        "data-quality",
+        "completeness",
+        "Completeness by feature",
+      );
+    }
+  }
+  if (det.outliers) {
+    if (det.outliers.visualization) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Outliers by feature</p>
+          <img src="data:image/png;base64,${det.outliers.visualization}" alt="Outliers chart" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (det.outliers.error) {
+      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Outliers: ${escapeHtml(det.outliers.error)}</p>`;
+    } else if (vizDeferred || det.outliers.visualization_deferred) {
+      detailsInner += _readinessVizSlot(
+        "data-quality",
+        "outliers",
+        "Outliers by feature",
+      );
+    }
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "data-quality");
+  }
+}
+
+/**
+ * Render the Impact on AI scorecard (automated all-pairs correlation signals:
+ * redundancy, leakage risk, isolated features) into the given container.
+ */
+function renderReadinessImpact(container, impact) {
+  if (impact.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Impact on AI unavailable: ${escapeHtml(impact.error)}</p>`;
+    return;
+  }
+
+  const autoSel = impact.auto_selection || {};
+  const crit = autoSel.selection_criteria || {};
+  const colCrit = crit.columns_analyzed || {};
+  const thresholds = crit.thresholds || {};
+  const kpis = impact.kpis || [];
+  const na = impact.needs_attention || {};
+  const gradeCls = _dqStatusClasses(impact.grade_status);
+
+  const leakage = na.leakage_pairs || impact.leakage_pairs || [];
+  const redundant = na.redundant_pairs || impact.redundant_pairs || [];
+  const isolated = na.isolated_features || impact.isolated_features || [];
+  const topPairs = impact.top_pairs || [];
+  const dropped = colCrit.excluded || impact.columns_dropped || [];
+  const analyzed = impact.columns_analyzed || (colCrit.selected || []).length;
+
+  const impactScoreValues = [
+    ...leakage.map((p) => p.score),
+    ...redundant.map((p) => p.score),
+    ...topPairs.map((p) => p.score),
+  ];
+  const fmtScore = _readinessNumFormatter(impactScoreValues);
+  const impactPctValues = [impact.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
+  const fmtImpactPct = _readinessPctFormatter(impactPctValues);
+  const fmtPair = (p) =>
+    _readinessNaRow(
+      `<span class="font-mono">${_escapeHtml(p.a)}</span> ↔ <span class="font-mono">${_escapeHtml(p.b)}</span>`,
+      "Correlated feature pair",
+      `|score| ${fmtScore(p.score)}`,
+    );
+
+  const selectedCols = colCrit.selected || [];
+  const selectedPreview =
+    selectedCols.length > 0
+      ? `${selectedCols.slice(0, 8).map(escapeHtml).join(", ")}${selectedCols.length > 8 ? "…" : ""}`
+      : "none";
+
+  // --- Auto-selection criteria ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Columns analyzed (${analyzed}):</span> ${selectedPreview}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(colCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Excluded columns:</span> ${dropped.length}</li>
+        <li><span class="font-medium">Thresholds:</span>
+          redundant |score| ≥ ${_readinessNum(thresholds.redundant_threshold)},
+          leakage |score| ≥ ${_readinessNum(thresholds.leakage_threshold)},
+          isolated max |score| &lt; ${_readinessNum(thresholds.isolated_threshold)}
+        </li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall impact grade${_readinessInfoIcon("overall_impact_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtImpactPct(impact.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    const displayVal =
+      k.raw_count != null ? `${k.raw_count} flagged` : fmtImpactPct(k.value);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-2xl font-bold ${cls.text} shrink-0">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
+      </div>`;
+  });
+  html += "</div>";
+
+  // --- Needs attention ---
+  const naItems = [];
+  if (leakage.length) {
+    const items = leakage.slice(0, 6).map(fmtPair).join("");
+    const more =
+      leakage.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${leakage.length - 6} more</li>`
+        : "";
+    naItems.push(
+      _readinessNaBlock(
+        `Leakage risk (|score| ≥ 0.95) (${leakage.length})`,
+        "leakage_risk_pairs",
+        null,
+        items + more,
+        "red",
+      ),
+    );
+  }
+  if (redundant.length) {
+    const items = redundant.slice(0, 6).map(fmtPair).join("");
+    const more =
+      redundant.length > 6
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${redundant.length - 6} more</li>`
+        : "";
+    naItems.push(
+      _readinessNaBlock(
+        `Redundant pairs (|score| ≥ 0.8) (${redundant.length})`,
+        "redundant_pairs",
+        null,
+        items + more,
+        "amber",
+      ),
+    );
+  }
+  if (isolated.length) {
+    const items = isolated
+      .slice(0, 10)
+      .map((f) => {
+        const name = typeof f === "string" ? f : f.feature || f;
+        return _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(name)}</span>`,
+          "No strong correlation to other analyzed features",
+          null,
+        );
+      })
+      .join("");
+    const more =
+      isolated.length > 10
+        ? `<li class="text-xs text-gray-400 dark:text-gray-500">+${isolated.length - 10} more</li>`
+        : "";
+    naItems.push(
+      _readinessNaBlock(
+        `Isolated features (${isolated.length})`,
+        "isolated_features",
+        null,
+        items + more,
+        "amber",
+      ),
+    );
+  }
+
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No redundancy, leakage risk, or isolated features detected.",
+  );
+
+  // --- Collapsible details ---
+  const det = impact.details || {};
+  const vizDeferred =
+    impact.visualizations_deferred || det.visualizations_deferred;
+  let detailsInner = "";
+
+  if (topPairs.length) {
+    detailsInner +=
+      '<p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 inline-flex items-center">Most-related feature pairs' +
+      _readinessInfoIcon("most_related_pairs") +
+      "</p>";
+    detailsInner +=
+      '<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4"><table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">';
+    detailsInner +=
+      '<thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr><th class="px-4 py-2">Feature A</th><th class="px-4 py-2">Feature B</th><th class="px-4 py-2 text-right">Score</th></tr></thead><tbody>';
+    topPairs.forEach((p, i) => {
+      const stripe =
+        i % 2 === 0
+          ? "bg-white dark:bg-gray-800"
+          : "bg-gray-50 dark:bg-gray-700/50";
+      detailsInner += `<tr class="${stripe} border-b dark:border-gray-700"><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${escapeHtml(p.a)}</td><td class="px-4 py-2 text-gray-900 dark:text-white truncate">${escapeHtml(p.b)}</td><td class="px-4 py-2 font-mono text-xs text-right">${fmtScore(p.score)}</td></tr>`;
+    });
+    detailsInner += "</tbody></table></div>";
+  }
+
+  if (det.numerical_visualization) {
+    const method = det.numerical_method
+      ? ` (${escapeHtml(det.numerical_method)})`
+      : "";
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Numerical correlation${method}</p>
+        <img src="data:image/png;base64,${det.numerical_visualization}" alt="Numerical correlation heatmap" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (vizDeferred && analyzed >= 2) {
+    const method = det.numerical_method ? ` (${det.numerical_method})` : "";
+    detailsInner += _readinessVizSlot(
+      "impact-on-ai",
+      "numerical_correlation",
+      `Numerical correlation${method}`,
+    );
+  }
+  if (det.categorical_visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Categorical correlation (Theil's U)</p>
+        <img src="data:image/png;base64,${det.categorical_visualization}" alt="Categorical correlation heatmap" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (vizDeferred && analyzed >= 2) {
+    detailsInner += _readinessVizSlot(
+      "impact-on-ai",
+      "categorical_correlation",
+      "Categorical correlation (Theil's U)",
+    );
+  }
+  if (dropped.length) {
+    const excludedMeta = colCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || dropped.length;
+    const { html: items } = _readinessTruncatedListItems(
+      dropped,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400 dark:text-gray-500">${escapeHtml(d.reason)}</span></li>`,
+    );
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded columns (${excludedTotal})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts &amp; tables
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "impact-on-ai");
+  }
+}
+
+/**
+ * Render the Fairness & Bias scorecard (auto-selected columns, four metrics,
+ * selection criteria, needs-attention lists, collapsible charts).
+ */
+function renderReadinessFairness(container, fb) {
+  if (fb.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Fairness &amp; Bias unavailable: ${escapeHtml(fb.error)}</p>`;
+    return;
+  }
+
+  const sel = fb.auto_selection || {};
+  const criteria = sel.selection_criteria || {};
+  const sensCrit = criteria.sensitive_attributes || {};
+  const targetCrit = criteria.target_column || {};
+  const posCrit = criteria.positive_class || {};
+  const thresholds = criteria.thresholds || {};
+  const kpis = fb.kpis || [];
+  const na = fb.needs_attention || {};
+  const gradeCls = _dqStatusClasses(fb.grade_status);
+  const fairnessPctValues = [fb.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
+  const fmtFairnessPct = _readinessPctFormatter(fairnessPctValues);
+  const fmtThresholdPct = _readinessPctFormatter(
+    thresholds.minority_class_share != null
+      ? [thresholds.minority_class_share]
+      : [],
+  );
+  const imbalanceVals = kpis
+    .filter((k) => k.id === "label_balance" && k.raw_imbalance_degree != null)
+    .map((k) => k.raw_imbalance_degree);
+  const fmtImbalance = _readinessNumFormatter(imbalanceVals);
+
+  // --- Auto-selection criteria (transparent) ---
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Sensitive attributes:</span> ${sensCrit.selected?.length ? sensCrit.selected.map(escapeHtml).join(", ") : "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(sensCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Target column:</span> ${escapeHtml(targetCrit.selected || "none")}${targetCrit.reason ? ` (${escapeHtml(targetCrit.reason)})` : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(targetCrit.rule || "")}</span></li>
+        <li><span class="font-medium">CDD positive class:</span> ${escapeHtml(String(posCrit.selected ?? "none"))}${posCrit.reason ? ` (${escapeHtml(posCrit.reason)})` : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(posCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Primary sensitive (statistical rate &amp; CDD):</span> ${escapeHtml(sel.primary_sensitive || "none")}</li>
+        <li><span class="font-medium">Flags:</span>
+          representation ratio ≥ ${_readinessNum(thresholds.representation_ratio_flag)},
+          minority class &lt; ${fmtThresholdPct(thresholds.minority_class_share)},
+          TSD ≥ ${_readinessNum(thresholds.tsd_disparity_flag)},
+          imbalance degree good/warning &lt; ${_readinessNum(thresholds.imbalance_degree_good)} / ${_readinessNum(thresholds.imbalance_degree_warning)}
+        </li>
+      </ul>
+    </div>`;
+
+  // --- Overall grade + KPI tiles ---
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall fairness grade${_readinessInfoIcon("overall_fairness_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtFairnessPct(fb.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    const displayVal =
+      k.id === "label_balance" && k.raw_imbalance_degree != null
+        ? `ID ${fmtImbalance(k.raw_imbalance_degree)}`
+        : fmtFairnessPct(k.value);
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-2xl font-bold ${cls.text}">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
+      </div>`;
+  });
+  html += "</div>";
+
+  // --- Needs attention ---
+  const naItems = [];
+  const repImbalance = na.representation_imbalance || [];
+  if (repImbalance.length) {
+    const ratioValues = repImbalance.flatMap((s) => [
+      s.max_ratio,
+      ...(s.flagged_pairs || []).map((p) => p.ratio),
+    ]);
+    const fmtRatio = _readinessNumFormatter(ratioValues);
+    const items = repImbalance
+      .slice(0, 5)
+      .map((s) => {
+        const pairHint =
+          s.flagged_pairs && s.flagged_pairs.length
+            ? `Worst pair: ${escapeHtml(s.flagged_pairs[0].pair)} (ratio ${fmtRatio(s.flagged_pairs[0].ratio)})`
+            : "";
+        return _readinessNaRow(
+          `<span class="font-mono font-medium">${_escapeHtml(s.column)}</span>`,
+          pairHint,
+          `max ratio ${fmtRatio(s.max_ratio)}`,
+        );
+      })
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Representation imbalance (${repImbalance.length})`,
+        "representation_imbalance",
+        "Sensitive attributes with extreme category probability ratios",
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const minorities = na.minority_classes || [];
+  if (minorities.length) {
+    const targetCol =
+      minorities[0].target_column || targetCrit.selected || "target";
+    const fmtMinorityShare = _readinessPctFormatter(
+      minorities.map((m) => m.share),
+    );
+    const items = minorities
+      .map((m) =>
+        _readinessNaRow(
+          `<span class="truncate">${_escapeHtml(m.class)}</span>`,
+          `Class in <span class="font-mono">${_escapeHtml(targetCol)}</span>`,
+          `${fmtMinorityShare(m.share)} share`,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Minority classes (${minorities.length})`,
+        "minority_classes",
+        `Target column: <span class="font-mono font-medium">${_escapeHtml(targetCol)}</span>`,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const outcomeDisp = na.outcome_disparities || [];
+  if (outcomeDisp.length) {
+    const sensCol =
+      outcomeDisp[0].sensitive_column || sel.primary_sensitive || "—";
+    const tgtCol = outcomeDisp[0].target_column || targetCrit.selected || "—";
+    const fmtTsd = _readinessNumFormatter(outcomeDisp.map((d) => d.tsd));
+    const items = outcomeDisp
+      .map((d) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(d.target_column || tgtCol)}</span> = ${_escapeHtml(d.class)}`,
+          `Outcome rates vary by sensitive <span class="font-mono">${_escapeHtml(d.sensitive_column || sensCol)}</span>`,
+          `TSD ${fmtTsd(d.tsd)}`,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Outcome-rate disparities (${outcomeDisp.length})`,
+        "outcome_disparities",
+        `Sensitive <span class="font-mono">${_escapeHtml(sensCol)}</span> × target <span class="font-mono">${_escapeHtml(tgtCol)}</span>`,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const cddDisp = na.cdd_disparities || [];
+  if (cddDisp.length) {
+    const sensCol = cddDisp[0].sensitive_column || sel.primary_sensitive || "—";
+    const tgtCol = cddDisp[0].target_column || targetCrit.selected || "—";
+    const posClass = cddDisp[0].positive_class || posCrit.selected || "—";
+    const items = cddDisp
+      .map((d) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(d.sensitive_column || sensCol)}</span> = ${_escapeHtml(d.group)}`,
+          `CDD vs target <span class="font-mono">${_escapeHtml(d.target_column || tgtCol)}</span> (positive: ${_escapeHtml(String(d.positive_class ?? posClass))})`,
+          null,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `CDD flagged groups (${cddDisp.length})`,
+        "cdd_disparities",
+        `Sensitive <span class="font-mono">${_escapeHtml(sensCol)}</span> × target <span class="font-mono">${_escapeHtml(tgtCol)}</span>`,
+        items,
+        "red",
+      ),
+    );
+  }
+
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No fairness issues detected under the automated thresholds.",
+  );
+
+  // --- Collapsible details (charts) ---
+  const det = fb.details || {};
+  const vizDeferred =
+    fb.visualizations_deferred ||
+    det.representation_rate?.visualizations_deferred;
+  let detailsInner = "";
+
+  const repVis = det.representation_rate?.visualizations || {};
+  const sensCols = sensCrit.selected || [];
+  if (vizDeferred && sensCols.length && !det.representation_rate?.error) {
+    sensCols.forEach((col) => {
+      detailsInner += _readinessVizSlot(
+        "fairness-bias",
+        `representation_rate.${col}`,
+        `Representation rate — ${col}`,
+      );
+    });
+  } else {
+    for (const [col, b64] of Object.entries(repVis)) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Representation rate — ${escapeHtml(col)}</p>
+          <img src="data:image/png;base64,${b64}" alt="Representation ${escapeHtml(col)}" class="w-full max-w-2xl" />
+        </div>`;
+    }
+  }
+  if (det.representation_rate?.error && !Object.keys(repVis).length) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Representation rate: ${escapeHtml(det.representation_rate.error)}</p>`;
+  }
+
+  if (det.class_imbalance?.visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Class imbalance — ${escapeHtml(targetCrit.selected || "target")}</p>
+        <img src="data:image/png;base64,${det.class_imbalance.visualization}" alt="Class imbalance" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (det.class_imbalance?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Class imbalance: ${escapeHtml(det.class_imbalance.error)}</p>`;
+  } else if (
+    (vizDeferred || det.class_imbalance?.visualization_deferred) &&
+    targetCrit.selected
+  ) {
+    detailsInner += _readinessVizSlot(
+      "fairness-bias",
+      "class_imbalance",
+      `Class imbalance — ${targetCrit.selected || "target"}`,
+    );
+  }
+
+  if (det.statistical_rate?.visualization) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Statistical rate — ${escapeHtml(det.statistical_rate.sensitive)} × ${escapeHtml(det.statistical_rate.target)}</p>
+        <img src="data:image/png;base64,${det.statistical_rate.visualization}" alt="Statistical rate" class="w-full max-w-2xl" />
+      </div>`;
+  } else if (det.statistical_rate?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Statistical rate: ${escapeHtml(det.statistical_rate.error)}</p>`;
+  } else if (
+    (vizDeferred || det.statistical_rate?.visualization_deferred) &&
+    sel.primary_sensitive &&
+    targetCrit.selected
+  ) {
+    detailsInner += _readinessVizSlot(
+      "fairness-bias",
+      "statistical_rate",
+      `Statistical rate — ${sel.primary_sensitive} × ${targetCrit.selected}`,
+    );
+  }
+
+  if (det.cdd?.disparities && !det.cdd.error) {
+    const rows = Object.entries(det.cdd.disparities)
+      .map(
+        ([grp, info]) =>
+          `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(grp)}</td><td class="px-3 py-2">${escapeHtml(formatValue(info.disparity))}</td></tr>`,
+      )
+      .join("");
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Conditional demographic disparity (positive: ${escapeHtml(String(det.cdd.positive_class ?? ""))})</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Group</th><th class="px-3 py-2">Disparity</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+  } else if (det.cdd?.error) {
+    detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">CDD: ${escapeHtml(det.cdd.error)}</p>`;
+  }
+
+  const excluded = sensCrit.excluded || [];
+  if (excluded.length) {
+    const excludedMeta = sensCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || excluded.length;
+    const { html: items } = _readinessTruncatedListItems(
+      excluded,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400">${escapeHtml(d.reason)}</span></li>`,
+    );
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded sensitive candidates (${excludedTotal})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts &amp; CDD table
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "fairness-bias");
+  }
+}
+
+/**
+ * Render the Data Governance scorecard (auto-selected columns, privacy KPIs,
+ * HIPAA flags, needs-attention lists, collapsible charts).
+ */
+function renderReadinessGovernance(container, gov) {
+  if (gov.error) {
+    container.innerHTML = `<p class="text-sm" style="color: var(--textColorSecondary);">Data Governance unavailable: ${escapeHtml(gov.error)}</p>`;
+    return;
+  }
+
+  const sel = gov.auto_selection || {};
+  const criteria = sel.selection_criteria || {};
+  const qiCrit = criteria.quasi_identifiers || {};
+  const sensCrit = criteria.sensitive_attribute || {};
+  const idCrit = criteria.id_column || {};
+  const hipaaCrit = criteria.hipaa_scan_columns || {};
+  const dpCrit = criteria.dp_features || {};
+  const thresholds = criteria.thresholds || {};
+  const kpis = gov.kpis || [];
+  const na = gov.needs_attention || {};
+  const det = gov.details || {};
+  const singleRisk = det.single_attribute_risk?.by_quasi_identifier || {};
+  const gradeCls = _dqStatusClasses(gov.grade_status);
+  const lowAnon = na.low_anonymity || [];
+  const linkage = na.high_linkage_risk || [];
+  const attrDisc = na.attribute_disclosure || [];
+  const govPctValues = [gov.grade, ...kpis.map((k) => k.value)].filter(
+    (v) => v != null,
+  );
+  const fmtGovPct = _readinessPctFormatter(govPctValues);
+  const govRiskValues = [
+    ...kpis.map((k) => k.raw_worst_mean ?? k.raw_mean).filter((v) => v != null),
+    ...linkage.map((x) => x.mean_risk),
+    ...lowAnon.flatMap((x) =>
+      x.worst_single_qi ? [x.worst_single_qi.mean_risk] : [],
+    ),
+    ...Object.values(singleRisk)
+      .map((v) => v.mean_risk)
+      .filter((v) => v != null),
+  ];
+  const govMetricValues = [
+    ...kpis
+      .filter((k) => k.id === "distribution_t" && k.raw_t != null)
+      .map((k) => k.raw_t),
+    ...attrDisc.map((x) => x.value),
+  ];
+  const fmtGovRisk = _readinessNumFormatter(govRiskValues);
+  const fmtGovMetric = _readinessNumFormatter(govMetricValues);
+
+  let html = `
+    <div class="p-4 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-sm">
+      <p class="font-semibold text-blue-800 dark:text-blue-300 mb-2">Auto-selection criteria</p>
+      <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+        <li><span class="font-medium">Quasi-identifiers:</span> ${qiCrit.selected?.length ? qiCrit.selected.map(escapeHtml).join(", ") : "none"}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(qiCrit.rule || "")}</span></li>
+        <li><span class="font-medium">Sensitive attribute:</span> ${escapeHtml(sensCrit.selected || "none")}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(sensCrit.rule || "")}</span></li>
+        <li><span class="font-medium">ID column:</span> ${escapeHtml(idCrit.selected || "none")}${idCrit.synthetic ? " (synthetic row index)" : ""}<br/>
+          <span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(idCrit.rule || "")}</span></li>
+        <li><span class="font-medium">HIPAA scan columns:</span> ${(hipaaCrit.selected || []).length} column(s)${hipaaCrit.selected?.length ? ` — ${hipaaCrit.selected.slice(0, 5).map(escapeHtml).join(", ")}${hipaaCrit.selected.length > 5 ? "…" : ""}` : ""}</li>
+        <li><span class="font-medium">Thresholds:</span>
+          k ≥ ${thresholds.k_good ?? "—"}/${thresholds.k_warning ?? "—"},
+          l ≥ ${thresholds.l_good ?? "—"}/${thresholds.l_warning ?? "—"},
+          t ≤ ${thresholds.t_good ?? "—"}/${thresholds.t_warning ?? "—"},
+          MM single &lt; ${thresholds.mm_single_good ?? "—"}/${thresholds.mm_single_warning ?? "—"},
+          MM combined &lt; ${thresholds.mm_multi_good ?? "—"}/${thresholds.mm_multi_warning ?? "—"}
+        </li>
+        ${
+          gov.small_sample_warning
+            ? `<li><span class="font-medium text-amber-700 dark:text-amber-400">Note:</span> small dataset (&lt; ${thresholds.small_sample_rows ?? 30} rows) — privacy metrics may be unstable.</li>`
+            : ""
+        }
+      </ul>
+    </div>`;
+
+  html += `
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300 inline-flex items-center">Overall governance grade${_readinessInfoIcon("overall_governance_grade")}</span>
+      <span class="px-3 py-1 rounded-full text-sm font-semibold ${gradeCls.badge}">${fmtGovPct(gov.grade)}</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">`;
+
+  kpis.forEach((k) => {
+    const cls = _dqStatusClasses(k.status);
+    let displayVal = fmtGovPct(k.value);
+    if (k.id === "anonymity_k" && k.raw_k != null) displayVal = `k=${k.raw_k}`;
+    else if (k.id === "diversity_l" && k.raw_l != null)
+      displayVal = `l=${k.raw_l}`;
+    else if (k.id === "distribution_t" && k.raw_t != null)
+      displayVal = `t=${fmtGovMetric(k.raw_t)}`;
+    else if (k.id === "single_linkage_risk" && k.raw_worst_mean != null)
+      displayVal = `${fmtGovRisk(k.raw_worst_mean)} risk`;
+    else if (k.id === "linkage_risk" && k.raw_mean != null)
+      displayVal = `${fmtGovRisk(k.raw_mean)} risk`;
+    else if (k.id === "phi_exposure" && k.columns_flagged != null)
+      displayVal =
+        k.columns_flagged === 0 ? "None" : `${k.columns_flagged} col(s)`;
+
+    const widthPct =
+      k.value === null || k.value === undefined
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(k.value * 100)));
+    html += `
+      <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-left">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-flex items-center">${escapeHtml(k.label)}${_readinessInfoIcon(k.id)}</span>
+          <span class="text-xl font-bold ${cls.text} shrink-0">${displayVal}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-2">
+          <div class="${cls.bar} h-1.5 rounded-full" style="width: ${widthPct}%"></div>
+        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${escapeHtml(k.hint || "")}</p>
+      </div>`;
+  });
+  html += "</div>";
+
+  const naItems = [];
+
+  if (lowAnon.length) {
+    let items = "";
+    lowAnon.forEach((x) => {
+      const qiList = (x.quasi_identifiers || []).map(escapeHtml).join(", ");
+      items += _readinessNaRow(
+        `${_escapeHtml(x.metric)}: k = ${escapeHtml(String(x.value))}`,
+        x.detail
+          ? escapeHtml(x.detail)
+          : qiList
+            ? `Quasi-identifiers: ${qiList}`
+            : null,
+        x.singleton_count != null
+          ? `${x.singleton_count} singleton group(s)`
+          : null,
+      );
+      (x.worst_groups || []).slice(0, 3).forEach((g) => {
+        items += _readinessNaRow(
+          `Smallest group (size ${g.size})`,
+          _formatQiValues(g.qi_values),
+          null,
+        );
+      });
+      if (x.worst_single_qi) {
+        items += _readinessNaRow(
+          `Highest single-QI risk: <span class="font-mono">${_escapeHtml(x.worst_single_qi.feature)}</span>`,
+          "May contribute to low k when combined with other quasi-identifiers",
+          `risk ${fmtGovRisk(x.worst_single_qi.mean_risk)}`,
+        );
+      }
+    });
+    naItems.push(
+      _readinessNaBlock(
+        `Low anonymity (${lowAnon.length})`,
+        "low_anonymity",
+        lowAnon[0].quasi_identifiers?.length
+          ? `Quasi-identifiers: <span class="font-mono">${_escapeHtml(lowAnon[0].quasi_identifiers.join(", "))}</span>`
+          : null,
+        items,
+        "red",
+      ),
+    );
+  }
+
+  const hipaaPhi = na.hipaa_phi || [];
+  if (hipaaPhi.length) {
+    const items = hipaaPhi
+      .slice(0, 6)
+      .map((x) =>
+        _readinessNaRow(
+          `<span class="font-mono">${_escapeHtml(x.column)}</span>`,
+          escapeHtml((x.types || []).join(", ") || "Pattern match"),
+          `${x.total_flags} flag(s)`,
+        ),
+      )
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `HIPAA pattern matches (${hipaaPhi.length})`,
+        "hipaa_phi",
+        "Scanned text-like columns for HIPAA-style identifier patterns",
+        items,
+        "red",
+      ),
+    );
+  }
+
+  const linkageNa = na.high_linkage_risk || [];
+  if (linkageNa.length) {
+    const items = linkageNa
+      .map((x) => {
+        const qis = x.quasi_identifiers || x.features || [];
+        const featLabel = x.feature
+          ? `<span class="font-mono">${_escapeHtml(x.feature)}</span>`
+          : `<span class="font-mono">${_escapeHtml(qis.join(", "))}</span>`;
+        return _readinessNaRow(
+          `${_escapeHtml(x.metric)}: ${featLabel}`,
+          x.detail
+            ? escapeHtml(x.detail)
+            : qis.length
+              ? `Quasi-identifiers: ${qis.map(escapeHtml).join(", ")}`
+              : null,
+          `risk ${fmtGovRisk(x.mean_risk)}`,
+        );
+      })
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `High linkage risk (${linkageNa.length})`,
+        "high_linkage_risk",
+        null,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  const attrDiscNa = na.attribute_disclosure || [];
+  if (attrDiscNa.length) {
+    const items = attrDiscNa
+      .map((x) => {
+        const qiList = (x.quasi_identifiers || []).map(escapeHtml).join(", ");
+        const sens = x.sensitive_attribute || "—";
+        return _readinessNaRow(
+          `${_escapeHtml(x.metric)} = ${fmtGovMetric(x.value)}`,
+          x.detail
+            ? escapeHtml(x.detail)
+            : `Sensitive <span class="font-mono">${_escapeHtml(sens)}</span> within groups of (${qiList})`,
+          null,
+        );
+      })
+      .join("");
+    naItems.push(
+      _readinessNaBlock(
+        `Attribute disclosure risk (${attrDiscNa.length})`,
+        "attribute_disclosure",
+        attrDiscNa[0].sensitive_attribute
+          ? `Sensitive: <span class="font-mono">${_escapeHtml(attrDiscNa[0].sensitive_attribute)}</span>`
+          : null,
+        items,
+        "amber",
+      ),
+    );
+  }
+
+  html += _renderReadinessNeedsAttentionPanel(
+    naItems,
+    "No governance issues detected under the automated thresholds.",
+  );
+
+  let detailsInner = "";
+  const vizDeferred = gov.visualizations_deferred;
+
+  const chartMetrics = [
+    ["k_anonymity", "k-Anonymity", "visualization"],
+    ["l_diversity", "l-Diversity", "visualization"],
+    ["t_closeness", "t-Closeness", "visualization"],
+    ["entropy_risk", "Entropy risk", "visualization"],
+    [
+      "multiple_attribute_risk",
+      "Multiple-attribute linkage risk",
+      "visualization",
+    ],
+    [
+      "differential_privacy",
+      "Differential privacy (illustrative)",
+      "visualization",
+    ],
+  ];
+  chartMetrics.forEach(([key, title, visKey]) => {
+    const block = det[key];
+    if (block?.[visKey]) {
+      detailsInner += `
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">${title}</p>
+          <img src="data:image/png;base64,${block[visKey]}" alt="${escapeHtml(title)}" class="w-full max-w-2xl" />
+        </div>`;
+    } else if (block?.error) {
+      detailsInner += `<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${escapeHtml(title)}: ${escapeHtml(block.error)}</p>`;
+    } else if (block && (vizDeferred || block.visualization_deferred)) {
+      detailsInner += _readinessVizSlot("data-governance", key, title);
+    }
+  });
+
+  const singleRows = Object.entries(singleRisk)
+    .filter(([, v]) => v.mean_risk != null)
+    .map(
+      ([q, v]) =>
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(q)}</td><td class="px-3 py-2 font-mono text-xs">${fmtGovRisk(v.mean_risk)}</td></tr>`,
+    )
+    .join("");
+  if (singleRows) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Single-attribute MM risk by quasi-identifier</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Quasi-identifier</th><th class="px-3 py-2">Mean risk</th></tr></thead><tbody>${singleRows}</tbody></table>
+      </div>`;
+  }
+
+  const hipaaDet = det.hipaa?.detected || {};
+  const hipaaRows = Object.entries(hipaaDet)
+    .map(
+      ([col, info]) =>
+        `<tr class="border-b dark:border-gray-700"><td class="px-3 py-2">${escapeHtml(col)}</td><td class="px-3 py-2 text-xs">${escapeHtml((info.potential_types_detected || []).join(", "))}</td><td class="px-3 py-2 font-mono text-xs">${escapeHtml(String(info.total_flags ?? ""))}</td></tr>`,
+    )
+    .join("");
+  if (hipaaRows) {
+    detailsInner += `
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">HIPAA scan results</p>
+        <table class="w-full text-sm text-left"><thead><tr class="text-xs uppercase text-gray-500"><th class="px-3 py-2">Column</th><th class="px-3 py-2">Types</th><th class="px-3 py-2">Flags</th></tr></thead><tbody>${hipaaRows}</tbody></table>
+      </div>`;
+  }
+
+  const qiExcluded = qiCrit.excluded || [];
+  if (qiExcluded.length) {
+    const excludedMeta = qiCrit.excluded_meta || {};
+    const excludedTotal = excludedMeta.total || qiExcluded.length;
+    const { html: items } = _readinessTruncatedListItems(
+      qiExcluded,
+      _READINESS_MAX_DETAIL_LIST_ITEMS,
+      (d) =>
+        `<li class="flex justify-between gap-3"><span class="truncate">${escapeHtml(d.feature)}</span><span class="text-xs text-gray-400">${escapeHtml(d.reason)}</span></li>`,
+    );
+    detailsInner += `
+      <div class="mb-2">
+        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">Excluded quasi-identifier candidates (${excludedTotal})</p>
+        <ul class="space-y-1 text-sm text-gray-700 dark:text-gray-300">${items}</ul>
+      </div>`;
+  }
+
+  if (dpCrit.selected?.length) {
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">DP demo features: ${dpCrit.selected.map(escapeHtml).join(", ")} (ε=${escapeHtml(String(dpCrit.epsilon ?? "—"))}, illustrative only).</p>`;
+  }
+
+  if (detailsInner) {
+    html += `
+      <details class="group border-t border-gray-200 dark:border-gray-700 pt-3">
+        <summary class="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline list-none">
+          Show detailed charts &amp; tables
+        </summary>
+        <div class="mt-4">${detailsInner}</div>
+      </details>`;
+  }
+
+  container.classList.remove("text-center", "py-8");
+  container.innerHTML = html;
+
+  if (vizDeferred) {
+    const detailsEl = container.querySelector("details");
+    if (detailsEl) _wireReadinessDetailsViz(detailsEl, "data-governance");
+  }
+}
+
+// ==================== Workspace Init ====================
+
+/**
  * Initialize the workspace after file upload.
  * Fetches summary statistics and populates feature dropdowns.
  */
 function initWorkspace() {
+  // Dataset switches (e.g. HDF5) re-run init without a page reload. Drop stale
+  // readiness state so the next open fetches the new dataset, not the previous one.
+  _readinessReportLoaded = false;
+  _intentRestored = false;
+  for (const key of Object.keys(_readinessVizCache)) {
+    delete _readinessVizCache[key];
+  }
+  for (const key of Object.keys(_readinessSectionStatus)) {
+    delete _readinessSectionStatus[key];
+  }
+  _readinessFairCompliance = { status: "idle", data: null };
+
   // Restore panel from URL hash, or default to data-overview
   const hash = location.hash.replace("#", "");
   const initialPanel =
@@ -4488,27 +8356,15 @@ function initWorkspace() {
   // Replace current history entry so back button works from the first panel
   history.replaceState({ panel: initialPanel }, "", "#" + initialPanel);
 
-  // Fetch summary statistics and feature list (disable clear session while loading)
   let initPending = 2;
   const initTaskDone = () => {
     if (--initPending === 0) _endServerProcessing();
   };
   _beginServerProcessing();
 
-  fetch("/summary-statistics")
-    .then((r) => r.json())
-    .then((data) => renderWorkspaceSummary(data))
-    .catch((err) => {
-      const container = document.getElementById("workspace-summary");
-      if (container) {
-        const p = document.createElement("p");
-        p.className = "text-sm";
-        p.style.color = "red";
-        p.textContent = "Error loading summary: " + err.message;
-        container.replaceChildren(p);
-      }
-    })
-    .finally(initTaskDone);
+  // Promise.resolve so a missing return from loadDataOverview cannot throw
+  // and skip the rest of init (which would leave Clear file disabled forever).
+  Promise.resolve(loadDataOverview()).finally(initTaskDone);
 
   // Populate feature dropdowns via /feature-set (same as metric.js does)
   fetch("/feature-set", { method: "POST" })
@@ -4523,6 +8379,30 @@ function initWorkspace() {
 
   initFileReferenceTargetPicker();
   loadFileReferenceOptions();
+  document
+    .getElementById("variable-unit-search")
+    ?.addEventListener("input", () => {
+      variableUnitPage = 0;
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-prev")
+    ?.addEventListener("click", () => {
+      variableUnitPage = Math.max(0, variableUnitPage - 1);
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-next")
+    ?.addEventListener("click", () => {
+      variableUnitPage += 1;
+      renderVariableUnitEditor();
+    });
+  document
+    .getElementById("variable-unit-import-file")
+    ?.addEventListener("change", (event) => {
+      importVariableUnitMetadata(event.target.files?.[0]);
+      event.target.value = "";
+    });
 
   // Feature relevance: disable target feature in checkbox lists
   const targetDropdown = document.getElementById(
@@ -4552,30 +8432,18 @@ function initWorkspace() {
   }
 
   // Handle FAIR assessment file input UI
-  const fairFile = document.getElementById("fair-file");
-  const fairLabel = document.getElementById("fairFileLabel");
-  const fairIcon = document.getElementById("fairUploadIcon");
-  if (fairFile && fairLabel) {
-    fairFile.addEventListener("change", () => {
-      if (fairFile.files.length) {
-        fairLabel.textContent = fairFile.files[0].name;
-        if (fairIcon) {
-          fairIcon.innerHTML =
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
-          fairIcon.classList.remove("text-gray-400");
-          fairIcon.classList.add("text-green-500");
-        }
-      } else {
-        fairLabel.textContent = "JSON metadata file";
-        if (fairIcon) {
-          fairIcon.innerHTML =
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>';
-          fairIcon.classList.remove("text-green-500");
-          fairIcon.classList.add("text-gray-400");
-        }
-      }
-    });
-  }
+  _wireFairFileInput(
+    document.getElementById("fair-file"),
+    document.getElementById("fairFileLabel"),
+    document.getElementById("fairUploadIcon"),
+  );
+
+  // Handle intent profile-loader file input UI
+  _wireFairFileInput(
+    document.getElementById("intent-profile-file"),
+    document.getElementById("intentProfileFileLabel"),
+    document.getElementById("intentUploadIcon"),
+  );
 }
 
 /**
@@ -4837,14 +8705,14 @@ function populateWorkspaceDropdowns(data) {
  */
 function _renderLLMCallout(container, explanation, model) {
   const modelTag = model
-    ? `<span class="ml-2 font-normal normal-case tracking-normal text-purple-400 dark:text-purple-500">(${model})</span>`
+    ? `<span class="ml-2 font-normal normal-case tracking-normal text-purple-400 dark:text-purple-500">(${escapeHtml(model)})</span>`
     : "";
   container.innerHTML = `
     <div class="flex items-start gap-2.5 p-4 text-sm rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
       <svg class="w-5 h-5 shrink-0 mt-0.5 text-purple-400 dark:text-purple-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/></svg>
       <div>
         <div class="text-xs font-semibold uppercase tracking-wide text-purple-500 dark:text-purple-400 mb-1">AI Explanation${modelTag}</div>
-        <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${explanation}</p>
+        <p class="text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(explanation)}</p>
       </div>
     </div>`;
 }
@@ -4920,7 +8788,7 @@ function requestLLMExplanation(
         container.innerHTML = `
           <div class="flex items-center gap-2 p-3 text-sm text-yellow-700 dark:text-yellow-400 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-            AI explanation unavailable: ${errMsg}
+            AI explanation unavailable: ${escapeHtml(errMsg)}
           </div>`;
         debugLog("LLM explanation unavailable:", errMsg);
       }
@@ -4929,7 +8797,7 @@ function requestLLMExplanation(
       container.innerHTML = `
         <div class="flex items-center gap-2 p-3 text-sm text-yellow-700 dark:text-yellow-400 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-          AI explanation error: ${err.message || err}
+          AI explanation error: ${escapeHtml(err.message || String(err))}
         </div>`;
       debugLog("LLM explanation error:", err);
     });
@@ -5041,6 +8909,8 @@ function saveLLMSettings() {
     .then((data) => {
       if (data.success) {
         window.AIDRIN_LLM_ENABLED = true;
+        syncIntentNotesVisibility();
+        syncAiBannerVisibility();
         if (statusEl) {
           statusEl.className =
             "mt-3 text-sm text-green-600 dark:text-green-400";
@@ -5069,7 +8939,854 @@ function saveLLMSettings() {
 function disconnectLLM() {
   fetch("/llm/disconnect", { method: "POST" }).then(() => {
     window.AIDRIN_LLM_ENABLED = false;
+    syncIntentNotesVisibility();
+    syncAiBannerVisibility();
     closeLLMSettings();
     showToast("LLM disconnected", "info");
+  });
+}
+
+// ==================== Intent & Recommendations ====================
+
+/**
+ * Open the intent modal once per dataset, from the point where the summary is
+ * genuinely ready. Never called before a dataset exists. This is the only
+ * way the modal opens -- once window.AIDRIN_INTENT_ASKED is set, nothing
+ * reopens it for that dataset.
+ */
+function maybeShowIntentModal() {
+  if (window.AIDRIN_INTENT_ASKED) return;
+  const modal = document.getElementById("intent-modal");
+  if (!modal) return;
+  window.AIDRIN_INTENT_ASKED = true;
+  _prefillIntentModalFromLastPayload();
+  const status = document.getElementById("intent-modal-status");
+  if (status) {
+    status.textContent = "";
+    status.className = "mt-3 text-sm hidden";
+    delete status.dataset.kind;
+  }
+  modal.classList.remove("hidden");
+}
+
+function closeIntentModal() {
+  const modal = document.getElementById("intent-modal");
+  if (modal) modal.classList.add("hidden");
+  _resetCustomProfileOption();
+}
+
+function _selectedIntents(formId) {
+  const form = document.getElementById(formId);
+  if (!form) return [];
+  // "__custom__" (aidrin.intent.CUSTOM_PROFILE_OPTION_VALUE) is the goal
+  // lists' extra "Other / load a custom profile" checkbox -- not a real
+  // intent, just a trigger that reveals the profile file loader (see
+  // toggleCustomProfileOption at the end of this file). It must never reach
+  // /intent/recommend as a selected goal.
+  return Array.from(form.querySelectorAll('input[name="intent"]:checked'))
+    .map((el) => el.value)
+    .filter((value) => value !== "__custom__");
+}
+
+/**
+ * The "Get recommendations" button is always clickable (submitIntent()
+ * handles the empty case with a visible message), so this no longer
+ * disables anything. It only clears a stale VALIDATION message once the
+ * user has made a valid selection, so the warning disappears as soon as
+ * they tick a goal or type a note. An error message (data-kind="error")
+ * must be left alone here — it needs to stay visible until the user starts
+ * another submit, not vanish the instant the promise chain settles.
+ */
+function updateIntentSubmitState() {
+  const notes = (document.getElementById("intent-notes") || {}).value || "";
+  if (_selectedIntents("intent-form").length === 0 && !notes.trim()) return;
+  const status = document.getElementById("intent-modal-status");
+  if (status && status.dataset.kind === "validation") {
+    status.textContent = "";
+    status.className = "mt-3 text-sm hidden";
+    delete status.dataset.kind;
+  }
+}
+
+function skipIntent() {
+  closeIntentModal();
+  fetch("/intent/dismiss", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  }).catch(() => {});
+}
+
+/**
+ * Ask the server which checks this dataset needs. `source` picks which form
+ * to read: the default (modal, "Get recommendations") reads the intent
+ * modal's #intent-form and reports validation/errors inline in
+ * #intent-modal-status; `source === "change"` instead reads the panel's
+ * inline "Change goal" card (#intent-change-form), which has no status area
+ * of its own, so it reports the same cases via the global toast.
+ */
+function submitIntent(source) {
+  const fromChangeForm = source === "change";
+  const formId = fromChangeForm ? "intent-change-form" : "intent-form";
+  const notesId = fromChangeForm ? "intent-change-notes" : "intent-notes";
+  const intents = _selectedIntents(formId);
+  const notes = ((document.getElementById(notesId) || {}).value || "").trim();
+  const status = fromChangeForm
+    ? null
+    : document.getElementById("intent-modal-status");
+
+  if (intents.length === 0 && !notes) {
+    // The notes box is hidden when no LLM is connected (it feeds only the
+    // AI-enhancement layer -- see syncIntentNotesVisibility() at the end of
+    // this file), so telling the user to "describe your plan in the box" is
+    // both wrong (there is no box) and impossible to satisfy in that case.
+    const message = window.AIDRIN_LLM_ENABLED
+      ? "Select at least one goal above, or describe your plan in the box."
+      : "Select at least one goal above.";
+    if (status) {
+      status.className = "mt-3 text-sm text-yellow-700 dark:text-yellow-400";
+      status.textContent = message;
+      status.dataset.kind = "validation";
+    } else if (typeof showToast === "function") {
+      showToast(message, "error");
+    }
+    return Promise.resolve();
+  }
+
+  // Re-entrancy guard: neither the modal's "Get recommendations" button nor
+  // the panel's "Update recommendations" button (wrapped in withSubmitGuard,
+  // which only guards its own button) stop a second click here from firing
+  // two /intent/recommend requests — each a real LLM call when one is
+  // configured.
+  if (_intentSubmitInFlight) return Promise.resolve();
+  _intentSubmitInFlight = true;
+
+  const submitButton = fromChangeForm
+    ? null
+    : document.getElementById("intent-submit");
+  const busyOverlay = fromChangeForm
+    ? null
+    : document.getElementById("intent-modal-busy");
+  if (submitButton) submitButton.disabled = true;
+  if (status) {
+    status.textContent = "";
+    status.className = "mt-3 text-sm hidden";
+    delete status.dataset.kind;
+  }
+  if (busyOverlay) busyOverlay.classList.remove("hidden");
+
+  return fetch("/intent/recommend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ intents: intents, notes: notes }),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.error) {
+        if (status) {
+          status.className =
+            "mt-3 text-sm text-yellow-700 dark:text-yellow-400";
+          status.textContent = data.error;
+          status.dataset.kind = "error";
+        } else if (typeof showToast === "function") {
+          showToast(data.error, "error");
+        }
+        return;
+      }
+      window.AIDRIN_INTENT_ASKED = true;
+      renderIntentRecommendations(data);
+      if (!fromChangeForm) closeIntentModal();
+      // Cards are already rendered from this response; mark the cache as
+      // restored so showPanel's _restoreIntentFromCache() does not re-fetch
+      // and re-render the same content a second time.
+      _intentRestored = true;
+      showPanel("intent");
+    })
+    .catch((err) => {
+      const message = "Could not load recommendations: " + (err.message || err);
+      if (status) {
+        status.className = "mt-3 text-sm text-yellow-700 dark:text-yellow-400";
+        status.textContent = message;
+        status.dataset.kind = "error";
+      } else if (typeof showToast === "function") {
+        showToast(message, "error");
+      }
+      debugLog("Intent recommendation error:", err);
+    })
+    .finally(() => {
+      _intentSubmitInFlight = false;
+      if (busyOverlay) busyOverlay.classList.add("hidden");
+      // The button is only disabled to guard against a double-submit while
+      // a request is in flight; re-enable it now that it has settled, and
+      // clear any stale validation message in case the user fixed things
+      // up while the request was outstanding.
+      if (submitButton) {
+        submitButton.disabled = false;
+        updateIntentSubmitState();
+      }
+    });
+}
+
+/**
+ * Jump to a recommended metric's panel and, when the checkbox that runs it
+ * is known (aidrin/intent.py CHECKBOX_BY_METRIC), scroll to it and apply a
+ * brief highlight. Called from an inline onclick, so this must never throw:
+ * an absent panel, a renamed checkbox, or a missing wrapper should silently
+ * degrade to "just switch panels".
+ */
+function jumpToMetric(panel, inputName) {
+  showPanel(panel);
+  if (!inputName) return;
+
+  requestAnimationFrame(() => {
+    try {
+      const panelEl = document.getElementById("panel-" + panel);
+      const input = panelEl
+        ? panelEl.querySelector('input[name="' + inputName + '"]')
+        : null;
+      if (!input) return;
+
+      const wrapper =
+        input.closest(".checkboxContainerIndividual") ||
+        input.closest("label") ||
+        input;
+
+      const reduceMotion =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (typeof input.scrollIntoView === "function") {
+        input.scrollIntoView({
+          behavior: reduceMotion ? "auto" : "smooth",
+          block: "center",
+        });
+      }
+
+      wrapper.classList.add("intent-metric-highlight");
+      const holdMs = reduceMotion ? 1600 : 1200;
+      setTimeout(() => {
+        wrapper.classList.add("intent-metric-highlight-fade");
+      }, holdMs);
+      setTimeout(
+        () => {
+          wrapper.classList.remove(
+            "intent-metric-highlight",
+            "intent-metric-highlight-fade",
+          );
+        },
+        reduceMotion ? holdMs : holdMs + 1500,
+      );
+    } catch (err) {
+      debugLog("jumpToMetric highlight error:", err);
+    }
+  });
+}
+
+function _intentPriorityBadge(priority) {
+  const isCritical = priority === "critical";
+  const classes = isCritical
+    ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+    : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
+  const label = isCritical ? "Critical" : "Recommended";
+  return `<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${classes}">${label}</span>`;
+}
+
+function _intentCardHtml(rec, profileName, allAiSourced) {
+  // When the LLM is the primary recommender, every card is source "ai" --
+  // badging every row is noise once the page-level AI banner already says
+  // the whole list may be AI-generated, so the per-card badge only earns
+  // its place when some other-sourced cards are mixed in (never true today,
+  // since a run is either fully curated, fully AI, or fully profile-based,
+  // but this keeps the badge meaningful if that ever changes).
+  const aiBadge =
+    rec.source === "ai" && !allAiSourced
+      ? '<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">AI suggested</span>'
+      : "";
+  // Goal-derived cards say which goals asked for it ("For: training,
+  // publishing"); cards from a loaded profile instead say which profile
+  // ("From: Custom profile - <name>"), since recommendations_from_profile
+  // always sets reason_intents to []. profileName is escaped inline here.
+  let reasons = "";
+  if ((rec.reason_intents || []).length) {
+    reasons = `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For: ${escapeHtml(rec.reason_intents.join(", "))}</p>`;
+  } else if (profileName) {
+    reasons = `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">From: ${escapeHtml("Custom profile - " + profileName)}</p>`;
+  }
+  return `
+    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div class="flex flex-wrap items-center gap-2 mb-1">
+        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">${escapeHtml(rec.display_name)}</h4>
+        ${_intentPriorityBadge(rec.priority)}
+        ${aiBadge}
+        <button type="button" onclick="jumpToMetric('${rec.panel}', ${escapeHtml(JSON.stringify(rec.input_name))})"
+                class="ml-auto text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+          ${escapeHtml(rec.panel_label)} &rarr;
+        </button>
+      </div>
+      <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(rec.why)}</p>
+      ${reasons}
+    </div>`;
+}
+
+// Show at most this many critical cards in full; the rest collapse into a
+// compact "also critical" list so a wall of criticals doesn't drown the badge.
+const _INTENT_CRITICAL_CARD_LIMIT = 6;
+
+/**
+ * Compact list for critical recommendations beyond the card limit: display
+ * name plus a jump link only, no rationale paragraph. Reachable without JS
+ * trickery via a native <details> element, and states the overflow count.
+ */
+function _intentCollapsedCriticalHtml(overflow, profileName) {
+  if (!overflow.length) return "";
+  // Kept deliberately compact (no per-item rationale), except a loaded
+  // profile still needs SOME attribution here or an overflowed profile
+  // metric would carry none at all -- goal-derived overflow rows are
+  // unaffected and keep showing nothing extra, as before.
+  const attribution = profileName
+    ? `<div class="text-[10px] text-gray-400 dark:text-gray-500">From: ${escapeHtml("Custom profile - " + profileName)}</div>`
+    : "";
+  const items = overflow
+    .map(
+      (rec) => `
+      <li class="flex items-center justify-between gap-2 py-1">
+        <span class="text-gray-700 dark:text-gray-300">
+          ${escapeHtml(rec.display_name)}
+          ${attribution}
+        </span>
+        <button type="button" onclick="jumpToMetric('${rec.panel}', ${escapeHtml(JSON.stringify(rec.input_name))})"
+                class="shrink-0 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+          ${escapeHtml(rec.panel_label)} &rarr;
+        </button>
+      </li>`,
+    )
+    .join("");
+  return `
+    <details class="mt-2 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
+      <summary class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+        Also critical (${overflow.length} more)
+      </summary>
+      <ul class="mt-1 divide-y divide-gray-100 dark:divide-gray-700">${items}</ul>
+    </details>`;
+}
+
+/** Render the recommendation cards, grouped by priority. */
+function renderIntentRecommendations(data) {
+  _lastIntentPayload = data;
+  const summaryEl = document.getElementById("intent-summary");
+  const cardsEl = document.getElementById("intent-cards");
+  if (!cardsEl) return;
+
+  if (summaryEl) {
+    if (data.profile_name) {
+      summaryEl.innerHTML = `<p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">Profile: ${escapeHtml(data.profile_name)}</p>`;
+    } else {
+      summaryEl.innerHTML = data.summary
+        ? `<p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">${escapeHtml(data.summary)}</p>`
+        : "";
+    }
+  }
+
+  const recs = data.recommendations || [];
+  const profileName = data.profile_name || "";
+  // Today the LLM is the primary recommender: when it produced this list,
+  // every card is source "ai" (see web/routes/intent.py's
+  // _build_ai_recommendations), so the per-card badge would just repeat
+  // what the page-level AI banner already says. Derive this from the
+  // recommendations themselves, not data.llm_used, so it still degrades
+  // correctly if that ever stops being an all-or-nothing split.
+  const allAiSourced = recs.length > 0 && recs.every((r) => r.source === "ai");
+
+  if (recs.length === 0) {
+    cardsEl.innerHTML =
+      '<p class="text-sm text-gray-500 dark:text-gray-400">No checks matched that goal for this dataset.</p>';
+    return;
+  }
+
+  // Server sorts critical-first, then by how many selected goals agree, then
+  // panel, then metric key — so taking the first N is correct without
+  // re-sorting here.
+  const critical = recs.filter((r) => r.priority === "critical");
+  const rest = recs.filter((r) => r.priority !== "critical");
+  const criticalShown = critical.slice(0, _INTENT_CRITICAL_CARD_LIMIT);
+  const criticalOverflow = critical.slice(_INTENT_CRITICAL_CARD_LIMIT);
+
+  let html = "";
+  if (criticalShown.length) {
+    html +=
+      '<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Check these first</h3>';
+    html += criticalShown
+      .map((rec) => _intentCardHtml(rec, profileName, allAiSourced))
+      .join("");
+    html += _intentCollapsedCriticalHtml(criticalOverflow, profileName);
+  }
+  if (rest.length) {
+    html +=
+      '<h3 class="text-sm font-semibold text-gray-900 dark:text-white pt-2">Worth checking</h3>';
+    html += rest
+      .map((rec) => _intentCardHtml(rec, profileName, allAiSourced))
+      .join("");
+  }
+  cardsEl.innerHTML = html;
+}
+
+/**
+ * Restore a previous recommendation when the panel is reopened.
+ * Deliberately not routed through _panelCacheMap: that path feeds
+ * renderWorkspaceResults(), which expects metric-result shape.
+ */
+function _restoreIntentFromCache() {
+  return fetch("/cached-result/intent")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((resp) => {
+      if (resp && resp.data && resp.data.recommendations) {
+        renderIntentRecommendations(resp.data);
+      } else {
+        // Cache miss (e.g. a dataset switch cleared it): reset to the
+        // template's placeholder rather than leaving the previous dataset's
+        // cards on screen.
+        const summaryEl = document.getElementById("intent-summary");
+        const cardsEl = document.getElementById("intent-cards");
+        if (summaryEl) summaryEl.innerHTML = "";
+        if (cardsEl) {
+          cardsEl.innerHTML =
+            '<p class="text-sm text-gray-500 dark:text-gray-400">' +
+            "No goal selected yet. Use <em>Change goal</em> below to get recommendations." +
+            "</p>";
+        }
+      }
+    })
+    .catch(() => {});
+}
+
+// ==================== Intent Profiles (save / load) ====================
+//
+// A profile is an explicit metric list with priorities, saved to a JSON file
+// the user downloads and later picks back up -- never stored server-side.
+// Mirrors the custom-outlier-rules file pattern in _data_quality.html: read
+// in the browser, never uploaded or saved.
+
+// profile_version is the file-FORMAT compatibility gate the server checks
+// on load (web/routes/intent.py's load_profile()) -- a mismatch is
+// rejected. aidrin_version (set once GET /intent/metrics resolves, below)
+// is provenance only -- which AIDRIN build produced this file -- and is
+// never used to reject a load, so it is fine for it to be missing here if
+// the catalog fetch has not resolved yet.
+const _INTENT_PROFILE_FILE_VERSION = 1;
+
+/**
+ * Two independent load/build flows each carry their own message element --
+ * the modal's loader (#intent-profile-message) and the profile-builder
+ * page's (#profile-builder-message) -- so an error from one never appears
+ * next to the other. elementId defaults to the loader's.
+ */
+function _intentProfileMessage(text, isError, elementId) {
+  const el = document.getElementById(elementId || "intent-profile-message");
+  if (!el) return;
+  if (!text) {
+    el.classList.add("hidden");
+    el.textContent = "";
+    return;
+  }
+  // textContent, not innerHTML: dropped_unknown/dropped_inapplicable entries
+  // echo back user-supplied metric keys from the profile file.
+  el.textContent = text;
+  el.className = isError
+    ? "text-xs text-red-700 dark:text-red-400"
+    : "text-xs text-amber-700 dark:text-amber-300";
+  el.classList.remove("hidden");
+}
+
+function _slugifyIntentProfileName(name) {
+  const slug = (name || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "profile";
+}
+
+// The full metric catalog (aidrin.intent.all_metric_keys(), 29 entries) for
+// the profile builder, fetched once from GET /intent/metrics and cached here
+// -- it never changes at runtime, so there is no reason to refetch it every
+// time the editor opens. Grouped-by-panel already, server-side.
+let _intentMetricCatalog = null;
+
+// The running AIDRIN version, from the same GET /intent/metrics response
+// (see aidrin_version there) -- stamped into a saved profile as provenance
+// by saveIntentProfile(). Empty until that first fetch resolves.
+let _intentAidrinVersion = "";
+
+function _fetchIntentMetricCatalog() {
+  if (_intentMetricCatalog) return Promise.resolve(_intentMetricCatalog);
+  return fetch("/intent/metrics")
+    .then((r) => r.json())
+    .then((data) => {
+      _intentMetricCatalog = data.metrics || [];
+      _intentAidrinVersion = data.aidrin_version || "";
+      return _intentMetricCatalog;
+    });
+}
+
+/**
+ * One row of the profile builder: a canonical flat material-checkbox (input,
+ * then .checkmark, then the label text, as direct children -- matching every
+ * other checkbox in this app, see _data_quality.html/_fairness.html) plus a
+ * priority <select>, the same per-metric control idiom already used for
+ * dropdown choices elsewhere (e.g. the frequency/target selects in
+ * _data_quality.html and _privacy_preservation.html). Neither element is
+ * inside a .checkboxContainer/.checkboxContainerIndividual ancestor, so
+ * main.js's toggleValue() never touches it.
+ */
+function _intentProfileRowHtml(metric, currentPriority) {
+  const checked = currentPriority ? "checked" : "";
+  const priority = currentPriority || "recommended";
+  // The description is shown in-flow behind a <details> toggle (same idiom
+  // as _intentCollapsedCriticalHtml below) rather than the hover .info-icon
+  // tooltip used elsewhere: this list sits inside a scroll container, and a
+  // tooltip that opens with `position: absolute; left: 100%` gets clipped
+  // and appears to flicker there (it cannot escape an overflow:auto
+  // ancestor). The <details> is a sibling of the row div, not nested inside
+  // it, so it never interferes with the checkbox/select this row's own
+  // querySelector calls (saveIntentProfile, _updateIntentProfileSelectedCount)
+  // look for, and expanding it only pushes rows below it down -- it never
+  // shifts rows above.
+  return `
+    <div class="intent-profile-row flex items-center justify-between gap-2 py-1" data-metric="${escapeHtml(metric.metric)}">
+      <label class="material-checkbox min-w-0 flex-1">
+        <input type="checkbox" ${checked} onchange="_updateIntentProfileSelectedCount()" />
+        <span class="checkmark"></span>
+        <span class="truncate">${escapeHtml(metric.display_name)}</span>
+      </label>
+      <select class="shrink-0 text-xs rounded-lg border border-gray-300 bg-white px-1.5 py-1 text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200">
+        <option value="recommended"${priority === "recommended" ? " selected" : ""}>Recommended</option>
+        <option value="critical"${priority === "critical" ? " selected" : ""}>Critical</option>
+      </select>
+    </div>
+    <details class="ml-7 -mt-0.5 mb-1">
+      <summary class="text-xs text-gray-500 dark:text-gray-400 cursor-pointer">What does this check?</summary>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(metric.description || "")}</p>
+    </details>`;
+}
+
+/** Every metric, grouped by panel with a small heading per group (matching
+ * the sub-heading style already used inside a panel, e.g. "Custom criteria
+ * rules" in _data_quality.html). Relies on the server having already sorted
+ * the catalog so same-panel entries are contiguous. */
+function _intentProfileRowsHtml(catalog, currentByMetric) {
+  let html = "";
+  let lastPanelLabel = null;
+  catalog.forEach((metric) => {
+    if (metric.panel_label !== lastPanelLabel) {
+      const spacing = lastPanelLabel === null ? "" : "pt-3";
+      html += `<h4 class="text-sm font-semibold text-gray-900 dark:text-white ${spacing}">${escapeHtml(metric.panel_label)}</h4>`;
+      lastPanelLabel = metric.panel_label;
+    }
+    html += _intentProfileRowHtml(metric, currentByMetric[metric.metric]);
+  });
+  return html;
+}
+
+function _updateIntentProfileSelectedCount() {
+  const countEl = document.getElementById("profile-builder-selected-count");
+  const rowsEl = document.getElementById("profile-builder-rows");
+  if (!countEl || !rowsEl) return;
+  const n = rowsEl.querySelectorAll('input[type="checkbox"]:checked').length;
+  countEl.textContent = `${n} ${n === 1 ? "metric" : "metrics"} selected`;
+}
+
+/**
+ * Open the profile builder page (_panels/_profile_builder.html) over every
+ * recommendable metric, not just the currently rendered recommendations
+ * kept in _lastIntentPayload by renderIntentRecommendations: metrics
+ * already recommended start ticked with their existing priority, everything
+ * else starts unticked so the user can add to the profile, not just pare it
+ * down. When there are no recommendations yet (nothing has been submitted
+ * this dataset), _lastIntentPayload is null and every row starts unticked
+ * -- a blank slate. Reached only from the "Build profile" button in the
+ * Intent panel's "Change goal" card -- this page has no sidebar entry.
+ */
+function openProfileBuilder() {
+  showPanel("profile-builder");
+
+  const nameInput = document.getElementById("profile-builder-name");
+  const rowsEl = document.getElementById("profile-builder-rows");
+  const countEl = document.getElementById("profile-builder-selected-count");
+  if (!nameInput || !rowsEl || !countEl) return;
+
+  _intentProfileMessage("", false, "profile-builder-message");
+  const currentByMetric = {};
+  ((_lastIntentPayload && _lastIntentPayload.recommendations) || []).forEach(
+    (rec) => {
+      currentByMetric[rec.metric] = rec.priority;
+    },
+  );
+  const defaultName =
+    (_lastIntentPayload && _lastIntentPayload.profile_name) || "";
+  nameInput.value = defaultName;
+  countEl.textContent = "Loading metrics…";
+  rowsEl.innerHTML = "";
+
+  _fetchIntentMetricCatalog()
+    .then((catalog) => {
+      if (!catalog.length) {
+        rowsEl.innerHTML =
+          '<p class="text-xs text-red-700 dark:text-red-400">Could not load the metric list.</p>';
+        return;
+      }
+      rowsEl.innerHTML = _intentProfileRowsHtml(catalog, currentByMetric);
+      _updateIntentProfileSelectedCount();
+    })
+    .catch(() => {
+      rowsEl.innerHTML =
+        '<p class="text-xs text-red-700 dark:text-red-400">Could not load the metric list.</p>';
+    });
+}
+
+/** Collect the ticked rows from the profile-builder page and trigger a JSON download. */
+function saveIntentProfile() {
+  const rowsEl = document.getElementById("profile-builder-rows");
+  if (!rowsEl) return;
+
+  const critical = [];
+  const recommended = [];
+  Array.from(rowsEl.querySelectorAll(".intent-profile-row")).forEach((row) => {
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    const metric = row.dataset.metric;
+    if (!checkbox || !checkbox.checked || !metric) return;
+    const select = row.querySelector("select");
+    const priority =
+      select && select.value === "critical" ? "critical" : "recommended";
+    (priority === "critical" ? critical : recommended).push(metric);
+  });
+
+  if (critical.length === 0 && recommended.length === 0) {
+    _intentProfileMessage(
+      "Select at least one metric to save.",
+      true,
+      "profile-builder-message",
+    );
+    return;
+  }
+
+  const nameInput = document.getElementById("profile-builder-name");
+  const name = ((nameInput && nameInput.value) || "").trim().slice(0, 80);
+
+  const profile = {
+    // profile_version: can the server still read this file shape (a
+    // mismatch is rejected). aidrin_version: which AIDRIN build produced
+    // it -- informational provenance only, never a rejection reason, so it
+    // is simply omitted (JSON.stringify drops undefined values) if the
+    // /intent/metrics fetch has not resolved yet.
+    profile_version: _INTENT_PROFILE_FILE_VERSION,
+    aidrin_version: _intentAidrinVersion || undefined,
+    name: name || "Untitled profile",
+    critical: critical,
+    recommended: recommended,
+  };
+
+  const blob = new Blob([JSON.stringify(profile, null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${_slugifyIntentProfileName(name)}.aidrin-profile.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+
+  _intentProfileMessage("", false, "profile-builder-message");
+}
+
+/**
+ * Read a profile JSON file chosen by the user (never uploaded), POST it to
+ * /intent/profile, and render whatever comes back. Three failure modes are
+ * handled distinctly and visibly: an unreadable file, invalid JSON, and a
+ * 400 from the server. The input is reset in every case so re-picking the
+ * same file fires the change event again.
+ */
+function loadIntentProfile(inputEl) {
+  const file = inputEl && inputEl.files && inputEl.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onerror = () => {
+    _intentProfileMessage("Could not read the profile file.", true);
+    inputEl.value = "";
+  };
+  reader.onload = () => {
+    let profile;
+    try {
+      profile = JSON.parse(reader.result);
+    } catch (error) {
+      _intentProfileMessage("The profile file must contain valid JSON.", true);
+      inputEl.value = "";
+      return;
+    }
+
+    fetch("/intent/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    })
+      .then((response) =>
+        response.json().then((data) => ({ ok: response.ok, data })),
+      )
+      .then(({ ok, data }) => {
+        if (!ok) {
+          _intentProfileMessage(
+            data.error || "The server rejected this profile.",
+            true,
+          );
+          return;
+        }
+        renderIntentRecommendations(data);
+        showPanel("intent");
+
+        const notes = [];
+        const unknown = data.dropped_unknown || [];
+        const inapplicable = data.dropped_inapplicable || [];
+        if (unknown.length) {
+          notes.push(
+            `${unknown.length} ${unknown.length === 1 ? "entry was" : "entries were"} not recognised: ${unknown.join(", ")}`,
+          );
+        }
+        if (inapplicable.length) {
+          notes.push(
+            `${inapplicable.length} ${inapplicable.length === 1 ? "check does" : "checks do"} not apply to this dataset: ${inapplicable.join(", ")}`,
+          );
+        }
+        // aidrin_version is informational provenance only (see
+        // web/routes/intent.py's load_profile()): a mismatch is surfaced
+        // here as the same mild, non-blocking note as the two cases above,
+        // never as an error, and this is silently skipped when the field
+        // is absent (profiles saved before it existed).
+        if (data.profile_aidrin_version_note) {
+          notes.push(data.profile_aidrin_version_note);
+        }
+        _intentProfileMessage(notes.join(" "), false);
+        if (typeof showToast === "function") {
+          showToast("Loaded profile: " + data.profile_name, "success");
+        }
+      })
+      .catch((error) => {
+        _intentProfileMessage(
+          "Could not load the profile: " + (error.message || error),
+          true,
+        );
+        debugLog("Intent profile load error:", error);
+      })
+      .finally(() => {
+        inputEl.value = "";
+      });
+  };
+  reader.readAsText(file);
+}
+
+// ================ Intent goal list: "Other / custom profile" ================
+//
+// The intent modal's goal list carries an eighth, hard-coded checkbox --
+// "Other / load a custom profile" -- alongside the seven real intents. It is
+// not a real intent key (see _selectedIntents' filter above and
+// aidrin.intent.CUSTOM_PROFILE_OPTION_VALUE); ticking it reveals
+// #intent-modal-custom-slot, which holds only the JSON file loader -- the
+// modal is the sole place a saved profile can be loaded from. Building a
+// profile lives on the standalone profile-builder page instead
+// (openProfileBuilder() above), never in the modal.
+
+/** Show or hide #intent-modal-custom-slot. Safe to call even if it is absent. */
+function toggleCustomProfileOption(checked) {
+  const slot = document.getElementById("intent-modal-custom-slot");
+  if (!slot) return;
+  slot.classList.toggle("hidden", !checked);
+}
+
+/** Defensive cleanup: uncheck "Other" in the intent form and hide its slot,
+ * so closing the modal never leaves the loader visible under a checkbox
+ * that is no longer ticked. */
+function _resetCustomProfileOption() {
+  const form = document.getElementById("intent-form");
+  const checkbox = form
+    ? form.querySelector('input[name="intent"][value="__custom__"]')
+    : null;
+  if (checkbox) checkbox.checked = false;
+  toggleCustomProfileOption(false);
+}
+
+/**
+ * Prefill the intent modal from whatever the panel is currently showing
+ * (_lastIntentPayload, set by renderIntentRecommendations): tick the goals
+ * that produced the current recommendations, restore the notes text, and if
+ * the current result came from a loaded profile, tick "Other / load a
+ * custom profile" too. A first-ever open has no payload yet, so every field
+ * is left at its blank-slate default.
+ */
+function _prefillIntentModalFromLastPayload() {
+  const form = document.getElementById("intent-form");
+  if (!form) return;
+
+  const payload = _lastIntentPayload;
+  const intents = (payload && payload.intents) || [];
+  const isFromProfile = !!(payload && payload.profile_name);
+
+  form.querySelectorAll('input[name="intent"]').forEach((checkbox) => {
+    checkbox.checked =
+      checkbox.value === "__custom__"
+        ? isFromProfile
+        : intents.indexOf(checkbox.value) !== -1;
+  });
+
+  const notes = document.getElementById("intent-notes");
+  if (notes) notes.value = (payload && payload.notes) || "";
+
+  toggleCustomProfileOption(isFromProfile);
+  updateIntentSubmitState();
+}
+
+// ================ Intent notes: hide when no LLM is connected ================
+//
+// The intent modal's and the "Change goal" card's "Anything else we should
+// know?" textareas feed only web.llm.recommend_for_intent (see
+// web/routes/intent.py's recommend()): with no LLM configured, notes are
+// accepted by the server but never read by anything, so showing the field
+// is misleading. Both templates render two mutually exclusive siblings for
+// this -- an ".intent-notes-field" wrapper around the textarea and an
+// ".intent-notes-llm-notice" pointing at the AI Explanation Settings modal
+// -- and this toggles between them from the one flag the rest of the app
+// already uses for "is an LLM connected", window.AIDRIN_LLM_ENABLED (set at
+// page load from llm_available/llm_configured, and flipped at runtime by
+// saveLLMSettings()/disconnectLLM() with no reload).
+
+/**
+ * Show the notes field(s) when an LLM is connected, otherwise show the
+ * "connect an AI" notice in their place. Called once at page load (see
+ * inspector.html) and again whenever window.AIDRIN_LLM_ENABLED changes, so a
+ * user who connects an LLM mid-session sees the field appear without
+ * reloading.
+ */
+/**
+ * Show/hide the fixed AI banner and keep #main-content's top padding matched to
+ * it, so connecting or disconnecting a provider does not require a reload and
+ * never leaves the first panel tucked under the banner.
+ */
+function syncAiBannerVisibility() {
+  const enabled = !!window.AIDRIN_LLM_ENABLED;
+  const banner = document.getElementById("ai-enabled-banner");
+  if (banner) banner.classList.toggle("hidden", !enabled);
+  const main = document.getElementById("main-content");
+  if (main) {
+    main.classList.toggle("pt-[5.75rem]", enabled);
+    main.classList.toggle("pt-14", !enabled);
+  }
+}
+
+function syncIntentNotesVisibility() {
+  const enabled = !!window.AIDRIN_LLM_ENABLED;
+  document.querySelectorAll(".intent-notes-field").forEach((el) => {
+    el.classList.toggle("hidden", !enabled);
+  });
+  document.querySelectorAll(".intent-notes-llm-notice").forEach((el) => {
+    el.classList.toggle("hidden", enabled);
   });
 }

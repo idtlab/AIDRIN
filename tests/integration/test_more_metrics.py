@@ -1,5 +1,7 @@
 """Tests for additional metric submission paths."""
 
+import web.routes.metrics as metrics_routes
+
 
 # -------------------------------------------------
 # HIPAA Compliance
@@ -176,6 +178,35 @@ def test_correlation_no_selection(uploaded_client):
         follow_redirects=True,
     )
     assert response.status_code == 200
+
+
+def test_correlation_analysis_calculation_error_surfaces_to_ui(uploaded_client, monkeypatch):
+    """A calc_correlations failure should surface as a correlationError trigger,
+    not silently disappear behind "No results returned." (issue #235)."""
+
+    class _FakeAsyncResult:
+        def get(self, timeout=None):
+            return {"Message": "Error: Invalid value '0.0' for dtype 'str'"}
+
+    class _FakeCalcCorrelations:
+        def delay(self, columns, file_info):
+            return _FakeAsyncResult()
+
+    monkeypatch.setattr(metrics_routes, "calc_correlations", _FakeCalcCorrelations())
+
+    response = uploaded_client.post(
+        "/correlation-analysis?return_type=json",
+        data={
+            "correlations": "yes",
+            "numerical features": "age,income",
+            "categorical features": "gender",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["trigger"] == "correlationError"
+    assert "Invalid value" in data["error"]
 
 
 # -------------------------------------------------

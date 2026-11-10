@@ -276,13 +276,19 @@ class DataProfiler:
                 "error": str(exc),
             }
 
-    def profile(self) -> dict[str, Any]:
-        """Produce combined summary stats and metadata."""
-        if self.data_path is None and not self.data_loader_path:
+    def profile(self, data_loader_override: str | None = None) -> dict[str, Any]:
+        """
+        Produce combined summary stats and metadata.
+
+        data_loader_override: if given, takes precedence over paths.data_loader
+        from the config for this call only (e.g. a per-question loader).
+        """
+        data_loader_path = data_loader_override or self.data_loader_path
+        if self.data_path is None and not data_loader_path:
             raise FileNotFoundError("No data source provided. Set paths.data_loader or paths.data_csv in config.")
 
-        if self.data_loader_path:
-            df = self._load_via_loader(self.data_loader_path)
+        if data_loader_path:
+            df = self._load_via_loader(data_loader_path)
         else:
             if not self.data_path.exists():
                 raise FileNotFoundError(f"Data file not found: {self.data_path}")
@@ -315,7 +321,7 @@ class DataProfiler:
             summary["notes"] = "Full summary mode."
 
         return {
-            "data_path": str(self.data_path) if self.data_path else f"loader:{self.data_loader_path}",
+            "data_path": str(self.data_path) if self.data_path else f"loader:{data_loader_path}",
             "metadata_path": str(self.metadata_path),
             "summary": summary,
             "metadata": metadata,

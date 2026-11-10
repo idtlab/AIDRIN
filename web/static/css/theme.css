@@ -312,8 +312,27 @@ html.dark .info-text {
 }
 
 .info-icon:hover .info-text,
-.info-text:hover {
+.info-text:hover,
+.info-icon:focus-within .info-text {
   display: block !important;
+}
+
+/* Readiness report: show tooltip below icon (avoids clipping in tables) */
+#panel-readiness-report .info-icon--below .info-text {
+  left: auto;
+  right: 0;
+  top: calc(100% + 6px);
+  margin-left: 0;
+}
+
+#panel-readiness-report th .info-icon,
+#panel-readiness-report .inline-flex .info-icon {
+  flex-shrink: 0;
+}
+
+/* Let readiness tooltips extend outside scrollable table wrappers when possible */
+#panel-readiness-report table {
+  overflow: visible;
 }
 
 .info-text a {
@@ -432,6 +451,34 @@ html.dark .info-text {
 .checkboxContainerIndividual [data-target-picker-option] {
   margin-bottom: 0;
   display: flex;
+}
+
+/* Jump-to-metric highlight: briefly marks the checkbox a recommendation card
+   sent the user to (inspector.js jumpToMetric). Reuses the app's existing
+   accent blue (--brandBlue: #4485f4) rather than a new colour, and that
+   variable is the same in both themes, so this reads consistently in light
+   and dark mode. */
+.intent-metric-highlight {
+  outline: 2px solid var(--brandBlue);
+  outline-offset: 2px;
+  background-color: rgba(68, 133, 244, 0.16);
+  border-radius: 6px;
+  transition:
+    background-color 1.5s ease,
+    outline-color 1.5s ease;
+}
+
+.intent-metric-highlight.intent-metric-highlight-fade {
+  background-color: rgba(68, 133, 244, 0);
+  outline-color: rgba(68, 133, 244, 0);
+}
+
+/* Respect prefers-reduced-motion: no fade, just a static highlight that is
+   removed outright once its hold period (set in inspector.js) elapses. */
+@media (prefers-reduced-motion: reduce) {
+  .intent-metric-highlight {
+    transition: none;
+  }
 }
 
 .metric-inputs {
@@ -660,4 +707,46 @@ select:focus {
   color: var(--textColorSecondary);
   margin-left: 8px;
   font-size: 12px;
+}
+
+/* Use the editor's available width: the sidebar narrows tablet layouts. */
+#custom-outlier-editor {
+  container-type: inline-size;
+}
+
+.custom-outlier-rule-header > *,
+.custom-outlier-condition-fields > *,
+.custom-outlier-range-fields > *,
+.custom-outlier-compare-fields > * {
+  min-width: 0;
+}
+
+.custom-outlier-range-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@container (min-width: 28rem) {
+  .custom-outlier-range-fields {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .custom-outlier-compare-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 40rem) {
+  .custom-outlier-limits {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 52rem) {
+  .custom-outlier-rule-header {
+    grid-template-columns: minmax(9rem, 0.6fr) minmax(16rem, 1.4fr) auto;
+  }
+
+  .custom-outlier-condition-fields {
+    grid-template-columns: minmax(9rem, 0.7fr) minmax(0, 1fr) auto;
+  }
 }

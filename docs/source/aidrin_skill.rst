@@ -37,7 +37,7 @@ Prerequisites
 
 - **Claude Code** installed (CLI, desktop app, or IDE extension). See the
   `Claude Code documentation <https://docs.anthropic.com/en/docs/claude-code>`_.
-- **AIDRIN** installed in a Python 3.10+ environment with its conda/virtual environment
+- **AIDRIN** installed in a Python 3.11+ environment with its conda/virtual environment
   activated. If you haven't done this yet, follow :ref:`cli_installation` first, then return here.
 
 ----
@@ -87,6 +87,14 @@ The local stdio MCP server intentionally does not apply the web interface's
 configured root allowlist. It uses the filesystem permissions of the account
 that started ``aidrin-mcp`` and should be connected only to trusted clients.
 
+Variable units can be audited with ``verify_variable_units`` or with
+``run_aidrin_metric`` using ``variable-unit-validation``. With no sidecar,
+the tools return an audit of existing metadata. Supply at most one of
+``unit_metadata_json`` and ``unit_metadata_file`` to apply resolutions and
+revalidate the complete sidecar. File paths resolve on the execution host,
+including a selected remote endpoint. See :ref:`variable_unit_validation`
+for the canonical sidecar schema and deterministic validation rules.
+
 Step 2 — Open the AIDRIN directory in Claude Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -110,9 +118,23 @@ tools become available to Claude for that session.
 
 .. note::
 
-   **Using a different project directory?** Copy ``.mcp.json`` and the
-   ``.claude/skills/aidrin/`` folder into your project root. Claude Code
-   will pick both up on next launch.
+   **Using a different project directory?** The skill ships inside the
+   ``aidrin`` package, so from your project root run:
+
+   .. code-block:: bash
+
+      aidrin skill install
+
+   This installs into every skills folder already present in the project
+   (``.claude/skills``, ``.agents/skills``); pass ``--dir <folder>`` to
+   pick one explicitly or to create it. Then copy ``.mcp.json`` alongside
+   it; Claude Code picks both up on next launch. After
+   ``pip install -U aidrin``, re-run ``aidrin skill install`` to refresh the
+   skill to the version that matches the package.
+
+   To skip the copying entirely, install the plugin instead
+   (:ref:`aidrin_skill_plugin`): it carries both components and needs no
+   per-project files.
 
 Step 3 — Verify the connection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -127,6 +149,70 @@ Claude should call the ``list_metrics`` tool and return the full metric catalogu
 category. If it falls back to running ``aidrin list`` in the terminal instead, the MCP server
 did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mcp``).
 
+Alternative — Install via skills.sh
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The skill is also published on `skills.sh <https://www.skills.sh/idtlab/aidrin/aidrin>`_
+and can be installed into any project, for any agent that supports the skills format
+(Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, and others), without cloning
+the repository:
+
+.. code-block:: bash
+
+   npx skills add idtlab/aidrin
+
+This installs only the skill. It drives AIDRIN through the ``aidrin`` command-line
+interface, so AIDRIN must be installed and on your PATH (:ref:`cli_installation`).
+To use the MCP server instead, complete Steps 1–2 above as well.
+
+Installing this way also keeps the skill easy to update: the CLI records the source
+repository in a ``skills-lock.json`` next to the skill, and a single command pulls the
+latest version from ``main`` — no release or manual copy needed:
+
+.. code-block:: bash
+
+   npx skills update aidrin
+
+.. _aidrin_skill_plugin:
+
+Alternative — Install as a Claude Code plugin
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+AIDRIN is also packaged as a Claude Code plugin, which carries the skill and the MCP server
+together. Install it once and AIDRIN is available in every session, whatever directory you
+are in — no per-project files and no clone. Inside Claude Code:
+
+.. code-block:: text
+
+   /plugin install aidrin --marketplace idtlab/AIDRIN
+
+Or from a terminal:
+
+.. code-block:: bash
+
+   claude plugin marketplace add idtlab/AIDRIN
+   claude plugin install aidrin@idtlab
+
+The plugin declares the server as ``uvx --from 'aidrin[mcp]' aidrin-mcp``, so
+`uv <https://docs.astral.sh/uv/>`_ is the only prerequisite: it installs AIDRIN and its
+dependencies into an isolated environment on first use, leaving your active Python
+environment untouched. Steps 1 and 2 above are not needed. Because the server is resolved
+from PyPI rather than your checkout, it tracks the latest release; use the steps above
+instead if you need the working tree's code.
+
+Verify from any directory:
+
+.. code-block:: bash
+
+   claude mcp list   # plugin:aidrin:aidrin ... ✔ Connected
+
+The plugin's components are namespaced — its tools appear as
+``mcp__plugin_aidrin_aidrin__*`` and its skill fires as ``aidrin:aidrin``, against
+``mcp__aidrin__*`` and a bare ``aidrin`` for project-scoped copies. In a directory that also
+has its own ``.mcp.json`` or ``.claude/skills/aidrin/``, such as a clone of this repository,
+both are present and their names collide, so those prefixes are how you tell which one
+answered.
+
 ----
 
 .. _aidrin_skill_tools:
@@ -134,7 +220,7 @@ did not connect — check that ``aidrin-mcp`` is on your PATH (``which aidrin-mc
 Available Tools
 ---------------
 
-The MCP server exposes eleven tools. You do not normally call these by name;
+The MCP server exposes the following tools. You do not normally call these by name;
 Claude selects them from your request. They are listed here so you know what is
 reachable.
 
@@ -152,6 +238,10 @@ reachable.
      - Runs the three core data quality metrics: completeness, duplicity, outliers
    * - ``run_aidrin_metric``
      - Runs a single built-in metric against a dataset
+   * - ``verify_variable_units``
+     - Audits unit metadata or revalidates a complete inline or host-local sidecar
+   * - ``verify_file_references``
+     - Validates file references stored in selected dataset targets
    * - ``run_custom_outlier_check``
      - Runs Custom Criteria Outliers against selected targets
    * - ``run_batch``
@@ -167,10 +257,15 @@ reachable.
    * - ``agentic_run``
      - Runs the full agentic evaluation pipeline
 
+``summarize_dataset``, ``run_data_quality_check``, and ``run_aidrin_metric`` accept an
+optional ``loader`` (``path/to/loader.py:function``) for formats AIDRIN cannot read
+natively; ``run_batch`` takes the same value as ``loader:`` in its config. The loader
+must return a pandas DataFrame (see ``aidrin add-custom-loader`` in the CLI guide).
+
 .. warning::
 
-   ``run_custom_metric``, ``run_custom_remedy``, and the agentic tools execute
-   Python from the files you point them at. Only use them with code you trust.
+   ``run_custom_metric``, ``run_custom_remedy``, the agentic tools, and any ``loader``
+   execute Python from the files you point them at. Only use them with code you trust.
 
 ----
 
@@ -200,12 +295,21 @@ Point Claude at a dataset and describe your intent:
 Claude follows a structured workflow:
 
 1. Confirms AIDRIN is available and lists the metrics.
-2. Inspects the dataset schema and sample statistics.
-3. Proposes a metric plan matched to your intent and asks you to confirm column roles.
-4. Runs the metrics via MCP tools.
-5. Writes an interpreted markdown report with scores, their directional meaning, and suggested
-   next steps — without declaring a ready/not-ready verdict (that judgment is yours).
-6. Offers to evaluate custom metrics or apply remedies to the dataset.
+2. Asks whether you have domain literature (PDFs, standards, regulations) the dataset
+   should be evaluated against — see :ref:`aidrin_skill_agentic` below. If you say no,
+   this step is a no-op and the rest of the workflow is unchanged. If your dataset
+   isn't a plain CSV, Claude writes a small loader for it automatically (or asks for
+   one, if the format isn't one AIDRIN already parses).
+3. Inspects the dataset schema and sample statistics.
+4. Proposes a metric plan matched to your intent and asks you to confirm column roles —
+   plus, if you gave a literature path, the resource path and domain questions from
+   step 2, before any of it runs.
+5. Runs the metrics via MCP tools, and the agentic pipeline too if domain literature
+   was provided.
+6. Writes an interpreted markdown report with scores, their directional meaning, and
+   suggested next steps — without declaring a ready/not-ready verdict (that judgment
+   is yours).
+7. Offers to evaluate custom metrics or apply remedies to the dataset.
 
 Supported file formats: CSV, Excel (``.xls`` / ``.xlsx`` / ``.xlsb`` / ``.xlsm``), JSON,
 NumPy (``.npz``), HDF5 (``.h5``), Parquet.
@@ -220,13 +324,32 @@ Agentic Pipeline via MCP
 The agentic pipeline is also available through MCP, letting Claude orchestrate the full
 literature-grounded evaluation without you running any commands.
 
-**What it does:** Takes domain-specific questions you define in a YAML config, retrieves
-relevant passages from indexed PDFs (research papers, standards, regulations), generates
-Python analysis code and runs it against your dataset, scores complexity, and produces
-remediation recommendations — all grounded in your domain literature.
+**What it does:** Takes domain-specific questions, retrieves relevant passages from
+indexed PDFs (research papers, standards, regulations), generates Python analysis code
+and runs it against your dataset, scores complexity, and produces remediation
+recommendations — all grounded in your domain literature.
 
 **When to use it:** When you have domain PDFs and want to evaluate the dataset against
 field-specific standards rather than (or in addition to) generic quality metrics.
+
+There are two ways to run it:
+
+**Guided** (recommended for most cases)
+   During a normal assessment (see `Running an Assessment`_ above), Claude asks up
+   front whether you have domain literature. Give it a path and your domain questions,
+   and Claude writes the config itself — dataset path, a short metadata description
+   drawn from your stated intent and the inspected schema, your resource path, and your
+   questions — then builds the index and runs the pipeline as part of the same session.
+   No YAML to hand-write, and nothing runs before you've confirmed the plan.
+
+**Standalone**
+   Run it separately at any time, with full control over the config: point Claude at a
+   config file you've authored yourself, or skip Claude entirely and run
+   ``aidrin agentic build-index`` / ``aidrin agentic run`` from the command line (see
+   :ref:`agentic_integration`). Use this when you want to re-run with a different
+   config, tune settings the guided path doesn't ask about (retrieval ``top_k``, chunk
+   size), or evaluate a dataset outside a full AIDRIN assessment.
+   The rest of this section documents that config format.
 
 Setup
 ~~~~~
@@ -237,18 +360,24 @@ Setup
 
    pip install -e ".[agentic]"
 
-**Set your API key:**
+**Pick one provider — OpenRouter or LBL CBORG, not both — and set its key:**
 
 .. code-block:: bash
 
-   export OPENAI_API_KEY="sk-..."   # or the key for your OpenAI-compatible endpoint
+   export OPENROUTER_API_KEY="sk-or-..."
+   # — or —
+   export CBORG_API_KEY="sk-cborg-..."
 
-**Create an agentic config YAML.** All paths are resolved relative to the config file:
+**Create an agentic config YAML.** All paths are resolved relative to the config file. One
+``llm`` block sets the endpoint, chat model, and embedding model for the whole pipeline — every
+stage below uses it, so there's nothing to configure per stage:
 
 .. code-block:: yaml
 
    llm:
-     base_url: "https://api.openai.com/v1"   # any OpenAI-compatible endpoint
+     base_url: "https://openrouter.ai/api/v1"   # or "https://api.cborg.lbl.gov"
+     model: "openai/gpt-oss-120b"
+     embedding_model: "openai/text-embedding-3-large"
 
    paths:
      data_loader: "./loader.py:load_dataset"  # Python function returning a DataFrame
@@ -258,14 +387,12 @@ Setup
    vector_store:
      sources:
        - ./sources                            # directory containing domain PDFs
-     embedding_model: text-embedding-ada-002
      vector_store_name: my_index
      chunk_size: 1000
      chunk_overlap: 200
 
    retrieval:
      enabled: true                            # false = skip RAG, use LLM knowledge only
-     answer_model: gpt-4o
      top_k: 3
      max_workers: 4                           # questions run in parallel
      question:
@@ -275,19 +402,13 @@ Setup
    executor:
      enabled: true
      max_attempts: 5
-     model: gpt-4o
      temperature: 0.0
 
    complexity_scorer:
      enabled: true
-     model: gpt-4o
 
    remediation:
      enabled: true
-     model: gpt-4o
-
-   output:
-     save_log: true
 
 .. note::
 
@@ -295,8 +416,8 @@ Setup
    (columns, units, provenance) — used to give the LLM structural context. Without it the
    pipeline will not start.
 
-Running
-~~~~~~~
+Running (standalone, with your own config)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Tell Claude to run it:
 

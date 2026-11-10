@@ -24,8 +24,13 @@ class TokenUsageTracker:
         self.embedding_chars = 0
         self._chat_models: dict[str, dict[str, int]] = {}
         self._embedding_models: dict[str, dict[str, Any]] = {}
+        self._components: dict[str, dict[str, int]] = {}
 
-    def record_chat(self, model: str, input_tokens: int, output_tokens: int) -> None:
+    def record_chat(self, model: str, input_tokens: int, output_tokens: int, component: str = "unknown") -> None:
+        """component: which pipeline stage made this call (e.g. "generation",
+        "execution", "remediation", "complexity_scorer") — tagged by the caller
+        at create_chat_model() time, since the tracker itself has no visibility
+        into which stage is invoking a given LLM instance."""
         with self._lock:
             self.chat_calls += 1
             self.chat_input_tokens += input_tokens
@@ -34,6 +39,10 @@ class TokenUsageTracker:
             entry["calls"] += 1
             entry["input_tokens"] += input_tokens
             entry["output_tokens"] += output_tokens
+            comp_entry = self._components.setdefault(component, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+            comp_entry["calls"] += 1
+            comp_entry["input_tokens"] += input_tokens
+            comp_entry["output_tokens"] += output_tokens
 
     def record_embedding(self, model: str, tokens: int, chars: int, tokens_unreported: bool = False) -> None:
         with self._lock:
@@ -46,6 +55,15 @@ class TokenUsageTracker:
             entry["chars"] += chars
             if tokens_unreported:
                 entry["tokens_unreported"] = True
+
+    def component_usage(self, component: str) -> dict[str, int]:
+        """Snapshot of one component's running totals, for callers that want
+        a per-query delta (capture before/after and subtract) rather than the
+        whole-run aggregate from to_dict(). Zeros if the component hasn't
+        recorded anything (yet)."""
+        with self._lock:
+            entry = self._components.get(component, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+            return dict(entry)
 
     def to_dict(self) -> dict[str, Any]:
         with self._lock:
@@ -60,6 +78,10 @@ class TokenUsageTracker:
                 "models": {
                     "chat": dict(self._chat_models),
                     "embedding": dict(self._embedding_models),
+                },
+                "components": {
+                    name: {**usage, "total_tokens": usage["input_tokens"] + usage["output_tokens"]}
+                    for name, usage in self._components.items()
                 },
             }
 

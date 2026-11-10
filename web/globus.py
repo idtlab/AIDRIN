@@ -299,7 +299,12 @@ def check_endpoint_compatibility(client, endpoint_id, timeout=30):
         report = {
             "compatible": False,
             "local": {"aidrin": local_aidrin, "python": local_python},
-            "remote": {"aidrin": "unknown", "python": "unknown"},
+            "remote": {
+                "aidrin": "unknown",
+                "python": "unknown",
+                "capability_schema_version": None,
+                "capabilities": [],
+            },
             "warnings": [
                 "The endpoint could not load AIDRIN's remote task code. "
                 f"Install aidrin {local_aidrin} in the endpoint's worker "
@@ -312,9 +317,22 @@ def check_endpoint_compatibility(client, endpoint_id, timeout=30):
 
     remote_aidrin = remote.get("aidrin_version", "unknown")
     remote_python = remote.get("python_version", "unknown")
+    capability_schema_version = remote.get("capability_schema_version")
+    advertised_capabilities = remote.get("capabilities", [])
+    capabilities = (
+        sorted({str(value) for value in advertised_capabilities})
+        if capability_schema_version == 1 and isinstance(advertised_capabilities, (list, tuple, set))
+        else []
+    )
 
     warnings = []
     compatible = True
+
+    if advertised_capabilities and capability_schema_version != 1:
+        warnings.append(
+            "Endpoint capabilities use an unsupported schema and will be ignored. "
+            "Upgrade AIDRIN in the endpoint worker environment."
+        )
 
     if _minor(remote_aidrin) != _minor(local_aidrin):
         compatible = False
@@ -333,7 +351,12 @@ def check_endpoint_compatibility(client, endpoint_id, timeout=30):
     report = {
         "compatible": compatible,
         "local": {"aidrin": local_aidrin, "python": local_python},
-        "remote": {"aidrin": remote_aidrin, "python": remote_python},
+        "remote": {
+            "aidrin": remote_aidrin,
+            "python": remote_python,
+            "capability_schema_version": capability_schema_version,
+            "capabilities": capabilities,
+        },
         "warnings": warnings,
     }
     logger.info("Endpoint %s compatibility: %s", endpoint_id, report)

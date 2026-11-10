@@ -21,7 +21,7 @@ Use this if you want the latest development version or plan to contribute:
 
    git clone https://github.com/idtlab/AIDRIN.git
    cd AIDRIN
-   conda create -n aidrin-env python=3.10 -y
+   conda create -n aidrin-env python=3.11 -y
    conda activate aidrin-env
    pip install -e .
 
@@ -41,6 +41,22 @@ The simplest way to get the CLI:
 .. code-block:: bash
 
    pip install aidrin
+
+----
+
+Zarr Support (Optional)
+------------------------
+
+Reading ``.zarr`` stores requires an additional dependency — install it as a separate optional
+extra (Python >= 3.11):
+
+.. code-block:: bash
+
+   # PyPI install
+   pip install "aidrin[zarr]"
+
+   # Source install
+   pip install -e ".[zarr]"
 
 ----
 

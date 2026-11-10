@@ -59,6 +59,41 @@ class TestReturnNoisyStats(unittest.TestCase):
         self.assertIn("Epsilon must be greater than 0", str(ctx.exception))
 
 
+class TestNoisyFilePath(unittest.TestCase):
+    """The noisy CSV write must be visible in the result and controllable by callers."""
+
+    def setUp(self):
+        self.df = pd.DataFrame({
+            "age": [25, 30, 35],
+            "salary": [50000, 60000, 70000],
+        })
+
+    def test_explicit_output_path_is_written_and_reported(self):
+        import tempfile
+        from pathlib import Path
+
+        tmp_dir = tempfile.mkdtemp()
+        target = Path(tmp_dir) / "custom" / "noisy.csv"
+
+        result = return_noisy_stats(
+            ["age"], 0.5, self.df,
+            output_path=str(target), include_visualization=False,
+        )
+
+        self.assertTrue(target.exists())
+        self.assertEqual(result["Noisy file saved"], "Successful")
+        self.assertEqual(result["Noisy file path"], str(target.resolve()))
+
+    def test_skipped_save_has_no_reported_path(self):
+        result = return_noisy_stats(
+            ["age"], 0.5, self.df,
+            save_output=False, include_visualization=False,
+        )
+
+        self.assertEqual(result["Noisy file saved"], "Skipped (readiness report preview only)")
+        self.assertNotIn("Noisy file path", result)
+
+
 class TestDpErrorPayload(unittest.TestCase):
     """The headless runner turns the raised message into a user-facing payload."""
 
