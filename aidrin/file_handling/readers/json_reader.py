@@ -5,7 +5,7 @@ import uuid
 import pandas as pd
 from flask import current_app, session
 
-from aidrin.file_handling.readers.base_reader import BaseFileReader
+from aidrin.file_handling.readers.base_reader import BaseFileReader, possible_rounded_integer_columns, preserve_integer_values
 
 
 class jsonReader(BaseFileReader):
@@ -26,7 +26,12 @@ class jsonReader(BaseFileReader):
                             rows.append(row)
 
             recurse(data)
-            return pd.DataFrame(rows)
+            frame = pd.DataFrame(rows)
+            for name in possible_rounded_integer_columns(frame):
+                values = [row.get(name) for row in rows]
+                if all(value is None or type(value) in {int, float} for value in values):
+                    preserve_integer_values(frame, name, values)
+            return frame
 
         with open(self.file_path) as f:
             data = json.load(f)

@@ -167,7 +167,13 @@
             <fieldset id="grouped-series-columns" data-metric-settings class="space-y-1 text-sm" hidden disabled>
               <legend>Columns that identify each series</legend>
               <p class="text-gray-500 dark:text-gray-400">Rows with the same values in these columns form one series. For example, select station and channel to check each station–channel pair separately.</p>
+              <p id="grouped-series-column-status" class="text-gray-500 dark:text-gray-400" role="status"></p>
               <div id="groupedTimeSeriesColumnsCheckbox" class="w-full" onchange="scheduleGroupedTimingDetection()"></div>
+              <fieldset id="grouped-manual-series" hidden disabled>
+                <label for="grouped-series-column-names">Series column names (one per line)</label>
+                <textarea id="grouped-series-column-names" name="grouped_series_column_names" rows="2" class="w-full"
+                          oninput="scheduleGroupedTimingDetection()"></textarea>
+              </fieldset>
             </fieldset>
             <div class="text-sm">
               <div class="flex flex-wrap items-baseline gap-x-1">
@@ -175,9 +181,14 @@
                 <span id="grouped-time-column-status" class="text-gray-500 dark:text-gray-400" role="status"></span>
               </div>
               <select name="timestamp column for grouped time series" id="groupedTimeSeriesTimeDropdown" required class="w-full"
-                      aria-describedby="grouped-time-column-status" onchange="setGroupedTimeColumnSource(this, false); scheduleGroupedTimingDetection()">
+                      aria-describedby="grouped-time-column-status" onchange="selectGroupedTimeColumn(this)">
                 <option value="" disabled selected>Select a time column</option>
               </select>
+              <fieldset id="grouped-manual-time" hidden disabled class="mt-2">
+                <label for="grouped-time-column-name">Time column name</label>
+                <input id="grouped-time-column-name" name="grouped_time_column_name" type="text" class="w-full"
+                       oninput="enterGroupedTimeColumn(this)" />
+              </fieldset>
             </div>
             <div class="text-sm">
               <div class="flex flex-wrap items-baseline gap-x-1">

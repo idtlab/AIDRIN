@@ -44,7 +44,7 @@ class HeadlessConfig:
     threshold: Optional[float] = None
     frequency: Optional[str] = None
     timestamp_column: Optional[str] = None
-    group_columns: Optional[List[str]] = field(default_factory=list)
+    group_columns: Optional[List[str]] = None
     expected_cadence: Optional[float] = None
     time_kind: str = "numeric"
     tolerance: float = 0.0

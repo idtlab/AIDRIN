@@ -45,6 +45,9 @@ def test_independent_and_stacked_modes_and_explicit_sequence_boundaries(tmp_path
     del default_request["source_columns"]
     separated = run_collection_metrics(files, [default_request], "stacked")
     assert separated == run_collection_metrics(files, [sequence_request()], "stacked")
+    for source_column in ("__aidrin_source_id", "__aidrin_source_row"):
+        request = {**default_request, "source_columns": [source_column]}
+        assert run_collection_metrics(files, [request], "stacked") == separated
     result = separated["datasets"][0]["metrics"]["grouped_time_series"]
     assert result["summary"]["group_count"] == 2
     assert result["summary"]["finding_counts"] == {}
