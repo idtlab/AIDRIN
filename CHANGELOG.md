@@ -5,6 +5,15 @@ All notable changes to AIDRIN are documented here. This project loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- **`aidrin readiness-report` CLI** (and headless
+  `run_readiness_report` / `run_readiness_report_pdf`): build the AI Data
+  Readiness Report as JSON (stdout / `-o`) and optional PDF (`--pdf-out`,
+  `--pdf-mode scorecard|full`), with optional FAIR appendix via
+  `--fair-metadata` / `--fair-standard` (same engine as `aidrin fair`).
+  Local-only; PDF needs WeasyPrint system libraries.
+
 ## [2026.10.1] - 2026-10-28
 
 ### Changed (breaking)

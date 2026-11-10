@@ -20,6 +20,9 @@ Quick Start
    # Run a batch of metrics from a YAML config
    aidrin batch /path/to/my_project/batch_config.yaml
 
+   # Full AI Data Readiness Report (JSON; optional PDF)
+   aidrin readiness-report /path/to/sample_dataset.csv -o report.json
+
    # HDF5 / Zarr: pick compatible 1D arrays (comma-separated paths)
    aidrin run completeness /path/to/store.zarr --selected-keys age,income
    aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
@@ -205,6 +208,46 @@ API responses). The JSON output leaves out the chart; see :ref:`web_usage` for t
      Accessible       6/6
      Interoperable    2/6  missing: conformsTo, references, language, temporal
      Reusable         7/8  missing: rights
+
+.. _cli_readiness_report:
+
+``aidrin readiness-report``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Builds the **AI Data Readiness Report** for a tabular dataset: the same five
+automated sections as the web report (Dataset Overview, Data Quality, Impact on
+AI, Fairness & Bias, Data Governance), as JSON on stdout. Optionally write JSON
+with ``-o``/``--output``, a PDF with ``--pdf-out``, and an optional FAIR appendix
+with ``--fair-metadata`` (same engine and ``--fair-standard`` values as
+:ref:`cli_fair`). FAIR is omitted when no metadata path is given; missing FAIR
+never blocks the PDF.
+
+This command is **local-only** (``aidrin remote readiness-report`` is rejected)
+because PDF rendering uses the web templates and WeasyPrint. PDF export needs
+WeasyPrint's native libraries; see :ref:`web_installation` if rendering fails.
+
+.. code-block:: bash
+
+   # JSON to stdout (and optionally to a file)
+   aidrin readiness-report /path/to/sample_dataset.csv
+   aidrin readiness-report /path/to/sample_dataset.csv -o /path/to/reports/readiness.json
+
+   # Scorecard PDF (default) or full PDF with section charts
+   aidrin readiness-report /path/to/sample_dataset.csv --pdf-out /path/to/reports/readiness.pdf
+   aidrin readiness-report /path/to/sample_dataset.csv \
+     -o /path/to/reports/readiness.json \
+     --pdf-out /path/to/reports/readiness-full.pdf \
+     --pdf-mode full
+
+   # Optional FAIR appendix (Croissant, RO-Crate, DCAT-US, or DataCite metadata)
+   aidrin readiness-report /path/to/sample_dataset.csv \
+     --fair-metadata /path/to/metadata.json \
+     --fair-standard auto \
+     -o /path/to/reports/readiness.json \
+     --pdf-out /path/to/reports/readiness.pdf
+
+   # Include chart payloads in the JSON (large); PDF full mode builds charts itself
+   aidrin readiness-report /path/to/sample_dataset.csv --viz -o /path/to/reports/readiness-viz.json
 
 ``aidrin run``
 ~~~~~~~~~~~~~~
@@ -552,11 +595,25 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
 
 .. code-block:: python
 
-   from aidrin.headless import run_metric, run_data_quality, run_batch_metrics
+   from aidrin.headless import (
+       run_metric,
+       run_data_quality,
+       run_batch_metrics,
+       run_readiness_report,
+       run_readiness_report_pdf,
+   )
    from aidrin.headless import HeadlessConfig
 
    # Single metric
    result = run_metric("completeness", "/path/to/sample_dataset.csv")
+
+   # Full readiness report (same sections as ``aidrin readiness-report``)
+   report = run_readiness_report("/path/to/sample_dataset.csv")
+   pdf_bytes = run_readiness_report_pdf(
+       "/path/to/sample_dataset.csv",
+       mode="scorecard",
+       fair_metadata="/path/to/metadata.json",
+   )
 
    # Custom criteria outliers
    result = run_metric(
