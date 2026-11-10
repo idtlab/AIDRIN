@@ -26,6 +26,12 @@ from aidrin.file_handling.file_reference_policy import (
     resolve_base_dir,
     scan_limit,
 )
+from aidrin.readiness.common import (
+    READINESS_MAX_DETAIL_LIST_ITEMS as _READINESS_MAX_DETAIL_LIST_ITEMS,
+    cap_detail_list as _cap_detail_list,
+    finite_kpi_values as _finite_kpi_values,
+    grade_label as _grade_label,
+)
 from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
 from aidrin.structured_data_metrics.class_imbalance import (
@@ -366,33 +372,8 @@ def data_quality():
 # ---------------------------------------------------------------------------
 # Readiness Report (aggregated, non-interactive)
 # ---------------------------------------------------------------------------
-
-def _grade_label(score):
-    """Map a 0–1 readiness score to a coarse status label."""
-    try:
-        if score is None or not math.isfinite(float(score)):
-            return "unknown"
-    except (TypeError, ValueError):
-        return "unknown"
-    if score >= 0.9:
-        return "good"
-    if score >= 0.7:
-        return "warning"
-    return "poor"
-
-
-def _finite_kpi_values(kpis):
-    """Return finite numeric KPI values (exclude None / NaN / Inf)."""
-    present = []
-    for kpi in kpis:
-        value = kpi.get("value") if isinstance(kpi, dict) else None
-        try:
-            if value is not None and math.isfinite(float(value)):
-                present.append(value)
-        except (TypeError, ValueError):
-            continue
-    return present
-
+# Shared helpers (_grade_label, _finite_kpi_values, _cap_detail_list,
+# _READINESS_MAX_DETAIL_LIST_ITEMS) are imported from aidrin.readiness.common.
 
 # Dataset-overview readiness thresholds (per-feature profile)
 _OVERVIEW_MISSING_WARNING = 0.05
@@ -404,20 +385,7 @@ _OVERVIEW_CAT_TOP_N = 5
 _OVERVIEW_MAX_FEATURE_PROFILES = 500
 _OVERVIEW_MAX_NUMERICAL_SUMMARY_COLS = 500
 _OVERVIEW_MAX_CATEGORICAL_DIST_COLS = 50
-_READINESS_MAX_DETAIL_LIST_ITEMS = 50
 _PROFILE_STATUS_RANK = {"poor": 0, "warning": 1, "good": 2}
-
-
-def _cap_detail_list(items, max_items):
-    """Return a capped list plus metadata for UI/PDF truncation notes."""
-    total = len(items)
-    if total <= max_items:
-        return items, {"total": total, "shown": total, "truncated": False}
-    return items[:max_items], {
-        "total": total,
-        "shown": max_items,
-        "truncated": True,
-    }
 
 
 def _build_numerical_summary_for_overview(num_df):

@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from web.routes.metrics import _finite_kpi_values, _grade_label
+from aidrin.readiness import finite_kpi_values, grade_label
 from web.routes.utils import ensure_json_serializable
 
 
@@ -43,13 +43,13 @@ class TestEnsureJsonSerializable(unittest.TestCase):
 
 class TestGradeLabelNonFinite(unittest.TestCase):
     def test_nan_and_inf_are_unknown_not_poor(self):
-        self.assertEqual(_grade_label(None), "unknown")
-        self.assertEqual(_grade_label(float("nan")), "unknown")
-        self.assertEqual(_grade_label(np.float64("nan")), "unknown")
-        self.assertEqual(_grade_label(float("inf")), "unknown")
-        self.assertEqual(_grade_label(0.5), "poor")
-        self.assertEqual(_grade_label(0.75), "warning")
-        self.assertEqual(_grade_label(0.95), "good")
+        self.assertEqual(grade_label(None), "unknown")
+        self.assertEqual(grade_label(float("nan")), "unknown")
+        self.assertEqual(grade_label(np.float64("nan")), "unknown")
+        self.assertEqual(grade_label(float("inf")), "unknown")
+        self.assertEqual(grade_label(0.5), "poor")
+        self.assertEqual(grade_label(0.75), "warning")
+        self.assertEqual(grade_label(0.95), "good")
 
     def test_finite_kpi_values_skip_nan(self):
         kpis = [
@@ -58,7 +58,7 @@ class TestGradeLabelNonFinite(unittest.TestCase):
             {"value": None},
             {"value": 0.5},
         ]
-        present = _finite_kpi_values(kpis)
+        present = finite_kpi_values(kpis)
         self.assertEqual(present, [1.0, 0.5])
         grade = sum(present) / len(present)
         self.assertTrue(math.isfinite(grade))
