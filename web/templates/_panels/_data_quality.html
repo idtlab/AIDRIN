@@ -137,7 +137,7 @@
 
         <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
-            <input type="checkbox" name="grouped time series" onchange="toggleValue(this); scheduleGroupedTimingDetection()" />
+            <input type="checkbox" name="grouped time series" onchange="toggleValue(this); syncGroupedTimeSeriesOptions()" />
             <span class="checkmark"></span>
             Check grouped time series
             <span class="info-icon">i<span class="info-text">Check for repeated timestamps, times that go backward, and uneven sample spacing in each series.</span></span>
@@ -147,20 +147,20 @@
             <div class="space-y-2 text-sm">
               <label class="block" for="grouped-input-files">Files to check</label>
               <select id="grouped-input-files" name="grouped_input_files" onchange="syncGroupedTimeSeriesOptions()">
+                <option value="all">All uploaded files ({{ workspace_files|length }})</option>
                 <option value="active">Active file only{% if uploaded_file_name %} ({{ uploaded_file_name }}){% endif %}</option>
                 <option value="selected">Choose uploaded files</option>
               </select>
-              <fieldset id="grouped-file-selection" data-metric-settings class="hidden border rounded-lg p-3 space-y-2" disabled>
-                <legend>Files for Grouped Time Series</legend>
-                <p>Other checks use the active file. Open a file with the columns you want to use for this check.</p>
-                <div class="flex flex-wrap items-center gap-2">
+              <fieldset id="grouped-file-selection" data-metric-settings class="hidden border rounded-lg p-3 space-y-2" aria-label="Uploaded file analysis" disabled>
+                <div id="grouped-file-selection-actions" class="hidden flex-wrap items-center gap-2">
                   <button type="button" class="px-2 border rounded" onclick="selectGroupedFiles(true)">Select all files</button>
                   <button type="button" class="px-2 border rounded" onclick="selectGroupedFiles(false)">Deselect all files</button>
                 </div>
-                <div id="grouped-file-list" class="max-h-48 overflow-auto space-y-1" onchange="scheduleGroupedTimingDetection()">
+                <div id="grouped-file-list" class="max-h-48 overflow-auto space-y-1" onchange="scheduleGroupedTimingDetection()" hidden>
                   {% for file in workspace_files %}
                   <div class="flex items-center gap-2">
-                    <label class="flex-1 break-all"><input type="checkbox" name="grouped_file_id" value="{{ file.id }}"> {{ loop.index }}. {{ file.name }}</label>
+                    <label class="flex-1 break-all"><input type="checkbox" name="grouped_file_id" value="{{ file.id }}" hidden disabled> {{ loop.index }}. {{ file.name }}</label>
+                    <input type="hidden" name="grouped_file_order" value="{{ file.id }}" disabled>
                     <button type="button" class="hidden px-2 border rounded" data-grouped-file-order onclick="moveGroupedFile(this, -1)" aria-label="Move {{ file.name }} up">↑</button>
                     <button type="button" class="hidden px-2 border rounded" data-grouped-file-order onclick="moveGroupedFile(this, 1)" aria-label="Move {{ file.name }} down">↓</button>
                   </div>

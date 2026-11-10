@@ -167,10 +167,15 @@ def _grouped_sequence_parameters(form):
 def _grouped_workspace_members(form):
     from web.routes.workspace_files import workspace_files
 
-    ids = form.getlist("grouped_file_id")
+    entries = {entry["id"]: entry for entry in workspace_files()}
+    if form.get("grouped_input_files") == "all":
+        ids = form.getlist("grouped_file_order") or list(entries)
+        if len(ids) != len(entries) or set(ids) != set(entries):
+            raise ValueError("The uploaded files have changed. Reload the Inspector to check all files.")
+    else:
+        ids = form.getlist("grouped_file_id")
     if not ids or len(set(ids)) != len(ids):
         raise ValueError("Select one or more distinct files from the workspace.")
-    entries = {entry["id"]: entry for entry in workspace_files()}
     if any(file_id not in entries for file_id in ids):
         raise ValueError("A selected file is not in this workspace.")
     return [
@@ -206,7 +211,7 @@ def data_quality():
                 parameters = _grouped_sequence_parameters(form)
                 options = {name: parameters[name] for name in ("group_columns", "timestamp_column", "time_kind")}
                 options["estimate_interval"] = action == "suggest_grouped_interval" or form.get("estimate_interval") != "no"
-                if form.get("grouped_input_files") == "selected":
+                if form.get("grouped_input_files") in {"all", "selected"}:
                     members = _grouped_workspace_members(form)
                     with using_builtin_readers():
                         result = detect_grouped_timing([(member.path, member.name, member.file_type) for member in members], **options)
@@ -297,7 +302,7 @@ def data_quality():
                 if "grouped time series" in selected:
                     try:
                         parameters = _grouped_sequence_parameters(request.form)
-                        if request.form.get("grouped_input_files") == "selected":
+                        if request.form.get("grouped_input_files") in {"all", "selected"}:
                             result = _run_grouped_collection(request.form, parameters)
                         else:
                             result = grouped_time_series(file_info, **parameters)

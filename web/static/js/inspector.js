@@ -981,7 +981,12 @@ function _restoreFormState(panelId, state) {
   if (!panel) return;
 
   for (const [key, value] of Object.entries(state)) {
-    if (!value || key === "grouped_file_boundaries") continue;
+    if (
+      !value ||
+      key === "grouped_file_boundaries" ||
+      key === "grouped_file_order"
+    )
+      continue;
     if (
       panelId === "variable-unit-validation" &&
       key === "variable_unit_metadata"
@@ -1035,15 +1040,20 @@ function _restoreFormState(panelId, state) {
       if (input.id === "grouped-interval") clearGroupedIntervalSource(input);
     }
   }
-  if (panelId === "data-quality" && state.grouped_input_files === "selected") {
+  if (
+    panelId === "data-quality" &&
+    ["all", "selected"].includes(state.grouped_input_files)
+  ) {
     const list = document.getElementById("grouped-file-list");
-    if (list && state.grouped_file_id) {
-      const ids = Array.isArray(state.grouped_file_id)
-        ? state.grouped_file_id
-        : [state.grouped_file_id];
+    const order =
+      state.grouped_input_files === "all"
+        ? state.grouped_file_order
+        : state.grouped_file_id;
+    if (list && order) {
+      const ids = Array.isArray(order) ? order : [order];
       const rows = new Map(
         Array.from(list.children, (row) => [
-          row.querySelector("input").value,
+          row.querySelector('[name="grouped_file_id"]').value,
           row,
         ]),
       );
@@ -1068,7 +1078,9 @@ function _restoreFormState(panelId, state) {
     ) {
       series.value = "columns";
     }
-    toggleValue(panel.querySelector('[name="grouped time series"]'));
+    const grouped = panel.querySelector('[name="grouped time series"]');
+    if (state["grouped time series"] === "yes") grouped.checked = true;
+    toggleValue(grouped);
     syncGroupedTimeSeriesOptions();
   }
 }
@@ -1082,12 +1094,29 @@ function syncGroupedTimeSeriesOptions() {
   const scope = document.getElementById("grouped-input-files");
   if (scope) {
     const selection = document.getElementById("grouped-file-selection");
-    const enabled = scope.value === "selected";
+    const all = scope.value === "all";
+    const choosing = scope.value === "selected";
+    const enabled = !scope.disabled && (all || choosing);
     const stacked =
       enabled &&
       document.getElementById("grouped-collection-mode").value === "stacked";
     selection.disabled = !enabled;
     selection.classList.toggle("hidden", !enabled);
+    const actions = document.getElementById("grouped-file-selection-actions");
+    actions.classList.toggle("hidden", !choosing);
+    actions.classList.toggle("flex", choosing);
+    document.getElementById("grouped-file-list").hidden = !choosing && !stacked;
+    for (const input of selection.querySelectorAll(
+      '[name="grouped_file_id"]',
+    )) {
+      input.hidden = !choosing;
+      input.disabled = !choosing;
+    }
+    for (const input of selection.querySelectorAll(
+      '[name="grouped_file_order"]',
+    )) {
+      input.disabled = !all;
+    }
     const boundaries = document.getElementById("grouped-file-boundaries");
     boundaries.hidden = !stacked || !byColumns;
     boundaries.disabled = boundaries.hidden;
@@ -1125,6 +1154,7 @@ function groupedTimingRequest(form) {
   for (const name of [
     "grouped_input_files",
     "grouped_file_id",
+    "grouped_file_order",
     "grouped_series",
     "group columns for grouped time series",
     "timestamp column for grouped time series",
@@ -1166,11 +1196,14 @@ function updateGroupedRunSummary() {
   if (summary.hidden) return;
 
   const inputs = new FormData(form);
-  const selected = inputs.get("grouped_input_files") === "selected";
-  const count = inputs.getAll("grouped_file_id").length;
+  const scope = inputs.get("grouped_input_files");
+  const collection = scope === "all" || scope === "selected";
+  const count = inputs.getAll(
+    scope === "all" ? "grouped_file_order" : "grouped_file_id",
+  ).length;
   const stacked =
-    selected && inputs.get("grouped_collection_mode") === "stacked";
-  const files = selected
+    collection && inputs.get("grouped_collection_mode") === "stacked";
+  const files = collection
     ? count
       ? `${count} ${count === 1 ? "file" : "files"} ${stacked ? "stacked" : "independently"}`
       : "choose files"

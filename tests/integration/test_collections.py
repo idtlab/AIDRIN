@@ -91,6 +91,30 @@ def test_upload_more_and_open_active_file_use_the_same_workspace(client):
     assert result["summary"]["finding_counts"] == {}
 
 
+def test_all_uploaded_files_uses_the_complete_workspace_and_keeps_stack_order(client):
+    regular = b"t,value\n0,1\n.01,2\n.02,3\n"
+    assert upload(client, ("first.csv", regular), ("second.csv", regular), ("third.csv", regular)).status_code == 302
+    ids = [entry["id"] for entry in inventory(client)]
+    result = run_grouped(client, [], grouped_input_files="all", grouped_series="file")["Grouped Time Series"]
+    assert result["mode"] == "independent"
+    assert [source["id"] for source in result["selection"]] == ids
+    assert len(result["datasets"]) == 3
+
+    preview = client.post("/data-quality", data={
+        "action": "detect_grouped_timing", "grouped_input_files": "all", "grouped_series": "file",
+        "timestamp column for grouped time series": "t",
+    }).get_json()
+    assert preview == {"time_kind": "numeric", "interval": .01, "sampled_files": 3, "total_files": 3}
+
+    order = ids[::-1]
+    stacked = run_grouped(client, [], mode="stacked", grouped_input_files="all", grouped_series="file",
+                          grouped_file_order=order)["Grouped Time Series"]
+    assert [(source["id"], source["start_row"]) for source in stacked["datasets"][0]["sources"]] == list(zip(order, [0, 3, 6]))
+    stale = run_grouped(client, [], grouped_input_files="all", grouped_series="file",
+                        grouped_file_order=ids[:-1])["Grouped Time Series"]
+    assert "Reload the Inspector" in stale["Error"]
+
+
 @pytest.mark.parametrize("continue_value", ["", "no"])
 def test_cross_file_boundaries_are_explicit_and_scoped_to_grouped_check(client, continue_value):
     upload(client, ("a.csv", CLEAN), ("b.csv", CLEAN))

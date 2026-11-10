@@ -108,14 +108,14 @@ files are available, choosing an **Active file** in the top bar immediately
 opens its Data Overview and makes it the input for single-file checks.
 
 In **Data Quality**, enable **Check grouped time series**. Under **Files to check**,
-**Active file only** shows the current filename. To check other uploaded files,
-select **Choose uploaded files**, then pick a subset or use **Select all files**.
-The default mode checks each selected file independently. To stack rows, choose the stacked
-mode and set the file order with the arrows. **One series per file** always keeps
-file boundaries, including when rows are stacked. With **Identify series by
-columns**, choose **Keep series separate by file** or **Continue matching series
-across files**. Series and time column choices come from the active file. Other
-selected checks use the active file.
+**All uploaded files** is the default when several files are available. Choose
+**Active file only** to check the file shown in the top bar, or **Choose uploaded
+files** to pick a subset. The default mode checks each file independently. To
+stack rows, choose the stacked mode and set the file order with the arrows.
+**One series per file** always keeps file boundaries, including when rows are
+stacked. With **Identify series by columns**, choose **Keep series separate by
+file** or **Continue matching series across files**. Series and time column
+choices come from the active file. Other selected checks use the active file.
 
 Run the usual Data Quality form. The Results panel shows the files used and
 the analysis mode. Stacked results include a source-row mapping, and the
