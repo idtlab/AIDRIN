@@ -992,7 +992,10 @@ The summary above **Submit** shows the file scope, series grouping, time column,
 and interval. If a setting needs attention, the form shows the message beside
 it and moves focus there on submission.
 
-Results show the time format used and each series with exact source row positions
-and failing intervals.
-The JSON download retains the structured findings. The check preserves the input
-order. See :ref:`grouped_time_series` for interpretation and limitations.
+Results report the rows checked and valid timestamps for each series, explain
+which files or series matched the expected spacing, and describe any findings.
+Data row numbers start at 1 in the displayed explanations. When
+rows are stacked, these numbers refer to the stacked table. **View raw JSON** and
+the JSON download retain the structured findings, full timestamp precision, and
+zero-based row positions. The check preserves input order. See
+:ref:`grouped_time_series` for interpretation and limitations.

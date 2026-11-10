@@ -2648,29 +2648,189 @@ function renderBeforeAfterTable(before, after) {
   return html;
 }
 
-function renderGroupedTimeSeriesResults(result) {
+function formatGroupedTime(value, units = "") {
+  if (value == null) return "unavailable";
+  const display =
+    typeof value === "number" && !Number.isInteger(value)
+      ? Number(value.toPrecision(12))
+      : value;
+  return units ? `${display} ${units}` : String(display);
+}
+
+function groupedFindingSummary(counts) {
+  const labels = {
+    cadence_gap: ["timing gap", "timing gaps"],
+    cadence_short: ["short interval", "short intervals"],
+    duplicate_time: ["repeated timestamp", "repeated timestamps"],
+    out_of_order: ["backward time jump", "backward time jumps"],
+    missing_time: ["missing timestamp", "missing timestamps"],
+    invalid_time: ["invalid timestamp", "invalid timestamps"],
+    nonfinite_time: ["nonfinite timestamp", "nonfinite timestamps"],
+    mixed_timezone_awareness: [
+      "inconsistent time zone",
+      "inconsistent time zones",
+    ],
+    insufficient_valid_times: [
+      "series with too few valid timestamps",
+      "series with too few valid timestamps",
+    ],
+    count_mismatch: ["unexpected row count", "unexpected row counts"],
+    duration_mismatch: ["unexpected time span", "unexpected time spans"],
+    nonfinite_interval: ["unavailable interval", "unavailable intervals"],
+    nonfinite_duration: ["unavailable time span", "unavailable time spans"],
+    missing_group_key: [
+      "row without a series identifier",
+      "rows without series identifiers",
+    ],
+  };
+  return Object.entries(counts || {})
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => {
+      const words = Object.hasOwn(labels, kind)
+        ? labels[kind]
+        : ["finding", "findings"];
+      return `${count} ${words[count === 1 ? 0 : 1]}`;
+    })
+    .join(", ");
+}
+
+function describeGroupedFinding(finding, units) {
+  const row = (position) =>
+    Number.isSafeInteger(position)
+      ? `data row ${position + 1}`
+      : "the recorded row";
+  const at = row(finding.row_position);
+  const between = `${row(finding.from_row_position)} and ${row(finding.to_row_position)}`;
+  const time = finding.time ?? "unavailable";
+  const change = `from ${finding.from_time ?? "unavailable"} to ${finding.to_time ?? "unavailable"}`;
+  switch (finding.kind) {
+    case "cadence_gap": {
+      const missing = finding.estimated_missing_samples;
+      const estimate =
+        missing == null
+          ? ""
+          : ` The gap suggests ${missing} missing ${Number(missing) === 1 ? "sample" : "samples"}.`;
+      return `The time jumped ${change} between ${between}, an interval of ${formatGroupedTime(finding.delta, units)}.${estimate}`;
+    }
+    case "cadence_short":
+      return `The interval between ${between} was ${formatGroupedTime(finding.delta, units)}, shorter than expected.`;
+    case "duplicate_time":
+      return `The timestamp ${time} at ${at} repeats the timestamp at ${row(finding.first_row_position)}.`;
+    case "out_of_order":
+      return `The timestamp went backward ${change} between ${between}.`;
+    case "missing_time":
+      return `A timestamp is missing at ${at}.`;
+    case "invalid_time":
+      return `The timestamp at ${at} could not be read in the selected format.`;
+    case "nonfinite_time":
+      return `The timestamp at ${at} is infinite.`;
+    case "mixed_timezone_awareness":
+      return `This series mixes timestamps with and without time zones. Check ${at}.`;
+    case "insufficient_valid_times":
+      return "At least two valid timestamps are needed to check sample spacing.";
+    case "count_mismatch":
+      return `Expected ${finding.expected} rows and found ${finding.observed}.`;
+    case "duration_mismatch":
+      return `Expected a time span of ${formatGroupedTime(finding.expected, units)}. The observed span was ${formatGroupedTime(finding.observed, units)}.`;
+    case "nonfinite_interval":
+      return `The interval between ${between} could not be represented.`;
+    case "nonfinite_duration":
+      return "The time span could not be represented.";
+    default:
+      return `${groupedFindingSummary({ [finding.kind]: 1 })}. See View raw JSON for the recorded details.`;
+  }
+}
+
+function renderGroupedResultNotes(parameters, stacked = false) {
+  const rows = stacked
+    ? "Data row numbers refer to the stacked table."
+    : "Data row numbers start at 1 in each input table.";
+  const span =
+    parameters.expected_count == null && parameters.expected_duration == null
+      ? " A shorter series can pass when its spacing is regular. An expected row count or time span is needed to check length."
+      : "";
+  return `<p class="mt-3 text-xs text-gray-600 dark:text-gray-400">${rows} Raw JSON positions start at 0.${span}</p>`;
+}
+
+function renderGroupedTimeSeriesResults(result, inCollection = false) {
   const summary = result.summary || {};
-  let html = `<p class="mb-3 text-sm">${escapeHtml(String(summary.group_count ?? 0))} series · ${escapeHtml(String(summary.groups_with_findings ?? 0))} with findings</p>`;
-  if (result.parameters?.time_kind) {
+  const parameters = result.parameters || {};
+  const groups = result.groups || [];
+  const units =
+    parameters.time_kind === "datetime"
+      ? "s"
+      : parameters.time_kind === "numeric"
+        ? "column units"
+        : "";
+  const expected = formatGroupedTime(parameters.expected_cadence, units);
+  const findings = groupedFindingSummary(summary.finding_counts);
+  const intervals = groups.reduce(
+    (count, group) => count + (group.evaluated_adjacent_intervals || 0),
+    0,
+  );
+  let explanation;
+  if (findings) {
+    explanation = `Findings · ${findings}.`;
+  } else if (!groups.length) {
+    explanation = "No series to check.";
+  } else {
+    explanation =
+      intervals && parameters.expected_cadence != null
+        ? `No timing findings. ${intervals === 1 ? "The checked interval matched" : `All ${intervals} checked intervals matched`} the expected spacing of ${expected}.`
+        : "No timing findings.";
+  }
+  let html = `<p class="mb-2 text-sm">${escapeHtml(explanation)}</p>`;
+  if (parameters.time_kind) {
     const format =
-      result.parameters.time_kind === "datetime"
-        ? "Date and time (seconds)"
-        : "Numeric time (column units)";
-    html += `<p class="mb-3 text-xs">Time format: ${format}</p>`;
+      parameters.time_kind === "datetime" ? "Date and time" : "Numeric time";
+    html += `<p class="mb-2 text-xs text-gray-600 dark:text-gray-400">${format}</p>`;
   }
-  html += `<p class="mb-3 text-xs">Row positions start at 0 in the parsed input. Sequences retain input order. Relative times do not establish synchronization.</p>`;
+  if (findings && parameters.expected_cadence != null) {
+    html += `<p class="mb-2 text-xs">Expected spacing ${escapeHtml(expected)}.</p>`;
+  }
   if (summary.unassigned_rows) {
-    html += `<p class="mb-3 text-sm">Rows missing series identifiers: ${escapeHtml(String(summary.unassigned_rows))}. Positions: ${escapeHtml(JSON.stringify(result.unassigned_row_positions))}${result.unassigned_rows_truncated ? " (detail capped)" : ""}</p>`;
+    const positions = result.unassigned_row_positions || [];
+    const rows = positions
+      .slice(0, 5)
+      .map((position) => position + 1)
+      .join(", ");
+    const partial = result.unassigned_rows_truncated || positions.length > 5;
+    const details = rows
+      ? ` Data rows ${rows}${partial ? " (partial list)" : ""}.`
+      : "";
+    html += `<p class="mb-2 text-sm">${escapeHtml(`Rows without a series identifier were skipped.${details}`)}</p>`;
   }
-  for (const group of result.groups || []) {
-    const series =
-      Object.entries(group.group)
-        .map(([column, value]) => `${column}: ${value}`)
-        .join(" · ") || "Whole file";
-    html += `<details class="mb-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3"><summary class="cursor-pointer text-sm font-medium">${escapeHtml(series)} · ${escapeHtml(String(group.row_count))} rows, ${escapeHtml(String(group.valid_time_count))} valid times, span ${escapeHtml(String(group.observed_duration ?? "unknown"))}</summary>`;
-    html += `<p class="mt-2 text-xs">${escapeHtml(JSON.stringify(group.finding_counts))}${group.findings_truncated ? " (detail capped; counts cover all rows)" : ""}</p>`;
-    html += `<pre class="mt-2 text-xs overflow-auto" style="max-height: 300px; white-space: pre-wrap;">${escapeHtml(JSON.stringify(group.findings, null, 2))}</pre></details>`;
+  for (const group of groups) {
+    const series = Object.entries(group.group)
+      .map(([column, value]) => `${column}: ${value}`)
+      .join(" · ");
+    const groupFindings = groupedFindingSummary(group.finding_counts);
+    const details = group.findings || [];
+    const rows = `${group.row_count} ${group.row_count === 1 ? "row" : "rows"} checked`;
+    const times = `${group.valid_time_count} valid ${group.valid_time_count === 1 ? "timestamp" : "timestamps"}`;
+    const coverage = `${rows} · ${times}`;
+    if (groups.length > 1) {
+      html += `<details class="mb-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3"><summary class="cursor-pointer text-sm font-medium">${escapeHtml(series || "Series")} · ${escapeHtml(coverage)} · ${escapeHtml(groupFindings || "No timing findings")}</summary>`;
+    } else if (series) {
+      html += `<p class="mb-1 text-sm font-medium">${escapeHtml(series)}</p>`;
+    }
+    const span = `Observed span ${formatGroupedTime(group.observed_duration, units)}`;
+    const stats = groups.length > 1 ? span : `${coverage} · ${span}`;
+    html += `<p class="my-1 text-xs text-gray-600 dark:text-gray-400">${escapeHtml(stats)}</p>`;
+    if (details.length) {
+      const items = (entries) =>
+        `<ul class="my-2 list-disc space-y-1 pl-5 text-sm">${entries.map((finding) => `<li>${escapeHtml(describeGroupedFinding(finding, units))}</li>`).join("")}</ul>`;
+      html += items(details.slice(0, 3));
+      if (details.length > 3) {
+        html += `<details class="my-2"><summary class="cursor-pointer text-sm">More finding details</summary>${items(details.slice(3))}</details>`;
+      }
+    }
+    if (group.findings_truncated) {
+      html += `<p class="my-1 text-xs">The detail limit applies here. Finding counts cover all rows.</p>`;
+    }
+    if (groups.length > 1) html += "</details>";
   }
+  if (!inCollection) html += renderGroupedResultNotes(parameters);
   return html;
 }
 
@@ -2683,6 +2843,7 @@ function renderGroupedCollectionResults(result) {
     ]),
   );
   let html = `<p class="mb-3 text-sm">${mode} · ${escapeHtml(String(result.summary.selected_files))} selected files</p>`;
+  let parameters;
   for (const dataset of result.datasets || []) {
     const sources = dataset.sources.map(
       (source) => names.get(source.id) || source.name,
@@ -2693,7 +2854,7 @@ function renderGroupedCollectionResults(result) {
     if (result.mode === "stacked") {
       html += `<details class="mb-3 text-xs"><summary class="cursor-pointer">Source rows in stack order</summary><ul class="list-disc pl-5">`;
       for (const [index, source] of dataset.sources.entries()) {
-        html += `<li>${escapeHtml(sources[index])}: ${escapeHtml(String(source.row_count))} rows starting at ${escapeHtml(String(source.start_row))}</li>`;
+        html += `<li>${escapeHtml(sources[index])} · ${escapeHtml(String(source.row_count))} rows starting at data row ${escapeHtml(String(source.start_row + 1))}</li>`;
       }
       html += "</ul></details>";
     }
@@ -2702,18 +2863,22 @@ function renderGroupedCollectionResults(result) {
     }
     const audit = dataset.metrics?.grouped_time_series;
     if (audit) {
+      parameters = audit.parameters;
       const groups = audit.groups.map((item) => {
         const { __aidrin_source_id: sourceId, ...group } = item.group;
+        if (result.mode === "independent") return { ...item, group };
         if (!names.has(sourceId)) return item;
         return {
           ...item,
           group: { "Source file": names.get(sourceId), ...group },
         };
       });
-      html += renderGroupedTimeSeriesResults({ ...audit, groups });
+      html += renderGroupedTimeSeriesResults({ ...audit, groups }, true);
     }
     html += "</section>";
   }
+  if (parameters)
+    html += renderGroupedResultNotes(parameters, result.mode === "stacked");
   return html;
 }
 

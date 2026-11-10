@@ -236,20 +236,27 @@ def test_renderer_preserves_precision_and_escapes_group_values():
     if not node:
         pytest.skip('Node is unavailable')
     source = (Path(__file__).parents[2] / 'web/static/js/inspector.js').read_text(encoding='utf-8')
-    render = re.search(r'function renderGroupedTimeSeriesResults\(result\) \{[\s\S]*?\n\}', source).group()
+    render = source[source.index('function formatGroupedTime('):source.index('function renderGroupedCollectionResults(')]
     escape = re.search(r'function escapeHtml\(str\) \{[\s\S]*?\n\}', source).group()
     result = {
-        'summary': {'group_count': 1, 'groups_with_findings': 1, 'unassigned_rows': 0},
+        'parameters': {'time_kind': 'datetime', 'expected_cadence': 5e-10},
+        'summary': {'group_count': 1, 'groups_with_findings': 1, 'unassigned_rows': 0, 'finding_counts': {'cadence_gap': 1}},
         'groups': [{'group': {'sensor': '<img src=x onerror=alert(1)>'}, 'row_count': 2,
                     'valid_time_count': 2, 'observed_duration': 1e-9, 'finding_counts': {'cadence_gap': 1},
-                    'findings': [{'kind': 'cadence_gap', 'delta': 1e-9}], 'findings_truncated': True}],
+                    'findings': [{'kind': 'cadence_gap', 'delta': 1e-9, 'from_row_position': 0, 'to_row_position': 1,
+                                  'from_time': '2026-01-01T00:00:00Z', 'to_time': '2026-01-01T00:00:00.000000001Z',
+                                  'estimated_missing_samples': 1}], 'findings_truncated': True}],
     }
     script = escape + '\n' + render + '\nprocess.stdout.write(renderGroupedTimeSeriesResults(' + json.dumps(result) + '));'
     html = subprocess.run([node, '-e', script], check=True, capture_output=True, text=True).stdout
     assert '<img src=x' not in html
     assert '&lt;img src=x' in html
     assert '1e-9' in html
+    assert '2 rows checked · 2 valid timestamps' in html
+    assert 'The gap suggests 1 missing sample.' in html
+    assert 'data row 1 and data row 2' in html
     assert 'counts cover all rows' in html
+    assert '<pre' not in html
 
 
 @pytest.mark.parametrize('malformed_tail', [False, True])
