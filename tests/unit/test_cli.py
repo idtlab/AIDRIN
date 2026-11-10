@@ -1324,6 +1324,89 @@ _DCAT_SAMPLE = os.path.join(_REPO, "examples", "sample_data", "dcat", "BUTTER-E.
 _DATACITE_SAMPLE = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "datacite_rest_default.json")
 
 
+class TestReadinessReportCommand(unittest.TestCase):
+    """`aidrin readiness-report` JSON (+ optional mocked PDF) for a dataset."""
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df(40))
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        _clean(self.csv)
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_json_stdout_and_output_file(self):
+        out = os.path.join(self.tmpdir, "report.json")
+        stdout, stderr, code = _run_cli("readiness-report", self.csv, "-o", out)
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["success"])
+        for key in (
+            "dataset_overview",
+            "data_quality",
+            "impact_on_ai",
+            "fairness_bias",
+            "data_governance",
+        ):
+            self.assertIn(key, payload)
+        self.assertNotIn("fair_compliance", payload)
+        with open(out, encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["success"], True)
+        self.assertIn("Results written to:", stderr)
+
+    def test_fair_metadata_attached(self):
+        stdout, stderr, code = _run_cli(
+            "readiness-report",
+            self.csv,
+            "--fair-metadata",
+            _DCAT_SAMPLE,
+            "--fair-standard",
+            "dcat-us-1.1",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(
+            payload["fair_compliance"]["FAIR Compliance Checks"]["Total Checks"],
+            "20/26",
+        )
+        self.assertNotIn("Pie chart", payload["fair_compliance"])
+
+    def test_pdf_mode_requires_pdf_out(self):
+        _stdout, stderr, code = _run_cli(
+            "readiness-report", self.csv, "--pdf-mode", "full"
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("--pdf-mode requires --pdf-out", stderr)
+
+    def test_pdf_out_writes_bytes_without_recomputing_when_mocked(self):
+        out_json = os.path.join(self.tmpdir, "report.json")
+        out_pdf = os.path.join(self.tmpdir, "report.pdf")
+        with patch(
+            "aidrin.headless.cli._local_api.run_readiness_report_pdf",
+            return_value=b"%PDF-1.4 cli-mock",
+        ) as mock_pdf:
+            stdout, stderr, code = _run_cli(
+                "readiness-report",
+                self.csv,
+                "-o",
+                out_json,
+                "--pdf-out",
+                out_pdf,
+                "--pdf-mode",
+                "scorecard",
+            )
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertTrue(json.loads(stdout)["success"])
+        with open(out_pdf, "rb") as f:
+            self.assertEqual(f.read(), b"%PDF-1.4 cli-mock")
+        self.assertIn("PDF written to:", stderr)
+        mock_pdf.assert_called_once()
+        self.assertEqual(mock_pdf.call_args.kwargs["mode"], "scorecard")
+        self.assertIn("sections", mock_pdf.call_args.kwargs)
+
+
 class TestFairCommand(unittest.TestCase):
     """`aidrin fair <metadata.json> --standard ...` scores metadata, no dataset needed."""
 
