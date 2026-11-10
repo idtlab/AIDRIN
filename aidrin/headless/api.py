@@ -1065,6 +1065,76 @@ def run_data_quality(
 run_all_data_quality = run_data_quality
 
 
+def run_readiness_report(
+    file_path: str,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    *,
+    fair_metadata: Optional[str] = None,
+    fair_standard: str = "auto",
+    include_visualizations: bool = False,
+    strip_visualizations: Optional[bool] = None,
+    sections: Optional[List[str]] = None,
+    loader: Optional[str] = None,
+    selected_keys: Optional[List[str]] = None,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """Build the AI Data Readiness Report JSON for a dataset (no Flask/Redis).
+
+    Section keys match ``GET /readiness-report`` (``dataset_overview``,
+    ``data_quality``, …). When *fair_metadata* is set, FAIR results from
+    ``calculate_fair_compliance`` are attached as ``fair_compliance``.
+
+    Visualizations are omitted by default. Pass ``include_visualizations=True``
+    to embed chart payloads; ``strip_visualizations`` defaults to the opposite
+    of that flag so headless output stays lean unless charts are requested.
+    """
+    from aidrin.file_handling.custom_loader import using_custom_loader
+    from aidrin.report.builder import build_readiness_report
+
+    if not os.path.exists(file_path):
+        raise ValueError(f"File not found: {file_path}")
+
+    if strip_visualizations is None:
+        strip_visualizations = not include_visualizations
+
+    file_info = _build_file_info(
+        file_path,
+        file_type,
+        file_name,
+        selected_keys=_normalize_list(selected_keys),
+    )
+
+    fair_data = None
+    if fair_metadata:
+        _log_progress(f"Scoring FAIR metadata: {fair_metadata}", verbose)
+        # Keep FAIR chart when the caller asked for visualizations.
+        fair_data = calculate_fair_compliance(
+            fair_metadata,
+            fair_standard,
+            strip_visualizations=strip_visualizations,
+        )
+
+    _log_progress(f"Building readiness report for {file_path}", verbose)
+    start = time.time()
+    with using_custom_loader(loader):
+        with using_selected_keys(_normalize_list(selected_keys)):
+            report = build_readiness_report(
+                file_info,
+                include_visualizations=include_visualizations,
+                fair_data=fair_data,
+                sections=sections,
+            )
+    _log_progress(
+        f"Readiness report built in {time.time() - start:.2f}s",
+        verbose,
+    )
+
+    if strip_visualizations:
+        report = _strip_visualizations(report)
+    return _sanitize(report)
+
+
 def run_privacy_assessment(
     file_path: str,
     file_type: Optional[str] = None,
