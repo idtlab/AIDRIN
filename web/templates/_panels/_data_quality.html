@@ -135,6 +135,99 @@
           </label>
         </div>
 
+
+        <div class="checkboxContainerIndividual">
+          <label class="material-checkbox">
+            <input type="checkbox" name="grouped time series" data-collection-metric onchange="toggleValue(this)" />
+            <span class="checkmark"></span>
+            Check grouped time series
+            <span class="info-icon">i<span class="info-text">Check for repeated timestamps, times that go backward, and uneven sample spacing in each series.</span></span>
+          </label>
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;" oninput="clearGroupedFormError(); updateGroupedRunSummary()">
+            {% if not globus_mode and local_workspace_files|length > 1 %}
+            <fieldset id="grouped-file-boundaries" hidden disabled>
+              <legend>Series across files</legend>
+              <label><input type="radio" name="grouped_file_boundaries" value="yes" checked> Keep series separate by file</label>
+              <label><input type="radio" name="grouped_file_boundaries" value="no"> Continue matching series across files</label>
+            </fieldset>
+            {% endif %}
+            <div class="space-y-1 text-sm">
+              <div class="grouped-field-label">
+                <label for="grouped-series">What identifies each series?</label>
+                <button type="button" class="info-icon" aria-label="About series grouping" aria-describedby="grouped-series-help">
+                  <span aria-hidden="true">i</span>
+                  <span id="grouped-series-help" class="info-text" role="tooltip">Use columns when a file contains several sensors, channels, or runs.</span>
+                </button>
+              </div>
+              <select id="grouped-series" name="grouped_series" aria-describedby="grouped-series-help" onchange="syncGroupedTimeSeriesOptions()">
+                <option value="file">One series per file</option>
+                <option value="columns">Identify series by columns</option>
+              </select>
+            </div>
+            <fieldset id="grouped-series-columns" data-metric-settings class="space-y-1 text-sm" hidden disabled>
+              <legend>Columns that identify each series</legend>
+              <p class="text-gray-500 dark:text-gray-400">Rows with the same values in these columns form one series. For example, select station and channel to check each station–channel pair separately.</p>
+              <div id="groupedTimeSeriesColumnsCheckbox" class="w-full" onchange="scheduleGroupedTimingDetection()"></div>
+            </fieldset>
+            <div class="text-sm">
+              <div class="flex flex-wrap items-baseline gap-x-1">
+                <label for="groupedTimeSeriesTimeDropdown">Time column</label>
+                <span id="grouped-time-column-status" class="text-gray-500 dark:text-gray-400" role="status"></span>
+              </div>
+              <select name="timestamp column for grouped time series" id="groupedTimeSeriesTimeDropdown" required class="w-full"
+                      aria-describedby="grouped-time-column-status" onchange="setGroupedTimeColumnSource(this, false); scheduleGroupedTimingDetection()">
+                <option value="" disabled selected>Select a time column</option>
+              </select>
+            </div>
+            <div class="text-sm">
+              <div class="flex flex-wrap items-baseline gap-x-1">
+                <label for="grouped-time-format">Time format</label>
+                <span id="grouped-time-format-status" class="text-gray-500 dark:text-gray-400" role="status"></span>
+              </div>
+              <select name="time kind for grouped time series" id="grouped-time-format" class="w-full"
+                      aria-describedby="grouped-time-format-status" onchange="scheduleGroupedTimingDetection()">
+                <option value="auto">Auto-detect</option>
+                <option value="numeric">Numeric time</option>
+                <option value="datetime">Date and time</option>
+              </select>
+            </div>
+            <div id="grouped-interval-field" class="text-sm">
+              <div class="flex flex-wrap items-baseline gap-x-1">
+                <label for="grouped-interval">Expected time between samples</label>
+                <span id="grouped-interval-status" role="status" class="text-gray-500 dark:text-gray-400"></span>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <input id="grouped-interval" name="cadence for grouped time series" type="number" min="0" step="any" required class="w-40 max-w-full"
+                       aria-describedby="grouped-interval-unit grouped-interval-help grouped-interval-status" oninput="clearGroupedIntervalSource(this)" />
+                <span id="grouped-interval-unit" class="text-gray-500 dark:text-gray-400">Units depend on time format</span>
+              </div>
+            </div>
+            <p id="grouped-interval-help" class="text-sm text-gray-500 dark:text-gray-400">
+              For numeric time, use the column’s units. For dates and times, use seconds. In seconds, enter 0.01 for samples 10 milliseconds apart.
+            </p>
+            <details class="rounded-lg border p-3 text-sm">
+              <summary class="cursor-pointer font-medium">Advanced options</summary>
+              <div class="mt-3 space-y-3">
+                <p class="text-gray-500 dark:text-gray-400">Set timing variation, row count, or time span if you know what the series should contain.</p>
+                <label class="block">Allowed timing variation
+                  <input name="tolerance for grouped time series" type="number" min="0" step="any" value="0" class="w-full" aria-describedby="grouped-tolerance-help" />
+                </label>
+                <p id="grouped-tolerance-help" class="text-gray-500 dark:text-gray-400">Use the same units as the expected interval and enter less than half that interval. For example, 0.01 ± 0.001 accepts spacing from 0.009 to 0.011.</p>
+                <label class="block">Expected rows per series (optional)
+                  <input name="expected count for grouped time series" type="number" min="1" step="1" class="w-full" />
+                </label>
+                <label class="block">Expected time span per series (optional)
+                  <input name="expected duration for grouped time series" type="number" min="0" step="any" class="w-full" aria-describedby="grouped-duration-help" />
+                </label>
+                <p id="grouped-duration-help" class="text-gray-500 dark:text-gray-400">Time from the earliest to the latest sample, in the same units as the expected interval.</p>
+                <label class="block">Finding details per series
+                  <input name="max findings for grouped time series" type="number" min="0" step="1" value="100" class="w-full" aria-describedby="grouped-findings-help" />
+                </label>
+                <p id="grouped-findings-help" class="text-gray-500 dark:text-gray-400">Enter 0 to show all details. The totals always include every finding.</p>
+              </div>
+            </details>
+          </div>
+        </div>
       </div>
       <div id="custom-outlier-editor" class="hidden mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
         <input type="hidden" name="custom_outlier_rules" id="custom-outlier-rules-json" value="[]" />
@@ -200,7 +293,9 @@
           Stop scanning after preview cap is reached
         </label>
       </div>
-      <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+      <p id="grouped-form-error" role="alert" class="text-sm text-red-700 dark:text-red-400" hidden></p>
+      <div class="flex flex-col items-end gap-2 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <p id="grouped-run-summary" class="w-full break-words text-sm text-gray-600 dark:text-gray-300" data-active-file="{{ uploaded_file_name }}" hidden></p>
         <button type="button" onclick="withSubmitGuard(this, () => workspaceSubmit('/data-quality'));"
                 class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
           Submit

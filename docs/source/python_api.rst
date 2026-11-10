@@ -3,6 +3,9 @@
 Library Usage
 =============
 
+The :ref:`file_collections` pilot exposes ``aidrin.headless.run_collection_metrics``
+for explicit multi-file selections, with independent and stacked modes.
+
 AIDRIN exposes **two** Python surfaces, and which one you want depends on the
 job:
 
@@ -542,3 +545,10 @@ in total, ``"Standard"``, ``"Other"``, ``"Original Metadata"``, and a base64
 ``"Pie chart"``. DataCite, Croissant and RO-Crate results also include ``"Conformance"``
 and ``"Structure"``; Croissant adds ``"RAI Documentation"`` (reported, not scored), and
 an attached RO-Crate adds ``"Not applicable"`` for checks that need a web-based crate.
+
+calculate_grouped_time_series
+-----------------------------
+
+Audit each group in input order with ``aidrin.calculate_grouped_time_series``
+or ``run_metric("grouped_time_series", ...)``. See :ref:`grouped_time_series`
+for the arguments, a runnable synthetic example, and result semantics.

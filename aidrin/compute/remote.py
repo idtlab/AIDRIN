@@ -33,6 +33,13 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
 
     file_info = (file_path, file_name, file_type)
 
+    def _grouped_time_series():
+        return aidrin.calculate_grouped_time_series(
+            file_info, params.get("group_columns", []), params.get("sequence_timestamp_column", params.get("timestamp_column")),
+            params.get("expected_cadence"), params.get("time_kind", "numeric"), params.get("tolerance", 0.0),
+            params.get("max_findings", 100), params.get("expected_count"), params.get("expected_duration"),
+        )
+
     def _data_quality():
         """Run selected data quality sub-metrics and bundle results."""
         result = {}
@@ -57,6 +64,8 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             result["Feature Coverage Ratio"] = aidrin.calculate_feature_coverage_ratio(
                 params.get("threshold", 0.9), file_info
             )
+        if "grouped_time_series" in selected:
+            result["Grouped Time Series"] = _grouped_time_series()
         if "temporal_completeness" in selected:
             result["Temporal Completeness"] = aidrin.calculate_temporal_completeness(
                 params.get("timestamp_column", ""), params.get("frequency", "D"), file_info
@@ -333,6 +342,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
     dispatch = {
         "summary_statistics": _summary_statistics,
         "data_quality": _data_quality,
+        "grouped_time_series": _grouped_time_series,
         "data_structure": _data_structure,
         "custom_outlier_targets": _custom_outlier_targets,
         "file_reference_validation": _file_reference_validation,
