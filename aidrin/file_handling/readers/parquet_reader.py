@@ -6,7 +6,7 @@ from aidrin.file_handling.readers.base_reader import BaseFileReader, possible_ro
 class parquetReader(BaseFileReader):
     def read(self):
         frame = pd.read_parquet(self.file_path)
-        candidates = possible_rounded_integer_columns(frame)
+        candidates = [name for name in possible_rounded_integer_columns(frame) if frame[name].hasnans]
         if candidates:
             exact = pd.read_parquet(self.file_path, columns=candidates, dtype_backend="numpy_nullable")
             for name in candidates:

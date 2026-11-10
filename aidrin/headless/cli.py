@@ -929,7 +929,7 @@ def main() -> None:
         metric_cli = metric_name.replace("_", "-")
         mparser = run_subparsers.add_parser(metric_cli, help=meta["description"] + extra_help)
         mparser.add_argument("file_path", help="Path to the dataset CSV")
-        _add_required_metric_args(mparser, meta.get("required_args", []))
+        _add_required_metric_args(mparser, [*meta.get("required_args", []), *meta.get("optional_args", [])])
         if metric_name == "outliers_custom":
             mparser.add_argument(
                 "--rule",

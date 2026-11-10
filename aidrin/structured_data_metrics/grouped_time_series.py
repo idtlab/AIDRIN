@@ -4,6 +4,7 @@ import math
 import re
 from collections import Counter
 from datetime import date, datetime
+from fractions import Fraction
 from statistics import median_low
 
 import numpy as np
@@ -11,6 +12,7 @@ import pandas as pd
 from celery import shared_task
 
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.readers.base_reader import exact_integer_frame
 
 
 DESCRIPTION = (
@@ -19,7 +21,7 @@ DESCRIPTION = (
     "establish synchronization. No sorting, interpolation, or repair is applied."
 )
 _ISO_DATE_PREFIX = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[Tt ]|$)")
-_EXPLICIT_DATE_PREFIX = re.compile(r"(?:[0-9]{4}[/.-][0-9]{1,2}[/.-][0-9]{1,2}|[0-9]{1,2}[/.-][0-9]{1,2}[/.-][0-9]{4})(?:[Tt ]|$)")
+_EXPLICIT_DATE_PREFIX = re.compile(r"[0-9]{4}([/.-])[0-9]{1,2}\1[0-9]{1,2}(?:[Tt ]|$)")
 _TIME_UNIT_SUFFIX = re.compile(r"_(?:s|secs?|seconds?|ms|milliseconds?|us|microseconds?|ns|nanoseconds?|minutes?|hours?|utc)$")
 _TIME_COLUMN_NAMES = {
     "t", "time", "timestamp", "time_stamp", "datetime", "date", "elapsed", "elapsed_time", "sample_time", "event_time",
@@ -27,6 +29,7 @@ _TIME_COLUMN_NAMES = {
 }
 _FORMAT_SAMPLE_LIMIT = 256
 _INTERVAL_ROUNDOFF = 1e-9
+_NS_PER_SECOND = 10**9
 
 
 def _number(value, name, positive=False):
@@ -70,8 +73,10 @@ def _scalar(value):
         return value.isoformat()
     if isinstance(value, float) and not math.isfinite(value):
         return str(value)
+    if isinstance(value, int) and abs(value) > 2**53 - 1:
+        return {"integer": str(value)}
     if isinstance(value, (str, int, float, bool)) or value is None:
-        return _json_number(value)
+        return value
     return str(value)
 
 
@@ -224,7 +229,7 @@ def suggest_sample_interval(frame, group_columns, timestamp_column, time_kind, *
 
 def _interval_delta(value, previous, time_kind):
     delta = value - previous
-    return delta / 1e9 if time_kind == "datetime" else delta
+    return delta / _NS_PER_SECOND if time_kind == "datetime" else delta
 
 
 def calculate_grouped_time_series(
@@ -267,9 +272,11 @@ def calculate_grouped_time_series(
     frame = read_file(file_info)
     if not isinstance(frame, pd.DataFrame) or not frame.columns.is_unique:
         raise ValueError("Input must be a table with unique column names")
-    missing = [c for c in group_columns + [timestamp_column] if c not in frame.columns]
+    audit_columns = group_columns + [timestamp_column]
+    missing = [c for c in audit_columns if c not in frame.columns]
     if missing:
         raise ValueError(f"Columns not found: {missing}")
+    frame = exact_integer_frame(frame, audit_columns)
     for column in group_columns:
         if not frame[column].map(pd.api.types.is_scalar).all():
             raise ValueError(f"Group column must contain scalar keys: {column}")
@@ -313,6 +320,10 @@ def calculate_grouped_time_series(
 def _estimate_missing_samples(delta, cadence, tolerance):
     # Allow floating-point roundoff at the scale of one step. Scaling it by
     # the whole gap can allow multiple equally plausible missing counts.
+    if isinstance(cadence, Fraction):
+        steps = round(delta / cadence)
+        remainder = abs(delta - steps * cadence)
+        return steps - 1 if steps >= 2 and remainder <= max(tolerance, cadence / _NS_PER_SECOND) else None
     if isinstance(delta, int) and cadence.is_integer():
         step = int(cadence)
         steps, remainder = divmod(delta, step)
@@ -344,6 +355,10 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
     valid = []
     awareness = None
     evaluated = 0
+    grid_cadence, grid_tolerance = cadence, tolerance
+    if time_kind == "datetime":
+        grid_cadence = Fraction(str(cadence)) * _NS_PER_SECOND
+        grid_tolerance = Fraction(str(tolerance)) * _NS_PER_SECOND
     for position in positions:
         value, display, aware, error = _time(series.iloc[position], time_kind, iso_dates_only=iso_dates_only)
         if error:
@@ -367,6 +382,8 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
             delta = _interval_delta(value, left, time_kind)
             interval = {"from_row_position": left_position, "to_row_position": int(position),
                         "from_time": left_display, "to_time": display, "delta": _json_number(delta)}
+            if time_kind == "datetime":
+                interval["delta_ns"] = _json_number(value - left)
             evaluated += 1
             if not _finite(delta):
                 record("nonfinite_interval", **{k: v for k, v in interval.items() if k != "delta"})
@@ -374,7 +391,8 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
                 record("out_of_order", **interval)
             elif delta > 0 and not math.isclose(delta, cadence, rel_tol=_INTERVAL_ROUNDOFF, abs_tol=tolerance):
                 if delta > cadence:
-                    missing_count = _estimate_missing_samples(delta, cadence, tolerance)
+                    grid_delta = value - left if time_kind == "datetime" else delta
+                    missing_count = _estimate_missing_samples(grid_delta, grid_cadence, grid_tolerance)
                     record("cadence_gap", estimated_missing_samples=_json_number(missing_count), **interval)
                 else:
                     record("cadence_short", **interval)
@@ -383,9 +401,10 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
     if len(valid) < 2:
         record("insufficient_valid_times", valid_time_count=len(valid))
     observed_duration = None
+    span = None
     if valid:
         span = max(t[0] for t in valid) - min(t[0] for t in valid)
-        observed_duration = span / 1e9 if time_kind == "datetime" else span
+        observed_duration = span / _NS_PER_SECOND if time_kind == "datetime" else span
         if not _finite(observed_duration):
             record("nonfinite_duration")
             observed_duration = None
@@ -400,6 +419,7 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
         "unique_time_count": len(seen), "evaluated_adjacent_intervals": evaluated,
         "first_time": valid[0][1] if valid else None, "last_time": valid[-1][1] if valid else None,
         "observed_duration": _json_number(observed_duration),
+        **({"observed_duration_ns": _json_number(span)} if time_kind == "datetime" else {}),
         "time_reference": ("relative_or_unspecified" if time_kind == "numeric" else
                            "timezone_aware" if awareness else "timezone_unspecified"),
         "finding_counts": dict(counts), "findings": findings,

@@ -135,7 +135,8 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
         "category": "data-quality",
         "description": "Per-group timestamp ordering, duplicates, cadence gaps, counts and duration in input order.",
         "runner": run_grouped_time_series,
-        "required_args": ["group-columns", "timestamp-column", "expected-cadence"],
+        "required_args": ["timestamp-column", "expected-cadence"],
+        "optional_args": ["group-columns"],
     },
     "temporal_completeness": {
         "category": "data-quality",
@@ -642,7 +643,7 @@ def _maybe_save_images(
 _RESULT_AFFECTING_ARGS = frozenset({
     "epsilon", "threshold", "frequency", "distance_metric", "scan_limit",
     "rules_file", "rules_json", "unit_metadata_file", "unit_metadata_json",
-    "unit_metadata", "time_kind", "tolerance", "expected_count", "expected_duration",
+    "unit_metadata", "group_columns", "time_kind", "tolerance", "expected_count", "expected_duration",
 })
 
 

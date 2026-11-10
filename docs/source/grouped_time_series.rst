@@ -67,21 +67,26 @@ the same controls. Existing remote adapters require an AIDRIN worker containing
 this feature; no endpoint installation or real remote execution is part of the
 example.
 
-Set ``time_kind="datetime"`` for datetime values or strings with a full numeric
-calendar date, such as ``2026-01-01T12:00:00Z``. A clock time alone cannot
-identify a date and is reported as invalid. Cadence,
+Set ``time_kind="datetime"`` for datetime values or strings with a full
+year-month-day date, such as ``2026-01-01T12:00:00Z``. Clock-only and
+day-first or month-first strings are reported as invalid. Cadence,
 tolerance and expected duration then use seconds: for example,
 ``expected_cadence=0.01`` means ten milliseconds. Numeric time
 (``time_kind="numeric"``, the default in Python) uses the input
 unit. Numeric epochs are never silently interpreted as datetime nanoseconds.
 Timezone-aware datetimes are compared as instants; timezone-naive and aware
 values cannot be combined within a group. Datetime arithmetic preserves
-nanosecond precision within pandas' nanosecond timestamp range. Numeric
+nanosecond precision within pandas' nanosecond timestamp range. The JSON
+fields ``delta_ns`` and ``observed_duration_ns`` retain exact differences
+alongside the seconds values. Numeric
 integer ticks (including decimal integer strings) retain exact integer equality
-and subtraction. Integer series identifiers, time endpoints, intervals, durations and estimated missing counts outside
-the browser-safe range (absolute value greater than 2**53 - 1) are serialized as
-decimal strings. Nonintegral numeric inputs use finite floating-point values;
+and subtraction. Integer time endpoints, intervals, durations and estimated
+missing counts outside the browser-safe range (absolute value greater than
+2**53 - 1) are serialized as decimal strings. Series identifiers in that range
+use ``{"integer": "<decimal digits>"}`` to distinguish them from text keys. Nonintegral numeric inputs use finite floating-point values;
 keep elapsed origins near zero when checking very fine floating-point cadence.
+When CSV or JSON mixes fractional values with large integer ticks, this audit
+uses the original integer values even if the inferred column type is floating point.
 
 Parameters
 ----------

@@ -1,14 +1,16 @@
 import csv
 import io
+import re
 
 import pandas as pd
 
-from aidrin.file_handling.readers.base_reader import BaseFileReader, possible_rounded_integer_columns
+from aidrin.file_handling.readers.base_reader import BaseFileReader, possible_rounded_integer_columns, preserve_integer_values
 
 # Delimiters a file named .csv is realistically written with.
 _DELIMITERS = ",;\t|"
 # Enough leading bytes for the sniffer to compare several rows.
 _SNIFF_BYTES = 64 * 1024
+_INTEGER = re.compile(r"[+-]?[0-9]+")
 
 
 class csvReader(BaseFileReader):
@@ -26,7 +28,15 @@ class csvReader(BaseFileReader):
     @staticmethod
     def _read(source, delimiter, nrows=None, usecols=None):
         frame = pd.read_csv(source, index_col=False, sep=delimiter, nrows=nrows, usecols=usecols)
-        candidates = possible_rounded_integer_columns(frame)
+        float_columns = possible_rounded_integer_columns(frame)
+        # A nullable unsigned column may come back as strings and leave
+        # standard missing markers as literal group keys.
+        text_columns = [
+            name for name, column in frame.items()
+            if pd.api.types.is_string_dtype(column.dtype)
+            and column.str.fullmatch(r"\s*[+-]?[0-9]{19,}\s*").any()
+        ]
+        candidates = [*float_columns, *text_columns]
         if not candidates:
             return frame
         if hasattr(source, "seek"):
@@ -35,16 +45,17 @@ class csvReader(BaseFileReader):
         # binary64 rounding before the exact integer conversion.
         raw = pd.read_csv(source, index_col=False, sep=delimiter, nrows=nrows, usecols=candidates, dtype="string")
         for name in candidates:
-            values = raw[name].dropna().str.strip()
-            if not values.str.fullmatch(r"[+-]?[0-9]+").all():
+            if name in text_columns and not raw[name].dropna().str.strip().str.fullmatch(_INTEGER).all():
                 continue
-            integers = [int(value) if not pd.isna(value) else None for value in raw[name]]
-            dtype = "UInt64" if max(value for value in integers if value is not None) > 2**63 - 1 else "Int64"
-            try:
-                frame[name] = pd.array(integers, dtype=dtype)
-            except (OverflowError, TypeError, ValueError):
-                # Integers outside both native 64-bit ranges stay exact as text.
-                frame[name] = raw[name]
+            values = []
+            for token, parsed in zip(raw[name], frame[name]):
+                if pd.isna(token):
+                    values.append(None)
+                elif _INTEGER.fullmatch(token.strip()):
+                    values.append(int(token))
+                else:
+                    values.append(parsed)
+            preserve_integer_values(frame, name, values)
         return frame
 
     def _detect_delimiter(self, sample=None):

@@ -966,13 +966,15 @@ contains several series, choose **Identify series by columns** and select the
 columns that distinguish them, such as station and channel.
 
 The Inspector preselects the **Time column** when it finds one clear match in
-the active file. It checks column names and types and samples a few values.
-You can change the selection or choose the column yourself when there is no
-clear match.
+the active file or in a bounded preview of the selected files. You can change
+the selection or choose the column yourself when there is no clear match.
+If a selected file cannot be previewed, you can enter exact time and series
+column names manually.
 **Time format** defaults to **Auto-detect**, which recognizes numbers and
 ISO-style dates such as ``2026-01-31`` or ``2026-01-31T09:30:00Z``. You can
-select **Numeric time** or **Date and time** manually. Use the column's units
-for numeric time and seconds for dates and times. Independent checks detect the
+select **Numeric time** or **Date and time** manually. Use full year-month-day
+dates for text timestamps. Use the column's units for numeric time and seconds
+for dates and times. Independent checks detect the
 format for each file, using the same expected interval you enter.
 
 The Inspector also tries to fill **Expected time between samples** from a small

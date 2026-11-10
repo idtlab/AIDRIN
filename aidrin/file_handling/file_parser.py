@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 import uuid
 
+from aidrin.file_handling.readers.base_reader import exact_integer_values
 from aidrin.file_handling.readers.csv_reader import csvReader
 from aidrin.file_handling.readers.excel_reader import excelReader
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
@@ -134,7 +135,7 @@ def _frame_cache_path(file_path):
     # name: a changed source simply misses the cache (and the old artifact is
     # later reaped) rather than risking a stale read from a coarse mtime compare.
     st = os.stat(file_path)
-    return f"{file_path}.{st.st_size}-{st.st_mtime_ns}-v2{_FRAME_CACHE_SUFFIX}"
+    return f"{file_path}.{st.st_size}-{st.st_mtime_ns}-v3{_FRAME_CACHE_SUFFIX}"
 
 
 def clear_frame_cache(file_path):
@@ -443,7 +444,7 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True, sample_
         # Best-effort cache for future calls. Failure is non-fatal: we still
         # return the freshly parsed frame below, so a read-only directory or an
         # unserialisable frame never turns a successful parse into an error.
-        if cacheable and write_cache:
+        if cacheable and write_cache and not exact_integer_values(df):
             _write_frame_cache(cache_path, df)
 
         if columns is not None:
