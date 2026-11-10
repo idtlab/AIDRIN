@@ -606,7 +606,17 @@ def summary_statistics():
 
         # describe() runs only on continuous columns. Datasets with no continuous
         # features simply get an empty numerical summary (issue #125).
-        numeric_df = df[continuous_columns]
+        #
+        # A column's role can be a user override rather than the inferred dtype
+        # (e.g. forcing a text column to "continuous"), so coerce to numeric here
+        # too — the same treatment summary_histograms/continuous_bars already
+        # give it — rather than handing describe() raw strings: its "top"/"freq"
+        # stats for an object column reach the formatter below, whose abs(x)
+        # raises TypeError on a string and 500s the whole overview.
+        numeric_df = df[continuous_columns].apply(lambda s: pd.to_numeric(s, errors="coerce"))
+        # A column that coerced to all-NaN has nothing to summarize; keeping it
+        # would describe() it into a column of literal "nan" strings.
+        numeric_df = numeric_df.dropna(axis=1, how="all")
         if numeric_df.shape[1] == 0:
             summary_statistics = {}
         else:
