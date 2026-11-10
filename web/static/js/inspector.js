@@ -2348,17 +2348,18 @@ function renderWorkspaceResults(data, options) {
         }
       }
 
-      // Raw JSON toggle
-      const rawJson = {};
-      for (const [k, v] of Object.entries(displayResults)) {
-        if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
+      if (type !== "Grouped Time Series") {
+        const rawJson = {};
+        for (const [k, v] of Object.entries(displayResults)) {
+          if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
+        }
+        html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
+        html += `<summary class="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">`;
+        html += `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>`;
+        html += `View raw JSON</summary>`;
+        html += `<pre class="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-700 dark:text-gray-300 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(rawJson, null, 2))}</pre>`;
+        html += `</details>`;
       }
-      html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
-      html += `<summary class="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">`;
-      html += `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>`;
-      html += `View raw JSON</summary>`;
-      html += `<pre class="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-700 dark:text-gray-300 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(rawJson, null, 2))}</pre>`;
-      html += `</details>`;
     }
 
     html += `</div>`; // close card
@@ -2737,7 +2738,7 @@ function describeGroupedFinding(finding, units) {
     case "nonfinite_duration":
       return "The time span could not be represented.";
     default:
-      return `${groupedFindingSummary({ [finding.kind]: 1 })}. See View raw JSON for the recorded details.`;
+      return `${groupedFindingSummary({ [finding.kind]: 1 })}. Use Download JSON for the recorded details.`;
   }
 }
 
@@ -2749,7 +2750,7 @@ function renderGroupedResultNotes(parameters, stacked = false) {
     parameters.expected_count == null && parameters.expected_duration == null
       ? " A shorter series can pass when its spacing is regular. An expected row count or time span is needed to check length."
       : "";
-  return `<p class="mt-3 text-xs text-gray-600 dark:text-gray-400">${rows} Raw JSON positions start at 0.${span}</p>`;
+  return `<p class="mt-3 text-xs text-gray-600 dark:text-gray-400">${rows} Downloaded JSON positions start at 0.${span}</p>`;
 }
 
 function groupedTimeSeriesRows(result, file = "", sourceNames) {
@@ -2822,11 +2823,18 @@ function renderGroupedSeriesResult(group, units) {
   return html;
 }
 
-function renderGroupedTimeSeriesTable(rows, labelHeading = "Series") {
-  if (!rows.length) return `<p class="mb-2 text-sm">No series to check.</p>`;
-  const { parameters, units } = rows[0];
+function renderGroupedTimeSeriesTable(
+  rows,
+  labelHeading = "Series",
+  scope = "",
+) {
+  const { parameters = {}, units = "" } = rows[0] || {};
   const sharedUnits = rows.every((row) => row.units === units);
-  const context = [];
+  const spanHeading =
+    sharedUnits && units
+      ? `Observed span (${units === "s" ? "seconds" : "time column units"})`
+      : "Observed span";
+  const context = scope ? [scope] : [];
   if (parameters.timestamp_column)
     context.push(`Time column ${parameters.timestamp_column}`);
   if (parameters.expected_cadence != null)
@@ -2837,13 +2845,15 @@ function renderGroupedTimeSeriesTable(rows, labelHeading = "Series") {
   let html = context.length
     ? `<p class="mb-2 text-sm">${escapeHtml(context.join(" · "))}</p>`
     : "";
+  if (!rows.length)
+    return `${html}<p class="mb-2 text-sm">No series to check.</p>`;
   html += `<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"><table class="w-full text-left text-sm text-gray-700 dark:text-gray-300">
     <caption class="sr-only">Grouped Time Series results by series</caption>
     <thead class="bg-gray-50 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300"><tr>
       <th scope="col" class="px-3 py-2.5">${escapeHtml(labelHeading)}</th>
       <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Rows checked</th>
       <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Valid timestamps</th>
-      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Observed span</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">${spanHeading}</th>
       <th scope="col" class="px-3 py-2.5">Result</th>
     </tr></thead><tbody>`;
   for (const row of rows) {
@@ -2855,7 +2865,7 @@ function renderGroupedTimeSeriesTable(rows, labelHeading = "Series") {
     html += `</th>
       <td class="px-3 py-2.5 text-right tabular-nums">${escapeHtml(group.row_count)}</td>
       <td class="px-3 py-2.5 text-right tabular-nums">${escapeHtml(group.valid_time_count)}</td>
-      <td class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">${escapeHtml(formatGroupedTime(group.observed_duration, units))}</td>
+      <td class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">${escapeHtml(formatGroupedTime(group.observed_duration, sharedUnits ? "" : units))}</td>
       <td class="min-w-[16rem] break-words px-3 py-2.5">${renderGroupedSeriesResult(group, units)}</td></tr>`;
   }
   return `${html}</tbody></table></div>`;
@@ -2871,12 +2881,9 @@ function renderGroupedTimeSeriesResults(result) {
 
 function renderGroupedCollectionResults(result) {
   const stacked = result.mode === "stacked";
-  const mode = stacked ? "Stacked rows" : "Independent files";
+  const mode = stacked ? "Stacked rows" : "Independent";
   const names = new Map(
-    (result.selection || []).map((source, index) => [
-      source.id,
-      `${index + 1}. ${source.name}`,
-    ]),
+    (result.selection || []).map((source) => [source.id, source.name]),
   );
   const rows = [];
   let notes = "";
@@ -2887,11 +2894,11 @@ function renderGroupedCollectionResults(result) {
     );
     const label = stacked ? "Stacked dataset" : sources.join(", ");
     if (stacked && dataset.sources.length) {
-      notes += `<details class="mt-3 text-xs"><summary class="cursor-pointer">Source rows in stack order</summary><ul class="list-disc pl-5">`;
+      notes += `<details class="mt-3 text-xs"><summary class="cursor-pointer">Source rows in stack order</summary><ol class="list-decimal pl-5">`;
       for (const [index, source] of dataset.sources.entries()) {
         notes += `<li>${escapeHtml(sources[index])} · ${escapeHtml(source.row_count)} rows starting at data row ${escapeHtml(source.start_row + 1)}</li>`;
       }
-      notes += "</ul></details>";
+      notes += "</ol></details>";
     }
     for (const message of Object.values(dataset.errors || {})) {
       notes += `<p class="mt-2 text-sm text-red-700 dark:text-red-400" role="alert">${escapeHtml(`${label} · ${message}`)}</p>`;
@@ -2916,8 +2923,9 @@ function renderGroupedCollectionResults(result) {
     : rows.some((row) => row.series)
       ? "File / series"
       : "File";
-  let html = `<p class="mb-3 text-sm">${mode} · ${escapeHtml(result.summary.selected_files)} selected files</p>`;
-  html += renderGroupedTimeSeriesTable(rows, heading) + notes;
+  const fileCount = result.summary.selected_files;
+  const scope = `${mode} · ${fileCount} ${fileCount === 1 ? "file" : "files"}`;
+  let html = renderGroupedTimeSeriesTable(rows, heading, scope) + notes;
   if (parameters) html += renderGroupedResultNotes(parameters, stacked);
   return html;
 }

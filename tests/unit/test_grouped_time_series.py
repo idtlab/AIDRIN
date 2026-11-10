@@ -239,7 +239,7 @@ def test_renderer_preserves_precision_and_escapes_group_values():
     render = source[source.index('function formatGroupedTime('):source.index('function renderGroupedCollectionResults(')]
     escape = re.search(r'function escapeHtml\(str\) \{[\s\S]*?\n\}', source).group()
     result = {
-        'parameters': {'time_kind': 'datetime', 'expected_cadence': 5e-10},
+        'parameters': {'time_kind': 'datetime', 'timestamp_column': 'time', 'expected_cadence': 5e-10},
         'summary': {'group_count': 2, 'groups_with_findings': 1, 'unassigned_rows': 0,
                     'finding_counts': {'cadence_gap': 1, 'duplicate_time': 2}},
         'groups': [{'group': {'sensor': '<img src=x onerror=alert(1)>'}, 'row_count': 4,
@@ -252,14 +252,30 @@ def test_renderer_preserves_precision_and_escapes_group_values():
                    {'group': {'sensor': 'B'}, 'row_count': 3, 'valid_time_count': 3, 'observed_duration': 1e-9,
                     'evaluated_adjacent_intervals': 2, 'finding_counts': {}, 'findings': []}],
     }
-    script = escape + '\n' + render + '\nprocess.stdout.write(renderGroupedTimeSeriesResults(' + json.dumps(result) + '));'
-    html = subprocess.run([node, '-e', script], check=True, capture_output=True, text=True).stdout
+    script = escape + '\n' + render + f'\nconst result = {json.dumps(result)};' + """
+const numeric = { ...result, parameters: {time_kind: "numeric"}, groups: result.groups.slice(1) };
+process.stdout.write(JSON.stringify([
+  renderGroupedTimeSeriesResults(result),
+  renderGroupedTimeSeriesResults(numeric),
+  renderGroupedTimeSeriesTable([...groupedTimeSeriesRows(result), ...groupedTimeSeriesRows(numeric)])
+]));
+"""
+    output = subprocess.run([node, '-e', script], check=True, capture_output=True, encoding='utf-8').stdout
+    html, numeric_html, mixed_html = json.loads(output)
     assert '<img src=x' not in html
     assert '&lt;img src=x' in html
     assert '1e-9' in html
+    assert 'Time column time · Expected spacing 5e-10 s' in html
     assert html.count('<th scope="row"') == 2
     assert 'Rows checked</th>' in html
     assert 'Valid timestamps</th>' in html
+    assert 'Observed span (seconds)</th>' in html
+    assert '>1e-9</td>' in html
+    assert 'Observed span (time column units)</th>' in numeric_html
+    assert '>1e-9</td>' in numeric_html
+    assert 'Observed span</th>' in mixed_html
+    assert '>1e-9 s</td>' in mixed_html
+    assert '>1e-9 column units</td>' in mixed_html
     assert 'Both checked intervals matched.' in html
     assert 'More finding details (1)' in html
     assert 'The gap suggests 1 missing sample.' in html

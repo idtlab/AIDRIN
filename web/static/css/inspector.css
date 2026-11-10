@@ -6,17 +6,17 @@
   background-position: right 6px center;
 }
 
-#grouped-analysis-mode-label {
+.grouped-field-label {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-#grouped-analysis-mode-label .info-icon {
+.grouped-field-label .info-icon {
   position: static;
 }
 
-#grouped-analysis-mode-help {
+.grouped-field-label .info-text {
   top: 100%;
   left: 0;
   margin-left: 0;

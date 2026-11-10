@@ -166,7 +166,7 @@
                   </div>
                   {% endfor %}
                 </div>
-                <div id="grouped-analysis-mode-label">
+                <div class="grouped-field-label">
                   <label for="grouped-collection-mode">Analysis mode</label>
                   <button type="button" class="info-icon" aria-label="About analysis modes" aria-describedby="grouped-analysis-mode-help">
                     <span aria-hidden="true">i</span>
@@ -193,12 +193,17 @@
             </div>
             {% endif %}
             <div class="space-y-1 text-sm">
-              <label class="block" for="grouped-series">What identifies each series?</label>
+              <div class="grouped-field-label">
+                <label for="grouped-series">What identifies each series?</label>
+                <button type="button" class="info-icon" aria-label="About series grouping" aria-describedby="grouped-series-help">
+                  <span aria-hidden="true">i</span>
+                  <span id="grouped-series-help" class="info-text" role="tooltip">Use columns when a file contains several sensors, channels, or runs.</span>
+                </button>
+              </div>
               <select id="grouped-series" name="grouped_series" aria-describedby="grouped-series-help" onchange="syncGroupedTimeSeriesOptions()">
                 <option value="file">One series per file</option>
                 <option value="columns">Identify series by columns</option>
               </select>
-              <p id="grouped-series-help" class="text-gray-500 dark:text-gray-400">Use columns when a file contains several sensors, channels, or runs.</p>
             </div>
             <fieldset id="grouped-series-columns" data-metric-settings class="space-y-1 text-sm" hidden disabled>
               <legend>Columns that identify each series</legend>
