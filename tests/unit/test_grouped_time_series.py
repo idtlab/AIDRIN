@@ -88,8 +88,9 @@ def test_auto_keeps_numeric_strings_numeric_and_audits_bad_values(monkeypatch):
     assert result["summary"]["finding_counts"] == {"cadence_gap": 1, "invalid_time": 1}
 
 
-def test_auto_datetime_does_not_infer_a_date_for_time_only_rows(monkeypatch):
-    result = audit(monkeypatch, ["2026-01-01T00:00:00Z", "12:00", "2026-01-01T00:00:00.03Z"], time_kind="auto")
+@pytest.mark.parametrize("time_kind", ["datetime", "auto"])
+def test_datetime_does_not_infer_a_date_for_time_only_rows(monkeypatch, time_kind):
+    result = audit(monkeypatch, ["2026-01-01T00:00:00Z", "12:00", "2026-01-01T00:00:00.03Z"], time_kind=time_kind)
     assert result["parameters"]["time_kind"] == "datetime"
     assert result["summary"]["finding_counts"] == {"invalid_time": 1}
     assert result["groups"][0]["evaluated_adjacent_intervals"] == 0
@@ -323,3 +324,59 @@ def test_large_integer_missing_count_and_duration_detail_are_exact(tmp_path, sta
     assert gap['estimated_missing_samples'] == str(end - start - 1)
     assert mismatch['kind'] == 'duration_mismatch'
     assert mismatch['observed'] == group['observed_duration'] == str(end - start)
+
+
+
+@pytest.mark.parametrize("file_type", [".csv", ".parquet"])
+def test_null_does_not_round_integer_ticks_in_reader_or_frame_cache(tmp_path, file_type):
+    from pyarrow import table
+    from pyarrow.parquet import write_table
+
+    from aidrin.file_handling.file_parser import read_file
+
+    path = tmp_path / f"ticks{file_type}"
+    start = 1_700_000_000_000_000_000
+    values = [start, start + 1, None, start + 3, start + 4]
+    if file_type == ".csv":
+        path.write_text("tick,value\n" + "".join(f"{tick if tick is not None else ''},1\n" for tick in values))
+    else:
+        write_table(table({"tick": values}), path)
+    file_info = (str(path), path.name, file_type)
+    preview = read_file(file_info, columns=["tick"], sample_rows=5)
+    assert preview["tick"].dropna().tolist() == [start, start + 1, start + 3, start + 4]
+    for _ in range(2):
+        group = module.calculate_grouped_time_series(file_info, None, "tick", 1, expected_duration=4)["groups"][0]
+        assert group["unique_time_count"] == 4
+        assert group["evaluated_adjacent_intervals"] == 2
+        assert group["observed_duration"] == 4
+        assert group["finding_counts"] == {"missing_time": 1}
+
+
+@pytest.mark.parametrize(("delta", "estimate"), [(10_000_000_000, 999_999_999), (10_000_000_005, None)])
+def test_missing_count_requires_unique_grid_match(tmp_path, delta, estimate):
+    path = tmp_path / "long_gap.csv"
+    path.write_text(f"tick\n0\n{delta}\n")
+    group = module.calculate_grouped_time_series((str(path), path.name, ".csv"), None, "tick", 10)["groups"][0]
+    assert group["findings"][0]["estimated_missing_samples"] == estimate
+
+
+def test_grouped_headless_without_group_columns_and_worker_partial_result(tmp_path):
+    from aidrin.compute.remote import remote_metric_runner
+    from aidrin.headless.api import run_batch_metrics, run_metric
+
+    path = tmp_path / "times.csv"
+    path.write_text("tick,value\n0,1\n1,2\n")
+    result = run_metric("grouped_time_series", str(path), timestamp_column="tick", expected_cadence=1)
+    assert result["summary"]["group_count"] == 1
+    assert result["summary"]["finding_counts"] == {}
+
+    path.write_text(" sensor,tick,value\nA,0,1\nA,1,2\n")
+    batch = run_batch_metrics({"file_path": str(path), "metrics": ["grouped_time_series"], "group_columns": [" sensor"],
+                               "timestamp_column": "tick", "expected_cadence": 1})
+    assert batch["grouped_time_series"]["groups"][0]["group"] == {" sensor": "A"}
+
+    path.write_text("tick,value\n0,1\n2026-01-01,2\n")
+    result = remote_metric_runner("data_quality", str(path), path.name, ".csv", selected=["completeness", "grouped_time_series"],
+                                  sequence_timestamp_column="tick", expected_cadence=1, time_kind="auto")
+    assert result["Completeness"]["Completeness scores"] == {"tick": 1.0, "value": 1.0}
+    assert "both numbers and dates" in result["Grouped Time Series"]["Error"]
