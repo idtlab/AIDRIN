@@ -9,7 +9,9 @@ files** to add to the workspace. The top-bar file switcher opens the selected
 file's Data Overview and makes it the input for ordinary single-file checks.
 Use **Batch Overview** to see counts and sizes, open a file, or remove it
 from the workspace. Removing the active file opens the first remaining
-available file. **New session** clears the workspace.
+available file. **New session** clears the workspace. Uploaded files are
+eligible for cleanup after one hour. The file list expires after an hour
+of workspace inactivity.
 
 For Globus Compute, enter an endpoint ID and a directory path and select
 **Import directory**. A compatible AIDRIN worker lists and summarizes supported
@@ -54,9 +56,10 @@ Metrics opt in via the headless registry's ``collection_modes`` contract. Each
 metric receives a private copy of its input table through the existing reader.
 An assessment returns ordered ``selection``, ``datasets``, and ``summary``.
 Source positions use zero-based offsets in the parsed table. Metrics that
-need source metadata can opt in to the reserved ``__aidrin_source_id`` and
-``__aidrin_source_row`` columns. Standard completeness, duplicity, and outliers
-use only measurement columns.
+need source metadata can advertise support for reserved source columns.
+Completeness, duplicity, and outliers use only measurement columns. Undefined
+scores are represented as JSON ``null``. Collection reads can reuse existing
+frame caches and leave source directories unchanged.
 
 Collection analysis currently accepts local tables from built-in readers.
 Custom-loader inputs, native HDF5/Zarr dataset selection, and remote collection

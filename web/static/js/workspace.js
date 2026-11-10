@@ -1,3 +1,17 @@
+async function fetchWorkspaceDataset(url, options = {}) {
+  const fileId =
+    document.getElementById("panels-container")?.dataset.workspaceFileId;
+  if (!fileId || new URL(url, location.href).origin !== location.origin)
+    return fetch(url, options);
+  const headers = new Headers(options.headers);
+  headers.set("X-AIDRIN-Workspace-File", fileId);
+  const response = await fetch(url, { ...options, headers });
+  if (response.headers.has("X-AIDRIN-Workspace-Stale")) {
+    throw new Error((await response.json()).message);
+  }
+  return response;
+}
+
 function filterWorkspaceFiles(search) {
   const query = search.value.trim().toLowerCase();
   search
@@ -25,7 +39,9 @@ async function loadWorkspaceOverview() {
     status.textContent = [
       `${count} ${count === 1 ? "file" : "files"}`,
       `${number.format(totals.records)} rows counted`,
-      size(totals.size),
+      files.some((file) => file.size == null)
+        ? `${size(totals.size)} counted`
+        : size(totals.size),
       failed ? `${failed} without a summary` : "",
     ]
       .filter(Boolean)
@@ -186,7 +202,8 @@ async function importGlobusDirectory() {
       if (!poll.ok || result.status === "failed")
         throw new Error(result.error || "Unable to import the directory.");
       if (result.status === "completed") {
-        window.location.href = "/inspector#batch-overview";
+        window.history.replaceState(null, "", "/inspector#batch-overview");
+        window.location.reload();
         return;
       }
     }

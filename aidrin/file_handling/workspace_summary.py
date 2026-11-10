@@ -1,6 +1,7 @@
 """Structural file summaries shared by the local workspace and Compute worker."""
 
 import logging
+import stat
 from pathlib import Path
 
 import pandas as pd
@@ -26,19 +27,20 @@ def overview_columns(frame):
 def summarize_workspace_file(path, name, file_type):
     """Read one file and return counts, or an actionable error for that row."""
     try:
-        size = Path(path).stat().st_size
+        info = Path(path).stat()
     except OSError:
         return {"error": "File is unavailable."}
+    details = {"size": info.st_size} if stat.S_ISREG(info.st_mode) else {}
     try:
-        frame = read_file((path, name, file_type))
+        frame = read_file((path, name, file_type, []), write_cache=False)
     except Exception:
         logger.warning("Unable to summarize workspace file", exc_info=True)
         frame = None
     if not isinstance(frame, pd.DataFrame):
-        return {"size": size, "error": "Unable to read a table. Open the file to check its format and dataset selection."}
+        return {**details, "error": "Unable to read a table. Open the file to check its format and dataset selection."}
     numerical, categorical = overview_columns(frame)
     return {
-        "size": size, "records": len(frame), "features": len(frame.columns),
+        **details, "records": len(frame), "features": len(frame.columns),
         "numerical": len(numerical), "categorical": len(categorical),
     }
 
@@ -48,6 +50,8 @@ def summarize_workspace_directory(path, limit):
     from aidrin.file_handling.file_parser import GLOBUS_FILE_TYPES
     from aidrin.headless.runners import _normalize_file_type
 
+    if type(limit) is not int or limit < 1:
+        return {"Error": "The workspace file limit must be a positive integer."}
     supported = {file_type for file_type, _ in GLOBUS_FILE_TYPES}
     files = []
     try:

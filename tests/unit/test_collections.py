@@ -1,6 +1,7 @@
 """Behavior boundaries for the shared collection pilot, using synthetic inputs."""
 
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 import io
 import json
 from unittest.mock import patch
@@ -142,3 +143,72 @@ def test_mcp_uses_the_same_collection_executor(tmp_path):
     result = json.loads(run_file_collection(inputs, [{"name": "duplicity"}]))
     assert result["datasets"][0]["metrics"]["duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"] == .5
     assert "duplicity" in json.loads(list_collection_metrics())["metrics"]
+
+
+@pytest.mark.parametrize("columns", [("plot_id", "missing"), ("missing", "plot_id")])
+def test_collection_preserves_plot_named_scores_and_emits_strict_json(tmp_path, columns):
+    path = tmp_path / "scores.csv"
+    pd.DataFrame({"plot_id": [0, 1, 2, 3, 100], "missing": [None] * 5}).to_csv(path, columns=list(columns), index=False)
+    result = run_collection_metrics([CollectionMember("scores", str(path))], [
+        {"name": "completeness"}, {"name": "outliers"},
+    ])
+    scores = result["datasets"][0]["metrics"]
+    assert scores["completeness"]["Completeness scores"] == {"plot_id": 1.0, "missing": 0.0}
+    assert scores["outliers"]["Outlier scores"]["plot_id"] == .2
+    assert scores["outliers"]["Outlier scores"]["missing"] is None
+    assert not any(key.endswith(" Visualization") for metric in scores.values() for key in metric)
+    json.dumps(result, allow_nan=False)
+
+
+def test_collection_supports_numeric_excel_headers(tmp_path):
+    path = tmp_path / "wavelengths.xlsx"
+    pd.DataFrame({450: [1, 2], 650: [1, None]}).to_excel(path, index=False)
+    result = run_collection_metrics([CollectionMember("wavelengths", str(path))], [{"name": "completeness"}])
+    assert result["datasets"][0]["metrics"]["completeness"]["Completeness scores"] == {"450": 1.0, "650": .5}
+
+
+@pytest.mark.parametrize("name", ["completeness", "duplicity", "outliers"])
+def test_measurement_metrics_reject_provenance_columns(tmp_path, name):
+    files = members(tmp_path, [pd.DataFrame({"x": [1, 1]})])
+    with pytest.raises(ValueError, match="does not support collection source columns"):
+        run_collection_metrics(files, [{"name": name, "source_columns": ["__aidrin_source_id"]}], "stacked")
+
+
+
+def test_collection_reuses_an_existing_frame_cache_without_creating_one(tmp_path, monkeypatch):
+    from aidrin.file_handling.file_parser import _frame_cache_path
+
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "1")
+    warm, cold = (tmp_path / name for name in ("warm.csv", "cold.csv"))
+    for path in (warm, cold):
+        path.write_text("x\n1\n1\n", encoding="utf-8")
+    read_file((str(warm), warm.name, ".csv"))
+    warm_cache = Path(_frame_cache_path(str(warm)))
+    original = warm_cache.read_bytes()
+    result = run_collection_metrics([CollectionMember(path.name, str(path)) for path in (warm, cold)], [{"name": "duplicity"}])
+    assert result["summary"]["datasets_with_errors"] == 0
+    assert warm_cache.read_bytes() == original
+    assert not Path(_frame_cache_path(str(cold))).exists()
+
+
+def test_stacked_duplicity_handles_nested_values_after_scalars(tmp_path):
+    scalar, nested = (tmp_path / name for name in ("scalar.json", "nested.json"))
+    scalar.write_text('[{"x":"a","n":1},{"x":2,"n":2}]', encoding="utf-8")
+    nested.write_text('[{"x":[1,2],"n":1},{"x":[1,2],"n":1}]', encoding="utf-8")
+    files = [CollectionMember(path.name, str(path)) for path in (scalar, nested)]
+    for ordered in (files, files[::-1]):
+        result = run_collection_metrics(ordered, [{"name": "duplicity"}], "stacked")["datasets"][0]
+        assert result["status"] == "ok"
+        assert result["metrics"]["duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"] == .25
+
+
+def test_workspace_directory_size_is_unavailable_for_directory_stores(tmp_path, monkeypatch):
+    from aidrin.file_handling.workspace_summary import summarize_workspace_directory
+
+    monkeypatch.setattr("aidrin.file_handling.workspace_summary.read_file", lambda *args, **kwargs: pd.DataFrame({"x": [1]}))
+    (tmp_path / "records.zarr").mkdir()
+    (tmp_path / "small.csv").write_text("x\n1\n", encoding="utf-8")
+    rows = summarize_workspace_directory(str(tmp_path), 2)["files"]
+    assert "size" not in rows[0]["summary"]
+    assert rows[0]["summary"]["records"] == 1
+    assert rows[1]["summary"]["size"] == 4

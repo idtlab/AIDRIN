@@ -88,8 +88,11 @@ def test_invalid_or_stale_selection_does_not_use_active_file(client):
 
 
 def test_globus_directory_import_shares_the_inventory_without_local_reads(client, app, monkeypatch, tmp_path):
+    import os
+    import time
     from aidrin.compute.remote import remote_metric_runner
     from web.routes.globus import globus_bp
+    from worker.tasks import prune_upload_folder
 
     if globus_bp.name not in app.blueprints:
         app.register_blueprint(globus_bp)
@@ -103,7 +106,7 @@ def test_globus_directory_import_shares_the_inventory_without_local_reads(client
     with client.session_transaction() as session:
         session["globus_authenticated"] = True
     monkeypatch.setattr("web.routes.globus.get_compute_client", lambda tokens: object())
-    monkeypatch.setattr("web.routes.globus._submission_negotiation",
+    monkeypatch.setattr("web.routes.globus._fresh_negotiation",
                         lambda *args: ({"capabilities": ["workspace_directory_v1"]}, {}))
     monkeypatch.setattr("web.routes.globus.submit_metric", lambda *args, **kwargs: "directory-task")
     monkeypatch.setattr("web.routes.globus.check_task", lambda *args: {"status": "completed", "result": listing})
@@ -116,7 +119,95 @@ def test_globus_directory_import_shares_the_inventory_without_local_reads(client
     with client.session_transaction() as session:
         assert session["globus_file_path"] == str(source)
         assert "uploaded_file_path" not in session
+        manifest = session["collection_manifest"]
+    old = time.time() - 3590
+    os.utime(manifest, (old, old))
+    assert [file["id"] for file in workspace(client)] == [local["id"], remote["id"]]
+    prune_upload_folder(app.config["UPLOAD_FOLDER"], max_age_seconds=3600, now=time.time() + 20)
+    assert [file["id"] for file in workspace(client)] == [local["id"], remote["id"]]
     assert client.post(f"/workspace/files/{remote['id']}/remove").status_code == 302
     assert source.is_file()
     assert [file["id"] for file in workspace(client)] == [local["id"]]
     assert client.get("/retrieve-uploaded-file").data == b"x\n5\n"
+
+
+def test_workspace_tab_and_cache_are_scoped_to_active_id(client, app):
+    upload(client, ("same.csv", b"x\n1\n1\n"), ("same.csv", b"x\n1\n2\n"))
+    first, second = workspace(client)
+    page = client.get("/inspector").get_data(as_text=True)
+    assert f'data-workspace-file-id="{first["id"]}"' in page
+    stale_header = {"X-AIDRIN-Workspace-File": first["id"]}
+    assert duplicity(data_quality(client, duplicity="yes")["Duplicity"]) == .5
+    old_worker_cache = dict(app.TEMP_RESULTS_CACHE)
+    assert client.post("/inspector", data={"active_file_id": second["id"]}).status_code == 302
+    app.TEMP_RESULTS_CACHE.update(old_worker_cache)  # Another worker did not see the switch.
+    assert client.get("/cached-result/data_quality").json == {"cached": False}
+
+    response = client.post("/data-quality?return_type=json", data={"duplicity": "yes"}, headers=stale_header)
+    assert response.status_code == 409
+    assert response.headers["X-AIDRIN-Workspace-Stale"] == "1"
+    assert client.get("/readiness-report/pdf", headers=stale_header).status_code == 409
+    response = client.post("/data-quality?return_type=json", data={"duplicity": "yes"},
+                           headers={"X-AIDRIN-Workspace-File": second["id"]})
+    assert duplicity(response.json["Duplicity"]) == 0
+
+
+def test_active_hdf5_selection_is_ignored_by_collection_and_batch_overview(client, tmp_path):
+    h5py = pytest.importorskip("h5py")
+    files = []
+    for name, values in (("a.h5", [1, 1]), ("b.h5", [1, 2])):
+        path = tmp_path / name
+        with h5py.File(path, "w") as handle:
+            handle["x"] = values
+            handle["y"] = [2, 3, 4]
+        files.append((name, path.read_bytes()))
+    files.append(("c.csv", b"x\n1\n2\n"))
+    upload(client, *files)
+    _, second, third = workspace(client)
+    assert client.post("/filter-file", json={"keys": ["x"]}).json["success"]
+    assert duplicity(data_quality(client, duplicity="yes")["Duplicity"]) == .5
+    assert workspace(client)[1]["error"]
+    result = data_quality(client, duplicity="yes", collection_scope="selected",
+                          collection_file_id=[second["id"], third["id"]])["Cross-file Data Quality"]
+    assert [dataset["status"] for dataset in result["datasets"]] == ["error", "ok"]
+
+
+def test_expired_uploads_do_not_block_replacement(client, app):
+    import json
+    from pathlib import Path
+
+    app.config["AIDRIN_MAX_UPLOAD_FILES"] = 2
+    upload(client, ("expired.csv", b"x\n1\n"), ("kept.csv", b"x\n2\n"))
+    with client.session_transaction() as session:
+        manifest = Path(session["collection_manifest"])
+    Path(json.loads(manifest.read_text(encoding="utf-8"))[0]["path"]).unlink()
+    assert upload(client, ("new.csv", b"x\n3\n")).status_code == 302
+    assert [row["name"] for row in workspace(client)] == ["kept.csv", "new.csv"]
+
+
+def test_globus_directory_capability_is_refreshed_and_reserved(client, app, monkeypatch):
+    from web.routes.globus import globus_bp
+
+    if globus_bp.name not in app.blueprints:
+        app.register_blueprint(globus_bp)
+    calls = []
+    with client.session_transaction() as session:
+        session["globus_authenticated"] = True
+        session["globus_endpoint_negotiation"] = {"endpoint_id": "endpoint", "checked_at": 0, "capabilities": []}
+    monkeypatch.setattr("web.routes.globus.get_compute_client", lambda tokens: object())
+
+    def probe(*args):
+        calls.append("probe")
+        return {"compatible": True, "remote": {"capabilities": ["workspace_directory_v1"]}}
+
+    def submit(*args, **kwargs):
+        calls.append(kwargs["limit"])
+        return "directory-task"
+
+    monkeypatch.setattr("web.routes.globus.check_endpoint_compatibility", probe)
+    monkeypatch.setattr("web.routes.globus.submit_metric", submit)
+    data = {"endpoint_id": "endpoint", "file_path": "/remote", "file_type": ".csv", "metric_name": "workspace_directory"}
+    assert client.post("/globus/submit", json=data).status_code == 400
+    assert calls == []
+    assert client.post("/globus/import-directory", json={"endpoint_id": "endpoint", "directory": "/remote"}).status_code == 200
+    assert calls == ["probe", 50]

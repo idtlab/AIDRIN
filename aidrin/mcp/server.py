@@ -97,6 +97,7 @@ def list_collection_metrics() -> str:
 
     return _dumps({
         "metrics": {name: {key: meta[key] for key in ("description", "required_args", "collection_modes")}
+                    | {"source_columns": meta.get("collection_source_columns", ())}
                     for name, meta in collection_metrics().items()},
         "source_columns": SOURCE_COLUMNS,
     })
@@ -110,7 +111,7 @@ def run_file_collection(files: list[dict[str, Any]], metrics: list[dict[str, Any
     name, optional parameters, and optional source_columns. Discover supported
     metrics with list_collection_metrics. Stacking requires identical column
     names and parsed dtypes and retains file order and row order. Provenance is
-    returned separately; request __aidrin_source_id explicitly to group by file.
+    returned separately. Pass source_columns only for metrics that advertise them.
     No files are uploaded, discovered, repaired or sent to a remote endpoint.
     """
     from aidrin.headless.api import run_collection_metrics

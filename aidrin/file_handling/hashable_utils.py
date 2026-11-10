@@ -36,17 +36,11 @@ def make_hashable(value):
 def is_unhashable_column(series: pd.Series) -> bool:
     """Whether *series* holds values pandas cannot hash.
 
-    Only object columns can carry such values; the first non-null value is used
-    as the probe, matching how the rest of the codebase samples column contents.
+    Only object columns can carry such values. Stacked files can mix
+    scalar and nested values in either order.
     """
-    if series.dtype != object:
-        return False
-    non_null = series.dropna()
-    if non_null.empty:
-        return False
-    return isinstance(
-        non_null.iloc[0], (np.ndarray, list, tuple, dict, set, frozenset)
-    )
+    nested_types = (np.ndarray, list, tuple, dict, set, frozenset)
+    return series.dtype == object and any(isinstance(value, nested_types) for value in series)
 
 
 def hashable_series(series: pd.Series) -> pd.Series:

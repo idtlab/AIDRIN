@@ -30,6 +30,7 @@ from aidrin.intent import (
     recommendations_from_profile,
 )
 from web.routes.utils import (
+    dataset_cache_identity,
     generate_metric_cache_key,
     get_current_user_id,
     is_metric_cache_valid,
@@ -186,7 +187,7 @@ def _store(payload):
     file_name = _session_file_name()
     if not file_name:
         return
-    key = f"user:{get_current_user_id()}:file:{file_name}:intent"
+    key = f"user:{get_current_user_id()}:{dataset_cache_identity(file_name)}:intent"
     current_app.TEMP_RESULTS_CACHE[key] = {
         "data": payload,
         "timestamp": time.time(),

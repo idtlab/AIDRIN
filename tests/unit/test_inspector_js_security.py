@@ -722,7 +722,7 @@ def test_workspace_init_releases_clear_file_lock_after_overview_load():
     drop the processing lock. Calling .finally on undefined throws, which left
     the top-bar clear button with pointer-events-none forever."""
     source = INSPECTOR_JS.read_text(encoding="utf-8")
-    assert "return fetch(\"/summary-statistics\")" in source
+    assert "return fetchWorkspaceDataset(\"/summary-statistics\")" in source
     assert "Promise.resolve(loadDataOverview()).finally(initTaskDone)" in source
 
 
