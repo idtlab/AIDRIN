@@ -16,20 +16,24 @@ import numpy as np
 import pandas as pd
 
 
-def make_hashable(value):
+_MAPPING_TAG = object()
+
+
+def make_hashable(value, *, distinguish_mappings=False):
     """Recursively convert an unhashable value to a hashable equivalent.
 
     Arrays/lists/tuples become tuples, dicts become sorted key/value tuples, and
     sets become sorted tuples. Scalars pass through untouched.
     """
     if isinstance(value, np.ndarray):
-        return tuple(make_hashable(v) for v in value.tolist())
+        value = value.tolist()
     if isinstance(value, (list, tuple)):
-        return tuple(make_hashable(v) for v in value)
+        return tuple(make_hashable(v, distinguish_mappings=distinguish_mappings) for v in value)
     if isinstance(value, dict):
-        return tuple(sorted((k, make_hashable(v)) for k, v in value.items()))
+        entries = tuple(sorted((k, make_hashable(v, distinguish_mappings=distinguish_mappings)) for k, v in value.items()))
+        return (_MAPPING_TAG, entries) if distinguish_mappings else entries
     if isinstance(value, (set, frozenset)):
-        return tuple(sorted(make_hashable(v) for v in value))
+        return tuple(sorted(make_hashable(v, distinguish_mappings=distinguish_mappings) for v in value))
     return value
 
 
@@ -55,7 +59,9 @@ def hashable_frame(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for col in out.columns:
         if is_unhashable_column(out[col]):
-            out[col] = out[col].apply(make_hashable)
+            # A JSON object and an array of pairs can have the same tuple
+            # encoding. Keep their original types distinct for row equality.
+            out[col] = out[col].apply(make_hashable, distinguish_mappings=True)
     return out
 
 
