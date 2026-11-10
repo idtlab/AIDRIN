@@ -5518,9 +5518,9 @@ function buildColumnRolesEditor(roles) {
   // to correct them. Uses the same <details> disclosure as the nested result
   // sections, so it opens on click and keeps its state while the panel lives.
   let html =
-    '<details id="column-roles-panel" class="mt-6 mb-3">' +
+    '<details id="column-roles-panel" class="group mt-6 mb-3">' +
     '<summary class="cursor-pointer flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">' +
-    '<svg class="w-3 h-3 shrink-0" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" fill="none" d="M1 1l4 4 4-4"/></svg>' +
+    '<svg class="w-3 h-3 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" fill="none" d="M1 1l4 4 4-4"/></svg>' +
     "Override Column Types" +
     `<span class="normal-case font-normal text-gray-500 dark:text-gray-400">(${cols.length})</span>` +
     "</summary>" +
