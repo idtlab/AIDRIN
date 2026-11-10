@@ -1324,6 +1324,39 @@ _DCAT_SAMPLE = os.path.join(_REPO, "examples", "sample_data", "dcat", "BUTTER-E.
 _DATACITE_SAMPLE = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "datacite_rest_default.json")
 
 
+class TestQuietReadinessPdfLoggers(unittest.TestCase):
+    def test_raises_noisy_loggers_to_error_then_restores(self):
+        import logging
+
+        from aidrin.headless.cli import (
+            _READINESS_PDF_QUIET_LOGGERS,
+            _quiet_readiness_pdf_loggers,
+        )
+
+        logger = logging.getLogger(_READINESS_PDF_QUIET_LOGGERS[0])
+        previous = logger.level
+        logger.setLevel(logging.INFO)
+        with _quiet_readiness_pdf_loggers(verbose=False):
+            self.assertEqual(logger.level, logging.ERROR)
+        self.assertEqual(logger.level, logging.INFO)
+        logger.setLevel(previous)
+
+    def test_verbose_leaves_levels_unchanged(self):
+        import logging
+
+        from aidrin.headless.cli import (
+            _READINESS_PDF_QUIET_LOGGERS,
+            _quiet_readiness_pdf_loggers,
+        )
+
+        logger = logging.getLogger(_READINESS_PDF_QUIET_LOGGERS[0])
+        previous = logger.level
+        logger.setLevel(logging.DEBUG)
+        with _quiet_readiness_pdf_loggers(verbose=True):
+            self.assertEqual(logger.level, logging.DEBUG)
+        logger.setLevel(previous)
+
+
 class TestReadinessReportCommand(unittest.TestCase):
     """`aidrin readiness-report` JSON (+ optional mocked PDF) for a dataset."""
 

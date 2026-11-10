@@ -226,6 +226,8 @@ path is given; missing FAIR never blocks the PDF.
 This command is **local-only** (``aidrin remote readiness-report`` is rejected)
 because PDF rendering uses the web templates and WeasyPrint. PDF export needs
 WeasyPrint's native libraries; see :ref:`web_installation` if rendering fails.
+By default, noisy Flask/WeasyPrint/fontTools logs during ``--pdf-out`` are
+suppressed; pass ``-v``/``--verbose`` to keep them.
 
 .. code-block:: bash
 

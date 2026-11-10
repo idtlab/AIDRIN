@@ -1,10 +1,11 @@
 import argparse
 import contextlib
 import json
+import logging
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterator, List, Optional
 import os
 
 from aidrin.file_handling.file_parser import clear_frame_cache
@@ -28,6 +29,36 @@ def _parse_list(value: Optional[str]) -> Optional[List[str]]:
         return None
     items = [item.strip() for item in value.split(",") if item.strip()]
     return items or None
+
+
+# Loggers that flood stderr during readiness PDF export (Flask/OTEL/WeasyPrint/fonts).
+_READINESS_PDF_QUIET_LOGGERS = (
+    "aidrin.telemetry.otel",
+    "web.telemetry",
+    "web",
+    "weasyprint",
+    "weasyprint.progress",
+    "fontTools",
+    "fontTools.subset",
+)
+
+
+@contextlib.contextmanager
+def _quiet_readiness_pdf_loggers(*, verbose: bool) -> Iterator[None]:
+    """Raise noisy PDF-related loggers to ERROR unless ``-v`` was passed."""
+    if verbose:
+        yield
+        return
+    previous: list[tuple[logging.Logger, int]] = []
+    for name in _READINESS_PDF_QUIET_LOGGERS:
+        logger = logging.getLogger(name)
+        previous.append((logger, logger.level))
+        logger.setLevel(logging.ERROR)
+    try:
+        yield
+    finally:
+        for logger, level in previous:
+            logger.setLevel(level)
 
 
 def _parse_path_targets(value: Optional[str], target_match: str) -> Optional[List[str]]:
@@ -1140,7 +1171,12 @@ def main() -> None:
         action="store_true",
         help="Include chart payloads in the JSON output (PDF full mode builds charts itself)",
     )
-    rr_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
+    rr_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Show progress output (also keeps WeasyPrint/Flask PDF library logs)",
+    )
 
     # Agentic evaluation commands
     agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
@@ -1428,14 +1464,15 @@ def main() -> None:
                     for slug, key in SECTION_RESPONSE_KEYS.items()
                     if key in result
                 }
-                pdf_bytes = _local_api.run_readiness_report_pdf(
-                    args.file_path,
-                    file_type=args.file_type,
-                    mode=pdf_mode,
-                    fair_data=result.get("fair_compliance"),
-                    sections=sections,
-                    verbose=args.verbose,
-                )
+                with _quiet_readiness_pdf_loggers(verbose=args.verbose):
+                    pdf_bytes = _local_api.run_readiness_report_pdf(
+                        args.file_path,
+                        file_type=args.file_type,
+                        mode=pdf_mode,
+                        fair_data=result.get("fair_compliance"),
+                        sections=sections,
+                        verbose=args.verbose,
+                    )
                 pdf_path = Path(args.pdf_out).resolve()
                 pdf_path.parent.mkdir(parents=True, exist_ok=True)
                 pdf_path.write_bytes(pdf_bytes)
