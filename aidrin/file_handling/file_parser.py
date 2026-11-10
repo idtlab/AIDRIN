@@ -274,7 +274,7 @@ def _unpack_file_info_extras(file_info):
     return selected_keys, embedded_loader
 
 
-def read_file(file_info, columns=None, loader=None):
+def read_file(file_info, columns=None, loader=None, *, write_cache=True):
     """
 
     Parses a given file into pandas Dataframe.
@@ -297,6 +297,9 @@ def read_file(file_info, columns=None, loader=None):
     loader: str, optional
         Custom loader spec ``path.py:function``. When set (or present in the
         headless/Flask loader context), skips built-in readers.
+    write_cache: bool, optional
+        Allow a new frame cache beside the source. Existing cache reads are
+        available even when this is disabled.
     Returns
     ----------
     pd.Dataframe, None, or str
@@ -424,7 +427,7 @@ def read_file(file_info, columns=None, loader=None):
         # Best-effort cache for future calls. Failure is non-fatal: we still
         # return the freshly parsed frame below, so a read-only directory or an
         # unserialisable frame never turns a successful parse into an error.
-        if cacheable:
+        if cacheable and write_cache:
             _write_frame_cache(cache_path, df)
 
         if columns is not None:

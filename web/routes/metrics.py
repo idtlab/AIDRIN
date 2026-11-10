@@ -81,6 +81,7 @@ from aidrin.structured_data_metrics.representation_rate import (
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
 from web.routes.utils import (
+    dataset_cache_identity,
     build_file_info,
     confine_to_upload_folder,
     ensure_json_serializable,
@@ -2482,8 +2483,8 @@ def _readiness_section_cache_key(file_name, section, *, viz=False):
     """User/file-scoped cache key (same colon pattern as ``/cached-result``)."""
     user_id = get_current_user_id()
     if viz:
-        return f"user:{user_id}:file:{file_name}:readiness_report:{section}:visualizations"
-    return f"user:{user_id}:file:{file_name}:readiness_report:{section}"
+        return f"user:{user_id}:{dataset_cache_identity(file_name)}:readiness_report:{section}:visualizations"
+    return f"user:{user_id}:{dataset_cache_identity(file_name)}:readiness_report:{section}"
 
 
 def _get_cached_readiness_payload(file_name, section, *, viz=False):
@@ -2557,7 +2558,7 @@ def get_cached_readiness_report(file_name):
 def _readiness_fair_cache_key(file_name):
     """Cache key for optional readiness-report FAIR compliance."""
     user_id = get_current_user_id()
-    return f"user:{user_id}:file:{file_name}:readiness_report:fair"
+    return f"user:{user_id}:{dataset_cache_identity(file_name)}:readiness_report:fair"
 
 
 def _fair_metadata_fingerprint(json_bytes, metadata_type):

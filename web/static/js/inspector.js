@@ -414,8 +414,8 @@ function loadFileReferenceOptions() {
 
   const request = window.AIDRIN_GLOBUS_MODE
     ? loadGlobusTargetDiscovery()
-    : fetch("/custom-outlier-targets", { method: "POST" }).then((response) =>
-        response.json(),
+    : fetchWorkspaceDataset("/custom-outlier-targets", { method: "POST" }).then(
+        (response) => response.json(),
       );
 
   return request
@@ -925,7 +925,7 @@ function _restoreCachedResult(panelId) {
     }
   }
 
-  fetch("/cached-result/" + metricName)
+  fetchWorkspaceDataset("/cached-result/" + metricName)
     .then((r) => r.json())
     .then((resp) => {
       if (resp.cached && resp.data && activePanel === panelId) {
@@ -1581,7 +1581,7 @@ async function workspaceSubmit(targetUrl) {
 
   // POST to the metric endpoint.
   // Return the promise so withSubmitGuard re-enables the button when it settles.
-  return fetch(targetUrl + "?return_type=json", {
+  return fetchWorkspaceDataset(targetUrl + "?return_type=json", {
     method: "POST",
     body: processedFormData,
   })
@@ -2348,7 +2348,7 @@ function fetchGlobusSummary() {
 
   _beginServerProcessing();
 
-  fetch("/globus/submit", {
+  fetchWorkspaceDataset("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2515,14 +2515,14 @@ function pollGlobusSummary(taskId) {
 
   const poll = () => {
     attempts++;
-    fetch(`/globus/check-task/${taskId}`)
+    fetchWorkspaceDataset(`/globus/check-task/${taskId}`)
       .then((r) => r.json())
       .then((response) => {
         if (response.status === "completed" && response.result) {
           renderGlobusSummary(response.result);
           _endServerProcessing();
           // Cache the result so page reloads don't re-fetch
-          fetch("/globus/cache-summary", {
+          fetchWorkspaceDataset("/globus/cache-summary", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(response.result),
@@ -2629,7 +2629,7 @@ function _submitGlobusDataset(endpointId, filePath, fileName, fileType) {
   if (typeof showToast === "function")
     showToast("Connecting to remote endpoint...", "info");
 
-  fetch("/globus/submit", {
+  fetchWorkspaceDataset("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2795,7 +2795,7 @@ function submitGlobusMetric(metricName, params, displayName) {
   const resultsSection = document.getElementById("results-section");
   if (resultsSection) resultsSection.style.display = "block";
 
-  fetch("/globus/submit", {
+  fetchWorkspaceDataset("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2916,7 +2916,7 @@ function loadCustomOutlierTargets() {
   if (window.AIDRIN_GLOBUS_MODE) {
     return loadGlobusCustomOutlierTargets(message);
   }
-  return fetch("/custom-outlier-targets", { method: "POST" })
+  return fetchWorkspaceDataset("/custom-outlier-targets", { method: "POST" })
     .then((response) =>
       response.json().then((data) => ({ ok: response.ok, data })),
     )
@@ -2967,7 +2967,7 @@ function loadGlobusTargetDiscovery() {
   if (cached) globusDiscoveryCache.delete(key);
 
   const entry = { expiresAt: Infinity, promise: null };
-  entry.promise = fetch("/globus/submit", {
+  entry.promise = fetchWorkspaceDataset("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -3038,7 +3038,7 @@ function pollGlobusCustomOutlierTargets(taskId) {
   return new Promise((resolve, reject) => {
     const poll = () => {
       attempts += 1;
-      fetch(`/globus/check-task/${taskId}`)
+      fetchWorkspaceDataset(`/globus/check-task/${taskId}`)
         .then((r) => r.json())
         .then((data) => {
           if (data.status === "completed") {
@@ -4106,7 +4106,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
     const checkUrl = checkUrlBase.includes("globus")
       ? `${checkUrlBase}${taskId}`
       : `${checkUrlBase}${taskId}/${encodeURIComponent(metricName)}`;
-    fetch(checkUrl)
+    fetchWorkspaceDataset(checkUrl)
       .then((r) => r.json())
       .then((response) => {
         const card = document.getElementById(placeholderId);
@@ -5009,7 +5009,10 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
       '<p class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">Processing…</p>';
   }
 
-  return fetch("/fair-assessment", { method: "POST", body: formData })
+  return fetchWorkspaceDataset("/fair-assessment", {
+    method: "POST",
+    body: formData,
+  })
     .then((response) => response.json())
     .then((data) => {
       if (superseded()) return;
@@ -5117,7 +5120,7 @@ function _restoreReadinessFairFromCache(fairPayload) {
 
 /** Restore optional FAIR compliance from server cache (separate lightweight fetch). */
 function _tryRestoreCachedReadinessFair() {
-  return fetch("/cached-result/readiness_report_fair")
+  return fetchWorkspaceDataset("/cached-result/readiness_report_fair")
     .then((r) => r.json())
     .then((resp) => {
       if (
@@ -5271,7 +5274,7 @@ function submitCustomMetric() {
   );
 
   // Return the promise so withSubmitGuard re-enables the button when it settles.
-  return fetch("/custom-metrics?return_type=json", {
+  return fetchWorkspaceDataset("/custom-metrics?return_type=json", {
     method: "POST",
     body: formData,
   })
@@ -5796,7 +5799,7 @@ function selectHdf5Datasets(paths) {
       <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading selected dataset(s)...</p>`;
   }
 
-  fetch("/filter-file", {
+  fetchWorkspaceDataset("/filter-file", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ keys: paths }),
@@ -5854,7 +5857,7 @@ function returnToHdf5DatasetPicker() {
   }
   clearWorkspaceFeatureDropdowns();
 
-  fetch("/clear-dataset-selection", { method: "POST" })
+  fetchWorkspaceDataset("/clear-dataset-selection", { method: "POST" })
     .then((r) => r.json())
     .then((data) => {
       if (data.needs_dataset_selection && data.datasets?.length && container) {
@@ -5893,7 +5896,7 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
   const summaryId = summaryContainerId || "workspace-summary";
   const histogramsId = histogramsContainerId || "workspace-histograms";
 
-  return fetch("/summary-statistics")
+  return fetchWorkspaceDataset("/summary-statistics")
     .then((r) => r.json())
     .then((data) => {
       const container = document.getElementById(summaryId);
@@ -6246,7 +6249,7 @@ function _loadReadinessSectionVisualizations(section, root) {
   if (histHost && !histHost.childElementCount)
     histHost.innerHTML = _readinessVizSpinnerHtml();
 
-  return fetch(`/readiness-report/${section}/visualizations`)
+  return fetchWorkspaceDataset(`/readiness-report/${section}/visualizations`)
     .then((r) => r.json())
     .then((resp) => {
       if (!resp.success) {
@@ -6360,7 +6363,7 @@ function _fetchReadinessSection(section, container, renderFn) {
     _updateReadinessExportButton();
     return Promise.resolve();
   }
-  return fetch(`/readiness-report/${section}`)
+  return fetchWorkspaceDataset(`/readiness-report/${section}`)
     .then((r) => r.json())
     .then((resp) => {
       if (!resp.success) {
@@ -6397,7 +6400,7 @@ function _fetchReadinessSection(section, container, renderFn) {
  * @returns {Promise<boolean>} true when all sections were restored from cache
  */
 function _restoreCachedReadinessReport() {
-  return fetch("/cached-result/readiness_report")
+  return fetchWorkspaceDataset("/cached-result/readiness_report")
     .then((r) => r.json())
     .then((resp) => {
       if (
@@ -6564,7 +6567,7 @@ function exportReadinessReportPdf(mode = "scorecard") {
     ? "/readiness-report/pdf?mode=full"
     : "/readiness-report/pdf";
 
-  return fetch(url)
+  return fetchWorkspaceDataset(url)
     .then(async (response) => {
       if (!response.ok) {
         let message = `PDF export failed (${response.status})`;
@@ -8168,7 +8171,7 @@ function initWorkspace() {
   Promise.resolve(loadDataOverview()).finally(initTaskDone);
 
   // Populate feature dropdowns via /feature-set (same as metric.js does)
-  fetch("/feature-set", { method: "POST" })
+  fetchWorkspaceDataset("/feature-set", { method: "POST" })
     .then((r) => r.json())
     .then((data) => {
       if (data.success && typeof populateWorkspaceDropdowns === "function") {
@@ -8573,7 +8576,7 @@ function requestLLMExplanation(
         // Cache the explanation server-side for restore on panel revisit
         const cacheMetric = _panelCacheMap[activePanel];
         if (cacheMetric) {
-          fetch("/llm/cache-explanation", {
+          fetchWorkspaceDataset("/llm/cache-explanation", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -8811,7 +8814,7 @@ function updateIntentSubmitState() {
 
 function skipIntent() {
   closeIntentModal();
-  fetch("/intent/dismiss", {
+  fetchWorkspaceDataset("/intent/dismiss", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
@@ -8876,7 +8879,7 @@ function submitIntent(source) {
   }
   if (busyOverlay) busyOverlay.classList.remove("hidden");
 
-  return fetch("/intent/recommend", {
+  return fetchWorkspaceDataset("/intent/recommend", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ intents: intents, notes: notes }),
@@ -9137,7 +9140,7 @@ function renderIntentRecommendations(data) {
  * renderWorkspaceResults(), which expects metric-result shape.
  */
 function _restoreIntentFromCache() {
-  return fetch("/cached-result/intent")
+  return fetchWorkspaceDataset("/cached-result/intent")
     .then((r) => (r.ok ? r.json() : null))
     .then((resp) => {
       if (resp && resp.data && resp.data.recommendations) {
@@ -9426,7 +9429,7 @@ function loadIntentProfile(inputEl) {
       return;
     }
 
-    fetch("/intent/profile", {
+    fetchWorkspaceDataset("/intent/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(profile),

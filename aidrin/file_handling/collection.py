@@ -51,15 +51,16 @@ class CollectionMember:
         file_type = _normalize_file_type(self.file_type, self.path)
         try:
             with using_builtin_readers():
-                frame = read_file((self.path, self.display_name, file_type))
+                frame = read_file((self.path, self.display_name, file_type, []), write_cache=False)
         except Exception as exc:
             logger.exception("Collection member read failed: %s", self.id)
             raise ValueError(f"{self.display_name}: unable to read a table; verify its format and dataset layout") from exc
         if not isinstance(frame, pd.DataFrame) or frame.empty or not frame.columns.is_unique:
             raise ValueError(f"{self.display_name}: expected a non-empty table with unique columns")
-        if any(not isinstance(column, str) for column in frame.columns):
-            raise ValueError(f"{self.display_name}: collection columns must have string names")
-        if set(frame.columns).intersection(SOURCE_COLUMNS):
+        result_labels = {str(column) for column in frame.columns}
+        if len(result_labels) != len(frame.columns):
+            raise ValueError(f"{self.display_name}: column names must be distinct when written as JSON")
+        if result_labels.intersection(SOURCE_COLUMNS):
             raise ValueError(f"{self.display_name}: input uses a reserved collection source column")
         return frame.reset_index(drop=True)
 

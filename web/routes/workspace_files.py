@@ -3,8 +3,9 @@
 import json
 import logging
 import os
+import sqlite3
 import tempfile
-import threading
+from contextlib import closing, contextmanager
 import uuid
 
 from flask import current_app, session
@@ -16,9 +17,21 @@ from web.routes.utils import clear_all_user_cache, confine_to_upload_folder
 
 
 logger = logging.getLogger(__name__)
-_inventory_lock = threading.RLock()
 _LOCAL_DATASET_KEYS = ("uploaded_file_path", "uploaded_file_name", "uploaded_file_type", "custom_loader_spec", "selected_keys")
 _REMOTE_DATASET_KEYS = ("globus_file_path", "globus_file_name", "globus_file_type")
+
+
+@contextmanager
+def _inventory_transaction():
+    """Serialize manifest mutations across workers sharing the upload folder."""
+    lock_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], ".workspace-lock")
+    os.makedirs(lock_dir, exist_ok=True)
+    try:
+        with closing(sqlite3.connect(os.path.join(lock_dir, "inventory.sqlite3"), timeout=10)) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            yield
+    except sqlite3.Error as exc:
+        raise OSError("Unable to update the file workspace.") from exc
 
 
 def _manifest_path():
@@ -33,10 +46,17 @@ def init_workspace():
 
 def workspace_files():
     manifest = _manifest_path()
-    if not manifest or not os.path.isfile(manifest):
+    if not manifest:
         return []
-    with open(manifest, encoding="utf-8") as handle:
-        entries = json.load(handle)
+    try:
+        with open(manifest, encoding="utf-8") as handle:
+            entries = json.load(handle)
+    except FileNotFoundError:
+        return []
+    try:
+        os.utime(manifest, None)
+    except OSError:
+        logger.debug("Unable to refresh the workspace expiration", exc_info=True)
     for entry in entries:
         if entry["source"] == "local":
             path = confine_to_upload_folder(entry["path"])
@@ -93,6 +113,10 @@ def _require_capacity(count):
         raise ValueError(f"Workspace file limit: {limit}.")
 
 
+def _files_with_available_uploads():
+    return [entry for entry in workspace_files() if entry["source"] != "local" or os.path.isfile(entry["path"])]
+
+
 def add_workspace_uploads(uploads, selected_type):
     """Store a batch atomically without reading its tables."""
     selected_type = None if selected_type in ("auto", "") else selected_type
@@ -108,8 +132,8 @@ def add_workspace_uploads(uploads, selected_type):
     try:
         for upload, file_type in zip(uploads, types):
             added.append(save_workspace_upload(upload, file_type))
-        with _inventory_lock:
-            entries = workspace_files()
+        with _inventory_transaction():
+            entries = _files_with_available_uploads()
             _require_capacity(len(entries) + len(added))
             _save_inventory(entries + added)
     except Exception:
@@ -121,8 +145,8 @@ def add_workspace_uploads(uploads, selected_type):
 
 def add_globus_files(endpoint_id, files):
     """Store remote references and summaries without opening paths on the server."""
-    with _inventory_lock:
-        entries = workspace_files()
+    with _inventory_transaction():
+        entries = _files_with_available_uploads()
         known = {(entry.get("endpoint_id"), entry["path"]): entry for entry in entries if entry["source"] == "globus"}
         added = []
         for file in files:
@@ -176,7 +200,7 @@ def _discard(entry):
 
 
 def remove_workspace_file(file_id):
-    with _inventory_lock:
+    with _inventory_transaction():
         entries = workspace_files()
         entry = next((file for file in entries if file["id"] == file_id), None)
         if entry is None:
@@ -196,7 +220,7 @@ def remove_workspace_file(file_id):
 
 
 def clear_workspace_uploads(source=None):
-    with _inventory_lock:
+    with _inventory_transaction():
         try:
             entries = workspace_files()
         except (OSError, ValueError):

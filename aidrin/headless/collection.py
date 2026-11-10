@@ -1,5 +1,6 @@
 """Shared collection execution for CLI, Python, MCP and web adapters."""
 
+import math
 import threading
 
 from aidrin.file_handling.collection import (
@@ -40,16 +41,29 @@ def _requests(metrics, mode):
         # nested parameters replace the selected input or write image files.
         if set(parameters).intersection({
             "file_path", "file_type", "file_name", "loader", "data_loader", "selected_keys",
-            "save_images", "image_dir", "session_id", "strip_visualizations",
+            "save_images", "image_dir", "session_id", "strip_visualizations", "_include_visualization",
         }):
             raise ValueError("Metric parameters cannot override collection inputs or output policy")
         columns = request.get("source_columns", [])
         if not isinstance(columns, list) or any(column not in SOURCE_COLUMNS for column in columns) or len(set(columns)) != len(columns):
             raise ValueError(f"source_columns must be a distinct list chosen from {SOURCE_COLUMNS}")
+        if set(columns).difference(available[name].get("collection_source_columns", ())):
+            raise ValueError(f"Metric does not support collection source columns: {name}")
         requests.append((name, parameters, columns))
     if len({request[0] for request in requests}) != len(requests):
         raise ValueError("Metric names must be unique within a collection assessment")
     return requests
+
+
+def _json_scores(value):
+    """Keep feature names and encode undefined scores as JSON null."""
+    if isinstance(value, dict):
+        return {str(key): _json_scores(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_scores(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
 
 
 def _assess(table, requests):
@@ -63,12 +77,17 @@ def _assess(table, requests):
             with _metric_lock, using_collection_table(table, source_columns) as file_info:
                 result = run_metric(
                     name, file_info[0], file_type=file_info[2], file_name=file_info[1],
-                    save_images=False, strip_visualizations=True, **parameters,
+                    save_images=False, _include_visualization=False, **parameters,
                 )
             if isinstance(result, dict) and (result.get("Error") or result.get("error")):
                 errors[name] = str(result.get("Error") or result.get("error"))
             else:
-                metrics[name] = result
+                if isinstance(result, dict):
+                    # Charts are top-level fields. Score dictionaries use arbitrary
+                    # dataset column names, including words such as "plot".
+                    result = {key: value for key, value in result.items()
+                              if not (isinstance(key, str) and isinstance(value, str) and key.lower().endswith(" visualization"))}
+                metrics[name] = _json_scores(result)
         except Exception as exc:
             errors[name] = str(exc)
     status = "partial" if metrics and errors else "error" if errors else "ok"

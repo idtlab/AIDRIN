@@ -26,6 +26,7 @@ from aidrin.file_handling.file_parser import (
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from web.routes.utils import (
+    dataset_cache_identity,
     clear_all_user_cache,
     confine_to_upload_folder,
     describe_loader_error,
@@ -46,6 +47,7 @@ from web.routes.workspace_files import (
     clear_workspace_uploads,
     init_workspace,
     remove_workspace_file,
+    reset_workspace_selection,
     save_workspace_upload,
     workspace_files,
 )
@@ -54,6 +56,20 @@ from web.routes.workspace_files import (
 core_bp = Blueprint("core", __name__)
 
 file_upload_time_log = logging.getLogger("file_upload")
+
+
+@core_bp.before_app_request
+def check_inspector_file():
+    """Reject requests from a tab displaying an outdated workspace selection."""
+    file_id = request.headers.get("X-AIDRIN-Workspace-File")
+    if file_id is None:
+        return None
+    if file_id == session.get("active_workspace_file_id"):
+        entry = next((item for item in workspace_files() if item["id"] == file_id), None)
+        if entry and available_workspace_file(entry):
+            return None
+    message = "The active file changed or expired. Reload the Inspector and try again."
+    return jsonify({"message": message}), 409, {"X-AIDRIN-Workspace-Stale": "1"}
 
 
 @core_bp.route("/")
@@ -201,6 +217,11 @@ def inspector():
     except (OSError, ValueError):
         file_upload_time_log.warning("Workspace inventory could not be loaded", exc_info=True)
         files = []
+    active_id = session.get("active_workspace_file_id")
+    if active_id and not any(entry["id"] == active_id for entry in files):
+        reset_workspace_selection()
+        session["upload_error"] = "The file workspace expired. Upload or import your files again."
+        uploaded_file_path = uploaded_file_name = file_type = ""
     if not uploaded_file_path and not session.get("globus_file_path"):
         available = [entry for entry in files if available_workspace_file(entry)]
         active_id = session.get("active_workspace_file_id")
@@ -452,7 +473,7 @@ def filter_file():
         file_name = session.get("uploaded_file_name")
         if file_name:
             current_app.TEMP_RESULTS_CACHE.pop(
-                f"user:{get_current_user_id()}:file:{file_name}:intent", None
+                f"user:{get_current_user_id()}:{dataset_cache_identity(file_name)}:intent", None
             )
 
         return jsonify({"success": True, "message": "File filtered successfully"})
@@ -582,7 +603,7 @@ def cached_result(metric_name):
             return jsonify(ensure_json_serializable(cached_fair))
         return jsonify({"cached": False})
 
-    cache_key = f"user:{user_id}:file:{file_name}:{metric_name}"
+    cache_key = f"user:{user_id}:{dataset_cache_identity(file_name)}:{metric_name}"
     entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
     if entry and entry.get("data"):
         resp = {"cached": True, "data": entry["data"]}

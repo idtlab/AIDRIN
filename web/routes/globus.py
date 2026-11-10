@@ -349,7 +349,9 @@ def import_directory():
 
     try:
         client = get_compute_client(session.get("globus_tokens", {}))
-        negotiation, _ = _submission_negotiation(client, endpoint_id, False)
+        negotiation, report = _fresh_negotiation(client, endpoint_id)
+        if negotiation and report is None and "workspace_directory_v1" not in negotiation["capabilities"]:
+            negotiation, _ = _fresh_negotiation(client, endpoint_id, force=True)
         if not negotiation or "workspace_directory_v1" not in negotiation["capabilities"]:
             return jsonify({"error": "Update AIDRIN on the Compute endpoint to import a directory."}), 409
         init_workspace()
@@ -425,6 +427,8 @@ def submit():
         return jsonify({"error": "Missing required fields: endpoint_id, file_path, file_type, metric_name"}), 400
     if not isinstance(params, dict):
         return jsonify({"error": "params must be a JSON object"}), 400
+    if metric_name == "workspace_directory":
+        return jsonify({"error": "Use the workspace directory import route."}), 400
 
     task_id = None
     try:
@@ -578,6 +582,8 @@ def check_task_status(task_id):
         payload = result.get("result")
         if (isinstance(payload, dict) and payload.get("format") == "aidrin.workspace-directory"
                 and context.get("operation") != "workspace_directory"):
+            if context:
+                _remove_task_tracking(task_id)
             return jsonify({"status": "failed", "error": "Directory import is unavailable."}), 404
         if result.get("status") == "completed" and context.get("operation") == "workspace_directory":
             try:

@@ -198,7 +198,7 @@ def cache_explanation():
         "model": "gpt-4o-mini"
     }
     """
-    from web.routes.utils import get_current_user_id
+    from web.routes.utils import dataset_cache_identity, get_current_user_id
     from flask import current_app
 
     data = request.get_json(silent=True)
@@ -222,7 +222,7 @@ def cache_explanation():
     if not file_name:
         return jsonify({"error": "No file in session"}), 400
 
-    cache_key = f"user:{user_id}:file:{file_name}:{metric_name}"
+    cache_key = f"user:{user_id}:{dataset_cache_identity(file_name)}:{metric_name}"
     entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
     if not entry:
         return jsonify({"error": "No cached entry found"}), 404
