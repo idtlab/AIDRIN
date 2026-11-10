@@ -102,9 +102,10 @@ runs; metric findings alone do not produce a nonzero exit.
 Web and MCP
 -----------
 
-In the Inspector, choose a file type and upload one or more files of that type. Use
-**Upload more files** to add to the workspace and **Active file** to choose
-the file used by Data Overview and single-file checks.
+In the Inspector, choose a file type and upload one or more files of that type.
+Use **Upload more files** in the top bar to add to the workspace. When several
+files are available, choosing an **Active file** in the top bar immediately
+opens its Data Overview and makes it the input for single-file checks.
 
 In **Data Quality**, enable **Check grouped time series** and set **Input
 files** to **Select files**. Choose a subset or use **Select all**. The default

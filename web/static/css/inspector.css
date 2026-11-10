@@ -1,5 +1,11 @@
 /* inspector.css — Custom styles for the inspector layout */
 
+#workspace-active-file {
+  max-width: 16rem;
+  padding: 4px 26px 4px 8px;
+  background-position: right 6px center;
+}
+
 /* Smooth panel transitions */
 .metric-panel {
   animation: fadeInPanel 0.2s ease-out;

@@ -2865,7 +2865,7 @@ function _setSubmitButtonsDisabled(disabled) {
     });
 }
 
-/** Disable or enable Clear session buttons in the top bar and mobile file chip. */
+/** Disable or enable the New session action in the top bar. */
 function _setClearSessionButtonsDisabled(disabled) {
   document.querySelectorAll('button[onclick="clearFile()"]').forEach((btn) => {
     btn.disabled = disabled;
@@ -2884,13 +2884,7 @@ function _setClearSessionButtonsDisabled(disabled) {
         "pointer-events-none",
       );
       btn.removeAttribute("aria-disabled");
-      if (btn.getAttribute("aria-label") === "Clear uploaded file") {
-        btn.title = "Clear file";
-      } else if (btn.getAttribute("aria-label") === "New session") {
-        btn.title = "Clear session and start over";
-      } else {
-        btn.removeAttribute("title");
-      }
+      btn.title = "Clear session and start over";
     }
   });
 }
