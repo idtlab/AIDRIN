@@ -799,6 +799,7 @@ def extract_features():
             "numerical_features": list(numerical_columns),
             "all_features": all_features,
             "datetime_features": datetime_features,
+            "grouped_columns": [name for name in df.columns if isinstance(name, str)],
             "suggested_time_column": suggest_time_column(df, all_features, datetime_features, categorical_columns),
             "class_imbalance_features": class_imbalance_features,
         }

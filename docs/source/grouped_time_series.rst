@@ -67,7 +67,9 @@ the same controls. Existing remote adapters require an AIDRIN worker containing
 this feature; no endpoint installation or real remote execution is part of the
 example.
 
-Set ``time_kind="datetime"`` for datetime values or datetime strings. Cadence,
+Set ``time_kind="datetime"`` for datetime values or strings with a full numeric
+calendar date, such as ``2026-01-01T12:00:00Z``. A clock time alone cannot
+identify a date and is reported as invalid. Cadence,
 tolerance and expected duration then use seconds: for example,
 ``expected_cadence=0.01`` means ten milliseconds. Numeric time
 (``time_kind="numeric"``, the default in Python) uses the input
@@ -76,7 +78,7 @@ Timezone-aware datetimes are compared as instants; timezone-naive and aware
 values cannot be combined within a group. Datetime arithmetic preserves
 nanosecond precision within pandas' nanosecond timestamp range. Numeric
 integer ticks (including decimal integer strings) retain exact integer equality
-and subtraction. Integer time endpoints, intervals, durations and estimated missing counts outside
+and subtraction. Integer series identifiers, time endpoints, intervals, durations and estimated missing counts outside
 the browser-safe range (absolute value greater than 2**53 - 1) are serialized as
 decimal strings. Nonintegral numeric inputs use finite floating-point values;
 keep elapsed origins near zero when checking very fine floating-point cadence.
@@ -84,10 +86,10 @@ keep elapsed origins near zero when checking very fine floating-point cadence.
 Parameters
 ----------
 
-* ``group_columns``: required non-empty list of distinct scalar-key columns,
-  or a comma-separated string. The time column must be separate. With
-  ``aidrin.calculate_grouped_time_series``, pass ``None`` to audit the entire
-  table as one series.
+* ``group_columns``: optional list of distinct scalar-key columns or a
+  comma-separated string. The time column must be separate. Omit the grouping
+  columns to audit a single file as one series. When calling
+  ``calculate_grouped_time_series`` directly, pass ``None`` for this argument.
 * ``timestamp_column``: required time column in the parsed table.
 * ``expected_cadence``: required finite positive interval.
 * ``time_kind``: ``numeric``, ``datetime``, or ``auto`` in Python. Auto-detection
@@ -134,7 +136,7 @@ including non-adjacent duplicates. Intervals contain both endpoint times and
 source row positions. Missing or invalid times break adjacency: no interval is
 invented across an unknown time. A gap has an estimated missing-sample count
 only when its endpoints match an integer multiple of the cadence within the
-declared tolerance; otherwise this field is null. A detail cap may omit later
+declared tolerance, with roundoff scaled to one interval; otherwise this field is null. A detail cap may omit later
 kinds from the preview; always consult full finding counts and truncation flags.
 An empty table reports zero groups and is not proof of readiness.
 

@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import time
+from contextlib import ExitStack
 
 import pandas as pd
 from celery.result import AsyncResult
@@ -20,7 +21,7 @@ from flask import (
     url_for,
 )
 from aidrin.file_handling.custom_loader import using_builtin_readers
-from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.file_parser import read_file, using_loaded_table
 from aidrin.file_handling.file_reference_policy import (
     allowed_roots,
     discovery_configuration,
@@ -82,10 +83,11 @@ from aidrin.structured_data_metrics.representation_rate import (
     create_representation_rate_vis,
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
-from web.routes.grouped_interval import detect_grouped_timing
+from web.routes.grouped_interval import detect_grouped_timing, preview_grouped_columns
 from web.routes.utils import (
     dataset_cache_identity,
     build_file_info,
+    load_dataframe,
     confine_to_upload_folder,
     ensure_json_serializable,
     format_dict_values,
@@ -178,7 +180,7 @@ def _grouped_sequence_parameters(form):
 
 def _grouped_collection_request(form):
     parameters = _grouped_sequence_parameters(form)
-    metric = {"name": "grouped_time_series", "parameters": parameters}
+    metric = {"name": "grouped_time_series", "parameters": parameters, "source_columns": []}
     mode = form.get("collection_mode", "independent")
     if mode == "independent" or parameters["group_columns"] is None or form.get("grouped_file_boundaries") != "no":
         source_id = "__aidrin_source_id"
@@ -211,6 +213,17 @@ def data_quality():
 
     if request.method == "POST":
         action = request.form.get("action")
+        if action == "preview_grouped_columns":
+            try:
+                members = workspace_collection_members(request.form)
+                with using_builtin_readers():
+                    result = preview_grouped_columns([(member.path, member.name, member.file_type) for member in members])
+                return jsonify(result)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            except (OSError, TypeError):
+                metric_time_log.warning("Unable to preview selected columns", exc_info=True)
+                return jsonify({"error": "A quick preview of the selected files is unavailable."}), 400
         if action in {"detect_grouped_timing", "suggest_grouped_interval"}:
             try:
                 form = request.form
@@ -243,7 +256,7 @@ def data_quality():
         metric_time_log.info("Data Quality request started: %s", selected)
 
         tracer = get_tracer()
-        with tracer.start_as_current_span("metric.data_quality") as span:
+        with tracer.start_as_current_span("metric.data_quality") as span, ExitStack() as active_table:
             span.set_attribute("metric.pillar", "data_quality")
             span.set_attribute("metric.selected", ",".join(selected))
             span.set_attribute("file.name", file_name or "")
@@ -280,6 +293,11 @@ def data_quality():
                         final_dict["Grouped Time Series"] = (
                             _collection_result_for(assessment, {grouped_name}) if ordinary_names else assessment
                         )
+
+                if "grouped time series" in selected and len(selected) > 1:
+                    frame, _ = load_dataframe(file_info)
+                    if frame is not None:
+                        active_table.enter_context(using_loaded_table(frame, file_info))
 
                 if "completeness" in selected:
                     t0 = time.time()

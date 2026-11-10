@@ -131,6 +131,7 @@ METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
     "grouped_time_series": {
         "collection_modes": ("independent", "stacked"),
         "collection_source_columns": ("__aidrin_source_id", "__aidrin_source_row"),
+        "collection_boundary_column": "__aidrin_source_id",
         "category": "data-quality",
         "description": "Per-group timestamp ordering, duplicates, cadence gaps, counts and duration in input order.",
         "runner": run_grouped_time_series,
@@ -817,7 +818,7 @@ def _run_registry_metric(
     if metric_key == "grouped_time_series":
         result = metric["runner"](
             file_path, file_type, file_name,
-            _normalize_list(kwargs.get("group_columns")) or [], kwargs.get("timestamp_column"),
+            kwargs.get("group_columns"), kwargs.get("timestamp_column"),
             kwargs.get("expected_cadence"), kwargs.get("time_kind", "numeric"), kwargs.get("tolerance", 0.0),
             kwargs.get("max_findings", 100), kwargs.get("expected_count"), kwargs.get("expected_duration"),
         )

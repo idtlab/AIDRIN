@@ -987,6 +987,7 @@ function _restoreFormState(panelId, state) {
     if (
       !value ||
       key === "collection_file_order" ||
+      key === "collection_scope_chosen" ||
       key === "grouped_file_boundaries"
     )
       continue;
@@ -995,6 +996,18 @@ function _restoreFormState(panelId, state) {
       key === "variable_unit_metadata"
     )
       continue;
+
+    if (key === "group columns for grouped time series") {
+      const container = document.getElementById(
+        "groupedTimeSeriesColumnsCheckbox",
+      );
+      const values = Array.isArray(value) ? value : [value];
+      const inputs = Array.from(container.querySelectorAll("input"));
+      if (
+        values.some((value) => !inputs.some((input) => input.value === value))
+      )
+        container.pendingColumns = values;
+    }
 
     // Checkboxes with name matching the key
     const checkboxes = panel.querySelectorAll(
@@ -1045,10 +1058,8 @@ function _restoreFormState(panelId, state) {
   }
   if (panelId === "data-quality") {
     restoreCollectionSelection(state);
-    if (state.collection_scope) {
-      const scope = document.getElementById("collection-scope");
-      if (scope) scope.dataset.chosen = "true";
-    }
+    const scope = document.getElementById("collection-scope");
+    if (scope && state.collection_scope_chosen) scope.dataset.chosen = "true";
     const boundaries = panel
       .querySelector("form")
       ?.elements.namedItem("grouped_file_boundaries");
@@ -1084,8 +1095,8 @@ function syncGroupedTimeSeriesOptions() {
       '[data-collection-metric]:checked:not([name="grouped time series"])',
     );
     scope.value = grouped.checked && !ordinary ? "all" : "active";
-    syncCollectionSelection();
   }
+  syncCollectionSelection();
   const boundaries = document.getElementById("grouped-file-boundaries");
   if (boundaries) {
     const stacked =
@@ -1094,7 +1105,7 @@ function syncGroupedTimeSeriesOptions() {
     boundaries.hidden = !grouped.checked || !byColumns || !stacked;
     boundaries.disabled = boundaries.hidden;
   }
-  scheduleGroupedTimingDetection();
+  refreshGroupedColumnChoices();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1115,6 +1126,151 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 });
+
+let activeGroupedColumns = { columns: [] };
+let groupedColumnsKey;
+let groupedColumnsController;
+let groupedColumnsPending = false;
+
+function applyGroupedColumnChoices(columns, suggestion, statusMessage) {
+  const time = document.getElementById("groupedTimeSeriesTimeDropdown");
+  const groupId = "groupedTimeSeriesColumnsCheckbox";
+  const container = document.getElementById(groupId);
+  if (!time || !container) return;
+  const previous =
+    time.dataset.pendingValue ||
+    (time.dataset.detected !== time.value ? time.value : "");
+  const selectedGroups =
+    container.pendingColumns ||
+    Array.from(
+      container.querySelectorAll("input:checked"),
+      (input) => input.value,
+    );
+  if (columns.length) {
+    delete time.dataset.pendingValue;
+    delete container.pendingColumns;
+  } else {
+    if (previous) time.dataset.pendingValue = previous;
+    if (selectedGroups.length) container.pendingColumns = selectedGroups;
+  }
+  fillDropdown(time.id, columns);
+  const keepTime = columns.includes(previous);
+  if (keepTime) time.value = previous;
+  else if (columns.includes(suggestion)) time.value = suggestion;
+  setGroupedTimeColumnSource(time, !keepTime && Boolean(time.value));
+  if (statusMessage) {
+    const status = document.getElementById("grouped-time-column-status");
+    status.textContent = [status.textContent, statusMessage]
+      .filter(Boolean)
+      .join(" ");
+  }
+  fillCheckboxContainer(
+    groupId,
+    columns,
+    "group columns for grouped time series",
+  );
+  for (const input of container.querySelectorAll("input")) {
+    input.checked = selectedGroups.includes(input.value);
+  }
+  if (columns.length) updateCheckboxCount(groupId);
+  scheduleGroupedTimingDetection();
+}
+
+async function refreshGroupedColumnChoices() {
+  const form = document.getElementById("form-data-quality");
+  if (!form) return;
+  const inputs = new FormData(form);
+  const scope = inputs.get("collection_scope");
+  const time = document.getElementById("groupedTimeSeriesTimeDropdown");
+  const groupContainer = document.getElementById(
+    "groupedTimeSeriesColumnsCheckbox",
+  );
+  const selected = inputs.getAll("collection_file_id");
+  const collection =
+    inputs.get("grouped time series") === "yes" &&
+    (scope === "all" || scope === "selected") &&
+    !window.AIDRIN_GLOBUS_MODE;
+  if (!collection) {
+    groupedColumnsController?.abort();
+    groupedColumnsKey = null;
+    groupedColumnsPending = false;
+    time.disabled = false;
+    groupContainer.inert = false;
+    applyGroupedColumnChoices(
+      activeGroupedColumns.columns,
+      activeGroupedColumns.suggested_time_column,
+    );
+    return;
+  }
+
+  const request = new URLSearchParams({
+    action: "preview_grouped_columns",
+    collection_scope: scope,
+  });
+  for (const name of ["collection_file_id", "collection_file_order"]) {
+    for (const value of inputs.getAll(name)) request.append(name, value);
+  }
+  const key = request.toString();
+  if (key === groupedColumnsKey) {
+    scheduleGroupedTimingDetection();
+    return;
+  }
+  groupedColumnsKey = key;
+  groupedColumnsController?.abort();
+  if (scope === "selected" && !selected.length) {
+    groupedColumnsPending = false;
+    time.disabled = false;
+    groupContainer.inert = false;
+    applyGroupedColumnChoices([], null, "Choose files to see their columns.");
+    return;
+  }
+  const controller = new AbortController();
+  groupedColumnsController = controller;
+  groupedColumnsPending = true;
+  scheduleGroupedTimingDetection();
+  time.disabled = true;
+  groupContainer.inert = true;
+  document.getElementById("grouped-time-column-status").textContent =
+    "Checking selected files…";
+  const timeout = setTimeout(() => controller.abort(), 650);
+  let preview;
+  try {
+    const response = await fetchWorkspaceDataset("/data-quality", {
+      method: "POST",
+      body: request,
+      signal: controller.signal,
+    });
+    if (response.ok) preview = await response.json();
+  } catch (error) {
+    debugLog("Grouped column preview:", error);
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (key !== groupedColumnsKey || groupedColumnsController !== controller)
+    return;
+  groupedColumnsPending = false;
+  time.disabled = false;
+  groupContainer.inert = false;
+  if (!preview?.columns) {
+    applyGroupedColumnChoices(
+      activeGroupedColumns.columns,
+      null,
+      "Selected files could not be previewed. Check the column names.",
+    );
+  } else {
+    const message =
+      !preview.columns.length && preview.complete
+        ? "The selected files have no columns in common."
+        : preview.complete
+          ? ""
+          : "Some files could not be previewed. Check the column names.";
+    applyGroupedColumnChoices(
+      preview.columns,
+      preview.suggested_time_column,
+      message,
+    );
+  }
+}
 
 function groupedTimingRequest(form) {
   const inputs = new FormData(form);
@@ -1213,7 +1369,7 @@ function scheduleGroupedTimingDetection() {
   if (!form) return;
   const request = groupedTimingRequest(form);
   const enabled = form.elements.namedItem("grouped time series").checked;
-  const key = enabled ? request.toString() : null;
+  const key = enabled && !groupedColumnsPending ? request.toString() : null;
   if (key === groupedTimingKey) {
     updateGroupedRunSummary();
     return;
@@ -1237,7 +1393,7 @@ function scheduleGroupedTimingDetection() {
   format.options[0].textContent = "Auto-detect";
   delete format.dataset.detectedKind;
   updateGroupedRunSummary();
-  if (!enabled) return;
+  if (!enabled || groupedColumnsPending) return;
 
   const autoFormat = format.value === "auto";
   const intervalNeeded = () =>
@@ -1291,7 +1447,7 @@ async function detectGroupedTiming(
 ) {
   const controller = new AbortController();
   groupedTimingController = controller;
-  const timeout = setTimeout(() => controller.abort(), 1350);
+  const timeout = setTimeout(() => controller.abort(), 1150);
   try {
     const response = await fetchWorkspaceDataset("/data-quality", {
       method: "POST",
@@ -1397,6 +1553,7 @@ function validateGroupedTimeSeriesForm(form) {
     );
   }
   const time = document.getElementById("groupedTimeSeriesTimeDropdown");
+  if (groupedColumnsPending) return false;
   if (formData.get("grouped_series") === "columns") {
     const columns = formData.getAll("group columns for grouped time series");
     const container = document.getElementById("grouped-series-columns");
@@ -2042,6 +2199,12 @@ async function workspaceSubmit(targetUrl) {
       } else {
         formState[key] = value;
       }
+    }
+    if (
+      activePanel === "data-quality" &&
+      document.getElementById("collection-scope")?.dataset.chosen === "true"
+    ) {
+      formState.collection_scope_chosen = true;
     }
     sessionStorage.setItem(
       "aidrin_form_" + activePanel,
@@ -9031,6 +9194,83 @@ function initWorkspace() {
   );
 }
 
+// Helper: populate a <select> dropdown
+function fillDropdown(id, features) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Keep the first disabled option
+  while (el.options.length > 1) el.remove(1);
+  features.forEach((f) => {
+    const opt = document.createElement("option");
+    opt.value = f;
+    opt.textContent = f;
+    el.appendChild(opt);
+  });
+}
+
+/**
+ * Populate a checkbox container with a compact chip/pill layout.
+ * Includes a select-all toggle. Scrollable when many features.
+ */
+function fillCheckboxContainer(id, features, nameAttr) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = "";
+
+  if (features.length === 0) {
+    el.innerHTML =
+      '<p class="text-xs text-gray-400 dark:text-gray-500 py-2">No features available</p>';
+    return;
+  }
+
+  // Wrapper with max-height scroll
+  const wrapper = document.createElement("div");
+  wrapper.className =
+    "border border-gray-200 dark:border-gray-700 rounded-lg p-2 overflow-y-auto overflow-x-hidden";
+  wrapper.style.maxHeight = "300px";
+
+  // Select all / none controls
+  const controls = document.createElement("div");
+  controls.className =
+    "flex items-center gap-3 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700";
+  controls.innerHTML = `
+    <button type="button" class="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer" onclick="toggleAllCheckboxes(this, '${id}', true)">Select all</button>
+    <button type="button" class="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer" onclick="toggleAllCheckboxes(this, '${id}', false)">Clear</button>
+    <span class="text-xs text-gray-400 dark:text-gray-500 ml-auto" id="${id}-count">${features.length} features</span>
+  `;
+  wrapper.appendChild(controls);
+
+  // Chip grid
+  const grid = document.createElement("div");
+  grid.className = "flex flex-wrap gap-1.5";
+
+  features.forEach((f) => {
+    const label = document.createElement("label");
+    label.className =
+      "inline-block px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors border border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500 has-[:checked]:text-blue-700 dark:has-[:checked]:bg-blue-900/30 dark:has-[:checked]:border-blue-400 dark:has-[:checked]:text-blue-300";
+    label.style.cssText =
+      "max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+    label.title = f;
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.name = nameAttr;
+    cb.value = f;
+    cb.style.cssText =
+      "width: 14px; height: 14px; min-width: 14px; vertical-align: middle; margin-right: 6px;";
+    cb.className =
+      "shrink-0 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600";
+    cb.addEventListener("change", () => updateCheckboxCount(id));
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(f));
+    grid.appendChild(label);
+  });
+
+  wrapper.appendChild(grid);
+  el.appendChild(wrapper);
+}
+
 /**
  * Populate all feature dropdowns and checkbox containers in the workspace.
  * Called after /feature-set returns data.
@@ -9040,83 +9280,6 @@ function populateWorkspaceDropdowns(data) {
   const catFeatures = data.categorical_features || [];
   const numFeatures = data.numerical_features || [];
   const classImbalanceFeatures = data.class_imbalance_features || [];
-
-  // Helper: populate a <select> dropdown
-  function fillDropdown(id, features) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    // Keep the first disabled option
-    while (el.options.length > 1) el.remove(1);
-    features.forEach((f) => {
-      const opt = document.createElement("option");
-      opt.value = f;
-      opt.textContent = f;
-      el.appendChild(opt);
-    });
-  }
-
-  /**
-   * Populate a checkbox container with a compact chip/pill layout.
-   * Includes a select-all toggle. Scrollable when many features.
-   */
-  function fillCheckboxContainer(id, features, nameAttr) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = "";
-
-    if (features.length === 0) {
-      el.innerHTML =
-        '<p class="text-xs text-gray-400 dark:text-gray-500 py-2">No features available</p>';
-      return;
-    }
-
-    // Wrapper with max-height scroll
-    const wrapper = document.createElement("div");
-    wrapper.className =
-      "border border-gray-200 dark:border-gray-700 rounded-lg p-2 overflow-y-auto overflow-x-hidden";
-    wrapper.style.maxHeight = "300px";
-
-    // Select all / none controls
-    const controls = document.createElement("div");
-    controls.className =
-      "flex items-center gap-3 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700";
-    controls.innerHTML = `
-      <button type="button" class="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer" onclick="toggleAllCheckboxes(this, '${id}', true)">Select all</button>
-      <button type="button" class="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer" onclick="toggleAllCheckboxes(this, '${id}', false)">Clear</button>
-      <span class="text-xs text-gray-400 dark:text-gray-500 ml-auto" id="${id}-count">${features.length} features</span>
-    `;
-    wrapper.appendChild(controls);
-
-    // Chip grid
-    const grid = document.createElement("div");
-    grid.className = "flex flex-wrap gap-1.5";
-
-    features.forEach((f) => {
-      const label = document.createElement("label");
-      label.className =
-        "inline-block px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors border border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500 has-[:checked]:text-blue-700 dark:has-[:checked]:bg-blue-900/30 dark:has-[:checked]:border-blue-400 dark:has-[:checked]:text-blue-300";
-      label.style.cssText =
-        "max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
-      label.title = f;
-
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.name = nameAttr;
-      cb.value = f;
-      cb.style.cssText =
-        "width: 14px; height: 14px; min-width: 14px; vertical-align: middle; margin-right: 6px;";
-      cb.className =
-        "shrink-0 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600";
-      cb.addEventListener("change", () => updateCheckboxCount(id));
-
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(f));
-      grid.appendChild(label);
-    });
-
-    wrapper.appendChild(grid);
-    el.appendChild(wrapper);
-  }
 
   // Data Quality (completeness-extras) column pickers
   fillCheckboxContainer(
@@ -9130,28 +9293,11 @@ function populateWorkspaceDropdowns(data) {
     "features for duplicate detection",
   );
   const timeFeatures = [...allFeatures, ...(data.datetime_features || [])];
-  const timeColumn = document.getElementById("groupedTimeSeriesTimeDropdown");
-  if (timeColumn) {
-    const previous =
-      timeColumn.dataset.detected === timeColumn.value
-        ? timeColumn.dataset.pendingValue
-        : timeColumn.value || timeColumn.dataset.pendingValue;
-    fillDropdown(timeColumn.id, timeFeatures);
-    delete timeColumn.dataset.pendingValue;
-    const usePrevious = timeFeatures.includes(previous);
-    const choice = usePrevious ? previous : data.suggested_time_column;
-    if (timeFeatures.includes(choice)) timeColumn.value = choice;
-    setGroupedTimeColumnSource(
-      timeColumn,
-      !usePrevious && Boolean(timeColumn.value),
-    );
-  }
-  fillCheckboxContainer(
-    "groupedTimeSeriesColumnsCheckbox",
-    allFeatures,
-    "group columns for grouped time series",
-  );
-  scheduleGroupedTimingDetection();
+  activeGroupedColumns = {
+    columns: (data.grouped_columns || timeFeatures).map(String),
+    suggested_time_column: data.suggested_time_column,
+  };
+  refreshGroupedColumnChoices();
   fillDropdown("temporalCompletenessColumnDropdown", allFeatures);
   fillDropdown("nullCountTrendBatchDropdown", allFeatures);
   fillCheckboxContainer(

@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import io
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -42,7 +41,10 @@ def test_independent_and_stacked_modes_and_explicit_sequence_boundaries(tmp_path
     independent = run_collection_metrics(files, [sequence_request(False)])
     assert len(independent["datasets"]) == 2
     assert all(not dataset["metrics"]["grouped_time_series"]["summary"]["finding_counts"] for dataset in independent["datasets"])
-    separated = run_collection_metrics(files, [sequence_request()], "stacked")
+    default_request = sequence_request(False)
+    del default_request["source_columns"]
+    separated = run_collection_metrics(files, [default_request], "stacked")
+    assert separated == run_collection_metrics(files, [sequence_request()], "stacked")
     result = separated["datasets"][0]["metrics"]["grouped_time_series"]
     assert result["summary"]["group_count"] == 2
     assert result["summary"]["finding_counts"] == {}

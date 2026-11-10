@@ -18,13 +18,15 @@ _loaded_table = ContextVar("aidrin_loaded_table", default=None)
 
 
 @contextmanager
-def using_loaded_table(frame):
+def using_loaded_table(frame, file_info=None):
     """Bind one in-memory table to a unique input for synchronous metric calls.
 
     Each read gets a private copy, as when reading an ordinary cached file.
-    This context never substitutes a table for an existing filesystem path.
+    Omit file_info for synthetic inputs, or supply the exact reader input
+    whose table was already parsed in the same request.
     """
-    file_info = (f"collection:{uuid.uuid4().hex}", "Collection", ".collection")
+    if file_info is None:
+        file_info = (f"collection:{uuid.uuid4().hex}", "Collection", ".collection")
     token = _loaded_table.set((file_info, frame))
     try:
         yield file_info
@@ -132,7 +134,7 @@ def _frame_cache_path(file_path):
     # name: a changed source simply misses the cache (and the old artifact is
     # later reaped) rather than risking a stale read from a coarse mtime compare.
     st = os.stat(file_path)
-    return f"{file_path}.{st.st_size}-{st.st_mtime_ns}{_FRAME_CACHE_SUFFIX}"
+    return f"{file_path}.{st.st_size}-{st.st_mtime_ns}-v2{_FRAME_CACHE_SUFFIX}"
 
 
 def clear_frame_cache(file_path):
@@ -313,7 +315,7 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True, sample_
     supply ``selected_keys``.
     """
     loaded = _loaded_table.get()
-    if loaded is not None and tuple(file_info[:3]) == loaded[0]:
+    if loaded is not None and tuple(file_info) == tuple(loaded[0]):
         frame = loaded[1]
         if sample_rows is not None:
             frame = frame.iloc[:sample_rows]

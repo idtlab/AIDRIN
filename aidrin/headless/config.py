@@ -121,13 +121,14 @@ class HeadlessConfig:
             "cat_columns",
             "num_columns",
             "required_columns",
-            "group_columns",
             "duplicate_columns",
             "target_columns",
             "selected_keys",
         ):
             if key in normalized:
                 normalized[key] = _normalize_list(normalized[key])
+        if isinstance(normalized.get("group_columns"), str):
+            normalized["group_columns"] = _normalize_list(normalized["group_columns"])
         if "path_targets" in normalized:
             normalized["path_targets"] = _normalize_path_targets(
                 normalized["path_targets"], normalized.get("target_match", "exact")

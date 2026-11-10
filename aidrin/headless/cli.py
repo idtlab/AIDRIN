@@ -511,11 +511,11 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
                                 help='Interval frequency (default "D"): '
                                      'ms, s, min, h, D, W, ME, QE, YE')
         elif arg == "group-columns":
-            parser.add_argument("--group-columns", required=True, help="Comma-separated sequence group keys")
+            parser.add_argument("--group-columns", help="Comma-separated sequence keys (default: one sequence)")
         elif arg == "expected-cadence":
             parser.add_argument("--expected-cadence", type=float, required=True,
                                 help="Positive interval: input units for numeric time, seconds for datetime")
-            parser.add_argument("--time-kind", choices=["numeric", "datetime"], default="numeric")
+            parser.add_argument("--time-kind", choices=["numeric", "datetime", "auto"], default="numeric")
             parser.add_argument("--tolerance", type=float, default=0.0,
                                 help="Absolute interval tolerance, less than half the cadence")
             parser.add_argument("--max-findings", type=int, default=100, help="Detail cap per group; 0 is unlimited")

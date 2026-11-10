@@ -253,3 +253,40 @@ def test_grouped_and_existing_collection_checks_share_one_input_read(client, mon
     assert grouped["selection"] == ordinary["selection"]
     assert all(set(dataset["metrics"]) == {"grouped_time_series"} for dataset in grouped["datasets"])
     assert all(set(dataset["metrics"]) == {"duplicity"} for dataset in ordinary["datasets"])
+
+
+
+def test_grouped_active_and_ordinary_checks_share_one_source_read(client, monkeypatch):
+    from aidrin.file_handling.readers.csv_reader import csvReader
+
+    upload(client, ("active.csv", CLEAN))
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "0")
+    read = csvReader.read
+    paths = []
+
+    def count_read(reader):
+        paths.append(reader.file_path)
+        return read(reader)
+
+    monkeypatch.setattr(csvReader, "read", count_read)
+    result = run_grouped(client, [], collection_scope="active", grouped_series="file",
+                         completeness="yes", duplicity="yes", outliers="yes")
+    assert len(paths) == 1
+    assert set(result) == {"Grouped Time Series", "Completeness", "Duplicity", "Outliers"}
+    assert result["Grouped Time Series"]["summary"]["finding_counts"] == {}
+
+
+def test_grouped_column_choices_follow_selected_files_and_preserve_labels(client):
+    content = b" station,t,value\n9007199254740992,0.0,1\n9007199254740992,0.01,1\n9007199254740993,0.0,1\n9007199254740993,0.02,1\n"
+    upload(client, ("unrelated.csv", b"age,temperature\n10,12\n"), ("a.csv", content), ("b.csv", content))
+    ids = [entry["id"] for entry in inventory(client)[1:]]
+    assert "t" not in client.post("/feature-set").get_json()["grouped_columns"]
+    preview = client.post("/data-quality", data={
+        "action": "preview_grouped_columns", "collection_scope": "selected", "collection_file_id": ids,
+    }).get_json()
+    assert preview == {"columns": [" station", "t", "value"], "suggested_time_column": "t", "complete": True}
+    result = run_grouped(client, ids, grouped_series="columns", **{"group columns for grouped time series": [" station"]})
+    for dataset in result["Grouped Time Series"]["datasets"]:
+        groups = dataset["metrics"]["grouped_time_series"]["groups"]
+        assert [group["group"][" station"] for group in groups] == ["9007199254740992", "9007199254740993"]
+        assert [group["finding_counts"] for group in groups] == [{}, {"cadence_gap": 1}]
