@@ -274,7 +274,7 @@ def _unpack_file_info_extras(file_info):
     return selected_keys, embedded_loader
 
 
-def read_file(file_info, columns=None, loader=None, *, write_cache=True):
+def read_file(file_info, columns=None, loader=None, *, write_cache=True, sample_rows=None):
     """
 
     Parses a given file into pandas Dataframe.
@@ -300,6 +300,9 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True):
     write_cache: bool, optional
         Allow a new frame cache beside the source. Existing cache reads are
         available even when this is disabled.
+    sample_rows: int, optional
+        Return up to this many rows from a bounded reader preview, or None
+        when a preview is unavailable. Never falls back to a full read.
     Returns
     ----------
     pd.Dataframe, None, or str
@@ -312,6 +315,8 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True):
     loaded = _loaded_table.get()
     if loaded is not None and tuple(file_info[:3]) == loaded[0]:
         frame = loaded[1]
+        if sample_rows is not None:
+            frame = frame.iloc[:sample_rows]
         return (frame if columns is None else frame[columns]).copy(deep=True)
 
     from aidrin.file_handling.custom_loader import (
@@ -338,6 +343,15 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True):
     # Prefer an explicit/context loader; fall back to a spec embedded in
     # file_info (Celery has no Flask session, so the web layer packs it there).
     loader_spec = get_active_loader_spec(loader) or embedded_loader
+    if sample_rows is not None:
+        reader_cls = READER_MAP.get(file_type)
+        if not file_path or loader_spec or not hasattr(reader_cls, "read_sample"):
+            return None
+        try:
+            return reader_cls(file_path, file_upload_time_log).read_sample(sample_rows, columns)
+        except (OSError, ValueError):
+            return None
+
     if loader_spec:
         try:
             kwargs = {}

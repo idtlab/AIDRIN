@@ -105,6 +105,11 @@ server, which dispatches on the same registry as the command line.
      - ``calculate_feature_coverage_ratio``
      - |yes|
      - |yes|
+   * - Grouped Time Series
+     - ``grouped-time-series``
+     - ``calculate_grouped_time_series``
+     - |yes|
+     - |yes|
    * - Temporal Completeness
      - ``temporal-completeness``
      - ``calculate_temporal_completeness``

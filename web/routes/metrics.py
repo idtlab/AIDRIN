@@ -19,6 +19,7 @@ from flask import (
     session,
     url_for,
 )
+from aidrin.file_handling.custom_loader import using_builtin_readers
 from aidrin.file_handling.file_parser import read_file
 from aidrin.file_handling.file_reference_policy import (
     allowed_roots,
@@ -46,6 +47,7 @@ from aidrin.structured_data_metrics.row_level_completeness import row_level_comp
 from aidrin.structured_data_metrics.duplicity_by_features import duplicity_by_features
 from aidrin.structured_data_metrics.constant_feature_count import constant_feature_count
 from aidrin.structured_data_metrics.temporal_completeness import temporal_completeness
+from aidrin.structured_data_metrics.grouped_time_series import grouped_time_series
 from aidrin.structured_data_metrics.correlation_score import calc_correlations
 from aidrin.structured_data_metrics.duplicity import duplicity
 from aidrin.structured_data_metrics.kurtosis import kurtosis
@@ -80,6 +82,7 @@ from aidrin.structured_data_metrics.representation_rate import (
     create_representation_rate_vis,
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
+from web.routes.grouped_interval import detect_grouped_timing
 from web.routes.utils import (
     dataset_cache_identity,
     build_file_info,
@@ -156,6 +159,48 @@ def _run_data_quality_collection(form, requests):
     return run_collection_metrics(members, requests, mode=form.get("collection_mode", "independent"))
 
 
+def _grouped_sequence_parameters(form):
+    series = form.get("grouped_series")
+    columns = form.getlist("group columns for grouped time series")
+    if series == "columns" and not columns:
+        raise ValueError("Choose at least one column that identifies each series, or select One series per file.")
+    return {
+        "group_columns": None if series == "file" else columns,
+        "timestamp_column": form.get("timestamp column for grouped time series"),
+        "expected_cadence": form.get("cadence for grouped time series"),
+        "time_kind": form.get("time kind for grouped time series", "numeric"),
+        "tolerance": form.get("tolerance for grouped time series") or 0.0,
+        "max_findings": form.get("max findings for grouped time series") or 100,
+        "expected_count": form.get("expected count for grouped time series") or None,
+        "expected_duration": form.get("expected duration for grouped time series") or None,
+    }
+
+
+def _grouped_collection_request(form):
+    parameters = _grouped_sequence_parameters(form)
+    metric = {"name": "grouped_time_series", "parameters": parameters}
+    mode = form.get("collection_mode", "independent")
+    if mode == "independent" or parameters["group_columns"] is None or form.get("grouped_file_boundaries") != "no":
+        source_id = "__aidrin_source_id"
+        parameters["group_columns"] = [source_id, *(parameters["group_columns"] or [])]
+        metric["source_columns"] = [source_id]
+    return metric
+
+
+def _collection_result_for(assessment, metric_names):
+    """Show separate results cards from one collection execution."""
+    if "Error" in assessment:
+        return assessment
+    datasets = []
+    for dataset in assessment["datasets"]:
+        metrics = {name: value for name, value in dataset["metrics"].items() if name in metric_names}
+        errors = {name: value for name, value in dataset["errors"].items() if name in metric_names or name == "input"}
+        status = "partial" if metrics and errors else "error" if errors else "ok"
+        datasets.append({**dataset, "status": status, "metrics": metrics, "errors": errors})
+    summary = {**assessment["summary"], "datasets_with_errors": sum(dataset["status"] != "ok" for dataset in datasets)}
+    return {**assessment, "datasets": datasets, "summary": summary}
+
+
 @metrics_bp.route("/data-quality", methods=["GET", "POST"])
 def data_quality():
     final_dict = {}
@@ -165,11 +210,32 @@ def data_quality():
     file_info = build_file_info(file_path, file_name, file_type)
 
     if request.method == "POST":
+        action = request.form.get("action")
+        if action in {"detect_grouped_timing", "suggest_grouped_interval"}:
+            try:
+                form = request.form
+                parameters = _grouped_sequence_parameters(form)
+                options = {name: parameters[name] for name in ("group_columns", "timestamp_column", "time_kind")}
+                options["estimate_interval"] = action == "suggest_grouped_interval" or form.get("estimate_interval") != "no"
+                if form.get("collection_scope") in {"all", "selected"}:
+                    members = workspace_collection_members(form)
+                    with using_builtin_readers():
+                        result = detect_grouped_timing([(member.path, member.name, member.file_type) for member in members], **options)
+                else:
+                    result = detect_grouped_timing([file_info], **options)
+                if action == "suggest_grouped_interval" and result.get("interval_error"):
+                    raise ValueError(result["interval_error"])
+                return jsonify(result)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            except (OSError, TypeError):
+                metric_time_log.warning("Unable to sample timestamps", exc_info=True)
+                return jsonify({"error": "A quick sample is unavailable. Enter the expected interval manually."}), 400
         start_time = time.time()
         selected = [
             m for m in (
                 "completeness", "row level completeness", "feature coverage ratio",
-                "temporal completeness", "null count trend",
+                "temporal completeness", "null count trend", "grouped time series",
                 "outliers", "duplicity", "duplicate detection by features",
                 "custom_outliers",
             ) if request.form.get(m) == "yes"
@@ -184,17 +250,36 @@ def data_quality():
             span.set_attribute("file.type", file_type or "")
 
             try:
-                collection_requests = _data_quality_collection_requests(selected, request.form)
+                form = request.form
+                collection_requests = _data_quality_collection_requests(selected, form)
+                ordinary_names = {metric["name"] for metric in collection_requests}
+                grouped_name = "grouped_time_series"
+                grouped_request = None
+                if form.get("collection_scope") in {"all", "selected"} and "grouped time series" in selected:
+                    selected.remove("grouped time series")
+                    try:
+                        grouped_request = _grouped_collection_request(form)
+                    except ValueError as exc:
+                        final_dict["Grouped Time Series"] = {"Error": str(exc)}
+                    else:
+                        collection_requests.append(grouped_request)
                 if collection_requests:
                     try:
-                        final_dict["Cross-file Data Quality"] = _run_data_quality_collection(request.form, collection_requests)
+                        assessment = _run_data_quality_collection(form, collection_requests)
                     except ValueError as exc:
-                        final_dict["Cross-file Data Quality"] = {"Error": str(exc)}
+                        assessment = {"Error": str(exc)}
                     except OSError:
                         metric_time_log.warning("Unable to read workspace inventory", exc_info=True)
-                        final_dict["Cross-file Data Quality"] = {"Error": "Unable to read the uploaded files."}
-                    collection_names = {metric["name"] for metric in collection_requests}
-                    selected = [name for name in selected if name not in collection_names]
+                        assessment = {"Error": "Unable to read the uploaded files."}
+                    if ordinary_names:
+                        final_dict["Cross-file Data Quality"] = (
+                            _collection_result_for(assessment, ordinary_names) if grouped_request else assessment
+                        )
+                        selected = [name for name in selected if name not in ordinary_names]
+                    if grouped_request:
+                        final_dict["Grouped Time Series"] = (
+                            _collection_result_for(assessment, {grouped_name}) if ordinary_names else assessment
+                        )
 
                 if "completeness" in selected:
                     t0 = time.time()
@@ -250,6 +335,13 @@ def data_quality():
                         metric_time_log.info(
                             "Feature Coverage Ratio took %.2f seconds", time.time() - t0
                         )
+
+                if "grouped time series" in selected:
+                    try:
+                        parameters = _grouped_sequence_parameters(form)
+                        final_dict["Grouped Time Series"] = grouped_time_series(file_info, **parameters)
+                    except ValueError as exc:
+                        final_dict["Grouped Time Series"] = {"Error": str(exc)}
 
                 if "temporal completeness" in selected:
                     timestamp_column = request.form.get("timestamp column for temporal completeness")

@@ -40,6 +40,20 @@ The Results panel shows per-file or combined scores and errors. The JSON
 download includes file identities and the mapping from stacked rows to input
 files. Stacking uses memory for the selected tables and the combined table.
 
+Grouped Time Series
+-------------------
+
+When Grouped Time Series is the only selected collection check, the form
+initially selects all uploaded local files. If you select it alongside another
+collection check, the same file selection and analysis mode apply to both.
+A single collection run reads the files and shows the sequence findings and
+other scores in separate results cards.
+
+In stacked mode, **One series per file** retains the source boundaries.
+When you identify series by columns, choose **Continue matching series across
+files** to compare adjacent samples across sources in the selected order.
+See :ref:`grouped_time_series` for timing detection and result interpretation.
+
 CLI, Python and MCP
 -------------------
 
