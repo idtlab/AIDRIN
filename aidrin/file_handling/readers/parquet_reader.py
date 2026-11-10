@@ -1,11 +1,18 @@
 import pandas as pd
 
-from aidrin.file_handling.readers.base_reader import BaseFileReader
+from aidrin.file_handling.readers.base_reader import BaseFileReader, possible_rounded_integer_columns
 
 
 class parquetReader(BaseFileReader):
     def read(self):
-        return pd.read_parquet(self.file_path)
+        frame = pd.read_parquet(self.file_path)
+        candidates = possible_rounded_integer_columns(frame)
+        if candidates:
+            exact = pd.read_parquet(self.file_path, columns=candidates, dtype_backend="numpy_nullable")
+            for name in candidates:
+                if pd.api.types.is_integer_dtype(exact[name].dtype):
+                    frame[name] = exact[name]
+        return frame
 
     def read_sample(self, rows, columns):
         from pyarrow.parquet import ParquetFile
@@ -21,4 +28,7 @@ class parquetReader(BaseFileReader):
                 return None
             batches = parquet.iter_batches(batch_size=rows, row_groups=[0], columns=columns, use_threads=False)
             batch = next(batches, None)
-            return batch.to_pandas() if batch is not None else None
+            if batch is None:
+                return None
+            # Nullable Arrow integer fields can otherwise become lossy floats.
+            return batch.to_pandas(types_mapper=pd.ArrowDtype)

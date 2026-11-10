@@ -19,6 +19,7 @@ DESCRIPTION = (
     "establish synchronization. No sorting, interpolation, or repair is applied."
 )
 _ISO_DATE_PREFIX = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[Tt ]|$)")
+_EXPLICIT_DATE_PREFIX = re.compile(r"(?:[0-9]{4}[/.-][0-9]{1,2}[/.-][0-9]{1,2}|[0-9]{1,2}[/.-][0-9]{1,2}[/.-][0-9]{4})(?:[Tt ]|$)")
 _TIME_UNIT_SUFFIX = re.compile(r"_(?:s|secs?|seconds?|ms|milliseconds?|us|microseconds?|ns|nanoseconds?|minutes?|hours?|utc)$")
 _TIME_COLUMN_NAMES = {
     "t", "time", "timestamp", "time_stamp", "datetime", "date", "elapsed", "elapsed_time", "sample_time", "event_time",
@@ -70,7 +71,7 @@ def _scalar(value):
     if isinstance(value, float) and not math.isfinite(value):
         return str(value)
     if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
+        return _json_number(value)
     return str(value)
 
 
@@ -101,8 +102,12 @@ def _time(value, time_kind, *, iso_dates_only=False):
     # Numeric epoch values must not silently become nanoseconds since epoch.
     if not isinstance(value, (str, datetime, date, pd.Timestamp, np.datetime64)):
         return None, None, None, "invalid_time"
-    if iso_dates_only and isinstance(value, str) and not _ISO_DATE_PREFIX.match(value.strip()):
-        return None, None, None, "invalid_time"
+    if isinstance(value, str):
+        value = value.strip()
+        # Timestamp accepts a bare clock time by inserting today's date.
+        date_pattern = _ISO_DATE_PREFIX if iso_dates_only else _EXPLICIT_DATE_PREFIX
+        if not date_pattern.match(value):
+            return None, None, None, "invalid_time"
     try:
         parsed = pd.Timestamp(value)
         if pd.isna(parsed):
@@ -177,7 +182,8 @@ def _group_positions(frame, group_columns):
     work = frame[group_columns].reset_index(drop=True)
     assigned = work.notna().all(axis=1)
     unassigned = [int(i) for i in work.index[~assigned]]
-    return unassigned, work[assigned].groupby(group_columns, sort=False, observed=True).groups.values()
+    by = group_columns[0] if len(group_columns) == 1 else group_columns
+    return unassigned, work[assigned].groupby(by, sort=False, observed=True).groups.values()
 
 
 def suggest_sample_interval(frame, group_columns, timestamp_column, time_kind, *, iso_dates_only=False):
@@ -304,6 +310,26 @@ def calculate_grouped_time_series(
     }
 
 
+def _estimate_missing_samples(delta, cadence, tolerance):
+    # Allow floating-point roundoff at the scale of one step. Scaling it by
+    # the whole gap can allow multiple equally plausible missing counts.
+    if isinstance(delta, int) and cadence.is_integer():
+        step = int(cadence)
+        steps, remainder = divmod(delta, step)
+        if remainder * 2 > step:
+            steps += 1
+            remainder = step - remainder
+    else:
+        ratio = delta / cadence
+        if not math.isfinite(ratio) or math.ulp(ratio) >= .5:
+            return None
+        steps = round(ratio)
+        remainder = abs(delta - steps * cadence)
+    if steps >= 2 and remainder <= max(tolerance, cadence * _INTERVAL_ROUNDOFF):
+        return steps - 1
+    return None
+
+
 def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, expected_count, expected_duration, *, iso_dates_only):
     counts = Counter()
     findings = []
@@ -346,31 +372,9 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
                 record("nonfinite_interval", **{k: v for k, v in interval.items() if k != "delta"})
             elif delta < 0:
                 record("out_of_order", **interval)
-            elif delta > 0 and not math.isclose(delta, cadence, rel_tol=1e-9, abs_tol=tolerance):
+            elif delta > 0 and not math.isclose(delta, cadence, rel_tol=_INTERVAL_ROUNDOFF, abs_tol=tolerance):
                 if delta > cadence:
-                    # Only infer a missing-sample count when endpoints lie on
-                    # the declared cadence grid within tolerance.
-                    missing_count = None
-                    if isinstance(delta, int) and cadence.is_integer():
-                        # Avoid float division rounding a large integer tick
-                        # interval before deriving the missing-sample count.
-                        integer_cadence = int(cadence)
-                        steps, remainder = divmod(delta, integer_cadence)
-                        if remainder * 2 > integer_cadence:
-                            steps += 1
-                        grid_interval = steps * integer_cadence
-                        matches = remainder == 0 or (
-                            _finite(grid_interval) and
-                            math.isclose(delta, grid_interval, rel_tol=1e-9, abs_tol=tolerance)
-                        )
-                        if steps >= 2 and matches:
-                            missing_count = steps - 1
-                    else:
-                        ratio = delta / cadence
-                        if math.isfinite(ratio):
-                            steps = round(ratio)
-                            if steps >= 2 and math.isclose(delta, steps * cadence, rel_tol=1e-9, abs_tol=tolerance):
-                                missing_count = steps - 1
+                    missing_count = _estimate_missing_samples(delta, cadence, tolerance)
                     record("cadence_gap", estimated_missing_samples=_json_number(missing_count), **interval)
                 else:
                     record("cadence_short", **interval)
@@ -388,7 +392,7 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
     if expected_count is not None and len(positions) != expected_count:
         record("count_mismatch", expected=expected_count, observed=len(positions))
     if expected_duration is not None and (
-        observed_duration is None or not math.isclose(observed_duration, expected_duration, rel_tol=1e-9, abs_tol=tolerance)
+        observed_duration is None or not math.isclose(observed_duration, expected_duration, rel_tol=_INTERVAL_ROUNDOFF, abs_tol=tolerance)
     ):
         record("duration_mismatch", expected=expected_duration, observed=_json_number(observed_duration))
     return {

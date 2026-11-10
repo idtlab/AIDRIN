@@ -57,6 +57,11 @@ See :ref:`grouped_time_series` for timing detection and result interpretation.
 CLI, Python and MCP
 -------------------
 
+A stacked Grouped Time Series request keeps file boundaries by default. To
+continue matching series across files in selection order, explicitly pass
+``"source_columns": []`` in that metric request and provide its grouping
+columns if the files contain multiple series.
+
 The same execution layer accepts a list of file members, a mode, and metric
 requests. Each member has an ``id``, ``path``, optional display ``name``, and
 optional ``file_type``. Use ``aidrin collection <config.json>`` with a JSON object

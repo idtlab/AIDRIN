@@ -49,6 +49,20 @@ def _requests(metrics, mode):
             raise ValueError(f"source_columns must be a distinct list chosen from {SOURCE_COLUMNS}")
         if set(columns).difference(available[name].get("collection_source_columns", ())):
             raise ValueError(f"Metric does not support collection source columns: {name}")
+        boundary = available[name].get("collection_boundary_column")
+        if mode == "stacked" and boundary and "source_columns" not in request:
+            from aidrin.headless.api import _normalize_list
+
+            groups = parameters.get("group_columns")
+            if isinstance(groups, str):
+                groups = _normalize_list(groups)
+            if groups is not None and not isinstance(groups, (list, tuple)):
+                raise ValueError("group_columns must be a list of column names or a comma-separated string")
+            groups = list(groups or ())
+            if boundary not in groups:
+                groups.insert(0, boundary)
+            parameters = {**parameters, "group_columns": groups}
+            columns = [boundary]
         requests.append((name, parameters, columns))
     if len({request[0] for request in requests}) != len(requests):
         raise ValueError("Metric names must be unique within a collection assessment")
