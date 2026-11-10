@@ -216,9 +216,10 @@ API responses). The JSON output leaves out the chart; see :ref:`web_usage` for t
 
 Builds the **AI Data Readiness Report** for a tabular dataset: the same five
 automated sections as the web report (Dataset Overview, Data Quality, Impact on
-AI, Fairness & Bias, Data Governance), as JSON on stdout. Optionally write JSON
-with ``-o``/``--output``, a PDF with ``--pdf-out``, and an optional FAIR appendix
-with ``--fair-metadata`` (same engine and ``--fair-standard`` values as
+AI, Fairness & Bias, Data Governance). JSON goes to stdout by default, or only
+to a file when ``-o``/``--output`` is set (stdout is then silent). Optionally
+write a PDF with ``--pdf-out``, and an optional FAIR appendix with
+``--fair-metadata`` (same engine and ``--fair-standard`` values as
 :ref:`cli_fair`). FAIR is omitted when no metadata path is given; missing FAIR
 never blocks the PDF.
 
@@ -228,7 +229,7 @@ WeasyPrint's native libraries; see :ref:`web_installation` if rendering fails.
 
 .. code-block:: bash
 
-   # JSON to stdout (and optionally to a file)
+   # JSON to stdout, or only to a file with -o (no stdout echo)
    aidrin readiness-report /path/to/sample_dataset.csv
    aidrin readiness-report /path/to/sample_dataset.csv -o /path/to/reports/readiness.json
 

@@ -1102,7 +1102,12 @@ def main() -> None:
         default=None,
         help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
     )
-    rr_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+    rr_parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Write JSON to this path only (suppresses stdout)",
+    )
     rr_parser.add_argument(
         "--pdf-out",
         dest="pdf_out",
@@ -1408,8 +1413,12 @@ def main() -> None:
                 verbose=args.verbose,
             )
             rounded = _round_floats(result)
-            _write_output_file(rounded, args.output)
-            _dump_result(rounded)
+            if args.output:
+                # -o means file-only: readiness reports are large, so do not
+                # also flood stdout (unlike fair/summarize, which echo and write).
+                _write_output_file(rounded, args.output)
+            else:
+                _dump_result(rounded)
 
             if args.pdf_out:
                 from aidrin.report.registry import SECTION_RESPONSE_KEYS

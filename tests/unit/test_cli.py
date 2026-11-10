@@ -1337,9 +1337,8 @@ class TestReadinessReportCommand(unittest.TestCase):
 
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def test_json_stdout_and_output_file(self):
-        out = os.path.join(self.tmpdir, "report.json")
-        stdout, stderr, code = _run_cli("readiness-report", self.csv, "-o", out)
+    def test_json_stdout_without_output_file(self):
+        stdout, stderr, code = _run_cli("readiness-report", self.csv)
         self.assertEqual(code, 0, msg=stderr)
         payload = json.loads(stdout)
         self.assertTrue(payload["success"])
@@ -1352,8 +1351,16 @@ class TestReadinessReportCommand(unittest.TestCase):
         ):
             self.assertIn(key, payload)
         self.assertNotIn("fair_compliance", payload)
+
+    def test_output_file_skips_stdout(self):
+        out = os.path.join(self.tmpdir, "report.json")
+        stdout, stderr, code = _run_cli("readiness-report", self.csv, "-o", out)
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertEqual(stdout, "")
         with open(out, encoding="utf-8") as f:
-            self.assertEqual(json.load(f)["success"], True)
+            payload = json.load(f)
+        self.assertTrue(payload["success"])
+        self.assertIn("data_quality", payload)
         self.assertIn("Results written to:", stderr)
 
     def test_fair_metadata_attached(self):
@@ -1398,7 +1405,9 @@ class TestReadinessReportCommand(unittest.TestCase):
                 "scorecard",
             )
         self.assertEqual(code, 0, msg=stderr)
-        self.assertTrue(json.loads(stdout)["success"])
+        self.assertEqual(stdout, "")
+        with open(out_json, encoding="utf-8") as f:
+            self.assertTrue(json.load(f)["success"])
         with open(out_pdf, "rb") as f:
             self.assertEqual(f.read(), b"%PDF-1.4 cli-mock")
         self.assertIn("PDF written to:", stderr)
