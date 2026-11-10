@@ -597,17 +597,18 @@ def _readiness_file_info():
 
 def _build_readiness_section(section, file_info, include_visualizations=False):
     """Build one readiness-report section; return error dict on failure."""
-    builder = _READINESS_SECTION_BUILDERS.get(section)
-    if builder is None:
-        return None
-    try:
-        return builder(file_info, include_visualizations=include_visualizations)
-    except Exception as e:
-        metric_time_log.error(
-            "Readiness report — %s error: %s", section, e, exc_info=True
-        )
-        # Exception text stays in the server log, not the response or PDF.
-        return {"error": "This section could not be computed. Details are in the server log."}
+    from aidrin.report.builder import build_readiness_section
+
+    # Exception text stays in the server log, not the response or PDF.
+    return build_readiness_section(
+        section,
+        file_info,
+        include_visualizations=include_visualizations,
+        builders=_READINESS_SECTION_BUILDERS,
+        error_message=(
+            "This section could not be computed. Details are in the server log."
+        ),
+    )
 
 
 @metrics_bp.route("/readiness-report/<section>/visualizations", methods=["GET"])
@@ -679,27 +680,60 @@ def readiness_report_section(section):
 @metrics_bp.route("/readiness-report", methods=["GET"])
 def readiness_report():
     """Return the full readiness report as JSON (all sections in one response)."""
+    from aidrin.report.builder import build_readiness_report
+
     file_info = _readiness_file_info()
     if file_info is None:
         return jsonify({"success": False, "message": "No file uploaded"}), 200
 
     start_time = time.time()
     try:
-        response = {"success": True, "sections_cached": {}}
+        # Prefer cache hits; only compute missing sections via the shared builder.
+        file_name = file_info[1]
+        sections_cached = {}
+        preloaded = {}
+        missing_slugs = []
         for slug in _READINESS_SECTION_BUILDERS:
-            section_data, section_elapsed, from_cache = (
-                _get_or_build_readiness_section(slug, file_info)
+            cached, build_time = _get_cached_readiness_payload(file_name, slug)
+            if cached is not None:
+                sections_cached[slug] = True
+                preloaded[slug] = {**cached, "build_time_seconds": build_time}
+            else:
+                sections_cached[slug] = False
+                missing_slugs.append(slug)
+
+        if missing_slugs:
+            computed = build_readiness_report(
+                file_info,
+                sections=missing_slugs,
+                section_builders=_READINESS_SECTION_BUILDERS,
+                section_error_message=(
+                    "This section could not be computed. Details are in the server log."
+                ),
             )
-            if isinstance(section_data, dict):
-                section_data = {**section_data, "build_time_seconds": section_elapsed}
-            if not from_cache:
-                metric_time_log.info(
-                    "Readiness report section %s built in %.2f seconds",
-                    slug,
-                    section_elapsed,
-                )
-            response["sections_cached"][slug] = from_cache
-            response[_READINESS_SECTION_RESPONSE_KEYS[slug]] = section_data
+            for slug in missing_slugs:
+                key = _READINESS_SECTION_RESPONSE_KEYS[slug]
+                section_data = computed.get(key)
+                if isinstance(section_data, dict):
+                    build_time = section_data.get("build_time_seconds", 0)
+                    metric_time_log.info(
+                        "Readiness report section %s built in %.2f seconds",
+                        slug,
+                        build_time,
+                    )
+                    if not section_data.get("error"):
+                        to_cache = {
+                            k: v for k, v in section_data.items()
+                            if k != "build_time_seconds"
+                        }
+                        _cache_readiness_payload(
+                            file_name, slug, to_cache, build_time
+                        )
+                preloaded[slug] = section_data
+
+        response = {"success": True, "sections_cached": sections_cached}
+        for slug in _READINESS_SECTION_BUILDERS:
+            response[_READINESS_SECTION_RESPONSE_KEYS[slug]] = preloaded[slug]
 
         metric_time_log.info("Readiness report built in %.2f seconds", time.time() - start_time)
         return jsonify(ensure_json_serializable(response))
