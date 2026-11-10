@@ -7,6 +7,7 @@ import os
 import pandas as pd
 
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.readers.structured import dropped_columns
 from aidrin.report.common import classify_feature_type
 
 # Dataset-overview readiness thresholds (per-feature profile)
@@ -262,6 +263,10 @@ def build_dataset_overview_section(
             "categorical_count": type_counts.get("categorical", 0),
             "datetime_count": type_counts.get("datetime", 0),
             "boolean_count": type_counts.get("boolean", 0),
+            # Columns the reader had to exclude to produce a tabular frame
+            # (e.g. array-valued ROOT branches); disclosed so "columns" is not
+            # read as the whole dataset.
+            "excluded_columns": dropped_columns(df),
         },
         "feature_profiles": display_profiles,
         "feature_profiles_meta": profile_meta,
