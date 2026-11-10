@@ -61,7 +61,11 @@ class TestMatplotlibPlotLockContract(unittest.TestCase):
             "summary_histograms / categorical_distribution_charts must enter "
             "MATPLOTLIB_PLOT_LOCK around pyplot figure work.",
         )
-        for fn in ("def summary_histograms", "def categorical_distribution_charts"):
+        for fn in (
+            "def summary_histograms",
+            "def continuous_bars",
+            "def categorical_distribution_charts",
+        ):
             self.assertIn(fn, source)
             # Lock acquisition must appear after each function definition and
             # before the next top-level def (rough structural check).
