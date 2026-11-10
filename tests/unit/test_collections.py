@@ -212,3 +212,13 @@ def test_workspace_directory_size_is_unavailable_for_directory_stores(tmp_path, 
     assert "size" not in rows[0]["summary"]
     assert rows[0]["summary"]["records"] == 1
     assert rows[1]["summary"]["size"] == 4
+
+
+def test_stacked_duplicity_distinguishes_json_objects_from_arrays_of_pairs(tmp_path):
+    mapping, array = (tmp_path / name for name in ("mapping.json", "array.json"))
+    mapping.write_text('[{"payload":{"a":1},"n":42}]', encoding="utf-8")
+    array.write_text('[{"payload":[["a",1]],"n":42}]', encoding="utf-8")
+    files = [CollectionMember(path.name, str(path)) for path in (mapping, array)]
+    for ordered in (files, files[::-1]):
+        result = run_collection_metrics(ordered, [{"name": "duplicity"}], "stacked")["datasets"][0]
+        assert result["metrics"]["duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"] == 0

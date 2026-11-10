@@ -606,6 +606,12 @@ def cached_result(metric_name):
     cache_key = f"user:{user_id}:{dataset_cache_identity(file_name)}:{metric_name}"
     entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
     if entry and entry.get("data"):
+        selection = entry.get("collection_file_ids")
+        if selection is not None:
+            current = {file["id"] for file in workspace_files() if file["source"] == "local" and available_workspace_file(file)}
+            if not selection <= current or (entry.get("collection_scope") == "all" and selection != current):
+                current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                return jsonify({"cached": False})
         resp = {"cached": True, "data": entry["data"]}
         if entry.get("_llm_explanations"):
             resp["llm_explanations"] = entry["_llm_explanations"]

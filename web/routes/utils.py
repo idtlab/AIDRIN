@@ -309,10 +309,14 @@ def store_result(metric, final_dict):
     metric_short = metric.rsplit(".", 1)[-1] if "." in metric else metric
     file_name = session.get("uploaded_file_name") or session.get("globus_file_name") or "unknown"
     user_key = f"user:{user_id}:{dataset_cache_identity(file_name)}:{metric_short}"
-    current_app.TEMP_RESULTS_CACHE[user_key] = {
-        "data": formatted_final_dict,
-        "timestamp": time.time(),
-    }
+    cached = {"data": formatted_final_dict, "timestamp": time.time()}
+    if metric_short == "data_quality":
+        selection = next((value["selection"] for value in formatted_final_dict.values()
+                          if isinstance(value, dict) and value.get("format") == "aidrin.collection-assessment"), None)
+        if selection is not None:
+            cached["collection_file_ids"] = {member["id"] for member in selection}
+            cached["collection_scope"] = request.form.get("collection_scope")
+    current_app.TEMP_RESULTS_CACHE[user_key] = cached
 
     if request.args.get("return_type") == "json":
         return jsonify(formatted_final_dict)

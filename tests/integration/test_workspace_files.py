@@ -211,3 +211,15 @@ def test_globus_directory_capability_is_refreshed_and_reserved(client, app, monk
     assert calls == []
     assert client.post("/globus/import-directory", json={"endpoint_id": "endpoint", "directory": "/remote"}).status_code == 200
     assert calls == ["probe", 50]
+
+
+def test_cached_collection_expires_when_another_worker_removes_a_file(client, app):
+    upload(client, ("a.csv", b"x\n1\n"), ("b.csv", b"x\n2\n"))
+    first, second = workspace(client)
+    header = {"X-AIDRIN-Workspace-File": first["id"]}
+    data_quality(client, duplicity="yes", collection_scope="all", collection_mode="stacked")
+    assert client.get("/cached-result/data_quality", headers=header).json["cached"]
+    old_worker_cache = dict(app.TEMP_RESULTS_CACHE)
+    assert client.post(f"/workspace/files/{second['id']}/remove").status_code == 302
+    app.TEMP_RESULTS_CACHE.update(old_worker_cache)
+    assert client.get("/cached-result/data_quality", headers=header).json == {"cached": False}
