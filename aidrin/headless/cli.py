@@ -602,7 +602,14 @@ REMOTE_MANAGEMENT = {
 
 # Commands that cannot run on an endpoint: they need files or credentials that
 # live on the client machine.
-REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory", "fair"}
+REMOTE_FORBIDDEN = {
+    "add-custom-module",
+    "agentic",
+    "skill",
+    "inventory",
+    "fair",
+    "readiness-report",
+}
 
 
 REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
@@ -1080,6 +1087,56 @@ def main() -> None:
     fair_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print a per-principle table instead of JSON")
     fair_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
+    # AI Data Readiness Report (JSON + optional PDF). Local-only: PDF needs web templates.
+    rr_parser = subparsers.add_parser(
+        "readiness-report",
+        help=(
+            "Build the AI Data Readiness Report for a dataset (JSON to stdout; "
+            "optional PDF via --pdf-out). Local-only."
+        ),
+    )
+    rr_parser.add_argument("file_path", help="Path to the dataset")
+    rr_parser.add_argument(
+        "--file-type",
+        dest="file_type",
+        default=None,
+        help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
+    )
+    rr_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+    rr_parser.add_argument(
+        "--pdf-out",
+        dest="pdf_out",
+        default=None,
+        help="Path to write the PDF report (requires WeasyPrint and native libs)",
+    )
+    rr_parser.add_argument(
+        "--pdf-mode",
+        dest="pdf_mode",
+        default=None,
+        choices=("scorecard", "full"),
+        help="PDF layout when using --pdf-out (default: scorecard). 'full' includes section charts.",
+    )
+    rr_parser.add_argument(
+        "--fair-metadata",
+        dest="fair_metadata",
+        default=None,
+        help="Optional path to FAIR metadata JSON/JSON-LD to attach as an appendix",
+    )
+    rr_parser.add_argument(
+        "--fair-standard",
+        dest="fair_standard",
+        default="auto",
+        choices=("auto", *FAIR_STANDARDS),
+        help="Metadata standard for --fair-metadata (default: detect it)",
+    )
+    rr_parser.add_argument(
+        "--viz",
+        dest="viz",
+        action="store_true",
+        help="Include chart payloads in the JSON output (PDF full mode builds charts itself)",
+    )
+    rr_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
+
     # Agentic evaluation commands
     agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
     agentic_sub = agentic_parser.add_subparsers(dest="agentic_command", required=True)
@@ -1333,6 +1390,47 @@ def main() -> None:
                 _print_fair_summary(result, args.metadata_path)
             else:
                 _dump_result(result)
+            return
+
+        if args.command == "readiness-report":
+            if args.pdf_mode is not None and not args.pdf_out:
+                sys.stderr.write("Error: --pdf-mode requires --pdf-out\n")
+                sys.exit(2)
+            pdf_mode = args.pdf_mode or "scorecard"
+
+            # Build the report once; reuse section payloads when also writing a PDF.
+            result = _local_api.run_readiness_report(
+                args.file_path,
+                file_type=args.file_type,
+                fair_metadata=args.fair_metadata,
+                fair_standard=args.fair_standard,
+                include_visualizations=bool(args.viz),
+                verbose=args.verbose,
+            )
+            rounded = _round_floats(result)
+            _write_output_file(rounded, args.output)
+            _dump_result(rounded)
+
+            if args.pdf_out:
+                from aidrin.report.registry import SECTION_RESPONSE_KEYS
+
+                sections = {
+                    slug: result[key]
+                    for slug, key in SECTION_RESPONSE_KEYS.items()
+                    if key in result
+                }
+                pdf_bytes = _local_api.run_readiness_report_pdf(
+                    args.file_path,
+                    file_type=args.file_type,
+                    mode=pdf_mode,
+                    fair_data=result.get("fair_compliance"),
+                    sections=sections,
+                    verbose=args.verbose,
+                )
+                pdf_path = Path(args.pdf_out).resolve()
+                pdf_path.parent.mkdir(parents=True, exist_ok=True)
+                pdf_path.write_bytes(pdf_bytes)
+                sys.stderr.write(f"PDF written to: {pdf_path}\n")
             return
 
         if args.command == "agentic":
