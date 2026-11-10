@@ -3,7 +3,6 @@ import io
 import json
 import logging
 import math
-import os
 import time
 
 import pandas as pd
@@ -29,8 +28,18 @@ from aidrin.file_handling.file_reference_policy import (
 from aidrin.readiness.common import (
     READINESS_MAX_DETAIL_LIST_ITEMS as _READINESS_MAX_DETAIL_LIST_ITEMS,
     cap_detail_list as _cap_detail_list,
+    classify_feature_type as _classify_feature_type,
     finite_kpi_values as _finite_kpi_values,
     grade_label as _grade_label,
+)
+from aidrin.readiness.data_quality import (
+    build_data_quality_section as _build_data_quality_section_impl,
+)
+from aidrin.readiness.overview import (
+    build_dataset_overview_section as _build_dataset_overview_section_impl,
+    build_feature_profiles as _build_feature_profiles,
+    dataframe_for_overview_detail_charts as _dataframe_for_overview_detail_charts,
+    prepare_feature_profiles_for_display as _prepare_feature_profiles_for_display,
 )
 from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -372,416 +381,35 @@ def data_quality():
 # ---------------------------------------------------------------------------
 # Readiness Report (aggregated, non-interactive)
 # ---------------------------------------------------------------------------
-# Shared helpers (_grade_label, _finite_kpi_values, _cap_detail_list,
-# _READINESS_MAX_DETAIL_LIST_ITEMS) are imported from aidrin.readiness.common.
-
-# Dataset-overview readiness thresholds (per-feature profile)
-_OVERVIEW_MISSING_WARNING = 0.05
-_OVERVIEW_MISSING_POOR = 0.20
-_OVERVIEW_DOMINANT_WARNING = 0.95
-_OVERVIEW_HIGH_CARDINALITY = 50
-_OVERVIEW_ID_UNIQUE_RATIO = 0.9
-_OVERVIEW_CAT_TOP_N = 5
-_OVERVIEW_MAX_FEATURE_PROFILES = 500
-_OVERVIEW_MAX_NUMERICAL_SUMMARY_COLS = 500
-_OVERVIEW_MAX_CATEGORICAL_DIST_COLS = 50
-_PROFILE_STATUS_RANK = {"poor": 0, "warning": 1, "good": 2}
+# Section builders and shared helpers live in aidrin.readiness.*; this module
+# re-exports underscore names and injects web chart renderers where needed.
 
 
-def _build_numerical_summary_for_overview(num_df):
-    """Build describe() summary for overview details, capped on wide datasets."""
-    if num_df.empty:
-        return {}, {"total": 0, "shown": 0, "truncated": False}
-
-    total = len(num_df.columns)
-    cols = num_df.columns
-    truncated = total > _OVERVIEW_MAX_NUMERICAL_SUMMARY_COLS
-    if truncated:
-        cols = cols[:_OVERVIEW_MAX_NUMERICAL_SUMMARY_COLS]
-
-    numerical_summary = num_df[cols].describe().to_dict()
-    for v in numerical_summary.values():
-        for old_key in list(v.keys()):
-            if old_key in ["25%", "50%", "75%"]:
-                new_key = old_key.replace("%", "th percentile")
-                v[new_key] = float(v.pop(old_key))
-        for stat_key, stat_val in list(v.items()):
-            if stat_val is not None and not isinstance(stat_val, str):
-                v[stat_key] = float(stat_val)
-
-    return numerical_summary, {
-        "total": total,
-        "shown": len(cols),
-        "truncated": truncated,
+def _render_overview_charts(chart_df):
+    """Attach overview chart images using Flask-side matplotlib helpers."""
+    return {
+        "categorical_charts": categorical_distribution_charts(chart_df),
+        "histograms": summary_histograms(chart_df, figsize=(7, 4.5)),
+        "histogram_bars": continuous_bars(chart_df, figsize=(7, 4.5)),
     }
-
-
-def _classify_feature_type(series):
-    """Map a pandas Series to a coarse feature type label."""
-    if pd.api.types.is_bool_dtype(series):
-        return "boolean"
-    if pd.api.types.is_datetime64_any_dtype(series):
-        return "datetime"
-    if pd.api.types.is_numeric_dtype(series):
-        return "numerical"
-    return "categorical"
-
-
-def _feature_readiness_status(pct_missing, n_unique, n_rows, feat_type, pct_dominant):
-    """Derive a per-feature readiness status from profile statistics."""
-    if n_unique <= 1:
-        return "poor"
-    if pct_missing is not None and pct_missing > _OVERVIEW_MISSING_POOR:
-        return "poor"
-    if n_rows > 0 and n_unique / n_rows >= _OVERVIEW_ID_UNIQUE_RATIO:
-        return "poor"
-    if pct_missing is not None and pct_missing > _OVERVIEW_MISSING_WARNING:
-        return "warning"
-    if feat_type == "categorical" and n_unique > _OVERVIEW_HIGH_CARDINALITY:
-        return "warning"
-    if pct_dominant is not None and pct_dominant > _OVERVIEW_DOMINANT_WARNING:
-        return "warning"
-    return "good"
-
-
-def _feature_summary(series, feat_type, n_unique):
-    """Build a compact, type-specific summary string for one feature."""
-    non_null = series.dropna()
-    if len(non_null) == 0:
-        return "all missing"
-
-    if feat_type == "numerical":
-        mean = non_null.mean()
-        std = non_null.std()
-        if pd.notna(std) and std > 0:
-            return f"mean {mean:.2g}, std {std:.2g}"
-        return f"min {non_null.min():.2g} – max {non_null.max():.2g}"
-
-    if feat_type == "categorical":
-        vc = non_null.value_counts(normalize=True)
-        top_val = vc.index[0]
-        top_pct = vc.iloc[0] * 100
-        return f"{top_val} ({top_pct:.0f}%), {n_unique} categories"
-
-    if feat_type == "datetime":
-        return f"{non_null.min()} – {non_null.max()}"
-
-    if feat_type == "boolean":
-        true_pct = (non_null.astype(bool)).mean() * 100
-        return f"True {true_pct:.0f}%, False {100 - true_pct:.0f}%"
-
-    return f"{n_unique} unique values"
-
-
-def _build_feature_profiles(df):
-    """Compute a per-column readiness profile for every feature in *df*."""
-    n_rows = len(df)
-    profiles = []
-    type_counts = {"numerical": 0, "categorical": 0, "datetime": 0, "boolean": 0}
-
-    for col in df.columns:
-        series = df[col]
-        feat_type = _classify_feature_type(series)
-        type_counts[feat_type] = type_counts.get(feat_type, 0) + 1
-
-        n_missing = int(series.isnull().sum())
-        pct_missing = round(n_missing / n_rows, 4) if n_rows else 0.0
-        n_unique = int(series.nunique(dropna=True))
-
-        pct_dominant = None
-        non_null = series.dropna()
-        if len(non_null) > 0:
-            pct_dominant = round(
-                float(non_null.value_counts(normalize=True).iloc[0]), 4
-            )
-
-        profiles.append({
-            "feature": str(col),
-            "type": feat_type,
-            "dtype": str(series.dtype),
-            "pct_missing": pct_missing,
-            "n_unique": n_unique,
-            "pct_dominant": pct_dominant,
-            "status": _feature_readiness_status(
-                pct_missing, n_unique, n_rows, feat_type, pct_dominant
-            ),
-            "summary": _feature_summary(series, feat_type, n_unique),
-        })
-
-    return profiles, type_counts
-
-
-def _prepare_feature_profiles_for_display(
-    profiles, max_profiles=_OVERVIEW_MAX_FEATURE_PROFILES
-):
-    """Cap profile rows for the report table, prioritizing poor then warning then good."""
-    status_counts = {"poor": 0, "warning": 0, "good": 0}
-    for profile in profiles:
-        status = profile.get("status", "good")
-        if status in status_counts:
-            status_counts[status] += 1
-
-    total = len(profiles)
-    meta = {
-        "total": total,
-        "shown": total,
-        "max": max_profiles,
-        "truncated": False,
-        "status_counts": status_counts,
-    }
-    if total <= max_profiles:
-        return profiles, meta
-
-    ranked = sorted(
-        enumerate(profiles),
-        key=lambda item: (
-            _PROFILE_STATUS_RANK.get(item[1].get("status"), 99),
-            item[0],
-        ),
-    )
-    meta["shown"] = max_profiles
-    meta["truncated"] = True
-    return [profile for _, profile in ranked[:max_profiles]], meta
-
-
-def _dataframe_for_overview_detail_charts(df, display_profiles):
-    """Subset *df* to capped profile-table features for overview detail charts."""
-    cols = [p["feature"] for p in display_profiles if p["feature"] in df.columns]
-    if not cols:
-        return df.iloc[:, :0]
-    return df[cols]
-
-
-def _build_categorical_distributions(df, top_n=_OVERVIEW_CAT_TOP_N, max_columns=None):
-    """Top-*n* value counts (with percentages) for each categorical column."""
-    distributions = {}
-    cat_cols = [
-        col for col in df.columns if _classify_feature_type(df[col]) == "categorical"
-    ]
-    total_cat = len(cat_cols)
-    truncated = False
-    if max_columns is not None and total_cat > max_columns:
-        cat_cols = cat_cols[:max_columns]
-        truncated = True
-    for col in cat_cols:
-        vc = df[col].value_counts(dropna=True)
-        total = len(df[col].dropna())
-        if total == 0:
-            distributions[str(col)] = []
-            continue
-        entries = []
-        for val, count in vc.head(top_n).items():
-            entries.append({
-                "value": str(val),
-                "count": int(count),
-                "pct": round(float(count) / total, 4),
-            })
-        distributions[str(col)] = entries
-    meta = {
-        "total": total_cat,
-        "shown": len(cat_cols),
-        "truncated": truncated,
-    }
-    return distributions, meta
 
 
 def _build_dataset_overview_section(file_info, include_visualizations=False):
-    """Build the dataset-overview portion of the readiness report.
-
-    Returns file metadata, per-feature readiness profiles, numerical describe()
-    summary, categorical top-value distributions, and numerical histograms.
-    """
-    file_path, file_name, file_type = file_info
-    df = read_file(file_info)
-    if hasattr(df, "columns"):
-        df.columns = [str(c) for c in df.columns]
-
-    n_rows = len(df)
-    profiles, type_counts = _build_feature_profiles(df)
-    display_profiles, profile_meta = _prepare_feature_profiles_for_display(profiles)
-
-    file_size_bytes = None
-    if file_path and os.path.exists(file_path):
-        try:
-            file_size_bytes = os.path.getsize(file_path)
-        except OSError:
-            pass
-
-    memory_bytes = int(df.memory_usage(deep=True).sum())
-
-    numerical_summary, numerical_summary_meta = _build_numerical_summary_for_overview(
-        df.select_dtypes(include="number")
+    """Web wrapper: inject chart renderer so aidrin stays free of web imports."""
+    return _build_dataset_overview_section_impl(
+        file_info,
+        include_visualizations=include_visualizations,
+        render_overview_charts=(
+            _render_overview_charts if include_visualizations else None
+        ),
     )
-    categorical_distributions, categorical_distributions_meta = (
-        _build_categorical_distributions(
-            df, max_columns=_OVERVIEW_MAX_CATEGORICAL_DIST_COLS
-        )
-    )
-
-    overview = {
-        "file_metadata": {
-            "file_name": file_name,
-            "file_type": file_type,
-            "file_size_bytes": file_size_bytes,
-            "memory_bytes": memory_bytes,
-            "rows": n_rows,
-            "columns": len(df.columns),
-            "numerical_count": type_counts.get("numerical", 0),
-            "categorical_count": type_counts.get("categorical", 0),
-            "datetime_count": type_counts.get("datetime", 0),
-            "boolean_count": type_counts.get("boolean", 0),
-        },
-        "feature_profiles": display_profiles,
-        "feature_profiles_meta": profile_meta,
-        "numerical_summary": numerical_summary,
-        "numerical_summary_meta": numerical_summary_meta,
-        "categorical_distributions": categorical_distributions,
-        "categorical_distributions_meta": categorical_distributions_meta,
-        "profile_thresholds": {
-            "missing_warning": _OVERVIEW_MISSING_WARNING,
-            "missing_poor": _OVERVIEW_MISSING_POOR,
-            "dominant_warning": _OVERVIEW_DOMINANT_WARNING,
-            "high_cardinality": _OVERVIEW_HIGH_CARDINALITY,
-            "id_unique_ratio": _OVERVIEW_ID_UNIQUE_RATIO,
-        },
-        "visualizations_deferred": not include_visualizations,
-    }
-    if include_visualizations:
-        chart_df = _dataframe_for_overview_detail_charts(df, display_profiles)
-        overview["categorical_charts"] = categorical_distribution_charts(chart_df)
-        overview["histograms"] = summary_histograms(chart_df, figsize=(7, 4.5))
-        overview["histogram_bars"] = continuous_bars(chart_df, figsize=(7, 4.5))
-    return overview
 
 
 def _build_data_quality_section(file_info, include_visualizations=False):
-    """Compute the data-quality portion of the readiness report.
-
-    Runs completeness, outliers, and duplicity (the same functions backing the
-    Data Quality tab), then derives readiness-oriented KPIs (normalized so that
-    higher is always better), an overall grade, and a "needs attention" list.
-
-    Returns a JSON-serializable dict, or ``{"error": str}`` on failure.
-    """
-    section = {}
-
-    # --- Completeness -----------------------------------------------------
-    compl = completeness(file_info, include_visualization=include_visualizations)
-    compl_scores = compl.get("Completeness scores", {}) or {}
-    overall_completeness = compl.get("Overall Completeness")
-
-    # --- Outliers ---------------------------------------------------------
-    out = outliers(file_info, include_visualization=include_visualizations)
-    out_scores_raw = out.get("Outlier scores", {}) if isinstance(out, dict) else {}
-    overall_outlier = None
-    out_scores = {}
-    if isinstance(out_scores_raw, dict):
-        overall_outlier = out_scores_raw.get("Overall outlier score")
-        out_scores = {
-            k: v for k, v in out_scores_raw.items() if k != "Overall outlier score"
-        }
-    outliers_error = out.get("Error") if isinstance(out, dict) else None
-
-    # --- Duplicity --------------------------------------------------------
-    dup = duplicity(file_info)
-    overall_duplicity = (
-        dup.get("Duplicity scores", {}).get("Overall duplicity of the dataset")
-        if isinstance(dup, dict)
-        else None
+    """Web wrapper around the shared data-quality section builder."""
+    return _build_data_quality_section_impl(
+        file_info, include_visualizations=include_visualizations
     )
-
-    # --- Normalized KPIs (higher = better) --------------------------------
-    completeness_kpi = overall_completeness
-    uniqueness_kpi = (1 - overall_duplicity) if overall_duplicity is not None else None
-    outlier_clean_kpi = (1 - overall_outlier) if overall_outlier is not None else None
-
-    kpis = [
-        {
-            "id": "completeness",
-            "label": "Completeness",
-            "value": completeness_kpi,
-            "status": _grade_label(completeness_kpi),
-            "hint": "Share of non-missing values across the dataset.",
-        },
-        {
-            "id": "uniqueness",
-            "label": "Uniqueness",
-            "value": uniqueness_kpi,
-            "status": _grade_label(uniqueness_kpi),
-            "hint": "1 − proportion of duplicate rows.",
-        },
-        {
-            "id": "outlier_cleanliness",
-            "label": "Outlier-cleanliness",
-            "value": outlier_clean_kpi,
-            "status": _grade_label(outlier_clean_kpi),
-            "hint": "1 − mean outlier proportion (IQR method) across numerical features.",
-        },
-    ]
-
-    present = _finite_kpi_values(kpis)
-    grade = sum(present) / len(present) if present else None
-
-    # --- Needs attention --------------------------------------------------
-    incomplete = sorted(
-        (
-            {"feature": col, "completeness": score}
-            for col, score in compl_scores.items()
-            if isinstance(score, (int, float)) and score < 1.0
-        ),
-        key=lambda x: x["completeness"],
-    )
-    high_outliers = sorted(
-        (
-            {"feature": col, "outlier_proportion": score}
-            for col, score in out_scores.items()
-            if isinstance(score, (int, float)) and score > 0
-        ),
-        key=lambda x: x["outlier_proportion"],
-        reverse=True,
-    )
-
-    section = {
-        "grade": grade,
-        "grade_status": _grade_label(grade),
-        "auto_selection": {
-            "selection_criteria": {
-                "analysis_scope": {
-                    "rule": (
-                        "Completeness, outliers, and duplicity run on the full dataset "
-                        "automatically — no column selection required."
-                    ),
-                    "selected": "all columns",
-                },
-            },
-        },
-        "kpis": kpis,
-        "needs_attention": {
-            "incomplete_features": incomplete,
-            "outlier_features": high_outliers,
-            "duplicate_rows": (
-                overall_duplicity if overall_duplicity not in (None, 0) else 0
-            ),
-        },
-        "details": {
-            "completeness": {
-                "overall": overall_completeness,
-                "scores": compl_scores,
-                "visualization": compl.get("Completeness Visualization") if include_visualizations else None,
-                "visualization_deferred": not include_visualizations,
-            },
-            "outliers": {
-                "overall": overall_outlier,
-                "scores": out_scores,
-                "visualization": out.get("Outliers Visualization") if include_visualizations and isinstance(out, dict) else None,
-                "visualization_deferred": not include_visualizations,
-                "error": outliers_error,
-            },
-            "duplicity": {"overall": overall_duplicity},
-        },
-        "visualizations_deferred": not include_visualizations,
-    }
-    return section
 
 
 # Impact-on-AI tuning constants

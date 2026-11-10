@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+import pandas as pd
+
 # Cap for excluded/dropped detail lists in report JSON (Impact, Fairness, Governance, …).
 READINESS_MAX_DETAIL_LIST_ITEMS = 50
 
@@ -46,3 +48,13 @@ def cap_detail_list(items, max_items):
         "truncated": True,
     }
 
+
+def classify_feature_type(series):
+    """Map a pandas Series to a coarse feature type label."""
+    if pd.api.types.is_bool_dtype(series):
+        return "boolean"
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return "datetime"
+    if pd.api.types.is_numeric_dtype(series):
+        return "numerical"
+    return "categorical"
