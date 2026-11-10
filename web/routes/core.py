@@ -27,6 +27,7 @@ from aidrin.file_handling.file_parser import (
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.root_reader import rootReader
+from aidrin.file_handling.readers.structured import dropped_columns
 from web.routes.utils import (
     clear_all_user_cache,
     build_file_info,
@@ -683,6 +684,10 @@ def summary_statistics():
             "histograms": histograms,
             "histogram_bars": histogram_bars,
             "hdf5_multi_dataset": hdf5_multi_dataset,
+            # Columns the reader had to exclude to produce a tabular frame
+            # (e.g. array-valued ROOT branches); disclosed so features_count
+            # is not read as the whole dataset.
+            "excluded_columns": dropped_columns(df),
             "root_tree_selected": file_type == ".root" and bool(selected),
             "selected_dataset_keys": selected_dataset_keys,
         })

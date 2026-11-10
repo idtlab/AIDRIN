@@ -5920,6 +5920,25 @@ function returnToHdf5DatasetPicker() {
  * @param {string} summaryContainerId - element ID for the stats/table.
  * @param {string} histogramsContainerId - element ID for the histograms.
  */
+/**
+ * Banner for columns the reader had to leave out to build a tabular frame
+ * (e.g. array-valued ROOT branches), so the feature counts next to it are not
+ * mistaken for the whole dataset.
+ *
+ * @param {Array} columns - excluded column names, or undefined.
+ * @returns {string} HTML for the banner, or "" when nothing was excluded.
+ */
+function excludedColumnsBanner(columns) {
+  const excluded = Array.isArray(columns) ? columns : [];
+  if (!excluded.length) return "";
+  return `
+    <div class="p-3 mb-4 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 text-xs text-amber-800 dark:text-amber-200">
+      <span class="font-semibold">${excluded.length} column${excluded.length === 1 ? "" : "s"} excluded</span>
+      (array-valued, not representable in a table):
+      ${escapeHtml(excluded.join(", "))}
+    </div>`;
+}
+
 function loadDataOverview(summaryContainerId, histogramsContainerId) {
   const summaryId = summaryContainerId || "workspace-summary";
   const histogramsId = histogramsContainerId || "workspace-histograms";
@@ -5950,6 +5969,7 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
             </button>
           </div>`;
         }
+        html += excludedColumnsBanner(data.excluded_columns);
         html += `
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-center">
@@ -6857,19 +6877,7 @@ function renderReadinessDatasetOverview(container, overview) {
       </div>
     </div>`;
 
-  // Reader-level exclusions (e.g. jagged ROOT branches): disclose them so the
-  // feature counts above are not mistaken for the whole dataset.
-  const excluded = Array.isArray(meta.excluded_columns)
-    ? meta.excluded_columns
-    : [];
-  if (excluded.length) {
-    html += `
-    <div class="p-3 mb-4 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 text-xs text-amber-800 dark:text-amber-200">
-      <span class="font-semibold">${excluded.length} column${excluded.length === 1 ? "" : "s"} excluded from this report</span>
-      (array-valued, not representable in a table):
-      ${escapeHtml(excluded.join(", "))}
-    </div>`;
-  }
+  html += excludedColumnsBanner(meta.excluded_columns);
 
   // --- KPI tiles ---
   html += `

@@ -78,3 +78,30 @@ def test_single_root_tree_loads_automatically(client, tmp_path):
     assert summary["success"]
     assert summary["records_count"] == 3
     assert not summary.get("needs_dataset_selection")
+
+
+def test_data_overview_discloses_excluded_branches(client, tmp_path):
+    """The web Data Overview must name the branches the reader left out.
+
+    Without it the most prominent panel reports "2 features" for a 3-branch
+    tree with no sign that anything was dropped -- the exact misreading the
+    reader's disclosure exists to prevent. The CLI and the readiness report
+    already surface this.
+    """
+    ak = pytest.importorskip("awkward")
+    path = tmp_path / "jagged.root"
+    with uproot.recreate(path) as handle:
+        handle.mktree("mini", {"energy": np.float64, "lep_pt": "var * float32"})
+        handle["mini"].extend({
+            "energy": np.array([1.0, 2.0, 3.0]),
+            "lep_pt": ak.Array([[1.0], [], [2.0, 3.0]]),
+        })
+    with path.open("rb") as source:
+        response = client.post("/inspector", data={
+            "file": (source, "jagged.root"), "fileTypeSelector": ".root",
+        })
+    assert response.status_code == 302
+    summary = client.get("/summary-statistics").get_json()
+    assert summary["success"]
+    assert summary["excluded_columns"] == ["lep_pt"]
+    assert "lep_pt" not in summary["all_features"]
