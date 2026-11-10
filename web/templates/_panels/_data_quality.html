@@ -137,12 +137,12 @@
 
         <div class="checkboxContainerIndividual">
           <label class="material-checkbox">
-            <input type="checkbox" name="grouped time series" onchange="toggleValue(this)" />
+            <input type="checkbox" name="grouped time series" onchange="toggleValue(this); scheduleGroupedTimingDetection()" />
             <span class="checkmark"></span>
             Check grouped time series
             <span class="info-icon">i<span class="info-text">Check for repeated timestamps, times that go backward, and uneven sample spacing in each series.</span></span>
           </label>
-          <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+          <div class="metric-inputs mt-3 space-y-3" style="display: none;" oninput="clearGroupedFormError(); updateGroupedRunSummary()">
             {% if not globus_mode and workspace_files|length > 1 %}
             <div class="space-y-2 text-sm">
               <label class="block" for="grouped-input-files">Files to check</label>
@@ -157,7 +157,7 @@
                   <button type="button" class="px-2 border rounded" onclick="selectGroupedFiles(true)">Select all files</button>
                   <button type="button" class="px-2 border rounded" onclick="selectGroupedFiles(false)">Deselect all files</button>
                 </div>
-                <div id="grouped-file-list" class="max-h-48 overflow-auto space-y-1">
+                <div id="grouped-file-list" class="max-h-48 overflow-auto space-y-1" onchange="scheduleGroupedTimingDetection()">
                   {% for file in workspace_files %}
                   <div class="flex items-center gap-2">
                     <label class="flex-1 break-all"><input type="checkbox" name="grouped_file_id" value="{{ file.id }}"> {{ loop.index }}. {{ file.name }}</label>
@@ -176,7 +176,7 @@
                       For example, combine hourly CSVs that each contain sensor ID, timestamp, and temperature.
                       Rows are appended in the file order shown above.<br><br>
                       Stacked files stay separate with <strong>One series per file</strong>. To check a series across files, choose <strong>Identify series by columns</strong>
-                      and clear <strong>Keep each file’s series separate</strong>.
+                      and select <strong>Continue matching series across files</strong>.
                     </span>
                   </button>
                 </div>
@@ -184,7 +184,11 @@
                   <option value="independent">Analyze each file independently</option>
                   <option value="stacked">Stack rows into one dataset</option>
                 </select>
-                <label id="grouped-file-boundaries-label" hidden><input type="checkbox" name="grouped_file_boundaries" value="yes" checked disabled> Keep each file’s series separate</label>
+                <fieldset id="grouped-file-boundaries" hidden disabled>
+                  <legend>Series across files</legend>
+                  <label><input type="radio" name="grouped_file_boundaries" value="yes" checked> Keep series separate by file</label>
+                  <label><input type="radio" name="grouped_file_boundaries" value="no"> Continue matching series across files</label>
+                </fieldset>
               </fieldset>
             </div>
             {% endif %}
@@ -199,34 +203,48 @@
             <fieldset id="grouped-series-columns" data-metric-settings class="space-y-1 text-sm" hidden disabled>
               <legend>Columns that identify each series</legend>
               <p class="text-gray-500 dark:text-gray-400">Rows with the same values in these columns form one series. For example, select station and channel to check each station–channel pair separately.</p>
-              <div id="groupedTimeSeriesColumnsCheckbox" class="w-full"></div>
+              <div id="groupedTimeSeriesColumnsCheckbox" class="w-full" onchange="scheduleGroupedTimingDetection()"></div>
             </fieldset>
-            <label class="block text-sm">Time column:
-              <select name="timestamp column for grouped time series" id="groupedTimeSeriesTimeDropdown" required class="w-full"><option value="" disabled selected>Select a time column</option></select>
-            </label>
-            <label class="block text-sm">Time format:
-              <select name="time kind for grouped time series" id="grouped-time-format" class="w-full">
+            <div class="text-sm">
+              <div class="flex flex-wrap items-baseline gap-x-1">
+                <label for="groupedTimeSeriesTimeDropdown">Time column</label>
+                <span id="grouped-time-column-status" class="text-gray-500 dark:text-gray-400" role="status"></span>
+              </div>
+              <select name="timestamp column for grouped time series" id="groupedTimeSeriesTimeDropdown" required class="w-full"
+                      aria-describedby="grouped-time-column-status" onchange="setGroupedTimeColumnSource(this, false); scheduleGroupedTimingDetection()">
+                <option value="" disabled selected>Select a time column</option>
+              </select>
+            </div>
+            <div class="text-sm">
+              <div class="flex flex-wrap items-baseline gap-x-1">
+                <label for="grouped-time-format">Time format</label>
+                <span id="grouped-time-format-status" class="text-gray-500 dark:text-gray-400" role="status"></span>
+              </div>
+              <select name="time kind for grouped time series" id="grouped-time-format" class="w-full"
+                      aria-describedby="grouped-time-format-status" onchange="scheduleGroupedTimingDetection()">
                 <option value="auto">Auto-detect</option>
                 <option value="numeric">Numeric time</option>
                 <option value="datetime">Date and time</option>
               </select>
-            </label>
-            <label class="block text-sm">Expected time between samples:
-              <input name="cadence for grouped time series" type="number" min="0" step="any" required class="w-full" aria-describedby="grouped-interval-help" />
-            </label>
+            </div>
+            <div id="grouped-interval-field" class="text-sm">
+              <div class="flex flex-wrap items-baseline gap-x-1">
+                <label for="grouped-interval">Expected time between samples</label>
+                <span id="grouped-interval-status" role="status" class="text-gray-500 dark:text-gray-400"></span>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <input id="grouped-interval" name="cadence for grouped time series" type="number" min="0" step="any" required class="w-40 max-w-full"
+                       aria-describedby="grouped-interval-unit grouped-interval-help grouped-interval-status" oninput="clearGroupedIntervalSource(this)" />
+                <span id="grouped-interval-unit" class="text-gray-500 dark:text-gray-400">Units depend on time format</span>
+              </div>
+            </div>
             <p id="grouped-interval-help" class="text-sm text-gray-500 dark:text-gray-400">
               For numeric time, use the column’s units. For dates and times, use seconds. In seconds, enter 0.01 for samples 10 milliseconds apart.
             </p>
-            {% if not globus_mode %}
-            <div class="flex flex-wrap items-center gap-2 text-sm">
-              <button type="button" class="px-2 py-1 border rounded" onclick="suggestGroupedInterval(this)">Suggest from data</button>
-              <button type="button" id="grouped-interval-apply" class="px-2 py-1 border rounded" hidden>Use suggestion</button>
-              <span id="grouped-interval-status" role="status" class="text-gray-500 dark:text-gray-400"></span>
-            </div>
-            {% endif %}
             <details class="rounded-lg border p-3 text-sm">
               <summary class="cursor-pointer font-medium">Advanced options</summary>
               <div class="mt-3 space-y-3">
+                <p class="text-gray-500 dark:text-gray-400">Set timing variation, row count, or time span if you know what the series should contain.</p>
                 <label class="block">Allowed timing variation
                   <input name="tolerance for grouped time series" type="number" min="0" step="any" value="0" class="w-full" aria-describedby="grouped-tolerance-help" />
                 </label>
@@ -311,7 +329,9 @@
           Stop scanning after preview cap is reached
         </label>
       </div>
-      <div class="flex items-center justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+      <p id="grouped-form-error" role="alert" class="text-sm text-red-700 dark:text-red-400" hidden></p>
+      <div class="flex flex-col items-end gap-2 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <p id="grouped-run-summary" class="w-full break-words text-sm text-gray-600 dark:text-gray-300" data-active-file="{{ uploaded_file_name }}" hidden></p>
         <button type="button" onclick="withSubmitGuard(this, () => workspaceSubmit('/data-quality'));"
                 class="px-5 py-2.5 text-sm font-medium text-white rounded-lg cursor-pointer bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 transition-colors">
           Submit

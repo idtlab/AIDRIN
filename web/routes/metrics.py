@@ -82,7 +82,7 @@ from aidrin.structured_data_metrics.representation_rate import (
     create_representation_rate_vis,
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
-from web.routes.grouped_interval import suggest_interval
+from web.routes.grouped_interval import detect_grouped_timing
 from web.routes.utils import (
     build_file_info,
     confine_to_upload_folder,
@@ -199,16 +199,22 @@ def data_quality():
     file_info = build_file_info(file_path, file_name, file_type)
 
     if request.method == "POST":
-        if request.form.get("action") == "suggest_grouped_interval":
+        action = request.form.get("action")
+        if action in {"detect_grouped_timing", "suggest_grouped_interval"}:
             try:
                 form = request.form
                 parameters = _grouped_sequence_parameters(form)
                 options = {name: parameters[name] for name in ("group_columns", "timestamp_column", "time_kind")}
+                options["estimate_interval"] = action == "suggest_grouped_interval" or form.get("estimate_interval") != "no"
                 if form.get("grouped_input_files") == "selected":
                     members = _grouped_workspace_members(form)
                     with using_builtin_readers():
-                        return jsonify(suggest_interval([(member.path, member.name, member.file_type) for member in members], **options))
-                return jsonify(suggest_interval([file_info], **options))
+                        result = detect_grouped_timing([(member.path, member.name, member.file_type) for member in members], **options)
+                else:
+                    result = detect_grouped_timing([file_info], **options)
+                if action == "suggest_grouped_interval" and result.get("interval_error"):
+                    raise ValueError(result["interval_error"])
+                return jsonify(result)
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), 400
             except (OSError, TypeError):

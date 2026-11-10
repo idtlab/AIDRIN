@@ -968,22 +968,29 @@ columns that distinguish them, such as station and channel.
 The Inspector preselects the **Time column** when it finds one clear match in
 the active file. It checks column names and types and samples a few values.
 You can change the selection or choose the column yourself when there is no
-clear match. Enter the **Expected time between samples**.
+clear match.
 **Time format** defaults to **Auto-detect**, which recognizes numbers and
 ISO-style dates such as ``2026-01-31`` or ``2026-01-31T09:30:00Z``. You can
 select **Numeric time** or **Date and time** manually. Use the column's units
 for numeric time and seconds for dates and times. Independent checks detect the
 format for each file, using the same expected interval you enter.
 
-Use **Suggest from data** to estimate the interval from a small sample of rows
-within each sampled file. It fills an empty field or offers to replace a value
-you already entered. You can edit the suggestion. The request samples up to six
-files and 256 rows per file. CSV and Parquet have bounded previews, and other
-formats can use a sample from a table already opened in the Inspector. If the
-sample is unavailable, inconsistent, or too slow, enter the interval manually.
+The Inspector also tries to fill **Expected time between samples** from a small
+sample within each file. **(Detected from data)** identifies a preselected time
+column or format. **(Estimated from data)** identifies an inferred interval, with
+its units shown beside the field. You can change any value, and a manual entry
+takes precedence. Detection samples up to six files and 256 rows
+per file. CSV and Parquet have bounded previews. Other formats can use a sample
+from a table already opened in the Inspector. If the sample is unavailable,
+inconsistent, or too slow, enter the interval manually.
 
-Under **Advanced options**, you can allow timing variation, set an expected row
-count or time span per series, and adjust the finding detail limit.
+Choose the files, analysis mode, and series identifiers for your check. Under
+**Advanced options**, enter known timing variation, expected row count or span,
+and adjust the finding detail limit as needed.
+
+The summary above **Submit** shows the file scope, series grouping, time column,
+and interval. If a setting needs attention, the form shows the message beside
+it and moves focus there on submission.
 
 Results show the time format used and each series with exact source row positions
 and failing intervals.

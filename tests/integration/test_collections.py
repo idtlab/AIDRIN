@@ -91,13 +91,14 @@ def test_upload_more_and_open_active_file_use_the_same_workspace(client):
     assert result["summary"]["finding_counts"] == {}
 
 
-def test_cross_file_boundaries_are_explicit_and_scoped_to_grouped_check(client):
+@pytest.mark.parametrize("continue_value", ["", "no"])
+def test_cross_file_boundaries_are_explicit_and_scoped_to_grouped_check(client, continue_value):
     upload(client, ("a.csv", CLEAN), ("b.csv", CLEAN))
     ids = [entry["id"] for entry in inventory(client)]
     separate = run_grouped(client, ids, mode="stacked")["Grouped Time Series"]
     assert separate["datasets"][0]["metrics"]["grouped_time_series"]["summary"]["finding_counts"] == {}
     together = run_grouped(client, ids, mode="stacked", **{
-        "grouped_file_boundaries": "",
+        "grouped_file_boundaries": continue_value,
         "group columns for grouped time series": "sensor",
     })["Grouped Time Series"]
     summary = together["datasets"][0]["metrics"]["grouped_time_series"]["summary"]

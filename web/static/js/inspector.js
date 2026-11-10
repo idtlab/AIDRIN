@@ -981,7 +981,7 @@ function _restoreFormState(panelId, state) {
   if (!panel) return;
 
   for (const [key, value] of Object.entries(state)) {
-    if (!value) continue;
+    if (!value || key === "grouped_file_boundaries") continue;
     if (
       panelId === "variable-unit-validation" &&
       key === "variable_unit_metadata"
@@ -1019,6 +1019,9 @@ function _restoreFormState(panelId, state) {
         });
       } else {
         select.value = value;
+        if (select.id === "groupedTimeSeriesTimeDropdown") {
+          setGroupedTimeColumnSource(select, false);
+        }
       }
       continue;
     }
@@ -1029,6 +1032,7 @@ function _restoreFormState(panelId, state) {
     );
     if (input) {
       input.value = value;
+      if (input.id === "grouped-interval") clearGroupedIntervalSource(input);
     }
   }
   if (panelId === "data-quality" && state.grouped_input_files === "selected") {
@@ -1050,8 +1054,10 @@ function _restoreFormState(panelId, state) {
       state.grouped_collection_mode === "stacked" &&
       state.grouped_series !== "file"
     ) {
-      panel.querySelector('[name="grouped_file_boundaries"]').checked =
-        state.grouped_file_boundaries === "yes";
+      const value = state.grouped_file_boundaries === "yes" ? "yes" : "no";
+      panel.querySelector(
+        `[name="grouped_file_boundaries"][value="${value}"]`,
+      ).checked = true;
     }
   }
   if (panelId === "data-quality") {
@@ -1074,22 +1080,24 @@ function syncGroupedTimeSeriesOptions() {
   columns.hidden = !byColumns;
   columns.disabled = !byColumns;
   const scope = document.getElementById("grouped-input-files");
-  if (!scope) return;
-  const selection = document.getElementById("grouped-file-selection");
-  const enabled = scope.value === "selected";
-  const stacked =
-    enabled &&
-    document.getElementById("grouped-collection-mode").value === "stacked";
-  selection.disabled = !enabled;
-  selection.classList.toggle("hidden", !enabled);
-  const boundaries = document.getElementById("grouped-file-boundaries-label");
-  boundaries.hidden = !stacked || !byColumns;
-  boundaries.querySelector("input").disabled = boundaries.hidden;
-  for (const button of selection.querySelectorAll(
-    "[data-grouped-file-order]",
-  )) {
-    button.classList.toggle("hidden", !stacked);
+  if (scope) {
+    const selection = document.getElementById("grouped-file-selection");
+    const enabled = scope.value === "selected";
+    const stacked =
+      enabled &&
+      document.getElementById("grouped-collection-mode").value === "stacked";
+    selection.disabled = !enabled;
+    selection.classList.toggle("hidden", !enabled);
+    const boundaries = document.getElementById("grouped-file-boundaries");
+    boundaries.hidden = !stacked || !byColumns;
+    boundaries.disabled = boundaries.hidden;
+    for (const button of selection.querySelectorAll(
+      "[data-grouped-file-order]",
+    )) {
+      button.classList.toggle("hidden", !stacked);
+    }
   }
+  scheduleGroupedTimingDetection();
 }
 
 function selectGroupedFiles(checked) {
@@ -1097,6 +1105,7 @@ function selectGroupedFiles(checked) {
   for (const input of list.querySelectorAll('input[name="grouped_file_id"]')) {
     input.checked = checked;
   }
+  scheduleGroupedTimingDetection();
 }
 
 function moveGroupedFile(button, direction) {
@@ -1107,11 +1116,12 @@ function moveGroupedFile(button, direction) {
   if (direction < 0) neighbor.before(row);
   else neighbor.after(row);
   button.focus();
+  scheduleGroupedTimingDetection();
 }
 
-function groupedIntervalRequest(form) {
+function groupedTimingRequest(form) {
   const inputs = new FormData(form);
-  const request = new URLSearchParams({ action: "suggest_grouped_interval" });
+  const request = new URLSearchParams({ action: "detect_grouped_timing" });
   for (const name of [
     "grouped_input_files",
     "grouped_file_id",
@@ -1125,97 +1135,343 @@ function groupedIntervalRequest(form) {
   return request;
 }
 
-async function suggestGroupedInterval(button) {
-  const form = button.form;
-  const input = form.elements.namedItem("cadence for grouped time series");
-  const status = document.getElementById("grouped-interval-status");
-  const apply = document.getElementById("grouped-interval-apply");
-  const request = groupedIntervalRequest(form);
-  const current = () =>
-    form.elements.namedItem("grouped time series").checked &&
-    groupedIntervalRequest(form).toString() === request.toString();
-  apply.hidden = true;
-  status.textContent = "Sampling timestamps…";
-  button.disabled = true;
+function setGroupedTimeColumnSource(select, detected) {
+  const status = document.getElementById("grouped-time-column-status");
+  delete select.dataset.detected;
+  if (detected) select.dataset.detected = select.value;
+  status.textContent = detected
+    ? "(detected from data)"
+    : !select.value && select.options.length > 1
+      ? "No clear match. Choose a column."
+      : "";
+}
+
+function clearGroupedIntervalSource(input) {
+  delete input.dataset.detected;
+  input.dataset.manual = "true";
+  document.getElementById("grouped-interval-status").textContent = "";
+}
+
+function updateGroupedRunSummary() {
+  const summary = document.getElementById("grouped-run-summary");
+  const form = summary.closest("form");
+  const format = document.getElementById("grouped-time-format");
+  const kind =
+    format.value === "auto" ? format.dataset.detectedKind : format.value;
+  const units =
+    kind === "datetime" ? "seconds" : kind === "numeric" ? "column units" : "";
+  document.getElementById("grouped-interval-unit").textContent =
+    units || "Units depend on time format";
+  summary.hidden = !form.elements.namedItem("grouped time series").checked;
+  if (summary.hidden) return;
+
+  const inputs = new FormData(form);
+  const selected = inputs.get("grouped_input_files") === "selected";
+  const count = inputs.getAll("grouped_file_id").length;
+  const stacked =
+    selected && inputs.get("grouped_collection_mode") === "stacked";
+  const files = selected
+    ? count
+      ? `${count} ${count === 1 ? "file" : "files"} ${stacked ? "stacked" : "independently"}`
+      : "choose files"
+    : summary.dataset.activeFile
+      ? `${summary.dataset.activeFile} only`
+      : "active file only";
+  const byColumns = inputs.get("grouped_series") === "columns";
+  const columns = inputs.getAll("group columns for grouped time series");
+  const series = byColumns
+    ? columns.length
+      ? `series by ${columns.join(", ")}`
+      : "choose series columns"
+    : "one series per file";
+  const time = inputs.get("timestamp column for grouped time series");
+  const interval = inputs.get("cadence for grouped time series");
+  const summaryUnit = kind === "datetime" ? "s" : units;
+  const details = ["Grouped Time Series", files, series];
+  if (stacked && byColumns) {
+    details.push(
+      inputs.get("grouped_file_boundaries") === "no"
+        ? "continue matching series across files"
+        : "keep series separate by file",
+    );
+  }
+  details.push(
+    time || "choose a time column",
+    Number(interval) > 0
+      ? `interval ${interval}${summaryUnit ? ` ${summaryUnit}` : ""}`
+      : "enter an interval",
+  );
+  summary.textContent = details.join(" · ");
+}
+
+let groupedTimingKey = null;
+let groupedTimingTimer;
+let groupedTimingController;
+
+function scheduleGroupedTimingDetection() {
+  const form = document.getElementById("form-data-quality");
+  if (!form) return;
+  const request = groupedTimingRequest(form);
+  const enabled = form.elements.namedItem("grouped time series").checked;
+  const key = enabled ? request.toString() : null;
+  if (key === groupedTimingKey) {
+    updateGroupedRunSummary();
+    return;
+  }
+  groupedTimingKey = key;
+  clearGroupedFormError();
+  clearTimeout(groupedTimingTimer);
+  groupedTimingController?.abort();
+  groupedTimingController = null;
+
+  const interval = document.getElementById("grouped-interval");
+  const intervalStatus = document.getElementById("grouped-interval-status");
+  const format = document.getElementById("grouped-time-format");
+  const formatStatus = document.getElementById("grouped-time-format-status");
+  if (interval.dataset.detected === interval.value) interval.value = "";
+  delete interval.dataset.detected;
+  if (!interval.value && !interval.validity.badInput)
+    delete interval.dataset.manual;
+  intervalStatus.textContent = "";
+  formatStatus.textContent = "";
+  format.options[0].textContent = "Auto-detect";
+  delete format.dataset.detectedKind;
+  updateGroupedRunSummary();
+  if (!enabled) return;
+
+  const autoFormat = format.value === "auto";
+  const intervalNeeded = () =>
+    !interval.value && !interval.validity.badInput && !interval.dataset.manual;
+  if (!autoFormat && !intervalNeeded()) return;
+  let missing;
+  if (!request.has("timestamp column for grouped time series"))
+    missing = "Choose a time column first.";
+  else if (
+    request.get("grouped_input_files") === "selected" &&
+    !request.has("grouped_file_id")
+  )
+    missing = "Choose files to check first.";
+  else if (
+    request.get("grouped_series") === "columns" &&
+    !request.has("group columns for grouped time series")
+  ) {
+    missing = "Choose the columns that identify each series first.";
+  }
+  if (missing || window.AIDRIN_GLOBUS_MODE) {
+    if (intervalNeeded())
+      intervalStatus.textContent = missing || "Enter the expected interval.";
+    return;
+  }
+
+  groupedTimingTimer = setTimeout(async () => {
+    if (autoFormat) formatStatus.textContent = "Detecting…";
+    if (intervalNeeded()) intervalStatus.textContent = "Detecting…";
+    request.set("estimate_interval", intervalNeeded() ? "yes" : "no");
+    if (!autoFormat && !intervalNeeded()) return;
+    await detectGroupedTiming(
+      request,
+      key,
+      format,
+      formatStatus,
+      interval,
+      intervalStatus,
+      intervalNeeded,
+    );
+  }, 150);
+}
+
+async function detectGroupedTiming(
+  request,
+  key,
+  format,
+  formatStatus,
+  interval,
+  intervalStatus,
+  intervalNeeded,
+) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1500);
+  groupedTimingController = controller;
+  const timeout = setTimeout(() => controller.abort(), 1350);
   try {
     const response = await fetch("/data-quality", {
       method: "POST",
       body: request,
       signal: controller.signal,
     });
-    const suggestion = await response.json();
-    if (!current()) {
-      status.textContent = "Settings changed. Ask for a new suggestion.";
+    const detected = await response.json();
+    if (groupedTimingController !== controller || groupedTimingKey !== key)
       return;
+    if (format.value === "auto") {
+      if (detected.time_kind) {
+        const name =
+          detected.time_kind === "datetime" ? "Date and time" : "Numeric time";
+        format.options[0].textContent = `Auto-detect · ${name}`;
+        format.dataset.detectedKind = detected.time_kind;
+        formatStatus.textContent = "(detected from data)";
+      } else {
+        formatStatus.textContent = "No clear match in the sample.";
+      }
     }
-    if (suggestion.error) {
-      status.textContent = suggestion.error;
-      return;
-    }
-    const units =
-      suggestion.time_kind === "datetime" ? "seconds" : "column units";
-    const source =
-      suggestion.sampled_files < suggestion.total_files
-        ? `${suggestion.sampled_files} of ${suggestion.total_files} files`
-        : `${suggestion.sampled_files} ${suggestion.sampled_files === 1 ? "file" : "files"}`;
-    status.textContent = `Suggested ${suggestion.interval} ${units} from sampled rows in ${source}.`;
-    if (!input.value && !input.validity.badInput) {
-      input.value = suggestion.interval;
-    } else {
-      apply.hidden = false;
-      apply.onclick = () => {
-        if (current()) {
-          input.value = suggestion.interval;
-          input.focus();
-        } else {
-          status.textContent = "Settings changed. Ask for a new suggestion.";
-        }
-        apply.hidden = true;
-      };
+    if (intervalNeeded()) {
+      if (detected.interval > 0) {
+        interval.value = detected.interval;
+        interval.dataset.detected = interval.value;
+        if (groupedInvalidInput === interval) clearGroupedFormError();
+        intervalStatus.textContent =
+          detected.sampled_files < detected.total_files
+            ? `(estimated from data · ${detected.sampled_files} of ${detected.total_files} files sampled)`
+            : "(estimated from data)";
+      } else {
+        intervalStatus.textContent =
+          detected.interval_error ||
+          detected.error ||
+          "Enter the expected interval.";
+      }
     }
   } catch (error) {
-    status.textContent =
-      error.name === "AbortError"
-        ? "A quick suggestion timed out. Enter the expected interval manually."
-        : "A quick suggestion is unavailable. Enter the expected interval manually.";
+    if (groupedTimingController !== controller || groupedTimingKey !== key)
+      return;
+    if (format.value === "auto")
+      formatStatus.textContent = "Format preview unavailable.";
+    if (intervalNeeded()) {
+      intervalStatus.textContent =
+        error.name === "AbortError"
+          ? "Detection timed out. Enter the expected interval."
+          : "Could not detect an interval. Enter it manually.";
+    }
   } finally {
     clearTimeout(timeout);
-    button.disabled = false;
+    if (groupedTimingController === controller && groupedTimingKey === key)
+      updateGroupedRunSummary();
   }
 }
 
-function groupedTimeSeriesFormError(formData) {
-  if (formData.get("grouped time series") !== "yes") return "";
+let groupedInvalidInput;
+
+function clearGroupedFormError() {
+  if (!groupedInvalidInput) return;
+  groupedInvalidInput.removeAttribute("aria-invalid");
+  groupedInvalidInput.removeAttribute("aria-errormessage");
+  groupedInvalidInput = null;
+  const error = document.getElementById("grouped-form-error");
+  error.hidden = true;
+  error.textContent = "";
+}
+
+function showGroupedFormError(
+  input,
+  message,
+  anchor = input.closest("label") || input,
+) {
+  groupedInvalidInput = input;
+  input.setAttribute("aria-invalid", "true");
+  if (message) {
+    const error = document.getElementById("grouped-form-error");
+    anchor.after(error);
+    error.hidden = false;
+    error.textContent = message;
+    input.setAttribute("aria-errormessage", error.id);
+  }
+  const advanced = input.closest("details");
+  if (advanced) advanced.open = true;
+  input.focus();
+  return false;
+}
+
+function validateGroupedTimeSeriesForm(form) {
+  clearGroupedFormError();
+  const formData = new FormData(form);
+  if (formData.get("grouped time series") !== "yes") return true;
   if (
     formData.get("grouped_input_files") === "selected" &&
     !formData.has("grouped_file_id")
   ) {
-    return "Choose at least one file to check.";
+    const list = document.getElementById("grouped-file-list");
+    const choice =
+      list.querySelector('input[name="grouped_file_id"]') ||
+      document.getElementById("grouped-input-files");
+    return showGroupedFormError(
+      choice,
+      "Choose at least one file to check.",
+      list,
+    );
   }
-  const time = formData.get("timestamp column for grouped time series");
-  if (!time) return "Choose a time column for the series check.";
-  const interval = Number(formData.get("cadence for grouped time series"));
-  if (!Number.isFinite(interval) || interval <= 0) {
-    return "Enter a positive expected time between samples.";
-  }
+  const time = document.getElementById("groupedTimeSeriesTimeDropdown");
   if (formData.get("grouped_series") === "columns") {
     const columns = formData.getAll("group columns for grouped time series");
-    if (!columns.length)
-      return "Choose at least one column that identifies each series.";
-    if (columns.includes(time))
-      return "Choose series identifiers separately from the time column.";
+    const container = document.getElementById("grouped-series-columns");
+    if (!columns.length) {
+      const choice =
+        container.querySelector('input[type="checkbox"]') ||
+        document.getElementById("grouped-series");
+      return showGroupedFormError(
+        choice,
+        "Choose at least one column that identifies each series.",
+        container,
+      );
+    }
+    if (columns.includes(time.value)) {
+      return showGroupedFormError(
+        time,
+        "Choose a time column separate from the series identifiers.",
+      );
+    }
   }
-  const variation = Number(formData.get("tolerance for grouped time series"));
+  if (!time.value) return showGroupedFormError(time, "Choose a time column.");
+
+  const intervalInput = document.getElementById("grouped-interval");
+  const interval = intervalInput.valueAsNumber;
+  if (!Number.isFinite(interval) || interval <= 0) {
+    const status = document.getElementById(
+      "grouped-interval-status",
+    ).textContent;
+    const hasGuidance =
+      !intervalInput.value &&
+      !intervalInput.validity.badInput &&
+      status &&
+      status !== "Detecting…";
+    const message = hasGuidance
+      ? ""
+      : "Enter a positive expected time between samples.";
+    return showGroupedFormError(
+      intervalInput,
+      message,
+      document.getElementById("grouped-interval-field"),
+    );
+  }
+  const variationInput = form.elements.namedItem(
+    "tolerance for grouped time series",
+  );
+  const variation = Number(variationInput.value || 0);
   if (
+    variationInput.validity.badInput ||
     !Number.isFinite(variation) ||
     variation < 0 ||
     variation >= interval / 2
   ) {
-    return "Allowed timing variation must be zero or positive and less than half the expected interval.";
+    return showGroupedFormError(
+      variationInput,
+      "Enter a nonnegative variation smaller than half the expected interval.",
+    );
   }
-  return "";
+  for (const [name, message] of [
+    [
+      "expected count for grouped time series",
+      "Enter a whole number of rows greater than zero.",
+    ],
+    [
+      "expected duration for grouped time series",
+      "Enter a time span of zero or greater.",
+    ],
+    [
+      "max findings for grouped time series",
+      "Enter a whole number of findings of zero or greater.",
+    ],
+  ]) {
+    const input = form.elements.namedItem(name);
+    if (!input.validity.valid) return showGroupedFormError(input, message);
+  }
+  return true;
 }
 
 // Handle browser back/forward buttons
@@ -1311,15 +1567,11 @@ function withSubmitGuard(button, taskFn) {
  * @param {string} targetUrl - The metric endpoint URL (e.g., '/data-quality')
  */
 async function workspaceSubmit(targetUrl) {
-  if (targetUrl === "/data-quality") {
-    const error = groupedTimeSeriesFormError(
-      new FormData(document.getElementById("form-data-quality")),
-    );
-    if (error) {
-      showToast(error, "error");
-      return;
-    }
-  }
+  if (
+    targetUrl === "/data-quality" &&
+    !validateGroupedTimeSeriesForm(document.getElementById("form-data-quality"))
+  )
+    return;
   // Clear previous results before submitting new ones
   const resultsSection = document.getElementById("results-section");
   if (resultsSection) resultsSection.style.display = "none";
@@ -1777,6 +2029,12 @@ async function workspaceSubmit(targetUrl) {
     const formState = {};
     for (const [key, value] of formData.entries()) {
       if (value instanceof File) continue;
+      if (
+        (key === "timestamp column for grouped time series" ||
+          key === "cadence for grouped time series") &&
+        form.elements.namedItem(key).dataset.detected === value
+      )
+        continue;
       if (formState[key]) {
         // Multi-value: convert to array
         if (!Array.isArray(formState[key])) formState[key] = [formState[key]];
@@ -8649,19 +8907,26 @@ function populateWorkspaceDropdowns(data) {
   const timeFeatures = [...allFeatures, ...(data.datetime_features || [])];
   const timeColumn = document.getElementById("groupedTimeSeriesTimeDropdown");
   if (timeColumn) {
-    const previous = timeColumn.value || timeColumn.dataset.pendingValue;
+    const previous =
+      timeColumn.dataset.detected === timeColumn.value
+        ? timeColumn.dataset.pendingValue
+        : timeColumn.value || timeColumn.dataset.pendingValue;
     fillDropdown(timeColumn.id, timeFeatures);
     delete timeColumn.dataset.pendingValue;
-    const choice = timeFeatures.includes(previous)
-      ? previous
-      : data.suggested_time_column;
+    const usePrevious = timeFeatures.includes(previous);
+    const choice = usePrevious ? previous : data.suggested_time_column;
     if (timeFeatures.includes(choice)) timeColumn.value = choice;
+    setGroupedTimeColumnSource(
+      timeColumn,
+      !usePrevious && Boolean(timeColumn.value),
+    );
   }
   fillCheckboxContainer(
     "groupedTimeSeriesColumnsCheckbox",
     allFeatures,
     "group columns for grouped time series",
   );
+  scheduleGroupedTimingDetection();
   fillDropdown("temporalCompletenessColumnDropdown", allFeatures);
   fillDropdown("nullCountTrendBatchDropdown", allFeatures);
   fillCheckboxContainer(

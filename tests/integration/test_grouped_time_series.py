@@ -80,6 +80,22 @@ def test_suggest_interval_declines_inconsistent_data_and_exhausted_budget(client
     assert 'timed out' in response.get_json()['error']
 
 
+def test_timing_preview_detects_format_even_when_interval_is_unreliable(client):
+    assert client.post('/inspector', data={
+        'file': (io.BytesIO(b't,value\n0,1\n.01,2\n.03,3\n.06,4\n'), 'irregular.csv'),
+        'fileTypeSelector': '.csv',
+    }).status_code == 302
+    response = suggest_interval(client, action='detect_grouped_timing')
+    assert response.status_code == 200
+    preview = response.get_json()
+    assert preview['time_kind'] == 'numeric'
+    assert 'interval' not in preview
+    assert 'uneven spacing' in preview['interval_error']
+    format_only = suggest_interval(client, action='detect_grouped_timing', estimate_interval='no').get_json()
+    assert format_only == {'time_kind': 'numeric', 'sampled_files': 1, 'total_files': 1}
+    assert not client.get('/cached-result/data_quality').get_json()['cached']
+
+
 def test_whole_file_sequence_checks_a_file_without_series_identifiers(client):
     response = client.post('/inspector', data={
         'file': (io.BytesIO(b'time,value\n0,4\n0.0105,5\n0.0305,6\n'), 'one_series.csv'),

@@ -112,10 +112,10 @@ In **Data Quality**, enable **Check grouped time series**. Under **Files to chec
 select **Choose uploaded files**, then pick a subset or use **Select all files**.
 The default mode checks each selected file independently. To stack rows, choose the stacked
 mode and set the file order with the arrows. **One series per file** always keeps
-file boundaries, including when rows are stacked. To continue matching series
-across stacked files, use **Identify series by columns** and clear **Keep each
-file's series separate**. Series and time column choices come from the active
-file. Other selected checks use the active file.
+file boundaries, including when rows are stacked. With **Identify series by
+columns**, choose **Keep series separate by file** or **Continue matching series
+across files**. Series and time column choices come from the active file. Other
+selected checks use the active file.
 
 Run the usual Data Quality form. The Results panel shows the files used and
 the analysis mode. Stacked results include a source-row mapping, and the

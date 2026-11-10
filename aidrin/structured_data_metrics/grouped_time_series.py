@@ -112,7 +112,8 @@ def _time(value, time_kind, *, iso_dates_only=False):
         return None, None, None, "invalid_time"
 
 
-def _detect_time_kind(series):
+def detect_time_kind(series):
+    """Resolve numeric or ISO-style datetime values from a bounded sample."""
     if pd.api.types.is_datetime64_any_dtype(series.dtype):
         return "datetime"
     if series.empty or pd.api.types.is_any_real_numeric_dtype(series.dtype):
@@ -150,7 +151,7 @@ def suggest_time_column(frame, features, datetime_features, text_features):
         name = next(iter(candidates))
         sample = frame[name].iloc[sampled_rows]
         try:
-            kind = _detect_time_kind(sample)
+            kind = detect_time_kind(sample)
         except ValueError:
             return None
         if any(_time(value, kind, iso_dates_only=True)[3] is None for value in sample):
@@ -179,14 +180,9 @@ def _group_positions(frame, group_columns):
     return unassigned, work[assigned].groupby(group_columns, sort=False, observed=True).groups.values()
 
 
-def suggest_sample_interval(frame, group_columns, timestamp_column, time_kind):
+def suggest_sample_interval(frame, group_columns, timestamp_column, time_kind, *, iso_dates_only=False):
     """Find a common interval from a bounded, in-order sample of one file."""
-    if time_kind not in {"auto", "numeric", "datetime"}:
-        raise ValueError("Choose a valid time format.")
     times = frame[timestamp_column]
-    auto_detect = time_kind == "auto"
-    if auto_detect:
-        time_kind = _detect_time_kind(times)
     _, groups = _group_positions(frame, group_columns)
     candidates = []
     matching_intervals = 0
@@ -194,7 +190,7 @@ def suggest_sample_interval(frame, group_columns, timestamp_column, time_kind):
         previous = awareness = None
         deltas = []
         for position in positions:
-            value, _, aware, error = _time(times.iloc[position], time_kind, iso_dates_only=auto_detect)
+            value, _, aware, error = _time(times.iloc[position], time_kind, iso_dates_only=iso_dates_only)
             if error or (awareness is not None and awareness != aware):
                 previous = None
                 continue
@@ -217,7 +213,7 @@ def suggest_sample_interval(frame, group_columns, timestamp_column, time_kind):
     candidate = median_low(candidates)
     if any(not math.isclose(interval, candidate, rel_tol=_INTERVAL_ROUNDOFF) for interval in candidates):
         raise ValueError("The sampled series have different intervals. Enter the expected interval manually.")
-    return candidate, time_kind
+    return candidate
 
 
 def _interval_delta(value, previous, time_kind):
@@ -275,7 +271,7 @@ def calculate_grouped_time_series(
     times = frame[timestamp_column]
     auto_detect = time_kind == "auto"
     if auto_detect:
-        time_kind = _detect_time_kind(times)
+        time_kind = detect_time_kind(times)
 
     groups = []
     unassigned, positions_by_group = _group_positions(frame, group_columns)

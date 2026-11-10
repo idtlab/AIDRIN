@@ -8,7 +8,7 @@ import pandas as pd
 from flask import current_app
 
 from aidrin.file_handling.file_parser import read_file
-from aidrin.structured_data_metrics.grouped_time_series import suggest_sample_interval
+from aidrin.structured_data_metrics.grouped_time_series import detect_time_kind, suggest_sample_interval
 from web.routes.utils import get_current_user_id, is_metric_cache_valid, manage_cache_size
 
 
@@ -51,10 +51,12 @@ def _read_interval_sample(file_info, columns):
     return read_file(file_info, columns=columns, sample_rows=_SAMPLE_ROWS)
 
 
-def suggest_interval(file_infos, group_columns, timestamp_column, time_kind):
-    """Estimate a common interval from a few files, without comparing across file boundaries."""
+def detect_grouped_timing(file_infos, group_columns, timestamp_column, time_kind, *, estimate_interval=True):
+    """Detect format and cadence independently on bounded samples within files."""
     if not timestamp_column:
         raise ValueError("Choose a time column to suggest an interval.")
+    if time_kind not in {"auto", "numeric", "datetime"}:
+        raise ValueError("Choose a valid time format.")
     group_columns = group_columns or []
     if timestamp_column in group_columns or len(set(group_columns)) != len(group_columns):
         raise ValueError("Choose distinct series identifiers separately from the time column.")
@@ -65,17 +67,30 @@ def suggest_interval(file_infos, group_columns, timestamp_column, time_kind):
     if total > sampled:
         file_infos = [file_infos[round(i * (total - 1) / (sampled - 1))] for i in range(sampled)]
 
-    suggestion = None
+    format_used = interval = interval_error = None
     for file_info in file_infos:
         if time.monotonic() >= deadline:
             raise ValueError(_TIMED_OUT)
         frame = _read_interval_sample(file_info, columns)
         if not isinstance(frame, pd.DataFrame) or not frame.columns.is_unique or any(column not in frame for column in columns):
             raise ValueError("A quick sample of the selected columns is unavailable. Enter the expected interval manually.")
-        interval, kind = suggest_sample_interval(frame, group_columns, timestamp_column, time_kind)
+        kind = detect_time_kind(frame[timestamp_column]) if time_kind == "auto" else time_kind
+        if format_used is not None and kind != format_used:
+            raise ValueError("The sampled files use different time formats. Enter the expected interval manually.")
+        format_used = kind
+        if estimate_interval and interval_error is None:
+            try:
+                candidate = suggest_sample_interval(frame, group_columns, timestamp_column, kind, iso_dates_only=time_kind == "auto")
+                if interval is not None and not math.isclose(candidate, interval, rel_tol=1e-9):
+                    raise ValueError("The sampled files have different intervals. Enter the expected interval manually.")
+                interval = interval or candidate
+            except ValueError as exc:
+                interval_error = str(exc)
         if time.monotonic() >= deadline:
             raise ValueError(_TIMED_OUT)
-        if suggestion is not None and (kind != suggestion[1] or not math.isclose(interval, suggestion[0], rel_tol=1e-9)):
-            raise ValueError("The sampled files have different intervals or time formats. Enter the expected interval manually.")
-        suggestion = suggestion or (interval, kind)
-    return {"interval": float(f"{suggestion[0]:.12g}"), "time_kind": suggestion[1], "sampled_files": sampled, "total_files": total}
+    result = {"time_kind": format_used, "sampled_files": sampled, "total_files": total}
+    if interval_error:
+        result["interval_error"] = interval_error
+    elif interval is not None:
+        result["interval"] = float(f"{interval:.12g}")
+    return result
