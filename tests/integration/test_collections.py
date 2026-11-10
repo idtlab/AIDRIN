@@ -284,9 +284,27 @@ def test_grouped_column_choices_follow_selected_files_and_preserve_labels(client
     preview = client.post("/data-quality", data={
         "action": "preview_grouped_columns", "collection_scope": "selected", "collection_file_id": ids,
     }).get_json()
-    assert preview == {"columns": [" station", "t", "value"], "suggested_time_column": "t", "complete": True}
+    assert preview == {"columns": [" station", "t", "value"], "suggested_time_column": "t", "complete": True,
+                       "previewed_files": 2, "total_files": 2}
     result = run_grouped(client, ids, grouped_series="columns", **{"group columns for grouped time series": [" station"]})
     for dataset in result["Grouped Time Series"]["datasets"]:
         groups = dataset["metrics"]["grouped_time_series"]["groups"]
-        assert [group["group"][" station"] for group in groups] == ["9007199254740992", "9007199254740993"]
+        assert [group["group"][" station"] for group in groups] == [{"integer": "9007199254740992"}, {"integer": "9007199254740993"}]
         assert [group["finding_counts"] for group in groups] == [{}, {"cadence_gap": 1}]
+
+
+
+def test_grouped_column_preview_uses_a_bounded_sample_and_keeps_readable_files(client):
+    upload(client, *((f"{i}.csv", CLEAN) for i in range(7)))
+    entries = inventory(client)
+    form = {"action": "preview_grouped_columns", "collection_scope": "all"}
+    result = client.post("/data-quality", data=form).get_json()
+    assert result == {"columns": ["sensor", "t", "value"], "suggested_time_column": "t", "complete": False,
+                      "previewed_files": 6, "total_files": 7}
+
+    Path(entries[0]["path"]).unlink()
+    response = client.post("/data-quality", data={**form, "collection_scope": "selected",
+                                                  "collection_file_id": [entry["id"] for entry in entries[:2]]})
+    assert response.status_code == 200
+    assert response.get_json() == {"columns": ["sensor", "t", "value"], "suggested_time_column": None, "complete": False,
+                                   "previewed_files": 1, "total_files": 2}

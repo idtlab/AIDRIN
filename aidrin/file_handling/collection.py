@@ -13,6 +13,7 @@ import logging
 import pandas as pd
 
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.readers.base_reader import exact_integer_values
 
 
 SOURCE_COLUMNS = ("__aidrin_source_id", "__aidrin_source_row")
@@ -141,7 +142,14 @@ def make_collection_table(members, frames):
         sources.append({"id": member.id, "name": member.display_name, "start_row": offset, "row_count": len(frame)})
         offset += len(frame)
         aligned.append(frame.loc[:, first.columns])
-    return CollectionTable(pd.concat(aligned, ignore_index=True), sources)
+    combined = pd.concat(aligned, ignore_index=True)
+    exact_columns = [exact_integer_values(frame) for frame in aligned]
+    for name in set().union(*exact_columns):
+        values = []
+        for frame, exact in zip(aligned, exact_columns):
+            values.extend(exact[name] if name in exact else frame[name].tolist())
+        exact_integer_values(combined, create=True)[name] = tuple(values)
+    return CollectionTable(combined, sources)
 
 
 @contextmanager

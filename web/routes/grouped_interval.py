@@ -8,6 +8,7 @@ import pandas as pd
 from flask import current_app
 
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.readers.base_reader import exact_integer_frame, exact_integer_values
 from aidrin.structured_data_metrics.grouped_time_series import detect_time_kind, suggest_sample_interval, suggest_time_column
 from web.routes.utils import get_current_user_id, is_metric_cache_valid, manage_cache_size
 
@@ -33,8 +34,9 @@ def remember_interval_sample(file_info, frame):
     # Copy individual scalar values so a slice of an Arrow-backed column does
     # not retain the buffers for the whole uploaded table.
     values = {}
+    exact = exact_integer_values(frame)
     for name, series in sample.items():
-        column = series.tolist()
+        column = exact[name][:_SAMPLE_ROWS] if name in exact else series.tolist()
         if all(pd.api.types.is_scalar(value) for value in column):
             values[name] = column
     preview = pd.DataFrame(values, dtype=object)
@@ -51,7 +53,8 @@ def _read_interval_sample(file_info, columns):
             return entry["data"]
         if all(column in entry["data"] for column in columns):
             return entry["data"][columns]
-    return read_file(file_info, columns=columns, sample_rows=_SAMPLE_ROWS)
+    frame = read_file(file_info, columns=columns, sample_rows=_SAMPLE_ROWS)
+    return exact_integer_frame(frame, columns) if isinstance(frame, pd.DataFrame) else frame
 
 
 def _sample_files(file_infos):
@@ -66,20 +69,26 @@ def preview_grouped_columns(file_infos):
     deadline = time.monotonic() + _TIME_BUDGET
     common = None
     suggestions = []
-    for file_info in _sample_files(file_infos):
+    sampled = _sample_files(file_infos)
+    for file_info in sampled:
         if time.monotonic() >= deadline:
             break
         frame = _read_interval_sample(file_info, None)
-        if frame is None or not frame.columns.is_unique:
+        if not isinstance(frame, pd.DataFrame) or not frame.columns.is_unique:
             continue
         columns = [name for name in frame.columns if isinstance(name, str)]
         common = columns if common is None else [name for name in common if name in columns]
         dates = [name for name in columns if pd.api.types.is_datetime64_any_dtype(frame[name].dtype)]
         text = [name for name in columns if pd.api.types.is_string_dtype(frame[name].dtype)]
         suggestions.append(suggest_time_column(frame, columns, dates, text))
-    suggestion = suggestions[0] if suggestions and len(set(suggestions)) == 1 else None
-    complete = len(suggestions) == len(file_infos)
-    return {"columns": common, "suggested_time_column": suggestion if complete else None, "complete": complete}
+    clear_match = suggestions and len(suggestions) == len(sampled) and len(set(suggestions)) == 1
+    return {
+        "columns": common,
+        "suggested_time_column": suggestions[0] if clear_match else None,
+        "complete": len(suggestions) == len(file_infos),
+        "previewed_files": len(suggestions),
+        "total_files": len(file_infos),
+    }
 
 
 def detect_grouped_timing(file_infos, group_columns, timestamp_column, time_kind, *, estimate_interval=True):

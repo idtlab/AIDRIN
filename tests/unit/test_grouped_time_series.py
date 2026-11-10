@@ -327,7 +327,7 @@ def test_large_integer_missing_count_and_duration_detail_are_exact(tmp_path, sta
 
 
 
-@pytest.mark.parametrize("file_type", [".csv", ".parquet"])
+@pytest.mark.parametrize("file_type", [".csv", ".parquet", ".json"])
 def test_null_does_not_round_integer_ticks_in_reader_or_frame_cache(tmp_path, file_type):
     from pyarrow import table
     from pyarrow.parquet import write_table
@@ -339,11 +339,14 @@ def test_null_does_not_round_integer_ticks_in_reader_or_frame_cache(tmp_path, fi
     values = [start, start + 1, None, start + 3, start + 4]
     if file_type == ".csv":
         path.write_text("tick,value\n" + "".join(f"{tick if tick is not None else ''},1\n" for tick in values))
-    else:
+    elif file_type == ".parquet":
         write_table(table({"tick": values}), path)
+    else:
+        path.write_text(json.dumps([{"tick": tick} for tick in values]))
     file_info = (str(path), path.name, file_type)
-    preview = read_file(file_info, columns=["tick"], sample_rows=5)
-    assert preview["tick"].dropna().tolist() == [start, start + 1, start + 3, start + 4]
+    if file_type != ".json":
+        preview = read_file(file_info, columns=["tick"], sample_rows=5)
+        assert preview["tick"].dropna().tolist() == [start, start + 1, start + 3, start + 4]
     for _ in range(2):
         group = module.calculate_grouped_time_series(file_info, None, "tick", 1, expected_duration=4)["groups"][0]
         assert group["unique_time_count"] == 4
@@ -369,6 +372,8 @@ def test_grouped_headless_without_group_columns_and_worker_partial_result(tmp_pa
     result = run_metric("grouped_time_series", str(path), timestamp_column="tick", expected_cadence=1)
     assert result["summary"]["group_count"] == 1
     assert result["summary"]["finding_counts"] == {}
+    assert run_batch_metrics({"file_path": str(path), "metrics": ["grouped_time_series"],
+                              "timestamp_column": "tick", "expected_cadence": 1})["grouped_time_series"] == result
 
     path.write_text(" sensor,tick,value\nA,0,1\nA,1,2\n")
     batch = run_batch_metrics({"file_path": str(path), "metrics": ["grouped_time_series"], "group_columns": [" sensor"],
@@ -380,3 +385,78 @@ def test_grouped_headless_without_group_columns_and_worker_partial_result(tmp_pa
                                   sequence_timestamp_column="tick", expected_cadence=1, time_kind="auto")
     assert result["Completeness"]["Completeness scores"] == {"tick": 1.0, "value": 1.0}
     assert "both numbers and dates" in result["Grouped Time Series"]["Error"]
+
+
+
+@pytest.mark.parametrize("missing", ["", "N/A"])
+def test_unsigned_csv_missing_series_id_is_unassigned(tmp_path, missing):
+    path = tmp_path / "unsigned.csv"
+    path.write_text(f"sensor,tick\n9223372036854775808,0\n9223372036854775809,1\n{missing},2\n9223372036854775809,3\n")
+    result = module.calculate_grouped_time_series((str(path), path.name, ".csv"), ["sensor"], "tick", 1)
+    assert result["unassigned_row_positions"] == [2]
+    assert [group["group"] for group in result["groups"]] == [
+        {"sensor": {"integer": "9223372036854775808"}}, {"sensor": {"integer": "9223372036854775809"}},
+    ]
+
+
+def test_json_distinguishes_integer_and_text_series_keys(tmp_path):
+    path = tmp_path / "keys.json"
+    origin = 1_700_000_000_000_000_000
+    path.write_text(json.dumps([{"sensor": sensor, "tick": tick} for sensor in (origin, str(origin)) for tick in (0, 1)]))
+    groups = module.calculate_grouped_time_series((str(path), path.name, ".json"), ["sensor"], "tick", 1)["groups"]
+    assert [group["group"] for group in groups] == [{"sensor": {"integer": str(origin)}}, {"sensor": str(origin)}]
+
+
+@pytest.mark.parametrize(("times", "cadence", "missing", "span_ns"), [
+    (["2020-01-01T00:00:00.000000000Z", "2020-01-01T00:00:00.123456789Z"], 1e-9, 123456788, 123456789),
+    (["2020-01-01T00:00:00Z", "2025-01-01T00:00:00.000000000Z"], 1, 157852799, "157852800000000000"),
+    (["2020-01-01T00:00:00Z", "2025-01-01T00:00:00.000000003Z"], 1, None, "157852800000000003"),
+])
+def test_datetime_gap_uses_exact_nanosecond_grid(tmp_path, times, cadence, missing, span_ns):
+    path = tmp_path / "times.csv"
+    path.write_text("tick\n" + "\n".join(times) + "\n")
+    group = module.calculate_grouped_time_series((str(path), path.name, ".csv"), None, "tick", cadence,
+                                                 time_kind="datetime")["groups"][0]
+    assert group["findings"][0]["estimated_missing_samples"] == missing
+    assert group["findings"][0]["delta_ns"] == span_ns
+    assert group["observed_duration_ns"] == span_ns
+
+
+
+def test_datetime_does_not_mix_day_and_month_conventions(tmp_path):
+    path = tmp_path / "dates.csv"
+    path.write_text("tick\n12/02/2026\n13/02/2026\n14/02/2026\n")
+    file_info = (str(path), path.name, ".csv")
+    rejected = module.calculate_grouped_time_series(file_info, None, "tick", 86400, time_kind="datetime")["groups"][0]
+    assert rejected["finding_counts"] == {"invalid_time": 3, "insufficient_valid_times": 1}
+    path.write_text("tick\n2026/02/12\n2026/02/13\n2026/02/14\n")
+    accepted = module.calculate_grouped_time_series(file_info, None, "tick", 86400, time_kind="datetime")["groups"][0]
+    assert accepted["finding_counts"] == {}
+
+
+
+@pytest.mark.parametrize("file_type", [".csv", ".json"])
+def test_integer_ticks_survive_a_fractional_series_in_same_table(tmp_path, file_type):
+    from aidrin.file_handling.file_parser import read_file
+    from aidrin.headless.api import run_collection_metrics
+
+    path = tmp_path / f"mixed{file_type}"
+    start = 1_700_000_000_000_000_000
+    rows = [("epoch", start), ("elapsed", .5), ("epoch", start + 1), ("elapsed", 1.5), ("epoch", start + 2)]
+    if file_type == ".csv":
+        path.write_text("sensor,tick\n" + "".join(f"{sensor},{tick}\n" for sensor, tick in rows))
+    else:
+        path.write_text(json.dumps([{"sensor": sensor, "tick": tick} for sensor, tick in rows]))
+    file_info = (str(path), path.name, file_type)
+    assert pd.api.types.is_float_dtype(read_file(file_info)["tick"].dtype)
+    expected = [(3, 2, {}), (2, 1, {})]
+    for _ in range(2):
+        groups = module.calculate_grouped_time_series(file_info, ["sensor"], "tick", 1)["groups"]
+        assert [(group["unique_time_count"], group["observed_duration"], group["finding_counts"]) for group in groups] == expected
+
+    files = [{"id": name, "path": str(path)} for name in ("first", "second")]
+    request = [{"name": "grouped_time_series", "parameters": {"group_columns": ["sensor"],
+                "timestamp_column": "tick", "expected_cadence": 1}}]
+    result = run_collection_metrics(files, request, mode="stacked")
+    groups = result["datasets"][0]["metrics"]["grouped_time_series"]["groups"]
+    assert [(group["unique_time_count"], group["observed_duration"], group["finding_counts"]) for group in groups] == expected * 2
