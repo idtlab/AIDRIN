@@ -55,6 +55,23 @@ def _is_jagged(series: pd.Series) -> bool:
     )
 
 
+def _branch_typenames(tree) -> dict:
+    """``{branch name: ROOT type name}`` for a TTree or an RNTuple."""
+    typenames = tree.typenames
+    return typenames() if callable(typenames) else dict(typenames)
+
+
+def _is_array_typename(typename) -> bool:
+    """True for ROOT types that hold a sequence per entry.
+
+    Covers ``std::vector<float>``, ``float[]``, ``float[3]``, ``std::map<...>``
+    and friends; plain scalars (``float``, ``std::int32_t``, ``std::string``)
+    carry neither bracket.
+    """
+    text = str(typename)
+    return "[" in text or "<" in text
+
+
 def _strip_cycle(name: str) -> str:
     """Normalize ``tree;1`` style keys to ``tree``."""
     if ";" in name:
@@ -110,13 +127,22 @@ class rootReader(BaseFileReader):
             self.logger.error("ROOT parse failed: %s", exc)
             return str(exc)
 
-    def _resolve_tree_name(self) -> str:
+    def _resolve_tree_name(self) -> str | None:
+        """The tree to read, or ``None`` when the file cannot pick one itself.
+
+        Returning None rather than raising lets ``read_file`` answer with the
+        same layout-aware message HDF5 and Zarr give for an ambiguous store
+        (which tree to pick, and how to pass it); a ValueError would be
+        flattened into "Unable to read the uploaded file."
+        """
         trees = self._list_trees()
         if not trees:
-            raise ValueError(
-                f"No TTree found in ROOT file '{self.file_path}'. "
-                "AIDRIN needs a TTree (tabular branches) to build a DataFrame."
+            self.logger.error(
+                "No TTree found in ROOT file '%s'; AIDRIN needs a TTree "
+                "(tabular branches) to build a DataFrame.",
+                self.file_path,
             )
+            return None
 
         selected = self._explicit_selected_keys
         if selected is None:
@@ -152,19 +178,46 @@ class rootReader(BaseFileReader):
         if len(trees) == 1:
             return trees[0]
 
-        raise ValueError(
-            f"ROOT file '{self.file_path}' has multiple TTrees "
-            f"({', '.join(trees)}). Select one tree "
-            "(web key picker, or pass selected_keys for library/Celery)."
+        self.logger.error(
+            "ROOT file '%s' has multiple TTrees (%s) and needs an explicit "
+            "selection.",
+            self.file_path,
+            ", ".join(trees),
         )
+        return None
 
-    def read(self) -> pd.DataFrame:
+    def read(self) -> pd.DataFrame | None:
         uproot = _require_uproot()
         tree_name = self._resolve_tree_name()
+        if tree_name is None:
+            # read_file turns this into the layout-aware "pick a tree" error.
+            return None
         self.logger.info("Reading ROOT TTree %r from %s", tree_name, self.file_path)
+        only_arrays = (
+            f"ROOT TTree '{tree_name}' contains only array-valued branches "
+            "(per-event sequences). AIDRIN metrics need scalar branches to "
+            "build a tabular DataFrame."
+        )
+
+        # Array-valued branches (per-event sequences, e.g. vector<float> or
+        # float[3]) are not representable as tabular columns: metrics that hash
+        # or aggregate cells crash on them (unhashable numpy.ndarray). Skip
+        # them at read time rather than after conversion: a real TTree routes
+        # them through the optional 'awkward-pandas' stack, so asking for them
+        # fails the whole read. Keep the names for df.attrs so callers can
+        # disclose the exclusion.
         with uproot.open(self.file_path) as handle:
             tree = handle[tree_name]
-            df = tree.arrays(library="pd")
+            typenames = _branch_typenames(tree)
+            jagged = [
+                name
+                for name, typename in typenames.items()
+                if _is_array_typename(typename)
+            ]
+            scalar = [name for name in typenames if name not in set(jagged)]
+            if not scalar:
+                raise ValueError(only_arrays)
+            df = tree.arrays(scalar, library="pd")
 
         if not isinstance(df, pd.DataFrame):
             raise ValueError(
@@ -174,19 +227,17 @@ class rootReader(BaseFileReader):
             raise ValueError(f"ROOT TTree '{tree_name}' produced an empty DataFrame.")
         df.columns = [str(c) for c in df.columns]
 
-        # Array-valued branches (per-event sequences, e.g. vector<float> or
-        # float[3]) are not representable as tabular columns: metrics that hash
-        # or aggregate cells crash on them (unhashable numpy.ndarray). Drop
-        # them, but keep the names on df.attrs so callers can disclose the
-        # exclusion.
-        jagged = [col for col in df.columns if _is_jagged(df[col])]
+        # Backstop: the type name does not catch every sequence (object
+        # branches, multi-leaf branches), so drop whatever still arrived as
+        # per-row arrays.
+        missed = [col for col in df.columns if _is_jagged(df[col])]
+        if missed:
+            if len(missed) == len(df.columns):
+                raise ValueError(only_arrays)
+            df = df.drop(columns=missed)
+            jagged += missed
+
         if jagged:
-            if len(jagged) == len(df.columns):
-                raise ValueError(
-                    f"ROOT TTree '{tree_name}' contains only array-valued branches "
-                    "(per-event sequences). AIDRIN metrics need scalar branches to "
-                    "build a tabular DataFrame."
-                )
             self.logger.warning(
                 "Dropped %d array-valued ROOT branch(es) from '%s' (per-event "
                 "sequences, not representable as tabular columns): %s",
@@ -194,6 +245,5 @@ class rootReader(BaseFileReader):
                 tree_name,
                 ", ".join(jagged),
             )
-            df = df.drop(columns=jagged)
             df.attrs[DROPPED_COLUMNS_ATTR] = jagged
         return df

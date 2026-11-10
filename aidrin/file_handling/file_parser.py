@@ -79,10 +79,10 @@ class ReaderReturnedNone(RuntimeError):
 
 
 # Formats whose readers legitimately refuse ambiguous inputs (a multi-array
-# HDF5/Zarr store needing selected_keys). Returning None there is
-# indistinguishable from "unsupported type", so raise instead and let the
-# CLI print one error.
-_RAISE_ON_EMPTY_FILE_TYPES = {".h5", ".zarr"}
+# HDF5/Zarr store, or a multi-tree ROOT file, needing selected_keys).
+# Returning None there is indistinguishable from "unsupported type", so raise
+# instead and let the CLI print one error.
+_RAISE_ON_EMPTY_FILE_TYPES = {".h5", ".root", ".zarr"}
 
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")
