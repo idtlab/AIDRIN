@@ -23,29 +23,16 @@ from aidrin.file_handling.file_reference_policy import (
     resolve_base_dir,
     scan_limit,
 )
-from aidrin.report.data_quality import (
-    build_data_quality_section as _build_data_quality_section_impl,
-)
 from aidrin.report.fairness import (
-    auto_select_fairness_columns as _auto_select_fairness_columns,
-    build_fairness_bias_section as _build_fairness_bias_section,
     compute_class_imbalance as _compute_class_imbalance,
-)
-from aidrin.report.governance import (
-    GOV_DP_EPSILON as _GOV_DP_EPSILON,
-    SYNTHETIC_ID_COL as _SYNTHETIC_ID_COL,
-    auto_select_governance_columns as _auto_select_governance_columns,
-    build_data_governance_section as _build_data_governance_section,
-)
-from aidrin.report.impact import (
-    build_impact_on_ai_section as _build_impact_on_ai_section,
-    prune_columns_for_corr as _prune_columns_for_corr,
 )
 from aidrin.report.overview import (
     build_dataset_overview_section as _build_dataset_overview_section_impl,
-    build_feature_profiles as _build_feature_profiles,
-    dataframe_for_overview_detail_charts as _dataframe_for_overview_detail_charts,
-    prepare_feature_profiles_for_display as _prepare_feature_profiles_for_display,
+)
+from aidrin.report.registry import (
+    SECTION_BUILDERS as _AIDRIN_SECTION_BUILDERS,
+    SECTION_RESPONSE_KEYS as _READINESS_SECTION_RESPONSE_KEYS,
+    make_viz_builders,
 )
 from aidrin.file_handling.value_iterators import iter_targets
 from aidrin.structured_data_metrics.add_noise import return_noisy_stats
@@ -87,7 +74,6 @@ from aidrin.structured_data_metrics.privacy_measure import (
     compute_k_anonymity,
     compute_l_diversity,
     compute_t_closeness,
-    generate_multiple_attribute_MM_risk_scores_groupby,
 )
 from aidrin.structured_data_metrics.representation_rate import (
     calculate_representation_rate,
@@ -382,8 +368,8 @@ def data_quality():
 # ---------------------------------------------------------------------------
 # Readiness Report (aggregated, non-interactive)
 # ---------------------------------------------------------------------------
-# Section builders and shared helpers live in aidrin.report.*; this module
-# re-exports underscore names and injects web chart renderers where needed.
+# Section/viz builders live in aidrin.report.*; web injects overview chart
+# rendering (matplotlib helpers in web.routes.utils).
 
 
 def _render_overview_charts(chart_df):
@@ -406,179 +392,15 @@ def _build_dataset_overview_section(file_info, include_visualizations=False):
     )
 
 
-def _build_data_quality_section(file_info, include_visualizations=False):
-    """Web wrapper around the shared data-quality section builder."""
-    return _build_data_quality_section_impl(
-        file_info, include_visualizations=include_visualizations
-    )
-
-
-# Data Governance section builders live in aidrin.report.governance.
-
-
-def _build_dataset_overview_visualizations(file_info):
-    df = read_file(file_info)
-    if hasattr(df, "columns"):
-        df.columns = [str(c) for c in df.columns]
-    profiles, _ = _build_feature_profiles(df)
-    display_profiles, _ = _prepare_feature_profiles_for_display(profiles)
-    chart_df = _dataframe_for_overview_detail_charts(df, display_profiles)
-    return {
-        "categorical_charts": categorical_distribution_charts(chart_df),
-        "histograms": summary_histograms(chart_df, figsize=(7, 4.5)),
-        "histogram_bars": continuous_bars(chart_df, figsize=(7, 4.5)),
-    }
-
-
-def _build_data_quality_visualizations(file_info):
-    compl = completeness(file_info, include_visualization=True)
-    out = outliers(file_info, include_visualization=True)
-    viz = {}
-    if compl.get("Completeness Visualization"):
-        viz["completeness"] = compl["Completeness Visualization"]
-    if isinstance(out, dict) and out.get("Outliers Visualization"):
-        viz["outliers"] = out["Outliers Visualization"]
-    return viz
-
-
-def _build_impact_on_ai_visualizations(file_info):
-    df = read_file(file_info)
-    if hasattr(df, "columns"):
-        df.columns = [str(c) for c in df.columns]
-    kept, _ = _prune_columns_for_corr(df)
-    if len(kept) < 2:
-        return {}
-    corr = calc_correlations(kept, file_info, include_visualization=True)
-    if isinstance(corr, dict) and "Message" in corr:
-        return {}
-    cat = corr.get("Correlations Analysis Categorical", {}) or {}
-    num = corr.get("Correlations Analysis Numerical", {}) or {}
-    viz = {}
-    cat_img = cat.get("Correlations Analysis Categorical Visualization")
-    num_img = num.get("Correlations Analysis Numerical Visualization")
-    if cat_img:
-        viz["categorical_correlation"] = cat_img
-    if num_img:
-        viz["numerical_correlation"] = num_img
-    return viz
-
-
-def _build_fairness_bias_visualizations(file_info):
-    df = read_file(file_info)
-    if hasattr(df, "columns"):
-        df.columns = [str(c) for c in df.columns]
-    selection = _auto_select_fairness_columns(df)
-    sensitive_cols = selection["sensitive_columns"]
-    target_col = selection["target_column"]
-    primary_sensitive = selection["primary_sensitive"]
-    viz = {}
-    for col in sensitive_cols:
-        try:
-            vis = create_representation_rate_vis([col], file_info)
-            if isinstance(vis, str):
-                viz[f"representation_rate.{col}"] = vis
-        except Exception:
-            pass
-    if target_col:
-        ci_dict = _compute_class_imbalance(df, target_col, "EU", include_visualization=True)
-        img = ci_dict.get("Class Imbalance Visualization")
-        if img:
-            viz["class_imbalance"] = img
-    if primary_sensitive and target_col:
-        sr = calculate_statistical_rates(
-            target_col, primary_sensitive, file_info, include_visualization=True,
-        )
-        if isinstance(sr, dict) and sr.get("Statistical Rate Visualization"):
-            viz["statistical_rate"] = sr["Statistical Rate Visualization"]
-    return viz
-
-
-def _build_data_governance_visualizations(file_info):
-    """Build only chart payloads for governance (metrics already computed on initial load)."""
-    df = read_file(file_info)
-    if hasattr(df, "columns"):
-        df.columns = [str(c) for c in df.columns]
-
-    fairness_sel = _auto_select_fairness_columns(df)
-    selection = _auto_select_governance_columns(
-        df, fairness_target=fairness_sel.get("target_column")
-    )
-    qi = selection["quasi_identifiers"]
-    mm_qis = selection["mm_quasi_identifiers"]
-    sensitive = selection["sensitive_attribute"]
-    id_col = selection["id_column"]
-    id_synthetic = selection["id_synthetic"]
-    dp_features = selection["dp_features"]
-
-    work_df = df.copy()
-    if id_synthetic:
-        work_df[_SYNTHETIC_ID_COL] = range(len(work_df))
-        id_col = _SYNTHETIC_ID_COL
-
-    viz = {}
-    if qi:
-        k_res = compute_k_anonymity(qi, work_df, include_visualization=True)
-        img = k_res.get("k-Anonymity Visualization")
-        if img:
-            viz["k_anonymity"] = img
-        e_res = compute_entropy_risk(qi, work_df, include_visualization=True)
-        img = e_res.get("Entropy Risk Visualization")
-        if img:
-            viz["entropy_risk"] = img
-    if qi and sensitive:
-        l_res = compute_l_diversity(qi, sensitive, work_df, include_visualization=True)
-        img = l_res.get("l-Diversity Visualization")
-        if img:
-            viz["l_diversity"] = img
-        t_res = compute_t_closeness(qi, sensitive, work_df, include_visualization=True)
-        img = t_res.get("t-Closeness Visualization")
-        if img:
-            viz["t_closeness"] = img
-    if mm_qis:
-        m_res = generate_multiple_attribute_MM_risk_scores_groupby(
-            work_df, id_col, mm_qis, include_visualization=True
-        )
-        img = m_res.get("Multiple attribute risk scoring Visualization")
-        if img:
-            viz["multiple_attribute_risk"] = img
-    if dp_features:
-        try:
-            dp_res = return_noisy_stats(
-                dp_features, _GOV_DP_EPSILON, work_df,
-                save_output=False, include_visualization=True,
-            )
-            img = dp_res.get("DP Statistics Visualization")
-            if img:
-                viz["differential_privacy"] = img
-        except Exception:
-            pass
-    return viz
-
-
-_READINESS_VIZ_BUILDERS = {
-    "dataset-overview": _build_dataset_overview_visualizations,
-    "data-quality": _build_data_quality_visualizations,
-    "impact-on-ai": _build_impact_on_ai_visualizations,
-    "fairness-bias": _build_fairness_bias_visualizations,
-    "data-governance": _build_data_governance_visualizations,
-}
-
-
 _READINESS_SECTION_BUILDERS = {
+    **_AIDRIN_SECTION_BUILDERS,
+    # Inject overview chart renderer when visualizations are requested inline.
     "dataset-overview": _build_dataset_overview_section,
-    "data-quality": _build_data_quality_section,
-    "impact-on-ai": _build_impact_on_ai_section,
-    "fairness-bias": _build_fairness_bias_section,
-    "data-governance": _build_data_governance_section,
 }
 
-_READINESS_SECTION_RESPONSE_KEYS = {
-    "dataset-overview": "dataset_overview",
-    "data-quality": "data_quality",
-    "impact-on-ai": "impact_on_ai",
-    "fairness-bias": "fairness_bias",
-    "data-governance": "data_governance",
-}
+_READINESS_VIZ_BUILDERS = make_viz_builders(
+    render_overview_charts=_render_overview_charts
+)
 
 _READINESS_CACHE_TTL_SECONDS = 30 * 60
 
