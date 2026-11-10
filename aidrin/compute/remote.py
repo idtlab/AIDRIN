@@ -30,7 +30,7 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
 
     def _grouped_time_series():
         return aidrin.calculate_grouped_time_series(
-            file_info, params.get("group_columns"), params.get("sequence_timestamp_column", params.get("timestamp_column")),
+            file_info, params.get("group_columns", []), params.get("sequence_timestamp_column", params.get("timestamp_column")),
             params.get("expected_cadence"), params.get("time_kind", "numeric"), params.get("tolerance", 0.0),
             params.get("max_findings", 100), params.get("expected_count"), params.get("expected_duration"),
         )

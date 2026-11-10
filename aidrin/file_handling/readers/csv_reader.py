@@ -1,4 +1,5 @@
 import csv
+import io
 
 import pandas as pd
 
@@ -14,7 +15,15 @@ class csvReader(BaseFileReader):
     def read(self):
         return pd.read_csv(self.file_path, index_col=False, sep=self._detect_delimiter())
 
-    def _detect_delimiter(self):
+    def read_sample(self, rows, columns):
+        with open(self.file_path, "rb") as handle:
+            prefix = handle.read(_SNIFF_BYTES + 1)
+        if len(prefix) > _SNIFF_BYTES:
+            prefix = prefix[:_SNIFF_BYTES].rpartition(b"\n")[0]
+        delimiter = self._detect_delimiter(prefix.decode("utf-8-sig", errors="replace"))
+        return pd.read_csv(io.BytesIO(prefix), index_col=False, sep=delimiter, nrows=rows, usecols=columns)
+
+    def _detect_delimiter(self, sample=None):
         """Delimiter reported by csv.Sniffer, or comma when it cannot tell.
 
         A file named .csv is not always comma-separated. Parsing a pipe-, tab-
@@ -32,8 +41,9 @@ class csvReader(BaseFileReader):
         rejects any field larger than 128 KiB.
         """
         try:
-            with open(self.file_path, newline="", errors="replace") as handle:
-                sample = handle.read(_SNIFF_BYTES)
+            if sample is None:
+                with open(self.file_path, newline="", errors="replace") as handle:
+                    sample = handle.read(_SNIFF_BYTES)
             delimiter = csv.Sniffer().sniff(sample, delimiters=_DELIMITERS).delimiter
         except (OSError, csv.Error):
             return ","

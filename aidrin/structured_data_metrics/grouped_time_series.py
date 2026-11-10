@@ -4,6 +4,7 @@ import math
 import re
 from collections import Counter
 from datetime import date, datetime
+from statistics import median_low
 
 import numpy as np
 import pandas as pd
@@ -17,6 +18,9 @@ DESCRIPTION = (
     "input unit; datetime cadence and duration use seconds. Relative times do not "
     "establish synchronization. No sorting, interpolation, or repair is applied."
 )
+_ISO_DATE_PREFIX = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[Tt ]|$)")
+_FORMAT_SAMPLE_LIMIT = 256
+_INTERVAL_ROUNDOFF = 1e-9
 
 
 def _number(value, name, positive=False):
@@ -65,7 +69,7 @@ def _scalar(value):
     return str(value)
 
 
-def _time(value, time_kind):
+def _time(value, time_kind, *, iso_dates_only=False):
     """Return comparable time, display time, timezone awareness, or diagnostic."""
     if not pd.api.types.is_scalar(value):
         return None, None, None, "invalid_time"
@@ -92,6 +96,8 @@ def _time(value, time_kind):
     # Numeric epoch values must not silently become nanoseconds since epoch.
     if not isinstance(value, (str, datetime, date, pd.Timestamp, np.datetime64)):
         return None, None, None, "invalid_time"
+    if iso_dates_only and isinstance(value, str) and not _ISO_DATE_PREFIX.match(value.strip()):
+        return None, None, None, "invalid_time"
     try:
         parsed = pd.Timestamp(value)
         if pd.isna(parsed):
@@ -99,6 +105,85 @@ def _time(value, time_kind):
         return parsed.value, parsed.isoformat(), parsed.tzinfo is not None, None
     except (TypeError, ValueError, OverflowError):
         return None, None, None, "invalid_time"
+
+
+def _detect_time_kind(series):
+    if pd.api.types.is_datetime64_any_dtype(series.dtype):
+        return "datetime"
+    if series.empty or pd.api.types.is_any_real_numeric_dtype(series.dtype):
+        return "numeric"
+
+    detected = None
+    stride = (len(series) + _FORMAT_SAMPLE_LIMIT - 1) // _FORMAT_SAMPLE_LIMIT
+    for value in series.iloc[::stride]:
+        if _time(value, "numeric")[3] is None:
+            kind = "numeric"
+        elif _time(value, "datetime", iso_dates_only=True)[3] is None:
+            kind = "datetime"
+        else:
+            continue
+        if detected is not None and detected != kind:
+            raise ValueError("Time column contains both numbers and dates. Choose Numeric time or Date and time to continue.")
+        detected = kind
+    if detected is None:
+        raise ValueError("Could not detect the time format. Choose Numeric time or Date and time to continue.")
+    return detected
+
+
+def _group_positions(frame, group_columns):
+    if not group_columns:
+        return [], () if frame.empty else (range(len(frame)),)
+    # Positions refer to input order and do not depend on index labels.
+    work = frame[group_columns].reset_index(drop=True)
+    assigned = work.notna().all(axis=1)
+    unassigned = [int(i) for i in work.index[~assigned]]
+    return unassigned, work[assigned].groupby(group_columns, sort=False, observed=True).groups.values()
+
+
+def suggest_sample_interval(frame, group_columns, timestamp_column, time_kind):
+    """Find a common interval from a bounded, in-order sample of one file."""
+    if time_kind not in {"auto", "numeric", "datetime"}:
+        raise ValueError("Choose a valid time format.")
+    times = frame[timestamp_column]
+    auto_detect = time_kind == "auto"
+    if auto_detect:
+        time_kind = _detect_time_kind(times)
+    _, groups = _group_positions(frame, group_columns)
+    candidates = []
+    matching_intervals = 0
+    for positions in groups:
+        previous = awareness = None
+        deltas = []
+        for position in positions:
+            value, _, aware, error = _time(times.iloc[position], time_kind, iso_dates_only=auto_detect)
+            if error or (awareness is not None and awareness != aware):
+                previous = None
+                continue
+            awareness = aware
+            if previous is not None:
+                delta = _interval_delta(value, previous, time_kind)
+                if delta > 0 and _finite(delta):
+                    deltas.append(delta)
+            previous = value
+        if not deltas:
+            continue
+        candidate = median_low(deltas)
+        matching = sum(math.isclose(delta, candidate, rel_tol=_INTERVAL_ROUNDOFF) for delta in deltas)
+        if matching * 3 < len(deltas) * 2:
+            raise ValueError("The sampled timestamps have uneven spacing. Enter the expected interval manually.")
+        candidates.append(candidate)
+        matching_intervals += matching
+    if matching_intervals < 2:
+        raise ValueError("There are too few usable intervals in the sample. Enter the expected interval manually.")
+    candidate = median_low(candidates)
+    if any(not math.isclose(interval, candidate, rel_tol=_INTERVAL_ROUNDOFF) for interval in candidates):
+        raise ValueError("The sampled series have different intervals. Enter the expected interval manually.")
+    return candidate, time_kind
+
+
+def _interval_delta(value, previous, time_kind):
+    delta = value - previous
+    return delta / 1e9 if time_kind == "datetime" else delta
 
 
 def calculate_grouped_time_series(
@@ -111,19 +196,23 @@ def calculate_grouped_time_series(
     Row positions are zero-based positions in the parsed input, excluding the
     header. Checks compare adjacent rows within each group without sorting.
     Invalid time rows break adjacency; checks never bridge them. Duplicate
-    detection also finds non-adjacent repeats. ``max_findings=0`` is unlimited.
+    detection also finds non-adjacent repeats. Pass ``group_columns=None`` to
+    check the entire table as one sequence. ``time_kind='auto'`` detects numeric
+    or ISO-style date and time values. ``max_findings=0`` is unlimited.
     """
     if isinstance(group_columns, str):
         group_columns = [c.strip() for c in group_columns.split(",") if c.strip()]
-    if not isinstance(group_columns, (list, tuple)) or not group_columns:
+    if group_columns is None:
+        group_columns = []
+    elif not isinstance(group_columns, (list, tuple)) or not group_columns:
         raise ValueError("group_columns must contain at least one column")
     group_columns = list(group_columns)
     if any(not isinstance(c, str) or not c for c in group_columns) or len(set(group_columns)) != len(group_columns):
         raise ValueError("group_columns must contain distinct non-empty column names")
     if not isinstance(timestamp_column, str) or not timestamp_column or timestamp_column in group_columns:
         raise ValueError("timestamp_column must be a column separate from group_columns")
-    if time_kind not in {"numeric", "datetime"}:
-        raise ValueError("time_kind must be numeric or datetime")
+    if time_kind not in {"numeric", "datetime", "auto"}:
+        raise ValueError("time_kind must be numeric, datetime, or auto")
     cadence = _number(expected_cadence, "expected_cadence", positive=True)
     tolerance = _number(tolerance, "tolerance")
     if tolerance >= cadence / 2:
@@ -144,18 +233,18 @@ def calculate_grouped_time_series(
         if not frame[column].map(pd.api.types.is_scalar).all():
             raise ValueError(f"Group column must contain scalar keys: {column}")
 
-    # Work on a small private projection. Neither source order nor cached frames
-    # returned by read_file are mutated. Positions do not rely on index labels.
+    times = frame[timestamp_column]
+    auto_detect = time_kind == "auto"
+    if auto_detect:
+        time_kind = _detect_time_kind(times)
+
     groups = []
-    work = frame[group_columns].copy().reset_index(drop=True)
-    assigned = work.notna().all(axis=1)
-    unassigned = [int(i) for i in work.index[~assigned]]
+    unassigned, positions_by_group = _group_positions(frame, group_columns)
     total_counts = Counter({"missing_group_key": len(unassigned)} if unassigned else {})
-    for _, indices in work[assigned].groupby(group_columns, sort=False, observed=True).groups.items():
-        positions = list(indices)
+    for positions in positions_by_group:
         keys = {c: _scalar(frame[c].iloc[positions[0]]) for c in group_columns}
-        group = _audit_group(frame[timestamp_column], positions, keys, time_kind, cadence, tolerance, max_findings,
-                             expected_count, expected_duration)
+        group = _audit_group(times, positions, keys, time_kind, cadence, tolerance, max_findings,
+                             expected_count, expected_duration, iso_dates_only=auto_detect)
         groups.append(group)
         total_counts.update(group["finding_counts"])
     return {
@@ -167,7 +256,7 @@ def calculate_grouped_time_series(
             "time_kind": time_kind, "expected_cadence": cadence, "tolerance": tolerance,
             "max_findings": max_findings, "expected_count": expected_count,
             "expected_duration": expected_duration, "row_position_base": 0,
-            "comparison_relative_tolerance": 1e-9,
+            "comparison_relative_tolerance": _INTERVAL_ROUNDOFF,
         },
         "summary": {
             "total_rows": len(frame), "group_count": len(groups),
@@ -180,7 +269,7 @@ def calculate_grouped_time_series(
     }
 
 
-def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, expected_count, expected_duration):
+def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, expected_count, expected_duration, *, iso_dates_only):
     counts = Counter()
     findings = []
 
@@ -195,7 +284,7 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
     awareness = None
     evaluated = 0
     for position in positions:
-        value, display, aware, error = _time(series.iloc[position], time_kind)
+        value, display, aware, error = _time(series.iloc[position], time_kind, iso_dates_only=iso_dates_only)
         if error:
             record(error, row_position=int(position))
             previous = None
@@ -214,7 +303,7 @@ def _audit_group(series, positions, keys, time_kind, cadence, tolerance, cap, ex
             seen[value] = int(position)
         if previous is not None:
             left, left_display, left_position = previous
-            delta = (value - left) / 1e9 if time_kind == "datetime" else value - left
+            delta = _interval_delta(value, left, time_kind)
             interval = {"from_row_position": left_position, "to_row_position": int(position),
                         "from_time": left_display, "to_time": display, "delta": _json_number(delta)}
             evaluated += 1

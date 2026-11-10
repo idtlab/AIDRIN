@@ -105,6 +105,44 @@ def test_cross_file_boundaries_are_explicit_and_scoped_to_grouped_check(client):
     assert client.get("/retrieve-uploaded-file").data == CLEAN
 
 
+def test_one_series_per_file_keeps_boundaries_in_both_collection_modes(client):
+    clean = b"t,value\n0,1\n.01,2\n"
+    upload(client, ("a.csv", clean), ("b.csv", clean))
+    ids = [entry["id"] for entry in inventory(client)]
+    for mode, expected_groups in [("independent", [1, 1]), ("stacked", [2])]:
+        result = run_grouped(client, ids, mode=mode, grouped_series="file", grouped_file_boundaries="")
+        audits = [dataset["metrics"]["grouped_time_series"] for dataset in result["Grouped Time Series"]["datasets"]]
+        assert [audit["summary"]["group_count"] for audit in audits] == expected_groups
+        assert all(audit["summary"]["finding_counts"] == {} for audit in audits)
+
+
+def test_independent_files_auto_detect_time_format_for_each_dataset(client):
+    numeric = b"t,value\n0,1\n.01,2\n"
+    datetime = b"t,value\n2026-01-01T00:00:00Z,1\n2026-01-01T00:00:00.02Z,2\n"
+    assert upload(client, ("numeric.csv", numeric), ("datetime.csv", datetime)).status_code == 302
+    ids = [entry["id"] for entry in inventory(client)]
+    result = run_grouped(client, ids, grouped_series="file", **{"time kind for grouped time series": "auto"})
+    audits = [dataset["metrics"]["grouped_time_series"] for dataset in result["Grouped Time Series"]["datasets"]]
+    assert [audit["parameters"]["time_kind"] for audit in audits] == ["numeric", "datetime"]
+    assert [audit["summary"]["finding_counts"] for audit in audits] == [{}, {"cadence_gap": 1}]
+
+
+def test_interval_suggestion_samples_only_a_few_files_and_requires_agreement(client):
+    common = b"t,value\n0,1\n.01,2\n.02,3\n"
+    different = b"t,value\n0,1\n.02,2\n.04,3\n"
+    files = [(f"{index}.csv", common) for index in range(8)] + [("different.csv", different)]
+    assert upload(client, *files).status_code == 302
+    ids = [entry["id"] for entry in inventory(client)]
+    form = {"action": "suggest_grouped_interval", "grouped_input_files": "selected", "grouped_series": "file",
+            "timestamp column for grouped time series": "t"}
+    response = client.post("/data-quality", data={**form, "grouped_file_id": ids[:-1]})
+    assert response.status_code == 200
+    assert response.get_json() == {"interval": .01, "time_kind": "numeric", "sampled_files": 6, "total_files": 8}
+    response = client.post("/data-quality", data={**form, "grouped_file_id": ids})
+    assert response.status_code == 400
+    assert "different intervals" in response.get_json()["error"]
+
+
 def test_file_ids_are_session_owned(client, app):
     upload(client, ("a.csv", CLEAN), ("b.csv", GAP))
     foreign = app.test_client()

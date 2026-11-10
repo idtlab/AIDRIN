@@ -25,7 +25,9 @@ from aidrin.file_handling.file_parser import (
 )
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
+from web.routes.grouped_interval import remember_interval_sample
 from web.routes.utils import (
+    build_file_info,
     clear_all_user_cache,
     confine_to_upload_folder,
     describe_loader_error,
@@ -708,10 +710,12 @@ def extract_features():
         if not file_type:
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
-        file_info = (file_path, file_name, file_type)
+        file_info = build_file_info(file_path, file_name, file_type)
         df, load_error = load_dataframe(file_info)
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200
+
+        remember_interval_sample(file_info, df)
 
         numerical_columns = [
             col for col, dtype in df.dtypes.items() if pd.api.types.is_numeric_dtype(dtype)
@@ -733,6 +737,7 @@ def extract_features():
             "categorical_features": list(categorical_columns),
             "numerical_features": list(numerical_columns),
             "all_features": all_features,
+            "datetime_features": [col for col, dtype in df.dtypes.items() if pd.api.types.is_datetime64_any_dtype(dtype)],
             "class_imbalance_features": class_imbalance_features,
         }
         return jsonify(response_data)

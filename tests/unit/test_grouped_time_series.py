@@ -42,12 +42,14 @@ def test_float_cadence_and_zero_values_are_valid(monkeypatch):
     json.dumps(result, allow_nan=False)
 
 
-def test_datetime_nanosecond_precision_and_offset_equivalence(monkeypatch):
+@pytest.mark.parametrize("time_kind", ["datetime", "auto"])
+def test_datetime_nanosecond_precision_and_offset_equivalence(monkeypatch, time_kind):
     times = ["2026-01-01T00:00:00.000000000Z", "2025-12-31T19:00:00.000000001-05:00",
              "2026-01-01T00:00:00.000000003Z"]
     frame = pd.DataFrame({"sensor": [1, 1, 1], "time": times})
     monkeypatch.setattr(module, "read_file", lambda _: frame)
-    result = module.calculate_grouped_time_series(("x", "x", ".csv"), ["sensor"], "time", 1e-9, time_kind="datetime")
+    result = module.calculate_grouped_time_series(("x", "x", ".csv"), ["sensor"], "time", 1e-9, time_kind=time_kind)
+    assert result["parameters"]["time_kind"] == "datetime"
     group = result["groups"][0]
     assert group["observed_duration"] == pytest.approx(3e-9)
     assert group["finding_counts"] == {"cadence_gap": 1}
@@ -77,6 +79,27 @@ def test_mixed_timezone_awareness_is_diagnostic_not_assumed_utc(monkeypatch):
 def test_numeric_epoch_is_not_implicitly_datetime(monkeypatch):
     result = audit(monkeypatch, [0, 1], time_kind="datetime")
     assert result["groups"][0]["finding_counts"] == {"invalid_time": 2, "insufficient_valid_times": 1}
+
+
+def test_auto_keeps_numeric_strings_numeric_and_audits_bad_values(monkeypatch):
+    result = audit(monkeypatch, ["1700000000000000000", "1700000000000000001", "bad"], time_kind="auto")
+    assert result["parameters"]["time_kind"] == "numeric"
+    assert result["groups"][0]["last_time"] == "1700000000000000001"
+    assert result["summary"]["finding_counts"] == {"cadence_gap": 1, "invalid_time": 1}
+
+
+def test_auto_datetime_does_not_infer_a_date_for_time_only_rows(monkeypatch):
+    result = audit(monkeypatch, ["2026-01-01T00:00:00Z", "12:00", "2026-01-01T00:00:00.03Z"], time_kind="auto")
+    assert result["parameters"]["time_kind"] == "datetime"
+    assert result["summary"]["finding_counts"] == {"invalid_time": 1}
+    assert result["groups"][0]["evaluated_adjacent_intervals"] == 0
+
+
+def test_auto_rejects_mixed_formats_and_manual_override_remains_available(monkeypatch):
+    times = ["0", "2026-01-01T00:00:00Z", "0.01"]
+    with pytest.raises(ValueError, match="both numbers and dates"):
+        audit(monkeypatch, times, time_kind="auto")
+    assert audit(monkeypatch, times, time_kind="numeric")["summary"]["finding_counts"] == {"invalid_time": 1}
 
 
 def test_tolerance_short_intervals_and_off_grid_gap(monkeypatch):
@@ -125,7 +148,7 @@ def test_overflowing_numeric_span_is_diagnostic(monkeypatch):
 @pytest.mark.parametrize("options", [
     {"expected_cadence": 0}, {"expected_cadence": float("inf")}, {"expected_cadence": True},
     {"group_columns": []}, {"group_columns": ["sensor", "sensor"]}, {"group_columns": ["absent"]},
-    {"timestamp_column": "sensor"}, {"timestamp_column": "absent"}, {"time_kind": "auto"},
+    {"timestamp_column": "sensor"}, {"timestamp_column": "absent"}, {"time_kind": "unknown"},
     {"tolerance": -.1}, {"tolerance": .005}, {"max_findings": 1.2}, {"expected_count": 0},
     {"expected_duration": float("nan")},
 ])

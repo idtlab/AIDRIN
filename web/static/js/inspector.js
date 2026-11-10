@@ -1037,15 +1037,34 @@ function _restoreFormState(panelId, state) {
       );
       list.prepend(...ids.map((id) => rows.get(id)).filter(Boolean));
     }
-    if (list && state.grouped_collection_mode === "stacked") {
+    if (
+      list &&
+      state.grouped_collection_mode === "stacked" &&
+      state.grouped_series !== "file"
+    ) {
       panel.querySelector('[name="grouped_file_boundaries"]').checked =
         state.grouped_file_boundaries === "yes";
     }
   }
-  if (panelId === "data-quality") syncGroupedFileSelection();
+  if (panelId === "data-quality") {
+    const series = document.getElementById("grouped-series");
+    if (
+      !state.grouped_series &&
+      state["group columns for grouped time series"]
+    ) {
+      series.value = "columns";
+    }
+    toggleValue(panel.querySelector('[name="grouped time series"]'));
+    syncGroupedTimeSeriesOptions();
+  }
 }
 
-function syncGroupedFileSelection() {
+function syncGroupedTimeSeriesOptions() {
+  const byColumns =
+    document.getElementById("grouped-series").value === "columns";
+  const columns = document.getElementById("grouped-series-columns");
+  columns.hidden = !byColumns;
+  columns.disabled = !byColumns;
   const scope = document.getElementById("grouped-input-files");
   if (!scope) return;
   const selection = document.getElementById("grouped-file-selection");
@@ -1055,9 +1074,9 @@ function syncGroupedFileSelection() {
     document.getElementById("grouped-collection-mode").value === "stacked";
   selection.disabled = !enabled;
   selection.classList.toggle("hidden", !enabled);
-  document
-    .getElementById("grouped-stack-options")
-    .classList.toggle("hidden", !stacked);
+  const boundaries = document.getElementById("grouped-file-boundaries-label");
+  boundaries.hidden = !stacked || !byColumns;
+  boundaries.querySelector("input").disabled = boundaries.hidden;
   for (const button of selection.querySelectorAll(
     "[data-grouped-file-order]",
   )) {
@@ -1080,6 +1099,115 @@ function moveGroupedFile(button, direction) {
   if (direction < 0) neighbor.before(row);
   else neighbor.after(row);
   button.focus();
+}
+
+function groupedIntervalRequest(form) {
+  const inputs = new FormData(form);
+  const request = new URLSearchParams({ action: "suggest_grouped_interval" });
+  for (const name of [
+    "grouped_input_files",
+    "grouped_file_id",
+    "grouped_series",
+    "group columns for grouped time series",
+    "timestamp column for grouped time series",
+    "time kind for grouped time series",
+  ]) {
+    for (const value of inputs.getAll(name)) request.append(name, value);
+  }
+  return request;
+}
+
+async function suggestGroupedInterval(button) {
+  const form = button.form;
+  const input = form.elements.namedItem("cadence for grouped time series");
+  const status = document.getElementById("grouped-interval-status");
+  const apply = document.getElementById("grouped-interval-apply");
+  const request = groupedIntervalRequest(form);
+  const current = () =>
+    form.elements.namedItem("grouped time series").checked &&
+    groupedIntervalRequest(form).toString() === request.toString();
+  apply.hidden = true;
+  status.textContent = "Sampling timestamps…";
+  button.disabled = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+  try {
+    const response = await fetch("/data-quality", {
+      method: "POST",
+      body: request,
+      signal: controller.signal,
+    });
+    const suggestion = await response.json();
+    if (!current()) {
+      status.textContent = "Settings changed. Ask for a new suggestion.";
+      return;
+    }
+    if (suggestion.error) {
+      status.textContent = suggestion.error;
+      return;
+    }
+    const units =
+      suggestion.time_kind === "datetime" ? "seconds" : "column units";
+    const source =
+      suggestion.sampled_files < suggestion.total_files
+        ? `${suggestion.sampled_files} of ${suggestion.total_files} files`
+        : `${suggestion.sampled_files} ${suggestion.sampled_files === 1 ? "file" : "files"}`;
+    status.textContent = `Suggested ${suggestion.interval} ${units} from sampled rows in ${source}.`;
+    if (!input.value && !input.validity.badInput) {
+      input.value = suggestion.interval;
+    } else {
+      apply.hidden = false;
+      apply.onclick = () => {
+        if (current()) {
+          input.value = suggestion.interval;
+          input.focus();
+        } else {
+          status.textContent = "Settings changed. Ask for a new suggestion.";
+        }
+        apply.hidden = true;
+      };
+    }
+  } catch (error) {
+    status.textContent =
+      error.name === "AbortError"
+        ? "A quick suggestion timed out. Enter the expected interval manually."
+        : "A quick suggestion is unavailable. Enter the expected interval manually.";
+  } finally {
+    clearTimeout(timeout);
+    button.disabled = false;
+  }
+}
+
+function groupedTimeSeriesFormError(formData) {
+  if (formData.get("grouped time series") !== "yes") return "";
+  if (
+    formData.get("grouped_input_files") === "selected" &&
+    !formData.has("grouped_file_id")
+  ) {
+    return "Choose at least one file to check.";
+  }
+  const time = formData.get("timestamp column for grouped time series");
+  if (!time) return "Choose a time column for the series check.";
+  const interval = Number(formData.get("cadence for grouped time series"));
+  if (!Number.isFinite(interval) || interval <= 0) {
+    return "Enter a positive expected time between samples.";
+  }
+  if (formData.get("grouped_series") === "columns") {
+    const columns = formData.getAll("group columns for grouped time series");
+    if (!columns.length)
+      return "Choose at least one column that identifies each series.";
+    if (columns.includes(time))
+      return "Choose series identifiers separately from the time column.";
+  }
+  const variation = Number(formData.get("tolerance for grouped time series"));
+  if (
+    !Number.isFinite(variation) ||
+    variation < 0 ||
+    variation >= interval / 2
+  ) {
+    return "Allowed timing variation must be zero or positive and less than half the expected interval.";
+  }
+  return "";
 }
 
 // Handle browser back/forward buttons
@@ -1175,6 +1303,15 @@ function withSubmitGuard(button, taskFn) {
  * @param {string} targetUrl - The metric endpoint URL (e.g., '/data-quality')
  */
 async function workspaceSubmit(targetUrl) {
+  if (targetUrl === "/data-quality") {
+    const error = groupedTimeSeriesFormError(
+      new FormData(document.getElementById("form-data-quality")),
+    );
+    if (error) {
+      showToast(error, "error");
+      return;
+    }
+  }
   // Clear previous results before submitting new ones
   const resultsSection = document.getElementById("results-section");
   if (resultsSection) resultsSection.style.display = "none";
@@ -1283,9 +1420,10 @@ async function workspaceSubmit(targetUrl) {
       if (gFormData.get("grouped time series") === "yes") {
         selected.push("grouped_time_series");
         selectedNames.push("Grouped Time Series");
-        remoteParams.group_columns = gFormData.getAll(
-          "group columns for grouped time series",
-        );
+        remoteParams.group_columns =
+          gFormData.get("grouped_series") === "file"
+            ? null
+            : gFormData.getAll("group columns for grouped time series");
         remoteParams.sequence_timestamp_column = gFormData.get(
           "timestamp column for grouped time series",
         );
@@ -2212,13 +2350,24 @@ function renderBeforeAfterTable(before, after) {
 
 function renderGroupedTimeSeriesResults(result) {
   const summary = result.summary || {};
-  let html = `<p class="mb-3 text-sm">${escapeHtml(String(summary.group_count ?? 0))} groups; ${escapeHtml(String(summary.groups_with_findings ?? 0))} with findings; ${escapeHtml(String(summary.unassigned_rows ?? 0))} rows missing group keys.</p>`;
+  let html = `<p class="mb-3 text-sm">${escapeHtml(String(summary.group_count ?? 0))} series · ${escapeHtml(String(summary.groups_with_findings ?? 0))} with findings</p>`;
+  if (result.parameters?.time_kind) {
+    const format =
+      result.parameters.time_kind === "datetime"
+        ? "Date and time (seconds)"
+        : "Numeric time (column units)";
+    html += `<p class="mb-3 text-xs">Time format: ${format}</p>`;
+  }
   html += `<p class="mb-3 text-xs">Row positions start at 0 in the parsed input. Sequences retain input order. Relative times do not establish synchronization.</p>`;
   if (summary.unassigned_rows) {
-    html += `<p class="mb-3 text-sm">Unassigned row positions: ${escapeHtml(JSON.stringify(result.unassigned_row_positions))}${result.unassigned_rows_truncated ? " (detail capped)" : ""}</p>`;
+    html += `<p class="mb-3 text-sm">Rows missing series identifiers: ${escapeHtml(String(summary.unassigned_rows))}. Positions: ${escapeHtml(JSON.stringify(result.unassigned_row_positions))}${result.unassigned_rows_truncated ? " (detail capped)" : ""}</p>`;
   }
   for (const group of result.groups || []) {
-    html += `<details class="mb-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3"><summary class="cursor-pointer text-sm font-medium">${escapeHtml(JSON.stringify(group.group))}: ${escapeHtml(String(group.row_count))} rows, ${escapeHtml(String(group.valid_time_count))} valid times, span ${escapeHtml(String(group.observed_duration ?? "unknown"))}</summary>`;
+    const series =
+      Object.entries(group.group)
+        .map(([column, value]) => `${column}: ${value}`)
+        .join(" · ") || "Whole file";
+    html += `<details class="mb-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3"><summary class="cursor-pointer text-sm font-medium">${escapeHtml(series)} · ${escapeHtml(String(group.row_count))} rows, ${escapeHtml(String(group.valid_time_count))} valid times, span ${escapeHtml(String(group.observed_duration ?? "unknown"))}</summary>`;
     html += `<p class="mt-2 text-xs">${escapeHtml(JSON.stringify(group.finding_counts))}${group.findings_truncated ? " (detail capped; counts cover all rows)" : ""}</p>`;
     html += `<pre class="mt-2 text-xs overflow-auto" style="max-height: 300px; white-space: pre-wrap;">${escapeHtml(JSON.stringify(group.findings, null, 2))}</pre></details>`;
   }
@@ -8488,7 +8637,10 @@ function populateWorkspaceDropdowns(data) {
     allFeatures,
     "features for duplicate detection",
   );
-  fillDropdown("groupedTimeSeriesTimeDropdown", allFeatures);
+  fillDropdown("groupedTimeSeriesTimeDropdown", [
+    ...allFeatures,
+    ...(data.datetime_features || []),
+  ]);
   fillCheckboxContainer(
     "groupedTimeSeriesColumnsCheckbox",
     allFeatures,

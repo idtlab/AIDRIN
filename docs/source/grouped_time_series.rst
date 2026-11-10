@@ -3,8 +3,8 @@
 Grouped Time Series
 ===================
 
-Audit each sensor, subject, or simulation-run sequence independently, using
-explicit group columns and a time column. Checks retain the parsed input order:
+Audit each sensor, subject, or simulation-run sequence independently. A table can
+contain one sequence or use group columns to identify several. Checks retain the parsed input order:
 AIDRIN never sorts, repairs, interpolates, or removes rows during this audit.
 This complements temporal completeness, which measures datetime interval
 coverage between observed endpoints rather than sequence ordering or cadence.
@@ -69,8 +69,8 @@ example.
 
 Set ``time_kind="datetime"`` for datetime values or datetime strings. Cadence,
 tolerance and expected duration then use seconds: for example,
-``expected_cadence=0.01`` means ten milliseconds. Numeric time is explicit
-(``time_kind="numeric"``, the default); its cadence and duration use the input
+``expected_cadence=0.01`` means ten milliseconds. Numeric time
+(``time_kind="numeric"``, the default in Python) uses the input
 unit. Numeric epochs are never silently interpreted as datetime nanoseconds.
 Timezone-aware datetimes are compared as instants; timezone-naive and aware
 values cannot be combined within a group. Datetime arithmetic preserves
@@ -85,10 +85,16 @@ Parameters
 ----------
 
 * ``group_columns``: required non-empty list of distinct scalar-key columns,
-  or a comma-separated string. The time column must be separate.
+  or a comma-separated string. The time column must be separate. With
+  ``aidrin.calculate_grouped_time_series``, pass ``None`` to audit the entire
+  table as one series.
 * ``timestamp_column``: required time column in the parsed table.
 * ``expected_cadence``: required finite positive interval.
-* ``time_kind``: explicitly ``numeric`` or ``datetime``; no inference.
+* ``time_kind``: ``numeric``, ``datetime``, or ``auto`` in Python. Auto-detection
+  uses the parsed column type or samples up to 256 values for numeric values and
+  ISO-style dates. A sample with both formats requires an explicit choice.
+  Rows incompatible with the detected format are reported during the audit.
+  The web form defaults to auto-detection. Results record the format used.
 * ``tolerance``: non-negative absolute interval tolerance, strictly less than
   half the cadence. Comparisons also allow relative floating-point roundoff of
   1e-9. The same tolerances apply to optional duration checks.

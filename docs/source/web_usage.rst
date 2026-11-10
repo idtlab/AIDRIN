@@ -960,10 +960,29 @@ Data and Code Storage Rules
 Grouped Time Series
 -------------------
 
-In Data Quality, select **Check grouped time series**, choose group keys and
-a time column, and enter the expected cadence. Select numeric elapsed time or
-datetime explicitly. Numeric cadence uses the input time unit; datetime uses
-seconds. Optionally declare expected count/duration, tolerance and a detail cap.
-Results show each group with exact source row positions and failing intervals;
-the JSON download retains the structured findings. No rows are reordered or
-repaired. See :ref:`grouped_time_series` for interpretation and limitations.
+At the bottom of the Data Quality checklist, select **Check grouped time series**.
+Use **One series per file** for files that each contain one sequence. If a file
+contains several series, choose **Identify series by columns** and select the
+columns that distinguish them, such as station and channel.
+
+Choose the **Time column** and enter the **Expected time between samples**.
+**Time format** defaults to **Auto-detect**, which recognizes numbers and
+ISO-style dates such as ``2026-01-31`` or ``2026-01-31T09:30:00Z``. You can
+select **Numeric time** or **Date and time** manually. Use the column's units
+for numeric time and seconds for dates and times. Independent checks detect the
+format for each file, using the same expected interval you enter.
+
+Use **Suggest from data** to estimate the interval from a small sample of rows
+within each sampled file. It fills an empty field or offers to replace a value
+you already entered. You can edit the suggestion. The request samples up to six
+files and 256 rows per file. CSV and Parquet have bounded previews, and other
+formats can use a sample from a table already opened in the Inspector. If the
+sample is unavailable, inconsistent, or too slow, enter the interval manually.
+
+Under **Advanced options**, you can allow timing variation, set an expected row
+count or time span per series, and adjust the finding detail limit.
+
+Results show the time format used and each series with exact source row positions
+and failing intervals.
+The JSON download retains the structured findings. The check preserves the input
+order. See :ref:`grouped_time_series` for interpretation and limitations.

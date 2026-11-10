@@ -6,6 +6,25 @@
   background-position: right 6px center;
 }
 
+#grouped-analysis-mode-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+#grouped-analysis-mode-label .info-icon {
+  position: static;
+}
+
+#grouped-analysis-mode-help {
+  top: 100%;
+  left: 0;
+  margin-left: 0;
+  box-sizing: border-box;
+  max-width: 100%;
+  text-align: left;
+}
+
 /* Smooth panel transitions */
 .metric-panel {
   animation: fadeInPanel 0.2s ease-out;

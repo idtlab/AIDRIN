@@ -20,6 +20,7 @@ from flask import (
     url_for,
 )
 from aidrin.file_handling.collection import CollectionMember
+from aidrin.file_handling.custom_loader import using_builtin_readers
 from aidrin.file_handling.file_parser import read_file
 from aidrin.headless.collection import run_collection_metrics
 from aidrin.file_handling.file_reference_policy import (
@@ -81,6 +82,7 @@ from aidrin.structured_data_metrics.representation_rate import (
     create_representation_rate_vis,
 )
 from aidrin.structured_data_metrics.statistical_rate import calculate_statistical_rates
+from web.routes.grouped_interval import suggest_interval
 from web.routes.utils import (
     build_file_info,
     confine_to_upload_folder,
@@ -146,8 +148,12 @@ def custom_outlier_targets():
 
 
 def _grouped_sequence_parameters(form):
+    series = form.get("grouped_series")
+    columns = form.getlist("group columns for grouped time series")
+    if series == "columns" and not columns:
+        raise ValueError("Choose at least one column that identifies each series, or select One series per file.")
     return {
-        "group_columns": form.getlist("group columns for grouped time series"),
+        "group_columns": None if series == "file" else columns,
         "timestamp_column": form.get("timestamp column for grouped time series"),
         "expected_cadence": form.get("cadence for grouped time series"),
         "time_kind": form.get("time kind for grouped time series", "numeric"),
@@ -158,7 +164,7 @@ def _grouped_sequence_parameters(form):
     }
 
 
-def _run_grouped_collection(form, parameters):
+def _grouped_workspace_members(form):
     from web.routes.workspace_files import workspace_files
 
     ids = form.getlist("grouped_file_id")
@@ -167,15 +173,19 @@ def _run_grouped_collection(form, parameters):
     entries = {entry["id"]: entry for entry in workspace_files()}
     if any(file_id not in entries for file_id in ids):
         raise ValueError("A selected file is not in this workspace.")
-    members = [
+    return [
         CollectionMember(entry["id"], entry["path"], entry["name"], entry["file_type"])
         for entry in (entries[file_id] for file_id in ids)
     ]
+
+
+def _run_grouped_collection(form, parameters):
+    members = _grouped_workspace_members(form)
     mode = form.get("grouped_collection_mode", "independent")
     metric = {"name": "grouped_time_series", "parameters": parameters}
-    if mode == "independent" or form.get("grouped_file_boundaries") == "yes":
+    if mode == "independent" or parameters["group_columns"] is None or form.get("grouped_file_boundaries") == "yes":
         source_id = "__aidrin_source_id"
-        parameters["group_columns"].insert(0, source_id)
+        parameters["group_columns"] = [source_id, *(parameters["group_columns"] or [])]
         metric["source_columns"] = [source_id]
     return run_collection_metrics(members, [metric], mode=mode)
 
@@ -189,6 +199,21 @@ def data_quality():
     file_info = build_file_info(file_path, file_name, file_type)
 
     if request.method == "POST":
+        if request.form.get("action") == "suggest_grouped_interval":
+            try:
+                form = request.form
+                parameters = _grouped_sequence_parameters(form)
+                options = {name: parameters[name] for name in ("group_columns", "timestamp_column", "time_kind")}
+                if form.get("grouped_input_files") == "selected":
+                    members = _grouped_workspace_members(form)
+                    with using_builtin_readers():
+                        return jsonify(suggest_interval([(member.path, member.name, member.file_type) for member in members], **options))
+                return jsonify(suggest_interval([file_info], **options))
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            except (OSError, TypeError):
+                metric_time_log.warning("Unable to sample timestamps", exc_info=True)
+                return jsonify({"error": "A quick sample is unavailable. Enter the expected interval manually."}), 400
         start_time = time.time()
         selected = [
             m for m in (
