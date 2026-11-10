@@ -16,7 +16,6 @@ from web.readiness.pdf_glossary import (
     FOOTNOTE_LABELS,
     READINESS_METRIC_GLOSSARY,
     _FEATURE_TYPE_ABBR,
-    _STATUS_LABELS,
 )
 
 NEEDS_ATTENTION_TOP_N = 6
@@ -219,7 +218,6 @@ def _enrich_profile(profile: dict) -> dict:
         "type_abbr": _FEATURE_TYPE_ABBR.get(
             feat_type, feat_type[:1].upper() if feat_type else "—"
         ),
-        "status_label": _STATUS_LABELS.get(profile.get("status", ""), "—"),
     }
 
 
@@ -227,17 +225,12 @@ def _prepare_overview(overview: dict) -> dict:
     meta = overview.get("file_metadata") or {}
     profiles = overview.get("feature_profiles") or []
     profile_meta = overview.get("feature_profiles_meta") or {}
-    status_counts = profile_meta.get("status_counts") or {}
     other_count = (meta.get("datetime_count") or 0) + (meta.get("boolean_count") or 0)
     return {
         "meta": meta,
         "profiles": [_enrich_profile(p) for p in profiles],
         "profile_meta": profile_meta,
         "other_count": other_count,
-        "poor_count": status_counts.get("poor", sum(1 for p in profiles if p.get("status") == "poor")),
-        "warn_count": status_counts.get(
-            "warning", sum(1 for p in profiles if p.get("status") == "warning")
-        ),
     }
 
 
@@ -682,7 +675,6 @@ def _collect_glossary_keys(
         "pct_missing",
         "n_unique",
         "pct_dominant",
-        "profile_status",
         "overall_dq_grade",
         "analysis_scope",
         "overall_impact_grade",

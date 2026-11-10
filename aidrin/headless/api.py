@@ -432,10 +432,13 @@ def inventory(file_path: str, file_type: Optional[str] = None) -> Dict[str, Any]
 
     normalized = _normalize_file_type(file_type, file_path)
     if normalized not in _SELECTION_FILE_TYPES:
+        # Name the set rather than a hand-written list, so adding a selectable
+        # format cannot leave this message behind again.
+        supported = ", ".join(sorted(_SELECTION_FILE_TYPES))
         raise ValueError(
-            "'aidrin inventory' only applies to HDF5 (.h5) and Zarr (.zarr) "
-            f"files; got {normalized or '(unrecognized)'}. Every other "
-            "supported format is always read as a single table."
+            f"'aidrin inventory' only applies to {supported} files; got "
+            f"{normalized or '(unrecognized)'}. Every other supported format "
+            "is always read as a single table."
         )
     if not os.path.exists(file_path):
         raise ValueError(f"File not found: {file_path}")
@@ -536,7 +539,7 @@ def summarize_dataset(
                 "missing": int(missing[col]),
             }
 
-    return {
+    result = {
         "shape": {"rows": len(df), "columns": len(df.columns)},
         "columns": df.columns.tolist(),
         "numerical": numerical,
@@ -544,6 +547,17 @@ def summarize_dataset(
         "truncated": truncated,
         "max_features": max_features,
     }
+    from aidrin.file_handling.readers.structured import dropped_columns
+
+    dropped = dropped_columns(df)
+    if dropped:
+        # Reader-level exclusions (e.g. array-valued ROOT branches): disclose
+        # so the shape/columns above are not read as the whole dataset.
+        result["dropped_columns"] = {
+            "reason": "array-valued cells, not representable as tabular columns",
+            "columns": dropped,
+        }
+    return result
 
 
 def _safe_slug(value: str) -> str:
