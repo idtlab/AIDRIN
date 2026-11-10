@@ -68,7 +68,7 @@
       <h3>Per-feature readiness profile{{ fn('feature_profile') }}</h3>
     </div>
     {% if overview.profile_meta.truncated %}
-    <p class="muted">Showing {{ '{:,}'.format(overview.profile_meta.shown) }} of {{ '{:,}'.format(overview.profile_meta.total) }} features (prioritized: poor → warning → good).</p>
+    <p class="muted">Showing {{ '{:,}'.format(overview.profile_meta.shown) }} of {{ '{:,}'.format(overview.profile_meta.total) }} features.</p>
     {% endif %}
 
     <table class="data">

@@ -6826,7 +6826,7 @@ function renderReadinessDatasetOverview(container, overview) {
     </div>`;
 
   if (profileMeta.truncated) {
-    html += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing ${profileMeta.shown.toLocaleString()} of ${profileMeta.total.toLocaleString()} features (prioritized: poor → warning → good).</p>`;
+    html += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing ${profileMeta.shown.toLocaleString()} of ${profileMeta.total.toLocaleString()} features.</p>`;
   }
 
   html += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4">`;
@@ -6940,7 +6940,7 @@ function renderReadinessDatasetOverview(container, overview) {
     hasHistograms || (vizDeferred && profileNumericalCount > 0);
 
   if ((showCatCharts || showHistograms) && profileMeta.truncated) {
-    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Distribution charts use the same ${profileMeta.shown.toLocaleString()} features shown in the profile table above (prioritized: poor → warning → good).</p>`;
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Distribution charts use the same ${profileMeta.shown.toLocaleString()} features shown in the profile table above.</p>`;
   }
 
   if (showCatCharts) {
