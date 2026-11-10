@@ -1135,6 +1135,49 @@ def run_readiness_report(
     return _sanitize(report)
 
 
+def run_readiness_report_pdf(
+    file_path: str,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    *,
+    mode: str = "scorecard",
+    fair_metadata: Optional[str] = None,
+    fair_standard: str = "auto",
+    fair_data: Optional[Dict[str, Any]] = None,
+    sections: Optional[Dict[str, Any]] = None,
+    visualizations: Optional[Dict[str, Any]] = None,
+    section_errors: Optional[Dict[str, str]] = None,
+    loader: Optional[str] = None,
+    selected_keys: Optional[List[str]] = None,
+    verbose: bool = False,
+) -> bytes:
+    """Render a readiness report PDF (scorecard or full) and return the bytes.
+
+    Thin wrapper around ``aidrin.headless.readiness_pdf.run_readiness_report_pdf``.
+    Creates a local Flask app for templates/static assets; does not need Redis.
+    Raises ``RuntimeError`` when WeasyPrint or its native libraries are missing.
+    """
+    from aidrin.headless.readiness_pdf import (
+        run_readiness_report_pdf as _run_readiness_report_pdf,
+    )
+
+    return _run_readiness_report_pdf(
+        file_path,
+        file_type=file_type,
+        file_name=file_name,
+        mode=mode,
+        fair_metadata=fair_metadata,
+        fair_standard=fair_standard,
+        fair_data=fair_data,
+        sections=sections,
+        visualizations=visualizations,
+        section_errors=section_errors,
+        loader=loader,
+        selected_keys=selected_keys,
+        verbose=verbose,
+    )
+
+
 def run_privacy_assessment(
     file_path: str,
     file_type: Optional[str] = None,

@@ -5,6 +5,7 @@ from .api import (
     run_data_quality,
     run_metric,
     run_readiness_report,
+    run_readiness_report_pdf,
 )
 from .config import HeadlessConfig
 
@@ -16,4 +17,5 @@ __all__ = [
     "run_data_quality",
     "run_metric",
     "run_readiness_report",
+    "run_readiness_report_pdf",
 ]
