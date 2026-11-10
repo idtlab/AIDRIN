@@ -1023,6 +1023,63 @@ function _restoreFormState(panelId, state) {
       input.value = value;
     }
   }
+  if (panelId === "data-quality" && state.grouped_input_files === "selected") {
+    const list = document.getElementById("grouped-file-list");
+    if (list && state.grouped_file_id) {
+      const ids = Array.isArray(state.grouped_file_id)
+        ? state.grouped_file_id
+        : [state.grouped_file_id];
+      const rows = new Map(
+        Array.from(list.children, (row) => [
+          row.querySelector("input").value,
+          row,
+        ]),
+      );
+      list.prepend(...ids.map((id) => rows.get(id)).filter(Boolean));
+    }
+    if (list && state.grouped_collection_mode === "stacked") {
+      panel.querySelector('[name="grouped_file_boundaries"]').checked =
+        state.grouped_file_boundaries === "yes";
+    }
+  }
+  if (panelId === "data-quality") syncGroupedFileSelection();
+}
+
+function syncGroupedFileSelection() {
+  const scope = document.getElementById("grouped-input-files");
+  if (!scope) return;
+  const selection = document.getElementById("grouped-file-selection");
+  const enabled = scope.value === "selected";
+  const stacked =
+    enabled &&
+    document.getElementById("grouped-collection-mode").value === "stacked";
+  selection.disabled = !enabled;
+  selection.classList.toggle("hidden", !enabled);
+  document
+    .getElementById("grouped-stack-options")
+    .classList.toggle("hidden", !stacked);
+  for (const button of selection.querySelectorAll(
+    "[data-grouped-file-order]",
+  )) {
+    button.classList.toggle("hidden", !stacked);
+  }
+}
+
+function selectGroupedFiles(checked) {
+  const list = document.getElementById("grouped-file-list");
+  for (const input of list.querySelectorAll('input[name="grouped_file_id"]')) {
+    input.checked = checked;
+  }
+}
+
+function moveGroupedFile(button, direction) {
+  const row = button.parentElement;
+  const neighbor =
+    direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+  if (!neighbor) return;
+  if (direction < 0) neighbor.before(row);
+  else neighbor.after(row);
+  button.focus();
 }
 
 // Handle browser back/forward buttons
@@ -1828,7 +1885,11 @@ function renderWorkspaceResults(data, options) {
       }
 
       // AI Explanation placeholder (filled async if LLM is configured)
-      if (window.AIDRIN_LLM_ENABLED && (hasViz || hasScores)) {
+      if (
+        window.AIDRIN_LLM_ENABLED &&
+        results.format !== "aidrin.collection-assessment" &&
+        (hasViz || hasScores)
+      ) {
         const llmId = "llm-" + pairId;
         html += `<div id="${llmId}" class="mt-3"></div>`;
         if (!skipLLM) {
@@ -2164,6 +2225,49 @@ function renderGroupedTimeSeriesResults(result) {
   return html;
 }
 
+function renderGroupedCollectionResults(result) {
+  const mode = result.mode === "stacked" ? "Stacked rows" : "Independent files";
+  const names = new Map(
+    (result.selection || []).map((source, index) => [
+      source.id,
+      `${index + 1}. ${source.name}`,
+    ]),
+  );
+  let html = `<p class="mb-3 text-sm">${mode} · ${escapeHtml(String(result.summary.selected_files))} selected files</p>`;
+  for (const dataset of result.datasets || []) {
+    const sources = dataset.sources.map(
+      (source) => names.get(source.id) || source.name,
+    );
+    const title =
+      result.mode === "stacked" ? "Stacked dataset" : sources.join(", ");
+    html += `<section class="mb-4 border-t border-gray-200 dark:border-gray-700 pt-3"><h4 class="mb-2 font-medium">${escapeHtml(title)}</h4>`;
+    if (result.mode === "stacked") {
+      html += `<details class="mb-3 text-xs"><summary class="cursor-pointer">Source rows in stack order</summary><ul class="list-disc pl-5">`;
+      for (const [index, source] of dataset.sources.entries()) {
+        html += `<li>${escapeHtml(sources[index])}: ${escapeHtml(String(source.row_count))} rows starting at ${escapeHtml(String(source.start_row))}</li>`;
+      }
+      html += "</ul></details>";
+    }
+    for (const message of Object.values(dataset.errors || {})) {
+      html += `<p class="mb-2 text-sm text-red-700 dark:text-red-400" role="alert">${escapeHtml(String(message))}</p>`;
+    }
+    const audit = dataset.metrics?.grouped_time_series;
+    if (audit) {
+      const groups = audit.groups.map((item) => {
+        const { __aidrin_source_id: sourceId, ...group } = item.group;
+        if (!names.has(sourceId)) return item;
+        return {
+          ...item,
+          group: { "Source file": names.get(sourceId), ...group },
+        };
+      });
+      html += renderGroupedTimeSeriesResults({ ...audit, groups });
+    }
+    html += "</section>";
+  }
+  return html;
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
@@ -2174,6 +2278,8 @@ function renderGroupedTimeSeriesResults(result) {
  *   side-by-side comparison table instead of two stacked sections
  */
 function renderScoresSection(scores, depth) {
+  if (scores.format === "aidrin.collection-assessment")
+    return renderGroupedCollectionResults(scores);
   if (scores.format === "aidrin.grouped-time-series")
     return renderGroupedTimeSeriesResults(scores);
   depth = depth || 0;

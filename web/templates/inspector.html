@@ -86,6 +86,24 @@
           </button>
         </div>
 
+        {% if not globus_mode %}
+        <div class="flex flex-wrap items-center gap-3 mb-4 text-sm">
+          <a href="{{ url_for('core.inspector', upload=1) }}" class="text-blue-600 dark:text-blue-400 underline">Upload more files</a>
+          {% if workspace_files and (workspace_files|length > 1 or not active_file_id) %}
+          <form method="post" action="{{ url_for('core.inspector') }}" class="flex flex-wrap items-center gap-2">
+            <label for="workspace-active-file">Active file</label>
+            <select id="workspace-active-file" name="active_file_id" required>
+              {% if not active_file_id %}<option disabled selected value="">Choose an uploaded file</option>{% endif %}
+              {% for file in workspace_files %}
+              <option value="{{ file.id }}" {% if file.id == active_file_id %}selected{% endif %}>{{ loop.index }}. {{ file.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="px-3 py-1 rounded border">Open file</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
+
         <!-- Metric configuration panels (only one visible at a time) -->
         <div id="panels-container">
           {% include '_panels/_data_overview.html' %}
@@ -258,6 +276,10 @@
         dropzone.addEventListener('drop', function(e) {
           const files = e.dataTransfer.files;
           if (files.length > 0) {
+            if (!fileInput.multiple && files.length !== 1) {
+              showToast("Choose one file for this upload.", "error");
+              return;
+            }
             fileInput.files = files;
             onDrop();
           }

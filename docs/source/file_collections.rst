@@ -102,15 +102,21 @@ runs; metric findings alone do not produce a nonzero exit.
 Web and MCP
 -----------
 
-Open **File collection** from the workspace navigation. Upload table files,
-select a subset, adjust file order with the arrows, choose the analysis mode
-and checks, and run. The page displays separate dataset results and source-row
-mappings and can download the complete JSON result. Uploads use session-owned
-opaque IDs; browser requests cannot submit server filesystem paths. Existing
-single-file workspace settings are not changed. Collections use the existing
-upload lifetime. **Clear collection uploads** removes this collection's copies
-without changing the single-file workspace; clearing the whole session also
-removes them.
+In the Inspector, choose a file type and upload one or more files of that type. Use
+**Upload more files** to add to the workspace and **Active file** to choose
+the file used by Data Overview and single-file checks.
+
+In **Data Quality**, enable **Check grouped time series** and set **Input
+files** to **Select files**. Choose a subset or use **Select all**. The default
+mode checks each selected file independently. To stack rows, choose the stacked
+mode and set the file order with the arrows. Group and time column options
+come from the active file. Keep file boundaries enabled unless matching groups
+should continue across files. Other selected checks use the active file.
+
+Run the usual Data Quality form. The Results panel shows the files used and
+the analysis mode. Stacked results include a source-row mapping, and the
+regular JSON download contains the full result. The workspace's clear action
+removes this session's uploaded files.
 
 The local MCP tools are ``list_collection_metrics`` and ``run_file_collection``.
 The latter accepts ``files``, ``metrics`` and ``mode`` with the same structure

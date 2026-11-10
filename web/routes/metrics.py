@@ -19,7 +19,9 @@ from flask import (
     session,
     url_for,
 )
+from aidrin.file_handling.collection import CollectionMember
 from aidrin.file_handling.file_parser import read_file
+from aidrin.headless.collection import run_collection_metrics
 from aidrin.file_handling.file_reference_policy import (
     allowed_roots,
     discovery_configuration,
@@ -143,6 +145,41 @@ def custom_outlier_targets():
         return jsonify({"success": False, "message": "Custom outlier target discovery failed."}), 200
 
 
+def _grouped_sequence_parameters(form):
+    return {
+        "group_columns": form.getlist("group columns for grouped time series"),
+        "timestamp_column": form.get("timestamp column for grouped time series"),
+        "expected_cadence": form.get("cadence for grouped time series"),
+        "time_kind": form.get("time kind for grouped time series", "numeric"),
+        "tolerance": form.get("tolerance for grouped time series") or 0.0,
+        "max_findings": form.get("max findings for grouped time series") or 100,
+        "expected_count": form.get("expected count for grouped time series") or None,
+        "expected_duration": form.get("expected duration for grouped time series") or None,
+    }
+
+
+def _run_grouped_collection(form, parameters):
+    from web.routes.workspace_files import workspace_files
+
+    ids = form.getlist("grouped_file_id")
+    if not ids or len(set(ids)) != len(ids):
+        raise ValueError("Select one or more distinct files from the workspace.")
+    entries = {entry["id"]: entry for entry in workspace_files()}
+    if any(file_id not in entries for file_id in ids):
+        raise ValueError("A selected file is not in this workspace.")
+    members = [
+        CollectionMember(entry["id"], entry["path"], entry["name"], entry["file_type"])
+        for entry in (entries[file_id] for file_id in ids)
+    ]
+    mode = form.get("grouped_collection_mode", "independent")
+    metric = {"name": "grouped_time_series", "parameters": parameters}
+    if mode == "independent" or form.get("grouped_file_boundaries") == "yes":
+        source_id = "__aidrin_source_id"
+        parameters["group_columns"].insert(0, source_id)
+        metric["source_columns"] = [source_id]
+    return run_collection_metrics(members, [metric], mode=mode)
+
+
 @metrics_bp.route("/data-quality", methods=["GET", "POST"])
 def data_quality():
     final_dict = {}
@@ -228,19 +265,17 @@ def data_quality():
 
                 if "grouped time series" in selected:
                     try:
-                        final_dict["Grouped Time Series"] = grouped_time_series(
-                            file_info,
-                            request.form.getlist("group columns for grouped time series"),
-                            request.form.get("timestamp column for grouped time series"),
-                            request.form.get("cadence for grouped time series"),
-                            request.form.get("time kind for grouped time series", "numeric"),
-                            request.form.get("tolerance for grouped time series") or 0.0,
-                            request.form.get("max findings for grouped time series") or 100,
-                            request.form.get("expected count for grouped time series") or None,
-                            request.form.get("expected duration for grouped time series") or None,
-                        )
+                        parameters = _grouped_sequence_parameters(request.form)
+                        if request.form.get("grouped_input_files") == "selected":
+                            result = _run_grouped_collection(request.form, parameters)
+                        else:
+                            result = grouped_time_series(file_info, **parameters)
+                        final_dict["Grouped Time Series"] = result
                     except ValueError as exc:
                         final_dict["Grouped Time Series"] = {"Error": str(exc)}
+                    except OSError:
+                        metric_time_log.warning("Unable to read workspace inventory", exc_info=True)
+                        final_dict["Grouped Time Series"] = {"Error": "Unable to read the uploaded files."}
 
                 if "temporal completeness" in selected:
                     timestamp_column = request.form.get("timestamp column for temporal completeness")

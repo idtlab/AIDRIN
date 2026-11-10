@@ -13,6 +13,41 @@
             <span class="info-icon">i<span class="info-text">Check each sequence in its original order for duplicate times, reversed intervals and cadence gaps. Relative time does not establish synchronization.</span></span>
           </label>
           <div class="metric-inputs mt-3 space-y-3" style="display: none;">
+            {% if not globus_mode and workspace_files|length > 1 %}
+            <div class="space-y-2 text-sm">
+              <label class="block" for="grouped-input-files">Input files</label>
+              <select id="grouped-input-files" name="grouped_input_files" onchange="syncGroupedFileSelection()">
+                <option value="active">Active file</option>
+                <option value="selected">Select files</option>
+              </select>
+              <fieldset id="grouped-file-selection" data-metric-settings class="hidden border rounded-lg p-3 space-y-2" disabled>
+                <legend>Files for Grouped Time Series</legend>
+                <p>Other checks use the active file. Open a file with the columns you want to use for this check.</p>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" class="px-2 border rounded" onclick="selectGroupedFiles(true)">Select all files</button>
+                  <button type="button" class="px-2 border rounded" onclick="selectGroupedFiles(false)">Deselect all files</button>
+                </div>
+                <div id="grouped-file-list" class="max-h-48 overflow-auto space-y-1">
+                  {% for file in workspace_files %}
+                  <div class="flex items-center gap-2">
+                    <label class="flex-1 break-all"><input type="checkbox" name="grouped_file_id" value="{{ file.id }}"> {{ loop.index }}. {{ file.name }}</label>
+                    <button type="button" class="hidden px-2 border rounded" data-grouped-file-order onclick="moveGroupedFile(this, -1)" aria-label="Move {{ file.name }} up">↑</button>
+                    <button type="button" class="hidden px-2 border rounded" data-grouped-file-order onclick="moveGroupedFile(this, 1)" aria-label="Move {{ file.name }} down">↓</button>
+                  </div>
+                  {% endfor %}
+                </div>
+                <label class="block" for="grouped-collection-mode">Analysis mode</label>
+                <select id="grouped-collection-mode" name="grouped_collection_mode" onchange="syncGroupedFileSelection()">
+                  <option value="independent">Analyze each file independently</option>
+                  <option value="stacked">Stack rows into one dataset</option>
+                </select>
+                <div id="grouped-stack-options" class="hidden space-y-1">
+                  <p>Stacking uses the order shown above and requires matching columns and parsed types.</p>
+                  <label class="block"><input type="checkbox" name="grouped_file_boundaries" value="yes" checked> Keep each file’s sequences separate</label>
+                </div>
+              </fieldset>
+            </div>
+            {% endif %}
             <div class="text-sm">
               <p>Group columns (for example station and component):</p>
               <div id="groupedTimeSeriesColumnsCheckbox" class="w-full"></div>

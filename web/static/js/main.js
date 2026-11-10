@@ -67,12 +67,16 @@ function uploadForm() {
 
   // Check the file does not exceed the server's upload size limit
   const maxBytes = parseInt(form.dataset.maxUploadBytes, 10);
-  if (maxBytes && fileInput.files[0].size > maxBytes) {
+  const totalSize = Array.from(fileInput.files).reduce(
+    (total, file) => total + file.size,
+    0,
+  );
+  if (maxBytes && totalSize > maxBytes) {
     const maxMb =
       form.dataset.maxUploadMb || Math.round(maxBytes / (1024 * 1024));
     if (typeof showToast === "function")
       showToast(
-        `File too large. The maximum upload size is ${maxMb} MB.`,
+        `Upload too large. The maximum combined size is ${maxMb} MB.`,
         "error",
       );
     fileInput.value = "";
@@ -2356,9 +2360,12 @@ function toggleValueIndividual(checkbox) {
 }
 // Ensure proper initial state on page load
 document.addEventListener("DOMContentLoaded", function () {
-  // Get all checkboxes inside each checkboxContainer
+  // Parameter checkboxes carry their own values, such as uploaded file IDs.
+  const metricToggles =
+    "input[type='checkbox']:not([data-metric-settings] input)";
+  // Get the metric checkboxes inside each checkboxContainer
   document.querySelectorAll(".checkboxContainer").forEach((container) => {
-    const checkboxes = container.querySelectorAll("input[type='checkbox']");
+    const checkboxes = container.querySelectorAll(metricToggles);
     checkboxes.forEach((checkbox) => {
       debugLog(checkbox);
       // Set initial state of selects based on checkbox
@@ -2370,7 +2377,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document
     .querySelectorAll(".checkboxContainerIndividual")
     .forEach((container) => {
-      const checkboxes = container.querySelectorAll("input[type='checkbox']");
+      const checkboxes = container.querySelectorAll(metricToggles);
       checkboxes.forEach((checkbox) => {
         debugLog(checkbox);
         // Set initial state of selects based on checkbox

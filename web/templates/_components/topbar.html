@@ -39,7 +39,6 @@
 
       <!-- Right: action buttons -->
       <div class="flex items-center gap-1">
-        <a href="{{ url_for('collections.page') }}" class="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-sm" title="Analyze a file collection">File collection</a>
         {% if uploaded_file_path %}
         <!-- New Session -->
         <button onclick="clearFile()" class="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" title="Clear session and start over" aria-label="New session">

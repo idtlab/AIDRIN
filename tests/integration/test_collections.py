@@ -1,137 +1,164 @@
-"""Collection upload, selection and execution across Flask session boundaries."""
+"""Multi-file uploads and grouped analysis in the standard Inspector workflow."""
 
 import io
+import json
+from pathlib import Path
 
 import pytest
 
 
-def upload(client, names=("a.csv", "a.csv")):
-    response = client.post("/collections/files", data={
-        "file": [(io.BytesIO(b"sensor,t,value\nA,0.0,1\nA,0.01,1\n"), name) for name in names],
+def upload(client, *files):
+    return client.post("/inspector", data={
+        "fileTypeSelector": ".csv",
+        "file": [(io.BytesIO(content), name) for name, content in files],
     }, content_type="multipart/form-data")
-    assert response.status_code == 200
-    return response.get_json()["files"]
 
 
-def test_selected_subset_order_and_modes_reach_the_same_engine(client):
-    assert client.get("/collections").status_code == 200
-    files = upload(client, ("same.csv", "same.csv", "exclude.csv"))
-    assert files[0]["id"] != files[1]["id"]
-    assert all("path" not in member for member in files)
-    selected = [files[1]["id"], files[0]["id"]]
-    payload = {"file_ids": selected, "mode": "independent", "metrics": [{"name": "duplicity"}]}
-    independent = client.post("/collections/run", json=payload)
-    assert independent.status_code == 200
-    assert [dataset["sources"][0]["id"] for dataset in independent.get_json()["datasets"]] == selected
-    payload["mode"] = "stacked"
-    stacked = client.post("/collections/run", json=payload).get_json()
-    assert stacked["summary"]["datasets"] == 1
-    assert [source["id"] for source in stacked["datasets"][0]["sources"]] == selected
-    assert stacked["datasets"][0]["metrics"]["duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"] == .5
-
-
-def test_sequence_boundary_choice_and_unrelated_upload_loader(client):
-    files = upload(client)
+def inventory(client):
     with client.session_transaction() as session:
-        session["custom_loader_spec"] = "/private/unrelated/loader.py:load"
-        previous = dict(session)
-    metric = {"name": "grouped_time_series", "source_columns": ["__aidrin_source_id"],
-              "parameters": {"group_columns": ["__aidrin_source_id", "sensor"], "timestamp_column": "t", "expected_cadence": .01}}
-    payload = {"file_ids": [member["id"] for member in files], "mode": "stacked", "metrics": [metric]}
-    response = client.post("/collections/run", json=payload)
-    assert response.status_code == 200
-    result = response.get_json()["datasets"][0]["metrics"]["grouped_time_series"]
-    assert result["summary"]["group_count"] == 2
+        return json.loads(Path(session["collection_manifest"]).read_text(encoding="utf-8"))
+
+
+def run_grouped(client, ids, mode="independent", **fields):
+    data = {
+        "grouped time series": "yes",
+        "grouped_input_files": "selected",
+        "grouped_file_id": ids,
+        "grouped_collection_mode": mode,
+        "grouped_file_boundaries": "yes",
+        "timestamp column for grouped time series": "t",
+        "cadence for grouped time series": ".01",
+        **fields,
+    }
+    return client.post("/data-quality?return_type=json", data=data).get_json()
+
+
+CLEAN = b"sensor,t,value\nA,0.0,1\nA,0.01,1\n"
+GAP = b"sensor,t,value\nA,0.0,3\nA,0.02,4\n"
+
+
+def test_main_uploader_and_existing_data_quality_route_use_selected_files(client):
+    landing = client.get("/inspector").get_data(as_text=True)
+    assert 'type="file" class="hidden" multiple required' in landing
+    assert upload(client, ("same.csv", CLEAN), ("same.csv", GAP), ("exclude.csv", CLEAN)).status_code == 302
+    first, second, excluded = inventory(client)
+    assert first["id"] != second["id"]
+    page = client.get("/inspector").get_data(as_text=True)
+    assert "Upload more files" in page
+    assert 'id="grouped-input-files"' in page
+    assert client.get("/collections").status_code == 404
+
+    ids = [second["id"], first["id"]]
+    response = run_grouped(client, ids, completeness="yes")
+    assert "Completeness" in response
+    independent = response["Grouped Time Series"]
+    assert [item["id"] for item in independent["selection"]] == ids
+    assert [d["metrics"]["grouped_time_series"]["summary"]["finding_counts"]
+            for d in independent["datasets"]] == [{"cadence_gap": 1}, {}]
+
+    stacked = run_grouped(client, ids, mode="stacked")["Grouped Time Series"]
+    assert stacked["summary"] == {"selected_files": 2, "datasets": 1, "datasets_with_errors": 0}
+    dataset = stacked["datasets"][0]
+    assert [(source["id"], source["start_row"]) for source in dataset["sources"]] == [(ids[0], 0), (ids[1], 2)]
+    assert dataset["metrics"]["grouped_time_series"]["summary"]["finding_counts"] == {"cadence_gap": 1}
+    assert excluded["id"] not in {source["id"] for source in dataset["sources"]}
+
+    with client.session_transaction() as session:
+        assert session["uploaded_file_path"] == first["path"]
+    cached = client.get("/cached-result/data_quality").get_json()
+    assert cached["data"]["Grouped Time Series"] == stacked
+
+
+def test_upload_more_and_open_active_file_use_the_same_workspace(client):
+    assert upload(client, ("clean.csv", CLEAN)).status_code == 302
+    with client.session_transaction() as session:
+        first_path = session["uploaded_file_path"]
+    upload_view = client.get("/inspector?upload=1").get_data(as_text=True)
+    assert 'id="uploadForm"' in upload_view and "Back to workspace" in upload_view
+    assert upload(client, ("gap.csv", GAP)).status_code == 302
+    first = inventory(client)[0]
+    assert first["path"] == first_path
+    assert client.post("/inspector", data={"active_file_id": first["id"]}).status_code == 302
+    assert client.get("/retrieve-uploaded-file").data == CLEAN
+
+    result = client.post("/data-quality?return_type=json", data={
+        "grouped time series": "yes",
+        "group columns for grouped time series": "sensor",
+        "timestamp column for grouped time series": "t",
+        "cadence for grouped time series": ".01",
+    }).get_json()["Grouped Time Series"]
+    assert result["format"] == "aidrin.grouped-time-series"
     assert result["summary"]["finding_counts"] == {}
-    metric["source_columns"] = []
-    metric["parameters"]["group_columns"] = ["sensor"]
-    result = client.post("/collections/run", json=payload).get_json()["datasets"][0]["metrics"]["grouped_time_series"]
-    assert result["summary"]["finding_counts"] == {"duplicate_time": 2, "out_of_order": 1}
-    with client.session_transaction() as session:
-        assert dict(session) == previous
 
 
-def test_another_session_cannot_select_inputs_or_supply_paths(client, app):
-    files = upload(client)
-    other = app.test_client()
-    payload = {"file_ids": [files[0]["id"]], "metrics": [{"name": "duplicity"}]}
-    response = other.post("/collections/run", json=payload)
-    assert response.status_code == 400
-    assert "not in this session" in response.get_json()["error"]
-    payload["files"] = [{"path": "/etc/passwd", "id": "x"}]
-    assert client.post("/collections/run", json=payload).status_code == 400
+def test_cross_file_boundaries_are_explicit_and_scoped_to_grouped_check(client):
+    upload(client, ("a.csv", CLEAN), ("b.csv", CLEAN))
+    ids = [entry["id"] for entry in inventory(client)]
+    separate = run_grouped(client, ids, mode="stacked")["Grouped Time Series"]
+    assert separate["datasets"][0]["metrics"]["grouped_time_series"]["summary"]["finding_counts"] == {}
+    together = run_grouped(client, ids, mode="stacked", **{
+        "grouped_file_boundaries": "",
+        "group columns for grouped time series": "sensor",
+    })["Grouped Time Series"]
+    summary = together["datasets"][0]["metrics"]["grouped_time_series"]["summary"]
+    assert summary["finding_counts"] == {"duplicate_time": 2, "out_of_order": 1}
+    assert client.get("/retrieve-uploaded-file").data == CLEAN
 
 
-def test_confined_stored_paths_and_missing_files_are_not_silently_dropped(client, tmp_path):
-    import json
-
-    files = upload(client)
-    with client.session_transaction() as session:
-        manifest = session["collection_manifest"]
-    with open(manifest) as handle:
-        entries = json.load(handle)
-    from pathlib import Path
-
-    Path(entries[0]["path"]).unlink()
-    payload = {"file_ids": [member["id"] for member in files], "metrics": [{"name": "duplicity"}]}
-    response = client.post("/collections/run", json=payload)
-    assert response.get_json()["summary"]["datasets_with_errors"] == 1
-    payload["mode"] = "stacked"
-    assert client.post("/collections/run", json=payload).status_code == 400
-    entries[0]["path"] = str(tmp_path / "outside.csv")
-    with open(manifest, "w") as handle:
-        json.dump(entries, handle)
-    assert client.post("/collections/run", json=payload).status_code == 400
+def test_file_ids_are_session_owned(client, app):
+    upload(client, ("a.csv", CLEAN), ("b.csv", GAP))
+    foreign = app.test_client()
+    file_id = inventory(client)[0]["id"]
+    assert foreign.post("/inspector", data={"active_file_id": file_id}).status_code == 404
+    assert "not in this workspace" in run_grouped(foreign, [file_id])["Grouped Time Series"]["Error"]
+    assert "not in this workspace" in run_grouped(client, ["/etc/passwd"])["Grouped Time Series"]["Error"]
 
 
-def test_failed_upload_preserves_inventory_and_count_limit(client, app, monkeypatch):
-    from pathlib import Path
+def test_missing_file_is_reported_for_selected_file_not_silently_skipped(client):
+    upload(client, ("a.csv", CLEAN), ("b.csv", GAP))
+    first, second = inventory(client)
+    Path(second["path"]).unlink()
+    ids = [first["id"], second["id"]]
+    independent = run_grouped(client, ids)["Grouped Time Series"]
+    assert [dataset["status"] for dataset in independent["datasets"]] == ["ok", "error"]
+    assert "Error" in run_grouped(client, ids, mode="stacked")["Grouped Time Series"]
 
-    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "1")
-    files = upload(client)
+
+def test_failed_batch_leaves_existing_inventory_and_active_file(client, app):
+    upload(client, ("a.csv", CLEAN), ("b.csv", GAP))
+    files = inventory(client)
     before = set(Path(app.config["UPLOAD_FOLDER"]).iterdir())
-    response = client.post("/collections/files", data={
-        "file": [(io.BytesIO(b"x\n1\n"), "new.csv"), (io.BytesIO(b"not a table"), "unknown.bin")],
-    }, content_type="multipart/form-data")
-    assert response.status_code == 400
-    assert client.get("/collections/files").get_json()["files"] == files
+    response = upload(client, ("new.csv", CLEAN), ("unknown.bin", b"not a table"))
+    assert response.status_code == 302
+    assert "Choose files matching the selected file type." in client.get(response.location).get_data(as_text=True)
+    assert inventory(client) == files
     assert set(Path(app.config["UPLOAD_FOLDER"]).iterdir()) == before
-    response = client.post("/collections/files", data={"file": (io.BytesIO(b"x\n"), "empty.csv")}, content_type="multipart/form-data")
-    assert response.status_code == 400
-    assert set(Path(app.config["UPLOAD_FOLDER"]).iterdir()) == before
+    assert client.get("/retrieve-uploaded-file").data == CLEAN
 
     app.config["AIDRIN_MAX_UPLOAD_FILES"] = 2
-    response = client.post("/collections/files", data={"file": (io.BytesIO(b"x\n1\n"), "extra.csv")}, content_type="multipart/form-data")
-    assert response.status_code == 400
-    assert client.get("/collections/files").get_json()["files"] == files
+    response = upload(client, ("extra.csv", GAP))
+    assert "Workspace file limit: 2." in client.get(response.location).get_data(as_text=True)
+    assert inventory(client) == files
+    assert set(Path(app.config["UPLOAD_FOLDER"]).iterdir()) == before
 
 
-def test_clear_collection_preserves_other_workspace_uploads(uploaded_client, app, monkeypatch):
-    from pathlib import Path
-
+def test_many_files_keep_inventory_off_cookie_and_clear_only_session_files(client, app, monkeypatch):
     monkeypatch.setenv("AIDRIN_FRAME_CACHE", "1")
-    upload(uploaded_client)
-    with uploaded_client.session_transaction() as session:
-        workspace_path = session["uploaded_file_path"]
-    collection_paths = set(Path(app.config["UPLOAD_FOLDER"]).iterdir()) - {Path(workspace_path)}
-    assert uploaded_client.post("/collections/clear").status_code == 200
-    assert Path(workspace_path).is_file()
-    assert all(not Path(path).exists() for path in collection_paths)
-    assert uploaded_client.get("/collections/files").get_json()["files"] == []
-
-
-def test_many_files_keep_inventory_out_of_cookies_and_clear_with_session(client, app):
-    from pathlib import Path
-
-    files = upload(client, tuple(f"{index}.csv" for index in range(20)))
-    with client.session_transaction() as session:
-        assert set(session) == {"collection_manifest"}
-    assert len(files) == 20
+    other = app.test_client()
+    upload(other, ("other.csv", CLEAN))
+    other_files = set(Path(app.config["UPLOAD_FOLDER"]).iterdir())
+    response = upload(client, *((f"{i}.csv", CLEAN) for i in range(20)))
+    assert response.status_code == 302
+    assert len(response.headers["Set-Cookie"]) < 4093
+    entries = inventory(client)
+    assert len(entries) == 20
+    assert run_grouped(client, [entries[0]["id"]])["Grouped Time Series"]["summary"]["datasets_with_errors"] == 0
     assert client.post("/clear").status_code == 302
-    assert client.get("/collections/files").get_json()["files"] == []
-    assert not list(Path(app.config["UPLOAD_FOLDER"]).iterdir())
+    assert set(Path(app.config["UPLOAD_FOLDER"]).iterdir()) == other_files
+    assert other.get("/retrieve-uploaded-file").data == CLEAN
 
 
-@pytest.mark.parametrize("ids", [[], ["unknown"], ["same", "same"], [1]])
-def test_invalid_selection_fails_before_metric_execution(client, ids):
-    assert client.post("/collections/run", json={"file_ids": ids, "metrics": [{"name": "duplicity"}]}).status_code == 400
+@pytest.mark.parametrize("ids", [[], ["unknown"], ["same", "same"]])
+def test_invalid_selection_does_not_fall_back_to_active_file(client, ids):
+    upload(client, ("a.csv", CLEAN))
+    assert "Error" in run_grouped(client, ids)["Grouped Time Series"]
