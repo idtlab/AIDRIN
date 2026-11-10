@@ -1363,6 +1363,21 @@ class TestReadinessReportCommand(unittest.TestCase):
         self.assertIn("data_quality", payload)
         self.assertIn("Results written to:", stderr)
 
+    def test_pdf_out_alone_skips_stdout(self):
+        out_pdf = os.path.join(self.tmpdir, "report.pdf")
+        with patch(
+            "aidrin.headless.cli._local_api.run_readiness_report_pdf",
+            return_value=b"%PDF-1.4 cli-mock",
+        ):
+            stdout, stderr, code = _run_cli(
+                "readiness-report", self.csv, "--pdf-out", out_pdf
+            )
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertEqual(stdout, "")
+        with open(out_pdf, "rb") as f:
+            self.assertEqual(f.read(), b"%PDF-1.4 cli-mock")
+        self.assertIn("PDF written to:", stderr)
+
     def test_fair_metadata_attached(self):
         stdout, stderr, code = _run_cli(
             "readiness-report",

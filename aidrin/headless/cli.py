@@ -1106,7 +1106,7 @@ def main() -> None:
         "-o",
         "--output",
         default=None,
-        help="Write JSON to this path only (suppresses stdout)",
+        help="Write JSON to this path (suppresses stdout; also suppressed with --pdf-out)",
     )
     rr_parser.add_argument(
         "--pdf-out",
@@ -1414,10 +1414,10 @@ def main() -> None:
             )
             rounded = _round_floats(result)
             if args.output:
-                # -o means file-only: readiness reports are large, so do not
-                # also flood stdout (unlike fair/summarize, which echo and write).
                 _write_output_file(rounded, args.output)
-            else:
+            # Readiness JSON is large: print to stdout only when no file output
+            # was requested (neither -o nor --pdf-out).
+            if not args.output and not args.pdf_out:
                 _dump_result(rounded)
 
             if args.pdf_out:

@@ -216,12 +216,12 @@ API responses). The JSON output leaves out the chart; see :ref:`web_usage` for t
 
 Builds the **AI Data Readiness Report** for a tabular dataset: the same five
 automated sections as the web report (Dataset Overview, Data Quality, Impact on
-AI, Fairness & Bias, Data Governance). JSON goes to stdout by default, or only
-to a file when ``-o``/``--output`` is set (stdout is then silent). Optionally
-write a PDF with ``--pdf-out``, and an optional FAIR appendix with
-``--fair-metadata`` (same engine and ``--fair-standard`` values as
-:ref:`cli_fair`). FAIR is omitted when no metadata path is given; missing FAIR
-never blocks the PDF.
+AI, Fairness & Bias, Data Governance). JSON goes to stdout only when neither
+``-o``/``--output`` nor ``--pdf-out`` is set. With ``-o``, JSON is written to
+that file; with ``--pdf-out``, a PDF is written (and stdout stays silent even
+without ``-o``). Optional FAIR appendix via ``--fair-metadata`` (same engine and
+``--fair-standard`` values as :ref:`cli_fair`). FAIR is omitted when no metadata
+path is given; missing FAIR never blocks the PDF.
 
 This command is **local-only** (``aidrin remote readiness-report`` is rejected)
 because PDF rendering uses the web templates and WeasyPrint. PDF export needs
@@ -229,11 +229,11 @@ WeasyPrint's native libraries; see :ref:`web_installation` if rendering fails.
 
 .. code-block:: bash
 
-   # JSON to stdout, or only to a file with -o (no stdout echo)
+   # JSON to stdout only when no -o / --pdf-out is given
    aidrin readiness-report /path/to/sample_dataset.csv
    aidrin readiness-report /path/to/sample_dataset.csv -o /path/to/reports/readiness.json
 
-   # Scorecard PDF (default) or full PDF with section charts
+   # Scorecard PDF (default) or full PDF with section charts (no JSON on stdout)
    aidrin readiness-report /path/to/sample_dataset.csv --pdf-out /path/to/reports/readiness.pdf
    aidrin readiness-report /path/to/sample_dataset.csv \
      -o /path/to/reports/readiness.json \
