@@ -2743,7 +2743,7 @@ function describeGroupedFinding(finding, units) {
 
 function renderGroupedResultNotes(parameters, stacked = false) {
   const rows = stacked
-    ? "Data row numbers refer to the stacked table."
+    ? "Data row numbers start at 1 in the stacked table."
     : "Data row numbers start at 1 in each input table.";
   const span =
     parameters.expected_count == null && parameters.expected_duration == null
@@ -2752,133 +2752,173 @@ function renderGroupedResultNotes(parameters, stacked = false) {
   return `<p class="mt-3 text-xs text-gray-600 dark:text-gray-400">${rows} Raw JSON positions start at 0.${span}</p>`;
 }
 
-function renderGroupedTimeSeriesResults(result, inCollection = false) {
-  const summary = result.summary || {};
+function groupedTimeSeriesRows(result, file = "", sourceNames) {
   const parameters = result.parameters || {};
-  const groups = result.groups || [];
   const units =
     parameters.time_kind === "datetime"
       ? "s"
       : parameters.time_kind === "numeric"
         ? "column units"
         : "";
-  const expected = formatGroupedTime(parameters.expected_cadence, units);
-  const findings = groupedFindingSummary(summary.finding_counts);
-  const intervals = groups.reduce(
-    (count, group) => count + (group.evaluated_adjacent_intervals || 0),
-    0,
-  );
-  let explanation;
-  if (findings) {
-    explanation = `Findings · ${findings}.`;
-  } else if (!groups.length) {
-    explanation = "No series to check.";
-  } else {
-    explanation =
-      intervals && parameters.expected_cadence != null
-        ? `No timing findings. ${intervals === 1 ? "The checked interval matched" : `All ${intervals} checked intervals matched`} the expected spacing of ${expected}.`
-        : "No timing findings.";
-  }
-  let html = `<p class="mb-2 text-sm">${escapeHtml(explanation)}</p>`;
-  if (parameters.time_kind) {
-    const format =
-      parameters.time_kind === "datetime" ? "Date and time" : "Numeric time";
-    html += `<p class="mb-2 text-xs text-gray-600 dark:text-gray-400">${format}</p>`;
-  }
-  if (findings && parameters.expected_cadence != null) {
-    html += `<p class="mb-2 text-xs">Expected spacing ${escapeHtml(expected)}.</p>`;
-  }
-  if (summary.unassigned_rows) {
-    const positions = result.unassigned_row_positions || [];
-    const rows = positions
-      .slice(0, 5)
-      .map((position) => position + 1)
-      .join(", ");
-    const partial = result.unassigned_rows_truncated || positions.length > 5;
-    const details = rows
-      ? ` Data rows ${rows}${partial ? " (partial list)" : ""}.`
-      : "";
-    html += `<p class="mb-2 text-sm">${escapeHtml(`Rows without a series identifier were skipped.${details}`)}</p>`;
-  }
-  for (const group of groups) {
-    const series = Object.entries(group.group)
+  return (result.groups || []).map((group) => {
+    const { __aidrin_source_id: sourceId, ...keys } = group.group;
+    const series = Object.entries(keys)
       .map(([column, value]) => `${column}: ${value}`)
       .join(" · ");
-    const groupFindings = groupedFindingSummary(group.finding_counts);
-    const details = group.findings || [];
-    const rows = `${group.row_count} ${group.row_count === 1 ? "row" : "rows"} checked`;
-    const times = `${group.valid_time_count} valid ${group.valid_time_count === 1 ? "timestamp" : "timestamps"}`;
-    const coverage = `${rows} · ${times}`;
-    if (groups.length > 1) {
-      html += `<details class="mb-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3"><summary class="cursor-pointer text-sm font-medium">${escapeHtml(series || "Series")} · ${escapeHtml(coverage)} · ${escapeHtml(groupFindings || "No timing findings")}</summary>`;
-    } else if (series) {
-      html += `<p class="mb-1 text-sm font-medium">${escapeHtml(series)}</p>`;
-    }
-    const span = `Observed span ${formatGroupedTime(group.observed_duration, units)}`;
-    const stats = groups.length > 1 ? span : `${coverage} · ${span}`;
-    html += `<p class="my-1 text-xs text-gray-600 dark:text-gray-400">${escapeHtml(stats)}</p>`;
-    if (details.length) {
-      const items = (entries) =>
-        `<ul class="my-2 list-disc space-y-1 pl-5 text-sm">${entries.map((finding) => `<li>${escapeHtml(describeGroupedFinding(finding, units))}</li>`).join("")}</ul>`;
-      html += items(details.slice(0, 3));
-      if (details.length > 3) {
-        html += `<details class="my-2"><summary class="cursor-pointer text-sm">More finding details</summary>${items(details.slice(3))}</details>`;
-      }
-    }
-    if (group.findings_truncated) {
-      html += `<p class="my-1 text-xs">The detail limit applies here. Finding counts cover all rows.</p>`;
-    }
-    if (groups.length > 1) html += "</details>";
+    return {
+      file: file || sourceNames?.get(sourceId),
+      series,
+      group,
+      units,
+      parameters,
+    };
+  });
+}
+
+function renderGroupedSkippedRows(result, label = "") {
+  const count = result.summary?.unassigned_rows;
+  if (!count) return "";
+  const positions = result.unassigned_row_positions || [];
+  const rows = positions
+    .slice(0, 5)
+    .map((position) => position + 1)
+    .join(", ");
+  const partial = result.unassigned_rows_truncated || positions.length > 5;
+  const details = rows
+    ? ` Data rows ${rows}${partial ? " (partial list)" : ""}.`
+    : "";
+  const skipped = `${count} ${count === 1 ? "row was" : "rows were"} skipped due to missing series identifiers.${details}`;
+  return `<p class="mt-2 text-sm">${escapeHtml(label ? `${label} · ${skipped}` : skipped)}</p>`;
+}
+
+function renderGroupedSeriesResult(group, units) {
+  const findings = groupedFindingSummary(group.finding_counts);
+  if (!findings) {
+    const intervals = group.evaluated_adjacent_intervals;
+    const matched =
+      intervals === 1
+        ? "The checked interval matched."
+        : intervals === 2
+          ? "Both checked intervals matched."
+          : intervals > 2
+            ? `All ${intervals} checked intervals matched.`
+            : "";
+    return `<strong class="font-medium">No timing findings.</strong> ${matched}`;
   }
-  if (!inCollection) html += renderGroupedResultNotes(parameters);
+
+  const details = group.findings || [];
+  let html = `<strong class="font-medium">${escapeHtml(findings)}.</strong>`;
+  if (details.length)
+    html += ` ${escapeHtml(describeGroupedFinding(details[0], units))}`;
+  if (details.length > 1) {
+    html += `<details class="mt-1"><summary class="cursor-pointer text-sm">More finding details (${details.length - 1})</summary><ul class="mt-1 list-disc space-y-1 pl-5">`;
+    for (const finding of details.slice(1))
+      html += `<li>${escapeHtml(describeGroupedFinding(finding, units))}</li>`;
+    html += "</ul></details>";
+  }
+  if (group.findings_truncated) {
+    html += `<p class="mt-1 text-xs">The detail limit applies here. Finding counts cover all rows.</p>`;
+  }
   return html;
 }
 
+function renderGroupedTimeSeriesTable(rows, labelHeading = "Series") {
+  if (!rows.length) return `<p class="mb-2 text-sm">No series to check.</p>`;
+  const { parameters, units } = rows[0];
+  const sharedUnits = rows.every((row) => row.units === units);
+  const context = [];
+  if (parameters.timestamp_column)
+    context.push(`Time column ${parameters.timestamp_column}`);
+  if (parameters.expected_cadence != null)
+    context.push(
+      `Expected spacing ${formatGroupedTime(parameters.expected_cadence, sharedUnits ? units : "")}`,
+    );
+  if (!sharedUnits) context.push("Units vary by series");
+  let html = context.length
+    ? `<p class="mb-2 text-sm">${escapeHtml(context.join(" · "))}</p>`
+    : "";
+  html += `<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"><table class="w-full text-left text-sm text-gray-700 dark:text-gray-300">
+    <caption class="sr-only">Grouped Time Series results by series</caption>
+    <thead class="bg-gray-50 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300"><tr>
+      <th scope="col" class="px-3 py-2.5">${escapeHtml(labelHeading)}</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Rows checked</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Valid timestamps</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Observed span</th>
+      <th scope="col" class="px-3 py-2.5">Result</th>
+    </tr></thead><tbody>`;
+  for (const row of rows) {
+    const { file, series, group, units } = row;
+    html += `<tr class="border-t border-gray-200 align-top even:bg-gray-50 dark:border-gray-700 dark:even:bg-gray-700/30">
+      <th scope="row" class="break-words px-3 py-2.5 font-medium">${escapeHtml(file || series || "Whole file")}`;
+    if (file && series)
+      html += `<span class="mt-1 block text-xs font-normal">${escapeHtml(series)}</span>`;
+    html += `</th>
+      <td class="px-3 py-2.5 text-right tabular-nums">${escapeHtml(group.row_count)}</td>
+      <td class="px-3 py-2.5 text-right tabular-nums">${escapeHtml(group.valid_time_count)}</td>
+      <td class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">${escapeHtml(formatGroupedTime(group.observed_duration, units))}</td>
+      <td class="min-w-[16rem] break-words px-3 py-2.5">${renderGroupedSeriesResult(group, units)}</td></tr>`;
+  }
+  return `${html}</tbody></table></div>`;
+}
+
+function renderGroupedTimeSeriesResults(result) {
+  return (
+    renderGroupedTimeSeriesTable(groupedTimeSeriesRows(result)) +
+    renderGroupedSkippedRows(result) +
+    renderGroupedResultNotes(result.parameters || {})
+  );
+}
+
 function renderGroupedCollectionResults(result) {
-  const mode = result.mode === "stacked" ? "Stacked rows" : "Independent files";
+  const stacked = result.mode === "stacked";
+  const mode = stacked ? "Stacked rows" : "Independent files";
   const names = new Map(
     (result.selection || []).map((source, index) => [
       source.id,
       `${index + 1}. ${source.name}`,
     ]),
   );
-  let html = `<p class="mb-3 text-sm">${mode} · ${escapeHtml(String(result.summary.selected_files))} selected files</p>`;
+  const rows = [];
+  let notes = "";
   let parameters;
   for (const dataset of result.datasets || []) {
     const sources = dataset.sources.map(
       (source) => names.get(source.id) || source.name,
     );
-    const title =
-      result.mode === "stacked" ? "Stacked dataset" : sources.join(", ");
-    html += `<section class="mb-4 border-t border-gray-200 dark:border-gray-700 pt-3"><h4 class="mb-2 font-medium">${escapeHtml(title)}</h4>`;
-    if (result.mode === "stacked") {
-      html += `<details class="mb-3 text-xs"><summary class="cursor-pointer">Source rows in stack order</summary><ul class="list-disc pl-5">`;
+    const label = stacked ? "Stacked dataset" : sources.join(", ");
+    if (stacked && dataset.sources.length) {
+      notes += `<details class="mt-3 text-xs"><summary class="cursor-pointer">Source rows in stack order</summary><ul class="list-disc pl-5">`;
       for (const [index, source] of dataset.sources.entries()) {
-        html += `<li>${escapeHtml(sources[index])} · ${escapeHtml(String(source.row_count))} rows starting at data row ${escapeHtml(String(source.start_row + 1))}</li>`;
+        notes += `<li>${escapeHtml(sources[index])} · ${escapeHtml(source.row_count)} rows starting at data row ${escapeHtml(source.start_row + 1)}</li>`;
       }
-      html += "</ul></details>";
+      notes += "</ul></details>";
     }
     for (const message of Object.values(dataset.errors || {})) {
-      html += `<p class="mb-2 text-sm text-red-700 dark:text-red-400" role="alert">${escapeHtml(String(message))}</p>`;
+      notes += `<p class="mt-2 text-sm text-red-700 dark:text-red-400" role="alert">${escapeHtml(`${label} · ${message}`)}</p>`;
     }
     const audit = dataset.metrics?.grouped_time_series;
     if (audit) {
       parameters = audit.parameters;
-      const groups = audit.groups.map((item) => {
-        const { __aidrin_source_id: sourceId, ...group } = item.group;
-        if (result.mode === "independent") return { ...item, group };
-        if (!names.has(sourceId)) return item;
-        return {
-          ...item,
-          group: { "Source file": names.get(sourceId), ...group },
-        };
-      });
-      html += renderGroupedTimeSeriesResults({ ...audit, groups }, true);
+      for (const row of groupedTimeSeriesRows(
+        audit,
+        stacked ? "" : label,
+        names,
+      ))
+        rows.push(row);
+      notes += renderGroupedSkippedRows(audit, label);
+      if (!audit.groups.length && !audit.summary?.unassigned_rows) {
+        notes += `<p class="mt-2 text-sm">${escapeHtml(label)} · No series to check.</p>`;
+      }
     }
-    html += "</section>";
   }
-  if (parameters)
-    html += renderGroupedResultNotes(parameters, result.mode === "stacked");
+  const heading = stacked
+    ? "Series"
+    : rows.some((row) => row.series)
+      ? "File / series"
+      : "File";
+  let html = `<p class="mb-3 text-sm">${mode} · ${escapeHtml(result.summary.selected_files)} selected files</p>`;
+  html += renderGroupedTimeSeriesTable(rows, heading) + notes;
+  if (parameters) html += renderGroupedResultNotes(parameters, stacked);
   return html;
 }
 

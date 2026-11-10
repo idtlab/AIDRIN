@@ -992,10 +992,10 @@ The summary above **Submit** shows the file scope, series grouping, time column,
 and interval. If a setting needs attention, the form shows the message beside
 it and moves focus there on submission.
 
-Results report the rows checked and valid timestamps for each series, explain
-which files or series matched the expected spacing, and describe any findings.
-Data row numbers start at 1 in the displayed explanations. When
-rows are stacked, these numbers refer to the stacked table. **View raw JSON** and
-the JSON download retain the structured findings, full timestamp precision, and
-zero-based row positions. The check preserves input order. See
+The results table shows one row per series, with rows checked, valid timestamps,
+observed span, and a plain-language result. Expand **More finding details** to
+see additional recorded findings for a series. Data row numbers in the table
+start at 1 and refer to the stacked table when rows are stacked. **View raw JSON**
+and the JSON download retain the structured findings, full timestamp precision,
+and zero-based row positions. The check preserves input order. See
 :ref:`grouped_time_series` for interpretation and limitations.

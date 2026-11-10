@@ -240,19 +240,28 @@ def test_renderer_preserves_precision_and_escapes_group_values():
     escape = re.search(r'function escapeHtml\(str\) \{[\s\S]*?\n\}', source).group()
     result = {
         'parameters': {'time_kind': 'datetime', 'expected_cadence': 5e-10},
-        'summary': {'group_count': 1, 'groups_with_findings': 1, 'unassigned_rows': 0, 'finding_counts': {'cadence_gap': 1}},
-        'groups': [{'group': {'sensor': '<img src=x onerror=alert(1)>'}, 'row_count': 2,
-                    'valid_time_count': 2, 'observed_duration': 1e-9, 'finding_counts': {'cadence_gap': 1},
+        'summary': {'group_count': 2, 'groups_with_findings': 1, 'unassigned_rows': 0,
+                    'finding_counts': {'cadence_gap': 1, 'duplicate_time': 2}},
+        'groups': [{'group': {'sensor': '<img src=x onerror=alert(1)>'}, 'row_count': 4,
+                    'valid_time_count': 4, 'observed_duration': 1e-9, 'finding_counts': {'cadence_gap': 1, 'duplicate_time': 2},
                     'findings': [{'kind': 'cadence_gap', 'delta': 1e-9, 'from_row_position': 0, 'to_row_position': 1,
                                   'from_time': '2026-01-01T00:00:00Z', 'to_time': '2026-01-01T00:00:00.000000001Z',
-                                  'estimated_missing_samples': 1}], 'findings_truncated': True}],
+                                  'estimated_missing_samples': 1},
+                                 {'kind': 'duplicate_time', 'row_position': 2, 'first_row_position': 1,
+                                  'time': '2026-01-01T00:00:00.000000001Z'}], 'findings_truncated': True},
+                   {'group': {'sensor': 'B'}, 'row_count': 3, 'valid_time_count': 3, 'observed_duration': 1e-9,
+                    'evaluated_adjacent_intervals': 2, 'finding_counts': {}, 'findings': []}],
     }
     script = escape + '\n' + render + '\nprocess.stdout.write(renderGroupedTimeSeriesResults(' + json.dumps(result) + '));'
     html = subprocess.run([node, '-e', script], check=True, capture_output=True, text=True).stdout
     assert '<img src=x' not in html
     assert '&lt;img src=x' in html
     assert '1e-9' in html
-    assert '2 rows checked · 2 valid timestamps' in html
+    assert html.count('<th scope="row"') == 2
+    assert 'Rows checked</th>' in html
+    assert 'Valid timestamps</th>' in html
+    assert 'Both checked intervals matched.' in html
+    assert 'More finding details (1)' in html
     assert 'The gap suggests 1 missing sample.' in html
     assert 'data row 1 and data row 2' in html
     assert 'counts cover all rows' in html
