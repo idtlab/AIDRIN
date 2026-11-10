@@ -2830,10 +2830,12 @@ function renderGroupedTimeSeriesTable(
 ) {
   const { parameters = {}, units = "" } = rows[0] || {};
   const sharedUnits = rows.every((row) => row.units === units);
-  const spanHeading =
+  const spanUnits =
     sharedUnits && units
-      ? `Observed span (${units === "s" ? "seconds" : "time column units"})`
-      : "Observed span";
+      ? units === "s"
+        ? "seconds"
+        : "time column units"
+      : "";
   const context = scope ? [scope] : [];
   if (parameters.timestamp_column)
     context.push(`Time column ${parameters.timestamp_column}`);
@@ -2851,9 +2853,9 @@ function renderGroupedTimeSeriesTable(
     <caption class="sr-only">Grouped Time Series results by series</caption>
     <thead class="bg-gray-50 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300"><tr>
       <th scope="col" class="px-3 py-2.5">${escapeHtml(labelHeading)}</th>
-      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Rows checked</th>
-      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Valid timestamps</th>
-      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">${spanHeading}</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Rows<br>checked</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Valid<br>timestamps</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Observed span${spanUnits ? `<br><span class="font-normal">(${spanUnits})</span>` : ""}</th>
       <th scope="col" class="px-3 py-2.5">Result</th>
     </tr></thead><tbody>`;
   for (const row of rows) {

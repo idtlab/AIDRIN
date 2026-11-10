@@ -267,11 +267,11 @@ process.stdout.write(JSON.stringify([
     assert '1e-9' in html
     assert 'Time column time · Expected spacing 5e-10 s' in html
     assert html.count('<th scope="row"') == 2
-    assert 'Rows checked</th>' in html
-    assert 'Valid timestamps</th>' in html
-    assert 'Observed span (seconds)</th>' in html
+    assert 'Rows<br>checked</th>' in html
+    assert 'Valid<br>timestamps</th>' in html
+    assert re.search(r'Observed span<br><span[^>]*>\(seconds\)</span></th>', html)
     assert '>1e-9</td>' in html
-    assert 'Observed span (time column units)</th>' in numeric_html
+    assert re.search(r'Observed span<br><span[^>]*>\(time column units\)</span></th>', numeric_html)
     assert '>1e-9</td>' in numeric_html
     assert 'Observed span</th>' in mixed_html
     assert '>1e-9 s</td>' in mixed_html
