@@ -2334,7 +2334,11 @@ function _globusSelectedKeysList(override) {
 function _globusResetSelectionIfFileChanged(filePath, fileType) {
   const loadedPath = window.AIDRIN_GLOBUS_FILE_PATH || "";
   const loadedType = window.AIDRIN_GLOBUS_FILE_TYPE || "";
-  if (filePath !== loadedPath || fileType !== loadedType || fileType !== ".h5") {
+  if (
+    filePath !== loadedPath ||
+    fileType !== loadedType ||
+    fileType !== ".h5"
+  ) {
     window.AIDRIN_GLOBUS_SELECTED_KEYS = [];
     window._globusPendingConnect = null;
     const panelPicker = document.getElementById("globus-hdf5-picker");
@@ -2370,25 +2374,43 @@ function _globusSubmitPayload(
 function _globusPollTaskResult(taskId) {
   return new Promise((resolve, reject) => {
     let attempts = 0;
+    let consecutiveErrors = 0;
     const maxAttempts = 120;
+    const maxConsecutiveErrors = 3;
     const poll = () => {
       attempts++;
       fetch(`/globus/check-task/${taskId}`)
         .then((r) => r.json())
         .then((response) => {
+          consecutiveErrors = 0;
           if (response.status === "completed" && response.result) {
             resolve(response.result);
           } else if (response.status === "failed") {
             reject(new Error(response.error || "Remote task failed"));
+          } else if (response.error) {
+            // An error with no status alongside it means the request itself
+            // was refused (401), so polling it another 120 times only delays
+            // the message by four minutes.
+            reject(new Error(response.error));
           } else if (attempts < maxAttempts) {
             setTimeout(poll, 2000);
           } else {
             reject(new Error("Timed out waiting for the remote endpoint"));
           }
         })
-        .catch(() => {
-          if (attempts < maxAttempts) setTimeout(poll, 3000);
-          else reject(new Error("Timed out waiting for the remote endpoint"));
+        .catch((err) => {
+          // Retrying a dropped request is right, but a server that is actually
+          // down should surface instead of holding a disabled form for the
+          // whole budget, and it should say what went wrong.
+          consecutiveErrors++;
+          if (
+            consecutiveErrors <= maxConsecutiveErrors &&
+            attempts < maxAttempts
+          ) {
+            setTimeout(poll, 3000);
+          } else {
+            reject(err);
+          }
         });
     };
     setTimeout(poll, 500);
@@ -2456,9 +2478,7 @@ function fetchGlobusSummary() {
     .then((r) => r.json())
     .then((data) => {
       if (data.error) {
-        const loading = document.getElementById("globus-summary-loading");
-        if (loading)
-          loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(data.error)}</div>`;
+        _showGlobusSummaryError(data.error);
         _endServerProcessing();
         return;
       }
@@ -2475,11 +2495,25 @@ function fetchGlobusSummary() {
       }
     })
     .catch((err) => {
-      const loading = document.getElementById("globus-summary-loading");
-      if (loading)
-        loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">Failed to connect: ${escapeHtml(err.message)}</div>`;
+      _showGlobusSummaryError(`Failed to connect: ${err.message}`);
       _endServerProcessing();
     });
+}
+
+/**
+ * Show an error where the Globus summary would have gone. #globus-summary-loading
+ * is rendered inside #workspace-summary and a dataset selection replaces it, so
+ * fall back to whichever container is still mounted or the message is lost and
+ * the locked sidebar has nothing to explain it.
+ */
+function _showGlobusSummaryError(message) {
+  const target =
+    document.getElementById("globus-summary-loading") ||
+    document.getElementById("globus-summary-content") ||
+    document.getElementById("workspace-summary");
+  if (!target) return;
+  target.style.display = "";
+  target.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(message)}</div>`;
 }
 
 /** Render Globus summary data (used by both cached and polled paths). */
@@ -2620,6 +2654,10 @@ function _lockGlobusSidebar() {
   var sidebarMetrics = document.getElementById("sidebar-metrics");
   if (sidebarMetrics)
     sidebarMetrics.classList.add("opacity-50", "pointer-events-none");
+  // The file did load; it is the dataset choice that is outstanding, so drop
+  // the "Loading dataset info..." placeholder with it.
+  var loadingMsg = document.getElementById("sidebar-loading-msg");
+  if (loadingMsg) loadingMsg.remove();
 }
 
 function _unlockGlobusSidebar() {
@@ -2650,9 +2688,7 @@ function pollGlobusSummary(taskId) {
             body: JSON.stringify(response.result),
           }).catch(() => {}); // Best-effort cache
         } else if (response.status === "failed") {
-          const loading = document.getElementById("globus-summary-loading");
-          if (loading)
-            loading.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400">${escapeHtml(response.error || "Failed to load summary")}</div>`;
+          _showGlobusSummaryError(response.error || "Failed to load summary");
           _unlockGlobusSidebar();
           _endServerProcessing();
         } else if (attempts < maxAttempts) {
@@ -6008,9 +6044,7 @@ function selectHdf5Datasets(paths, sourceContainer) {
       pending.pickerId || "globus-hdf5-picker",
     );
     const fromPendingPicker =
-      expectedPicker &&
-      sourceContainer &&
-      sourceContainer === expectedPicker;
+      expectedPicker && sourceContainer && sourceContainer === expectedPicker;
     if (fromPendingPicker) {
       window._globusPendingConnect = null;
       expectedPicker.classList.add("hidden");
@@ -6130,7 +6164,6 @@ function returnToHdf5DatasetPicker() {
   const hist = document.getElementById("workspace-histograms");
   if (hist) hist.innerHTML = "";
   if (window.AIDRIN_GLOBUS_MODE) {
-    clearWorkspaceFeatureDropdowns();
     if (container) {
       container.innerHTML = `
       <div role="status" class="inline-block">
@@ -6139,15 +6172,14 @@ function returnToHdf5DatasetPicker() {
       <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Returning to dataset selection...</p>`;
     }
     fetch("/globus/clear-dataset-selection", { method: "POST" })
-      .then((r) =>
-        r.json().then((data) => ({ ok: r.ok, data: data || {} })),
-      )
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data: data || {} })))
       .then(({ ok, data }) => {
         if (!ok || data.success === false) {
           throw new Error(
             data.error || data.message || "Failed to clear dataset selection",
           );
         }
+        clearWorkspaceFeatureDropdowns();
         window.AIDRIN_GLOBUS_SELECTED_KEYS = [];
         clearGlobusDiscoveryCache();
         fetchGlobusSummary();
