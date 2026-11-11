@@ -5655,7 +5655,7 @@ function renderWorkspaceSummary(data) {
   const idCount = (data.identifier_features || []).length;
   let html = "";
 
-  if (data.hdf5_multi_dataset) {
+  if (data.hdf5_multi_dataset || data.root_tree_selected) {
     const keys = (data.selected_dataset_keys || []).join(", ");
     const keysDisplay = keys.length > 80 ? `${keys.slice(0, 77)}...` : keys;
     const escapedKeys = keys
@@ -5668,7 +5668,7 @@ function renderWorkspaceSummary(data) {
     html += `
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
         <p class="text-sm text-gray-600 dark:text-gray-400">
-          HDF5 datasets:
+          ${data.root_tree_selected ? "ROOT tree:" : "HDF5 datasets:"}
           <span class="font-mono text-xs text-gray-800 dark:text-gray-200" title="${escapedKeys}">${escapedDisplay || "selected"}</span>
         </p>
         <button type="button" onclick="returnToHdf5DatasetPicker()" class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -5677,6 +5677,8 @@ function renderWorkspaceSummary(data) {
         </button>
       </div>`;
   }
+
+  html += excludedColumnsBanner(data.excluded_columns);
 
   html += `
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
@@ -5808,10 +5810,47 @@ function renderCategoricalPieCharts(charts, containerId) {
   container.innerHTML = html;
 }
 
+/** Show a single-tree selector for ROOT files. */
+function renderRootTreePicker(container, data) {
+  const checked = new Set(data.current_checked_keys || []);
+  container.innerHTML = `
+    <h3 class="text-lg font-semibold mb-2">Select a ROOT tree</h3>
+    <p class="text-sm mb-4">${escapeHtml(data.message)}</p>
+    <div class="space-y-2 mb-4">
+      ${(data.datasets || [])
+        .map(
+          (ds) => `
+        <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer">
+          <input type="radio" name="root-tree" value="${escapeHtml(ds.path)}" ${checked.has(ds.path) ? "checked" : ""} />
+          <span>${escapeHtml(ds.path)} (${escapeHtml(ds.shape[0])} entries)</span>
+        </label>`,
+        )
+        .join("")}
+    </div>
+    <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50" data-load-root-tree disabled>Load selected tree</button>`;
+  const button = container.querySelector("[data-load-root-tree]");
+  const selection = () =>
+    container.querySelector('input[name="root-tree"]:checked');
+  container.querySelectorAll('input[name="root-tree"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      button.disabled = !selection();
+    });
+  });
+  button.disabled = !selection();
+  button.addEventListener("click", () => {
+    const selected = selection();
+    if (selected) selectHdf5Datasets([selected.value]);
+  });
+}
+
 /**
  * Show dataset picker for multi-dataset HDF5 files.
  */
 function renderHdf5DatasetPicker(container, data) {
+  if (data.file_type === ".root") {
+    renderRootTreePicker(container, data);
+    return;
+  }
   const datasets = data.datasets || [];
   const groups = data.groups || [];
   const checked = new Set(data.current_checked_keys || []);
@@ -6159,7 +6198,7 @@ function clearWorkspaceFeatureDropdowns() {
 }
 
 /**
- * Return to the HDF5 dataset picker without re-uploading the file.
+ * Return to the dataset or tree picker without re-uploading the file.
  */
 function returnToHdf5DatasetPicker() {
   const container = document.getElementById("workspace-summary");
@@ -6209,6 +6248,25 @@ function returnToHdf5DatasetPicker() {
  * @param {string} summaryContainerId - element ID for the stats/table.
  * @param {string} histogramsContainerId - element ID for the histograms.
  */
+/**
+ * Banner for columns the reader had to leave out to build a tabular frame
+ * (e.g. array-valued ROOT branches), so the feature counts next to it are not
+ * mistaken for the whole dataset.
+ *
+ * @param {Array} columns - excluded column names, or undefined.
+ * @returns {string} HTML for the banner, or "" when nothing was excluded.
+ */
+function excludedColumnsBanner(columns) {
+  const excluded = Array.isArray(columns) ? columns : [];
+  if (!excluded.length) return "";
+  return `
+    <div class="p-3 mb-4 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 text-xs text-amber-800 dark:text-amber-200">
+      <span class="font-semibold">${excluded.length} column${excluded.length === 1 ? "" : "s"} excluded</span>
+      (array-valued, not representable in a table):
+      ${escapeHtml(excluded.join(", "))}
+    </div>`;
+}
+
 function loadDataOverview(summaryContainerId, histogramsContainerId) {
   const summaryId = summaryContainerId || "workspace-summary";
   const histogramsId = histogramsContainerId || "workspace-histograms";
@@ -6874,15 +6932,13 @@ function _renderReadinessNeedsAttentionPanel(naItems, emptyMessage) {
 /** Readiness metric definitions shown in info-icon tooltips. */
 const _READINESS_METRIC_INFO = {
   feature_profile:
-    "A per-column snapshot of whether each feature is usable for modeling. Combines missingness, cardinality, and value balance into a readiness status (Good / Warning / Poor).",
+    "A per-column snapshot of structural characteristics useful for modeling. Combines missingness, cardinality, and value balance.",
   pct_missing:
     "Share of rows where this feature is missing (null/NaN). High missingness reduces reliability and may require imputation or dropping the column.",
   n_unique:
     "Number of distinct non-missing values. Very low values suggest constants; very high values relative to row count may indicate IDs or free text.",
   pct_dominant:
     "Share of rows taken by the most frequent value (the mode). Values near 100% mean the column is almost constant and usually carries little signal.",
-  profile_status:
-    "Readiness verdict for this feature. Poor: high missingness, constant, or ID-like. Warning: moderate issues. Good: no major issues detected.",
   overall_dq_grade:
     "Average of the data-quality KPIs (completeness, uniqueness, outlier-cleanliness). Higher is better — indicates how clean the dataset is overall.",
   analysis_scope:
@@ -6975,20 +7031,6 @@ function _formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Badge HTML for per-feature readiness status. */
-function _profileStatusBadge(status) {
-  const cls = _dqStatusClasses(status);
-  const label =
-    status === "good"
-      ? "Good"
-      : status === "warning"
-        ? "Warning"
-        : status === "poor"
-          ? "Poor"
-          : "—";
-  return `<span class="px-2 py-0.5 rounded text-xs font-medium ${cls.badge}">${label}</span>`;
-}
-
 /**
  * Render the dataset overview: file metadata, KPI tiles, per-feature readiness
  * profile, and collapsible detailed statistics / distributions / histograms.
@@ -7002,12 +7044,6 @@ function renderReadinessDatasetOverview(container, overview) {
   const meta = overview.file_metadata || {};
   const profiles = overview.feature_profiles || [];
   const profileMeta = overview.feature_profiles_meta || {};
-  const statusCounts = profileMeta.status_counts || {};
-  const poorCount =
-    statusCounts.poor ?? profiles.filter((p) => p.status === "poor").length;
-  const warnCount =
-    statusCounts.warning ??
-    profiles.filter((p) => p.status === "warning").length;
 
   // --- File metadata ---
   let html = `
@@ -7024,6 +7060,8 @@ function renderReadinessDatasetOverview(container, overview) {
         <div><span class="text-gray-500 dark:text-gray-400">Other:</span> ${(meta.datetime_count || 0) + (meta.boolean_count || 0)}</div>
       </div>
     </div>`;
+
+  html += excludedColumnsBanner(meta.excluded_columns);
 
   // --- KPI tiles ---
   html += `
@@ -7048,17 +7086,12 @@ function renderReadinessDatasetOverview(container, overview) {
 
   // --- Per-feature readiness profile ---
   html += `
-    <div class="flex items-center justify-between mb-2">
+    <div class="mb-2">
       <p class="text-sm font-semibold text-gray-900 dark:text-white inline-flex items-center">Per-feature readiness profile${_readinessInfoIcon("feature_profile")}</p>
-      <span class="text-xs text-gray-500 dark:text-gray-400">
-        ${poorCount ? `<span class="text-red-600 dark:text-red-400">${poorCount} poor</span>` : ""}
-        ${warnCount ? `${poorCount ? " · " : ""}<span class="text-amber-600 dark:text-amber-400">${warnCount} warning</span>` : ""}
-        ${!poorCount && !warnCount ? "all good" : ""}
-      </span>
     </div>`;
 
   if (profileMeta.truncated) {
-    html += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing ${profileMeta.shown.toLocaleString()} of ${profileMeta.total.toLocaleString()} features (prioritized: poor → warning → good).</p>`;
+    html += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Showing ${profileMeta.shown.toLocaleString()} of ${profileMeta.total.toLocaleString()} features.</p>`;
   }
 
   html += `<div class="relative overflow-x-auto rounded-lg shadow-sm mb-4">`;
@@ -7068,7 +7101,6 @@ function renderReadinessDatasetOverview(container, overview) {
   html += _readinessTh("% missing", "pct_missing", true);
   html += _readinessTh("# unique", "n_unique", true);
   html += _readinessTh("% dominant", "pct_dominant", true);
-  html += _readinessTh("Status", "profile_status", false);
   html += `<th class="px-3 py-2">Summary</th>`;
   html += `</tr></thead><tbody>`;
 
@@ -7089,7 +7121,6 @@ function renderReadinessDatasetOverview(container, overview) {
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${fmtProfilePct(p.pct_missing)}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.n_unique}</td>`;
     html += `<td class="px-3 py-2 font-mono text-xs text-right">${p.pct_dominant != null ? fmtProfilePct(p.pct_dominant) : "—"}</td>`;
-    html += `<td class="px-3 py-2">${_profileStatusBadge(p.status)}</td>`;
     html += `<td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title="${escapeHtml(p.summary || "")}">${escapeHtml(p.summary || "—")}</td>`;
     html += `</tr>`;
   });
@@ -7174,7 +7205,7 @@ function renderReadinessDatasetOverview(container, overview) {
     hasHistograms || (vizDeferred && profileNumericalCount > 0);
 
   if ((showCatCharts || showHistograms) && profileMeta.truncated) {
-    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Distribution charts use the same ${profileMeta.shown.toLocaleString()} features shown in the profile table above (prioritized: poor → warning → good).</p>`;
+    detailsInner += `<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Distribution charts use the same ${profileMeta.shown.toLocaleString()} features shown in the profile table above.</p>`;
   }
 
   if (showCatCharts) {
