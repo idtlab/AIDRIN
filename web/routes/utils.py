@@ -361,6 +361,10 @@ def format_dict_values(d):
     small-but-real scores to ``0.0`` in the table while the chart showed
     ``0.004`` (issue #211).
     """
+    # Sequence audit parameters and interval endpoints are measurement data,
+    # including sub-millisecond tolerances, rather than rounded chart scores.
+    if d.get("format") == "aidrin.grouped-time-series":
+        return d
     formatted_dict = {}
     for key, value in d.items():
         if isinstance(value, dict):

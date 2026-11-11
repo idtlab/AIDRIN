@@ -202,6 +202,9 @@ def _round_floats(obj, ndigits: int = 4):
     """Recursively round float values for cleaner CLI output."""
     from numbers import Number
 
+    # Sequence timestamps and intervals must retain sub-millisecond precision.
+    if isinstance(obj, dict) and obj.get("format") == "aidrin.grouped-time-series":
+        return obj
     if isinstance(obj, float):
         return round(obj, ndigits)
     if isinstance(obj, list):
@@ -370,6 +373,13 @@ def _build_run_kwargs(args: argparse.Namespace) -> dict:
         "threshold": getattr(args, "threshold", None),
         "frequency": getattr(args, "frequency", None),
         "timestamp_column": getattr(args, "timestamp_column", None),
+        "group_columns": _parse_list(getattr(args, "group_columns", None)),
+        "expected_cadence": getattr(args, "expected_cadence", None),
+        "time_kind": getattr(args, "time_kind", "numeric"),
+        "tolerance": getattr(args, "tolerance", 0.0),
+        "max_findings": getattr(args, "max_findings", 100),
+        "expected_count": getattr(args, "expected_count", None),
+        "expected_duration": getattr(args, "expected_duration", None),
         "batch_column": getattr(args, "batch_column", None),
         "target_columns": _parse_list(getattr(args, "target_columns", None)),
         "loader": getattr(args, "loader", None),
@@ -500,9 +510,20 @@ def _add_required_metric_args(parser: argparse.ArgumentParser, required_args: Li
                                 choices=["ms", "s", "min", "h", "D", "W", "ME", "QE", "YE"],
                                 help='Interval frequency (default "D"): '
                                      'ms, s, min, h, D, W, ME, QE, YE')
+        elif arg == "group-columns":
+            parser.add_argument("--group-columns", help="Comma-separated sequence keys (default: one sequence)")
+        elif arg == "expected-cadence":
+            parser.add_argument("--expected-cadence", type=float, required=True,
+                                help="Positive interval: input units for numeric time, seconds for datetime")
+            parser.add_argument("--time-kind", choices=["numeric", "datetime", "auto"], default="numeric")
+            parser.add_argument("--tolerance", type=float, default=0.0,
+                                help="Absolute interval tolerance, less than half the cadence")
+            parser.add_argument("--max-findings", type=int, default=100, help="Detail cap per group; 0 is unlimited")
+            parser.add_argument("--expected-count", type=int, default=None, help="Optional expected rows per group")
+            parser.add_argument("--expected-duration", type=float, default=None, help="Optional expected time span per group")
         elif arg == "timestamp-column":
             parser.add_argument("--timestamp-column", dest="timestamp_column", default=None,
-                                help="Datetime column name")
+                                help="Time column name (datetime for temporal completeness)")
         elif arg == "batch-column":
             parser.add_argument("--batch-column", dest="batch_column", default=None,
                                 help="Column that groups rows into batches")
@@ -908,7 +929,7 @@ def main() -> None:
         metric_cli = metric_name.replace("_", "-")
         mparser = run_subparsers.add_parser(metric_cli, help=meta["description"] + extra_help)
         mparser.add_argument("file_path", help="Path to the dataset CSV")
-        _add_required_metric_args(mparser, meta.get("required_args", []))
+        _add_required_metric_args(mparser, [*meta.get("required_args", []), *meta.get("optional_args", [])])
         if metric_name == "outliers_custom":
             mparser.add_argument(
                 "--rule",

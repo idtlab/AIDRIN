@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 import uuid
 
+from aidrin.file_handling.readers.base_reader import exact_integer_values
 from aidrin.file_handling.readers.csv_reader import csvReader
 from aidrin.file_handling.readers.excel_reader import excelReader
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
@@ -18,13 +19,15 @@ _loaded_table = ContextVar("aidrin_loaded_table", default=None)
 
 
 @contextmanager
-def using_loaded_table(frame):
+def using_loaded_table(frame, file_info=None):
     """Bind one in-memory table to a unique input for synchronous metric calls.
 
     Each read gets a private copy, as when reading an ordinary cached file.
-    This context never substitutes a table for an existing filesystem path.
+    Omit file_info for synthetic inputs, or supply the exact reader input
+    whose table was already parsed in the same request.
     """
-    file_info = (f"collection:{uuid.uuid4().hex}", "Collection", ".collection")
+    if file_info is None:
+        file_info = (f"collection:{uuid.uuid4().hex}", "Collection", ".collection")
     token = _loaded_table.set((file_info, frame))
     try:
         yield file_info
@@ -132,7 +135,7 @@ def _frame_cache_path(file_path):
     # name: a changed source simply misses the cache (and the old artifact is
     # later reaped) rather than risking a stale read from a coarse mtime compare.
     st = os.stat(file_path)
-    return f"{file_path}.{st.st_size}-{st.st_mtime_ns}{_FRAME_CACHE_SUFFIX}"
+    return f"{file_path}.{st.st_size}-{st.st_mtime_ns}-v3{_FRAME_CACHE_SUFFIX}"
 
 
 def clear_frame_cache(file_path):
@@ -274,7 +277,7 @@ def _unpack_file_info_extras(file_info):
     return selected_keys, embedded_loader
 
 
-def read_file(file_info, columns=None, loader=None, *, write_cache=True):
+def read_file(file_info, columns=None, loader=None, *, write_cache=True, sample_rows=None):
     """
 
     Parses a given file into pandas Dataframe.
@@ -300,6 +303,9 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True):
     write_cache: bool, optional
         Allow a new frame cache beside the source. Existing cache reads are
         available even when this is disabled.
+    sample_rows: int, optional
+        Return up to this many rows from a bounded reader preview, or None
+        when a preview is unavailable. Never falls back to a full read.
     Returns
     ----------
     pd.Dataframe, None, or str
@@ -310,8 +316,10 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True):
     supply ``selected_keys``.
     """
     loaded = _loaded_table.get()
-    if loaded is not None and tuple(file_info[:3]) == loaded[0]:
+    if loaded is not None and tuple(file_info) == tuple(loaded[0]):
         frame = loaded[1]
+        if sample_rows is not None:
+            frame = frame.iloc[:sample_rows]
         return (frame if columns is None else frame[columns]).copy(deep=True)
 
     from aidrin.file_handling.custom_loader import (
@@ -338,6 +346,15 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True):
     # Prefer an explicit/context loader; fall back to a spec embedded in
     # file_info (Celery has no Flask session, so the web layer packs it there).
     loader_spec = get_active_loader_spec(loader) or embedded_loader
+    if sample_rows is not None:
+        reader_cls = READER_MAP.get(file_type)
+        if not file_path or loader_spec or not hasattr(reader_cls, "read_sample"):
+            return None
+        try:
+            return reader_cls(file_path, file_upload_time_log).read_sample(sample_rows, columns)
+        except (OSError, ValueError):
+            return None
+
     if loader_spec:
         try:
             kwargs = {}
@@ -427,7 +444,7 @@ def read_file(file_info, columns=None, loader=None, *, write_cache=True):
         # Best-effort cache for future calls. Failure is non-fatal: we still
         # return the freshly parsed frame below, so a read-only directory or an
         # unserialisable frame never turns a successful parse into an error.
-        if cacheable and write_cache:
+        if cacheable and write_cache and not exact_integer_values(df):
             _write_frame_cache(cache_path, df)
 
         if columns is not None:

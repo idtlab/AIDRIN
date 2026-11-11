@@ -147,6 +147,19 @@ def calculate_feature_coverage_ratio(threshold, file_info):
     return feature_coverage_ratio.apply(args=(threshold, file_info)).get()
 
 
+def calculate_grouped_time_series(file_info, group_columns, timestamp_column, expected_cadence,
+                                  time_kind="numeric", tolerance=0.0, max_findings=100,
+                                  expected_count=None, expected_duration=None):
+    """Audit each sequence in original order; see grouped_time_series documentation.
+
+    Numeric cadence uses input time units; datetime cadence uses seconds.
+    Returns JSON-compatible per-group counts and exact failing intervals.
+    """
+    from aidrin.structured_data_metrics.grouped_time_series import calculate_grouped_time_series as audit
+    return audit(file_info, group_columns, timestamp_column, expected_cadence, time_kind, tolerance,
+                 max_findings, expected_count, expected_duration)
+
+
 def calculate_temporal_completeness(timestamp_column, frequency, file_info):
     """Percentage of expected time intervals present in the data.
 
@@ -622,6 +635,7 @@ __all__ = [
     "calculate_duplicity_by_features",
     "calculate_feature_coverage_ratio",
     "calculate_temporal_completeness",
+    "calculate_grouped_time_series",
     "calculate_null_count_trend",
     # Fairness / Bias
     "calculate_class_distribution",

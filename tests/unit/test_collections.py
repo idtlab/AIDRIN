@@ -29,9 +29,38 @@ def members(tmp_path, frames):
     return selection
 
 
+def sequence_request(boundaries=True, **parameters):
+    return {"name": "grouped_time_series", "source_columns": ["__aidrin_source_id"] if boundaries else [],
+            "parameters": {"group_columns": ["__aidrin_source_id", "sensor"] if boundaries else ["sensor"],
+                           "timestamp_column": "t", "expected_cadence": .01, **parameters}}
+
+
+def test_independent_and_stacked_modes_and_explicit_sequence_boundaries(tmp_path):
+    files = members(tmp_path, [pd.DataFrame({"sensor": ["A", "A"], "t": [0., .01]})] * 2)
+    original = [Path(member.path).read_bytes() for member in files]
+    independent = run_collection_metrics(files, [sequence_request(False)])
+    assert len(independent["datasets"]) == 2
+    assert all(not dataset["metrics"]["grouped_time_series"]["summary"]["finding_counts"] for dataset in independent["datasets"])
+    default_request = sequence_request(False)
+    del default_request["source_columns"]
+    separated = run_collection_metrics(files, [default_request], "stacked")
+    assert separated == run_collection_metrics(files, [sequence_request()], "stacked")
+    for source_column in ("__aidrin_source_id", "__aidrin_source_row"):
+        request = {**default_request, "source_columns": [source_column]}
+        assert run_collection_metrics(files, [request], "stacked") == separated
+    result = separated["datasets"][0]["metrics"]["grouped_time_series"]
+    assert result["summary"]["group_count"] == 2
+    assert result["summary"]["finding_counts"] == {}
+    assert [group["group"]["__aidrin_source_id"] for group in result["groups"]] == ["0", "1"]
+    continued = run_collection_metrics(files, [sequence_request(False)], "stacked")
+    counts = continued["datasets"][0]["metrics"]["grouped_time_series"]["summary"]["finding_counts"]
+    assert counts == {"duplicate_time": 2, "out_of_order": 1}
+    assert [Path(member.path).read_bytes() for member in files] == original
+
+
 def test_provenance_does_not_hide_duplicates_or_inflate_completeness(tmp_path):
     files = members(tmp_path, [pd.DataFrame({"sensor": ["A", "A"], "t": [0., .01], "value": [1., None]})] * 2)
-    result = run_collection_metrics(files, [{"name": "duplicity"}, {"name": "completeness"}], "stacked")
+    result = run_collection_metrics(files, [{"name": "duplicity"}, {"name": "completeness"}, sequence_request()], "stacked")
     dataset = result["datasets"][0]
     assert dataset["status"] == "ok"
     assert dataset["metrics"]["duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"] == .5
@@ -44,16 +73,31 @@ def test_provenance_does_not_hide_duplicates_or_inflate_completeness(tmp_path):
     ]
 
 
+def test_selection_order_positions_and_large_integer_ticks_remain_exact(tmp_path):
+    origin = 2**53
+    files = members(tmp_path, [pd.DataFrame({"sensor": ["A", "A"], "t": [origin, origin + 1]}),
+                               pd.DataFrame({"sensor": ["A", "A"], "t": [origin + 2, origin + 3]})])
+    request = sequence_request(False, expected_cadence=1)
+    result = run_collection_metrics(files[::-1], [request], "stacked")
+    dataset = result["datasets"][0]
+    assert [source["id"] for source in dataset["sources"]] == ["1", "0"]
+    group = dataset["metrics"]["grouped_time_series"]["groups"][0]
+    assert group["first_time"] == str(origin + 2)
+    assert group["finding_counts"] == {"out_of_order": 1}
+    assert group["findings"][0]["from_row_position"] == 1
+    assert group["findings"][0]["to_row_position"] == 2
+
+
 def test_stacking_aligns_column_order_but_refuses_name_and_dtype_mismatches(tmp_path):
     frames = [pd.DataFrame({"sensor": ["A"], "t": [0.]}), pd.DataFrame({"t": [.01], "sensor": ["A"]})]
     files = members(tmp_path, frames)
-    assert run_collection_metrics(files, [{"name": "completeness"}], "stacked")["summary"]["datasets_with_errors"] == 0
+    assert run_collection_metrics(files, [sequence_request(False)], "stacked")["summary"]["datasets_with_errors"] == 0
     pd.DataFrame({"sensor": ["A"], "other": [.01]}).to_parquet(files[1].path)
     with pytest.raises(ValueError, match="same column names"):
-        run_collection_metrics(files, [{"name": "duplicity"}], "stacked")
+        run_collection_metrics(files, [sequence_request()], "stacked")
     pd.DataFrame({"sensor": ["A"], "t": [1]}).to_parquet(files[1].path)
     with pytest.raises(ValueError, match="same parsed column dtypes"):
-        run_collection_metrics(files, [{"name": "duplicity"}], "stacked")
+        run_collection_metrics(files, [sequence_request()], "stacked")
 
 
 def test_input_failure_is_visible_and_does_not_silently_reduce_a_stack(tmp_path):
@@ -73,6 +117,15 @@ def test_reserved_source_columns_and_duplicate_member_ids_are_rejected(tmp_path)
     assert "reserved" in result["datasets"][0]["errors"]["input"]
     with pytest.raises(ValueError, match="unique"):
         run_collection_metrics(files * 2, [{"name": "duplicity"}])
+
+
+def test_metric_failure_is_explicit_and_other_checks_continue(tmp_path):
+    files = members(tmp_path, [pd.DataFrame({"sensor": ["A"], "t": [0.]})])
+    result = run_collection_metrics(files, [sequence_request(timestamp_column="missing"), {"name": "duplicity"}])
+    dataset = result["datasets"][0]
+    assert dataset["status"] == "partial"
+    assert "Columns not found" in dataset["errors"]["grouped_time_series"]
+    assert "duplicity" in dataset["metrics"]
 
 
 def test_new_tabular_metric_only_needs_registry_opt_in(tmp_path, monkeypatch):
@@ -116,7 +169,7 @@ def test_unsupported_metric_and_input_overrides_fail_before_loading(tmp_path, me
 def test_manifest_relative_paths_and_cli_report_actual_failures(tmp_path):
     path = tmp_path / "data.csv"
     path.write_text("sensor,t\nA,0.0\nA,0.01\n")
-    config = {"files": [{"id": "a", "path": "data.csv"}], "mode": "stacked", "metrics": [{"name": "duplicity"}]}
+    config = {"files": [{"id": "a", "path": "data.csv"}], "mode": "stacked", "metrics": [sequence_request()]}
     manifest = tmp_path / "collection.json"
     manifest.write_text(json.dumps(config))
     assert load_collection_config(manifest)["files"][0].path == str(path)
@@ -126,8 +179,8 @@ def test_manifest_relative_paths_and_cli_report_actual_failures(tmp_path):
     with patch("sys.argv", ["aidrin", "collection", str(manifest)]), patch("sys.stdout", output):
         main()
     result = json.loads(output.getvalue())
-    assert result["datasets"][0]["metrics"]["duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"] == 0
-    config["files"][0]["path"] = "missing.csv"
+    assert result["datasets"][0]["metrics"]["grouped_time_series"]["parameters"]["expected_cadence"] == .01
+    config["metrics"][0]["parameters"]["timestamp_column"] = "missing"
     manifest.write_text(json.dumps(config))
     with patch("sys.argv", ["aidrin", "collection", str(manifest)]), patch("sys.stdout", io.StringIO()), pytest.raises(SystemExit) as exc:
         main()
@@ -142,7 +195,7 @@ def test_mcp_uses_the_same_collection_executor(tmp_path):
     inputs = [{"id": member.id, "path": member.path} for member in files]
     result = json.loads(run_file_collection(inputs, [{"name": "duplicity"}]))
     assert result["datasets"][0]["metrics"]["duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"] == .5
-    assert "duplicity" in json.loads(list_collection_metrics())["metrics"]
+    assert "grouped_time_series" in json.loads(list_collection_metrics())["metrics"]
 
 
 @pytest.mark.parametrize("columns", [("plot_id", "missing"), ("missing", "plot_id")])

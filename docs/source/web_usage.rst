@@ -956,3 +956,49 @@ Data and Code Storage Rules
 - Your custom metric code is stored temporarily for **1 hour**.
 - The (optional) remedied dataset is also stored for **1 hour**.
 - After expiration, all artifacts are safely removed.
+
+Grouped Time Series
+-------------------
+
+At the bottom of the Data Quality checklist, select **Check grouped time series**.
+Use **One series per file** for files that each contain one sequence. If a file
+contains several series, choose **Identify series by columns** and select the
+columns that distinguish them, such as station and channel.
+
+The Inspector preselects the **Time column** when it finds one clear match in
+the active file or in a bounded preview of the selected files. You can change
+the selection or choose the column yourself when there is no clear match.
+If a selected file cannot be previewed, you can enter exact time and series
+column names manually.
+**Time format** defaults to **Auto-detect**, which recognizes numbers and
+ISO-style dates such as ``2026-01-31`` or ``2026-01-31T09:30:00Z``. You can
+select **Numeric time** or **Date and time** manually. Use full year-month-day
+dates for text timestamps. Use the column's units for numeric time and seconds
+for dates and times. Independent checks detect the
+format for each file, using the same expected interval you enter.
+
+The Inspector also tries to fill **Expected time between samples** from a small
+sample within each file. **(Detected from data)** identifies a preselected time
+column or format. **(Estimated from data)** identifies an inferred interval, with
+its units shown beside the field. You can change any value, and a manual entry
+takes precedence. Detection samples up to six files and 256 rows
+per file. CSV and Parquet have bounded previews. Other formats can use a sample
+from a table already opened in the Inspector. If the sample is unavailable,
+inconsistent, or too slow, enter the interval manually.
+
+Choose the files, analysis mode, and series identifiers for your check. Under
+**Advanced options**, enter known timing variation, expected row count or span,
+and adjust the finding detail limit as needed.
+
+The summary above **Submit** shows the file scope, series grouping, time column,
+and interval. If a setting needs attention, the form shows the message beside
+it and moves focus there on submission.
+
+The results table shows one row per series, with rows checked, valid timestamps,
+observed span, and a plain-language result. Shared span units appear in the column
+header. When units vary, they appear beside each span. Expand **More finding
+details** to see additional recorded findings for a series. Data row numbers in
+the table start at 1 and refer to the stacked table when rows are stacked.
+**Download JSON** exports the structured findings, full timestamp precision,
+and zero-based row positions. The check preserves input order. See
+:ref:`grouped_time_series` for interpretation and limitations.

@@ -984,12 +984,30 @@ function _restoreFormState(panelId, state) {
   if (!panel) return;
 
   for (const [key, value] of Object.entries(state)) {
-    if (!value || key === "collection_file_order") continue;
+    if (
+      !value ||
+      key === "collection_file_order" ||
+      key === "collection_scope_chosen" ||
+      key === "grouped_file_boundaries"
+    )
+      continue;
     if (
       panelId === "variable-unit-validation" &&
       key === "variable_unit_metadata"
     )
       continue;
+
+    if (key === "group columns for grouped time series") {
+      const container = document.getElementById(
+        "groupedTimeSeriesColumnsCheckbox",
+      );
+      const values = Array.isArray(value) ? value : [value];
+      const inputs = Array.from(container.querySelectorAll("input"));
+      if (
+        values.some((value) => !inputs.some((input) => input.value === value))
+      )
+        container.pendingColumns = values;
+    }
 
     // Checkboxes with name matching the key
     const checkboxes = panel.querySelectorAll(
@@ -1006,6 +1024,14 @@ function _restoreFormState(panelId, state) {
     // Select dropdowns
     const select = panel.querySelector(`select[name="${key}"]`);
     if (select) {
+      if (
+        select.id === "groupedTimeSeriesTimeDropdown" &&
+        !Array.from(select.options).some((option) => option.value === value)
+      ) {
+        // The current picker may still describe the active file.
+        select.dataset.pendingValue = value;
+        continue;
+      }
       // Handle multi-select
       if (select.multiple) {
         const values = typeof value === "string" ? value.split(",") : [value];
@@ -1014,19 +1040,689 @@ function _restoreFormState(panelId, state) {
         });
       } else {
         select.value = value;
+        if (select.id === "groupedTimeSeriesTimeDropdown") {
+          setGroupedTimeColumnSource(select, false);
+        }
       }
       continue;
     }
 
-    // Text/hidden inputs
+    // Text/hidden inputs. Browsers do not let scripts restore file inputs.
     const input = panel.querySelector(
-      `input[name="${key}"]:not([type="checkbox"]):not([type="file"])`,
+      `input[name="${key}"]:not([type="checkbox"]):not([type="file"]), textarea[name="${key}"]`,
     );
     if (input) {
       input.value = value;
+      if (input.id === "grouped-interval") clearGroupedIntervalSource(input);
     }
   }
-  if (panelId === "data-quality") restoreCollectionSelection(state);
+  if (panelId === "data-quality") {
+    restoreCollectionSelection(state);
+    const scope = document.getElementById("collection-scope");
+    if (scope && state.collection_scope_chosen) scope.dataset.chosen = "true";
+    const boundaries = panel
+      .querySelector("form")
+      ?.elements.namedItem("grouped_file_boundaries");
+    if (boundaries && state.grouped_file_boundaries)
+      boundaries.value = state.grouped_file_boundaries;
+
+    const series = document.getElementById("grouped-series");
+    if (
+      !state.grouped_series &&
+      state["group columns for grouped time series"]
+    ) {
+      series.value = "columns";
+    }
+    const grouped = panel.querySelector('[name="grouped time series"]');
+    if (state["grouped time series"] === "yes") grouped.checked = true;
+    toggleValue(grouped);
+    syncGroupedTimeSeriesOptions();
+  }
+}
+
+function syncGroupedTimeSeriesOptions() {
+  const form = document.getElementById("form-data-quality");
+  const grouped = form?.elements.namedItem("grouped time series");
+  if (!grouped) return;
+  const byColumns =
+    document.getElementById("grouped-series").value === "columns";
+  const columns = document.getElementById("grouped-series-columns");
+  columns.hidden = !byColumns;
+  columns.disabled = !byColumns || !grouped.checked;
+  const scope = document.getElementById("collection-scope");
+  if (scope && !scope.dataset.chosen) {
+    const ordinary = form.querySelector(
+      '[data-collection-metric]:checked:not([name="grouped time series"])',
+    );
+    scope.value = grouped.checked && !ordinary ? "all" : "active";
+  }
+  syncCollectionSelection();
+  const boundaries = document.getElementById("grouped-file-boundaries");
+  if (boundaries) {
+    const stacked =
+      scope?.value !== "active" &&
+      document.getElementById("collection-mode")?.value === "stacked";
+    boundaries.hidden = !grouped.checked || !byColumns || !stacked;
+    boundaries.disabled = boundaries.hidden;
+  }
+  refreshGroupedColumnChoices();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const scope = document.getElementById("collection-scope");
+  scope?.addEventListener("change", () => {
+    scope.dataset.chosen = "true";
+  });
+  const selection = document.getElementById("collection-selection");
+  document
+    .getElementById("form-data-quality")
+    ?.addEventListener("change", (event) => {
+      if (
+        selection?.contains(event.target) ||
+        event.target.hasAttribute("data-collection-metric")
+      ) {
+        clearGroupedFormError();
+        syncGroupedTimeSeriesOptions();
+      }
+    });
+});
+
+let activeGroupedColumns = { columns: [] };
+let groupedColumnsKey;
+let groupedColumnsController;
+let groupedColumnsPending = false;
+
+function applyGroupedColumnChoices(
+  columns,
+  suggestion,
+  statusMessage,
+  allowManual = false,
+) {
+  const time = document.getElementById("groupedTimeSeriesTimeDropdown");
+  const groupId = "groupedTimeSeriesColumnsCheckbox";
+  const container = document.getElementById(groupId);
+  if (!time || !container) return;
+  const manualTime = document.getElementById("grouped-time-column-name");
+  const manualGroups = document.getElementById("grouped-series-column-names");
+  const previous =
+    time.dataset.pendingValue ||
+    (time.dataset.detected !== time.value ? time.value : "") ||
+    (!document.getElementById("grouped-manual-time").disabled
+      ? manualTime.value
+      : "");
+  const previousGroups = new Set([
+    ...(container.pendingColumns || []),
+    ...Array.from(
+      container.querySelectorAll("input:checked"),
+      (input) => input.value,
+    ),
+    ...manualGroups.value.split(/\r?\n/).filter(Boolean),
+  ]);
+  for (const id of ["grouped-manual-time", "grouped-manual-series"]) {
+    const field = document.getElementById(id);
+    field.hidden = !allowManual;
+    field.disabled = !allowManual;
+  }
+  const missingGroups = [...previousGroups].filter(
+    (name) => !columns.includes(name),
+  );
+  const groupStatus = document.getElementById("grouped-series-column-status");
+  groupStatus.textContent = "";
+  if (allowManual) manualGroups.value = missingGroups.join("\n");
+  else if (columns.length) {
+    manualGroups.value = "";
+    if (missingGroups.length) {
+      previousGroups.clear();
+      groupStatus.textContent =
+        "Some selected series columns are unavailable. Choose the series columns again.";
+    }
+  }
+  if (columns.length) {
+    delete time.dataset.pendingValue;
+    delete container.pendingColumns;
+  } else {
+    if (previous) time.dataset.pendingValue = previous;
+    if (previousGroups.size) container.pendingColumns = [...previousGroups];
+  }
+  fillDropdown(time.id, columns);
+  const keepTime = columns.includes(previous);
+  if (keepTime) {
+    time.value = previous;
+    manualTime.value = "";
+  } else if (!previous && columns.includes(suggestion)) time.value = suggestion;
+  setGroupedTimeColumnSource(time, !keepTime && Boolean(time.value));
+  if (previous && !keepTime) {
+    if (allowManual) {
+      manualTime.value = previous;
+    } else if (columns.length) {
+      const interval = document.getElementById("grouped-interval");
+      interval.value = "";
+      manualTime.value = "";
+      delete interval.dataset.manual;
+      statusMessage =
+        "Previously selected time column is unavailable. Choose a column.";
+    }
+  }
+  if (
+    allowManual &&
+    document.getElementById("grouped-time-column-name").value
+  ) {
+    time.value = "";
+    delete time.dataset.detected;
+  }
+  if (statusMessage) {
+    const status = document.getElementById("grouped-time-column-status");
+    status.textContent = [status.textContent, statusMessage]
+      .filter(Boolean)
+      .join(" ");
+  }
+  fillCheckboxContainer(
+    groupId,
+    columns,
+    "group columns for grouped time series",
+  );
+  for (const input of container.querySelectorAll("input")) {
+    input.checked = previousGroups.has(input.value);
+  }
+  if (columns.length) updateCheckboxCount(groupId);
+  scheduleGroupedTimingDetection();
+}
+
+async function refreshGroupedColumnChoices() {
+  const form = document.getElementById("form-data-quality");
+  if (!form) return;
+  const inputs = new FormData(form);
+  const scope = inputs.get("collection_scope");
+  const time = document.getElementById("groupedTimeSeriesTimeDropdown");
+  const groupContainer = document.getElementById(
+    "groupedTimeSeriesColumnsCheckbox",
+  );
+  const selected = inputs.getAll("collection_file_id");
+  const collection =
+    inputs.get("grouped time series") === "yes" &&
+    (scope === "all" || scope === "selected") &&
+    !window.AIDRIN_GLOBUS_MODE;
+  if (!collection) {
+    groupedColumnsController?.abort();
+    groupedColumnsKey = null;
+    groupedColumnsPending = false;
+    time.disabled = false;
+    groupContainer.inert = false;
+    applyGroupedColumnChoices(
+      activeGroupedColumns.columns,
+      activeGroupedColumns.suggested_time_column,
+    );
+    return;
+  }
+
+  const request = new URLSearchParams({
+    action: "preview_grouped_columns",
+    collection_scope: scope,
+  });
+  for (const name of ["collection_file_id", "collection_file_order"]) {
+    for (const value of inputs.getAll(name)) request.append(name, value);
+  }
+  const key = request.toString();
+  if (key === groupedColumnsKey) {
+    scheduleGroupedTimingDetection();
+    return;
+  }
+  groupedColumnsKey = key;
+  groupedColumnsController?.abort();
+  if (scope === "selected" && !selected.length) {
+    groupedColumnsPending = false;
+    time.disabled = false;
+    groupContainer.inert = false;
+    applyGroupedColumnChoices([], null, "Choose files to see their columns.");
+    return;
+  }
+  const controller = new AbortController();
+  groupedColumnsController = controller;
+  groupedColumnsPending = true;
+  scheduleGroupedTimingDetection();
+  time.disabled = true;
+  groupContainer.inert = true;
+  document.getElementById("grouped-time-column-status").textContent =
+    "Checking selected files…";
+  const timeout = setTimeout(() => controller.abort(), 650);
+  let preview;
+  try {
+    const response = await fetchWorkspaceDataset("/data-quality", {
+      method: "POST",
+      body: request,
+      signal: controller.signal,
+    });
+    if (response.ok) preview = await response.json();
+  } catch (error) {
+    debugLog("Grouped column preview:", error);
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (key !== groupedColumnsKey || groupedColumnsController !== controller)
+    return;
+  groupedColumnsPending = false;
+  time.disabled = false;
+  groupContainer.inert = false;
+  if (!preview?.columns) {
+    applyGroupedColumnChoices(
+      activeGroupedColumns.columns,
+      null,
+      "Selected files could not be previewed. Choose or enter the exact column name.",
+      true,
+    );
+  } else {
+    const message =
+      !preview.columns.length && preview.complete
+        ? "The selected files have no columns in common."
+        : preview.complete
+          ? ""
+          : `${preview.previewed_files} of ${preview.total_files} files previewed. Choose or enter the exact column name.`;
+    applyGroupedColumnChoices(
+      preview.columns,
+      preview.suggested_time_column,
+      message,
+      !preview.complete,
+    );
+  }
+}
+
+function groupedFormData(form) {
+  const inputs = new FormData(form);
+  const time = inputs.get("grouped_time_column_name");
+  if (time) inputs.set("timestamp column for grouped time series", time);
+  const names = inputs
+    .get("grouped_series_column_names")
+    ?.split(/\r?\n/)
+    .filter(Boolean);
+  if (names?.length) {
+    const key = "group columns for grouped time series";
+    const chosen = new Set(inputs.getAll(key));
+    for (const name of new Set(names)) {
+      if (!chosen.has(name)) inputs.append(key, name);
+    }
+  }
+  return inputs;
+}
+
+function groupedTimingRequest(form) {
+  const inputs = groupedFormData(form);
+  const request = new URLSearchParams({ action: "detect_grouped_timing" });
+  for (const name of [
+    "collection_scope",
+    "collection_file_id",
+    "collection_file_order",
+    "grouped_series",
+    "group columns for grouped time series",
+    "timestamp column for grouped time series",
+    "time kind for grouped time series",
+  ]) {
+    for (const value of inputs.getAll(name)) request.append(name, value);
+  }
+  return request;
+}
+
+function selectGroupedTimeColumn(picker) {
+  document.getElementById("grouped-time-column-name").value = "";
+  setGroupedTimeColumnSource(picker, false);
+  scheduleGroupedTimingDetection();
+}
+
+function enterGroupedTimeColumn(input) {
+  const picker = document.getElementById("groupedTimeSeriesTimeDropdown");
+  if (input.value) {
+    picker.value = "";
+    delete picker.dataset.detected;
+  }
+  scheduleGroupedTimingDetection();
+}
+
+function setGroupedTimeColumnSource(select, detected) {
+  const status = document.getElementById("grouped-time-column-status");
+  delete select.dataset.detected;
+  if (detected) select.dataset.detected = select.value;
+  status.textContent = detected
+    ? "(detected from data)"
+    : !select.value && select.options.length > 1
+      ? "No clear match. Choose a column."
+      : "";
+}
+
+function clearGroupedIntervalSource(input) {
+  delete input.dataset.detected;
+  input.dataset.manual = "true";
+  document.getElementById("grouped-interval-status").textContent = "";
+}
+
+function updateGroupedRunSummary() {
+  const summary = document.getElementById("grouped-run-summary");
+  const form = summary.closest("form");
+  const format = document.getElementById("grouped-time-format");
+  const kind =
+    format.value === "auto" ? format.dataset.detectedKind : format.value;
+  const units =
+    kind === "datetime" ? "seconds" : kind === "numeric" ? "column units" : "";
+  document.getElementById("grouped-interval-unit").textContent =
+    units || "Units depend on time format";
+  summary.hidden = !form.elements.namedItem("grouped time series").checked;
+  if (summary.hidden) return;
+
+  const inputs = groupedFormData(form);
+  const scope = inputs.get("collection_scope");
+  const collection = scope === "all" || scope === "selected";
+  const count = inputs.getAll(
+    scope === "all" ? "collection_file_order" : "collection_file_id",
+  ).length;
+  const stacked = collection && inputs.get("collection_mode") === "stacked";
+  const files = collection
+    ? count
+      ? `${count} ${count === 1 ? "file" : "files"} ${stacked ? "stacked" : "independently"}`
+      : "choose files"
+    : summary.dataset.activeFile
+      ? `${summary.dataset.activeFile} only`
+      : "active file only";
+  const byColumns = inputs.get("grouped_series") === "columns";
+  const columns = inputs.getAll("group columns for grouped time series");
+  const series = byColumns
+    ? columns.length
+      ? `series by ${columns.join(", ")}`
+      : "choose series columns"
+    : "one series per file";
+  const time = inputs.get("timestamp column for grouped time series");
+  const interval = inputs.get("cadence for grouped time series");
+  const summaryUnit = kind === "datetime" ? "s" : units;
+  const details = ["Grouped Time Series", files, series];
+  if (stacked && byColumns) {
+    details.push(
+      inputs.get("grouped_file_boundaries") === "no"
+        ? "continue matching series across files"
+        : "keep series separate by file",
+    );
+  }
+  details.push(
+    time || "choose a time column",
+    Number(interval) > 0
+      ? `interval ${interval}${summaryUnit ? ` ${summaryUnit}` : ""}`
+      : "enter an interval",
+  );
+  summary.textContent = details.join(" · ");
+}
+
+let groupedTimingKey = null;
+let groupedTimingTimer;
+let groupedTimingController;
+
+function scheduleGroupedTimingDetection() {
+  const form = document.getElementById("form-data-quality");
+  if (!form) return;
+  const request = groupedTimingRequest(form);
+  const enabled = form.elements.namedItem("grouped time series").checked;
+  const key = enabled && !groupedColumnsPending ? request.toString() : null;
+  if (key === groupedTimingKey) {
+    updateGroupedRunSummary();
+    return;
+  }
+  groupedTimingKey = key;
+  clearGroupedFormError();
+  clearTimeout(groupedTimingTimer);
+  groupedTimingController?.abort();
+  groupedTimingController = null;
+
+  const interval = document.getElementById("grouped-interval");
+  const intervalStatus = document.getElementById("grouped-interval-status");
+  const format = document.getElementById("grouped-time-format");
+  const formatStatus = document.getElementById("grouped-time-format-status");
+  if (interval.dataset.detected === interval.value) interval.value = "";
+  delete interval.dataset.detected;
+  if (!interval.value && !interval.validity.badInput)
+    delete interval.dataset.manual;
+  intervalStatus.textContent = "";
+  formatStatus.textContent = "";
+  format.options[0].textContent = "Auto-detect";
+  delete format.dataset.detectedKind;
+  updateGroupedRunSummary();
+  if (!enabled || groupedColumnsPending) return;
+
+  const autoFormat = format.value === "auto";
+  const intervalNeeded = () =>
+    !interval.value && !interval.validity.badInput && !interval.dataset.manual;
+  if (!autoFormat && !intervalNeeded()) return;
+  let missing;
+  if (!request.has("timestamp column for grouped time series"))
+    missing = "Choose a time column first.";
+  else if (
+    request.get("collection_scope") === "selected" &&
+    !request.has("collection_file_id")
+  )
+    missing = "Choose files to check first.";
+  else if (
+    request.get("grouped_series") === "columns" &&
+    !request.has("group columns for grouped time series")
+  ) {
+    missing = "Choose the columns that identify each series first.";
+  }
+  if (missing || window.AIDRIN_GLOBUS_MODE) {
+    if (intervalNeeded())
+      intervalStatus.textContent = missing || "Enter the expected interval.";
+    return;
+  }
+
+  groupedTimingTimer = setTimeout(async () => {
+    if (autoFormat) formatStatus.textContent = "Detecting…";
+    if (intervalNeeded()) intervalStatus.textContent = "Detecting…";
+    request.set("estimate_interval", intervalNeeded() ? "yes" : "no");
+    if (!autoFormat && !intervalNeeded()) return;
+    await detectGroupedTiming(
+      request,
+      key,
+      format,
+      formatStatus,
+      interval,
+      intervalStatus,
+      intervalNeeded,
+    );
+  }, 150);
+}
+
+async function detectGroupedTiming(
+  request,
+  key,
+  format,
+  formatStatus,
+  interval,
+  intervalStatus,
+  intervalNeeded,
+) {
+  const controller = new AbortController();
+  groupedTimingController = controller;
+  const timeout = setTimeout(() => controller.abort(), 1150);
+  try {
+    const response = await fetchWorkspaceDataset("/data-quality", {
+      method: "POST",
+      body: request,
+      signal: controller.signal,
+    });
+    const detected = await response.json();
+    if (groupedTimingController !== controller || groupedTimingKey !== key)
+      return;
+    if (format.value === "auto") {
+      if (detected.time_kind) {
+        const name =
+          detected.time_kind === "datetime" ? "Date and time" : "Numeric time";
+        format.options[0].textContent = `Auto-detect · ${name}`;
+        format.dataset.detectedKind = detected.time_kind;
+        formatStatus.textContent = "(detected from data)";
+      } else {
+        formatStatus.textContent = "No clear match in the sample.";
+      }
+    }
+    if (intervalNeeded()) {
+      if (detected.interval > 0) {
+        interval.value = detected.interval;
+        interval.dataset.detected = interval.value;
+        if (groupedInvalidInput === interval) clearGroupedFormError();
+        intervalStatus.textContent =
+          detected.sampled_files < detected.total_files
+            ? `(estimated from data · ${detected.sampled_files} of ${detected.total_files} files sampled)`
+            : "(estimated from data)";
+      } else {
+        intervalStatus.textContent =
+          detected.interval_error ||
+          detected.error ||
+          "Enter the expected interval.";
+      }
+    }
+  } catch (error) {
+    if (groupedTimingController !== controller || groupedTimingKey !== key)
+      return;
+    if (format.value === "auto")
+      formatStatus.textContent = "Format preview unavailable.";
+    if (intervalNeeded()) {
+      intervalStatus.textContent =
+        error.name === "AbortError"
+          ? "Detection timed out. Enter the expected interval."
+          : "Could not detect an interval. Enter it manually.";
+    }
+  } finally {
+    clearTimeout(timeout);
+    if (groupedTimingController === controller && groupedTimingKey === key)
+      updateGroupedRunSummary();
+  }
+}
+
+let groupedInvalidInput;
+
+function clearGroupedFormError() {
+  if (!groupedInvalidInput) return;
+  groupedInvalidInput.removeAttribute("aria-invalid");
+  groupedInvalidInput.removeAttribute("aria-errormessage");
+  groupedInvalidInput = null;
+  const error = document.getElementById("grouped-form-error");
+  error.hidden = true;
+  error.textContent = "";
+}
+
+function showGroupedFormError(
+  input,
+  message,
+  anchor = input.closest("label") || input,
+) {
+  groupedInvalidInput = input;
+  input.setAttribute("aria-invalid", "true");
+  if (message) {
+    const error = document.getElementById("grouped-form-error");
+    anchor.after(error);
+    error.hidden = false;
+    error.textContent = message;
+    input.setAttribute("aria-errormessage", error.id);
+  }
+  const advanced = input.closest("details");
+  if (advanced) advanced.open = true;
+  input.focus();
+  return false;
+}
+
+function validateGroupedTimeSeriesForm(form) {
+  clearGroupedFormError();
+  const formData = groupedFormData(form);
+  if (formData.get("grouped time series") !== "yes") return true;
+  if (
+    formData.get("collection_scope") === "selected" &&
+    !formData.has("collection_file_id")
+  ) {
+    const list = document.getElementById("collection-file-list");
+    const choice =
+      list.querySelector('input[name="collection_file_id"]') ||
+      document.getElementById("collection-scope");
+    return showGroupedFormError(
+      choice,
+      "Choose at least one file to check.",
+      list,
+    );
+  }
+  const picker = document.getElementById("groupedTimeSeriesTimeDropdown");
+  const manualTime = document.getElementById("grouped-time-column-name");
+  const time =
+    !manualTime.matches(":disabled") &&
+    (manualTime.value || picker.options.length === 1)
+      ? manualTime
+      : picker;
+  if (groupedColumnsPending) return false;
+  if (formData.get("grouped_series") === "columns") {
+    const columns = formData.getAll("group columns for grouped time series");
+    const container = document.getElementById("grouped-series-columns");
+    if (!columns.length) {
+      const choice =
+        container.querySelector('input[type="checkbox"]') ||
+        container.querySelector("textarea:enabled") ||
+        document.getElementById("grouped-series");
+      return showGroupedFormError(
+        choice,
+        "Choose at least one column that identifies each series.",
+        container,
+      );
+    }
+    if (columns.includes(time.value)) {
+      return showGroupedFormError(
+        time,
+        "Choose a time column separate from the series identifiers.",
+      );
+    }
+  }
+  if (!time.value) return showGroupedFormError(time, "Choose a time column.");
+
+  const intervalInput = document.getElementById("grouped-interval");
+  const interval = intervalInput.valueAsNumber;
+  if (!Number.isFinite(interval) || interval <= 0) {
+    const status = document.getElementById(
+      "grouped-interval-status",
+    ).textContent;
+    const hasGuidance =
+      !intervalInput.value &&
+      !intervalInput.validity.badInput &&
+      status &&
+      status !== "Detecting…";
+    const message = hasGuidance
+      ? ""
+      : "Enter a positive expected time between samples.";
+    return showGroupedFormError(
+      intervalInput,
+      message,
+      document.getElementById("grouped-interval-field"),
+    );
+  }
+  const variationInput = form.elements.namedItem(
+    "tolerance for grouped time series",
+  );
+  const variation = Number(variationInput.value || 0);
+  if (
+    variationInput.validity.badInput ||
+    !Number.isFinite(variation) ||
+    variation < 0 ||
+    variation >= interval / 2
+  ) {
+    return showGroupedFormError(
+      variationInput,
+      "Enter a nonnegative variation smaller than half the expected interval.",
+    );
+  }
+  for (const [name, message] of [
+    [
+      "expected count for grouped time series",
+      "Enter a whole number of rows greater than zero.",
+    ],
+    [
+      "expected duration for grouped time series",
+      "Enter a time span of zero or greater.",
+    ],
+    [
+      "max findings for grouped time series",
+      "Enter a whole number of findings of zero or greater.",
+    ],
+  ]) {
+    const input = form.elements.namedItem(name);
+    if (!input.validity.valid) return showGroupedFormError(input, message);
+  }
+  return true;
 }
 
 // Handle browser back/forward buttons
@@ -1122,6 +1818,11 @@ function withSubmitGuard(button, taskFn) {
  * @param {string} targetUrl - The metric endpoint URL (e.g., '/data-quality')
  */
 async function workspaceSubmit(targetUrl) {
+  if (
+    targetUrl === "/data-quality" &&
+    !validateGroupedTimeSeriesForm(document.getElementById("form-data-quality"))
+  )
+    return;
   // Clear previous results before submitting new ones
   const resultsSection = document.getElementById("results-section");
   if (resultsSection) resultsSection.style.display = "none";
@@ -1174,6 +1875,7 @@ async function workspaceSubmit(targetUrl) {
       duplicity_by_features: "Duplicates by Selected Features",
       feature_coverage_ratio: "Feature Coverage Ratio",
       temporal_completeness: "Temporal Completeness",
+      grouped_time_series: "Grouped Time Series",
       null_count_trend: "Null Count Trend",
       representation_rate: "Representation Rate",
       statistical_rates: "Statistical Rate",
@@ -1225,6 +1927,37 @@ async function workspaceSubmit(targetUrl) {
           gFormData.get("threshold for feature coverage ratio"),
         );
         remoteParams.threshold = isNaN(thr) ? 0.9 : thr;
+      }
+      if (gFormData.get("grouped time series") === "yes") {
+        selected.push("grouped_time_series");
+        selectedNames.push("Grouped Time Series");
+        remoteParams.group_columns =
+          gFormData.get("grouped_series") === "file"
+            ? null
+            : gFormData.getAll("group columns for grouped time series");
+        remoteParams.sequence_timestamp_column = gFormData.get(
+          "timestamp column for grouped time series",
+        );
+        remoteParams.expected_cadence = Number(
+          gFormData.get("cadence for grouped time series"),
+        );
+        remoteParams.time_kind =
+          gFormData.get("time kind for grouped time series") || "numeric";
+        remoteParams.tolerance = Number(
+          gFormData.get("tolerance for grouped time series") || 0,
+        );
+        remoteParams.max_findings = Number(
+          gFormData.get("max findings for grouped time series") || 100,
+        );
+        const expectedCount = gFormData.get(
+          "expected count for grouped time series",
+        );
+        const expectedDuration = gFormData.get(
+          "expected duration for grouped time series",
+        );
+        if (expectedCount) remoteParams.expected_count = Number(expectedCount);
+        if (expectedDuration)
+          remoteParams.expected_duration = Number(expectedDuration);
       }
       if (gFormData.get("temporal completeness") === "yes") {
         selected.push("temporal_completeness");
@@ -1462,7 +2195,8 @@ async function workspaceSubmit(targetUrl) {
   const form = panel.querySelector("form");
   if (!form) return;
 
-  const formData = new FormData(form);
+  const formData =
+    targetUrl === "/data-quality" ? groupedFormData(form) : new FormData(form);
 
   // Replicate main.js submitForm() field name remapping:
   // The backend expects short names for multi-value checkbox fields,
@@ -1546,6 +2280,13 @@ async function workspaceSubmit(targetUrl) {
   try {
     const formState = {};
     for (const [key, value] of formData.entries()) {
+      if (value instanceof File) continue;
+      if (
+        (key === "timestamp column for grouped time series" ||
+          key === "cadence for grouped time series") &&
+        form.elements.namedItem(key).dataset.detected === value
+      )
+        continue;
       if (formState[key]) {
         // Multi-value: convert to array
         if (!Array.isArray(formState[key])) formState[key] = [formState[key]];
@@ -1553,6 +2294,12 @@ async function workspaceSubmit(targetUrl) {
       } else {
         formState[key] = value;
       }
+    }
+    if (
+      activePanel === "data-quality" &&
+      document.getElementById("collection-scope")?.dataset.chosen === "true"
+    ) {
+      formState.collection_scope_chosen = true;
     }
     sessionStorage.setItem(
       "aidrin_form_" + activePanel,
@@ -1778,7 +2525,11 @@ function renderWorkspaceResults(data, options) {
         // Right: scores (height synced to plot via JS)
         if (hasScores) {
           html += `<div id="${pairId}-scores" class="overflow-auto" style="min-height: 400px; max-height: 500px;">`;
-          html += renderScoresSection(scores);
+          html +=
+            type === "Grouped Time Series" &&
+            scores.format === "aidrin.collection-assessment"
+              ? renderGroupedCollectionResults(scores)
+              : renderScoresSection(scores);
           html += `</div>`;
         }
 
@@ -1826,8 +2577,10 @@ function renderWorkspaceResults(data, options) {
         }
       }
 
-      if (results.format !== "aidrin.collection-assessment") {
-        // Raw JSON toggle
+      if (
+        type !== "Grouped Time Series" &&
+        results.format !== "aidrin.collection-assessment"
+      ) {
         const rawJson = {};
         for (const [k, v] of Object.entries(displayResults)) {
           if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
@@ -2128,6 +2881,299 @@ function renderBeforeAfterTable(before, after) {
   return html;
 }
 
+function formatGroupedTime(value, units = "") {
+  if (value == null) return "unavailable";
+  const display =
+    typeof value === "number" && !Number.isInteger(value)
+      ? Number(value.toPrecision(12))
+      : value;
+  return units ? `${display} ${units}` : String(display);
+}
+
+function groupedFindingSummary(counts) {
+  const labels = {
+    cadence_gap: ["timing gap", "timing gaps"],
+    cadence_short: ["short interval", "short intervals"],
+    duplicate_time: ["repeated timestamp", "repeated timestamps"],
+    out_of_order: ["backward time jump", "backward time jumps"],
+    missing_time: ["missing timestamp", "missing timestamps"],
+    invalid_time: ["invalid timestamp", "invalid timestamps"],
+    nonfinite_time: ["nonfinite timestamp", "nonfinite timestamps"],
+    mixed_timezone_awareness: [
+      "inconsistent time zone",
+      "inconsistent time zones",
+    ],
+    insufficient_valid_times: [
+      "series with too few valid timestamps",
+      "series with too few valid timestamps",
+    ],
+    count_mismatch: ["unexpected row count", "unexpected row counts"],
+    duration_mismatch: ["unexpected time span", "unexpected time spans"],
+    nonfinite_interval: ["unavailable interval", "unavailable intervals"],
+    nonfinite_duration: ["unavailable time span", "unavailable time spans"],
+    missing_group_key: [
+      "row without a series identifier",
+      "rows without series identifiers",
+    ],
+  };
+  return Object.entries(counts || {})
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => {
+      const words = Object.hasOwn(labels, kind)
+        ? labels[kind]
+        : ["finding", "findings"];
+      return `${count} ${words[count === 1 ? 0 : 1]}`;
+    })
+    .join(", ");
+}
+
+function describeGroupedFinding(finding, units) {
+  const row = (position) =>
+    Number.isSafeInteger(position)
+      ? `data row ${position + 1}`
+      : "the recorded row";
+  const at = row(finding.row_position);
+  const between = `${row(finding.from_row_position)} and ${row(finding.to_row_position)}`;
+  const time = finding.time ?? "unavailable";
+  const change = `from ${finding.from_time ?? "unavailable"} to ${finding.to_time ?? "unavailable"}`;
+  switch (finding.kind) {
+    case "cadence_gap": {
+      const missing = finding.estimated_missing_samples;
+      const estimate =
+        missing == null
+          ? ""
+          : ` The gap suggests ${missing} missing ${Number(missing) === 1 ? "sample" : "samples"}.`;
+      return `The time jumped ${change} between ${between}, an interval of ${formatGroupedTime(finding.delta, units)}.${estimate}`;
+    }
+    case "cadence_short":
+      return `The interval between ${between} was ${formatGroupedTime(finding.delta, units)}, shorter than expected.`;
+    case "duplicate_time":
+      return `The timestamp ${time} at ${at} repeats the timestamp at ${row(finding.first_row_position)}.`;
+    case "out_of_order":
+      return `The timestamp went backward ${change} between ${between}.`;
+    case "missing_time":
+      return `A timestamp is missing at ${at}.`;
+    case "invalid_time":
+      return `The timestamp at ${at} could not be read in the selected format.`;
+    case "nonfinite_time":
+      return `The timestamp at ${at} is infinite.`;
+    case "mixed_timezone_awareness":
+      return `This series mixes timestamps with and without time zones. Check ${at}.`;
+    case "insufficient_valid_times":
+      return "At least two valid timestamps are needed to check sample spacing.";
+    case "count_mismatch":
+      return `Expected ${finding.expected} rows and found ${finding.observed}.`;
+    case "duration_mismatch":
+      return `Expected a time span of ${formatGroupedTime(finding.expected, units)}. The observed span was ${formatGroupedTime(finding.observed, units)}.`;
+    case "nonfinite_interval":
+      return `The interval between ${between} could not be represented.`;
+    case "nonfinite_duration":
+      return "The time span could not be represented.";
+    default:
+      return `${groupedFindingSummary({ [finding.kind]: 1 })}. Use Download JSON for the recorded details.`;
+  }
+}
+
+function renderGroupedResultNotes(parameters, stacked = false) {
+  const rows = stacked
+    ? "Data row numbers start at 1 in the stacked table."
+    : "Data row numbers start at 1 in each input table.";
+  const span =
+    parameters.expected_count == null && parameters.expected_duration == null
+      ? " A shorter series can pass when its spacing is regular. An expected row count or time span is needed to check length."
+      : "";
+  return `<p class="mt-3 text-xs text-gray-600 dark:text-gray-400">${rows} Downloaded JSON positions start at 0.${span}</p>`;
+}
+
+function groupedTimeSeriesRows(result, file = "", sourceNames) {
+  const parameters = result.parameters || {};
+  const units =
+    parameters.time_kind === "datetime"
+      ? "s"
+      : parameters.time_kind === "numeric"
+        ? "column units"
+        : "";
+  return (result.groups || []).map((group) => {
+    const { __aidrin_source_id: sourceId, ...keys } = group.group;
+    const series = Object.entries(keys)
+      .map(
+        ([column, value]) =>
+          `${column}: ${value?.integer ? `${value.integer} (integer)` : value}`,
+      )
+      .join(" · ");
+    return {
+      file: file || sourceNames?.get(sourceId),
+      series,
+      group,
+      units,
+      parameters,
+    };
+  });
+}
+
+function renderGroupedSkippedRows(result, label = "") {
+  const count = result.summary?.unassigned_rows;
+  if (!count) return "";
+  const positions = result.unassigned_row_positions || [];
+  const rows = positions
+    .slice(0, 5)
+    .map((position) => position + 1)
+    .join(", ");
+  const partial = result.unassigned_rows_truncated || positions.length > 5;
+  const details = rows
+    ? ` Data rows ${rows}${partial ? " (partial list)" : ""}.`
+    : "";
+  const skipped = `${count} ${count === 1 ? "row was" : "rows were"} skipped due to missing series identifiers.${details}`;
+  return `<p class="mt-2 text-sm">${escapeHtml(label ? `${label} · ${skipped}` : skipped)}</p>`;
+}
+
+function renderGroupedSeriesResult(group, units) {
+  const findings = groupedFindingSummary(group.finding_counts);
+  if (!findings) {
+    const intervals = group.evaluated_adjacent_intervals;
+    const matched =
+      intervals === 1
+        ? "The checked interval matched."
+        : intervals === 2
+          ? "Both checked intervals matched."
+          : intervals > 2
+            ? `All ${intervals} checked intervals matched.`
+            : "";
+    return `<strong class="font-medium">No timing findings.</strong> ${matched}`;
+  }
+
+  const details = group.findings || [];
+  let html = `<strong class="font-medium">${escapeHtml(findings)}.</strong>`;
+  if (details.length)
+    html += ` ${escapeHtml(describeGroupedFinding(details[0], units))}`;
+  if (details.length > 1) {
+    html += `<details class="mt-1"><summary class="cursor-pointer text-sm">More finding details (${details.length - 1})</summary><ul class="mt-1 list-disc space-y-1 pl-5">`;
+    for (const finding of details.slice(1))
+      html += `<li>${escapeHtml(describeGroupedFinding(finding, units))}</li>`;
+    html += "</ul></details>";
+  }
+  if (group.findings_truncated) {
+    html += `<p class="mt-1 text-xs">The detail limit applies here. Finding counts cover all rows.</p>`;
+  }
+  return html;
+}
+
+function renderGroupedTimeSeriesTable(
+  rows,
+  labelHeading = "Series",
+  scope = "",
+) {
+  const { parameters = {}, units = "" } = rows[0] || {};
+  const sharedUnits = rows.every((row) => row.units === units);
+  const spanUnits =
+    sharedUnits && units
+      ? units === "s"
+        ? "seconds"
+        : "time column units"
+      : "";
+  const context = scope ? [scope] : [];
+  if (parameters.timestamp_column)
+    context.push(`Time column ${parameters.timestamp_column}`);
+  if (parameters.expected_cadence != null)
+    context.push(
+      `Expected spacing ${formatGroupedTime(parameters.expected_cadence, sharedUnits ? units : "")}`,
+    );
+  if (!sharedUnits) context.push("Units vary by series");
+  let html = context.length
+    ? `<p class="mb-2 text-sm">${escapeHtml(context.join(" · "))}</p>`
+    : "";
+  if (!rows.length)
+    return `${html}<p class="mb-2 text-sm">No series to check.</p>`;
+  html += `<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"><table class="w-full text-left text-sm text-gray-700 dark:text-gray-300">
+    <caption class="sr-only">Grouped Time Series results by series</caption>
+    <thead class="bg-gray-50 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300"><tr>
+      <th scope="col" class="px-3 py-2.5">${escapeHtml(labelHeading)}</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Rows<br>checked</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Valid<br>timestamps</th>
+      <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right">Observed span${spanUnits ? `<br><span class="font-normal">(${spanUnits})</span>` : ""}</th>
+      <th scope="col" class="px-3 py-2.5">Result</th>
+    </tr></thead><tbody>`;
+  for (const row of rows) {
+    const { file, series, group, units } = row;
+    html += `<tr class="border-t border-gray-200 align-top even:bg-gray-50 dark:border-gray-700 dark:even:bg-gray-700/30">
+      <th scope="row" class="break-words px-3 py-2.5 font-medium">${escapeHtml(file || series || "Whole file")}`;
+    if (file && series)
+      html += `<span class="mt-1 block text-xs font-normal">${escapeHtml(series)}</span>`;
+    html += `</th>
+      <td class="px-3 py-2.5 text-right tabular-nums">${escapeHtml(group.row_count)}</td>
+      <td class="px-3 py-2.5 text-right tabular-nums">${escapeHtml(group.valid_time_count)}</td>
+      <td class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">${escapeHtml(formatGroupedTime(group.observed_duration, sharedUnits ? "" : units))}</td>
+      <td class="min-w-[16rem] break-words px-3 py-2.5">${renderGroupedSeriesResult(group, units)}</td></tr>`;
+  }
+  return `${html}</tbody></table></div>`;
+}
+
+function renderGroupedTimeSeriesResults(result) {
+  return (
+    renderGroupedTimeSeriesTable(groupedTimeSeriesRows(result)) +
+    renderGroupedSkippedRows(result) +
+    renderGroupedResultNotes(result.parameters || {})
+  );
+}
+
+function renderGroupedCollectionResults(result) {
+  const stacked = result.mode === "stacked";
+  const mode = stacked ? "Stacked rows" : "Independent";
+  const selection = result.selection || [];
+  const counts = new Map();
+  for (const { name } of selection)
+    counts.set(name, (counts.get(name) || 0) + 1);
+  const names = new Map(
+    selection.map(({ id, name }, index) => [
+      id,
+      counts.get(name) > 1 ? `${name} (file ${index + 1})` : name,
+    ]),
+  );
+  const rows = [];
+  let notes = "";
+  let parameters;
+  for (const dataset of result.datasets || []) {
+    const sources = dataset.sources.map(
+      (source) => names.get(source.id) || source.name,
+    );
+    const label = stacked ? "Stacked dataset" : sources.join(", ");
+    if (stacked && dataset.sources.length) {
+      notes += `<details class="mt-3 text-xs"><summary class="cursor-pointer">Source rows in stack order</summary><ol class="list-decimal pl-5">`;
+      for (const [index, source] of dataset.sources.entries()) {
+        notes += `<li>${escapeHtml(sources[index])} · ${escapeHtml(source.row_count)} rows starting at data row ${escapeHtml(source.start_row + 1)}</li>`;
+      }
+      notes += "</ol></details>";
+    }
+    for (const message of Object.values(dataset.errors || {})) {
+      notes += `<p class="mt-2 text-sm text-red-700 dark:text-red-400" role="alert">${escapeHtml(`${label} · ${message}`)}</p>`;
+    }
+    const audit = dataset.metrics?.grouped_time_series;
+    if (audit) {
+      parameters = audit.parameters;
+      for (const row of groupedTimeSeriesRows(
+        audit,
+        stacked ? "" : label,
+        names,
+      ))
+        rows.push(row);
+      notes += renderGroupedSkippedRows(audit, label);
+      if (!audit.groups.length && !audit.summary?.unassigned_rows) {
+        notes += `<p class="mt-2 text-sm">${escapeHtml(label)} · No series to check.</p>`;
+      }
+    }
+  }
+  const heading = rows.some((row) => row.file)
+    ? rows.some((row) => row.series)
+      ? "File / series"
+      : "File"
+    : "Series";
+  const fileCount = result.summary.selected_files;
+  const scope = `${mode} · ${fileCount} ${fileCount === 1 ? "file" : "files"}`;
+  let html = renderGroupedTimeSeriesTable(rows, heading, scope) + notes;
+  if (parameters) html += renderGroupedResultNotes(parameters, stacked);
+  return html;
+}
+
 /**
  * Render scores section. Detects structure and picks the best layout:
  * - Flat dict of {key: primitive} → compact key-value table
@@ -2140,6 +3186,8 @@ function renderBeforeAfterTable(before, after) {
 function renderScoresSection(scores, depth) {
   if (scores.format === "aidrin.collection-assessment")
     return renderWorkspaceCollection(scores);
+  if (scores.format === "aidrin.grouped-time-series")
+    return renderGroupedTimeSeriesResults(scores);
   depth = depth || 0;
   let html = "";
 
@@ -4056,6 +5104,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
     duplicity_by_features: "Duplicates by Selected Features",
     feature_coverage_ratio: "Feature Coverage Ratio",
     temporal_completeness: "Temporal Completeness",
+    grouped_time_series: "Grouped Time Series",
     null_count_trend: "Null Count Trend",
     correlations: "Correlation Analysis",
     feature_relevance: "Feature Relevance",
@@ -8250,6 +9299,83 @@ function initWorkspace() {
   );
 }
 
+// Helper: populate a <select> dropdown
+function fillDropdown(id, features) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Keep the first disabled option
+  while (el.options.length > 1) el.remove(1);
+  features.forEach((f) => {
+    const opt = document.createElement("option");
+    opt.value = f;
+    opt.textContent = f;
+    el.appendChild(opt);
+  });
+}
+
+/**
+ * Populate a checkbox container with a compact chip/pill layout.
+ * Includes a select-all toggle. Scrollable when many features.
+ */
+function fillCheckboxContainer(id, features, nameAttr) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = "";
+
+  if (features.length === 0) {
+    el.innerHTML =
+      '<p class="text-xs text-gray-400 dark:text-gray-500 py-2">No features available</p>';
+    return;
+  }
+
+  // Wrapper with max-height scroll
+  const wrapper = document.createElement("div");
+  wrapper.className =
+    "border border-gray-200 dark:border-gray-700 rounded-lg p-2 overflow-y-auto overflow-x-hidden";
+  wrapper.style.maxHeight = "300px";
+
+  // Select all / none controls
+  const controls = document.createElement("div");
+  controls.className =
+    "flex items-center gap-3 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700";
+  controls.innerHTML = `
+    <button type="button" class="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer" onclick="toggleAllCheckboxes(this, '${id}', true)">Select all</button>
+    <button type="button" class="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer" onclick="toggleAllCheckboxes(this, '${id}', false)">Clear</button>
+    <span class="text-xs text-gray-400 dark:text-gray-500 ml-auto" id="${id}-count">${features.length} features</span>
+  `;
+  wrapper.appendChild(controls);
+
+  // Chip grid
+  const grid = document.createElement("div");
+  grid.className = "flex flex-wrap gap-1.5";
+
+  features.forEach((f) => {
+    const label = document.createElement("label");
+    label.className =
+      "inline-block px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors border border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500 has-[:checked]:text-blue-700 dark:has-[:checked]:bg-blue-900/30 dark:has-[:checked]:border-blue-400 dark:has-[:checked]:text-blue-300";
+    label.style.cssText =
+      "max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+    label.title = f;
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.name = nameAttr;
+    cb.value = f;
+    cb.style.cssText =
+      "width: 14px; height: 14px; min-width: 14px; vertical-align: middle; margin-right: 6px;";
+    cb.className =
+      "shrink-0 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600";
+    cb.addEventListener("change", () => updateCheckboxCount(id));
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(f));
+    grid.appendChild(label);
+  });
+
+  wrapper.appendChild(grid);
+  el.appendChild(wrapper);
+}
+
 /**
  * Populate all feature dropdowns and checkbox containers in the workspace.
  * Called after /feature-set returns data.
@@ -8259,83 +9385,6 @@ function populateWorkspaceDropdowns(data) {
   const catFeatures = data.categorical_features || [];
   const numFeatures = data.numerical_features || [];
   const classImbalanceFeatures = data.class_imbalance_features || [];
-
-  // Helper: populate a <select> dropdown
-  function fillDropdown(id, features) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    // Keep the first disabled option
-    while (el.options.length > 1) el.remove(1);
-    features.forEach((f) => {
-      const opt = document.createElement("option");
-      opt.value = f;
-      opt.textContent = f;
-      el.appendChild(opt);
-    });
-  }
-
-  /**
-   * Populate a checkbox container with a compact chip/pill layout.
-   * Includes a select-all toggle. Scrollable when many features.
-   */
-  function fillCheckboxContainer(id, features, nameAttr) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = "";
-
-    if (features.length === 0) {
-      el.innerHTML =
-        '<p class="text-xs text-gray-400 dark:text-gray-500 py-2">No features available</p>';
-      return;
-    }
-
-    // Wrapper with max-height scroll
-    const wrapper = document.createElement("div");
-    wrapper.className =
-      "border border-gray-200 dark:border-gray-700 rounded-lg p-2 overflow-y-auto overflow-x-hidden";
-    wrapper.style.maxHeight = "300px";
-
-    // Select all / none controls
-    const controls = document.createElement("div");
-    controls.className =
-      "flex items-center gap-3 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700";
-    controls.innerHTML = `
-      <button type="button" class="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer" onclick="toggleAllCheckboxes(this, '${id}', true)">Select all</button>
-      <button type="button" class="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer" onclick="toggleAllCheckboxes(this, '${id}', false)">Clear</button>
-      <span class="text-xs text-gray-400 dark:text-gray-500 ml-auto" id="${id}-count">${features.length} features</span>
-    `;
-    wrapper.appendChild(controls);
-
-    // Chip grid
-    const grid = document.createElement("div");
-    grid.className = "flex flex-wrap gap-1.5";
-
-    features.forEach((f) => {
-      const label = document.createElement("label");
-      label.className =
-        "inline-block px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors border border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500 has-[:checked]:text-blue-700 dark:has-[:checked]:bg-blue-900/30 dark:has-[:checked]:border-blue-400 dark:has-[:checked]:text-blue-300";
-      label.style.cssText =
-        "max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
-      label.title = f;
-
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.name = nameAttr;
-      cb.value = f;
-      cb.style.cssText =
-        "width: 14px; height: 14px; min-width: 14px; vertical-align: middle; margin-right: 6px;";
-      cb.className =
-        "shrink-0 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600";
-      cb.addEventListener("change", () => updateCheckboxCount(id));
-
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(f));
-      grid.appendChild(label);
-    });
-
-    wrapper.appendChild(grid);
-    el.appendChild(wrapper);
-  }
 
   // Data Quality (completeness-extras) column pickers
   fillCheckboxContainer(
@@ -8348,6 +9397,12 @@ function populateWorkspaceDropdowns(data) {
     allFeatures,
     "features for duplicate detection",
   );
+  const timeFeatures = [...allFeatures, ...(data.datetime_features || [])];
+  activeGroupedColumns = {
+    columns: (data.grouped_columns || timeFeatures).map(String),
+    suggested_time_column: data.suggested_time_column,
+  };
+  refreshGroupedColumnChoices();
   fillDropdown("temporalCompletenessColumnDropdown", allFeatures);
   fillDropdown("nullCountTrendBatchDropdown", allFeatures);
   fillCheckboxContainer(

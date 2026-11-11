@@ -44,6 +44,13 @@ class HeadlessConfig:
     threshold: Optional[float] = None
     frequency: Optional[str] = None
     timestamp_column: Optional[str] = None
+    group_columns: Optional[List[str]] = None
+    expected_cadence: Optional[float] = None
+    time_kind: str = "numeric"
+    tolerance: float = 0.0
+    max_findings: int = 100
+    expected_count: Optional[int] = None
+    expected_duration: Optional[float] = None
     batch_column: Optional[str] = None
     target_columns: Optional[List[str]] = field(default_factory=list)
     loader: Optional[str] = None
@@ -120,6 +127,8 @@ class HeadlessConfig:
         ):
             if key in normalized:
                 normalized[key] = _normalize_list(normalized[key])
+        if isinstance(normalized.get("group_columns"), str):
+            normalized["group_columns"] = _normalize_list(normalized["group_columns"])
         if "path_targets" in normalized:
             normalized["path_targets"] = _normalize_path_targets(
                 normalized["path_targets"], normalized.get("target_match", "exact")

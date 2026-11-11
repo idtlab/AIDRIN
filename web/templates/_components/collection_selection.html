@@ -7,8 +7,18 @@
     <option value="selected">Choose uploaded files</option>
   </select>
   <div id="collection-settings" hidden>
-    <label class="block" for="collection-mode">Analysis mode</label>
-    <select id="collection-mode" name="collection_mode">
+    <div class="grouped-field-label">
+      <label for="collection-mode">Analysis mode</label>
+      <button type="button" class="info-icon" aria-label="About analysis modes" aria-describedby="collection-mode-help">
+        <span aria-hidden="true">i</span>
+        <span id="collection-mode-help" class="info-text" role="tooltip">
+          <strong>Analyze independently</strong> for separate recordings or datasets. Each file gets its own result.<br><br>
+          <strong>Stack rows</strong> for files with the same columns and data types that contain different rows.
+          Rows are appended in the file order shown below.
+        </span>
+      </button>
+    </div>
+    <select id="collection-mode" name="collection_mode" aria-describedby="collection-mode-help">
       <option value="independent">Analyze each file independently</option>
       <option value="stacked">Stack rows into one dataset</option>
     </select>

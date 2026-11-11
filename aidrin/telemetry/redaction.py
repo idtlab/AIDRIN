@@ -52,6 +52,11 @@ NAMESPACE = {
 # silently appends to the same series rather than erroring).
 HEADLINE = {
     "completeness": {"aidrin.quality.completeness": ("Overall Completeness",)},
+    "grouped_time_series": {
+        "aidrin.quality.sequence_groups": ("summary", "group_count"),
+        "aidrin.quality.sequence_groups_with_findings": ("summary", "groups_with_findings"),
+        "aidrin.quality.sequence_unassigned_rows": ("summary", "unassigned_rows"),
+    },
     "duplicity": {
         "aidrin.quality.duplicity": (
             "Duplicity scores",
