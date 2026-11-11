@@ -37,6 +37,9 @@ def make_viz_builders(*, render_overview_charts=None):
 
     Overview charts need a Flask-side renderer; pass ``render_overview_charts``
     as ``(chart_df) -> dict``. Without it, overview viz returns an empty dict.
+    Callers that need overview charts (web, full PDF) must pass the renderer;
+    there is no module-level default registry so an empty overview is not
+    silently reused.
     """
     def overview_viz(file_info):
         if render_overview_charts is None:
@@ -52,7 +55,3 @@ def make_viz_builders(*, render_overview_charts=None):
         "fairness-bias": build_fairness_bias_visualizations,
         "data-governance": build_data_governance_visualizations,
     }
-
-
-# Default registry without overview chart rendering (CLI/PDF can rebuild via factory).
-VIZ_BUILDERS = make_viz_builders()
