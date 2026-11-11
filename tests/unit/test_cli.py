@@ -1463,6 +1463,20 @@ class TestReadinessReportCommand(unittest.TestCase):
         self.assertEqual(mock_pdf.call_args.kwargs["mode"], "scorecard")
         self.assertIn("sections", mock_pdf.call_args.kwargs)
 
+    def test_selected_keys_on_hdf5(self):
+        h5 = os.path.join(_REPO, "examples", "sample_data", "h5", "unit_audit_demo.h5")
+        stdout, stderr, code = _run_cli(
+            "readiness-report",
+            h5,
+            "--selected-keys",
+            "environment/temperature,environment/pressure",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        overview = payload["dataset_overview"]
+        self.assertNotIn("error", overview)
+        self.assertEqual(overview["file_metadata"]["columns"], 2)
+
 
 class TestFairCommand(unittest.TestCase):
     """`aidrin fair <metadata.json> --standard ...` scores metadata, no dataset needed."""

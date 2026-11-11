@@ -1140,6 +1140,18 @@ def main() -> None:
         help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
     )
     rr_parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
+    rr_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
+    rr_parser.add_argument(
         "-o",
         "--output",
         default=None,
@@ -1446,12 +1458,16 @@ def main() -> None:
             pdf_mode = args.pdf_mode or "scorecard"
 
             # Build the report once; reuse section payloads when also writing a PDF.
+            selected_keys = _parse_list(getattr(args, "selected_keys", None))
+            loader = getattr(args, "loader", None)
             result = _local_api.run_readiness_report(
                 args.file_path,
                 file_type=args.file_type,
                 fair_metadata=args.fair_metadata,
                 fair_standard=args.fair_standard,
                 include_visualizations=bool(args.viz),
+                loader=loader,
+                selected_keys=selected_keys,
                 verbose=args.verbose,
             )
             rounded = _round_floats(result)
@@ -1477,6 +1493,8 @@ def main() -> None:
                         mode=pdf_mode,
                         fair_data=result.get("fair_compliance"),
                         sections=sections,
+                        loader=loader,
+                        selected_keys=selected_keys,
                         verbose=args.verbose,
                     )
                 pdf_path = Path(args.pdf_out).resolve()

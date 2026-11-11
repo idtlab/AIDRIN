@@ -234,7 +234,9 @@ AI, Fairness & Bias, Data Governance). JSON goes to stdout only when neither
 that file; with ``--pdf-out``, a PDF is written (and stdout stays silent even
 without ``-o``). Optional FAIR appendix via ``--fair-metadata`` (same engine and
 ``--fair-standard`` values as :ref:`cli_fair`). FAIR is omitted when no metadata
-path is given; missing FAIR never blocks the PDF.
+path is given; missing FAIR never blocks the PDF. For HDF5/Zarr multi-array
+stores use ``--selected-keys`` (same as ``summarize`` / ``data-quality``); for
+formats the built-in readers do not cover, pass ``--loader``.
 
 This command is **local-only** (``aidrin remote readiness-report`` is rejected)
 because PDF rendering uses the web templates and WeasyPrint. PDF export needs
@@ -267,6 +269,10 @@ Flask/WeasyPrint/fontTools logs during ``--pdf-out`` are suppressed; pass
 
    # Include chart payloads in the JSON (large); PDF full mode builds charts itself
    aidrin readiness-report /path/to/sample_dataset.csv --viz -o /path/to/reports/readiness-viz.json
+
+   # HDF5 / Zarr: pick arrays; or use a custom loader for unsupported formats
+   aidrin readiness-report /path/to/store.h5 --selected-keys age,income -o /path/to/reports/readiness.json
+   aidrin readiness-report /path/to/data.nc --loader ./loaders/nc.py:to_table -o /path/to/reports/readiness.json
 
 ``aidrin run``
 ~~~~~~~~~~~~~~
