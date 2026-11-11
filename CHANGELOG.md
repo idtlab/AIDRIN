@@ -12,7 +12,9 @@ All notable changes to AIDRIN are documented here. This project loosely follows
   Readiness Report as JSON (stdout only if neither `-o` nor `--pdf-out`) and
   optional PDF (`--pdf-out`, `--pdf-mode scorecard|full`), with optional FAIR appendix via
   `--fair-metadata` / `--fair-standard` (same engine as `aidrin fair`).
-  Local-only; PDF needs WeasyPrint system libraries.
+  Local-only; PDF needs WeasyPrint system libraries. PDF templates, print CSS,
+  and overview chart helpers live in ``aidrin.report.pdf`` / ``aidrin.report.charts``
+  (shared with the web app), so ``--pdf-out`` does not import the ``web`` package.
 
 ## [2026.10.1] - 2026-10-28
 

@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -199,20 +199,16 @@ class TestRunReadinessReportPdf(unittest.TestCase):
             run_readiness_report_pdf(self.csv, mode="nope")
         self.assertIn("scorecard", str(ctx.exception))
 
-    @patch("web.readiness.pdf.render_readiness_report_pdf", return_value=b"%PDF-1.4 mock")
-    @patch("web.readiness.pdf.build_pdf_context", return_value={"file_name": "x.csv"})
-    @patch("web.create_app")
-    def test_scorecard_returns_pdf_bytes(
-        self, mock_create_app, mock_build_ctx, mock_render
-    ):
+    @patch(
+        "aidrin.report.pdf.render_readiness_report_pdf",
+        return_value=b"%PDF-1.4 mock",
+    )
+    @patch(
+        "aidrin.report.pdf.build_pdf_context",
+        return_value={"file_name": "x.csv"},
+    )
+    def test_scorecard_returns_pdf_bytes(self, mock_build_ctx, mock_render):
         from aidrin.headless import run_readiness_report_pdf
-
-        app = MagicMock()
-        ctx = MagicMock()
-        ctx.__enter__ = MagicMock(return_value=None)
-        ctx.__exit__ = MagicMock(return_value=False)
-        app.app_context.return_value = ctx
-        mock_create_app.return_value = app
 
         sections = {
             slug: {"grade": 1.0, "grade_status": "good", "kpis": []}
@@ -226,7 +222,7 @@ class TestRunReadinessReportPdf(unittest.TestCase):
         self.assertEqual(pdf, b"%PDF-1.4 mock")
         mock_build_ctx.assert_called_once()
         self.assertFalse(mock_build_ctx.call_args.kwargs["include_details"])
-        mock_render.assert_called_once_with(app, {"file_name": "x.csv"})
+        mock_render.assert_called_once_with({"file_name": "x.csv"})
 
 
 if __name__ == "__main__":

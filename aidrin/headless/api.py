@@ -1180,7 +1180,7 @@ def run_readiness_report_pdf(
     """Render a readiness report PDF (scorecard or full) and return the bytes.
 
     Thin wrapper around ``aidrin.headless.readiness_pdf.run_readiness_report_pdf``.
-    Creates a local Flask app for templates/static assets; does not need Redis.
+    Uses packaged ``aidrin.report.pdf`` templates/static (no ``web`` import).
     Raises ``RuntimeError`` when WeasyPrint or its native libraries are missing.
     """
     from aidrin.headless.readiness_pdf import (

@@ -238,12 +238,11 @@ path is given; missing FAIR never blocks the PDF. For HDF5/Zarr multi-array
 stores use ``--selected-keys`` (same as ``summarize`` / ``data-quality``); for
 formats the built-in readers do not cover, pass ``--loader``.
 
-This command is **local-only** (``aidrin remote readiness-report`` is rejected)
-because PDF rendering uses the web templates and WeasyPrint. PDF export needs
-WeasyPrint's native libraries; see :ref:`web_installation` if rendering fails.
-Run ``--pdf-out`` from a checkout with ``PYTHONPATH=.`` so the ``web`` package
-is importable (it is not shipped inside the ``aidrin`` wheel). By default, noisy
-Flask/WeasyPrint/fontTools logs during ``--pdf-out`` are suppressed; pass
+This command is **local-only** (``aidrin remote readiness-report`` is rejected).
+PDF export uses the shared ``aidrin.report.pdf`` templates and WeasyPrint (no
+``web`` package import). PDF export needs WeasyPrint's native libraries; see
+:ref:`web_installation` if rendering fails. By default, noisy
+WeasyPrint/fontTools logs during ``--pdf-out`` are suppressed; pass
 ``-v``/``--verbose`` to keep them.
 
 .. code-block:: bash
@@ -253,15 +252,15 @@ Flask/WeasyPrint/fontTools logs during ``--pdf-out`` are suppressed; pass
    aidrin readiness-report /path/to/sample_dataset.csv -o /path/to/reports/readiness.json
 
    # Scorecard PDF (default) or full PDF with section charts (no JSON on stdout)
-   PYTHONPATH=. aidrin readiness-report /path/to/sample_dataset.csv \
+   aidrin readiness-report /path/to/sample_dataset.csv \
      --pdf-out /path/to/reports/readiness.pdf
-   PYTHONPATH=. aidrin readiness-report /path/to/sample_dataset.csv \
+   aidrin readiness-report /path/to/sample_dataset.csv \
      -o /path/to/reports/readiness.json \
      --pdf-out /path/to/reports/readiness-full.pdf \
      --pdf-mode full
 
    # Optional FAIR appendix (Croissant, RO-Crate, DCAT-US, or DataCite metadata)
-   PYTHONPATH=. aidrin readiness-report /path/to/sample_dataset.csv \
+   aidrin readiness-report /path/to/sample_dataset.csv \
      --fair-metadata /path/to/metadata.json \
      --fair-standard auto \
      -o /path/to/reports/readiness.json \

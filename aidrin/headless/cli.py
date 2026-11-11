@@ -1124,7 +1124,7 @@ def main() -> None:
     fair_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print a per-principle table instead of JSON")
     fair_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
-    # AI Data Readiness Report (JSON + optional PDF). Local-only: PDF needs web templates.
+    # AI Data Readiness Report (JSON + optional PDF). Local-only.
     rr_parser = subparsers.add_parser(
         "readiness-report",
         help=(

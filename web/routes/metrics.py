@@ -818,7 +818,7 @@ def readiness_report_pdf():
             visualizations=visualizations,
             section_errors=section_errors,
         )
-        pdf_bytes = render_readiness_report_pdf(current_app, context)
+        pdf_bytes = render_readiness_report_pdf(context)
         metric_time_log.info(
             "Readiness report PDF (%s) generated in %.2f seconds",
             mode,

@@ -1,8 +1,9 @@
-"""Headless readiness-report PDF rendering via Flask + WeasyPrint.
+"""Headless readiness-report PDF rendering via packaged templates + WeasyPrint.
 
 Builds section (and optional visualization) payloads without Redis/session
-cache, then renders with the same ``web.readiness.pdf`` pipeline as the web
+cache, then renders with the same ``aidrin.report.pdf`` pipeline as the web
 export. Requires WeasyPrint and its native libraries (pango, cairo, gdk-pixbuf).
+Does not import the ``web`` package.
 """
 
 from __future__ import annotations
@@ -13,17 +14,16 @@ from typing import Any, Dict, List, Optional
 
 from aidrin.headless.runners import _build_file_info, using_selected_keys
 from aidrin.report.builder import build_readiness_section
+from aidrin.report.charts import (
+    categorical_distribution_charts,
+    continuous_bars,
+    summary_histograms,
+)
 from aidrin.report.registry import SECTION_BUILDERS, make_viz_builders
 
 
 def _overview_chart_renderer(chart_df):
-    """Inject Flask-side matplotlib helpers for overview charts in full PDFs."""
-    from web.routes.utils import (
-        categorical_distribution_charts,
-        continuous_bars,
-        summary_histograms,
-    )
-
+    """Attach overview chart images for full PDFs / JSON --viz."""
     return {
         "categorical_charts": categorical_distribution_charts(chart_df),
         "histograms": summary_histograms(chart_df, figsize=(7, 4.5)),
@@ -94,15 +94,14 @@ def run_readiness_report_pdf(
     RuntimeError
         WeasyPrint or logo asset unavailable (same message as the web export).
     """
-    # Lazy imports keep the JSON headless path free of Flask/WeasyPrint.
+    # Lazy imports keep the JSON headless path free of WeasyPrint.
     from aidrin.file_handling.custom_loader import using_custom_loader
     from aidrin.headless.api import (
         _log_progress,
         _normalize_list,
         calculate_fair_compliance,
     )
-    from web import create_app
-    from web.readiness.pdf import build_pdf_context, render_readiness_report_pdf
+    from aidrin.report.pdf import build_pdf_context, render_readiness_report_pdf
 
     if mode not in ("scorecard", "full"):
         raise ValueError(f"mode must be 'scorecard' or 'full', got {mode!r}")
@@ -161,16 +160,14 @@ def run_readiness_report_pdf(
 
     _log_progress(f"Rendering readiness PDF ({mode})", verbose)
     t0 = time.time()
-    app = create_app()
-    with app.app_context():
-        context = build_pdf_context(
-            file_name=resolved_name,
-            sections=sections,
-            fair_data=fair_data,
-            include_details=include_details,
-            visualizations=visualizations,
-            section_errors=section_errors,
-        )
-        pdf_bytes = render_readiness_report_pdf(app, context)
+    context = build_pdf_context(
+        file_name=resolved_name,
+        sections=sections,
+        fair_data=fair_data,
+        include_details=include_details,
+        visualizations=visualizations,
+        section_errors=section_errors,
+    )
+    pdf_bytes = render_readiness_report_pdf(context)
     _log_progress(f"PDF rendered in {time.time() - t0:.2f}s", verbose)
     return pdf_bytes
