@@ -157,6 +157,18 @@ class TestRunReadinessReport(unittest.TestCase):
             run_readiness_report("/no/such/dataset.csv")
         self.assertIn("File not found", str(ctx.exception))
 
+    def test_selected_keys_does_not_break_overview(self):
+        from aidrin.headless import run_readiness_report
+
+        h5 = _REPO / "examples" / "sample_data" / "h5" / "unit_audit_demo.h5"
+        report = run_readiness_report(
+            str(h5),
+            selected_keys=["environment/temperature", "environment/pressure"],
+        )
+        overview = report["dataset_overview"]
+        self.assertNotIn("error", overview)
+        self.assertEqual(overview["file_metadata"]["columns"], 2)
+
 
 class TestRunReadinessReportPdf(unittest.TestCase):
     def setUp(self):

@@ -224,7 +224,8 @@ def build_dataset_overview_section(
     so ``aidrin`` does not depend on ``web``. Pass ``render_overview_charts`` as a
     callable ``(chart_df) -> dict`` when ``include_visualizations`` is true.
     """
-    file_path, file_name, file_type = file_info
+    # file_info may include selected_keys / loader extras (4th+ elements).
+    file_path, file_name, file_type = file_info[:3]
     df = read_file(file_info)
     if hasattr(df, "columns"):
         df.columns = [str(c) for c in df.columns]
