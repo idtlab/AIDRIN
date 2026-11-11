@@ -1099,9 +1099,12 @@ def run_readiness_report(
     ``data_quality``, …). When *fair_metadata* is set, FAIR results from
     ``calculate_fair_compliance`` are attached as ``fair_compliance``.
 
-    Visualizations are omitted by default. Pass ``include_visualizations=True``
-    to embed chart payloads; ``strip_visualizations`` defaults to the opposite
-    of that flag so headless output stays lean unless charts are requested.
+    Visualizations are omitted by default via ``include_visualizations`` (builders
+    do not emit chart payloads). Pass ``include_visualizations=True`` to embed
+    them. ``strip_visualizations`` only controls whether the optional FAIR
+    appendix drops its ``"Pie chart"`` image (defaults to the opposite of
+    ``include_visualizations``); it is not applied to the readiness sections,
+    whose payloads are keyed by column name and must not be substring-stripped.
     """
     from aidrin.file_handling.custom_loader import using_custom_loader
     from aidrin.report.builder import build_readiness_report
@@ -1144,8 +1147,6 @@ def run_readiness_report(
         verbose,
     )
 
-    if strip_visualizations:
-        report = _strip_visualizations(report)
     return _sanitize(report)
 
 

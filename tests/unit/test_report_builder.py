@@ -92,14 +92,48 @@ class TestRunReadinessReport(unittest.TestCase):
         except OSError:
             pass
 
-    def test_omits_fair_and_strips_visualizations_by_default(self):
+    def test_omits_fair_and_chart_payloads_by_default(self):
         from aidrin.headless import run_readiness_report
 
         report = run_readiness_report(self.csv)
         self.assertTrue(report["success"])
         self.assertNotIn("fair_compliance", report)
+        # Builders leave chart fields empty; do not substring-strip the tree
+        # (that would also drop column names containing "plot" / "visualization").
         dumped = json.dumps(report)
-        self.assertNotIn("visualization", dumped.lower())
+        self.assertNotIn("iVBORw", dumped)
+        self.assertTrue(
+            report["dataset_overview"].get("visualizations_deferred", False)
+        )
+
+    def test_preserves_columns_whose_names_look_like_chart_keys(self):
+        from aidrin.headless import run_readiness_report
+
+        csv = _write_csv(
+            pd.DataFrame(
+                {
+                    "plot_id": [1, 2],
+                    "plot_area": [10.5, 12.0],
+                    "yield": [100, 110],
+                    "region": ["A", "B"],
+                }
+            )
+        )
+        try:
+            report = run_readiness_report(csv)
+            scores = (
+                report["data_quality"]["details"]["completeness"]["scores"]
+            )
+            self.assertEqual(
+                set(scores),
+                {"plot_id", "plot_area", "yield", "region"},
+            )
+            summary = report["dataset_overview"]["numerical_summary"]
+            self.assertIn("plot_id", summary)
+            self.assertIn("plot_area", summary)
+            self.assertIn("yield", summary)
+        finally:
+            os.unlink(csv)
 
     def test_attaches_fair_compliance_without_pie_chart(self):
         from aidrin.headless import run_readiness_report
