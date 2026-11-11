@@ -1101,8 +1101,9 @@ def run_readiness_report(
 
     Visualizations are omitted by default via ``include_visualizations`` (builders
     do not emit chart payloads). Pass ``include_visualizations=True`` to embed
-    them. ``strip_visualizations`` only controls whether the optional FAIR
-    appendix drops its ``"Pie chart"`` image (defaults to the opposite of
+    them (including dataset-overview charts via the same renderer as full PDF).
+    ``strip_visualizations`` only controls whether the optional FAIR appendix
+    drops its ``"Pie chart"`` image (defaults to the opposite of
     ``include_visualizations``); it is not applied to the readiness sections,
     whose payloads are keyed by column name and must not be substring-stripped.
     """
@@ -1132,6 +1133,15 @@ def run_readiness_report(
             strip_visualizations=strip_visualizations,
         )
 
+    # Overview charts live in web.routes.utils; reuse the PDF helper so --viz
+    # embeds the same keys as the web report / full PDF (lazy import keeps the
+    # default no-viz path free of that dependency).
+    render_overview_charts = None
+    if include_visualizations:
+        from aidrin.headless.readiness_pdf import _overview_chart_renderer
+
+        render_overview_charts = _overview_chart_renderer
+
     _log_progress(f"Building readiness report for {file_path}", verbose)
     start = time.time()
     with using_custom_loader(loader):
@@ -1141,6 +1151,7 @@ def run_readiness_report(
                 include_visualizations=include_visualizations,
                 fair_data=fair_data,
                 sections=sections,
+                render_overview_charts=render_overview_charts,
             )
     _log_progress(
         f"Readiness report built in {time.time() - start:.2f}s",

@@ -169,6 +169,18 @@ class TestRunReadinessReport(unittest.TestCase):
         self.assertNotIn("error", overview)
         self.assertEqual(overview["file_metadata"]["columns"], 2)
 
+    def test_include_visualizations_embeds_overview_charts(self):
+        from aidrin.headless import run_readiness_report
+
+        report = run_readiness_report(self.csv, include_visualizations=True)
+        overview = report["dataset_overview"]
+        self.assertFalse(overview.get("visualizations_deferred", True))
+        self.assertIn("histograms", overview)
+        self.assertIn("histogram_bars", overview)
+        self.assertIn("categorical_charts", overview)
+        self.assertTrue(overview["histograms"] or overview["histogram_bars"])
+        self.assertIn("iVBORw", json.dumps(overview))
+
 
 class TestRunReadinessReportPdf(unittest.TestCase):
     def setUp(self):

@@ -85,11 +85,11 @@ def build_readiness_report(
     if render_overview_charts is not None:
         charts = render_overview_charts
 
-        def _overview(file_info_, include_visualizations_=False):
+        def _overview(file_info_, include_visualizations=False):
             return build_dataset_overview_section(
                 file_info_,
-                include_visualizations=include_visualizations_,
-                render_overview_charts=charts if include_visualizations_ else None,
+                include_visualizations=include_visualizations,
+                render_overview_charts=charts if include_visualizations else None,
             )
 
         builders["dataset-overview"] = _overview
