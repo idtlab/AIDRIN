@@ -202,16 +202,17 @@ def test_stacked_duplicity_handles_nested_values_after_scalars(tmp_path):
         assert result["metrics"]["duplicity"]["Duplicity scores"]["Overall duplicity of the dataset"] == .25
 
 
-def test_workspace_directory_size_is_unavailable_for_directory_stores(tmp_path, monkeypatch):
+@pytest.mark.parametrize("csv_bytes", [b"x\n1\n", b"x\r\n1\r\n"])
+def test_workspace_directory_size_is_unavailable_for_directory_stores(tmp_path, monkeypatch, csv_bytes):
     from aidrin.file_handling.workspace_summary import summarize_workspace_directory
 
     monkeypatch.setattr("aidrin.file_handling.workspace_summary.read_file", lambda *args, **kwargs: pd.DataFrame({"x": [1]}))
     (tmp_path / "records.zarr").mkdir()
-    (tmp_path / "small.csv").write_text("x\n1\n", encoding="utf-8")
+    (tmp_path / "small.csv").write_bytes(csv_bytes)
     rows = summarize_workspace_directory(str(tmp_path), 2)["files"]
     assert "size" not in rows[0]["summary"]
     assert rows[0]["summary"]["records"] == 1
-    assert rows[1]["summary"]["size"] == 4
+    assert rows[1]["summary"]["size"] == len(csv_bytes)
 
 
 def test_stacked_duplicity_distinguishes_json_objects_from_arrays_of_pairs(tmp_path):
