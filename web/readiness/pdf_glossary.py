@@ -1,7 +1,7 @@
 """Shim: PDF glossary lives in ``aidrin.report.pdf.pdf_glossary``."""
 
 from aidrin.report.pdf import pdf_glossary as _pdf_glossary
-from aidrin.report.pdf.pdf_glossary import *  # noqa: F403
+from aidrin.report.pdf.pdf_glossary import *  # noqa: F401, F403
 
 for _name in dir(_pdf_glossary):
     if _name.startswith("_") and not _name.startswith("__"):

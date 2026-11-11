@@ -15,8 +15,6 @@ import numpy as np
 import pandas as pd
 from scipy.stats import gaussian_kde
 
-
-
 # Matplotlib's pyplot API is process-global and not thread-safe. Serialize chart
 # builders that share this process so concurrent requests cannot cross-contaminate figures.
 MATPLOTLIB_PLOT_LOCK = threading.Lock()

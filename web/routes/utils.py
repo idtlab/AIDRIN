@@ -387,4 +387,3 @@ def ensure_json_serializable(obj):
     elif pd.isna(obj):
         return None
     return obj
-

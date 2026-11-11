@@ -1,7 +1,7 @@
 """Shim: PDF detail builders live in ``aidrin.report.pdf.pdf_details``."""
 
 from aidrin.report.pdf import pdf_details as _pdf_details
-from aidrin.report.pdf.pdf_details import *  # noqa: F403
+from aidrin.report.pdf.pdf_details import *  # noqa: F401, F403
 
 # Re-export underscore helpers for tests (star-import skips leading underscores).
 for _name in dir(_pdf_details):
