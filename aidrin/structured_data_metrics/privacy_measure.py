@@ -601,15 +601,6 @@ def generate_single_attribute_MM_risk_scores_groupby(
         if df[id_col].nunique() != len(df):
             raise ValueError(f"ID column '{id_col}' must contain unique values for each row.")
 
-        selected_columns = [id_col] + eval_cols
-        selected_df = df[selected_columns].dropna()
-        rows_after_dropna = len(selected_df)
-        logger.debug("Rows remaining after dropna: %d", rows_after_dropna)
-        if rows_after_dropna == 0:
-            raise ValueError(
-                "After removing missing values, no data remains. Please check your data quality or select different columns."
-            )
-
         non_categorical_cols = []
         for col in eval_cols:
             if pd.api.types.is_numeric_dtype(df[col]) and df[col].nunique() > 100:
@@ -619,6 +610,15 @@ def generate_single_attribute_MM_risk_scores_groupby(
             raise ValueError(
                 f"Columns {', '.join(non_categorical_cols)} appear to be numerical with too many unique values."
                 "Quasi-identifiers should be categorical."
+            )
+
+        selected_columns = [id_col] + eval_cols
+        selected_df = df[selected_columns].dropna()
+        rows_after_dropna = len(selected_df)
+        logger.debug("Rows remaining after dropna: %d", rows_after_dropna)
+        if rows_after_dropna == 0:
+            raise ValueError(
+                "After removing missing values, no data remains. Please check your data quality or select different columns."
             )
 
         if task:
