@@ -163,9 +163,10 @@ def summary_histograms(df, columns=None, figsize=_DISTRIBUTION_FIGSIZE, dpi=150)
     columns whose semantic role is *continuous*); when ``None`` it falls back
     to every numeric column for backward compatibility.
 
-    Paired with :func:`continuous_bars`, which draws the same columns as a
-    histogram; both emit a key per column so the per-chart switch in the Data
-    Overview never dead-ends on a card.
+    :func:`continuous_bars` draws the same columns as a histogram so the Data
+    Overview can offer a per-chart switch. It skips columns with nothing to
+    bin, so a column with no finite values yields a KDE key here and no bar
+    key; the switch is only offered where both exist.
     """
     curve_color = "#4485F4"
 
