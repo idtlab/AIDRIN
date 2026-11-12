@@ -1,4 +1,7 @@
-"""Shim: PDF detail builders live in ``aidrin.report.pdf.pdf_details``."""
+"""Shim: PDF detail builders live in ``aidrin.report.pdf.pdf_details``.
+
+Templates/CSS for the PDF live under ``aidrin.report.pdf`` package data.
+"""
 
 from aidrin.report.pdf import pdf_details as _pdf_details
 from aidrin.report.pdf.pdf_details import *  # noqa: F401, F403

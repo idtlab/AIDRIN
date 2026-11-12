@@ -1,9 +1,0 @@
-{% if footnotes.section(section_name).entries() %}
-<div class="section-footnotes">
-  <ol class="footnotes-list">
-    {% for item in footnotes.section(section_name).entries() %}
-    <li value="{{ item.number }}"><strong>{{ item.term }}.</strong> {{ item.definition }}</li>
-    {% endfor %}
-  </ol>
-</div>
-{% endif %}
