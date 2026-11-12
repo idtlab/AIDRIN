@@ -2,7 +2,7 @@
 
 import unittest
 
-from web.routes.metrics import _pairwise_signals
+from aidrin.report.impact import pairwise_signals
 
 
 class TestPairwiseSignalsIsolatedSeeding(unittest.TestCase):
@@ -17,7 +17,7 @@ class TestPairwiseSignalsIsolatedSeeding(unittest.TestCase):
             "c3 vs c2": 0.03,
         }
         kept = ["c1", "c2", "c3", "n1"]
-        signals = _pairwise_signals(scores, columns=kept)
+        signals = pairwise_signals(scores, columns=kept)
         self.assertEqual(signals["isolated"], ["c1", "c2", "c3", "n1"])
         n_kept = len(kept)
         informativeness = max(0.0, 1.0 - len(signals["isolated"]) / n_kept)
@@ -33,7 +33,7 @@ class TestPairwiseSignalsIsolatedSeeding(unittest.TestCase):
             "c2 vs c3": 0.03,
             "c3 vs c2": 0.03,
         }
-        signals = _pairwise_signals(scores)
+        signals = pairwise_signals(scores)
         self.assertEqual(signals["isolated"], ["c1", "c2", "c3"])
         informativeness = max(0.0, 1.0 - len(signals["isolated"]) / 4)
         self.assertEqual(informativeness, 0.25)

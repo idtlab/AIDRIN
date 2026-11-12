@@ -34,7 +34,7 @@ def test_readiness_visualizations_hide_exception(uploaded_client, caplog):
 
 
 def test_readiness_report_hides_exception(uploaded_client, caplog):
-    with patch.object(metrics, "_get_or_build_readiness_section", _boom):
+    with patch("aidrin.report.builder.build_readiness_report", _boom):
         response = uploaded_client.get("/readiness-report")
     assert response.get_json()["success"] is False
     _assert_hidden(response, caplog)

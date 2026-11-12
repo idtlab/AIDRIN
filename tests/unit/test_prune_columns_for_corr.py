@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from web.routes.metrics import _pairwise_signals, _prune_columns_for_corr
+from aidrin.report.impact import pairwise_signals, prune_columns_for_corr
 
 
 class TestPruneColumnsForCorr(unittest.TestCase):
@@ -18,7 +18,7 @@ class TestPruneColumnsForCorr(unittest.TestCase):
             "feature_a": np.random.default_rng(0).normal(size=n),
             "cat": np.random.default_rng(1).choice(["x", "y", "z"], size=n),
         })
-        kept, dropped = _prune_columns_for_corr(df)
+        kept, dropped = prune_columns_for_corr(df)
         dropped_by_feature = {d["feature"]: d["reason"] for d in dropped}
 
         self.assertEqual(dropped_by_feature["row_id"], "ID-like (near-unique values)")
@@ -39,7 +39,7 @@ class TestPruneColumnsForCorr(unittest.TestCase):
             "seq_no": np.arange(n) * 2,
             "feature_a": np.random.default_rng(0).normal(size=n),
         })
-        kept, _ = _prune_columns_for_corr(df)
+        kept, _ = prune_columns_for_corr(df)
         # Only a real feature remains among the four; no ID/timestamp pairs to score.
         self.assertEqual(kept, ["feature_a"])
 
@@ -48,6 +48,6 @@ class TestPruneColumnsForCorr(unittest.TestCase):
             "row_id vs seq_no": 1.0,
             "created_at vs seq_no": 1.0,
         }
-        self.assertEqual(len(_pairwise_signals(bogus_scores)["leakage"]), 3)
+        self.assertEqual(len(pairwise_signals(bogus_scores)["leakage"]), 3)
         leakage_kpi = max(0.0, 1.0 - 3 / 5.0)
         self.assertEqual(leakage_kpi, 0.4)

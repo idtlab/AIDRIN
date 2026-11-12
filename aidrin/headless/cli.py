@@ -1,10 +1,11 @@
 import argparse
 import contextlib
 import json
+import logging
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterator, List, Optional
 import os
 
 from aidrin.file_handling.file_parser import clear_frame_cache
@@ -28,6 +29,36 @@ def _parse_list(value: Optional[str]) -> Optional[List[str]]:
         return None
     items = [item.strip() for item in value.split(",") if item.strip()]
     return items or None
+
+
+# Loggers that flood stderr during readiness PDF export (Flask/OTEL/WeasyPrint/fonts).
+_READINESS_PDF_QUIET_LOGGERS = (
+    "aidrin.telemetry.otel",
+    "web.telemetry",
+    "web",
+    "weasyprint",
+    "weasyprint.progress",
+    "fontTools",
+    "fontTools.subset",
+)
+
+
+@contextlib.contextmanager
+def _quiet_readiness_pdf_loggers(*, verbose: bool) -> Iterator[None]:
+    """Raise noisy PDF-related loggers to ERROR unless ``-v`` was passed."""
+    if verbose:
+        yield
+        return
+    previous: list[tuple[logging.Logger, int]] = []
+    for name in _READINESS_PDF_QUIET_LOGGERS:
+        logger = logging.getLogger(name)
+        previous.append((logger, logger.level))
+        logger.setLevel(logging.ERROR)
+    try:
+        yield
+    finally:
+        for logger, level in previous:
+            logger.setLevel(level)
 
 
 def _parse_path_targets(value: Optional[str], target_match: str) -> Optional[List[str]]:
@@ -608,7 +639,14 @@ REMOTE_MANAGEMENT = {
 
 # Commands that cannot run on an endpoint: they need files or credentials that
 # live on the client machine.
-REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory", "fair"}
+REMOTE_FORBIDDEN = {
+    "add-custom-module",
+    "agentic",
+    "skill",
+    "inventory",
+    "fair",
+    "readiness-report",
+}
 
 
 REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
@@ -1086,6 +1124,78 @@ def main() -> None:
     fair_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print a per-principle table instead of JSON")
     fair_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
+    # AI Data Readiness Report (JSON + optional PDF). Local-only.
+    rr_parser = subparsers.add_parser(
+        "readiness-report",
+        help=(
+            "Build the AI Data Readiness Report for a dataset (JSON to stdout; "
+            "optional PDF via --pdf-out). Local-only."
+        ),
+    )
+    rr_parser.add_argument("file_path", help="Path to the dataset")
+    rr_parser.add_argument(
+        "--file-type",
+        dest="file_type",
+        default=None,
+        help="File type override (csv, parquet, xlsx, hdf5, json, npz, zarr)",
+    )
+    rr_parser.add_argument(
+        "--loader",
+        dest="loader",
+        default=None,
+        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+    )
+    rr_parser.add_argument(
+        "--selected-keys",
+        dest="selected_keys",
+        default=None,
+        help="Comma-separated HDF5/Zarr array paths to read",
+    )
+    rr_parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Write JSON to this path (suppresses stdout; also suppressed with --pdf-out)",
+    )
+    rr_parser.add_argument(
+        "--pdf-out",
+        dest="pdf_out",
+        default=None,
+        help="Path to write the PDF report (requires WeasyPrint and native libs)",
+    )
+    rr_parser.add_argument(
+        "--pdf-mode",
+        dest="pdf_mode",
+        default=None,
+        choices=("scorecard", "full"),
+        help="PDF layout when using --pdf-out (default: scorecard). 'full' includes section charts.",
+    )
+    rr_parser.add_argument(
+        "--fair-metadata",
+        dest="fair_metadata",
+        default=None,
+        help="Optional path to FAIR metadata JSON/JSON-LD to attach as an appendix",
+    )
+    rr_parser.add_argument(
+        "--fair-standard",
+        dest="fair_standard",
+        default="auto",
+        choices=("auto", *FAIR_STANDARDS),
+        help="Metadata standard for --fair-metadata (default: detect it)",
+    )
+    rr_parser.add_argument(
+        "--viz",
+        dest="viz",
+        action="store_true",
+        help="Include chart payloads in the JSON output (PDF full mode builds charts itself)",
+    )
+    rr_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Show progress output (also keeps WeasyPrint/Flask PDF library logs)",
+    )
+
     # Agentic evaluation commands
     agentic_parser = subparsers.add_parser("agentic", help="Agentic evaluation commands (requires aidrin[agentic])")
     agentic_sub = agentic_parser.add_subparsers(dest="agentic_command", required=True)
@@ -1339,6 +1449,58 @@ def main() -> None:
                 _print_fair_summary(result, args.metadata_path)
             else:
                 _dump_result(result)
+            return
+
+        if args.command == "readiness-report":
+            if args.pdf_mode is not None and not args.pdf_out:
+                sys.stderr.write("Error: --pdf-mode requires --pdf-out\n")
+                sys.exit(2)
+            pdf_mode = args.pdf_mode or "scorecard"
+
+            # Build the report once; reuse section payloads when also writing a PDF.
+            selected_keys = _parse_list(getattr(args, "selected_keys", None))
+            loader = getattr(args, "loader", None)
+            result = _local_api.run_readiness_report(
+                args.file_path,
+                file_type=args.file_type,
+                fair_metadata=args.fair_metadata,
+                fair_standard=args.fair_standard,
+                include_visualizations=bool(args.viz),
+                loader=loader,
+                selected_keys=selected_keys,
+                verbose=args.verbose,
+            )
+            rounded = _round_floats(result)
+            if args.output:
+                _write_output_file(rounded, args.output)
+            # Readiness JSON is large: print to stdout only when no file output
+            # was requested (neither -o nor --pdf-out).
+            if not args.output and not args.pdf_out:
+                _dump_result(rounded)
+
+            if args.pdf_out:
+                from aidrin.report.registry import SECTION_RESPONSE_KEYS
+
+                sections = {
+                    slug: result[key]
+                    for slug, key in SECTION_RESPONSE_KEYS.items()
+                    if key in result
+                }
+                with _quiet_readiness_pdf_loggers(verbose=args.verbose):
+                    pdf_bytes = _local_api.run_readiness_report_pdf(
+                        args.file_path,
+                        file_type=args.file_type,
+                        mode=pdf_mode,
+                        fair_data=result.get("fair_compliance"),
+                        sections=sections,
+                        loader=loader,
+                        selected_keys=selected_keys,
+                        verbose=args.verbose,
+                    )
+                pdf_path = Path(args.pdf_out).resolve()
+                pdf_path.parent.mkdir(parents=True, exist_ok=True)
+                pdf_path.write_bytes(pdf_bytes)
+                sys.stderr.write(f"PDF written to: {pdf_path}\n")
             return
 
         if args.command == "agentic":
