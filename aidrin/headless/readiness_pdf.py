@@ -19,7 +19,11 @@ from aidrin.report.charts import (
     continuous_bars,
     summary_histograms,
 )
-from aidrin.report.registry import SECTION_BUILDERS, make_viz_builders
+from aidrin.report.registry import (
+    SECTION_BUILDERS,
+    SECTION_RESPONSE_KEYS,
+    make_viz_builders,
+)
 
 
 def _overview_chart_renderer(chart_df):
@@ -43,6 +47,35 @@ def _build_sections(file_info) -> tuple[dict[str, Any], dict[str, str]]:
             section_errors[slug] = data["error"]
         sections[slug] = data
     return sections, section_errors
+
+
+def _coerce_sections_to_slugs(sections: dict[str, Any]) -> dict[str, Any]:
+    """Accept PDF slugs or ``run_readiness_report`` response keys; return slugs."""
+    out = dict(sections)
+    for slug, key in SECTION_RESPONSE_KEYS.items():
+        if slug not in out and key in out:
+            out[slug] = out.pop(key)
+        elif key in out and slug in out:
+            out.pop(key, None)
+    return out
+
+
+def _merge_section_errors(
+    section_errors: Optional[Dict[str, str]],
+    sections: dict[str, Any],
+) -> dict[str, str]:
+    """Fill missing ``section_errors`` entries from inline section ``error`` keys.
+
+    An empty ``{}`` from the caller must not skip harvest; Jinja treats a missing
+    slug in ``section_errors`` as a successful section and reads thresholds/meta.
+    """
+    merged = dict(section_errors or {})
+    for slug, data in sections.items():
+        if slug in merged:
+            continue
+        if isinstance(data, dict) and data.get("error"):
+            merged[slug] = data["error"]
+    return merged
 
 
 def _build_visualizations(file_info) -> dict[str, dict]:
@@ -83,8 +116,11 @@ def run_readiness_report_pdf(
         Optional FAIR appendix. Pass *fair_data* to reuse a prior
         ``calculate_fair_compliance`` result; otherwise *fair_metadata* is scored.
     sections / visualizations / section_errors
-        Optional precomputed slug-keyed payloads (for CLI "compute once"). When
-        omitted, sections are built here; visualizations are built only for
+        Optional precomputed payloads (for CLI "compute once"). *sections* may use
+        PDF slugs (``impact-on-ai``) or ``run_readiness_report`` keys
+        (``impact_on_ai``); response keys are remapped. Inline ``error`` fields are
+        always merged into *section_errors* (even when the caller passes ``{}``).
+        When omitted, sections are built here; visualizations only for
         ``mode="full"``.
 
     Raises
@@ -137,12 +173,10 @@ def run_readiness_report_pdf(
                     f"Sections built in {time.time() - t0:.2f}s",
                     verbose,
                 )
-            elif section_errors is None:
-                section_errors = {
-                    slug: data["error"]
-                    for slug, data in sections.items()
-                    if isinstance(data, dict) and data.get("error")
-                }
+            else:
+                sections = _coerce_sections_to_slugs(sections)
+
+            section_errors = _merge_section_errors(section_errors, sections)
 
             if include_details and visualizations is None:
                 _log_progress("Building readiness visualizations for full PDF", verbose)
@@ -155,8 +189,6 @@ def run_readiness_report_pdf(
 
     if visualizations is None:
         visualizations = {}
-    if section_errors is None:
-        section_errors = {}
 
     _log_progress(f"Rendering readiness PDF ({mode})", verbose)
     t0 = time.time()
