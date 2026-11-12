@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from web.readiness.pdf import (
+from aidrin.report.pdf.pdf import (
     FootnoteRegistry,
     _cap_na_rows,
     _fair_value_rows,
@@ -268,11 +268,7 @@ class TestReadinessPdfContext(unittest.TestCase):
 
 class TestReadinessPdfLogo(unittest.TestCase):
     def test_readiness_pdf_logo_uri_resolves_aidrin_image(self):
-        import web.readiness.pdf as pdf_module
-
-        app = MagicMock()
-        app.root_path = str(Path(pdf_module.__file__).resolve().parent.parent)
-        uri = readiness_pdf_logo_uri(app)
+        uri = readiness_pdf_logo_uri()
         self.assertTrue(uri.startswith("file:"))
         self.assertTrue(uri.endswith("logoNoBackground.png"))
 
@@ -282,10 +278,10 @@ class TestReadinessPdfRender(unittest.TestCase):
     # are deterministic regardless of which WeasyPrint major is actually
     # installed in the environment running the suite; the modern shape is
     # covered separately in TestReadinessPdfUrlFetcherModernApi.
-    @patch("web.readiness.pdf._weasyprint_url_fetcher_base", return_value=None)
-    @patch("web.readiness.pdf._weasyprint")
-    @patch("web.readiness.pdf.render_template", return_value="<html></html>")
-    @patch("web.readiness.pdf.readiness_pdf_logo_uri", return_value="file:///tmp/logo.png")
+    @patch("aidrin.report.pdf.pdf._weasyprint_url_fetcher_base", return_value=None)
+    @patch("aidrin.report.pdf.pdf._weasyprint")
+    @patch("aidrin.report.pdf.pdf.render_template", return_value="<html></html>")
+    @patch("aidrin.report.pdf.pdf.readiness_pdf_logo_uri", return_value="file:///tmp/logo.png")
     def test_render_readiness_report_pdf(
         self, _mock_logo, _mock_template, mock_weasyprint, _mock_url_fetcher_base
     ):
@@ -293,9 +289,7 @@ class TestReadinessPdfRender(unittest.TestCase):
         mock_instance.write_pdf.return_value = b"%PDF-1.4"
         mock_html = MagicMock(return_value=mock_instance)
         mock_weasyprint.return_value = (mock_html, MagicMock())
-        app = MagicMock()
-        app.root_path = str(Path(tempfile.gettempdir()) / "web")
-        result = render_readiness_report_pdf(app, {"file_name": "data.csv"})
+        result = render_readiness_report_pdf({"file_name": "data.csv"})
         self.assertEqual(result, b"%PDF-1.4")
         mock_instance.write_pdf.assert_called_once()
         _mock_template.assert_called_once()
@@ -390,7 +384,7 @@ class TestReadinessPdfUrlFetcherLegacyApi(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "static").mkdir()
-            with patch("web.readiness.pdf._weasyprint_url_fetcher_base", return_value=None):
+            with patch("aidrin.report.pdf.pdf._weasyprint_url_fetcher_base", return_value=None):
                 fetcher = _make_readiness_pdf_url_fetcher([root / "static"])
             self.assertTrue(callable(fetcher))
             with self.assertRaises(ValueError):
@@ -403,7 +397,7 @@ class TestReadinessPdfUrlFetcherLegacyApi(unittest.TestCase):
             allowed.mkdir()
             outside = root / "secret.txt"
             outside.write_text("nope", encoding="utf-8")
-            with patch("web.readiness.pdf._weasyprint_url_fetcher_base", return_value=None):
+            with patch("aidrin.report.pdf.pdf._weasyprint_url_fetcher_base", return_value=None):
                 fetcher = _make_readiness_pdf_url_fetcher([allowed])
             with self.assertRaises(ValueError) as ctx:
                 fetcher(outside.as_uri())
@@ -424,7 +418,7 @@ class TestReadinessPdfUrlFetcherLegacyApi(unittest.TestCase):
             asset = allowed / "logo.png"
             asset.write_bytes(b"png")
             with (
-                patch("web.readiness.pdf._weasyprint_url_fetcher_base", return_value=None),
+                patch("aidrin.report.pdf.pdf._weasyprint_url_fetcher_base", return_value=None),
                 patch.dict(sys.modules, {"weasyprint": fake_weasy}),
             ):
                 fetcher = _make_readiness_pdf_url_fetcher([allowed])
@@ -452,7 +446,7 @@ class TestReadinessPdfUrlFetcherModernApi(unittest.TestCase):
 
     def _make_fetcher(self, allowed_roots):
         with patch(
-            "web.readiness.pdf._weasyprint_url_fetcher_base",
+            "aidrin.report.pdf.pdf._weasyprint_url_fetcher_base",
             return_value=self._FakeURLFetcherBase,
         ):
             return _make_readiness_pdf_url_fetcher(allowed_roots)

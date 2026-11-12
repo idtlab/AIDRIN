@@ -6,11 +6,11 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
+from aidrin.report.governance import build_data_governance_section
 from aidrin.structured_data_metrics.privacy_measure import (
     generate_single_attribute_MM_risk_scores,
     generate_single_attribute_MM_risk_scores_groupby,
 )
-from web.routes.metrics import _build_data_governance_section
 
 
 def _missingness_df():
@@ -62,25 +62,25 @@ def _ok_e(*_args, **_kwargs):
 class TestReadinessSingleAttributeMmMatchesPrivacy(unittest.TestCase):
     def test_groupby_called_once_with_all_qis_and_no_viz(self):
         df = _missingness_df()
-        with patch("web.routes.metrics.read_file", return_value=df), patch(
-            "web.routes.metrics._auto_select_fairness_columns",
+        with patch("aidrin.report.governance.read_file", return_value=df), patch(
+            "aidrin.report.governance.auto_select_fairness_columns",
             return_value={"target_column": None},
         ), patch(
-            "web.routes.metrics._auto_select_governance_columns",
+            "aidrin.report.governance.auto_select_governance_columns",
             return_value=_GOV_SELECTION,
         ), patch(
-            "web.routes.metrics.compute_k_anonymity", side_effect=_ok_k
+            "aidrin.report.governance.compute_k_anonymity", side_effect=_ok_k
         ), patch(
-            "web.routes.metrics.compute_l_diversity", side_effect=_ok_l
+            "aidrin.report.governance.compute_l_diversity", side_effect=_ok_l
         ), patch(
-            "web.routes.metrics.compute_t_closeness", side_effect=_ok_t
+            "aidrin.report.governance.compute_t_closeness", side_effect=_ok_t
         ), patch(
-            "web.routes.metrics.compute_entropy_risk", side_effect=_ok_e
+            "aidrin.report.governance.compute_entropy_risk", side_effect=_ok_e
         ), patch(
-            "web.routes.metrics.generate_single_attribute_MM_risk_scores_groupby",
+            "aidrin.report.governance.generate_single_attribute_MM_risk_scores_groupby",
             wraps=generate_single_attribute_MM_risk_scores_groupby,
         ) as spy:
-            _build_data_governance_section(("unused", "data.csv", ".csv"), include_visualizations=True)
+            build_data_governance_section(("unused", "data.csv", ".csv"), include_visualizations=True)
 
         spy.assert_called_once()
         args, kwargs = spy.call_args
@@ -94,22 +94,22 @@ class TestReadinessSingleAttributeMmMatchesPrivacy(unittest.TestCase):
         )
         privacy_stats = privacy["Descriptive statistics of the risk scores"]
 
-        with patch("web.routes.metrics.read_file", return_value=df), patch(
-            "web.routes.metrics._auto_select_fairness_columns",
+        with patch("aidrin.report.governance.read_file", return_value=df), patch(
+            "aidrin.report.governance.auto_select_fairness_columns",
             return_value={"target_column": None},
         ), patch(
-            "web.routes.metrics._auto_select_governance_columns",
+            "aidrin.report.governance.auto_select_governance_columns",
             return_value=_GOV_SELECTION,
         ), patch(
-            "web.routes.metrics.compute_k_anonymity", side_effect=_ok_k
+            "aidrin.report.governance.compute_k_anonymity", side_effect=_ok_k
         ), patch(
-            "web.routes.metrics.compute_l_diversity", side_effect=_ok_l
+            "aidrin.report.governance.compute_l_diversity", side_effect=_ok_l
         ), patch(
-            "web.routes.metrics.compute_t_closeness", side_effect=_ok_t
+            "aidrin.report.governance.compute_t_closeness", side_effect=_ok_t
         ), patch(
-            "web.routes.metrics.compute_entropy_risk", side_effect=_ok_e
+            "aidrin.report.governance.compute_entropy_risk", side_effect=_ok_e
         ):
-            section = _build_data_governance_section(("unused", "data.csv", ".csv"))
+            section = build_data_governance_section(("unused", "data.csv", ".csv"))
 
         by_qi = section["details"]["single_attribute_risk"]["by_quasi_identifier"]
         for col in ("age", "sex"):

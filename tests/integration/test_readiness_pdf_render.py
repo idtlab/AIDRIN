@@ -1,6 +1,6 @@
 """Renders a readiness report PDF for real, without mocking WeasyPrint.
 
-Every other PDF test patches ``web.readiness.pdf._weasyprint``, which keeps them
+Every other PDF test patches ``aidrin.report.pdf.pdf._weasyprint``, which keeps them
 fast and portable but means WeasyPrint itself is never exercised. A WeasyPrint
 upgrade can therefore go green in CI while the rendered document is broken.
 
@@ -27,11 +27,11 @@ def _weasyprint_renderable():
     """True when WeasyPrint can actually load, not merely import.
 
     The Python package imports fine without its native libraries; the failure
-    only appears when the CFFI bindings are loaded. web.readiness.pdf._weasyprint
+    only appears when the CFFI bindings are loaded. aidrin.report.pdf.pdf._weasyprint
     is the same hook the application uses, so this mirrors production exactly.
     """
     try:
-        from web.readiness.pdf import _weasyprint
+        from aidrin.report.pdf.pdf import _weasyprint
 
         _weasyprint()
         return True

@@ -14,7 +14,7 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 
-from web.routes import utils as web_utils
+from aidrin.report import charts as charts_module
 from web.routes.utils import categorical_bars
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -23,9 +23,9 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 def _drawn(df, column, **kwargs):
     """Return (labels top-to-bottom, values, figure height) for one chart."""
     captured = {}
-    real_labels = web_utils.plt.Axes.set_yticklabels
-    real_barh = web_utils.plt.Axes.barh
-    real_subplots = web_utils.plt.subplots
+    real_labels = charts_module.plt.Axes.set_yticklabels
+    real_barh = charts_module.plt.Axes.barh
+    real_subplots = charts_module.plt.subplots
 
     def labels_spy(self, labels, *a, **kw):
         captured["labels"] = [str(x) for x in labels]
@@ -41,16 +41,16 @@ def _drawn(df, column, **kwargs):
         captured["figsize"] = kw.get("figsize")
         return real_subplots(*a, **kw)
 
-    real_text = web_utils.plt.Axes.text
+    real_text = charts_module.plt.Axes.text
 
     def text_spy(self, x, y, s, *a, **kw):
         captured.setdefault("value_labels", []).append(s)
         return real_text(self, x, y, s, *a, **kw)
 
-    with mock.patch.object(web_utils.plt.Axes, "set_yticklabels", labels_spy), \
-         mock.patch.object(web_utils.plt.Axes, "barh", barh_spy), \
-         mock.patch.object(web_utils.plt.Axes, "text", text_spy), \
-         mock.patch.object(web_utils.plt, "subplots", subplots_spy):
+    with mock.patch.object(charts_module.plt.Axes, "set_yticklabels", labels_spy), \
+         mock.patch.object(charts_module.plt.Axes, "barh", barh_spy), \
+         mock.patch.object(charts_module.plt.Axes, "text", text_spy), \
+         mock.patch.object(charts_module.plt, "subplots", subplots_spy):
         categorical_bars(df, [column], **kwargs)
     return captured
 
@@ -81,14 +81,14 @@ def test_sparse_bars_are_centred_in_the_spare_slots():
     positions = two["positions"]
     assert len(positions) == 2
     midpoint = sum(positions) / len(positions)
-    assert midpoint == (web_utils._CATEGORICAL_SLOTS - 1) / 2
+    assert midpoint == (charts_module._CATEGORICAL_SLOTS - 1) / 2
 
 
 def test_a_full_chart_uses_every_slot():
     # Nine categories plus the rollup exactly fills the ten slots.
     df = pd.DataFrame({"c": sum(([f"c{i}"] * (20 - i) for i in range(15)), [])})
     drawn = _drawn(df, "c")
-    assert len(drawn["values"]) == web_utils._CATEGORICAL_SLOTS
+    assert len(drawn["values"]) == charts_module._CATEGORICAL_SLOTS
     assert drawn["positions"][0] == 0
 
 
@@ -145,7 +145,7 @@ def test_no_rollup_when_everything_fits():
 def test_rollup_reports_how_many_categories_it_stands_for():
     df = pd.DataFrame({"c": sum(([f"c{i}"] * (20 - i) for i in range(15)), [])})
     drawn = _drawn(df, "c")
-    hidden = df["c"].value_counts().iloc[web_utils._CATEGORICAL_MAX_BARS:]
+    hidden = df["c"].value_counts().iloc[charts_module._CATEGORICAL_MAX_BARS:]
     assert drawn["values"][-1] == int(hidden.sum())
     # Carried in the bar's own value label, next to its count and percentage.
     assert "6 categories" in drawn["value_labels"][-1]

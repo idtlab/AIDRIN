@@ -1079,6 +1079,131 @@ def run_data_quality(
 run_all_data_quality = run_data_quality
 
 
+def run_readiness_report(
+    file_path: str,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    *,
+    fair_metadata: Optional[str] = None,
+    fair_standard: str = "auto",
+    include_visualizations: bool = False,
+    strip_visualizations: Optional[bool] = None,
+    sections: Optional[List[str]] = None,
+    loader: Optional[str] = None,
+    selected_keys: Optional[List[str]] = None,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """Build the AI Data Readiness Report JSON for a dataset (no Flask/Redis).
+
+    Section keys match ``GET /readiness-report`` (``dataset_overview``,
+    ``data_quality``, …). When *fair_metadata* is set, FAIR results from
+    ``calculate_fair_compliance`` are attached as ``fair_compliance``.
+
+    Visualizations are omitted by default via ``include_visualizations`` (builders
+    do not emit chart payloads). Pass ``include_visualizations=True`` to embed
+    them (including dataset-overview charts via the same renderer as full PDF).
+    ``strip_visualizations`` only controls whether the optional FAIR appendix
+    drops its ``"Pie chart"`` image (defaults to the opposite of
+    ``include_visualizations``); it is not applied to the readiness sections,
+    whose payloads are keyed by column name and must not be substring-stripped.
+    """
+    from aidrin.file_handling.custom_loader import using_custom_loader
+    from aidrin.report.builder import build_readiness_report
+
+    if not os.path.exists(file_path):
+        raise ValueError(f"File not found: {file_path}")
+
+    if strip_visualizations is None:
+        strip_visualizations = not include_visualizations
+
+    file_info = _build_file_info(
+        file_path,
+        file_type,
+        file_name,
+        selected_keys=_normalize_list(selected_keys),
+    )
+
+    fair_data = None
+    if fair_metadata:
+        _log_progress(f"Scoring FAIR metadata: {fair_metadata}", verbose)
+        # Keep FAIR chart when the caller asked for visualizations.
+        fair_data = calculate_fair_compliance(
+            fair_metadata,
+            fair_standard,
+            strip_visualizations=strip_visualizations,
+        )
+
+    # Overview charts live in web.routes.utils; reuse the PDF helper so --viz
+    # embeds the same keys as the web report / full PDF (lazy import keeps the
+    # default no-viz path free of that dependency).
+    render_overview_charts = None
+    if include_visualizations:
+        from aidrin.headless.readiness_pdf import _overview_chart_renderer
+
+        render_overview_charts = _overview_chart_renderer
+
+    _log_progress(f"Building readiness report for {file_path}", verbose)
+    start = time.time()
+    with using_custom_loader(loader):
+        with using_selected_keys(_normalize_list(selected_keys)):
+            report = build_readiness_report(
+                file_info,
+                include_visualizations=include_visualizations,
+                fair_data=fair_data,
+                sections=sections,
+                render_overview_charts=render_overview_charts,
+            )
+    _log_progress(
+        f"Readiness report built in {time.time() - start:.2f}s",
+        verbose,
+    )
+
+    return _sanitize(report)
+
+
+def run_readiness_report_pdf(
+    file_path: str,
+    file_type: Optional[str] = None,
+    file_name: Optional[str] = None,
+    *,
+    mode: str = "scorecard",
+    fair_metadata: Optional[str] = None,
+    fair_standard: str = "auto",
+    fair_data: Optional[Dict[str, Any]] = None,
+    sections: Optional[Dict[str, Any]] = None,
+    visualizations: Optional[Dict[str, Any]] = None,
+    section_errors: Optional[Dict[str, str]] = None,
+    loader: Optional[str] = None,
+    selected_keys: Optional[List[str]] = None,
+    verbose: bool = False,
+) -> bytes:
+    """Render a readiness report PDF (scorecard or full) and return the bytes.
+
+    Thin wrapper around ``aidrin.headless.readiness_pdf.run_readiness_report_pdf``.
+    Uses packaged ``aidrin.report.pdf`` templates/static (no ``web`` import).
+    Raises ``RuntimeError`` when WeasyPrint or its native libraries are missing.
+    """
+    from aidrin.headless.readiness_pdf import (
+        run_readiness_report_pdf as _run_readiness_report_pdf,
+    )
+
+    return _run_readiness_report_pdf(
+        file_path,
+        file_type=file_type,
+        file_name=file_name,
+        mode=mode,
+        fair_metadata=fair_metadata,
+        fair_standard=fair_standard,
+        fair_data=fair_data,
+        sections=sections,
+        visualizations=visualizations,
+        section_errors=section_errors,
+        loader=loader,
+        selected_keys=selected_keys,
+        verbose=verbose,
+    )
+
+
 def run_privacy_assessment(
     file_path: str,
     file_type: Optional[str] = None,

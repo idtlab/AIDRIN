@@ -1324,6 +1324,160 @@ _DCAT_SAMPLE = os.path.join(_REPO, "examples", "sample_data", "dcat", "BUTTER-E.
 _DATACITE_SAMPLE = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "datacite_rest_default.json")
 
 
+class TestQuietReadinessPdfLoggers(unittest.TestCase):
+    def test_raises_noisy_loggers_to_error_then_restores(self):
+        import logging
+
+        from aidrin.headless.cli import (
+            _READINESS_PDF_QUIET_LOGGERS,
+            _quiet_readiness_pdf_loggers,
+        )
+
+        logger = logging.getLogger(_READINESS_PDF_QUIET_LOGGERS[0])
+        previous = logger.level
+        logger.setLevel(logging.INFO)
+        with _quiet_readiness_pdf_loggers(verbose=False):
+            self.assertEqual(logger.level, logging.ERROR)
+        self.assertEqual(logger.level, logging.INFO)
+        logger.setLevel(previous)
+
+    def test_verbose_leaves_levels_unchanged(self):
+        import logging
+
+        from aidrin.headless.cli import (
+            _READINESS_PDF_QUIET_LOGGERS,
+            _quiet_readiness_pdf_loggers,
+        )
+
+        logger = logging.getLogger(_READINESS_PDF_QUIET_LOGGERS[0])
+        previous = logger.level
+        logger.setLevel(logging.DEBUG)
+        with _quiet_readiness_pdf_loggers(verbose=True):
+            self.assertEqual(logger.level, logging.DEBUG)
+        logger.setLevel(previous)
+
+
+class TestReadinessReportCommand(unittest.TestCase):
+    """`aidrin readiness-report` JSON (+ optional mocked PDF) for a dataset."""
+
+    def setUp(self):
+        self.csv = _write_csv(_sample_df(40))
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        _clean(self.csv)
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_json_stdout_without_output_file(self):
+        stdout, stderr, code = _run_cli("readiness-report", self.csv)
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["success"])
+        for key in (
+            "dataset_overview",
+            "data_quality",
+            "impact_on_ai",
+            "fairness_bias",
+            "data_governance",
+        ):
+            self.assertIn(key, payload)
+        self.assertNotIn("fair_compliance", payload)
+
+    def test_output_file_skips_stdout(self):
+        out = os.path.join(self.tmpdir, "report.json")
+        stdout, stderr, code = _run_cli("readiness-report", self.csv, "-o", out)
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertEqual(stdout, "")
+        with open(out, encoding="utf-8") as f:
+            payload = json.load(f)
+        self.assertTrue(payload["success"])
+        self.assertIn("data_quality", payload)
+        self.assertIn("Results written to:", stderr)
+
+    def test_pdf_out_alone_skips_stdout(self):
+        out_pdf = os.path.join(self.tmpdir, "report.pdf")
+        with patch(
+            "aidrin.headless.cli._local_api.run_readiness_report_pdf",
+            return_value=b"%PDF-1.4 cli-mock",
+        ):
+            stdout, stderr, code = _run_cli(
+                "readiness-report", self.csv, "--pdf-out", out_pdf
+            )
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertEqual(stdout, "")
+        with open(out_pdf, "rb") as f:
+            self.assertEqual(f.read(), b"%PDF-1.4 cli-mock")
+        self.assertIn("PDF written to:", stderr)
+
+    def test_fair_metadata_attached(self):
+        stdout, stderr, code = _run_cli(
+            "readiness-report",
+            self.csv,
+            "--fair-metadata",
+            _DCAT_SAMPLE,
+            "--fair-standard",
+            "dcat-us-1.1",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(
+            payload["fair_compliance"]["FAIR Compliance Checks"]["Total Checks"],
+            "20/26",
+        )
+        self.assertNotIn("Pie chart", payload["fair_compliance"])
+
+    def test_pdf_mode_requires_pdf_out(self):
+        _stdout, stderr, code = _run_cli(
+            "readiness-report", self.csv, "--pdf-mode", "full"
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("--pdf-mode requires --pdf-out", stderr)
+
+    def test_pdf_out_writes_bytes_without_recomputing_when_mocked(self):
+        out_json = os.path.join(self.tmpdir, "report.json")
+        out_pdf = os.path.join(self.tmpdir, "report.pdf")
+        with patch(
+            "aidrin.headless.cli._local_api.run_readiness_report_pdf",
+            return_value=b"%PDF-1.4 cli-mock",
+        ) as mock_pdf:
+            stdout, stderr, code = _run_cli(
+                "readiness-report",
+                self.csv,
+                "-o",
+                out_json,
+                "--pdf-out",
+                out_pdf,
+                "--pdf-mode",
+                "scorecard",
+            )
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertEqual(stdout, "")
+        with open(out_json, encoding="utf-8") as f:
+            self.assertTrue(json.load(f)["success"])
+        with open(out_pdf, "rb") as f:
+            self.assertEqual(f.read(), b"%PDF-1.4 cli-mock")
+        self.assertIn("PDF written to:", stderr)
+        mock_pdf.assert_called_once()
+        self.assertEqual(mock_pdf.call_args.kwargs["mode"], "scorecard")
+        self.assertIn("sections", mock_pdf.call_args.kwargs)
+
+    def test_selected_keys_on_hdf5(self):
+        h5 = os.path.join(_REPO, "examples", "sample_data", "h5", "unit_audit_demo.h5")
+        stdout, stderr, code = _run_cli(
+            "readiness-report",
+            h5,
+            "--selected-keys",
+            "environment/temperature,environment/pressure",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        overview = payload["dataset_overview"]
+        self.assertNotIn("error", overview)
+        self.assertEqual(overview["file_metadata"]["columns"], 2)
+
+
 class TestFairCommand(unittest.TestCase):
     """`aidrin fair <metadata.json> --standard ...` scores metadata, no dataset needed."""
 

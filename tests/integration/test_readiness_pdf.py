@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 
-@patch("web.readiness.pdf._weasyprint")
+@patch("aidrin.report.pdf.pdf._weasyprint")
 def test_readiness_report_pdf_download(mock_weasyprint, uploaded_client):
     mock_instance = MagicMock()
     mock_instance.write_pdf.return_value = b"%PDF-1.4 test"
