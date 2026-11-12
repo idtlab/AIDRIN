@@ -19,6 +19,10 @@ from scipy.stats import gaussian_kde
 # builders that share this process so concurrent requests cannot cross-contaminate figures.
 MATPLOTLIB_PLOT_LOCK = threading.Lock()
 
+# Every distribution chart in the Data Overview uses this figure size, so the
+# cards in the grid line up whatever kind of chart they hold.
+_DISTRIBUTION_FIGSIZE = (4, 3)
+
 
 def _finite_values(series):
     """Numeric values with NaN *and* infinities removed.
@@ -152,18 +156,26 @@ def _encode_figure(fig, dpi):
     return encoded_img
 
 
-def summary_histograms(df, figsize=(4, 3), dpi=150):
-    """Generate base64-encoded KDE distribution plots for all numeric columns.
+def summary_histograms(df, columns=None, figsize=_DISTRIBUTION_FIGSIZE, dpi=150):
+    """Generate base64-encoded KDE distribution plots.
 
-    Paired with :func:`continuous_bars`, which draws the same columns as a
-    histogram; both emit a key per numeric column so the per-chart switch in the
-    Data Overview never dead-ends on a card.
+    ``columns`` restricts the plots to the given columns (used to plot only
+    columns whose semantic role is *continuous*); when ``None`` it falls back
+    to every numeric column for backward compatibility.
+
+    :func:`continuous_bars` draws the same columns as a histogram so the Data
+    Overview can offer a per-chart switch. It skips columns with nothing to
+    bin, so a column with no finite values yields a KDE key here and no bar
+    key; the switch is only offered where both exist.
     """
     curve_color = "#4485F4"
 
+    if columns is None:
+        columns = list(df.select_dtypes(include="number").columns)
+
     line_graphs = {}
     with MATPLOTLIB_PLOT_LOCK:
-        for column in df.select_dtypes(include="number").columns:
+        for column in columns:
             fig, ax = plt.subplots(figsize=figsize)
             fig.patch.set_alpha(0)
             ax.set_facecolor("none")
@@ -187,32 +199,43 @@ def summary_histograms(df, figsize=(4, 3), dpi=150):
     return line_graphs
 
 
-def continuous_bars(df, figsize=(4, 3), dpi=150):
-    """Generate base64-encoded histograms for all numeric columns.
+def continuous_bars(df, columns=None, figsize=_DISTRIBUTION_FIGSIZE, dpi=150):
+    """Generate base64-encoded binned-histogram bars for continuous columns.
 
-    The bar twin of :func:`summary_histograms`: same columns, same keys, so the
-    Data Overview can offer both and let the reader switch per chart (issue
-    #212). A KDE smooths over gaps in data that is continuous by dtype but
-    effectively discrete, which a histogram shows plainly.
+    The twin of :func:`summary_histograms`: same columns, same keys, drawn as
+    a binned histogram instead of a KDE curve. A KDE smooths the distribution,
+    which hides the gaps in data that is continuous by dtype but effectively
+    discrete (issue #212), so the Data Overview ships both and lets the reader
+    switch per chart. Columns with no non-null values are skipped — there is
+    nothing to bin, and a blank card is worse than no card.
+
+    ``columns`` restricts the plots the same way :func:`summary_histograms`
+    does. Categorical columns are not covered here; they get value-count bars
+    from :func:`categorical_bars` instead.
     """
     bar_color = "#4485F4"
 
+    if columns is None:
+        columns = list(df.select_dtypes(include="number").columns)
+
     bar_graphs = {}
     with MATPLOTLIB_PLOT_LOCK:
-        for column in df.select_dtypes(include="number").columns:
+        for column in columns:
+            values = _finite_values(df[column])
+            if values.size == 0:
+                continue
+
             fig, ax = plt.subplots(figsize=figsize)
             fig.patch.set_alpha(0)
             ax.set_facecolor("none")
 
-            values = _finite_values(df[column])
-            if values.size:
-                ax.hist(
-                    values,
-                    bins=_bin_count(values),
-                    color=bar_color,
-                    edgecolor="white",
-                    linewidth=0.5,
-                )
+            ax.hist(
+                values,
+                bins=_bin_count(values),
+                color=bar_color,
+                edgecolor="white",
+                linewidth=0.5,
+            )
 
             _style_distribution_axes(ax, "Count")
             fig.tight_layout(pad=0.5)
@@ -220,6 +243,123 @@ def continuous_bars(df, figsize=(4, 3), dpi=150):
             bar_graphs[f"{column}_light"] = _encode_figure(fig, dpi)
 
     return bar_graphs
+
+
+# Individual categories shown before the tail is rolled up. Nine leaves room
+# for the "Other" bar inside a fixed ten-slot axis.
+_CATEGORICAL_MAX_BARS = 9
+# Every categorical chart is laid out on this many slots whether or not it fills
+# them, so bar thickness is identical across columns and the cards in the grid
+# are all the same height. Fewer categories buy blank space, not fatter bars.
+_CATEGORICAL_SLOTS = 10
+# Muted fill for the rolled-up tail, so it reads as a summary, not a category.
+_OTHER_BAR_COLOR = "#c7d6f5"
+# A bar at least this fraction of the widest gets its label drawn inside, where
+# it cannot run off the right edge.
+_LABEL_INSIDE_FRACTION = 0.55
+
+
+def categorical_bars(df, columns, max_categories=_CATEGORICAL_MAX_BARS):
+    """Generate base64-encoded value-count bar charts for categorical columns.
+
+    KDE curves are meaningless for discrete/coded columns, so categorical
+    columns (including numeric codes like ``flavor``) get a value-count bar
+    chart instead.
+
+    Bars are horizontal, matching every other chart in the app and letting long
+    category names ("Married-spouse-absent", "Dominican-Republic") read at full
+    length instead of being rotated and clipped.
+
+    Every chart is drawn on a fixed ``_CATEGORICAL_SLOTS``-slot axis at the same
+    figure size as the continuous charts, and vertically centred, so a
+    two-category column and a ten-category one produce bars of the same
+    thickness and cards of the same height throughout the grid — the axis gains
+    blank space rather than the bars stretching to fill it.
+
+    Categories beyond ``max_categories`` are summed into a single ``Other`` bar
+    rather than dropped, so the chart always accounts for every non-null row and
+    the size of the tail stays visible. How many categories it stands for is
+    carried in that bar's value label, keeping the axis tick to a plain
+    ``Other``.
+
+    Ordering: numeric and boolean categories read in value order, so a 1-5
+    rating is a scale rather than a frequency ranking. Everything else has no
+    natural order and reads largest-first.
+    """
+    text_color = "#6b7280"
+    bar_color = "#4485F4"
+
+    bars = {}
+    with MATPLOTLIB_PLOT_LOCK:
+        for column in columns:
+            series = df[column]
+            total = int(series.notna().sum())
+            counts = series.value_counts(dropna=True)
+            if counts.empty or total == 0:
+                continue
+
+            shown = counts.head(max_categories)
+            hidden = counts.iloc[max_categories:]
+            if pd.api.types.is_numeric_dtype(shown.index) or pd.api.types.is_bool_dtype(shown.index):
+                shown = shown.sort_index()
+            else:
+                shown = shown.sort_values(ascending=False)
+
+            labels = [str(i) for i in shown.index]
+            values = [int(v) for v in shown.values]
+            colors = [bar_color] * len(values)
+            # Per-bar suffix; only the rollup carries one.
+            notes = [""] * len(values)
+            if len(hidden):
+                labels.append("Other")
+                values.append(int(hidden.sum()))
+                colors.append(_OTHER_BAR_COLOR)
+                notes.append(f" · {len(hidden)} categories")
+
+            n = len(values)
+            slots = max(n, _CATEGORICAL_SLOTS)
+            # Centre the bars in the slots, so the slack sits above and below.
+            offset = (slots - n) / 2
+            positions = [offset + i for i in range(n)]
+
+            # Same figure size as the continuous charts, so every card in the Data
+            # Overview grid is the same height.
+            fig, ax = plt.subplots(figsize=_DISTRIBUTION_FIGSIZE)
+            fig.patch.set_alpha(0)
+            ax.set_facecolor("none")
+
+            ax.barh(positions, values, color=colors, height=0.7)
+            ax.set_yticks(positions)
+            ax.set_yticklabels(labels, fontsize=7, color=text_color)
+            ax.set_xlabel("Count", fontsize=10, color=text_color)
+            ax.tick_params(axis="x", colors=text_color, labelsize=8)
+            ax.invert_yaxis()  # first category at the top
+            ax.set_ylim(slots - 0.5, -0.5)
+
+            widest = max(values)
+            ax.set_xlim(0, widest * 1.3)
+            for position, value, color, note in zip(positions, values, colors, notes):
+                inside = value >= widest * _LABEL_INSIDE_FRACTION
+                ax.text(
+                    value - widest * 0.02 if inside else value + widest * 0.02,
+                    position,
+                    f"{value:,} ({value / total * 100:.1f}%){note}",
+                    ha="right" if inside else "left",
+                    va="center",
+                    fontsize=6.5,
+                    # White reads on the solid blue fill but not on the muted
+                    # "Other" bar, which keeps the normal text colour.
+                    color="white" if inside and color == bar_color else text_color,
+                    fontweight="bold" if inside and color == bar_color else "normal",
+                )
+
+            for spine in ax.spines.values():
+                spine.set_color(text_color)
+            fig.tight_layout(pad=0.5)
+
+            bars[f"{column}_light"] = _encode_figure(fig, 150)
+
+    return bars
 
 
 def categorical_distribution_charts(df, top_n=10):

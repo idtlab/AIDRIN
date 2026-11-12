@@ -29,16 +29,18 @@ from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.root_reader import rootReader
 from aidrin.file_handling.readers.structured import dropped_columns
 from web.routes.utils import (
-    clear_all_user_cache,
     build_file_info,
+    categorical_bars,
+    clear_all_user_cache,
     confine_to_upload_folder,
+    continuous_bars,
     describe_loader_error,
     ensure_json_serializable,
     generate_metric_cache_key,
     get_current_user_id,
+    infer_column_roles,
     is_metric_cache_valid,
     load_dataframe,
-    continuous_bars,
     summary_histograms,
 )
 
@@ -149,6 +151,8 @@ def inspector():
             session["uploaded_file_path"] = file_path
             session["uploaded_file_type"] = file_type
             session.pop("selected_keys", None)
+            # Column-role overrides are per-dataset; drop any from a prior file.
+            session.pop("column_roles", None)
             session.pop("upload_error", None)
             # This feature owns session["intent"], so a new dataset drops it.
             session.pop("intent", None)
@@ -614,11 +618,29 @@ def summary_statistics():
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200
 
-        # Restrict to numeric columns: describe() would otherwise fall back to
-        # object-column stats (top/freq are strings) and the numeric formatter
-        # below would fail on them. Datasets with no numerical features simply
-        # get an empty numerical summary (issue #125).
-        numeric_df = df.select_dtypes(include="number")
+        # Classify columns by *semantic role* rather than raw dtype, so numeric
+        # codes (e.g. a class label) and identifiers (e.g. a near-unique index)
+        # are not summarized as if they were continuous measurements. User
+        # overrides stored in the session take precedence over the heuristic.
+        role_overrides = session.get("column_roles", {})
+        column_roles = infer_column_roles(df, role_overrides)
+        continuous_columns = [c for c in df.columns if column_roles[c] == "continuous"]
+        categorical_columns = [c for c in df.columns if column_roles[c] == "categorical"]
+        identifier_columns = [c for c in df.columns if column_roles[c] == "identifier"]
+
+        # describe() runs only on continuous columns. Datasets with no continuous
+        # features simply get an empty numerical summary (issue #125).
+        #
+        # A column's role can be a user override rather than the inferred dtype
+        # (e.g. forcing a text column to "continuous"), so coerce to numeric here
+        # too — the same treatment summary_histograms/continuous_bars already
+        # give it — rather than handing describe() raw strings: its "top"/"freq"
+        # stats for an object column reach the formatter below, whose abs(x)
+        # raises TypeError on a string and 500s the whole overview.
+        numeric_df = df[continuous_columns].apply(lambda s: pd.to_numeric(s, errors="coerce"))
+        # A column that coerced to all-NaN has nothing to summarize; keeping it
+        # would describe() it into a column of literal "nan" strings.
+        numeric_df = numeric_df.dropna(axis=1, how="all")
         if numeric_df.shape[1] == 0:
             summary_statistics = {}
         else:
@@ -626,21 +648,13 @@ def summary_statistics():
                 lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
             ).to_dict()
 
-        histograms = summary_histograms(df)
-        histogram_bars = continuous_bars(df)
-
-        # Booleans are treated as categorical (they're excluded from describe()
-        # and select_dtypes("number") above, so they belong with the categorical
-        # summary, not the numerical one).
-        numerical_columns = [
-            col for col, dtype in df.dtypes.items()
-            if pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
-        ]
-        categorical_columns = [
-            col for col, dtype in df.dtypes.items()
-            if pd.api.types.is_string_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
-        ]
-        all_features = numerical_columns + categorical_columns
+        # KDE curves for continuous columns; value-count bars for categorical
+        # ones (a KDE of a discrete code is meaningless). Identifiers get neither.
+        histograms = summary_histograms(df, columns=continuous_columns)
+        categorical_histograms = categorical_bars(df, categorical_columns)
+        # Binned twin of each KDE curve, so the reader can switch a continuous
+        # chart to bars when the data is effectively discrete (issue #212).
+        histogram_bars = continuous_bars(df, columns=continuous_columns)
 
         for v in summary_statistics.values():
             for old_key in list(v.keys()):
@@ -651,6 +665,9 @@ def summary_statistics():
         hdf5_multi_dataset = file_type == ".h5" and bool(selected)
         selected_dataset_keys = selected
 
+        # Per-column summary for categorical features (numeric codes included).
+        # Reports non-null count, distinct values, the most frequent value, its
+        # frequency, and that frequency as a percentage of the non-null values.
         categorical_summary = {}
         for col in categorical_columns:
             # value_counts() and nunique() both hash, so a column holding
@@ -671,17 +688,32 @@ def summary_statistics():
                 "freq_pct": round(freq / count * 100, 1) if count else 0.0,
             }
 
+        # Compact per-identifier note (excluded from stats/plots).
+        identifier_summary = {
+            str(col): {
+                "count": int(df[col].notna().sum()),
+                "unique": int(df[col].nunique(dropna=True)),
+            }
+            for col in identifier_columns
+        }
+
+        all_features = continuous_columns + categorical_columns
+
         response_data = ensure_json_serializable({
             "success": True,
             "message": "File uploaded successfully",
             "records_count": len(df),
             "features_count": len(df.columns),
             "categorical_features": list(categorical_columns),
-            "numerical_features": list(numerical_columns),
+            "numerical_features": list(continuous_columns),
+            "identifier_features": list(identifier_columns),
             "all_features": all_features,
+            "column_roles": {str(c): r for c, r in column_roles.items()},
             "summary_statistics": summary_statistics,
             "categorical_summary": categorical_summary,
+            "identifier_summary": identifier_summary,
             "histograms": histograms,
+            "categorical_histograms": categorical_histograms,
             "histogram_bars": histogram_bars,
             "hdf5_multi_dataset": hdf5_multi_dataset,
             # Columns the reader had to exclude to produce a tabular frame
@@ -700,6 +732,32 @@ def summary_statistics():
     except Exception as e:
         file_upload_time_log.error("Error computing summary statistics: %s", e, exc_info=True)
         return jsonify({"success": False, "message": "An internal error occurred"})
+
+
+@core_bp.route("/column-roles", methods=["POST"])
+def set_column_roles():
+    """Persist user overrides of inferred column roles for the current session.
+
+    Accepts a JSON body ``{"column_roles": {col: role}}`` (or a bare
+    ``{col: role}`` map). The full override set replaces any previous one, so
+    sending ``{}`` resets to the inferred defaults. The Data Overview re-fetches
+    ``/summary-statistics`` afterwards to recompute with the new roles.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        overrides = data.get("column_roles", data)
+        if not isinstance(overrides, dict):
+            return jsonify({"success": False, "message": "Invalid payload"}), 200
+        valid_roles = {"continuous", "categorical", "identifier"}
+        cleaned = {str(c): r for c, r in overrides.items() if r in valid_roles}
+        session["column_roles"] = cleaned
+        # Overrides change which columns each metric treats as numeric/categorical,
+        # so any cached metric results are now stale.
+        clear_all_user_cache()
+        return jsonify({"success": True, "column_roles": cleaned})
+    except Exception as e:
+        file_upload_time_log.error("Error setting column roles: %s", e, exc_info=True)
+        return jsonify({"success": False, "message": "An internal error occurred"}), 200
 
 
 @core_bp.route("/feature-set", methods=["POST"])

@@ -6,8 +6,12 @@ rarer than the middle ones. Three things caused it, and each is pinned below:
 the kernel losing mass past the data bounds, a density axis that did not start
 at zero, and a histogram bin width that aliased against the sampling grid.
 
-Issue #212: continuous columns get a bar twin so the reader can switch per
-chart.
+Issue #212: continuous columns render as a KDE curve, which smooths over data
+that may be effectively discrete. ``continuous_bars`` supplies a binned-
+histogram twin for every column ``summary_histograms`` draws, so the UI can
+swap between the two without another round trip. Categorical columns are
+excluded on purpose: they already render as value-count bars, and a KDE over
+a discrete code is the thing column roles exist to avoid.
 """
 
 import base64
@@ -24,16 +28,82 @@ from web.routes.utils import (
     summary_histograms,
 )
 
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+INSPECTOR_JS = REPO_ROOT / "web" / "static" / "js" / "inspector.js"
+
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
-INSPECTOR_JS = (
-    pathlib.Path(__file__).resolve().parents[2] / "web" / "static" / "js" / "inspector.js"
-)
+
+
+def _df(n=500):
+    rng = np.random.default_rng(7)
+    return pd.DataFrame(
+        {
+            "age": rng.normal(42, 12, n),
+            "income": rng.lognormal(10.6, 0.45, n),
+            "star_rating": rng.choice([1, 2, 3, 4, 5], n),
+        }
+    )
 
 
 def _grid_frame():
     """The shape of the reported column: an even grid, every value once."""
     return pd.DataFrame({"depth_m": np.arange(0, 28001, 200, dtype=float)})
 
+
+# ---------------------------------------------------------------------------
+# Line/bar toggle (issue #212)
+# ---------------------------------------------------------------------------
+
+def test_every_line_chart_has_a_bar_counterpart():
+    # Without a twin for each column the toggle would dead-end on some cards.
+    df = _df()
+    cols = ["age", "income"]
+    assert set(summary_histograms(df, columns=cols)) == set(continuous_bars(df, columns=cols))
+
+
+def test_bars_are_keyed_for_the_existing_picker():
+    # The JS picker strips a "_light" suffix; a different key renders nothing.
+    bars = continuous_bars(_df(), columns=["age"])
+    assert list(bars) == ["age_light"]
+
+
+def test_bars_are_real_pngs():
+    bars = continuous_bars(_df(), columns=["age"])
+    assert base64.b64decode(bars["age_light"]).startswith(PNG_MAGIC)
+
+
+def test_all_nan_column_is_skipped_not_fatal():
+    # A column that is entirely missing has nothing to bin; it must not take
+    # the whole Data Overview down with it.
+    df = pd.DataFrame({"empty": [np.nan] * 20, "age": np.arange(20.0)})
+    bars = continuous_bars(df, columns=["empty", "age"])
+    assert "empty_light" not in bars
+    assert "age_light" in bars
+
+
+def test_no_columns_gives_no_charts():
+    assert continuous_bars(_df(), columns=[]) == {}
+
+
+def test_toggle_is_wired_in_the_renderer():
+    # The charts are server-rendered PNGs, so the swap happens in the DOM.
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert "function toggleDistributionChart" in source
+    assert "data-chart-card" in source
+    assert "data-chart-bar" in source
+
+
+def test_the_line_png_is_not_mirrored_into_an_attribute():
+    # Each PNG is ~15-30 KB of base64. Copying the line rendering into a
+    # data-attribute as well as the <img> doubled the section's DOM for no
+    # gain, on every card — including the categorical ones with no toggle.
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+    assert "data-chart-line" not in source
+
+
+# ---------------------------------------------------------------------------
+# Reflected KDE (issue #253)
+# ---------------------------------------------------------------------------
 
 class TestReflectedKde(unittest.TestCase):
     def test_density_keeps_all_its_mass(self):
@@ -152,46 +222,6 @@ class TestCurveAndBarsAgree(unittest.TestCase):
         # Neither rendering may imply structure the column does not have.
         self.assertLess(curve_spread, 0.05)
         self.assertLess(bar_spread, 0.05)
-
-
-class TestChartPairing(unittest.TestCase):
-    def _frame(self):
-        rng = np.random.default_rng(3)
-        return pd.DataFrame({
-            "age": rng.normal(40, 9, 120),
-            "rating": rng.integers(1, 6, 120),
-            "label": ["a", "b"] * 60,          # categorical: not charted here
-            "empty": [np.nan] * 120,
-        })
-
-    def test_every_curve_has_a_bar_twin(self):
-        # Without a twin per column the toggle would dead-end on some cards.
-        frame = self._frame()
-        self.assertEqual(
-            set(summary_histograms(frame)),
-            set(continuous_bars(frame)),
-        )
-
-    def test_charts_are_keyed_for_the_existing_picker(self):
-        self.assertEqual(list(continuous_bars(pd.DataFrame({"age": [1.0, 2.0, 3.0]}))), ["age_light"])
-
-    def test_charts_are_real_pngs(self):
-        frame = pd.DataFrame({"age": [1.0, 2.0, 3.0, 4.0]})
-        for charts in (summary_histograms(frame), continuous_bars(frame)):
-            self.assertTrue(base64.b64decode(charts["age_light"]).startswith(PNG_MAGIC))
-
-    def test_degenerate_columns_still_produce_a_card(self):
-        # They charted before this change; dropping them would silently shrink
-        # the Data Overview grid.
-        frame = pd.DataFrame({"empty": [np.nan] * 5, "const": [2.0] * 5})
-        for charts in (summary_histograms(frame), continuous_bars(frame)):
-            self.assertEqual(set(charts), {"empty_light", "const_light"})
-
-    def test_renderer_is_wired_for_the_toggle(self):
-        source = INSPECTOR_JS.read_text(encoding="utf-8")
-        self.assertIn("function toggleDistributionChart", source)
-        self.assertIn("data-chart-bars", source)
-        self.assertIn("data.histogram_bars", source)
 
 
 if __name__ == "__main__":
