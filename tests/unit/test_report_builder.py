@@ -224,6 +224,77 @@ class TestRunReadinessReportPdf(unittest.TestCase):
         self.assertFalse(mock_build_ctx.call_args.kwargs["include_details"])
         mock_render.assert_called_once_with({"file_name": "x.csv"})
 
+    @patch(
+        "aidrin.report.pdf.render_readiness_report_pdf",
+        return_value=b"%PDF-1.4 mock",
+    )
+    @patch(
+        "aidrin.report.pdf.build_pdf_context",
+        return_value={"file_name": "x.csv"},
+    )
+    def test_empty_section_errors_harvests_inline_errors(
+        self, mock_build_ctx, _mock_render
+    ):
+        """Empty section_errors={} must still pick up inline section 'error' keys."""
+        from aidrin.headless import run_readiness_report_pdf
+
+        sections = {
+            slug: {"grade": 1.0, "grade_status": "good", "kpis": []}
+            for slug in SECTION_BUILDERS
+        }
+        sections["impact-on-ai"] = {
+            "error": "Not enough usable columns for correlation analysis after pruning.",
+            "columns_analyzed": [],
+        }
+
+        run_readiness_report_pdf(
+            self.csv,
+            sections=sections,
+            section_errors={},
+        )
+
+        errors = mock_build_ctx.call_args.kwargs["section_errors"]
+        self.assertEqual(
+            errors["impact-on-ai"],
+            "Not enough usable columns for correlation analysis after pruning.",
+        )
+
+    @patch(
+        "aidrin.report.pdf.render_readiness_report_pdf",
+        return_value=b"%PDF-1.4 mock",
+    )
+    @patch(
+        "aidrin.report.pdf.build_pdf_context",
+        return_value={"file_name": "x.csv"},
+    )
+    def test_response_keyed_sections_are_remapped_to_slugs(
+        self, mock_build_ctx, _mock_render
+    ):
+        """run_readiness_report() underscore keys should remap to PDF slugs."""
+        from aidrin.headless import run_readiness_report_pdf
+
+        sections = {
+            "dataset_overview": {
+                "file_size_bytes": 100,
+                "numerical_summary": {},
+                "categorical_summary": {},
+            },
+            "data_quality": {"grade": 1.0, "grade_status": "good", "kpis": []},
+            "impact_on_ai": {"error": "boom"},
+            "fairness_bias": {"grade": 1.0, "grade_status": "good", "kpis": []},
+            "data_governance": {"grade": 1.0, "grade_status": "good", "kpis": []},
+        }
+
+        run_readiness_report_pdf(self.csv, sections=sections)
+
+        passed = mock_build_ctx.call_args.kwargs["sections"]
+        self.assertIn("dataset-overview", passed)
+        self.assertNotIn("dataset_overview", passed)
+        self.assertEqual(
+            mock_build_ctx.call_args.kwargs["section_errors"]["impact-on-ai"],
+            "boom",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
