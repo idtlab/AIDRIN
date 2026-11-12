@@ -608,7 +608,7 @@ REMOTE_MANAGEMENT = {
 
 # Commands that cannot run on an endpoint: they need files or credentials that
 # live on the client machine.
-REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory", "fair"}
+REMOTE_FORBIDDEN = {"add-custom-module", "agentic", "skill", "inventory", "fair", "collection"}
 
 
 REMOTE_HELP = """usage: aidrin remote [--profile NAME] [--endpoint UUID] [--async] [--timeout SECONDS] <command> ...
@@ -993,6 +993,10 @@ def main() -> None:
     )
     _configure_minimal_run_args(custom_parser)
 
+    collection_parser = subparsers.add_parser("collection", help="Assess selected files independently or as a stacked table (pilot)")
+    collection_parser.add_argument("config_path", help="JSON collection config; member paths are relative to this file")
+    collection_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+
     batch_parser = subparsers.add_parser("batch", help="Run metrics from config file (JSON or YAML)")
     batch_parser.add_argument("config_path")
     batch_parser.add_argument("-v", "--verbose", action="store_true", help="Show progress output")
@@ -1269,6 +1273,16 @@ def main() -> None:
                 _dump_result(_round_floats(result))
             else:
                 _summarize_metric(args.command, result)
+            return
+
+        if args.command == "collection":
+            from aidrin.file_handling.collection import load_collection_config
+
+            result = _local_api.run_collection_metrics(**load_collection_config(args.config_path))
+            _write_output_file(result, args.output)
+            _dump_result(result)
+            if result["summary"]["datasets_with_errors"]:
+                sys.exit(1)
             return
 
         if args.command == "batch":

@@ -414,8 +414,8 @@ function loadFileReferenceOptions() {
 
   const request = window.AIDRIN_GLOBUS_MODE
     ? loadGlobusTargetDiscovery()
-    : fetch("/custom-outlier-targets", { method: "POST" }).then((response) =>
-        response.json(),
+    : fetchWorkspaceDataset("/custom-outlier-targets", { method: "POST" }).then(
+        (response) => response.json(),
       );
 
   return request
@@ -847,8 +847,11 @@ function showPanel(panelId, pushHistory) {
   const buttonsContainer = document.getElementById("buttonsContainer");
   if (buttonsContainer) buttonsContainer.style.display = "none";
 
+  if (panelId === "batch-overview") loadWorkspaceOverview();
+
   // Check for cached results and restore them
   _restoreCachedResult(panelId);
+  if (panelId === "data-quality") syncCollectionSelection();
 
   if (panelId === "intent" && !_intentRestored) {
     _intentRestored = true;
@@ -922,7 +925,7 @@ function _restoreCachedResult(panelId) {
     }
   }
 
-  fetch("/cached-result/" + metricName)
+  fetchWorkspaceDataset("/cached-result/" + metricName)
     .then((r) => r.json())
     .then((resp) => {
       if (resp.cached && resp.data && activePanel === panelId) {
@@ -981,7 +984,7 @@ function _restoreFormState(panelId, state) {
   if (!panel) return;
 
   for (const [key, value] of Object.entries(state)) {
-    if (!value) continue;
+    if (!value || key === "collection_file_order") continue;
     if (
       panelId === "variable-unit-validation" &&
       key === "variable_unit_metadata"
@@ -1017,12 +1020,13 @@ function _restoreFormState(panelId, state) {
 
     // Text/hidden inputs
     const input = panel.querySelector(
-      `input[name="${key}"]:not([type="checkbox"])`,
+      `input[name="${key}"]:not([type="checkbox"]):not([type="file"])`,
     );
     if (input) {
       input.value = value;
     }
   }
+  if (panelId === "data-quality") restoreCollectionSelection(state);
 }
 
 // Handle browser back/forward buttons
@@ -1577,7 +1581,7 @@ async function workspaceSubmit(targetUrl) {
 
   // POST to the metric endpoint.
   // Return the promise so withSubmitGuard re-enables the button when it settles.
-  return fetch(targetUrl + "?return_type=json", {
+  return fetchWorkspaceDataset(targetUrl + "?return_type=json", {
     method: "POST",
     body: processedFormData,
   })
@@ -1797,7 +1801,11 @@ function renderWorkspaceResults(data, options) {
       }
 
       // AI Explanation placeholder (filled async if LLM is configured)
-      if (window.AIDRIN_LLM_ENABLED && (hasViz || hasScores)) {
+      if (
+        window.AIDRIN_LLM_ENABLED &&
+        results.format !== "aidrin.collection-assessment" &&
+        (hasViz || hasScores)
+      ) {
         const llmId = "llm-" + pairId;
         html += `<div id="${llmId}" class="mt-3"></div>`;
         if (!skipLLM) {
@@ -1818,17 +1826,19 @@ function renderWorkspaceResults(data, options) {
         }
       }
 
-      // Raw JSON toggle
-      const rawJson = {};
-      for (const [k, v] of Object.entries(displayResults)) {
-        if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
+      if (results.format !== "aidrin.collection-assessment") {
+        // Raw JSON toggle
+        const rawJson = {};
+        for (const [k, v] of Object.entries(displayResults)) {
+          if (!k.toLowerCase().includes("visualization")) rawJson[k] = v;
+        }
+        html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
+        html += `<summary class="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">`;
+        html += `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>`;
+        html += `View raw JSON</summary>`;
+        html += `<pre class="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-700 dark:text-gray-300 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(rawJson, null, 2))}</pre>`;
+        html += `</details>`;
       }
-      html += `<details class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">`;
-      html += `<summary class="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">`;
-      html += `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>`;
-      html += `View raw JSON</summary>`;
-      html += `<pre class="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-700 dark:text-gray-300 overflow-auto" style="max-height: 300px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(rawJson, null, 2))}</pre>`;
-      html += `</details>`;
     }
 
     html += `</div>`; // close card
@@ -2128,6 +2138,8 @@ function renderBeforeAfterTable(before, after) {
  *   side-by-side comparison table instead of two stacked sections
  */
 function renderScoresSection(scores, depth) {
+  if (scores.format === "aidrin.collection-assessment")
+    return renderWorkspaceCollection(scores);
   depth = depth || 0;
   let html = "";
 
@@ -2336,7 +2348,7 @@ function fetchGlobusSummary() {
 
   _beginServerProcessing();
 
-  fetch("/globus/submit", {
+  fetchWorkspaceDataset("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2503,14 +2515,14 @@ function pollGlobusSummary(taskId) {
 
   const poll = () => {
     attempts++;
-    fetch(`/globus/check-task/${taskId}`)
+    fetchWorkspaceDataset(`/globus/check-task/${taskId}`)
       .then((r) => r.json())
       .then((response) => {
         if (response.status === "completed" && response.result) {
           renderGlobusSummary(response.result);
           _endServerProcessing();
           // Cache the result so page reloads don't re-fetch
-          fetch("/globus/cache-summary", {
+          fetchWorkspaceDataset("/globus/cache-summary", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(response.result),
@@ -2617,7 +2629,7 @@ function _submitGlobusDataset(endpointId, filePath, fileName, fileType) {
   if (typeof showToast === "function")
     showToast("Connecting to remote endpoint...", "info");
 
-  fetch("/globus/submit", {
+  fetchWorkspaceDataset("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2711,7 +2723,7 @@ function _setSubmitButtonsDisabled(disabled) {
     });
 }
 
-/** Disable or enable Clear session buttons in the top bar and mobile file chip. */
+/** Disable or enable the New session action in the top bar. */
 function _setClearSessionButtonsDisabled(disabled) {
   document.querySelectorAll('button[onclick="clearFile()"]').forEach((btn) => {
     btn.disabled = disabled;
@@ -2730,13 +2742,7 @@ function _setClearSessionButtonsDisabled(disabled) {
         "pointer-events-none",
       );
       btn.removeAttribute("aria-disabled");
-      if (btn.getAttribute("aria-label") === "Clear uploaded file") {
-        btn.title = "Clear file";
-      } else if (btn.getAttribute("aria-label") === "New session") {
-        btn.title = "Clear session and start over";
-      } else {
-        btn.removeAttribute("title");
-      }
+      btn.title = "Clear session and start over";
     }
   });
 }
@@ -2789,7 +2795,7 @@ function submitGlobusMetric(metricName, params, displayName) {
   const resultsSection = document.getElementById("results-section");
   if (resultsSection) resultsSection.style.display = "block";
 
-  fetch("/globus/submit", {
+  fetchWorkspaceDataset("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2910,7 +2916,7 @@ function loadCustomOutlierTargets() {
   if (window.AIDRIN_GLOBUS_MODE) {
     return loadGlobusCustomOutlierTargets(message);
   }
-  return fetch("/custom-outlier-targets", { method: "POST" })
+  return fetchWorkspaceDataset("/custom-outlier-targets", { method: "POST" })
     .then((response) =>
       response.json().then((data) => ({ ok: response.ok, data })),
     )
@@ -2961,7 +2967,7 @@ function loadGlobusTargetDiscovery() {
   if (cached) globusDiscoveryCache.delete(key);
 
   const entry = { expiresAt: Infinity, promise: null };
-  entry.promise = fetch("/globus/submit", {
+  entry.promise = fetchWorkspaceDataset("/globus/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -3032,7 +3038,7 @@ function pollGlobusCustomOutlierTargets(taskId) {
   return new Promise((resolve, reject) => {
     const poll = () => {
       attempts += 1;
-      fetch(`/globus/check-task/${taskId}`)
+      fetchWorkspaceDataset(`/globus/check-task/${taskId}`)
         .then((r) => r.json())
         .then((data) => {
           if (data.status === "completed") {
@@ -4100,7 +4106,7 @@ function pollAsyncMetric(taskId, metricName, cacheKey, checkUrlBase) {
     const checkUrl = checkUrlBase.includes("globus")
       ? `${checkUrlBase}${taskId}`
       : `${checkUrlBase}${taskId}/${encodeURIComponent(metricName)}`;
-    fetch(checkUrl)
+    fetchWorkspaceDataset(checkUrl)
       .then((r) => r.json())
       .then((response) => {
         const card = document.getElementById(placeholderId);
@@ -5003,7 +5009,10 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
       '<p class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">Processing…</p>';
   }
 
-  return fetch("/fair-assessment", { method: "POST", body: formData })
+  return fetchWorkspaceDataset("/fair-assessment", {
+    method: "POST",
+    body: formData,
+  })
     .then((response) => response.json())
     .then((data) => {
       if (superseded()) return;
@@ -5111,7 +5120,7 @@ function _restoreReadinessFairFromCache(fairPayload) {
 
 /** Restore optional FAIR compliance from server cache (separate lightweight fetch). */
 function _tryRestoreCachedReadinessFair() {
-  return fetch("/cached-result/readiness_report_fair")
+  return fetchWorkspaceDataset("/cached-result/readiness_report_fair")
     .then((r) => r.json())
     .then((resp) => {
       if (
@@ -5265,7 +5274,7 @@ function submitCustomMetric() {
   );
 
   // Return the promise so withSubmitGuard re-enables the button when it settles.
-  return fetch("/custom-metrics?return_type=json", {
+  return fetchWorkspaceDataset("/custom-metrics?return_type=json", {
     method: "POST",
     body: formData,
   })
@@ -5827,7 +5836,7 @@ function selectHdf5Datasets(paths) {
       <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading selected dataset(s)...</p>`;
   }
 
-  fetch("/filter-file", {
+  fetchWorkspaceDataset("/filter-file", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ keys: paths }),
@@ -5885,7 +5894,7 @@ function returnToHdf5DatasetPicker() {
   }
   clearWorkspaceFeatureDropdowns();
 
-  fetch("/clear-dataset-selection", { method: "POST" })
+  fetchWorkspaceDataset("/clear-dataset-selection", { method: "POST" })
     .then((r) => r.json())
     .then((data) => {
       if (data.needs_dataset_selection && data.datasets?.length && container) {
@@ -5943,7 +5952,7 @@ function loadDataOverview(summaryContainerId, histogramsContainerId) {
   const summaryId = summaryContainerId || "workspace-summary";
   const histogramsId = histogramsContainerId || "workspace-histograms";
 
-  return fetch("/summary-statistics")
+  return fetchWorkspaceDataset("/summary-statistics")
     .then((r) => r.json())
     .then((data) => {
       const container = document.getElementById(summaryId);
@@ -6297,7 +6306,7 @@ function _loadReadinessSectionVisualizations(section, root) {
   if (histHost && !histHost.childElementCount)
     histHost.innerHTML = _readinessVizSpinnerHtml();
 
-  return fetch(`/readiness-report/${section}/visualizations`)
+  return fetchWorkspaceDataset(`/readiness-report/${section}/visualizations`)
     .then((r) => r.json())
     .then((resp) => {
       if (!resp.success) {
@@ -6411,7 +6420,7 @@ function _fetchReadinessSection(section, container, renderFn) {
     _updateReadinessExportButton();
     return Promise.resolve();
   }
-  return fetch(`/readiness-report/${section}`)
+  return fetchWorkspaceDataset(`/readiness-report/${section}`)
     .then((r) => r.json())
     .then((resp) => {
       if (!resp.success) {
@@ -6448,7 +6457,7 @@ function _fetchReadinessSection(section, container, renderFn) {
  * @returns {Promise<boolean>} true when all sections were restored from cache
  */
 function _restoreCachedReadinessReport() {
-  return fetch("/cached-result/readiness_report")
+  return fetchWorkspaceDataset("/cached-result/readiness_report")
     .then((r) => r.json())
     .then((resp) => {
       if (
@@ -6615,7 +6624,7 @@ function exportReadinessReportPdf(mode = "scorecard") {
     ? "/readiness-report/pdf?mode=full"
     : "/readiness-report/pdf";
 
-  return fetch(url)
+  return fetchWorkspaceDataset(url)
     .then(async (response) => {
       if (!response.ok) {
         let message = `PDF export failed (${response.status})`;
@@ -8192,7 +8201,7 @@ function initWorkspace() {
   Promise.resolve(loadDataOverview()).finally(initTaskDone);
 
   // Populate feature dropdowns via /feature-set (same as metric.js does)
-  fetch("/feature-set", { method: "POST" })
+  fetchWorkspaceDataset("/feature-set", { method: "POST" })
     .then((r) => r.json())
     .then((data) => {
       if (data.success && typeof populateWorkspaceDropdowns === "function") {
@@ -8597,7 +8606,7 @@ function requestLLMExplanation(
         // Cache the explanation server-side for restore on panel revisit
         const cacheMetric = _panelCacheMap[activePanel];
         if (cacheMetric) {
-          fetch("/llm/cache-explanation", {
+          fetchWorkspaceDataset("/llm/cache-explanation", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -8835,7 +8844,7 @@ function updateIntentSubmitState() {
 
 function skipIntent() {
   closeIntentModal();
-  fetch("/intent/dismiss", {
+  fetchWorkspaceDataset("/intent/dismiss", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
@@ -8900,7 +8909,7 @@ function submitIntent(source) {
   }
   if (busyOverlay) busyOverlay.classList.remove("hidden");
 
-  return fetch("/intent/recommend", {
+  return fetchWorkspaceDataset("/intent/recommend", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ intents: intents, notes: notes }),
@@ -9161,7 +9170,7 @@ function renderIntentRecommendations(data) {
  * renderWorkspaceResults(), which expects metric-result shape.
  */
 function _restoreIntentFromCache() {
-  return fetch("/cached-result/intent")
+  return fetchWorkspaceDataset("/cached-result/intent")
     .then((r) => (r.ok ? r.json() : null))
     .then((resp) => {
       if (resp && resp.data && resp.data.recommendations) {
@@ -9450,7 +9459,7 @@ function loadIntentProfile(inputEl) {
       return;
     }
 
-    fetch("/intent/profile", {
+    fetchWorkspaceDataset("/intent/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(profile),

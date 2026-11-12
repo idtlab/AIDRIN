@@ -77,18 +77,10 @@
       {% else %}
         <!-- File uploaded: show metric workspace -->
 
-        <!-- Mobile file info (visible on small screens) -->
-        <div class="sm:hidden flex items-center gap-2 p-3 mb-4 rounded-lg text-sm" style="background: var(--secondaryColor);">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" viewBox="0 -960 960 960" fill="currentColor"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/></svg>
-          <span class="font-medium truncate">{{ uploaded_file_name }}</span>
-          <button onclick="clearFile()" class="ml-auto p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30" aria-label="Clear file">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
-        </div>
-
         <!-- Metric configuration panels (only one visible at a time) -->
-        <div id="panels-container">
+        <div id="panels-container" data-workspace-file-id="{{ active_file_id or '' }}">
           {% include '_panels/_data_overview.html' %}
+          {% if workspace_files %}{% include '_panels/_batch_overview.html' %}{% endif %}
           {% include '_panels/_intent.html' %}
           {% include '_panels/_profile_builder.html' %}
           {% include '_panels/_readiness_report.html' %}
@@ -115,6 +107,7 @@
 {% endblock %}
 
 {% block scripts_extra %}
+  <script src="{{ url_for('static', filename='js/workspace.js') }}"></script>
   <script src="{{ url_for('static', filename='js/inspector.js') }}"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -130,14 +123,14 @@
       {% elif globus_mode %}
         // Globus mode — flag for workspaceSubmit to route through Globus
         window.AIDRIN_GLOBUS_MODE = true;
-        window.AIDRIN_GLOBUS_ENDPOINT = '{{ globus_endpoint_id }}';
+        window.AIDRIN_GLOBUS_ENDPOINT = {{ globus_endpoint_id | tojson }};
         window.AIDRIN_GLOBUS_CAPABILITIES = {{ globus_capabilities | tojson }};
-        window.AIDRIN_GLOBUS_FILE_PATH = '{{ uploaded_file_path }}';
-        window.AIDRIN_GLOBUS_FILE_NAME = '{{ uploaded_file_name }}';
+        window.AIDRIN_GLOBUS_FILE_PATH = {{ uploaded_file_path | tojson }};
+        window.AIDRIN_GLOBUS_FILE_NAME = {{ uploaded_file_name | tojson }};
         window.AIDRIN_DATASET_NAME = {{ uploaded_file_name | tojson }};
-        window.AIDRIN_GLOBUS_FILE_TYPE = '{{ file_type }}';
+        window.AIDRIN_GLOBUS_FILE_TYPE = {{ file_type | tojson }};
         initFileReferenceTargetPicker();
-        showPanel('data-overview');
+        showPanel(location.hash.slice(1) || 'data-overview');
         // Show Globus info banner + loading spinner for summary stats
         var ws = document.getElementById('workspace-summary');
         if (ws) ws.innerHTML = `
@@ -222,7 +215,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
       renderFiles();
-      {% if upload_error and custom_loaders_enabled %}
+      {% if upload_error and upload_error_tab == 'custom' and custom_loaders_enabled %}
       // Upload errors come from the custom loader form: reopen it.
       switchUploadTab('custom');
       {% endif %}
@@ -259,6 +252,10 @@
         dropzone.addEventListener('drop', function(e) {
           const files = e.dataTransfer.files;
           if (files.length > 0) {
+            if (!fileInput.multiple && files.length !== 1) {
+              showToast("Choose one file for this upload.", "error");
+              return;
+            }
             fileInput.files = files;
             onDrop();
           }

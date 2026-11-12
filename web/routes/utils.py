@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
-from flask import current_app, jsonify, redirect, request, session, url_for
+from flask import current_app, jsonify, redirect, request, session, url_for, has_request_context
 
 from aidrin.file_handling.custom_loader import CustomLoaderError
 from aidrin.file_handling.file_parser import (
@@ -205,10 +205,16 @@ def get_current_user_id():
     return session["user_id"]
 
 
+def dataset_cache_identity(file_name):
+    """Use the workspace file ID where available, including for duplicate names."""
+    file_id = session.get("active_workspace_file_id") if has_request_context() else None
+    return f"file-id:{file_id}" if file_id else f"file:{file_name}"
+
+
 def generate_metric_cache_key(file_name, metric_type, **params):
     """Generate a user-specific cache key for metrics."""
     user_id = get_current_user_id()
-    cache_parts = [f"user:{user_id}", f"file:{file_name}"]
+    cache_parts = [f"user:{user_id}", dataset_cache_identity(file_name)]
 
     if metric_type == "dp":
         features = params.get("features", [])
@@ -301,11 +307,15 @@ def store_result(metric, final_dict):
     user_id = get_current_user_id()
     metric_short = metric.rsplit(".", 1)[-1] if "." in metric else metric
     file_name = session.get("uploaded_file_name") or session.get("globus_file_name") or "unknown"
-    user_key = f"user:{user_id}:file:{file_name}:{metric_short}"
-    current_app.TEMP_RESULTS_CACHE[user_key] = {
-        "data": formatted_final_dict,
-        "timestamp": time.time(),
-    }
+    user_key = f"user:{user_id}:{dataset_cache_identity(file_name)}:{metric_short}"
+    cached = {"data": formatted_final_dict, "timestamp": time.time()}
+    if metric_short == "data_quality":
+        selection = next((value["selection"] for value in formatted_final_dict.values()
+                          if isinstance(value, dict) and value.get("format") == "aidrin.collection-assessment"), None)
+        if selection is not None:
+            cached["collection_file_ids"] = {member["id"] for member in selection}
+            cached["collection_scope"] = request.form.get("collection_scope")
+    current_app.TEMP_RESULTS_CACHE[user_key] = cached
 
     if request.args.get("return_type") == "json":
         return jsonify(formatted_final_dict)

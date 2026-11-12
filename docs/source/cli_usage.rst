@@ -3,6 +3,9 @@
 CLI Usage
 =========
 
+For explicit multi-file selection and independent or stacked table analysis,
+see the :ref:`file_collections` pilot and its ``aidrin collection`` command.
+
 Quick Start
 -----------
 

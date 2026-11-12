@@ -260,7 +260,9 @@ def browser_target_discovery(remote, failure, target_match="exact", action="impo
     source = SOURCE.read_text(encoding="utf-8")
     start = source.index("// ==================== Custom Criteria Outliers")
     end = source.index("// ==================== Layout Helpers", start)
-    script = source[start:end] + r'''
+    workspace_source = SOURCE.with_name("workspace.js").read_text(encoding="utf-8")
+    fetch_helper = workspace_source[:workspace_source.index("function filterWorkspaceFiles(")]
+    script = fetch_helper + source[start:end] + r'''
 const payload = JSON.parse(process.argv[2]);
 let customOutlierTargets = ['lower', 'upper'].map(name => ({name, target_type: 'column'}));
 const originalRules = [{id: 'keep-me', target: 'lower'}];

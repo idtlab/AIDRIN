@@ -50,22 +50,30 @@ from .runners import (
     run_temporal_completeness,
     run_variable_unit_validation,
 )
+from .collection import run_collection_metrics  # noqa: F401 - public headless API
 
 
+# collection_modes opts a runner into request-local table inputs. Native-file
+# and metadata-dependent metrics require their own contract before opting in.
 METRIC_REGISTRY: Dict[str, Dict[str, Any]] = {
     "completeness": {
+        "optional_visualization": True,
+        "collection_modes": ("independent", "stacked"),
         "category": "data-quality",
         "description": "Column completeness scores and overall completeness.",
         "runner": run_completeness,
         "required_args": [],
     },
     "duplicity": {
+        "collection_modes": ("independent", "stacked"),
         "category": "data-quality",
         "description": "Dataset duplicates ratio.",
         "runner": run_duplicity,
         "required_args": [],
     },
     "outliers": {
+        "optional_visualization": True,
+        "collection_modes": ("independent", "stacked"),
         "category": "data-quality",
         "description": "Outlier proportions for numerical columns.",
         "runner": run_outliers,
@@ -765,7 +773,10 @@ def _run_metric_impl(
             "completeness", "duplicity", "outliers", "constant_feature_count",
             "max_pairwise_correlation", "skewness", "kurtosis",
         }:
-            result = metric["runner"](file_path, file_type, file_name)
+            runner_options = {}
+            if metric.get("optional_visualization"):
+                runner_options["include_visualization"] = kwargs.get("_include_visualization", True)
+            result = metric["runner"](file_path, file_type, file_name, **runner_options)
             return _finalize(result)
 
         return _run_registry_metric(
