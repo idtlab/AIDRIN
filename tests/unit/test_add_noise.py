@@ -108,5 +108,18 @@ class TestDpErrorPayload(unittest.TestCase):
         self.assertEqual(payload["Noisy file saved"], "Failed - Invalid parameters")
 
 
+class TestJsonStringInput(unittest.TestCase):
+    """The ``isinstance(file_info, str)`` branch reads a serialized frame.
+
+    pandas 3 removed literal JSON strings as read_json input, so an unwrapped
+    string is treated as a file path and raises "File name too long".
+    """
+
+    def test_serialized_frame_is_accepted(self):
+        df = pd.DataFrame({"age": [25, 30, 35, 40], "salary": [50000, 60000, 70000, 80000]})
+        result = return_noisy_stats(["age"], 0.5, df.to_json(), save_output=False)
+        self.assertIn("Mean of feature age(before noise)", result)
+
+
 if __name__ == "__main__":
     unittest.main()
