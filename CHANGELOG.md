@@ -3,7 +3,7 @@
 All notable changes to AIDRIN are documented here. This project loosely follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
-## [Unreleased]
+## [2026.11.1] - 2026-11-13
 
 ### Added
 
