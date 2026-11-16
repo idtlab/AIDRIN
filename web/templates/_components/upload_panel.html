@@ -21,11 +21,7 @@
               class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 {{ 'border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400' if globus_available and globus_authenticated else 'border-blue-600 text-blue-600 dark:text-blue-500 dark:border-blue-500' }}">
         Upload File
       </button>
-<<<<<<< Updated upstream
       {% if custom_loaders_enabled %}
-=======
-      {% if web_custom_loaders_enabled %}
->>>>>>> Stashed changes
       <button type="button" onclick="switchUploadTab('custom')" id="tab-custom"
               class="upload-tab flex-1 py-2.5 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-600 hover:border-gray-300 dark:text-gray-400">
         Custom Loader
@@ -131,7 +127,6 @@
 
     {% if custom_loaders_enabled %}
     <!-- Custom loader tab -->
-    {% if web_custom_loaders_enabled %}
     <div id="custom-upload" class="hidden">
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-5">
         <form id="uploadCustomForm" method="post" enctype="multipart/form-data" action="{{ url_for('core.inspector') }}" data-max-upload-bytes="{{ max_upload_bytes }}" data-max-upload-mb="{{ max_upload_mb }}">
@@ -181,7 +176,6 @@ def load(path: str, **kwargs) -> pd.DataFrame:
     </div>
     {% endif %}
 
-    {% endif %}
     {% if globus_available %}
     <!-- Globus remote panel -->
     <div id="globus-panel" class="{{ '' if globus_authenticated else 'hidden' }}">

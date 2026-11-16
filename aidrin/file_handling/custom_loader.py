@@ -93,7 +93,6 @@ def _resolve_callable(spec: str, file_path: str) -> Callable[..., Any]:
         resolved = None
         for candidate in candidates:
             try:
-<<<<<<< Updated upstream
                 cand = candidate.resolve()
             except OSError:
                 continue
@@ -106,14 +105,6 @@ def _resolve_callable(spec: str, file_path: str) -> Callable[..., Any]:
                     spec,
                     file_path,
                     f"loader file not found: {module_part}",
-=======
-                # Always read the current script. Timestamp-based .pyc caching
-                # can otherwise reuse old code after same-size edits in one second.
-                exec(compile(resolved.read_bytes(), str(resolved), "exec", dont_inherit=True), module.__dict__)
-            except Exception as exc:
-                logger.error(
-                    "Custom loader import failed for %s: %s", spec, exc, exc_info=True
->>>>>>> Stashed changes
                 )
             )
         mod_name = f"aidrin_custom_loader_{resolved.stem}_{id(resolved)}"
@@ -128,7 +119,8 @@ def _resolve_callable(spec: str, file_path: str) -> Callable[..., Any]:
             )
         module = importlib.util.module_from_spec(mod_spec)
         try:
-            mod_spec.loader.exec_module(module)
+            # Read current source so same-size edits within one second cannot reuse stale bytecode.
+            exec(compile(resolved.read_bytes(), str(resolved), "exec", dont_inherit=True), module.__dict__)
         except Exception as exc:
             logger.error(
                 "Custom loader import failed for %s: %s", spec, exc, exc_info=True

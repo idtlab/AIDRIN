@@ -198,12 +198,6 @@ def create_app():
     )
     os.makedirs(custom_loaders_folder, exist_ok=True)
     app.config["CUSTOM_LOADERS_FOLDER"] = custom_loaders_folder
-    # Pasted loader code runs inside this process, so the web Custom Loader is
-    # opt-in: set AIDRIN_ENABLE_WEB_CUSTOM_LOADERS=1 for trusted deployments only.
-    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = os.environ.get(
-        "AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", ""
-    ).strip().lower() in {"1", "true", "yes"}
-
     # The log viewer exposes the process-wide log, which mixes every user's
     # activity, so it is opt-in: set AIDRIN_ENABLE_LOG_VIEWER=1 for trusted
     # deployments only.

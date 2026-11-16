@@ -26,12 +26,9 @@ from aidrin.file_handling.file_parser import (
 )
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
-<<<<<<< Updated upstream
 from aidrin.file_handling.readers.root_reader import rootReader
 from aidrin.file_handling.readers.structured import dropped_columns
-=======
 from aidrin.file_handling.registered_loaders import read_registered_loaders, resolve_registered_loader
->>>>>>> Stashed changes
 from web.routes.utils import (
     build_file_info,
     categorical_bars,
@@ -64,14 +61,9 @@ def inspector():
     registered_formats = read_registered_loaders(current_app.config.get("REGISTERED_LOADERS_FILE"))
     if request.method == "POST":
         if request.form.get("fileTypeSelector", "").strip() == ".custom" and not current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS"):
-            session["upload_error"] = "Web custom loaders are disabled by the administrator. Select a supported or registered format."
-            return redirect(url_for("core.inspector"))
+            abort(403, description="Web custom loaders are disabled by the administrator. Select a supported or registered format.")
         file_upload_time_log.info("File upload initiated (workspace)")
         file = request.files.get("file")
-        if (request.form.get("fileTypeSelector") or "").strip() == ".custom" and not current_app.config.get(
-            "ENABLE_WEB_CUSTOM_LOADERS"
-        ):
-            abort(403)
 
         if file:
             cleared_count = clear_all_user_cache()
@@ -93,6 +85,7 @@ def inspector():
 
             selected_type = (request.form.get("fileTypeSelector") or "").strip()
             loader_code = (request.form.get("loader_code") or "").strip()
+            loader_path = None
             # ".custom" means: any extension + required user loader on upload.
             if selected_type.startswith("registered:"):
                 from aidrin.file_handling.custom_loader import load_dataframe as load_registered
@@ -174,7 +167,6 @@ def inspector():
                 session["custom_loader_spec"] = spec
             else:
                 file_type = selected_type
-                loader_path = None
                 session.pop("custom_loader_spec", None)
 
             session["uploaded_file_name"] = display_name
@@ -279,12 +271,8 @@ def inspector():
             file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
             upload_file_types=list(SUPPORTED_FILE_TYPES),
-<<<<<<< Updated upstream
             custom_loaders_enabled=current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False),
-=======
             registered_formats=registered_formats,
-            web_custom_loaders_enabled=current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False),
->>>>>>> Stashed changes
             upload_error=upload_error,
             globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],

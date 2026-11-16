@@ -24,6 +24,7 @@ def registry(app, tmp_path):
     path = tmp_path / "formats.json"
     path.write_text(json.dumps(entries))
     app.config["REGISTERED_LOADERS_FILE"] = str(path)
+    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = False
     return path, script, entries
 
 

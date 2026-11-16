@@ -517,7 +517,6 @@ for the sidecar schema and workflow.
 **Returns**: Coverage and validity scores, readiness status, classification
 counts, and one machine-readable record per variable.
 
-<<<<<<< Updated upstream
 calculate_fair_compliance
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -543,7 +542,7 @@ in total, ``"Standard"``, ``"Other"``, ``"Original Metadata"``, and a base64
 ``"Pie chart"``. DataCite, Croissant and RO-Crate results also include ``"Conformance"``
 and ``"Structure"``; Croissant adds ``"RAI Documentation"`` (reported, not scored), and
 an attached RO-Crate adds ``"Not applicable"`` for checks that need a web-based crate.
-=======
+
 Registered data formats
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -568,4 +567,3 @@ See :ref:`web_usage` for a matching registry and loader. This also works with
 ``loader: registered:household``. Loader dependencies must exist in the calling
 Python environment. This uses the existing custom-loader mechanism; it does
 not introduce the separate proposed ``register_reader()`` API.
->>>>>>> Stashed changes

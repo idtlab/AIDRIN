@@ -9,7 +9,13 @@ from aidrin.file_handling.custom_loader import CustomLoaderError, get_active_loa
 from web.routes.utils import build_file_info
 
 
-def test_web_loaders_disabled_by_default(client, app):
+def test_web_loaders_disabled_by_default(client, app, monkeypatch):
+    from web import create_app
+
+    monkeypatch.delenv('AIDRIN_ENABLE_WEB_CUSTOM_LOADERS', raising=False)
+    assert create_app().config['ENABLE_WEB_CUSTOM_LOADERS'] is False
+    # The shared test fixture opts in for legacy loader tests; exercise opt-out here.
+    app.config['ENABLE_WEB_CUSTOM_LOADERS'] = False
     assert app.config['ENABLE_WEB_CUSTOM_LOADERS'] is False
     html = client.get('/inspector').get_data(as_text=True)
     assert 'id="tab-custom"' not in html
@@ -19,6 +25,7 @@ def test_web_loaders_disabled_by_default(client, app):
         'fileTypeSelector': '.custom',
         'loader_code': "raise RuntimeError('must never run')",
     }, follow_redirects=True)
+    assert response.status_code == 403
     assert 'Web custom loaders are disabled' in response.get_data(as_text=True)
     assert not list(Path(app.config['UPLOAD_FOLDER']).iterdir())
     assert not list(Path(app.config['CUSTOM_LOADERS_FOLDER']).iterdir())
@@ -41,6 +48,7 @@ def test_web_loader_environment_switch(monkeypatch, value, enabled):
 def test_switch_off_blocks_existing_session_before_worker_dispatch(app, tmp_path):
     from flask import session
 
+    app.config['ENABLE_WEB_CUSTOM_LOADERS'] = False
     dataset = Path(app.config['UPLOAD_FOLDER']) / 'data.txt'
     dataset.write_text('a\n1\n')
     script = tmp_path / 'loader.py'
