@@ -1010,3 +1010,26 @@ Step 5: Build the index and run
 
    aidrin agentic build-index -c ~/my_project/config.yaml
    aidrin agentic run -c ~/my_project/config.yaml -o ~/my_project/results.json
+
+Registered data formats
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The CLI shares the web application's administrator-managed JSON format
+registry. Set ``AIDRIN_REGISTERED_LOADERS_FILE`` to its path and pass the format
+ID through the existing loader option:
+
+.. code-block:: bash
+
+   aidrin run completeness power.txt --loader registered:household
+
+This requires a ``household`` entry whose accepted extensions include ``.txt``.
+See :ref:`web_usage` for the registry schema and a matching semicolon-separated
+loader. Relative scripts resolve beside the registry, and format selection is
+explicit because several formats may use the same extension. Unknown IDs,
+missing registries and mismatched extensions produce loader errors. Inspect
+the JSON result for errors; a successful process exit alone is insufficient.
+
+Unlike web uploads, CLI metric reads execute the loader directly; dependencies
+must be installed in the CLI environment. The web custom-loader enable switch
+only controls pasted server-side web loaders and does not restrict trusted
+local CLI loaders.

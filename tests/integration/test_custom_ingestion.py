@@ -1,5 +1,13 @@
 """Integration tests for upload-time custom loaders (Other / custom loader)."""
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def enable_web_custom_loaders(app):
+    # These tests exercise the administrator opt-in flow.
+    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = True
+
 
 GOOD_LOADER = """
 import pandas as pd

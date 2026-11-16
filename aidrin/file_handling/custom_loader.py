@@ -119,7 +119,8 @@ def _resolve_callable(spec: str, file_path: str) -> Callable[..., Any]:
             )
         module = importlib.util.module_from_spec(mod_spec)
         try:
-            mod_spec.loader.exec_module(module)
+            # Read current source so same-size edits within one second cannot reuse stale bytecode.
+            exec(compile(resolved.read_bytes(), str(resolved), "exec", dont_inherit=True), module.__dict__)
         except Exception as exc:
             logger.error(
                 "Custom loader import failed for %s: %s", spec, exc, exc_info=True
@@ -169,12 +170,17 @@ def load_dataframe(
     Parameters
     ----------
     spec:
-        ``path/to/loader.py:function`` (or importable ``module:function``).
+        ``path/to/loader.py:function``, importable ``module:function``, or
+        ``registered:<id>`` from ``AIDRIN_REGISTERED_LOADERS_FILE``.
     file_path:
         Dataset path passed as the first positional argument to the loader.
     **kwargs:
         Forwarded to the loader (e.g. ``selected_keys``).
     """
+    if isinstance(spec, str) and spec.startswith("registered:"):
+        from aidrin.file_handling.registered_loaders import resolve_registered_loader
+
+        spec = resolve_registered_loader(spec, file_path)
     display_path = file_path or ""
     try:
         func = _resolve_callable(spec, display_path)
@@ -239,12 +245,16 @@ def get_active_loader_spec(explicit: str | None = None) -> str | None:
     if ctx:
         return ctx
     try:
-        from flask import has_request_context, session
+        from flask import current_app, has_request_context, session
 
         if has_request_context():
             spec = session.get("custom_loader_spec")
             if spec:
+                if not current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False):
+                    raise CustomLoaderError("Web custom loaders are disabled by the administrator. Clear the dataset and upload again.")
                 return str(spec)
+    except CustomLoaderError:
+        raise
     except Exception:
         pass
     return None

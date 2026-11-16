@@ -54,6 +54,7 @@ class ConfineToUploadFolderTests(unittest.TestCase):
         self.assertEqual(info[0], os.path.realpath(inside))
 
     def test_build_file_info_embeds_custom_loader_for_celery(self):
+        self.app.config["ENABLE_WEB_CUSTOM_LOADERS"] = True
         inside = os.path.join(self.upload_dir, "sample.root")
         with self.app.test_request_context():
             from flask import session

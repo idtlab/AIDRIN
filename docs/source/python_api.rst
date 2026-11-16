@@ -542,3 +542,28 @@ in total, ``"Standard"``, ``"Other"``, ``"Original Metadata"``, and a base64
 ``"Pie chart"``. DataCite, Croissant and RO-Crate results also include ``"Conformance"``
 and ``"Structure"``; Croissant adds ``"RAI Documentation"`` (reported, not scored), and
 an attached RO-Crate adds ``"Not applicable"`` for checks that need a web-based crate.
+
+Registered data formats
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Library calls share the same JSON format registry as the web application and
+CLI. Set ``AIDRIN_REGISTERED_LOADERS_FILE`` before the call, then select a format
+with the existing ``loader`` argument:
+
+.. code-block:: python
+
+   from aidrin.headless.api import run_metric
+
+   result = run_metric(
+       "completeness",
+       "power.txt",
+       loader="registered:household",
+       save_images=False,
+       strip_visualizations=True,
+   )
+
+See :ref:`web_usage` for a matching registry and loader. This also works with
+``read_file(..., loader="registered:household")`` and batch configurations using
+``loader: registered:household``. Loader dependencies must exist in the calling
+Python environment. This uses the existing custom-loader mechanism; it does
+not introduce the separate proposed ``register_reader()`` API.
