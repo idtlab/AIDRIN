@@ -93,6 +93,7 @@ def _resolve_callable(spec: str, file_path: str) -> Callable[..., Any]:
         resolved = None
         for candidate in candidates:
             try:
+<<<<<<< Updated upstream
                 cand = candidate.resolve()
             except OSError:
                 continue
@@ -105,6 +106,14 @@ def _resolve_callable(spec: str, file_path: str) -> Callable[..., Any]:
                     spec,
                     file_path,
                     f"loader file not found: {module_part}",
+=======
+                # Always read the current script. Timestamp-based .pyc caching
+                # can otherwise reuse old code after same-size edits in one second.
+                exec(compile(resolved.read_bytes(), str(resolved), "exec", dont_inherit=True), module.__dict__)
+            except Exception as exc:
+                logger.error(
+                    "Custom loader import failed for %s: %s", spec, exc, exc_info=True
+>>>>>>> Stashed changes
                 )
             )
         mod_name = f"aidrin_custom_loader_{resolved.stem}_{id(resolved)}"
@@ -169,12 +178,17 @@ def load_dataframe(
     Parameters
     ----------
     spec:
-        ``path/to/loader.py:function`` (or importable ``module:function``).
+        ``path/to/loader.py:function``, importable ``module:function``, or
+        ``registered:<id>`` from ``AIDRIN_REGISTERED_LOADERS_FILE``.
     file_path:
         Dataset path passed as the first positional argument to the loader.
     **kwargs:
         Forwarded to the loader (e.g. ``selected_keys``).
     """
+    if isinstance(spec, str) and spec.startswith("registered:"):
+        from aidrin.file_handling.registered_loaders import resolve_registered_loader
+
+        spec = resolve_registered_loader(spec, file_path)
     display_path = file_path or ""
     try:
         func = _resolve_callable(spec, display_path)
@@ -239,12 +253,16 @@ def get_active_loader_spec(explicit: str | None = None) -> str | None:
     if ctx:
         return ctx
     try:
-        from flask import has_request_context, session
+        from flask import current_app, has_request_context, session
 
         if has_request_context():
             spec = session.get("custom_loader_spec")
             if spec:
+                if not current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False):
+                    raise CustomLoaderError("Web custom loaders are disabled by the administrator. Clear the dataset and upload again.")
                 return str(spec)
+    except CustomLoaderError:
+        raise
     except Exception:
         pass
     return None

@@ -36,6 +36,7 @@ def create_app():
     _configure_matplotlib()
     setup_logging()
     app = Flask(__name__)
+    app.config["REGISTERED_LOADERS_FILE"] = os.environ.get("AIDRIN_REGISTERED_LOADERS_FILE")
     # Preserve insertion order in JSON responses so result cards render in the
     # order the routes build them (matching the panel), not alphabetically.
     app.json.sort_keys = False
@@ -85,6 +86,13 @@ def create_app():
         "result_expires": 600,
     }
     app.config.from_prefixed_env()
+    # The explicit security switch takes precedence over generic Flask settings.
+    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = os.environ.get(
+        "AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", "0"
+    ).strip().lower() in ("1", "true", "yes")
+    from aidrin.file_handling.registered_loaders import read_registered_loaders
+    # Validate the effective registry after all environment configuration is loaded.
+    read_registered_loaders(app.config["REGISTERED_LOADERS_FILE"])
     # Local UI demos without Redis: set AIDRIN_CELERY_EAGER=1 (after env merge)
     if os.environ.get("AIDRIN_CELERY_EAGER", "").strip().lower() in {"1", "true", "yes"}:
         app.config["CELERY"]["task_always_eager"] = True

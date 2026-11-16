@@ -441,7 +441,7 @@ def _configure_common_run_args(parser: argparse.ArgumentParser) -> None:
         "--loader",
         dest="loader",
         default=None,
-        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+        help="Custom data loader as path.py:function or registered:<id> (returns a pandas DataFrame)",
     )
     parser.add_argument("--save-images", dest="save_images", action="store_true", help="Save visualizations to disk")
     parser.add_argument("--no-save-images", dest="save_images", action="store_false", help="Do not save visualizations")
@@ -459,7 +459,7 @@ def _configure_minimal_run_args(parser: argparse.ArgumentParser) -> None:
         "--loader",
         dest="loader",
         default=None,
-        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+        help="Custom data loader as path.py:function or registered:<id> (returns a pandas DataFrame)",
     )
     parser.add_argument(
         "--selected-keys",
@@ -1060,7 +1060,7 @@ def main() -> None:
         "--loader",
         dest="loader",
         default=None,
-        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+        help="Custom data loader as path.py:function or registered:<id> (returns a pandas DataFrame)",
     )
     dq_parser.add_argument(
         "--selected-keys",
@@ -1085,7 +1085,7 @@ def main() -> None:
         "--loader",
         dest="loader",
         default=None,
-        help="Custom data loader as path.py:function (returns a pandas DataFrame)",
+        help="Custom data loader as path.py:function or registered:<id> (returns a pandas DataFrame)",
     )
     summarize_parser.add_argument(
         "--selected-keys",

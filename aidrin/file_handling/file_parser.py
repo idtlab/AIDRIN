@@ -276,7 +276,7 @@ def read_file(file_info, columns=None, loader=None):
     columns: list of str, optional
         When given, only these columns are returned.
     loader: str, optional
-        Custom loader spec ``path.py:function``. When set (or present in the
+        Custom loader spec ``path.py:function`` or ``registered:<id>``. When set (or present in the
         headless/Flask loader context), skips built-in readers.
     Returns
     ----------

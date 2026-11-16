@@ -194,6 +194,9 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
     else:
         loader = None
     if loader:
+        if not current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False):
+            from aidrin.file_handling.custom_loader import CustomLoaderError
+            raise CustomLoaderError("Web custom loaders are disabled by the administrator. Clear the dataset and upload again.")
         parts.append(loader)
 
     return tuple(parts)

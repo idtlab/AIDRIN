@@ -76,6 +76,9 @@
         {% include '_components/upload_panel.html' %}
       {% else %}
         <!-- File uploaded: show metric workspace -->
+        {% if upload_error %}
+        <div class="p-3 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-300" role="alert">{{ upload_error }}</div>
+        {% endif %}
 
         <!-- Mobile file info (visible on small screens) -->
         <div class="sm:hidden flex items-center gap-2 p-3 mb-4 rounded-lg text-sm" style="background: var(--secondaryColor);">
