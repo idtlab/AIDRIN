@@ -460,3 +460,45 @@ def test_integer_ticks_survive_a_fractional_series_in_same_table(tmp_path, file_
     result = run_collection_metrics(files, request, mode="stacked")
     groups = result["datasets"][0]["metrics"]["grouped_time_series"]["groups"]
     assert [(group["unique_time_count"], group["observed_duration"], group["finding_counts"]) for group in groups] == expected * 2
+
+
+@pytest.mark.parametrize("adapter", ["api", "cli", "mcp"])
+def test_visualization_stripping_preserves_group_keys(tmp_path, adapter):
+    path = tmp_path / "groups.csv"
+    path.write_text("plot_id,time\nA,0\nA,0.02\n")
+    if adapter == "api":
+        from aidrin.headless.api import run_metric
+
+        result = run_metric("grouped_time_series", str(path), group_columns=["plot_id"], timestamp_column="time",
+                            expected_cadence=.01, save_images=False, strip_visualizations=True)
+    elif adapter == "cli":
+        from aidrin.headless.cli import main
+
+        output = io.StringIO()
+        with patch("sys.argv", ["aidrin", "run", "grouped-time-series", str(path), "--group-columns", "plot_id",
+                                "--timestamp-column", "time", "--expected-cadence", "0.01"]), patch("sys.stdout", output):
+            main()
+        result = json.loads(output.getvalue())
+    else:
+        pytest.importorskip("mcp")
+        from aidrin.mcp.server import run_aidrin_metric
+
+        result = json.loads(run_aidrin_metric(str(path), "grouped_time_series", group_columns="plot_id",
+                                              timestamp_column="time", expected_cadence=.01))
+    assert result["groups"][0]["group"] == {"plot_id": "A"}
+    assert result["summary"]["finding_counts"] == {"cadence_gap": 1}
+
+
+def test_remote_summary_exposes_datetime_and_grouping_columns(tmp_path):
+    from aidrin.compute.remote import remote_metric_runner
+
+    frame = pd.DataFrame({"sensor": pd.Categorical(["A", "A", "A"]),
+                          "when": pd.date_range("2026-01-01", periods=3, freq="s"), "value": [1., 2., 3.]})
+    path = tmp_path / "dates.parquet"
+    frame.to_parquet(path, index=False)
+    summary = remote_metric_runner("summary_statistics", str(path), path.name, ".parquet")
+    assert summary["grouped_columns"] == ["sensor", "when", "value"]
+    assert summary["datetime_features"] == ["when"]
+    result = remote_metric_runner("grouped_time_series", str(path), path.name, ".parquet", group_columns=["sensor"],
+                                  timestamp_column="when", expected_cadence=1, time_kind="datetime")
+    assert result["summary"]["finding_counts"] == {}

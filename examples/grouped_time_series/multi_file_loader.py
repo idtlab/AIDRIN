@@ -10,8 +10,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from aidrin.file_handling.custom_loader import using_custom_loader
+from aidrin.file_handling.custom_loader import using_builtin_readers
 from aidrin.file_handling.file_parser import read_file
+from aidrin.file_handling.readers.base_reader import exact_integer_frame
 
 
 def load(path, **kwargs):
@@ -36,13 +37,14 @@ def load(path, **kwargs):
         file_type = record.get("file_type", source.suffix.lower())
         # The outer read_file is invoking this loader. Suspend it for member
         # reads, which must go through the ordinary AIDRIN readers.
-        with using_custom_loader(None):
+        with using_builtin_readers():
             frame = read_file((str(source), source.name, file_type))
         column = record["timestamp_column"]
         if not isinstance(frame, pd.DataFrame) or not frame.columns.is_unique or column not in frame:
             raise ValueError(f"Record {identity}: no unique timestamp column {column}")
         if frame.empty:
             raise ValueError(f"Record {identity}: empty component file")
+        frame = exact_integer_frame(frame, [column])
         frames.append(pd.DataFrame({
             "record_id": identity,
             "station": record["station"],
