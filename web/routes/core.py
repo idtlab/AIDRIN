@@ -49,7 +49,9 @@ from web.routes.utils import (
 from aidrin.file_handling.workspace_summary import summarize_workspace_file
 from web.routes.workspace_files import (
     activate_workspace_file,
+    add_custom_workspace_upload,
     add_workspace_uploads,
+    advance_workspace_input_revision,
     available_workspace_file,
     clear_workspace_uploads,
     init_workspace,
@@ -71,12 +73,26 @@ def check_inspector_file():
     file_id = request.headers.get("X-AIDRIN-Workspace-File")
     if file_id is None:
         return None
-    if file_id == session.get("active_workspace_file_id"):
+    revision = request.headers.get("X-AIDRIN-Workspace-Revision")
+    if file_id == session.get("active_workspace_file_id") and (
+        revision is None or revision == session.get("workspace_input_revision")
+    ):
         entry = next((item for item in workspace_files() if item["id"] == file_id), None)
         if entry and available_workspace_file(entry):
             return None
     message = "The active file changed or expired. Reload the Inspector and try again."
     return jsonify({"message": message}), 409, {"X-AIDRIN-Workspace-Stale": "1"}
+
+
+@core_bp.after_app_request
+def publish_workspace_revision(response):
+    if request.headers.get("X-AIDRIN-Workspace-File") == session.get("active_workspace_file_id") and (
+        "X-AIDRIN-Workspace-Stale" not in response.headers
+    ):
+        revision = session.get("workspace_input_revision")
+        if revision:
+            response.headers["X-AIDRIN-Workspace-Revision"] = revision
+    return response
 
 
 @core_bp.route("/")
@@ -121,7 +137,8 @@ def inspector():
             file = uploads[0]
             clear_all_user_cache()
             display_name = file.filename
-            file_path = save_workspace_upload(file, selected_type)["path"]
+            upload_entry = save_workspace_upload(file, selected_type)
+            file_path = upload_entry["path"]
             loader_code = (request.form.get("loader_code") or "").strip()
             _, ext = os.path.splitext(display_name or "")
             file_type = (ext or "").lower() or ".custom"
@@ -158,6 +175,8 @@ def inspector():
             spec = f"{loader_path}:load"
             try:
                 load_via_custom_loader(spec, file_path)
+                upload_entry["file_type"] = file_type
+                entry = add_custom_workspace_upload(upload_entry, spec)
             except Exception as exc:
                 # Remove only this attempt's files; the previous dataset
                 # and its loader stay active.
@@ -177,27 +196,7 @@ def inspector():
                     "Upload custom loader failed: %s", exc, exc_info=True
                 )
                 return redirect(url_for("core.inspector"))
-            session["custom_loader_spec"] = spec
-
-            session.pop("active_workspace_file_id", None)
-            session["uploaded_file_name"] = display_name
-            session["uploaded_file_path"] = file_path
-            session["uploaded_file_type"] = file_type
-            session.pop("globus_file_path", None)
-            session.pop("selected_keys", None)
-            # Column-role overrides are per-dataset; drop any from a prior file.
-            session.pop("column_roles", None)
-            session.pop("upload_error", None)
-            # This feature owns session["intent"], so a new dataset drops it.
-            session.pop("intent", None)
-
-            # Track files this session created so /clear removes only these,
-            # never files belonging to other concurrent sessions.
-            owned_files = session.get("owned_files", [])
-            for owned_path in (file_path, loader_path):
-                if owned_path and owned_path not in owned_files:
-                    owned_files.append(owned_path)
-            session["owned_files"] = owned_files
+            activate_workspace_file(entry)
 
             return redirect(url_for("core.inspector"))
 
@@ -241,7 +240,7 @@ def inspector():
             uploaded_file_name = session.get("uploaded_file_name", "")
             file_type = session.get("uploaded_file_type", "")
 
-    show_upload = request.args.get("upload") == "1"
+    show_upload = request.args.get("upload") == "1" or bool(session.get("upload_error"))
     file_preview = None
     current_checked_keys = None
 
@@ -303,8 +302,10 @@ def inspector():
             uploaded_file_path="" if show_upload else effective_file_path or "",
             show_upload=show_upload,
             workspace_files=[{key: entry[key] for key in ("id", "name", "file_type", "source")} for entry in files],
-            local_workspace_files=[{"id": entry["id"], "name": entry["name"]} for entry in files if entry["source"] == "local"],
+            local_workspace_files=[{"id": entry["id"], "name": entry["name"]} for entry in files
+                                   if entry["source"] == "local" and not entry.get("custom_loader_spec")],
             active_file_id=session.get("active_workspace_file_id"),
+            workspace_input_revision=session.get("workspace_input_revision", ""),
             uploaded_file_name=effective_file_name or "",
             file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
@@ -381,7 +382,7 @@ def workspace_summary():
         for entry in workspace_files():
             row = {key: entry[key] for key in ("id", "name", "file_type", "source")}
             if entry["source"] == "local":
-                row.update(summarize_workspace_file(entry["path"], entry["name"], entry["file_type"]))
+                row.update(summarize_workspace_file(entry["path"], entry["name"], entry["file_type"], loader=entry.get("custom_loader_spec")))
             else:
                 row.update(entry["summary"])
             files.append(row)
@@ -499,6 +500,8 @@ def filter_file():
                 if error:
                     return jsonify({"success": False, "error": error}), 400
 
+        if session.get("selected_keys") != keys_list:
+            advance_workspace_input_revision()
         session["selected_keys"] = keys_list
         session["minimize_preview"] = True
         # Recommendations were computed for the previous column selection.
@@ -531,6 +534,8 @@ def clear_dataset_selection():
         if isinstance(previous, str):
             previous = [key.strip() for key in previous.split(",") if key.strip()]
         session.pop("selected_keys", None)
+        if previous:
+            advance_workspace_input_revision()
         session.pop("minimize_preview", None)
         session.pop("intent", None)
 
@@ -844,6 +849,8 @@ def set_column_roles():
             return jsonify({"success": False, "message": "Invalid payload"}), 200
         valid_roles = {"continuous", "categorical", "identifier"}
         cleaned = {str(c): r for c, r in overrides.items() if r in valid_roles}
+        if session.get("column_roles", {}) != cleaned:
+            advance_workspace_input_revision()
         session["column_roles"] = cleaned
         # Overrides change which columns each metric treats as numeric/categorical,
         # so any cached metric results are now stale.

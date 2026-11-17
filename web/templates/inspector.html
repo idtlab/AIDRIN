@@ -78,7 +78,7 @@
         <!-- File uploaded: show metric workspace -->
 
         <!-- Metric configuration panels (only one visible at a time) -->
-        <div id="panels-container" data-workspace-file-id="{{ active_file_id or '' }}">
+        <div id="panels-container" data-workspace-file-id="{{ active_file_id or '' }}" data-workspace-revision="{{ workspace_input_revision }}">
           {% include '_panels/_data_overview.html' %}
           {% if workspace_files %}{% include '_panels/_batch_overview.html' %}{% endif %}
           {% include '_panels/_intent.html' %}

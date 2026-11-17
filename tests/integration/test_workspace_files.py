@@ -237,3 +237,132 @@ def test_column_roles_reset_on_upload_and_active_file_changes(client):
     assert client.post("/column-roles", json={"column_roles": {"category": "identifier"}}).json["success"]
     assert client.post("/inspector", data={"active_file_id": first["id"]}).status_code == 302
     assert client.get("/summary-statistics").json["column_roles"]["category"] == "categorical"
+
+
+def workspace_headers(client):
+    with client.session_transaction() as session:
+        return {"X-AIDRIN-Workspace-File": session["active_workspace_file_id"],
+                "X-AIDRIN-Workspace-Revision": session["workspace_input_revision"]}
+
+
+def test_input_revision_rejects_reopened_file_tabs_and_old_worker_cache(client, app):
+    upload(client, ("a.csv", b"x\n1\n1\n"), ("b.csv", b"x\n2\n3\n"))
+    first, second = workspace(client)
+    original = workspace_headers(client)
+    data_quality(client, duplicity="yes")
+    saved = dict(app.TEMP_RESULTS_CACHE)
+    client.post("/inspector", data={"active_file_id": second["id"]})
+    client.post("/inspector", data={"active_file_id": first["id"]})
+    assert workspace_headers(client) != original
+    assert client.post("/data-quality", data={"duplicity": "yes"}, headers=original).status_code == 409
+    app.TEMP_RESULTS_CACHE.update(saved)
+    assert client.get("/cached-result/data_quality", headers=workspace_headers(client)).json == {"cached": False}
+
+
+def test_column_role_revision_invalidates_tabs_and_worker_cache(client, app):
+    upload(client, ("a.csv", b"x\n1\n1\n"))
+    original = workspace_headers(client)
+    data_quality(client, duplicity="yes")
+    saved = dict(app.TEMP_RESULTS_CACHE)
+    response = client.post("/column-roles", json={"column_roles": {"x": "identifier"}}, headers=original)
+    assert response.json["success"]
+    assert response.headers["X-AIDRIN-Workspace-Revision"] == workspace_headers(client)["X-AIDRIN-Workspace-Revision"]
+    assert workspace_headers(client) != original
+    assert client.get("/summary-statistics", headers=original).status_code == 409
+    assert client.post("/column-roles", json={"column_roles": {"x": "continuous"}}, headers=original).status_code == 409
+    with client.session_transaction() as session:
+        assert session["column_roles"] == {"x": "identifier"}
+    app.TEMP_RESULTS_CACHE.update(saved)
+    assert client.get("/cached-result/data_quality", headers=workspace_headers(client)).json == {"cached": False}
+
+
+@pytest.mark.parametrize("file_type", [".h5", ".root"])
+def test_dataset_selection_revision_rejects_old_tabs(client, tmp_path, file_type):
+    import numpy as np
+
+    path = tmp_path / f"datasets{file_type}"
+    if file_type == ".h5":
+        h5py = pytest.importorskip("h5py")
+        with h5py.File(path, "w") as handle:
+            handle.create_dataset("first", data=np.array([1., 2., 3.]))
+            handle.create_dataset("second", data=np.array([4., 5.]))
+    else:
+        uproot = pytest.importorskip("uproot")
+        with uproot.recreate(path) as handle:
+            handle.mktree("first", {"x": np.array([1., 2., 3.])})
+            handle.mktree("second", {"x": np.array([4., 5., 6.])})
+    with path.open("rb") as handle:
+        assert client.post("/inspector", data={"file": (handle, path.name), "fileTypeSelector": file_type}).status_code == 302
+    original = workspace_headers(client)
+    response = client.post("/filter-file", json={"keys": ["first"]}, headers=original)
+    assert response.json["success"]
+    first = workspace_headers(client)
+    assert first != original
+    response = client.post("/filter-file", json={"keys": ["second"]}, headers=first)
+    assert response.json["success"]
+    assert client.post("/data-quality", data={"completeness": "yes"}, headers=first).status_code == 409
+    current = workspace_headers(client)
+    assert client.post("/clear-dataset-selection", headers=current).json["success"]
+    assert workspace_headers(client) != current
+
+
+def test_custom_upload_identity_survives_switching_and_stays_out_of_collections(client):
+    loader = 'import pandas as pd\ndef load(path):\n    return pd.DataFrame({"custom": [1, 1]})\n'
+    response = client.post("/inspector", data={
+        "fileTypeSelector": ".custom", "file": (io.BytesIO(b"native input"), "custom.native"), "loader_code": loader,
+    })
+    assert response.status_code == 302
+    custom = workspace(client)[0]
+    assert custom["records"] == 2
+    custom_header = workspace_headers(client)
+    upload(client, ("regular.csv", b"ordinary\n1\n2\n"))
+    assert client.post("/data-quality", data={"completeness": "yes"}, headers=custom_header).status_code == 409
+    result = data_quality(client, duplicity="yes", collection_scope="all", collection_mode="independent")["Cross-file Data Quality"]
+    assert [source["name"] for source in result["selection"]] == ["regular.csv"]
+    assert "Error" in data_quality(client, duplicity="yes", collection_scope="selected",
+                                   collection_file_id=custom["id"])["Cross-file Data Quality"]
+    assert client.post("/inspector", data={"active_file_id": custom["id"]}).status_code == 302
+    assert client.post("/feature-set", headers=workspace_headers(client)).json["all_features"] == ["custom"]
+    assert duplicity(data_quality(client, duplicity="yes")["Duplicity"]) == .5
+
+
+@pytest.mark.parametrize("loader", ["", "def load(path, **kwargs):\n    raise ValueError('bad input')\n"])
+def test_failed_upload_more_keeps_custom_error_visible(client, loader):
+    upload(client, ("kept.csv", b"x\n1\n"))
+    original = workspace_headers(client)
+    response = client.post("/inspector", data={
+        "fileTypeSelector": ".custom", "file": (io.BytesIO(b"wrong"), "failed.native"), "loader_code": loader,
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert 'id="uploadForm"' in response.text
+    assert "custom loader" in response.text.lower()
+    assert workspace_headers(client) == original
+    assert client.get("/retrieve-uploaded-file").data == b"x\n1\n"
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_individual_globus_load_has_identity_and_rejects_stale_summary_writes(client, app, monkeypatch, cached):
+    from web.routes.globus import globus_bp
+
+    if globus_bp.name not in app.blueprints:
+        app.register_blueprint(globus_bp)
+    upload(client, ("local.csv", b"x\n1\n"))
+    with client.session_transaction() as session:
+        session["globus_authenticated"] = True
+    monkeypatch.setattr("web.routes.globus.get_compute_client", lambda *_: object())
+    monkeypatch.setattr("web.routes.globus._submission_negotiation",
+                        lambda *_: ({"capabilities": [], "fingerprint": "test"}, None))
+    monkeypatch.setattr("web.routes.globus.submit_metric", lambda *args, **kwargs: "task")
+    if cached:
+        app.TEMP_RESULTS_CACHE["globus_summary:endpoint:/remote/a.csv"] = {"data": {"records_count": 2}}
+    payload = {"endpoint_id": "endpoint", "file_path": "/remote/a.csv", "file_type": ".csv", "metric_name": "summary_statistics"}
+    assert client.post("/globus/submit", json=payload).status_code == 200
+    remote = workspace(client)[1]
+    assert remote["name"] == "a.csv" and remote["source"] == "globus"
+    original = workspace_headers(client)
+    assert client.post("/globus/submit", json=payload, headers=original).status_code == 200
+    assert workspace_headers(client) == original
+    assert client.post("/globus/submit", json={**payload, "file_path": "/remote/b.csv"}).status_code == 200
+    assert client.post("/globus/cache-summary", json={"wrong": True}, headers=original).status_code == 409
+    assert client.get("/cached-result/data_quality", headers=original).status_code == 409
+    assert "globus_summary:endpoint:/remote/b.csv" not in app.TEMP_RESULTS_CACHE

@@ -143,6 +143,16 @@ def add_workspace_uploads(uploads, selected_type):
     return added[0]
 
 
+def add_custom_workspace_upload(entry, loader_spec):
+    """Register a validated custom upload with its immutable loader."""
+    entry = {**entry, "custom_loader_spec": loader_spec}
+    with _inventory_transaction():
+        entries = _files_with_available_uploads()
+        _require_capacity(len(entries) + 1)
+        _save_inventory(entries + [entry])
+    return entry
+
+
 def add_globus_files(endpoint_id, files):
     """Store remote references and summaries without opening paths on the server."""
     with _inventory_transaction():
@@ -152,9 +162,10 @@ def add_globus_files(endpoint_id, files):
         for file in files:
             key = endpoint_id, file["path"]
             if key in known:
-                known[key]["summary"] = file["summary"]
+                if "summary" in file:
+                    known[key]["summary"] = file["summary"]
             else:
-                entry = {**file, "id": uuid.uuid4().hex, "source": "globus", "endpoint_id": endpoint_id}
+                entry = {**file, "summary": file.get("summary", {}), "id": uuid.uuid4().hex, "source": "globus", "endpoint_id": endpoint_id}
                 known[key] = entry
                 added.append(entry)
         _require_capacity(len(entries) + len(added))
@@ -168,15 +179,23 @@ def available_workspace_file(entry):
     return os.path.isfile(entry["path"])
 
 
+def advance_workspace_input_revision():
+    """Invalidate older tabs and worker caches after the input scope changes."""
+    session["workspace_input_revision"] = uuid.uuid4().hex
+
+
 def reset_workspace_selection():
     clear_all_user_cache()
-    for key in (*_LOCAL_DATASET_KEYS, *_REMOTE_DATASET_KEYS, "active_workspace_file_id", "intent", "upload_error", "minimize_preview"):
+    keys = (*_LOCAL_DATASET_KEYS, *_REMOTE_DATASET_KEYS,
+            "active_workspace_file_id", "workspace_input_revision", "intent", "upload_error", "minimize_preview")
+    for key in keys:
         session.pop(key, None)
 
 
 def activate_workspace_file(entry):
     reset_workspace_selection()
     session["active_workspace_file_id"] = entry["id"]
+    advance_workspace_input_revision()
     if entry["source"] == "globus":
         negotiation = session.get("globus_endpoint_negotiation", {})
         session["globus_capabilities"] = negotiation.get("capabilities", []) if negotiation.get("endpoint_id") == entry["endpoint_id"] else []
@@ -188,12 +207,16 @@ def activate_workspace_file(entry):
         session["uploaded_file_path"] = entry["path"]
         session["uploaded_file_name"] = entry["name"]
         session["uploaded_file_type"] = entry["file_type"]
+        if entry.get("custom_loader_spec"):
+            session["custom_loader_spec"] = entry["custom_loader_spec"]
 
 
 def _discard(entry):
     if entry["source"] == "local":
         clear_frame_cache(entry["path"])
         _remove(entry["path"])
+        if entry.get("custom_loader_spec"):
+            _remove(entry["custom_loader_spec"].rsplit(":", 1)[0])
     else:
         cache_key = f"globus_summary:{entry['endpoint_id']}:{entry['path']}"
         current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
@@ -244,7 +267,7 @@ def workspace_collection_members(form):
     """Resolve ordered IDs against the current session's local inventory."""
     from aidrin.file_handling.collection import CollectionMember
 
-    entries = {entry["id"]: entry for entry in workspace_files() if entry["source"] == "local"}
+    entries = {entry["id"]: entry for entry in workspace_files() if entry["source"] == "local" and not entry.get("custom_loader_spec")}
     if form.get("collection_scope") == "all":
         ids = form.getlist("collection_file_order") or list(entries)
         if len(ids) != len(entries) or set(ids) != set(entries):

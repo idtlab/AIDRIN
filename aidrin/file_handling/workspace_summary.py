@@ -24,7 +24,7 @@ def overview_columns(frame):
     return numerical, categorical
 
 
-def summarize_workspace_file(path, name, file_type):
+def summarize_workspace_file(path, name, file_type, *, loader=None):
     """Read one file and return counts, or an actionable error for that row."""
     try:
         info = Path(path).stat()
@@ -32,7 +32,8 @@ def summarize_workspace_file(path, name, file_type):
         return {"error": "File is unavailable."}
     details = {"size": info.st_size} if stat.S_ISREG(info.st_mode) else {}
     try:
-        frame = read_file((path, name, file_type, []), write_cache=False)
+        file_info = (path, name, file_type, loader) if loader else (path, name, file_type, [])
+        frame = read_file(file_info, write_cache=False)
     except Exception:
         logger.warning("Unable to summarize workspace file", exc_info=True)
         frame = None

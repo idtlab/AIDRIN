@@ -80,7 +80,8 @@ def test_mixed_record_dtypes_preserve_integer_ticks(tmp_path, monkeypatch):
     assert ticks["observed_duration"] == 1
 
 
-def test_manifest_loader_ignores_web_session_loader():
+def test_manifest_loader_ignores_web_session_loader(monkeypatch):
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "0")
     from aidrin.file_handling.custom_loader import load_dataframe
 
     from flask import Flask, session
