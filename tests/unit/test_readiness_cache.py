@@ -2,7 +2,7 @@
 
 import time
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from flask import Flask
 
@@ -167,6 +167,18 @@ class TestReadinessFairCache(unittest.TestCase):
         dcat = _fair_metadata_fingerprint(payload, "DCAT")
         datacite = _fair_metadata_fingerprint(payload, "Datacite")
         self.assertNotEqual(dcat, datacite)
+
+    def test_metadata_fingerprint_aliases_match_canonical_names(self):
+        """Legacy form values and CLI names must share a readiness FAIR cache key."""
+        payload = b'{"title": "example"}'
+        self.assertEqual(
+            _fair_metadata_fingerprint(payload, "DCAT"),
+            _fair_metadata_fingerprint(payload, "dcat-us-1.1"),
+        )
+        self.assertEqual(
+            _fair_metadata_fingerprint(payload, "Datacite"),
+            _fair_metadata_fingerprint(payload, "datacite"),
+        )
 
     @patch("web.routes.metrics.get_current_user_id", return_value="user-1")
     @patch("web.routes.metrics.current_app")

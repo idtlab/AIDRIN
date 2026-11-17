@@ -1,6 +1,6 @@
 {
   "name": "aidrin",
-  "version": "2026.10.1",
+  "version": "2026.11.1",
   "description": "Assess and improve dataset AI-readiness across six dimensions: data quality, impact of data on AI, fairness and bias, data governance, understandability and usability, and data structure.",
   "author": {
     "name": "The AIDRIN authors (IDT Lab, The Ohio State University; LBNL; ANL)",

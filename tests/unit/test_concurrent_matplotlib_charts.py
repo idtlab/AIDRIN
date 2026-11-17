@@ -7,7 +7,7 @@ the implicit current figure. Under threaded request handling those calls interle
 These tests:
 
 1. Require production chart helpers to serialize behind ``MATPLOTLIB_PLOT_LOCK``
-   (fails until the lock is wired into ``web/routes/utils.py`` chart builders).
+   (wired in ``aidrin/report/charts.py``, re-exported from ``web/routes/utils.py``).
 2. Demonstrate that the same global-pyplot pattern races without a lock, and is
    stable when the lock is held (passes only after the lock symbol exists).
 """
@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 import pandas as pd
 
-UTILS_PATH = Path(__file__).resolve().parents[2] / "web" / "routes" / "utils.py"
+CHARTS_PATH = Path(__file__).resolve().parents[2] / "aidrin" / "report" / "charts.py"
 
 
 def _racey_global_pyplot_chart(marker: int) -> bytes:
@@ -48,12 +48,12 @@ def _racey_global_pyplot_chart(marker: int) -> bytes:
 
 class TestMatplotlibPlotLockContract(unittest.TestCase):
     def test_utils_chart_helpers_use_shared_plot_lock(self):
-        source = UTILS_PATH.read_text(encoding="utf-8")
+        source = CHARTS_PATH.read_text(encoding="utf-8")
         self.assertIn(
             "MATPLOTLIB_PLOT_LOCK",
             source,
             "Define a process-wide threading.Lock as MATPLOTLIB_PLOT_LOCK in "
-            "web/routes/utils.py and wrap chart generation with it.",
+            "aidrin/report/charts.py and wrap chart generation with it.",
         )
         self.assertRegex(
             source,
@@ -82,10 +82,10 @@ class TestMatplotlibPlotLockContract(unittest.TestCase):
 class TestConcurrentGlobalPyplot(unittest.TestCase):
     def test_lock_prevents_global_pyplot_cross_contamination(self):
         try:
-            from web.routes.utils import MATPLOTLIB_PLOT_LOCK
+            from aidrin.report.charts import MATPLOTLIB_PLOT_LOCK
         except ImportError as exc:
             self.fail(
-                "MATPLOTLIB_PLOT_LOCK is missing; add it in web/routes/utils.py "
+                "MATPLOTLIB_PLOT_LOCK is missing; add it in aidrin/report/charts.py "
                 f"before chart helpers. Import error: {exc}"
             )
 

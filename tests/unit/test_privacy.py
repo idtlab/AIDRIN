@@ -5,9 +5,12 @@ The generate_single_attribute_MM_risk_scores function is a plain Python
 function (not a Celery task) so it is called directly with DataFrames.
 """
 
+import os
 import sys
+import tempfile
 import types
 import unittest
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -26,10 +29,23 @@ if "pkg_resources" not in sys.modules:
     sys.modules["pkg_resources"] = _pkg
 
 # ---------------------------------------------------------------------------
+# Minimal always-eager Celery app so the shared_task wrappers resolve cleanly
+# ---------------------------------------------------------------------------
+
+from celery import Celery  # noqa: E402
+
+_celery_app = Celery("tests")
+_celery_app.conf.update(task_always_eager=True, task_eager_propagates=True)
+_celery_app.set_default()
+
+# ---------------------------------------------------------------------------
 # Imports under test
 # ---------------------------------------------------------------------------
 
+from aidrin.file_handling.file_parser import read_file  # noqa: E402
 from aidrin.structured_data_metrics.privacy_measure import (  # noqa: E402
+    calculate_single_attribute_risk_score,
+    calculate_multiple_attribute_risk_score,
     generate_single_attribute_MM_risk_scores,
     generate_single_attribute_MM_risk_scores_groupby,
     generate_multiple_attribute_MM_risk_scores,
@@ -610,6 +626,240 @@ class TestEntropyRisk(unittest.TestCase):
         vis = result.get("Entropy Risk Visualization", "")
         if vis:
             base64.b64decode(vis)
+
+
+# ---------------------------------------------------------------------------
+# Loop vs groupby equivalence
+#
+# The Celery tasks call the _groupby variants; the readiness path already did.
+# These assert the two implementations agree on results AND on every rejection,
+# so the swap cannot change what a user sees.
+# ---------------------------------------------------------------------------
+
+
+class TestGroupbyMatchesLoopImplementation(unittest.TestCase):
+    PAIRS = (
+        (
+            generate_single_attribute_MM_risk_scores,
+            generate_single_attribute_MM_risk_scores_groupby,
+        ),
+        (
+            generate_multiple_attribute_MM_risk_scores,
+            generate_multiple_attribute_MM_risk_scores_groupby,
+        ),
+    )
+
+    def _frame(self, n=200):
+        rng = np.random.default_rng(0)
+        return pd.DataFrame(
+            {
+                "id": np.arange(n),
+                "zip": rng.integers(0, 30, n).astype(str),
+                "sex": rng.integers(0, 2, n).astype(str),
+            }
+        )
+
+    def _compare(self, args_frame, id_col, eval_cols):
+        """Both implementations must return the same stats or the same error."""
+        for loop_fn, gb_fn in self.PAIRS:
+            with self.subTest(fn=loop_fn.__name__):
+                a = loop_fn(args_frame, id_col, eval_cols, include_visualization=False)
+                b = gb_fn(args_frame, id_col, eval_cols, include_visualization=False)
+                self.assertEqual(a.get("Error"), b.get("Error"))
+                self.assertEqual(a.get("ErrorType"), b.get("ErrorType"))
+                self.assertEqual(
+                    a.get("Descriptive statistics of the risk scores"),
+                    b.get("Descriptive statistics of the risk scores"),
+                )
+                self.assertEqual(a.get("Dataset Risk Score"), b.get("Dataset Risk Score"))
+
+    def test_scores_match(self):
+        self._compare(self._frame(), "id", ["zip", "sex"])
+
+    def test_single_quasi_identifier_matches(self):
+        self._compare(self._frame(), "id", ["zip"])
+
+    def test_rows_with_missing_values_match(self):
+        df = self._frame()
+        df.loc[::10, "zip"] = None
+        self._compare(df, "id", ["zip", "sex"])
+
+    def test_missing_column_rejected_the_same_way(self):
+        self._compare(self._frame(), "id", ["zip", "nope"])
+
+    def test_unknown_id_column_rejected_the_same_way(self):
+        self._compare(self._frame(), "nope", ["zip"])
+
+    def test_duplicate_ids_rejected_the_same_way(self):
+        df = self._frame()
+        df["id"] = 1
+        self._compare(df, "id", ["zip"])
+
+    def test_constant_quasi_identifier_rejected_the_same_way(self):
+        df = self._frame()
+        df["zip"] = "same"
+        self._compare(df, "id", ["zip", "sex"])
+
+    def test_empty_frame_rejected_the_same_way(self):
+        self._compare(self._frame().iloc[:0], "id", ["zip"])
+
+    def test_all_rows_dropped_rejected_the_same_way(self):
+        df = self._frame()
+        df["zip"] = None
+        self._compare(df, "id", ["zip", "sex"])
+
+    def test_comma_separated_eval_cols_match(self):
+        self._compare(self._frame(), "id", "zip, sex")
+
+    def test_groupby_is_not_quadratic(self):
+        """The loop grew 4x per doubling; the groupby path must not."""
+        import time
+
+        timings = []
+        for n in (2000, 8000):
+            df = self._frame(n)
+            start = time.perf_counter()
+            generate_single_attribute_MM_risk_scores_groupby(
+                df, "id", ["zip", "sex"], include_visualization=False
+            )
+            timings.append(time.perf_counter() - start)
+        # 4x the rows would cost ~16x quadratic; allow generous headroom for
+        # a loaded CI box but still fail an accidental revert to the O(n^2) path.
+        self.assertLess(timings[1], max(timings[0] * 8, 0.5))
+
+# ---------------------------------------------------------------------------
+# Celery task wrappers
+#
+# The tasks receive a (path, name, type) file_info tuple and re-read the
+# dataset in the worker, so the broker never carries the data and no dtype is
+# coerced on the way.  Celery's JSON serializer turns the tuple into a list.
+# ---------------------------------------------------------------------------
+
+
+class TestRiskScoreTasks(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def _csv(self, df, name="data.csv"):
+        path = os.path.join(self._tmp.name, name)
+        df.to_csv(path, index=False)
+        return (path, name, ".csv")
+
+    def _frame(self, n=40):
+        return pd.DataFrame(
+            {
+                "id": range(1, n + 1),
+                "gender": ["M", "F"] * (n // 2),
+                "education": ["BS", "MS", "PhD", "BS"] * (n // 4),
+            }
+        )
+
+    def test_single_attribute_task_reads_from_file_info(self):
+        result = calculate_single_attribute_risk_score.apply(
+            args=(self._csv(self._frame()), "id", ["gender", "education"])
+        ).get()
+        self.assertNotIn("Error", result)
+        self.assertEqual(
+            set(result["Descriptive statistics of the risk scores"]),
+            {"gender", "education"},
+        )
+
+    def test_multiple_attribute_task_reads_from_file_info(self):
+        result = calculate_multiple_attribute_risk_score.apply(
+            args=(self._csv(self._frame()), "id", ["gender", "education"])
+        ).get()
+        self.assertNotIn("Error", result)
+        self.assertIn("Descriptive statistics of the risk scores", result)
+
+    def test_file_info_arriving_as_a_list_is_accepted(self):
+        """Celery's JSON serializer delivers the tuple as a list."""
+        result = calculate_single_attribute_risk_score.apply(
+            args=(list(self._csv(self._frame())), "id", ["gender"])
+        ).get()
+        self.assertNotIn("Error", result)
+
+    def _parquet(self, df, name="data.parquet"):
+        path = os.path.join(self._tmp.name, name)
+        df.to_parquet(path, index=False)
+        return (path, name, ".parquet")
+
+    def test_zero_padded_quasi_identifier_is_not_retyped(self):
+        """Parquet carries real dtypes, so a '02139' zip reaches the metric as a
+        string.  Serializing the frame turned it into int 2139, which tripped
+        the "numerical with too many unique values" guard and rejected a
+        textbook quasi-identifier."""
+        n = 300
+        df = pd.DataFrame(
+            {
+                "id": [f"{i:05d}" for i in range(n)],
+                "zipcode": [f"{2000 + (i % 150):05d}" for i in range(n)],
+                "sex": ["M", "F"] * (n // 2),
+            }
+        )
+        result = calculate_single_attribute_risk_score.apply(
+            args=(self._parquet(df), "id", ["zipcode", "sex"])
+        ).get()
+        self.assertNotIn("Error", result)
+        self.assertIn("zipcode", result["Descriptive statistics of the risk scores"])
+
+    def test_date_named_column_stays_categorical(self):
+        """read_json coerces any date-ish column name to datetime64 regardless
+        of the source format; read_file leaves it alone."""
+        n = 40
+        df = pd.DataFrame(
+            {
+                "id": range(n),
+                "date": ["2021-01-05", "2021-02-06"] * (n // 2),
+                "sex": ["M", "F"] * (n // 2),
+            }
+        )
+        file_info = self._csv(df)
+        self.assertEqual(read_file(file_info)["date"].dtype, df["date"].dtype)
+        result = calculate_single_attribute_risk_score.apply(
+            args=(file_info, "id", ["date", "sex"])
+        ).get()
+        self.assertNotIn("Error", result)
+
+    def test_missing_upload_reports_a_clean_error(self):
+        """The upload folder is pruned on a schedule, so the file can vanish
+        between dispatch and execution."""
+        missing = (os.path.join(self._tmp.name, "gone.csv"), "gone.csv", ".csv")
+        result = calculate_single_attribute_risk_score.apply(
+            args=(missing, "id", ["gender"])
+        ).get()
+        self.assertIn("File not found", result["Error"])
+        self.assertEqual(result["ErrorType"], "Processing Error")
+        self.assertNotIn("Traceback", result["Error"])
+
+    def test_dataframe_is_still_accepted_directly(self):
+        result = calculate_single_attribute_risk_score.apply(
+            args=(self._frame(), "id", ["gender"])
+        ).get()
+        self.assertNotIn("Error", result)
+
+    def test_tasks_use_the_groupby_implementations(self):
+        """Guard against a revert to the O(n^2) loop variants."""
+        for task, fn_name in (
+            (
+                calculate_single_attribute_risk_score,
+                "generate_single_attribute_MM_risk_scores_groupby",
+            ),
+            (
+                calculate_multiple_attribute_risk_score,
+                "generate_multiple_attribute_MM_risk_scores_groupby",
+            ),
+        ):
+            with self.subTest(task=task.name):
+                with mock.patch(
+                    f"aidrin.structured_data_metrics.privacy_measure.{fn_name}"
+                ) as fast_path:
+                    fast_path.return_value = {"ok": True}
+                    result = task.apply(
+                        args=(self._csv(self._frame()), "id", ["gender", "education"])
+                    ).get()
+                self.assertTrue(fast_path.called)
+                self.assertEqual(result, {"ok": True})
 
 
 if __name__ == "__main__":

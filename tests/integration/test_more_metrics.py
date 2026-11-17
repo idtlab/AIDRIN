@@ -1,5 +1,7 @@
 """Tests for additional metric submission paths."""
 
+from unittest import mock
+
 import web.routes.metrics as metrics_routes
 
 
@@ -22,6 +24,59 @@ def test_hipaa_scan(uploaded_client):
     data = response.get_json()
     assert data is not None
 
+
+# -------------------------------------------------
+# Privacy Preservation (async MM risk tasks)
+# -------------------------------------------------
+
+
+def _risk_dispatch_args(uploaded_client, task_name, form):
+    """Submit a risk-scoring request and capture what the task was handed."""
+    with mock.patch.object(metrics_routes, task_name) as task:
+        task.delay.return_value.id = "test-task-id"
+        response = uploaded_client.post(
+            "/privacy-preservation?return_type=json", data=form, follow_redirects=True
+        )
+    assert response.status_code == 200
+    assert task.delay.called, "task was never dispatched"
+    return task.delay.call_args.args
+
+
+def test_single_attribute_risk_dispatches_file_info_not_a_serialized_frame(uploaded_client):
+    """A serialized DataFrame would put the whole dataset on the broker and
+    silently retype columns on the way (issue #216)."""
+    args = _risk_dispatch_args(
+        uploaded_client,
+        "calculate_single_attribute_risk_score",
+        {
+            "single attribute risk score": "yes",
+            "id feature to measure single attribute risk score": "income",
+            "quasi identifiers to measure single attribute risk score": ["gender", "education"],
+        },
+    )
+    file_info, id_col, eval_cols = args
+    assert isinstance(file_info, tuple), f"expected a file_info tuple, got {type(file_info)}"
+    assert file_info[1] == "test_data.csv"
+    assert file_info[2] == ".csv"
+    assert id_col == "income"
+    assert eval_cols == ["gender", "education"]
+
+
+def test_multiple_attribute_risk_dispatches_file_info_not_a_serialized_frame(uploaded_client):
+    args = _risk_dispatch_args(
+        uploaded_client,
+        "calculate_multiple_attribute_risk_score",
+        {
+            "multiple attribute risk score": "yes",
+            "id feature to measure multiple attribute risk score": "income",
+            "quasi identifiers to measure multiple attribute risk score": ["gender", "education"],
+        },
+    )
+    file_info, id_col, eval_cols = args
+    assert isinstance(file_info, tuple), f"expected a file_info tuple, got {type(file_info)}"
+    assert file_info[2] == ".csv"
+    assert id_col == "income"
+    assert eval_cols == ["gender", "education"]
 
 # -------------------------------------------------
 # Privacy Preservation (sync metrics)

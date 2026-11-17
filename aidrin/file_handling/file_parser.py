@@ -9,6 +9,7 @@ from aidrin.file_handling.readers.json_reader import jsonReader
 from aidrin.file_handling.readers.npz_reader import npzReader
 from aidrin.file_handling.readers.parquet_reader import parquetReader
 from aidrin.file_handling.readers.pdc_reader import PDCError, pdcReader
+from aidrin.file_handling.readers.root_reader import rootReader
 from aidrin.file_handling.readers.zarr_reader import zarrReader
 
 # Notes:
@@ -30,6 +31,7 @@ READER_MAP = {
     ".json": jsonReader,
     ".h5": hdf5Reader,
     ".parquet": parquetReader,
+    ".root": rootReader,
     ".zarr": zarrReader,
     ".pdc": pdcReader,
     # Add additional file types here
@@ -43,6 +45,7 @@ SUPPORTED_FILE_TYPES = [
     (".npz", "NumPy"),
     (".h5", "HDF5"),
     (".parquet", "Parquet"),
+    (".root", "ROOT"),
     # Add additional file types here using the format:
     # (file_type,file_type_name)
 ]
@@ -68,7 +71,7 @@ GLOBUS_FILE_TYPES = SUPPORTED_FILE_TYPES + [
 ]
 
 # File types that accept selected_keys for multi-array / multi-dataset selection.
-_SELECTION_FILE_TYPES = {".h5", ".zarr", ".pdc"}
+_SELECTION_FILE_TYPES = {".h5", ".root", ".zarr", ".pdc"}
 
 
 class ReaderReturnedNone(RuntimeError):
@@ -80,10 +83,10 @@ class ReaderReturnedNone(RuntimeError):
 
 
 # Formats whose readers legitimately refuse ambiguous inputs (a multi-array
-# HDF5/Zarr store needing selected_keys). Returning None there is
-# indistinguishable from "unsupported type", so raise instead and let the
-# CLI print one error.
-_RAISE_ON_EMPTY_FILE_TYPES = {".h5", ".zarr", ".pdc"}
+# HDF5/Zarr store, a multi-tree ROOT file, or PDC objects, needing
+# selected_keys). Returning None there is indistinguishable from "unsupported
+# type", so raise instead and let the CLI print one error.
+_RAISE_ON_EMPTY_FILE_TYPES = {".h5", ".root", ".zarr", ".pdc"}
 
 # logger config
 file_upload_time_log = logging.getLogger("file_upload")

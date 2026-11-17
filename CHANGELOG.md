@@ -17,6 +17,19 @@ All notable changes to AIDRIN are documented here. This project loosely follows
   server, and `tests/unit/test_pdc_live.py` runs against a real server when one
   is available. See the PDC section of the CLI usage docs.
 
+## [2026.11.1] - 2026-11-13
+
+### Added
+
+- **`aidrin readiness-report` CLI** (and headless
+  `run_readiness_report` / `run_readiness_report_pdf`): build the AI Data
+  Readiness Report as JSON (stdout only if neither `-o` nor `--pdf-out`) and
+  optional PDF (`--pdf-out`, `--pdf-mode scorecard|full`), with optional FAIR appendix via
+  `--fair-metadata` / `--fair-standard` (same engine as `aidrin fair`).
+  Local-only; PDF needs WeasyPrint system libraries. PDF templates, print CSS,
+  and overview chart helpers live in ``aidrin.report.pdf`` / ``aidrin.report.charts``
+  (shared with the web app), so ``--pdf-out`` does not import the ``web`` package.
+
 ## [2026.10.1] - 2026-10-28
 
 ### Changed (breaking)

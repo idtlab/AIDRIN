@@ -56,6 +56,10 @@ def test_fair_assessment_get_redirects(client):
 @pytest.mark.parametrize(
     "path, metadata_type, total",
     [
+        # Canonical CLI / form values
+        ("examples/sample_data/dcat/BUTTER-E.json", "dcat-us-1.1", "20/26"),
+        ("tests/fixtures/fair_metadata/datacite_rest_default.json", "datacite", "14/22"),
+        # Legacy form aliases still accepted
         ("examples/sample_data/dcat/BUTTER-E.json", "DCAT", "20/26"),
         ("tests/fixtures/fair_metadata/datacite_rest_default.json", "Datacite", "14/22"),
     ],

@@ -28,7 +28,12 @@ import pytest
 if sys.platform == "win32":
     pytest.skip("PDC does not support Windows", allow_module_level=True)
 
-pdc = pytest.importorskip("pdc")
+# Not importorskip: PDCpy installed without its libpdc on the library path
+# raises a plain ImportError, which importorskip does not skip on newer pytest.
+try:
+    import pdc
+except ImportError as exc:
+    pytest.skip(f"PDCpy is not importable: {exc}", allow_module_level=True)
 
 from aidrin.file_handling.file_parser import ReaderReturnedNone, read_file  # noqa: E402
 from aidrin.file_handling.readers.pdc_reader import PDCClient, PDCError, check_server  # noqa: E402

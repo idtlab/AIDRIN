@@ -198,10 +198,15 @@ def test_datacite_totals_follow_the_profile():
 
 @pytest.mark.parametrize("name, form_value", [("dcat-us-1.1", "DCAT"), ("datacite", "Datacite")])
 def test_standard_names_and_web_form_values_agree(name, form_value):
+    from aidrin.structured_data_metrics.fair_metadata import normalize_fair_standard
+
     metadata = _load(DCAT_SAMPLES / "BUTTER-E.json")
     by_name = calculate_fair_compliance(metadata, name)
     by_form = calculate_fair_compliance(metadata, form_value)
     assert by_name["FAIR Compliance Checks"] == by_form["FAIR Compliance Checks"]
+    assert normalize_fair_standard(form_value) == name
+    assert normalize_fair_standard(name) == name
+    assert normalize_fair_standard("auto") == "auto"
 
 
 def test_public_api_reads_a_path_or_a_dict():

@@ -129,3 +129,34 @@ def test_summary_statistics_survives_infinite_values(client, tmp_path):
     # Curve/Bars switch still has a twin to swap to.
     assert set(data["histograms"]) == set(data["histogram_bars"])
     assert "ratio_light" in data["histogram_bars"]
+
+
+def test_summary_statistics_survives_a_text_column_overridden_to_continuous(client, tmp_path):
+    """Forcing a categorical column's role to "continuous" must not 500.
+
+    describe() on an un-coerced object column returns string stats ("top",
+    "freq"), and the numeric formatter's abs(x) raised TypeError on them —
+    the same crash issue #125 fixed for the inferred case, reopened through
+    the column-roles override.
+    """
+    _upload(
+        client,
+        tmp_path,
+        "name,department\nAlice,Engineering\nBob,Sales\n",
+        name="departments.csv",
+    )
+
+    override = client.post(
+        "/column-roles",
+        json={"column_roles": {"department": "continuous"}},
+    )
+    assert override.status_code == 200
+    assert override.get_json()["success"] is True
+
+    resp = client.get("/summary-statistics")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    # Nothing numeric survives the coercion, so it is dropped rather than
+    # reported as a column of literal "nan" stats.
+    assert "department" not in data["summary_statistics"]
