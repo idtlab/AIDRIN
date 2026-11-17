@@ -3,7 +3,7 @@
 ## Contents
 
 - [Invocation & conventions](#invocation--conventions)
-- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, duplicity-by-features, feature-coverage-ratio, temporal-completeness, null-count-trend, file-reference-validation
+- [Data quality](#data-quality): completeness, duplicity, outliers, row-level-completeness, duplicity-by-features, feature-coverage-ratio, temporal-completeness, grouped-time-series, null-count-trend, file-reference-validation
 - [Data structure](#data-structure): constant-feature-count, max-pairwise-correlation, skewness, kurtosis
 - [Impact on AI](#impact-on-ai): correlations, feature-relevance
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
@@ -22,7 +22,7 @@
   `feature-relevance`, `k-anonymity`, etc.). Underscore forms are NOT accepted by
   `aidrin run`.
 - Exception: the completeness-family metrics (`row-level-completeness`,
-  `feature-coverage-ratio`, `temporal-completeness`, `null-count-trend`) take
+  `feature-coverage-ratio`, `temporal-completeness`, `grouped-time-series`, `null-count-trend`) take
   their arguments as NAMED `--flags` (e.g. `--required-columns`, `--frequency`),
   not positionally.
 - `file-reference-validation` takes its target list positionally and its path and
@@ -680,3 +680,15 @@ Config keys use dash names. Set `"save-images": false` to suppress the PNG write
 
 Note: `entropy-risk` ignores `sensitive-column` (it takes only `quasi-identifiers`);
 the extra key is silently ignored by batch.
+
+### grouped-time-series
+
+- **Syntax:** `aidrin run grouped-time-series <file> --group-columns station,component --timestamp-column elapsed_s --expected-cadence 0.01`
+- Explicit `--time-kind numeric` (input units) or `datetime` (seconds). Optional
+  `--tolerance`, `--expected-count`, `--expected-duration`, `--max-findings` (0 unlimited).
+- Output: per-group counts, observed duration, exact source row positions and
+  failing intervals; full finding counts survive capped details. Input order is
+  retained. Missing/invalid time breaks adjacency. Valid value zeros are untouched.
+- This does not establish cross-component synchronization or scientific validity.
+  Do not use spectral MT period grids as timestamps. See
+  `docs/source/grouped_time_series.rst` for the synthetic example and limitations.

@@ -241,6 +241,8 @@ class TestDeclaredPathsResolveAgainstRealResults(unittest.TestCase):
         "skewness": {},
         "kurtosis": {},
         "temporal_completeness": {"timestamp_column": "day", "frequency": "D"},
+        "grouped_time_series": {"group_columns": "education", "timestamp_column": "day",
+                                "time_kind": "datetime", "expected_cadence": 86400},
     }
 
     @classmethod

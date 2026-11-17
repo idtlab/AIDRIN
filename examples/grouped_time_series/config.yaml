@@ -1,0 +1,12 @@
+# Entirely synthetic illustration. Run from the repository root.
+file-path: examples/grouped_time_series/synthetic_sensors.csv
+metrics: [grouped-time-series]
+group-columns: [station, component]
+timestamp-column: elapsed_s
+time-kind: numeric
+expected-cadence: 0.01
+tolerance: 0.000001
+expected-count: 5
+expected-duration: 0.04
+max-findings: 100
+save-images: false
