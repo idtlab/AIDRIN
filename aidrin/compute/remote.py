@@ -298,6 +298,8 @@ def remote_metric_runner(metric_name, file_path, file_name, file_type, **params)
             "categorical_features": list(categorical_columns),
             "numerical_features": list(numerical_columns),
             "all_features": all_features,
+            "datetime_features": [column for column in df.columns if pd.api.types.is_datetime64_any_dtype(df[column].dtype)],
+            "grouped_columns": [column for column in df.columns if isinstance(column, str)],
             "summary_statistics": summary,
             "categorical_summary": categorical_summary,
             "histograms": histograms,

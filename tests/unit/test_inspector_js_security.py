@@ -996,6 +996,35 @@ def test_outlier_explanation_wraps_and_escapes_column_names(tmp_path):
     assert "whitespace-nowrap" not in why_cell[1]
 
 
+def test_bulk_series_selection_notifies_timing_detection():
+    if not shutil.which("node"):
+        pytest.skip("node unavailable")
+    source = INSPECTOR_JS.read_text()
+    start = source.index("function toggleAllCheckboxes(")
+    stop = source.index("\n}", start) + 2
+    # Run the actual bulk action against a small event target. Disabled
+    # identifiers must stay unchanged and every bulk action sends one change.
+    script = r"""
+const assert = require("node:assert/strict");
+const container = new EventTarget();
+const inputs = [{checked:false, disabled:false}, {checked:false, disabled:true}];
+container.querySelectorAll = () => inputs;
+let changes = 0;
+container.addEventListener("change", () => { changes++; });
+globalThis.document = {getElementById: () => container};
+globalThis.updateCheckboxCount = () => {};
+"""
+    script += source[start:stop]
+    script += r"""
+toggleAllCheckboxes(null, "groupedTimeSeriesColumnsCheckbox", true);
+assert.deepEqual(inputs.map(input => input.checked), [true,false]);
+toggleAllCheckboxes(null, "groupedTimeSeriesColumnsCheckbox", false);
+assert.deepEqual(inputs.map(input => input.checked), [false,false]);
+assert.equal(changes, 2);
+"""
+    subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+
+
 def test_column_role_requests_keep_the_workspace_revision():
     if not shutil.which("node"):
         pytest.skip("node unavailable")

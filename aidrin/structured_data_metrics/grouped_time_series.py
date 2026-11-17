@@ -278,7 +278,7 @@ def calculate_grouped_time_series(
         raise ValueError(f"Columns not found: {missing}")
     frame = exact_integer_frame(frame, audit_columns)
     for column in group_columns:
-        if not frame[column].map(pd.api.types.is_scalar).all():
+        if not all(pd.api.types.is_scalar(value) for value in frame[column]):
             raise ValueError(f"Group column must contain scalar keys: {column}")
 
     times = frame[timestamp_column]

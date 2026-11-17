@@ -5647,6 +5647,7 @@ function toggleAllCheckboxes(btn, containerId, checked) {
     if (!cb.disabled) cb.checked = checked;
   });
   updateCheckboxCount(containerId);
+  el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 /** Update the "N selected / M features" counter. */

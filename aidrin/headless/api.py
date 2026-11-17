@@ -728,7 +728,7 @@ def _run_metric_impl(
     def _finalize(result: Dict[str, Any]) -> Dict[str, Any]:
         """Apply post-processing: save images, strip visualizations, sanitize types."""
         result = _maybe_save_images(metric_key, result, save_images, image_dir)
-        if strip_visualizations:
+        if strip_visualizations and metric_key != "grouped_time_series":
             result = _strip_visualizations(result)
         elapsed = time.time() - start_time
         span.set_attribute("metric.duration_ms", elapsed * 1000)

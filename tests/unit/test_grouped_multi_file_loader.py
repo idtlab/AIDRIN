@@ -78,3 +78,40 @@ def test_mixed_record_dtypes_preserve_integer_ticks(tmp_path, monkeypatch):
     assert ticks["unique_time_count"] == 2
     assert ticks["last_time"] == "9007199254740993"
     assert ticks["observed_duration"] == 1
+
+
+def test_manifest_loader_ignores_web_session_loader(monkeypatch):
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "0")
+    from aidrin.file_handling.custom_loader import load_dataframe
+
+    from flask import Flask, session
+
+    app = Flask(__name__)
+    app.secret_key = "test"
+    with app.test_request_context("/"):
+        session["custom_loader_spec"] = LOADER
+        frame = load_dataframe(LOADER, str(ROOT / "examples/grouped_time_series/multi_file_manifest.json"))
+    assert list(frame.groupby("record_id", sort=False).size()) == [5, 3]
+
+
+@pytest.mark.parametrize("file_type", [".csv", ".json"])
+def test_manifest_projection_preserves_mixed_integer_source_values(tmp_path, file_type, monkeypatch):
+    monkeypatch.setenv("AIDRIN_FRAME_CACHE", "0")
+    origin = 1_700_000_000_000_000_000
+    times = [origin, origin + 1, origin + 2, .5]
+    path = tmp_path / f"mixed{file_type}"
+    if file_type == ".csv":
+        path.write_text("t\n" + "\n".join(map(str, times)) + "\n")
+    else:
+        path.write_text(json.dumps([{"t": time} for time in times]))
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps([dict(record_id="one", station="S", component="H1",
+                                         path=path.name, timestamp_column="t")]))
+    result = run_metric("grouped_time_series", str(manifest), loader=LOADER, save_images=False,
+                        group_columns=["record_id"], timestamp_column="time", expected_cadence=1)
+    group = result["groups"][0]
+    assert group["unique_time_count"] == 4
+    assert group["findings"] == [{
+        "kind": "out_of_order", "from_row_position": 2, "to_row_position": 3,
+        "from_time": str(origin + 2), "to_time": .5, "delta": -(origin + 2) + .5,
+    }]
