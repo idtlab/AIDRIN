@@ -439,6 +439,11 @@ def submit():
             cached = current_app.TEMP_RESULTS_CACHE.get(cache_key)
             if cached and cached.get("data"):
                 logger.info("Globus summary cache hit: %s", cache_key)
+                from web.routes.workspace_files import add_globus_files, activate_workspace_file
+
+                entry = add_globus_files(endpoint_id, [{"path": file_path, "name": file_name, "file_type": file_type}])
+                if session.get("active_workspace_file_id") != entry["id"]:
+                    activate_workspace_file(entry)
                 return jsonify({
                     "status": "completed",
                     "result": cached["data"],
@@ -469,12 +474,11 @@ def submit():
                 or session.get("globus_file_path") != file_path):
             session.pop("intent", None)
 
-        if (session.get("globus_endpoint_id"), session.get("globus_file_path")) != (endpoint_id, file_path):
-            session.pop("active_workspace_file_id", None)
-        session["globus_endpoint_id"] = endpoint_id
-        session["globus_file_path"] = file_path
-        session["globus_file_name"] = file_name
-        session["globus_file_type"] = file_type
+        from web.routes.workspace_files import add_globus_files, activate_workspace_file
+
+        entry = add_globus_files(endpoint_id, [{"path": file_path, "name": file_name, "file_type": file_type}])
+        if session.get("active_workspace_file_id") != entry["id"]:
+            activate_workspace_file(entry)
 
         task_id = submit_metric(
             client, endpoint_id, metric_name,

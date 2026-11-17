@@ -5607,7 +5607,7 @@ function applyColumnRoles() {
     btn.disabled = true;
     btn.textContent = "Applying…";
   }
-  fetch("/column-roles", {
+  fetchWorkspaceDataset("/column-roles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ column_roles: overrides }),
@@ -5632,7 +5632,7 @@ function refreshWorkspaceSummary() {
   const hist = document.getElementById("workspace-histograms");
   if (hist) hist.innerHTML = "";
   _beginServerProcessing();
-  return fetch("/summary-statistics")
+  return fetchWorkspaceDataset("/summary-statistics")
     .then((r) => r.json())
     .then((data) => renderWorkspaceSummary(data))
     .catch((err) => {

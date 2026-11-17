@@ -7,11 +7,17 @@ Use the Inspector to upload one or more files. **Auto-detect from filename**
 allows different supported formats in the same upload. Use **Upload more
 files** to add to the workspace. The top-bar file switcher opens the selected
 file's Data Overview and makes it the input for ordinary single-file checks.
+Custom-loader uploads also appear in the file switcher and retain their loader
+when reopened. Cross-file checks offer only files supported by the collection
+reader. Individually loaded Globus files share the workspace with directory
+imports.
+
 Use **Batch Overview** to see counts and sizes, open a file, or remove it
 from the workspace. Removing the active file opens the first remaining
 available file. **New session** clears the workspace. Uploaded files are
 eligible for cleanup after one hour. The file list expires after an hour
-of workspace inactivity.
+of workspace inactivity. An Inspector tab must be reloaded after another tab
+changes the active file, dataset/tree selection, or column-role overrides.
 
 For Globus Compute, enter an endpoint ID and a directory path and select
 **Import directory**. A compatible AIDRIN worker lists and summarizes supported

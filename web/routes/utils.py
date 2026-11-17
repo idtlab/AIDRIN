@@ -292,7 +292,10 @@ def get_current_user_id():
 def dataset_cache_identity(file_name):
     """Use the workspace file ID where available, including for duplicate names."""
     file_id = session.get("active_workspace_file_id") if has_request_context() else None
-    return f"file-id:{file_id}" if file_id else f"file:{file_name}"
+    if file_id:
+        revision = session.get("workspace_input_revision", "")
+        return f"file-id:{file_id}:revision:{revision}"
+    return f"file:{file_name}"
 
 
 def generate_metric_cache_key(file_name, metric_type, **params):

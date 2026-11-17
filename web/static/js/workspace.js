@@ -1,14 +1,19 @@
 async function fetchWorkspaceDataset(url, options = {}) {
-  const fileId =
-    document.getElementById("panels-container")?.dataset.workspaceFileId;
+  const panel = document.getElementById("panels-container");
+  const fileId = panel?.dataset.workspaceFileId;
+  const revision = panel?.dataset.workspaceRevision;
   if (!fileId || new URL(url, location.href).origin !== location.origin)
     return fetch(url, options);
   const headers = new Headers(options.headers);
   headers.set("X-AIDRIN-Workspace-File", fileId);
+  if (revision) headers.set("X-AIDRIN-Workspace-Revision", revision);
   const response = await fetch(url, { ...options, headers });
   if (response.headers.has("X-AIDRIN-Workspace-Stale")) {
     throw new Error((await response.json()).message);
   }
+  const nextRevision = response.headers.get("X-AIDRIN-Workspace-Revision");
+  if (nextRevision && panel.dataset.workspaceRevision === revision)
+    panel.dataset.workspaceRevision = nextRevision;
   return response;
 }
 
