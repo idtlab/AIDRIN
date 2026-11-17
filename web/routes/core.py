@@ -44,7 +44,7 @@ from web.routes.utils import (
     summary_histograms,
 )
 
-from aidrin.file_handling.workspace_summary import overview_columns, summarize_workspace_file
+from aidrin.file_handling.workspace_summary import summarize_workspace_file
 from web.routes.workspace_files import (
     activate_workspace_file,
     add_workspace_uploads,

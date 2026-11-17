@@ -223,3 +223,17 @@ def test_cached_collection_expires_when_another_worker_removes_a_file(client, ap
     assert client.post(f"/workspace/files/{second['id']}/remove").status_code == 302
     app.TEMP_RESULTS_CACHE.update(old_worker_cache)
     assert client.get("/cached-result/data_quality", headers=header).json == {"cached": False}
+
+
+def test_column_roles_reset_on_upload_and_active_file_changes(client):
+    contents = b"category,value\nA,1\nB,2\n"
+    assert upload(client, ("first.csv", contents)).status_code == 302
+    first = workspace(client)[0]
+    assert client.post("/column-roles", json={"column_roles": {"category": "identifier"}}).json["success"]
+    assert client.get("/summary-statistics").json["column_roles"]["category"] == "identifier"
+
+    assert upload(client, ("second.csv", contents)).status_code == 302
+    assert client.get("/summary-statistics").json["column_roles"]["category"] == "categorical"
+    assert client.post("/column-roles", json={"column_roles": {"category": "identifier"}}).json["success"]
+    assert client.post("/inspector", data={"active_file_id": first["id"]}).status_code == 302
+    assert client.get("/summary-statistics").json["column_roles"]["category"] == "categorical"

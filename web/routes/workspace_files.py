@@ -17,7 +17,7 @@ from web.routes.utils import clear_all_user_cache, confine_to_upload_folder
 
 
 logger = logging.getLogger(__name__)
-_LOCAL_DATASET_KEYS = ("uploaded_file_path", "uploaded_file_name", "uploaded_file_type", "custom_loader_spec", "selected_keys")
+_LOCAL_DATASET_KEYS = ("uploaded_file_path", "uploaded_file_name", "uploaded_file_type", "custom_loader_spec", "selected_keys", "column_roles")
 _REMOTE_DATASET_KEYS = ("globus_file_path", "globus_file_name", "globus_file_type")
 
 
