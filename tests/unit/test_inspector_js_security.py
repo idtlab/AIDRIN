@@ -999,7 +999,7 @@ def test_outlier_explanation_wraps_and_escapes_column_names(tmp_path):
 def test_bulk_series_selection_notifies_timing_detection():
     if not shutil.which("node"):
         pytest.skip("node unavailable")
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     start = source.index("function toggleAllCheckboxes(")
     stop = source.index("\n}", start) + 2
     # Run the actual bulk action against a small event target. Disabled
@@ -1028,13 +1028,13 @@ assert.equal(changes, 2);
 def test_column_role_requests_keep_the_workspace_revision():
     if not shutil.which("node"):
         pytest.skip("node unavailable")
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
 
     def function_text(name):
         start = source.index(f"function {name}(")
         return source[start:source.index("\n}", start) + 2]
 
-    helper = (REPO_ROOT / "web/static/js/workspace.js").read_text().split("\nfunction filterWorkspaceFiles", 1)[0]
+    helper = (REPO_ROOT / "web/static/js/workspace.js").read_text(encoding="utf-8").split("\nfunction filterWorkspaceFiles", 1)[0]
     script = r"""
 const assert = require("node:assert/strict");
 const panel = {dataset:{workspaceFileId:"file-a",workspaceRevision:"revision-1"}};
@@ -1048,7 +1048,9 @@ globalThis.location = {href:"http://localhost/inspector",origin:"http://localhos
 globalThis._beginServerProcessing = () => {};
 globalThis._endServerProcessing = () => {};
 let rendered = 0;
-globalThis.renderWorkspaceSummary = () => { rendered++; };
+let finish;
+const renderedPromise = new Promise(resolve => { finish = resolve; });
+globalThis.renderWorkspaceSummary = () => { rendered++; finish(); };
 const requests = [];
 globalThis.fetch = async (url, options) => {
   requests.push({url,revision:options.headers.get("X-AIDRIN-Workspace-Revision"),
@@ -1060,7 +1062,7 @@ globalThis.fetch = async (url, options) => {
     script += r"""
 (async () => {
   applyColumnRoles();
-  await new Promise(resolve => setTimeout(resolve, 20));
+  await renderedPromise;
   assert.deepEqual(requests, [
     {url:"/column-roles",revision:"revision-1",file:"file-a"},
     {url:"/summary-statistics",revision:"revision-2",file:"file-a"},
