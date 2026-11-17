@@ -999,7 +999,7 @@ def test_outlier_explanation_wraps_and_escapes_column_names(tmp_path):
 def test_bulk_series_selection_notifies_timing_detection():
     if not shutil.which("node"):
         pytest.skip("node unavailable")
-    source = INSPECTOR_JS.read_text()
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
     start = source.index("function toggleAllCheckboxes(")
     stop = source.index("\n}", start) + 2
     # Run the actual bulk action against a small event target. Disabled
