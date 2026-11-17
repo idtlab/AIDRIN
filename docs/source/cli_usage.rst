@@ -49,9 +49,10 @@ file is really one table? Run ``aidrin inventory <file>`` first — see :ref:`cl
 PDC (Proactive Data Containers)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-`PDC <https://github.com/hpc-io/pdc>`_ is a server-backed object store, so AIDRIN reads it
-through a small JSON descriptor with the ``.pdc`` extension that names objects on a running PDC
-server:
+`PDC <https://github.com/hpc-io/pdc>`_ is a high-performance, object-centric data management
+framework that supports flexible, scalable and efficient data movement across diverse memory and
+storage systems. Its data lives in objects on a running PDC server rather than in files, so AIDRIN
+reads it through a small JSON descriptor with the ``.pdc`` extension that names those objects:
 
 .. code-block:: json
 

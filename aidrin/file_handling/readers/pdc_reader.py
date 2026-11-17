@@ -1,8 +1,10 @@
 """Proactive Data Containers (PDC) reader.
 
-PDC (https://github.com/hpc-io/pdc) is a server-backed object store, not a file
-format, so AIDRIN reads it through a small JSON *descriptor* file with the
-``.pdc`` extension that names the objects to load from a running PDC server::
+PDC (https://github.com/hpc-io/pdc) is a high-performance, object-centric data
+management framework for moving data across memory and storage systems. Its data
+lives in objects on a running PDC server, not in files, so AIDRIN reads it
+through a small JSON *descriptor* file with the ``.pdc`` extension that names
+the objects to load::
 
     {
         "objects": ["age", "income", "score"],
