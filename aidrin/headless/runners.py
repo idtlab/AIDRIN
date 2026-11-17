@@ -118,9 +118,11 @@ def _call_task(task: Any, *args: Any) -> Any:
         return unwrapped(NullTask(), *args)
 
 
-def run_completeness(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+def run_completeness(
+    file_path: str, file_type: Optional[str], file_name: Optional[str], *, include_visualization: bool = True,
+) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
-    return _call_task(completeness, file_info)
+    return _call_task(completeness, file_info, include_visualization)
 
 
 def run_duplicity(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
@@ -158,9 +160,11 @@ def run_kurtosis(file_path: str, file_type: Optional[str], file_name: Optional[s
     return _call_task(kurtosis, file_info)
 
 
-def run_outliers(file_path: str, file_type: Optional[str], file_name: Optional[str]) -> Dict[str, Any]:
+def run_outliers(
+    file_path: str, file_type: Optional[str], file_name: Optional[str], *, include_visualization: bool = True,
+) -> Dict[str, Any]:
     file_info = _build_file_info(file_path, file_type, file_name)
-    return _call_task(outliers, file_info)
+    return _call_task(outliers, file_info, include_visualization)
 
 
 def run_row_level_completeness(

@@ -1,0 +1,34 @@
+{% if not globus_mode and local_workspace_files|length > 1 %}
+<fieldset id="collection-selection" class="mb-3 space-y-2 text-sm" hidden disabled>
+  <label class="block" for="collection-scope">Files to check</label>
+  <select id="collection-scope" name="collection_scope">
+    <option value="active">Active file only ({{ uploaded_file_name }})</option>
+    <option value="all">All uploaded local files ({{ local_workspace_files|length }})</option>
+    <option value="selected">Choose uploaded files</option>
+  </select>
+  <div id="collection-settings" hidden>
+    <label class="block" for="collection-mode">Analysis mode</label>
+    <select id="collection-mode" name="collection_mode">
+      <option value="independent">Analyze each file independently</option>
+      <option value="stacked">Stack rows into one dataset</option>
+    </select>
+    <p id="collection-scope-note" class="text-xs text-gray-600 dark:text-gray-400" hidden>
+      Checks without multi-file support use the active file.
+    </p>
+    <div id="collection-file-actions" class="space-x-2" hidden>
+      <button type="button" data-select-collection-files="all" class="underline">Select all files</button>
+      <button type="button" data-select-collection-files="none" class="underline">Deselect all files</button>
+    </div>
+    <div id="collection-file-list" class="mt-2 max-h-48 space-y-1 overflow-auto">
+      {% for file in local_workspace_files %}
+      <div class="flex items-center gap-2" data-collection-file>
+        <label class="flex-1 break-all"><input type="checkbox" name="collection_file_id" value="{{ file.id }}" checked> {{ file.name }}</label>
+        <input type="hidden" name="collection_file_order" value="{{ file.id }}">
+        <button type="button" class="rounded border px-2" data-move-file="-1" aria-label="Move {{ file.name }} up">↑</button>
+        <button type="button" class="rounded border px-2" data-move-file="1" aria-label="Move {{ file.name }} down">↓</button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</fieldset>
+{% endif %}

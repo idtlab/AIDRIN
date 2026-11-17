@@ -98,6 +98,10 @@ def create_app():
     except ValueError:
         max_upload_mb = 1024
     app.config["MAX_CONTENT_LENGTH"] = max_upload_mb * 1024 * 1024
+    try:
+        app.config["AIDRIN_MAX_UPLOAD_FILES"] = max(1, int(os.environ.get("AIDRIN_MAX_UPLOAD_FILES", 50)))
+    except ValueError:
+        app.config["AIDRIN_MAX_UPLOAD_FILES"] = 50
 
     @app.context_processor
     def inject_file_type_accept():

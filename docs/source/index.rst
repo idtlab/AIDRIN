@@ -91,6 +91,7 @@ Four Ways to Use AIDRIN
 
    metric_names
    variable_unit_validation
+   file_collections
 
 .. toctree::
    :maxdepth: 2

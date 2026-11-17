@@ -28,6 +28,17 @@ class CustomLoaderError(ValueError):
 _custom_loader_ctx: ContextVar[str | None] = ContextVar(
     "aidrin_custom_loader", default=None
 )
+_builtin_readers_only: ContextVar[bool] = ContextVar("aidrin_builtin_readers_only", default=False)
+
+
+@contextmanager
+def using_builtin_readers() -> Iterator[None]:
+    """Read explicit collection members without an unrelated active loader."""
+    token = _builtin_readers_only.set(True)
+    try:
+        yield
+    finally:
+        _builtin_readers_only.reset(token)
 
 
 @contextmanager
@@ -233,6 +244,8 @@ def load_dataframe(
 
 def get_active_loader_spec(explicit: str | None = None) -> str | None:
     """Return explicit loader, else headless context, else Flask session spec."""
+    if _builtin_readers_only.get():
+        return None
     if explicit:
         return explicit
     ctx = get_custom_loader_spec()
