@@ -15,7 +15,8 @@ holds, only the ones the current process opened. ``container`` is optional and
 only checked for existence. ``pdc_tmpdir`` is optional and points at the
 directory holding the server's ``server.cfg`` (the same ``PDC_TMPDIR`` the
 server was started with); a relative path is resolved against the descriptor's
-directory. When omitted, the ``PDC_TMPDIR`` environment variable is used.
+directory. When omitted, the ``PDC_TMPDIR`` environment variable is used, and
+when that is unset too, PDC's own default ``./pdc_tmp``.
 
 Objects are read with PDCpy (https://github.com/hpc-io/PDCpy), PDC's official
 Python interface, which has to be built against the same PDC installation the
@@ -31,6 +32,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import logging
 import os
 import re
 import socket
@@ -50,6 +52,12 @@ from aidrin.file_handling.readers.structured import (
     StructuredFileReader,
     make_inventory,
 )
+
+
+_log = logging.getLogger(__name__)
+
+# The PDC client falls back to this when PDC_TMPDIR is unset (pdc_client_connect.c).
+DEFAULT_PDC_TMPDIR = "pdc_tmp"
 
 
 class PDCError(RuntimeError):
@@ -99,10 +107,26 @@ def load_descriptor(path: str) -> dict[str, Any]:
     return {"objects": list(objects), "container": container, "pdc_tmpdir": tmpdir}
 
 
+def resolve_tmpdir(tmpdir: str | None) -> tuple[str, str]:
+    """Return ``(absolute path, where it came from)`` for the server's PDC_TMPDIR.
+
+    Precedence matches the PDC client: the descriptor's ``pdc_tmpdir``, then
+    ``PDC_TMPDIR``, then PDC's default ``./pdc_tmp`` under the working directory.
+    """
+    if tmpdir:
+        source = '"pdc_tmpdir" in the descriptor'
+    elif os.environ.get("PDC_TMPDIR"):
+        tmpdir, source = os.environ["PDC_TMPDIR"], "PDC_TMPDIR"
+    else:
+        tmpdir = DEFAULT_PDC_TMPDIR
+        source = 'PDC\'s default ./pdc_tmp, since neither "pdc_tmpdir" in the descriptor nor PDC_TMPDIR is set'
+    return os.path.normpath(os.path.abspath(tmpdir)), source
+
+
 _TCP_ADDRESS = re.compile(r"^(?P<transport>[^:]+)://\[?(?P<host>[^\]/]+?)\]?:(?P<port>\d+)$")
 
 
-def check_server(tmpdir: str, timeout: float = 2.0) -> None:
+def check_server(tmpdir: str, timeout: float = 2.0, source: str | None = None) -> None:
     """Raise PDCError unless a PDC server looks reachable through ``tmpdir``.
 
     ``pdc.init()`` blocks and then kills the process when no server answers, so
@@ -110,15 +134,18 @@ def check_server(tmpdir: str, timeout: float = 2.0) -> None:
     per line) and, for TCP-based transports, connects to the first address; a
     leftover ``server.cfg`` from a stopped server fails here instead of in
     ``pdc.init()``. Other transports (e.g. ``ofi+cxi``) are not probed.
+    ``source`` says where ``tmpdir`` came from, for the error message.
     """
     cfg = os.path.join(tmpdir, "server.cfg")
     try:
         with open(cfg, encoding="utf-8") as fh:
             lines = [line.strip() for line in fh if line.strip()]
     except OSError:
+        origin = f" (from {source})" if source else ""
         raise PDCError(
-            f"No PDC server found: '{cfg}' does not exist. "
-            "Start pdc_server with this PDC_TMPDIR, or fix \"pdc_tmpdir\" in the descriptor."
+            f"No PDC server found: '{cfg}'{origin} does not exist. Start pdc_server with this "
+            "PDC_TMPDIR, or point \"pdc_tmpdir\" in the descriptor or the PDC_TMPDIR environment "
+            "variable at the server's directory."
         ) from None
     match = _TCP_ADDRESS.match(lines[1]) if len(lines) > 1 else None
     if not match or not any(t in match["transport"] for t in ("tcp", "sockets")):
@@ -155,13 +182,22 @@ def configure_pdc_logging(pdc):
     ``setLogLevel`` (pdc_logger.h) through the already-loaded PDCpy
     extension, whose dependencies include libpdc. Warnings and errors are
     kept; set ``PDC_DEBUG=1`` to see everything. Call before ``pdc.init()``.
-    Older PDC releases lack these functions; logging is then left alone.
+    Older PDC releases lack these functions; logging is then left alone and a
+    warning says so, since PDC's INFO lines will then land on stdout.
     """
     try:
         lib = ctypes.CDLL(pdc.main.__file__)
-        set_log_file, set_log_level = lib.setLogFile, lib.setLogLevel
-    except (AttributeError, OSError):
+    except (AttributeError, OSError) as exc:
+        _log.warning("Could not load the PDC library to redirect its logging (%s); PDC may log to stdout.", exc)
         return
+    missing = [name for name in ("setLogFile", "setLogLevel") if not hasattr(lib, name)]
+    if missing:
+        _log.warning(
+            "This PDC build lacks %s, so its logging stays on stdout and INFO lines are not filtered.",
+            " and ".join(missing),
+        )
+        return
+    set_log_file, set_log_level = lib.setLogFile, lib.setLogLevel
     set_log_file.restype = None
     set_log_file.argtypes = [ctypes.c_int, ctypes.c_char_p]
     for level in _LOG_LEVELS:
@@ -182,36 +218,34 @@ class PDCClient:
     _instance: PDCClient | None = None
     _lock = threading.Lock()
 
-    def __init__(self, pdc, tmpdir: str | None):
+    def __init__(self, pdc, tmpdir: str):
         self._pdc = pdc
         self.tmpdir = tmpdir
 
     @classmethod
     def get(cls, tmpdir: str | None = None) -> PDCClient:
+        requested, source = resolve_tmpdir(tmpdir)
         with cls._lock:
             if cls._instance is not None:
                 active = cls._instance.tmpdir
-                if tmpdir and active and os.path.normpath(tmpdir) != os.path.normpath(active):
+                if requested != active:
                     raise PDCError(
                         f"This process is already connected to the PDC server in '{active}'; "
-                        f"cannot also connect to '{tmpdir}'."
+                        f"cannot also connect to '{requested}' (from {source})."
                     )
                 return cls._instance
 
             pdc = _require_pdcpy()
-            effective = tmpdir or os.environ.get("PDC_TMPDIR")
             if not pdc.ready():
-                if effective:
-                    check_server(effective)
-                if tmpdir:
-                    # The client library reads PDC_TMPDIR at init to find server.cfg.
-                    os.environ["PDC_TMPDIR"] = tmpdir
+                check_server(requested, source=source)
+                # The client library reads PDC_TMPDIR at init to find server.cfg.
+                os.environ["PDC_TMPDIR"] = requested
                 configure_pdc_logging(pdc)
                 try:
                     pdc.init()
                 except pdc.PDCError as exc:
                     raise PDCError(f"Could not connect to a PDC server: {exc}") from exc
-            cls._instance = cls(pdc, effective)
+            cls._instance = cls(pdc, requested)
             return cls._instance
 
     def check_container(self, name: str):
@@ -325,6 +359,9 @@ class pdcReader(StructuredFileReader):
         unknown = [k for k in keys if k not in objects]
         if unknown:
             raise PDCError(f"Selected keys not listed in the PDC descriptor: {', '.join(unknown)}")
+        repeated = sorted({k for k in keys if keys.count(k) > 1})
+        if repeated:
+            raise PDCError(f"Selected keys name an object more than once: {', '.join(repeated)}")
         return keys or objects
 
     def _frame(self, names: list[str]) -> pd.DataFrame | None:

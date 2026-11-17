@@ -15,11 +15,14 @@ from unittest import mock
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from aidrin.file_handling import file_parser
 from aidrin.file_handling.file_parser import READER_MAP, ReaderReturnedNone, read_file
 from aidrin.file_handling.readers import pdc_reader
 from aidrin.file_handling.readers.pdc_reader import PDCError, load_descriptor, pdcReader
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="PDC does not support Windows")
 
 _log = logging.getLogger("test")
 
@@ -146,6 +149,13 @@ class TestPdcReader(unittest.TestCase):
         with self.assertRaisesRegex(PDCError, "not listed in the PDC descriptor: secret"):
             self._reader(["age"], selected_keys=["secret"]).read()
 
+    def test_repeated_selected_keys_are_refused(self):
+        for keys, repeated in (("grid,grid", "grid"), (["age", "income", "age"], "age")):
+            with self.subTest(keys=keys):
+                with self.assertRaisesRegex(PDCError, f"more than once: {repeated}$"):
+                    self._reader(["age", "income", "grid"], selected_keys=keys).read()
+        self.assertEqual(self.client.reads, [])
+
     def test_incompatible_objects_are_refused_before_reading(self):
         for objects in (["age", "short"], ["age", "grid"], ["cube"]):
             with self.subTest(objects=objects):
@@ -250,6 +260,17 @@ class TestPDCClient(unittest.TestCase):
             with self.assertRaisesRegex(ImportError, "pip install PDCpy"):
                 pdc_reader.PDCClient.get()
 
+    def _server_dir(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        open(os.path.join(tmp.name, "server.cfg"), "w").close()
+        return tmp.name
+
+    def _chdir(self, path):
+        cwd = os.getcwd()
+        os.chdir(path)
+        self.addCleanup(os.chdir, cwd)
+
     def test_missing_server_cfg_refused_before_init(self):
         fake = _fake_pdcpy()
         tmp = tempfile.mkdtemp()
@@ -261,13 +282,36 @@ class TestPDCClient(unittest.TestCase):
         self.assertNotIn("PDC_TMPDIR", os.environ)
         self.assertIsNone(pdc_reader.PDCClient._instance)
 
+    def test_nothing_configured_probes_pdc_default_before_init(self):
+        fake = _fake_pdcpy()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self._chdir(tmp.name)
+        with mock.patch.object(pdc_reader, "_require_pdcpy", return_value=fake):
+            with self.assertRaises(PDCError) as ctx:
+                pdc_reader.PDCClient.get()
+        message = str(ctx.exception)
+        self.assertIn(os.path.join("pdc_tmp", "server.cfg"), message)
+        self.assertIn("PDC_TMPDIR", message)
+        self.assertIn('"pdc_tmpdir"', message)
+        fake.init.assert_not_called()
+
+    def test_nothing_configured_uses_pdc_default_when_server_is_there(self):
+        fake = _fake_pdcpy()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        os.mkdir(os.path.join(tmp.name, "pdc_tmp"))
+        open(os.path.join(tmp.name, "pdc_tmp", "server.cfg"), "w").close()
+        self._chdir(tmp.name)
+        with mock.patch.object(pdc_reader, "_require_pdcpy", return_value=fake):
+            client = pdc_reader.PDCClient.get()
+        fake.init.assert_called_once()
+        self.assertEqual(client.tmpdir, os.path.abspath("pdc_tmp"))
+        self.assertEqual(os.environ["PDC_TMPDIR"], client.tmpdir)
+
     def test_init_once_with_tmpdir(self):
         fake = _fake_pdcpy()
-        tmp = tempfile.mkdtemp()
-        cfg = os.path.join(tmp, "server.cfg")
-        open(cfg, "w").close()
-        self.addCleanup(os.rmdir, tmp)
-        self.addCleanup(os.remove, cfg)
+        tmp = self._server_dir()
         with mock.patch.object(pdc_reader, "_require_pdcpy", return_value=fake):
             first = pdc_reader.PDCClient.get(tmp)
             second = pdc_reader.PDCClient.get(tmp)
@@ -283,12 +327,35 @@ class TestPDCClient(unittest.TestCase):
                 pdc_reader.PDCClient.get("/srv/b")
         fake.init.assert_not_called()
 
+    def test_second_server_refused_when_first_had_no_tmpdir(self):
+        fake = _fake_pdcpy(ready=True)
+        with mock.patch.object(pdc_reader, "_require_pdcpy", return_value=fake):
+            pdc_reader.PDCClient.get()
+            with self.assertRaisesRegex(PDCError, "already connected"):
+                pdc_reader.PDCClient.get("/srv/b")
+
+    def test_second_server_refused_when_only_env_differs(self):
+        fake = _fake_pdcpy(ready=True)
+        with mock.patch.object(pdc_reader, "_require_pdcpy", return_value=fake):
+            pdc_reader.PDCClient.get("/srv/a")
+            os.environ["PDC_TMPDIR"] = "/srv/b"
+            with self.assertRaisesRegex(PDCError, "already connected"):
+                pdc_reader.PDCClient.get()
+
+    def test_same_server_reused_however_it_is_named(self):
+        fake = _fake_pdcpy(ready=True)
+        with mock.patch.object(pdc_reader, "_require_pdcpy", return_value=fake):
+            first = pdc_reader.PDCClient.get("/srv/a")
+            os.environ["PDC_TMPDIR"] = "/srv/x/../a"
+            self.assertIs(pdc_reader.PDCClient.get(), first)
+            self.assertIs(pdc_reader.PDCClient.get("/srv/a/"), first)
+
     def test_init_failure_becomes_pdc_error(self):
         fake = _fake_pdcpy()
         fake.init.side_effect = fake.PDCError("Could not initialize PDC")
         with mock.patch.object(pdc_reader, "_require_pdcpy", return_value=fake):
             with self.assertRaisesRegex(PDCError, "Could not connect to a PDC server"):
-                pdc_reader.PDCClient.get()
+                pdc_reader.PDCClient.get(self._server_dir())
 
 
 class TestConfigurePdcLogging(unittest.TestCase):
@@ -308,9 +375,19 @@ class TestConfigurePdcLogging(unittest.TestCase):
         self.assertEqual(lib.setLogFile.call_count, 4)
         lib.setLogLevel.assert_not_called()
 
-    def test_missing_library_is_ignored(self):
+    def test_missing_library_warns(self):
         with mock.patch.object(pdc_reader.ctypes, "CDLL", side_effect=OSError("no such file")):
-            pdc_reader.configure_pdc_logging(_fake_pdcpy())
+            with self.assertLogs(pdc_reader._log, "WARNING") as logs:
+                pdc_reader.configure_pdc_logging(_fake_pdcpy())
+        self.assertIn("no such file", logs.output[0])
+
+    def test_missing_logger_functions_warn(self):
+        lib = types.SimpleNamespace(setLogFile=mock.Mock())
+        with mock.patch.object(pdc_reader.ctypes, "CDLL", return_value=lib):
+            with self.assertLogs(pdc_reader._log, "WARNING") as logs:
+                pdc_reader.configure_pdc_logging(_fake_pdcpy())
+        self.assertIn("lacks setLogLevel", logs.output[0])
+        lib.setLogFile.assert_not_called()
 
 
 class TestCheckServer(unittest.TestCase):

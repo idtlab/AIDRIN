@@ -55,6 +55,27 @@ def test_upload_creates_file_on_disk(client, sample_csv, app):
     assert os.path.exists(file_path)
 
 
+def test_upload_rejects_type_not_in_dropdown(client, app, tmp_path):
+    """A crafted file type outside SUPPORTED_FILE_TYPES must not reach its reader."""
+    descriptor = tmp_path / "data.pdc"
+    descriptor.write_text('{"objects": ["age"], "pdc_tmpdir": "/tmp/elsewhere"}')
+    upload_dir = app.config["UPLOAD_FOLDER"]
+    before = set(os.listdir(upload_dir))
+    for file_type in (".pdc", ".zarr", "", ".exe"):
+        with open(descriptor, "rb") as f:
+            response = client.post(
+                "/inspector",
+                data={"file": (f, "data.pdc"), "fileTypeSelector": file_type},
+                content_type="multipart/form-data",
+                follow_redirects=False,
+            )
+        assert response.status_code == 302
+        with client.session_transaction() as sess:
+            assert "uploaded_file_path" not in sess
+            assert "Unsupported file type" in sess.get("upload_error", "")
+    assert set(os.listdir(upload_dir)) == before
+
+
 # -------------------------------------------------
 # Clear flow
 # -------------------------------------------------

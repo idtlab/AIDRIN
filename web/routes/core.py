@@ -44,6 +44,8 @@ core_bp = Blueprint("core", __name__)
 
 file_upload_time_log = logging.getLogger("file_upload")
 
+_UPLOAD_FILE_TYPES = {ext for ext, _ in SUPPORTED_FILE_TYPES} | {".custom"}
+
 
 @core_bp.route("/")
 def homepage():
@@ -59,6 +61,14 @@ def inspector():
             "ENABLE_WEB_CUSTOM_LOADERS"
         ):
             abort(403)
+
+        # The dropdown is built from SUPPORTED_FILE_TYPES, but the form value is
+        # client-controlled; without this a crafted POST could select a reader
+        # that is not offered for upload (e.g. .pdc, which contacts a server).
+        selected_type = (request.form.get("fileTypeSelector") or "").strip()
+        if selected_type not in _UPLOAD_FILE_TYPES:
+            session["upload_error"] = "Unsupported file type. Choose a file type from the list."
+            return redirect(url_for("core.inspector"))
 
         if file:
             cleared_count = clear_all_user_cache()
@@ -78,7 +88,6 @@ def inspector():
                 return redirect(url_for("core.inspector"))
             file.save(file_path)
 
-            selected_type = (request.form.get("fileTypeSelector") or "").strip()
             loader_code = (request.form.get("loader_code") or "").strip()
             # ".custom" means: any extension + required user loader on upload.
             if selected_type == ".custom":

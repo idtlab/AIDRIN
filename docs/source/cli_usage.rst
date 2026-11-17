@@ -49,7 +49,9 @@ server:
 ``objects`` is required. ``container`` is optional and only checked for existence.
 ``pdc_tmpdir`` is the directory holding the server's ``server.cfg`` (the ``PDC_TMPDIR`` the
 server was started with); a relative path is resolved against the descriptor's directory, and
-when it is omitted the ``PDC_TMPDIR`` environment variable is used.
+when it is omitted the ``PDC_TMPDIR`` environment variable is used, falling back to PDC's own
+default ``./pdc_tmp``. AIDRIN checks for a reachable server there before connecting and reports
+an error if there is none. PDC does not support Windows.
 
 AIDRIN reads the objects with `PDCpy <https://github.com/hpc-io/PDCpy>`_, PDC's official Python
 interface. PDCpy compiles against your PDC installation, so install it with ``PDC_DIR`` and

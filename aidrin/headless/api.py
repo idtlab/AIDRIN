@@ -411,14 +411,16 @@ def get_metric_info(name: str) -> Dict[str, Any]:
 
 
 def inventory(file_path: str, file_type: Optional[str] = None) -> Dict[str, Any]:
-    """Classify an HDF5/Zarr file's on-disk layout without reading it as a table.
+    """Classify an HDF5/Zarr file's or PDC descriptor's layout without reading it as a table.
 
     Returns the reader's ``inventory()`` dict: ``{"type", "datasets", "groups"}``.
     ``type`` is one of ``empty``, ``single_dataset``, ``multi_dataset``, or
     ``legacy`` (see ``aidrin.file_handling.readers.structured`` for what each
     means) -- ``multi_dataset`` is the layout that ``run``/``data-quality``/
     ``summarize`` refuse to auto-flatten, and needs an explicit
-    ``selected_keys`` choice.
+    ``selected_keys`` choice. For a ``.pdc`` descriptor this connects to the
+    PDC server and reports the shapes and types of the objects it names,
+    without reading their data.
 
     Every other supported format (CSV, Parquet, Excel, JSON, NumPy) is always
     read as a single table and has no ambiguous layout to vet, so this raises

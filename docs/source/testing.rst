@@ -46,7 +46,9 @@ want to exercise.
 PDCpy is installed and ``PDC_TMPDIR`` points at a running ``pdc_server`` (see
 :ref:`cli_pdc`). It writes its own objects and deletes them afterwards. No other
 PDC client may run on the same host while it does, since non-MPI PDC clients all
-bind port 8000.
+bind port 8000. For the same reason, run the module in one process (not under
+pytest-xdist); if an in-process test connects before the CLI tests run, as with
+``--lf``, the CLI tests are skipped. Both PDC test modules are skipped on Windows.
 
 .. code-block:: bash
 

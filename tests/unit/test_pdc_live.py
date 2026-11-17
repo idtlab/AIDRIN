@@ -5,10 +5,14 @@ Skipped unless PDCpy is installed and ``PDC_TMPDIR`` points at a running
 them back through the CLI and ``read_file()``, then deletes them.
 
 A PDC client that is not launched with MPI always binds port 8000, so only one
-can run per host at a time. The objects are therefore written by a subprocess
-that exits before the CLI tests start their own clients, and this test process
-connects only after those (the CLI tests come first in this file), keeping the
-connection until it deletes the objects at teardown.
+can run per host at a time, and PDCpy keeps its connection until the process
+exits. The objects are therefore written by a subprocess, the CLI tests each
+start their own client in a subprocess, and in-process tests connect through the
+``in_process_client`` fixture. CLI tests require ``client_port_free``, which
+skips them once this process has connected, so an order that runs an in-process
+test first (``--lf``, ``-k``) skips the CLI tests instead of failing them. Run
+this module in a single process: separate pytest-xdist workers on one host
+would also contend for port 8000.
 """
 
 import json
@@ -20,6 +24,9 @@ import uuid
 
 import numpy as np
 import pytest
+
+if sys.platform == "win32":
+    pytest.skip("PDC does not support Windows", allow_module_level=True)
 
 pdc = pytest.importorskip("pdc")
 
@@ -82,6 +89,27 @@ def dataset(tmp_path_factory):
     PDCClient.get(_TMPDIR)
     for name in arrays:
         pdc.Object.get(name).delete()
+    # PDCpy marks Container._delete() as not actually deleting yet; try anyway
+    # so the container goes once PDCpy fixes it.
+    try:
+        pdc.Container.get(container)._delete()
+    except pdc.PDCError:
+        pass
+
+
+@pytest.fixture
+def client_port_free():
+    """Skip if this process already holds the PDC client port a CLI subprocess needs."""
+    if PDCClient._instance is not None or pdc.ready():
+        pytest.skip(
+            "this process is already connected to PDC and holds port 8000, so a CLI subprocess "
+            "cannot start its own client; run the CLI tests before the in-process ones"
+        )
+
+
+@pytest.fixture
+def in_process_client(dataset):
+    return PDCClient.get(_TMPDIR)
 
 
 def _descriptor(tmp_path, objects, **extra):
@@ -100,10 +128,10 @@ def _cli(*args):
     )
 
 
-# CLI tests first: each starts its own PDC client, which needs port 8000 free.
+# CLI tests: each starts its own PDC client in a subprocess.
 
 
-def test_cli_inventory_stdout_is_json(dataset, tmp_path):
+def test_cli_inventory_stdout_is_json(dataset, client_port_free, tmp_path):
     names = _names(dataset, "age", "income", "grid")
     result = _cli("inventory", _descriptor(tmp_path, names))
     assert result.returncode == 0, result.stderr
@@ -113,23 +141,23 @@ def test_cli_inventory_stdout_is_json(dataset, tmp_path):
     assert shapes == {names[0]: ([N], "int32"), names[1]: ([N], "float64"), names[2]: ([N, 3], "float64")}
 
 
-def test_cli_completeness(dataset, tmp_path):
+def test_cli_completeness(dataset, client_port_free, tmp_path):
     names = _names(dataset, "age", "income")
     result = _cli("run", "completeness", _descriptor(tmp_path, names))
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["Overall Completeness"] == 1.0
 
 
-def test_cli_missing_object_fails_cleanly(dataset, tmp_path):
+def test_cli_missing_object_fails_cleanly(dataset, client_port_free, tmp_path):
     result = _cli("run", "completeness", _descriptor(tmp_path, [f"missing_{dataset['tag']}"]))
     assert result.returncode == 1
     assert f"PDC object 'missing_{dataset['tag']}' not found" in result.stderr
 
 
-# In-process tests: from here on this process holds the PDC connection.
+# In-process tests: these connect this process to PDC for the rest of the run.
 
 
-def test_read_file_returns_exact_values_and_dtypes(dataset, tmp_path):
+def test_read_file_returns_exact_values_and_dtypes(dataset, in_process_client, tmp_path):
     names = _names(dataset, "age", "income", "score", "flag")
     path = _descriptor(tmp_path, names, container=dataset["container"])
     df = read_file((path, "data.pdc", ".pdc"))
@@ -140,25 +168,25 @@ def test_read_file_returns_exact_values_and_dtypes(dataset, tmp_path):
         np.testing.assert_array_equal(df[name].to_numpy(), expected)
 
 
-def test_2d_object(dataset, tmp_path):
+def test_2d_object(dataset, in_process_client, tmp_path):
     (grid,) = _names(dataset, "grid")
     df = read_file((_descriptor(tmp_path, [grid]), "data.pdc", ".pdc"))
     assert list(df.columns) == [f"{grid}_{i}" for i in range(3)]
     np.testing.assert_array_equal(df.to_numpy(), dataset["arrays"][grid])
 
 
-def test_selected_keys(dataset, tmp_path):
+def test_selected_keys(dataset, in_process_client, tmp_path):
     names = _names(dataset, "age", "income", "grid")
     df = read_file((_descriptor(tmp_path, names), "data.pdc", ".pdc", [names[1]]))
     assert list(df.columns) == [names[1]]
 
 
-def test_mismatched_lengths_refused(dataset, tmp_path):
+def test_mismatched_lengths_refused(dataset, in_process_client, tmp_path):
     with pytest.raises(ReaderReturnedNone, match="cannot form one table"):
         read_file((_descriptor(tmp_path, _names(dataset, "age", "short")), "data.pdc", ".pdc"))
 
 
-def test_missing_container(dataset, tmp_path):
+def test_missing_container(dataset, in_process_client, tmp_path):
     path = _descriptor(tmp_path, _names(dataset, "age"), container=f"missing_{dataset['tag']}")
     with pytest.raises(PDCError, match="container .* not found"):
         read_file((path, "data.pdc", ".pdc"))
