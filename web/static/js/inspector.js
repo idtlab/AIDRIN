@@ -4699,7 +4699,11 @@ function _fairOriginalMetadataIndex(data) {
 
 /** Whether a FAIR result is a Croissant assessment — editing is scoped to Croissant for now. */
 function _fairIsCroissant(data) {
-  return !!(data && data.Standard && String(data.Standard.Name || "").startsWith("Croissant"));
+  return !!(
+    data &&
+    data.Standard &&
+    String(data.Standard.Name || "").startsWith("Croissant")
+  );
 }
 
 /** Candidate top-level key names a check label like "identifier or sameAs" or
@@ -4729,7 +4733,9 @@ function _fairLabelCandidates(label) {
 let _croissantFieldGuidePromise = null;
 function _getCroissantFieldGuide() {
   if (!_croissantFieldGuidePromise) {
-    _croissantFieldGuidePromise = fetch("/fair-assessment/croissant-field-guide")
+    _croissantFieldGuidePromise = fetch(
+      "/fair-assessment/croissant-field-guide",
+    )
       .then((r) => r.json())
       .catch(() => ({}));
   }
@@ -4751,8 +4757,10 @@ function _fairGuideEntryForLabel(fieldGuide, label) {
  * data (kind/cardinality/node_types) -- not prose written for this UI. */
 function _fairGuideTypeLabel(guide) {
   const parts = [guide.kind];
-  if (guide.node_types && guide.node_types.length) parts.push(guide.node_types.join(" or "));
-  if (guide.allows_free_text && guide.kind !== "text") parts.push("or plain text");
+  if (guide.node_types && guide.node_types.length)
+    parts.push(guide.node_types.join(" or "));
+  if (guide.allows_free_text && guide.kind !== "text")
+    parts.push("or plain text");
   if (guide.cardinality === "MANY") parts.push("list");
   return parts.join(", ");
 }
@@ -4766,7 +4774,10 @@ function _fairGuideTypeLabel(guide) {
 function _fairSubFieldsHint(subFields) {
   if (!subFields || !subFields.length) return "";
   const items = subFields
-    .map((f) => `<strong>${escapeHtml(f.key)}</strong>${f.description ? ` (${escapeHtml(f.description)})` : ""}`)
+    .map(
+      (f) =>
+        `<strong>${escapeHtml(f.key)}</strong>${f.description ? ` (${escapeHtml(f.description)})` : ""}`,
+    )
     .join(", ");
   return `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Add any of these keys inside the object: ${items}.</p>`;
 }
@@ -4774,7 +4785,9 @@ function _fairSubFieldsHint(subFields) {
 function _renderFairMissingFieldHtml(label, guide) {
   const templateText = _fairValueBoxText(guide.template);
   const fieldType = typeof guide.template === "string" ? "string" : "json";
-  const hint = [guide.description, `(${_fairGuideTypeLabel(guide)})`].filter(Boolean).join(" ");
+  const hint = [guide.description, `(${_fairGuideTypeLabel(guide)})`]
+    .filter(Boolean)
+    .join(" ");
   return `<div class="px-3 py-1.5" data-fair-missing-field="1">
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
@@ -4854,7 +4867,11 @@ function _fairCroissantFieldDataTypes(rawIndex) {
   const fields = [];
   sets.forEach((rs) => {
     if (!rs || typeof rs !== "object") return;
-    const fieldList = Array.isArray(rs.field) ? rs.field : rs.field ? [rs.field] : [];
+    const fieldList = Array.isArray(rs.field)
+      ? rs.field
+      : rs.field
+        ? [rs.field]
+        : [];
     fieldList.forEach((f) => {
       if (!f || typeof f !== "object") return;
       fields.push({
@@ -4922,17 +4939,29 @@ function _fairValueRows(obj, rawIndex, editable, fieldGuide) {
         found: !failed,
         value: entry && entry.value !== undefined ? entry.value : String(val),
         editKey: editable && entry ? entry.key : undefined,
-        missingGuide: failed && editable ? _fairGuideEntryForLabel(fieldGuide, key) : undefined,
+        missingGuide:
+          failed && editable
+            ? _fairGuideEntryForLabel(fieldGuide, key)
+            : undefined,
       });
     }
   }
   // Missing fields sink to the bottom of the group; found fields and group headers keep
   // their original relative order (Array.prototype.sort is a stable sort).
-  rows.sort((a, b) => (a.isGroup || a.found ? 0 : 1) - (b.isGroup || b.found ? 0 : 1));
+  rows.sort(
+    (a, b) => (a.isGroup || a.found ? 0 : 1) - (b.isGroup || b.found ? 0 : 1),
+  );
   return rows;
 }
 
-function _fairPrincipleStats(data, principle, checks, rawIndex, editable, fieldGuide) {
+function _fairPrincipleStats(
+  data,
+  principle,
+  checks,
+  rawIndex,
+  editable,
+  fieldGuide,
+) {
   const checkStr = checks[`${principle} Checks`] || "0/0";
   const m = checkStr.match(/(\d+)\/(\d+)/);
   const passed = m ? parseInt(m[1], 10) : 0;
@@ -5080,7 +5109,8 @@ function renderFairValue(obj, rawIndex, editable, fieldGuide) {
         v === false ||
         v === "Fail" ||
         v === "No";
-      const missingGuide = isFail && editable ? _fairGuideEntryForLabel(fieldGuide, k) : undefined;
+      const missingGuide =
+        isFail && editable ? _fairGuideEntryForLabel(fieldGuide, k) : undefined;
       if (missingGuide) {
         entries.push({
           missing: true,
@@ -5237,9 +5267,9 @@ function _wireFairEditTracking(container) {
   if (!btn) return;
   const status = container.querySelector(".fair-download-status");
   const updateState = () => {
-    const changed = Array.from(container.querySelectorAll(".fair-edit-field")).filter(
-      (el) => el.value !== el.dataset.fairOriginal,
-    );
+    const changed = Array.from(
+      container.querySelectorAll(".fair-edit-field"),
+    ).filter((el) => el.value !== el.dataset.fairOriginal);
     btn.disabled = changed.length === 0;
     if (status) {
       status.textContent = changed.length
@@ -5248,7 +5278,8 @@ function _wireFairEditTracking(container) {
     }
   };
   container.addEventListener("input", (e) => {
-    if (e.target.classList && e.target.classList.contains("fair-edit-field")) updateState();
+    if (e.target.classList && e.target.classList.contains("fair-edit-field"))
+      updateState();
   });
   // Exposed so _cancelFairMissingField can re-check after removing a field's textarea
   // without going through an "input" event (innerHTML replacement doesn't fire one).
@@ -5299,7 +5330,9 @@ function _fairApplyProvenance(edited, name, affiliation) {
   const person = {
     "@type": "Person",
     name,
-    ...(affiliation ? { affiliation: { "@type": "Organization", name: affiliation } } : {}),
+    ...(affiliation
+      ? { affiliation: { "@type": "Organization", name: affiliation } }
+      : {}),
   };
   const existingContributors =
     edited.contributor === undefined
@@ -5318,7 +5351,9 @@ function _fairApplyProvenance(edited, name, affiliation) {
 }
 
 function _fairDownloadJson(obj, fileName) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -5376,11 +5411,15 @@ function _openFairProvenanceModal(onConfirm) {
     onConfirm(name, affiliation);
   };
 
-  modal.querySelector("#fair-provenance-cancel").addEventListener("click", close);
+  modal
+    .querySelector("#fair-provenance-cancel")
+    .addEventListener("click", close);
   modal.addEventListener("click", (e) => {
     if (e.target === modal) close();
   });
-  modal.querySelector("#fair-provenance-confirm").addEventListener("click", confirm);
+  modal
+    .querySelector("#fair-provenance-confirm")
+    .addEventListener("click", confirm);
   nameInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") confirm();
   });
@@ -5445,7 +5484,9 @@ function _validateThenDownloadCroissant(container, stamped, fileName) {
     .then((r) => r.json())
     .then((result) => {
       if (result.available !== false && result.valid === false) {
-        const errors = (result.errors || []).map((e) => `• ${e}`).join("\n") || "Unknown error.";
+        const errors =
+          (result.errors || []).map((e) => `• ${e}`).join("\n") ||
+          "Unknown error.";
         alert(
           `This edit doesn't parse as valid Croissant:\n\n${errors}\n\nFix the field(s) above and try again.`,
         );
@@ -5459,7 +5500,10 @@ function _validateThenDownloadCroissant(container, stamped, fileName) {
       restore();
     })
     .catch((err) => {
-      console.warn("Could not reach Croissant validation; downloading without it.", err);
+      console.warn(
+        "Could not reach Croissant validation; downloading without it.",
+        err,
+      );
       _fairDownloadJson(stamped, fileName);
       restore();
     });
@@ -5471,7 +5515,8 @@ function buildReadinessFairResultHtml(data, fieldGuide) {
   let html = _renderFairComplianceSummaryHtml(data);
   if (editable) html += _renderFairEditableNoticeHtml();
   html += `<div class="mt-4">${_renderFairPrincipleCardsGridHtml(data, fieldGuide)}</div>`;
-  if (editable) html += `<div class="mt-4">${_renderFairDownloadSectionHtml()}</div>`;
+  if (editable)
+    html += `<div class="mt-4">${_renderFairDownloadSectionHtml()}</div>`;
   if (_fairSupplementaryDetailKeys(data).length) {
     html += `
     <details class="group border-t border-gray-200 dark:border-gray-700 pt-3 mt-4" data-fair-details="1">
@@ -5496,7 +5541,12 @@ function _wireFairComplianceDetails(detailsEl, data) {
   });
 }
 
-function renderFairAssessmentResult(data, resultContainer, fileName, fieldGuide) {
+function renderFairAssessmentResult(
+  data,
+  resultContainer,
+  fileName,
+  fieldGuide,
+) {
   if (!resultContainer) return false;
   if (data.error) {
     resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
@@ -5510,7 +5560,12 @@ function renderFairAssessmentResult(data, resultContainer, fileName, fieldGuide)
   return true;
 }
 
-function renderReadinessFairResult(data, resultContainer, fileName, fieldGuide) {
+function renderReadinessFairResult(
+  data,
+  resultContainer,
+  fileName,
+  fieldGuide,
+) {
   if (!resultContainer) return false;
   if (data.error) {
     resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
