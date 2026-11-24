@@ -18,6 +18,7 @@ from aidrin.headless.api import (
     run_custom_metric_remedy,
     run_metric,
 )
+from aidrin.headless import api
 from aidrin.headless.config import HeadlessConfig
 from aidrin.telemetry import mlflow_sink
 
@@ -367,6 +368,102 @@ def check_fair_compliance(metadata_path: str, standard: str = "auto") -> str:
     """
     try:
         return _dumps(calculate_fair_compliance(metadata_path, standard))
+    except (OSError, ValueError) as exc:
+        return _dumps({"error": str(exc)})
+
+
+@mcp_server.tool()
+def croissant_fields(metadata_path: str) -> str:
+    """
+    List the Croissant fields a metadata file is missing and the ones it has,
+    with what each field means and expects. Croissant files only; runs locally.
+
+    Each entry gives "key", "description" (MLCommons' own text), "kind" (text,
+    date, url, number, boolean or node), "cardinality", "addable" (false for
+    structural fields like recordSet or distribution, which are not a one-value
+    fill-in), "template", "format_hint" (an example value, never real content)
+    and, for Person/Organization-shaped fields, "sub_fields". "available" is
+    false when mlcroissant isn't installed.
+
+    Use it to show the user what is missing and ask them for the values. Do not
+    fill a field with a value the user has not given or confirmed.
+
+    Args:
+        metadata_path: Absolute path to the Croissant JSON-LD file.
+    """
+    try:
+        return _dumps(api.croissant_fields(metadata_path))
+    except (OSError, ValueError) as exc:
+        return _dumps({"error": str(exc)})
+
+
+@mcp_server.tool()
+def validate_croissant(metadata_path: str) -> str:
+    """
+    Check a Croissant metadata file with MLCommons' official mlcroissant parser.
+
+    Returns "valid", and the parser's "errors" and "warnings". "available" is
+    false (and "valid" null) when mlcroissant isn't installed. This checks the
+    file parses as Croissant; check_fair_compliance scores its FAIR content.
+
+    Args:
+        metadata_path: Absolute path to the Croissant JSON-LD file.
+    """
+    try:
+        return _dumps(api.validate_croissant(metadata_path))
+    except (OSError, ValueError) as exc:
+        return _dumps({"error": str(exc)})
+
+
+@mcp_server.tool()
+def enhance_croissant(
+    metadata_path: str,
+    edits: dict[str, Any],
+    contributor_name: str,
+    output_path: str,
+    contributor_affiliation: str | None = None,
+) -> str:
+    """
+    Set or add top-level fields in a Croissant file, record who made the edit,
+    validate the result with mlcroissant, and write it to a new file. The
+    input file is never overwritten, and nothing is written if the result is
+    not valid Croissant.
+
+    Provenance is stamped the same way as the AIDRIN web UI: "dateModified"
+    is set to today, the contributor is appended to "contributor", and
+    "wasGeneratedBy" records the edit as made by that person using AIDRIN.
+
+    ALWAYS ask the user for contributor_name and contributor_affiliation
+    before calling. Never infer them, take them from the environment, git
+    config or the conversation, or use your own name: they are recorded in
+    the file as the person responsible for the edit. Affiliation may be left
+    out only if the user says they have none to give. Likewise, every value
+    in "edits" must come from the user or be confirmed by them.
+
+    Returns "written", "output_path", "edited_fields", "validation" (errors
+    explain why nothing was written) and the FAIR "Total Checks" before and
+    after ("fair_before", "fair_after").
+
+    Args:
+        metadata_path: Absolute path to the Croissant JSON-LD file.
+        edits: Top-level field names mapped to their new values, e.g.
+               {"license": "https://creativecommons.org/licenses/by/4.0/",
+                "publisher": {"@type": "Organization", "name": "..."}}.
+               Use croissant_fields for each field's expected shape.
+        contributor_name: The user's name, as they gave it.
+        output_path: Absolute path for the enhanced file (not the input path).
+        contributor_affiliation: The user's affiliation, as they gave it.
+    """
+    try:
+        return _dumps(
+            api.enhance_croissant(
+                metadata_path,
+                edits,
+                contributor_name,
+                output_path,
+                contributor_affiliation=contributor_affiliation,
+            )
+        )
     except (OSError, ValueError) as exc:
         return _dumps({"error": str(exc)})
 

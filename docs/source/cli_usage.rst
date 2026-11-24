@@ -222,6 +222,42 @@ API responses). The JSON output leaves out the chart; see :ref:`web_usage` for t
      Interoperable    2/6  missing: conformsTo, references, language, temporal
      Reusable         7/8  missing: rights
 
+.. _cli_croissant:
+
+``aidrin croissant``
+~~~~~~~~~~~~~~~~~~~~
+
+Works on Croissant metadata only, locally (``aidrin remote croissant`` is rejected). The
+field guide and validation use MLCommons' ``mlcroissant`` library.
+
+- ``fields`` lists the Croissant fields the file is missing and has, with each field's
+  description, expected kind, and an example value.
+- ``validate`` checks the file with the ``mlcroissant`` parser and exits with code 1 when it
+  is not valid Croissant.
+- ``enhance`` sets or adds top-level fields, records you as the contributor, validates the
+  result, and writes it to a new file. ``--name`` is required and ``--affiliation`` is
+  optional; both are recorded in the file as given (``dateModified``, a ``contributor``
+  entry, and a ``wasGeneratedBy`` update by you using AIDRIN). The input file is never
+  overwritten, and nothing is written if the result is not valid Croissant (exit code 1).
+
+.. code-block:: bash
+
+   aidrin croissant fields /path/to/croissant.json --summary
+   aidrin croissant validate /path/to/croissant.json
+
+   # A VALUE starting with {, [ or " is parsed as JSON
+   aidrin croissant enhance /path/to/croissant.json \
+       --set datePublished=2024-01-01 \
+       --set 'publisher={"@type": "Organization", "name": "Example Lab"}' \
+       --name "Jane Doe" --affiliation "Example University" \
+       -o /path/to/croissant-enhanced.json
+
+   # Or put the edits in a JSON file
+   aidrin croissant enhance /path/to/croissant.json --edits edits.json --name "Jane Doe" -o out.json
+
+``enhance`` prints the fields changed, the ``mlcroissant`` result, and the FAIR score before
+and after (``fair_before``, ``fair_after``).
+
 .. _cli_readiness_report:
 
 ``aidrin readiness-report``

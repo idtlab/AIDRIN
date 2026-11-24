@@ -273,6 +273,24 @@ top level of the file only, so a title or description on a distribution never st
 dataset's own. Elements written with a namespace prefix (``dct:title``) or as a full IRI match their
 plain name.
 
+Enhancing a Croissant file
+''''''''''''''''''''''''''
+
+For a Croissant file, the values in the report are editable:
+
+1. Correct a value directly in its box, or click **Add** next to a missing field. The box is
+   pre-filled with the shape the field expects, with a hint listing what belongs inside an object
+   such as ``publisher``. Structural fields (``recordSet``, ``distribution``) are shown as missing
+   but cannot be added this way.
+2. Click **Download enhanced JSON** and enter your name (required) and affiliation (optional).
+3. Before downloading, AIDRIN checks the edited file with MLCommons' ``mlcroissant`` parser. If it
+   is not valid Croissant, the errors are shown and nothing is downloaded.
+
+The downloaded file records the edit: ``dateModified`` is set to today, you are added to
+``contributor``, and ``wasGeneratedBy`` names you as having made the update using AIDRIN. The same
+flow is available from the command line as ``aidrin croissant`` (see :ref:`cli_croissant`) and
+through the MCP server.
+
 FAIR Principles and Criteria: Croissant
 ''''''''''''''''''''''''''''''''''''''''
 

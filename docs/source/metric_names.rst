@@ -43,7 +43,8 @@ The web interface groups capabilities into **six** dimensions. It presents
 variable-unit validation under Understandability and Usability while retaining
 its ``data-structure`` registry category. The FAIR checks in that web dimension
 score a metadata file rather than a dataset, so they have no registry category and
-no ``aidrin run`` name; run them with ``aidrin fair`` (see :ref:`cli_fair`).
+no ``aidrin run`` name; run them with ``aidrin fair`` (see :ref:`cli_fair`), and validate or
+enhance a Croissant file with ``aidrin croissant`` (see :ref:`cli_croissant`).
 
 Naming conventions
 ------------------

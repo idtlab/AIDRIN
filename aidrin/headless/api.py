@@ -466,6 +466,97 @@ def calculate_fair_compliance(
     return _sanitize(result)
 
 
+def _load_croissant(metadata_path: str) -> Dict[str, Any]:
+    """Read a metadata file and confirm it is Croissant (the only standard these commands edit)."""
+    import json
+
+    from aidrin.structured_data_metrics.fair_metadata import detect_standard
+
+    if not os.path.exists(metadata_path):
+        raise ValueError(f"File not found: {metadata_path}")
+    with open(metadata_path, encoding="utf-8") as f:
+        try:
+            metadata = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{metadata_path} is not valid JSON: {exc}") from exc
+    try:
+        standard = detect_standard(metadata)
+    except ValueError:
+        standard = None
+    if standard != "croissant":
+        raise ValueError(
+            f"{metadata_path} is not a Croissant file (detected: {standard or 'unknown'}). "
+            "Only Croissant metadata can be validated or enhanced."
+        )
+    return metadata
+
+
+def validate_croissant(metadata_path: str) -> Dict[str, Any]:
+    """Check a Croissant file with MLCommons' ``mlcroissant`` parser.
+
+    Returns ``available`` (False when mlcroissant isn't installed), ``valid``, and the
+    parser's ``errors`` and ``warnings``.
+    """
+    from aidrin.structured_data_metrics.croissant_validation import validate_croissant_jsonld
+
+    return _sanitize(validate_croissant_jsonld(_load_croissant(metadata_path)))
+
+
+def croissant_fields(metadata_path: str) -> Dict[str, Any]:
+    """List the Croissant fields a file is missing and has, with what each one expects."""
+    from aidrin.structured_data_metrics.croissant_enhance import croissant_field_status
+
+    return _sanitize(croissant_field_status(_load_croissant(metadata_path)))
+
+
+def enhance_croissant(
+    metadata_path: str,
+    edits: Dict[str, Any],
+    contributor_name: str,
+    output_path: str,
+    contributor_affiliation: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Apply ``edits`` to a Croissant file, stamp provenance, validate, and write a new file.
+
+    ``edits`` maps top-level keys to their new values. The contributor's name (and
+    optional affiliation) must come from the person making the edit. The enhanced file
+    is written to ``output_path`` only if mlcroissant accepts it (or isn't installed);
+    the input file is never overwritten. Returns ``written``, ``output_path``,
+    ``edited_fields``, ``validation`` and the FAIR ``Total Checks`` before and after.
+    """
+    import json
+
+    from aidrin.structured_data_metrics.croissant_enhance import apply_croissant_edits
+    from aidrin.structured_data_metrics.croissant_validation import validate_croissant_jsonld
+    from aidrin.structured_data_metrics.fair_metadata import calculate_fair_compliance as _score
+
+    if not output_path:
+        raise ValueError("An output path is required; the input file is never overwritten")
+    if os.path.abspath(output_path) == os.path.abspath(metadata_path):
+        raise ValueError("The output path must differ from the input; the input file is never overwritten")
+    if not isinstance(edits, dict):
+        raise ValueError("Edits must be a JSON object mapping field names to values")
+
+    metadata = _load_croissant(metadata_path)
+    enhanced = apply_croissant_edits(metadata, edits, contributor_name, contributor_affiliation)
+    validation = validate_croissant_jsonld(enhanced)
+    written = not (validation.get("available") and validation.get("valid") is False)
+    if written:
+        out = os.path.abspath(output_path)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(enhanced, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+    return _sanitize({
+        "written": written,
+        "output_path": os.path.abspath(output_path) if written else None,
+        "edited_fields": sorted(edits),
+        "validation": validation,
+        "fair_before": _score(metadata, "croissant")["FAIR Compliance Checks"]["Total Checks"],
+        "fair_after": _score(enhanced, "croissant")["FAIR Compliance Checks"]["Total Checks"],
+    })
+
+
 def summarize_dataset(
     file_path: str,
     file_type: Optional[str] = None,

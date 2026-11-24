@@ -1538,6 +1538,70 @@ class TestFairCommand(unittest.TestCase):
         self.assertIn("File not found", stderr)
 
 
+_MNIST_CROISSANT = os.path.join(_REPO, "tests", "fixtures", "fair_metadata", "croissant_1.1_huggingface_mnist.json")
+
+
+class TestCroissantCommand(unittest.TestCase):
+    """`aidrin croissant fields|validate|enhance` on a Croissant file."""
+
+    def setUp(self):
+        import pytest
+
+        pytest.importorskip("mlcroissant")
+        self.tmpdir = tempfile.mkdtemp()
+
+    def test_fields_summary_lists_missing_fields(self):
+        stdout, stderr, code = _run_cli("croissant", "fields", _MNIST_CROISSANT, "--summary")
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertIn("Croissant fields missing", stdout)
+        self.assertIn("datePublished [date, ONE]", stdout)
+
+    def test_validate_reports_a_valid_file(self):
+        stdout, stderr, code = _run_cli("croissant", "validate", _MNIST_CROISSANT)
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertTrue(json.loads(stdout)["valid"])
+
+    def test_enhance_writes_the_file_with_provenance(self):
+        out = os.path.join(self.tmpdir, "mnist.json")
+        stdout, stderr, code = _run_cli(
+            "croissant", "enhance", _MNIST_CROISSANT,
+            "--set", "datePublished=2024-01-01",
+            "--set", 'publisher={"@type": "Organization", "name": "HF"}',
+            "--name", "Jane Doe", "--affiliation", "ACME", "-o", out,
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertEqual(json.loads(stdout)["edited_fields"], ["datePublished", "publisher"])
+        with open(out, encoding="utf-8") as f:
+            written = json.load(f)
+        self.assertEqual(written["publisher"]["name"], "HF")
+        self.assertEqual(written["contributor"][-1]["affiliation"]["name"], "ACME")
+
+    def test_enhance_reads_edits_from_a_file(self):
+        edits = os.path.join(self.tmpdir, "edits.json")
+        with open(edits, "w", encoding="utf-8") as f:
+            json.dump({"version": "1.0.0"}, f)
+        out = os.path.join(self.tmpdir, "o.json")
+        stdout, stderr, code = _run_cli("croissant", "enhance", _MNIST_CROISSANT, "--edits", edits, "--name", "J", "-o", out)
+        self.assertEqual(code, 0, msg=stderr)
+        self.assertEqual(json.loads(stdout)["edited_fields"], ["version"])
+
+    def test_enhance_invalid_result_exits_1_without_writing(self):
+        out = os.path.join(self.tmpdir, "bad.json")
+        _, stderr, code = _run_cli("croissant", "enhance", _MNIST_CROISSANT, "--set", "datePublished=soon", "--name", "J", "-o", out)
+        self.assertEqual(code, 1)
+        self.assertIn("Not written", stderr)
+        self.assertFalse(os.path.exists(out))
+
+    def test_enhance_requires_a_name(self):
+        _, stderr, code = _run_cli("croissant", "enhance", _MNIST_CROISSANT, "--set", "version=1", "-o", os.path.join(self.tmpdir, "o.json"))
+        self.assertEqual(code, 2)
+        self.assertIn("--name", stderr)
+
+    def test_croissant_is_local_only(self):
+        _, stderr, code = _run_cli("remote", "croissant", "validate", _MNIST_CROISSANT)
+        self.assertNotEqual(code, 0)
+
+
 # ===========================================================================
 # skill install command
 # ===========================================================================

@@ -9,7 +9,7 @@
 - [Fairness & bias](#fairness--bias): class-imbalance, statistical-rates, representation-rate
 - [Data governance](#data-governance): k-anonymity, l-diversity, t-closeness, entropy-risk, single-attribute-risk, multiple-attribute-risk, hipaa-compliance
 - [Privacy](#privacy): differential-privacy
-- [FAIR metadata](#fair-metadata): `aidrin fair`
+- [FAIR metadata](#fair-metadata): `aidrin fair`, `aidrin croissant`
 - [Batch config format](#batch-config-format)
 
 ---
@@ -626,6 +626,36 @@ local-only (`aidrin remote fair` is rejected).
 
 ```bash
 aidrin fair examples/sample_data/dcat/BUTTER-E.json --summary
+```
+
+### croissant
+
+Croissant-only, local-only (`aidrin remote croissant` is rejected). Uses MLCommons'
+`mlcroissant` for the field guide and validation; without it, `available` is `false`.
+
+- **Syntax:**
+  - `aidrin croissant fields <croissant.json> [--summary] [-o <path>]` (MCP: `croissant_fields`)
+  - `aidrin croissant validate <croissant.json> [-o <path>]` (MCP: `validate_croissant`)
+  - `aidrin croissant enhance <croissant.json> [--set KEY=VALUE ...] [--edits <edits.json>] --name <name> [--affiliation <aff>] -o <out.json>`
+    (MCP: `enhance_croissant(metadata_path, edits, contributor_name, output_path, contributor_affiliation)`)
+- **fields output:** `available`, `missing` and `present`, each a list of `{key, description,
+  kind, cardinality, addable, template, format_hint, sub_fields, node_types, allows_free_text}`.
+  `addable: false` marks structural fields (recordSet, distribution, ...) that are not a
+  one-value fill-in. `format_hint` is an example, never real content.
+- **validate output:** `available`, `valid`, `errors`, `warnings`. CLI exit code 1 when invalid.
+- **enhance:** `--set` values starting with `{`, `[` or `"` are parsed as JSON; `--set` wins
+  over `--edits` on the same key. Stamps `dateModified`, appends the contributor to
+  `contributor`, and sets `wasGeneratedBy` (an `UpdateAction` by that person with AIDRIN).
+  Output keys: `written`, `output_path`, `edited_fields`, `validation`, `fair_before`,
+  `fair_after`. Nothing is written (and the CLI exits 1) when `validation.valid` is false;
+  the input file is never overwritten.
+- **Name and affiliation come from the user.** Ask for them every time; never infer them.
+
+**Example:**
+
+```bash
+aidrin croissant enhance tests/fixtures/fair_metadata/croissant_1.1_huggingface_mnist.json \
+  --set datePublished=2024-01-01 --name "Jane Doe" --affiliation "Example University" -o mnist-enhanced.json
 ```
 
 ---
