@@ -1,6 +1,6 @@
 ---
 name: aidrin
-description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to validate file paths stored in a dataset, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, FAIR compliance of a metadata file (Croissant, RO-Crate, DCAT-US 3.0 or 1.1, DataCite), or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
+description: Use when the user asks "is my data AI ready", "is my dataset ready", "what is the quality of my data", whether data is good enough to train or publish, to assess a collection of dataset files independently or as stacked rows, to validate file paths stored in a dataset, to check a dataset for bias, fairness, privacy, PII risk, HIPAA compliance, protected health information, PHI, class imbalance, duplicates, outliers, completeness, feature relevance, k-anonymity, feature correlation, collinearity, redundant features, skewness, kurtosis, distribution shape, FAIR compliance of a metadata file (Croissant, RO-Crate, DCAT-US 3.0 or 1.1, DataCite), or mentions AIDRIN. Supports CSV, Excel (.xls/.xlsb/.xlsx/.xlsm), JSON, NumPy (.npz), HDF5 (.h5), and Parquet files.
 ---
 
 # Assessing dataset AI-readiness with AIDRIN
@@ -10,13 +10,15 @@ AIDRIN runs the metrics; you choose what to run based on the user's intent,
 interpret the results, and report scores with their meaning. You do NOT
 declare a final ready/not-ready verdict — that judgment is the user's.
 
+Use [File collections](reference/file-collections.md) to compare files or
+assess them as one table. For a single file, use the workflow below.
+
 ## Tool path: MCP vs CLI
 
-**Check for MCP first.** If the `list_metrics` tool appears in your available
-tools, the AIDRIN MCP server is connected — use MCP tools throughout. MCP
-accepts named parameters (no positional ordering), suppresses image side-effects
-by default, and returns structured JSON directly. Fall back to the `aidrin` CLI
-only when MCP is absent.
+Use MCP when `list_metrics` is available. MCP tools take named arguments and
+return structured JSON. Metric calls suppress image writes by default. Use the
+`aidrin` CLI when MCP is unavailable. For collections, check for the two tools
+in the File collection row.
 
 | Action | MCP tool | CLI equivalent | Remote |
 |---|---|---|---|
@@ -26,6 +28,7 @@ only when MCP is absent.
 | List endpoints | `list_remote_profiles()` | `aidrin remote list` | n/a |
 | Summarize dataset | `summarize_dataset(file_path)` | `aidrin summarize <file>` | add `profile=` / `aidrin remote summarize` |
 | Quality baseline | `run_data_quality_check(file_path)` | `aidrin data-quality <file> [--detail]` | add `profile=` / `aidrin remote data-quality` |
+| File collection | `list_collection_metrics()`, `run_file_collection(files, metrics, mode)` | `aidrin collection <config.json> [-o <results.json>]` | local-only |
 | Single metric | `run_aidrin_metric(file_path, metric, ...)` | `aidrin run <metric> <file> <args...>` | add `profile=` / `aidrin remote run <metric>` |
 | Validate file references | `verify_file_references(file_path, path_targets, ...)` | `aidrin run file-reference-validation <file> <targets> [...]` | use the generic tool with `profile=` / `aidrin remote run file-reference-validation` |
 | Batch | `run_batch(config_path)` | `aidrin batch <config>` | add `profile=` / `aidrin remote batch` |
