@@ -26,13 +26,19 @@ from aidrin.file_handling.file_parser import (
 )
 from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
+from aidrin.file_handling.readers.root_reader import rootReader
+from aidrin.file_handling.readers.structured import dropped_columns
 from web.routes.utils import (
+    build_file_info,
+    categorical_bars,
     clear_all_user_cache,
     confine_to_upload_folder,
+    continuous_bars,
     describe_loader_error,
     ensure_json_serializable,
     generate_metric_cache_key,
     get_current_user_id,
+    infer_column_roles,
     is_metric_cache_valid,
     load_dataframe,
     summary_histograms,
@@ -145,6 +151,8 @@ def inspector():
             session["uploaded_file_path"] = file_path
             session["uploaded_file_type"] = file_type
             session.pop("selected_keys", None)
+            # Column-role overrides are per-dataset; drop any from a prior file.
+            session.pop("column_roles", None)
             session.pop("upload_error", None)
             # This feature owns session["intent"], so a new dataset drops it.
             session.pop("intent", None)
@@ -182,7 +190,7 @@ def inspector():
     file_preview = None
     current_checked_keys = None
 
-    if uploaded_file_path and file_type in [".h5", ".json", ".npz"]:
+    if uploaded_file_path and file_type in [".h5", ".json", ".npz", ".root"]:
         try:
             if file_type in READER_MAP:
                 reader = READER_MAP[file_type](uploaded_file_path, file_upload_time_log)
@@ -264,7 +272,10 @@ def inspector():
         return "<h1>Workspace render error</h1>", 500
 
 
-_SAMPLE_DATA_TYPES = {"csv", "json", "h5", "parquet", "xlsx", "npz", "dcat", "croissant", "rocrate", "datacite"}
+_SAMPLE_DATA_TYPES = {
+    "csv", "json", "h5", "parquet", "xlsx", "npz", "dcat", "root",
+    "croissant", "rocrate", "datacite",
+}
 
 
 @core_bp.route("/sample-data/<file_type>/<path:filename>")
@@ -348,6 +359,20 @@ def clear_file():
     return redirect(url_for("core.inspector"))
 
 
+def _selection_inventory(file_path, file_type):
+    reader = rootReader if file_type == ".root" else hdf5Reader
+    return reader(file_path, file_upload_time_log).inventory()
+
+
+def _selection_message(file_type):
+    if file_type == ".root":
+        return "This ROOT file contains multiple trees. Select one tree to analyze."
+    return (
+        "This HDF5 file contains multiple datasets with different shapes. "
+        "Select 1D datasets of the same length, or fields that share a grid, to analyze."
+    )
+
+
 @core_bp.route("/filter-file", methods=["POST"])
 def filter_file():
     try:
@@ -366,6 +391,16 @@ def filter_file():
 
         file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_type = session.get("uploaded_file_type")
+        if file_type == ".root":
+            if not file_path or not os.path.isfile(file_path):
+                return jsonify({"success": False, "error": "No ROOT file in session"}), 400
+            if len(keys_list) != 1:
+                return jsonify({"success": False, "error": "Select exactly one ROOT tree."}), 400
+            inv = _selection_inventory(file_path, file_type)
+            if keys_list[0] not in {ds["path"] for ds in inv["datasets"]}:
+                return jsonify({"success": False, "error": "The selected ROOT tree was not found."}), 400
+            clear_all_user_cache()
+
         if file_path and file_type == ".h5":
             reader = hdf5Reader(file_path, file_upload_time_log)
             if reader.inventory()["type"] == "multi_dataset":
@@ -397,12 +432,12 @@ def filter_file():
 
 @core_bp.route("/clear-dataset-selection", methods=["POST"])
 def clear_dataset_selection():
-    """Clear HDF5 dataset selection so the user can pick different arrays."""
+    """Clear dataset selection so the user can pick different arrays or trees."""
     try:
-        file_path = session.get("uploaded_file_path")
+        file_path = confine_to_upload_folder(session.get("uploaded_file_path"))
         file_type = session.get("uploaded_file_type")
-        if not file_path or file_type != ".h5":
-            return jsonify({"success": False, "message": "No HDF5 file in session"}), 400
+        if not file_path or file_type not in {".h5", ".root"}:
+            return jsonify({"success": False, "message": "No HDF5 or ROOT file in session"}), 400
 
         previous = session.get("selected_keys") or []
         if isinstance(previous, str):
@@ -413,10 +448,10 @@ def clear_dataset_selection():
 
         cleared_count = clear_all_user_cache()
         file_upload_time_log.info(
-            "HDF5 dataset selection cleared (%d cache entries removed)", cleared_count
+            "Dataset selection cleared (%d cache entries removed)", cleared_count
         )
 
-        inv = hdf5Reader(file_path, file_upload_time_log).inventory()
+        inv = _selection_inventory(file_path, file_type)
         if inv["type"] != "multi_dataset":
             return jsonify(
                 {"success": False, "message": "This file does not require dataset selection"}
@@ -429,11 +464,8 @@ def clear_dataset_selection():
                 "datasets": inv["datasets"],
                 "groups": inv.get("groups", []),
                 "current_checked_keys": previous,
-                "message": (
-                    "This HDF5 file contains multiple datasets with different shapes. "
-                    "Select 1D datasets of the same length, or fields that share a "
-                    "grid, to analyze."
-                ),
+                "file_type": file_type,
+                "message": _selection_message(file_type),
             })
         )
     except Exception as e:
@@ -549,7 +581,7 @@ def summary_statistics():
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
         selected = []
-        if file_type == ".h5":
+        if file_type in {".h5", ".root"}:
             selected = session.get("selected_keys") or []
             if isinstance(selected, str):
                 selected = [key.strip() for key in selected.split(",") if key.strip()]
@@ -566,8 +598,8 @@ def summary_statistics():
         if cached_entry:
             current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
 
-        if file_type == ".h5":
-            inv = hdf5Reader(file_path, file_upload_time_log).inventory()
+        if file_type in {".h5", ".root"}:
+            inv = _selection_inventory(file_path, file_type)
             if inv["type"] == "multi_dataset" and not selected:
                 return jsonify(
                     ensure_json_serializable({
@@ -576,24 +608,39 @@ def summary_statistics():
                         "datasets": inv["datasets"],
                         "groups": inv.get("groups", []),
                         "current_checked_keys": selected,
-                        "message": (
-                            "This HDF5 file contains multiple datasets with "
-                            "different shapes. Select 1D datasets of the same "
-                            "length, or fields that share a grid, to analyze."
-                        ),
+                        "file_type": file_type,
+                        "message": _selection_message(file_type),
                     })
                 ), 200
 
-        file_info = (file_path, file_name, file_type)
+        file_info = build_file_info(file_path, file_name, file_type, selected)
         df, load_error = load_dataframe(file_info)
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200
 
-        # Restrict to numeric columns: describe() would otherwise fall back to
-        # object-column stats (top/freq are strings) and the numeric formatter
-        # below would fail on them. Datasets with no numerical features simply
-        # get an empty numerical summary (issue #125).
-        numeric_df = df.select_dtypes(include="number")
+        # Classify columns by *semantic role* rather than raw dtype, so numeric
+        # codes (e.g. a class label) and identifiers (e.g. a near-unique index)
+        # are not summarized as if they were continuous measurements. User
+        # overrides stored in the session take precedence over the heuristic.
+        role_overrides = session.get("column_roles", {})
+        column_roles = infer_column_roles(df, role_overrides)
+        continuous_columns = [c for c in df.columns if column_roles[c] == "continuous"]
+        categorical_columns = [c for c in df.columns if column_roles[c] == "categorical"]
+        identifier_columns = [c for c in df.columns if column_roles[c] == "identifier"]
+
+        # describe() runs only on continuous columns. Datasets with no continuous
+        # features simply get an empty numerical summary (issue #125).
+        #
+        # A column's role can be a user override rather than the inferred dtype
+        # (e.g. forcing a text column to "continuous"), so coerce to numeric here
+        # too — the same treatment summary_histograms/continuous_bars already
+        # give it — rather than handing describe() raw strings: its "top"/"freq"
+        # stats for an object column reach the formatter below, whose abs(x)
+        # raises TypeError on a string and 500s the whole overview.
+        numeric_df = df[continuous_columns].apply(lambda s: pd.to_numeric(s, errors="coerce"))
+        # A column that coerced to all-NaN has nothing to summarize; keeping it
+        # would describe() it into a column of literal "nan" strings.
+        numeric_df = numeric_df.dropna(axis=1, how="all")
         if numeric_df.shape[1] == 0:
             summary_statistics = {}
         else:
@@ -601,20 +648,13 @@ def summary_statistics():
                 lambda x: round(x, 2) if x == 0 or abs(x) >= 0.001 else f"{x:.2e}"
             ).to_dict()
 
-        histograms = summary_histograms(df)
-
-        # Booleans are treated as categorical (they're excluded from describe()
-        # and select_dtypes("number") above, so they belong with the categorical
-        # summary, not the numerical one).
-        numerical_columns = [
-            col for col, dtype in df.dtypes.items()
-            if pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
-        ]
-        categorical_columns = [
-            col for col, dtype in df.dtypes.items()
-            if pd.api.types.is_string_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
-        ]
-        all_features = numerical_columns + categorical_columns
+        # KDE curves for continuous columns; value-count bars for categorical
+        # ones (a KDE of a discrete code is meaningless). Identifiers get neither.
+        histograms = summary_histograms(df, columns=continuous_columns)
+        categorical_histograms = categorical_bars(df, categorical_columns)
+        # Binned twin of each KDE curve, so the reader can switch a continuous
+        # chart to bars when the data is effectively discrete (issue #212).
+        histogram_bars = continuous_bars(df, columns=continuous_columns)
 
         for v in summary_statistics.values():
             for old_key in list(v.keys()):
@@ -622,9 +662,12 @@ def summary_statistics():
                     new_key = old_key.replace("%", "th percentile")
                     v[new_key] = v.pop(old_key)
 
-        hdf5_multi_dataset = bool(selected)
+        hdf5_multi_dataset = file_type == ".h5" and bool(selected)
         selected_dataset_keys = selected
 
+        # Per-column summary for categorical features (numeric codes included).
+        # Reports non-null count, distinct values, the most frequent value, its
+        # frequency, and that frequency as a percentage of the non-null values.
         categorical_summary = {}
         for col in categorical_columns:
             # value_counts() and nunique() both hash, so a column holding
@@ -645,18 +688,39 @@ def summary_statistics():
                 "freq_pct": round(freq / count * 100, 1) if count else 0.0,
             }
 
+        # Compact per-identifier note (excluded from stats/plots).
+        identifier_summary = {
+            str(col): {
+                "count": int(df[col].notna().sum()),
+                "unique": int(df[col].nunique(dropna=True)),
+            }
+            for col in identifier_columns
+        }
+
+        all_features = continuous_columns + categorical_columns
+
         response_data = ensure_json_serializable({
             "success": True,
             "message": "File uploaded successfully",
             "records_count": len(df),
             "features_count": len(df.columns),
             "categorical_features": list(categorical_columns),
-            "numerical_features": list(numerical_columns),
+            "numerical_features": list(continuous_columns),
+            "identifier_features": list(identifier_columns),
             "all_features": all_features,
+            "column_roles": {str(c): r for c, r in column_roles.items()},
             "summary_statistics": summary_statistics,
             "categorical_summary": categorical_summary,
+            "identifier_summary": identifier_summary,
             "histograms": histograms,
+            "categorical_histograms": categorical_histograms,
+            "histogram_bars": histogram_bars,
             "hdf5_multi_dataset": hdf5_multi_dataset,
+            # Columns the reader had to exclude to produce a tabular frame
+            # (e.g. array-valued ROOT branches); disclosed so features_count
+            # is not read as the whole dataset.
+            "excluded_columns": dropped_columns(df),
+            "root_tree_selected": file_type == ".root" and bool(selected),
             "selected_dataset_keys": selected_dataset_keys,
         })
         current_app.TEMP_RESULTS_CACHE[cache_key] = {
@@ -668,6 +732,32 @@ def summary_statistics():
     except Exception as e:
         file_upload_time_log.error("Error computing summary statistics: %s", e, exc_info=True)
         return jsonify({"success": False, "message": "An internal error occurred"})
+
+
+@core_bp.route("/column-roles", methods=["POST"])
+def set_column_roles():
+    """Persist user overrides of inferred column roles for the current session.
+
+    Accepts a JSON body ``{"column_roles": {col: role}}`` (or a bare
+    ``{col: role}`` map). The full override set replaces any previous one, so
+    sending ``{}`` resets to the inferred defaults. The Data Overview re-fetches
+    ``/summary-statistics`` afterwards to recompute with the new roles.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        overrides = data.get("column_roles", data)
+        if not isinstance(overrides, dict):
+            return jsonify({"success": False, "message": "Invalid payload"}), 200
+        valid_roles = {"continuous", "categorical", "identifier"}
+        cleaned = {str(c): r for c, r in overrides.items() if r in valid_roles}
+        session["column_roles"] = cleaned
+        # Overrides change which columns each metric treats as numeric/categorical,
+        # so any cached metric results are now stale.
+        clear_all_user_cache()
+        return jsonify({"success": True, "column_roles": cleaned})
+    except Exception as e:
+        file_upload_time_log.error("Error setting column roles: %s", e, exc_info=True)
+        return jsonify({"success": False, "message": "An internal error occurred"}), 200
 
 
 @core_bp.route("/feature-set", methods=["POST"])
@@ -682,7 +772,7 @@ def extract_features():
         if not file_type:
             return jsonify({"success": False, "message": "File type not set in session"}), 200
 
-        file_info = (file_path, file_name, file_type)
+        file_info = build_file_info(file_path, file_name, file_type)
         df, load_error = load_dataframe(file_info)
         if load_error:
             return jsonify({"success": False, "message": load_error}), 200

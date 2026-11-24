@@ -20,6 +20,21 @@ Quick Start
    # Run a batch of metrics from a YAML config
    aidrin batch /path/to/my_project/batch_config.yaml
 
+   # Full AI Data Readiness Report (JSON; optional PDF)
+   aidrin readiness-report /path/to/sample_dataset.csv -o report.json
+
+ROOT (``.root``) files are supported via ``uproot`` (a core dependency). A single-TTree file
+loads like any other tabular format. Array-valued branches (per-event sequences such as
+``vector<float>``) cannot be represented as tabular columns: they are excluded from metrics,
+and the exclusion is disclosed in the summarize output (a ``dropped_columns`` entry, also
+printed by ``--summary``) and in the web readiness report:
+
+.. code-block:: bash
+
+   aidrin summarize examples/sample_data/root/sample.root --summary
+   aidrin data-quality examples/sample_data/root/sample.root
+   aidrin run completeness examples/sample_data/root/sample.root
+
    # HDF5 / Zarr: pick compatible 1D arrays (comma-separated paths)
    aidrin run completeness /path/to/store.zarr --selected-keys age,income
    aidrin summarize /path/to/file.h5 --selected-keys S1/X,S1/Y
@@ -126,14 +141,15 @@ and cardinality. Useful for deciding which columns to feed to other metrics.
 ``aidrin inventory``
 ~~~~~~~~~~~~~~~~~~~~
 
-Classifies an HDF5 (``.h5``) or Zarr (``.zarr``) file's on-disk layout and lists its
-datasets/arrays, without reading the file as a table. Every other supported format (CSV,
-Parquet, Excel, JSON, NumPy) is always read as a single table and has no ambiguous layout to
-vet, so ``inventory`` only applies to HDF5/Zarr.
+Classifies an HDF5 (``.h5``), ROOT (``.root``) or Zarr (``.zarr``) file's on-disk layout and
+lists its datasets/arrays/trees, without reading the file as a table. Every other supported
+format (CSV, Parquet, Excel, JSON, NumPy) is always read as a single table and has no
+ambiguous layout to vet, so ``inventory`` only applies to HDF5/ROOT/Zarr.
 
 .. code-block:: bash
 
    aidrin inventory /path/to/file.h5
+   aidrin inventory /path/to/file.root
    aidrin inventory /path/to/store.zarr
 
    # Write the JSON report to a file (in addition to stdout)
@@ -205,6 +221,57 @@ API responses). The JSON output leaves out the chart; see :ref:`web_usage` for t
      Accessible       6/6
      Interoperable    2/6  missing: conformsTo, references, language, temporal
      Reusable         7/8  missing: rights
+
+.. _cli_readiness_report:
+
+``aidrin readiness-report``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Builds the **AI Data Readiness Report** for a tabular dataset: the same five
+automated sections as the web report (Dataset Overview, Data Quality, Impact on
+AI, Fairness & Bias, Data Governance). JSON goes to stdout only when neither
+``-o``/``--output`` nor ``--pdf-out`` is set. With ``-o``, JSON is written to
+that file; with ``--pdf-out``, a PDF is written (and stdout stays silent even
+without ``-o``). Optional FAIR appendix via ``--fair-metadata`` (same engine and
+``--fair-standard`` values as :ref:`cli_fair`). FAIR is omitted when no metadata
+path is given; missing FAIR never blocks the PDF. For HDF5/Zarr multi-array
+stores use ``--selected-keys`` (same as ``summarize`` / ``data-quality``); for
+formats the built-in readers do not cover, pass ``--loader``.
+
+This command is **local-only** (``aidrin remote readiness-report`` is rejected).
+PDF export uses the shared ``aidrin.report.pdf`` templates and WeasyPrint (no
+``web`` package import). PDF export needs WeasyPrint's native libraries; see
+:ref:`web_installation` if rendering fails. By default, noisy
+WeasyPrint/fontTools logs during ``--pdf-out`` are suppressed; pass
+``-v``/``--verbose`` to keep them.
+
+.. code-block:: bash
+
+   # JSON to stdout only when no -o / --pdf-out is given
+   aidrin readiness-report /path/to/sample_dataset.csv
+   aidrin readiness-report /path/to/sample_dataset.csv -o /path/to/reports/readiness.json
+
+   # Scorecard PDF (default) or full PDF with section charts (no JSON on stdout)
+   aidrin readiness-report /path/to/sample_dataset.csv \
+     --pdf-out /path/to/reports/readiness.pdf
+   aidrin readiness-report /path/to/sample_dataset.csv \
+     -o /path/to/reports/readiness.json \
+     --pdf-out /path/to/reports/readiness-full.pdf \
+     --pdf-mode full
+
+   # Optional FAIR appendix (Croissant, RO-Crate, DCAT-US, or DataCite metadata)
+   aidrin readiness-report /path/to/sample_dataset.csv \
+     --fair-metadata /path/to/metadata.json \
+     --fair-standard auto \
+     -o /path/to/reports/readiness.json \
+     --pdf-out /path/to/reports/readiness.pdf
+
+   # Include chart payloads in the JSON (large); PDF full mode builds charts itself
+   aidrin readiness-report /path/to/sample_dataset.csv --viz -o /path/to/reports/readiness-viz.json
+
+   # HDF5 / Zarr: pick arrays; or use a custom loader for unsupported formats
+   aidrin readiness-report /path/to/store.h5 --selected-keys age,income -o /path/to/reports/readiness.json
+   aidrin readiness-report /path/to/data.nc --loader ./loaders/nc.py:to_table -o /path/to/reports/readiness.json
 
 ``aidrin run``
 ~~~~~~~~~~~~~~
@@ -552,11 +619,25 @@ All CLI metrics are also available as a Python API for use in notebooks or scrip
 
 .. code-block:: python
 
-   from aidrin.headless import run_metric, run_data_quality, run_batch_metrics
+   from aidrin.headless import (
+       run_metric,
+       run_data_quality,
+       run_batch_metrics,
+       run_readiness_report,
+       run_readiness_report_pdf,
+   )
    from aidrin.headless import HeadlessConfig
 
    # Single metric
    result = run_metric("completeness", "/path/to/sample_dataset.csv")
+
+   # Full readiness report (same sections as ``aidrin readiness-report``)
+   report = run_readiness_report("/path/to/sample_dataset.csv")
+   pdf_bytes = run_readiness_report_pdf(
+       "/path/to/sample_dataset.csv",
+       mode="scorecard",
+       fair_metadata="/path/to/metadata.json",
+   )
 
    # Custom criteria outliers
    result = run_metric(

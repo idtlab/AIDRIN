@@ -1,18 +1,13 @@
 """Shared utilities used across web route blueprints."""
 
-import io
-import base64
 import logging
 import math
 import os
 import re
-import threading
 import time
 import uuid
 
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from flask import current_app, jsonify, redirect, request, session, url_for
 
 from aidrin.file_handling.custom_loader import CustomLoaderError
@@ -21,12 +16,17 @@ from aidrin.file_handling.file_parser import (
     ReaderReturnedNone,
     read_file,
 )
+from aidrin.report.charts import (  # noqa: F401 — re-export for existing web/tests imports
+    MATPLOTLIB_PLOT_LOCK,
+    _bin_count,
+    _reflected_kde,
+    categorical_bars,
+    categorical_distribution_charts,
+    continuous_bars,
+    summary_histograms,
+)
 
 logger = logging.getLogger(__name__)
-
-# Matplotlib's pyplot API is process-global and not thread-safe. Serialize chart
-# builders that share this process so concurrent requests cannot cross-contaminate figures.
-MATPLOTLIB_PLOT_LOCK = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,91 @@ def confine_to_upload_folder(file_path):
 
 
 # ---------------------------------------------------------------------------
+# Semantic column-role inference
+# ---------------------------------------------------------------------------
+#
+# Metrics historically keyed off the pandas dtype (``select_dtypes``), which
+# mislabels numeric columns that are really categorical codes (e.g. a class
+# label ``flavor`` with values -1/1/2/5/21) or identifiers (e.g. a near-unique
+# ``jetIndex``). Those get meaningless means, KDE plots, and correlations.
+#
+# ``infer_column_roles`` assigns each column a *semantic role* — one of
+# ``continuous``, ``categorical``, or ``identifier`` — from dtype + cardinality
+# (+ a light column-name hint for ids). The result is a suggestion the user can
+# override; ``overrides`` takes precedence over the heuristic.
+
+VALID_ROLES = ("continuous", "categorical", "identifier")
+
+# Cardinality thresholds (fractions are of the row count).
+# A near-unique integer column reads as an identifier.
+_ID_UNIQUE_RATIO = 0.98
+# An id-like name needs at least this spread to be treated as an identifier.
+_ID_NAME_MIN_RATIO = 0.10
+# ... and enough distinct values that near-uniqueness is meaningful
+# (tiny datasets are trivially unique).
+_ID_MIN_UNIQUE = 50
+# A column is categorical when it has at most this many distinct values ...
+_CATEGORICAL_MAX_UNIQUE = 20
+# ... AND distinct/rows is below this (guards tiny datasets where every value
+# is trivially distinct).
+_CATEGORICAL_MAX_RATIO = 0.50
+
+_ID_NAME_TOKENS = {"id", "idx", "index", "key", "uid", "guid", "uuid", "pk"}
+
+
+def _looks_like_id_name(name) -> bool:
+    """True when a column name's leading/trailing token looks like an identifier."""
+    # Split camelCase then snake/space/dash: "eventIndex" -> ["event", "index"].
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(name))
+    parts = [p.lower() for p in re.split(r"[_\s\-]+", spaced) if p]
+    if not parts:
+        return False
+    return parts[-1] in _ID_NAME_TOKENS or parts[0] in _ID_NAME_TOKENS
+
+
+def infer_column_roles(df, overrides=None):
+    """Return ``{column: role}`` where role is continuous/categorical/identifier.
+
+    ``overrides`` (``{column: role}``) wins over the heuristic; unknown columns
+    or invalid role strings in ``overrides`` are ignored.
+    """
+    roles = {}
+    n = len(df)
+    for col in df.columns:
+        series = df[col]
+        dtype = series.dtype
+
+        if not pd.api.types.is_numeric_dtype(dtype) or pd.api.types.is_bool_dtype(dtype):
+            roles[col] = "categorical"
+            continue
+
+        nunique = int(series.nunique(dropna=True))
+        ratio = nunique / n if n else 0.0
+        is_int = pd.api.types.is_integer_dtype(dtype)
+
+        if is_int and nunique >= _ID_MIN_UNIQUE and ratio >= _ID_UNIQUE_RATIO:
+            roles[col] = "identifier"
+        elif (
+            is_int
+            and nunique >= _ID_MIN_UNIQUE
+            and _looks_like_id_name(col)
+            and ratio >= _ID_NAME_MIN_RATIO
+        ):
+            roles[col] = "identifier"
+        elif nunique <= _CATEGORICAL_MAX_UNIQUE and ratio <= _CATEGORICAL_MAX_RATIO:
+            roles[col] = "categorical"
+        else:
+            roles[col] = "continuous"
+
+    if overrides:
+        for col, role in overrides.items():
+            if col in roles and role in VALID_ROLES:
+                roles[col] = role
+
+    return roles
+
+
+# ---------------------------------------------------------------------------
 # File loading
 # ---------------------------------------------------------------------------
 
@@ -69,8 +154,9 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
     """Build a file_info tuple, embedding HDF5 keys / custom loader when needed.
 
     Celery workers do not have Flask session context, so multi-dataset HDF5
-    files must carry ``selected_keys`` in the tuple for background tasks, and
-    an active upload custom loader must carry ``custom_loader_spec`` the same way.
+    files, ROOT trees, and multi-array Zarr sources must carry ``selected_keys``
+    in the tuple for background tasks, and an active upload custom loader must
+    carry ``custom_loader_spec`` the same way.
 
     Tuple shapes:
       ``(path, name, type)``
@@ -86,11 +172,9 @@ def build_file_info(file_path, file_name, file_type, selected_keys=None):
 
     if file_type in _SELECTION_FILE_TYPES:
         if selected_keys is None:
-            # Only HDF5 has a key picker writing session["selected_keys"];
-            # reading it for another format would apply a stale HDF5
-            # selection to this source.
+            # HDF5 and ROOT pickers persist selections in the session.
             try:
-                selected_keys = session.get("selected_keys") or [] if file_type == ".h5" else []
+                selected_keys = session.get("selected_keys") or [] if file_type in {".h5", ".root"} else []
             except RuntimeError:
                 selected_keys = []
         if isinstance(selected_keys, str):
@@ -389,110 +473,3 @@ def ensure_json_serializable(obj):
     elif pd.isna(obj):
         return None
     return obj
-
-
-def summary_histograms(df, figsize=(4, 3), dpi=150):
-    """Generate base64-encoded KDE distribution plots for all numeric columns."""
-    text_color = "#6b7280"
-    curve_color = "#4485F4"
-
-    line_graphs = {}
-    with MATPLOTLIB_PLOT_LOCK:
-        for column in df.select_dtypes(include="number").columns:
-            fig, ax = plt.subplots(figsize=figsize)
-            fig.patch.set_alpha(0)
-            ax.set_facecolor("none")
-
-            sns.kdeplot(df[column], bw_adjust=0.5, cut=0, ax=ax, color=curve_color)
-
-            ax.set_xlabel("Values", fontsize=10, color=text_color)
-            ax.set_ylabel("Density", fontsize=10, color=text_color)
-            ax.tick_params(colors=text_color, labelsize=8)
-            for spine in ax.spines.values():
-                spine.set_color(text_color)
-            fig.tight_layout(pad=0.5)
-
-            img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format="png", dpi=dpi, transparent=True)
-            img_buffer.seek(0)
-            encoded_img = base64.b64encode(img_buffer.read()).decode("utf-8")
-
-            # Store as _light for backward compat with JS picker
-            line_graphs[f"{column}_light"] = encoded_img
-            plt.close(fig)
-            img_buffer.close()
-
-    return line_graphs
-
-
-def categorical_distribution_charts(df, top_n=10):
-    """Generate base64-encoded pie charts for categorical columns.
-
-    Shows the top *top_n* values per column; remaining values are grouped
-    into an "Other" slice when applicable.
-    """
-    text_color = "#6b7280"
-    palette = [
-        "#4485F4", "#34A853", "#FBBC05", "#EA4335", "#9C27B0",
-        "#00ACC1", "#FF7043", "#8D6E63", "#78909C", "#AB47BC",
-    ]
-    charts = {}
-
-    cat_cols = df.select_dtypes(include=["object", "string", "category"]).columns
-    with MATPLOTLIB_PLOT_LOCK:
-        for column in cat_cols:
-            series = df[column].dropna()
-            if len(series) == 0:
-                continue
-
-            vc = series.value_counts()
-            if len(vc) > top_n:
-                top = vc.head(top_n)
-                other_count = int(vc.iloc[top_n:].sum())
-                labels = [str(v) for v in top.index]
-                sizes = [int(v) for v in top.values]
-                if other_count > 0:
-                    labels.append("Other")
-                    sizes.append(other_count)
-            else:
-                labels = [str(v) for v in vc.index]
-                sizes = [int(v) for v in vc.values]
-
-            n_slices = len(labels)
-            colors = [palette[i % len(palette)] for i in range(n_slices)]
-
-            fig, ax = plt.subplots(figsize=(5, 5))
-            fig.patch.set_alpha(0)
-
-            wedges, _, autotexts = ax.pie(
-                sizes,
-                labels=None,
-                autopct=lambda pct: f"{pct:.1f}%" if pct >= 4 else "",
-                colors=colors,
-                startangle=90,
-                pctdistance=0.75,
-                textprops={"color": text_color, "fontsize": 8},
-            )
-            for t in autotexts:
-                t.set_fontsize(7)
-
-            ax.legend(
-                wedges,
-                labels,
-                loc="center left",
-                bbox_to_anchor=(1, 0.5),
-                fontsize=8,
-                frameon=False,
-                labelcolor=text_color,
-            )
-            ax.set_title(str(column), fontsize=10, color=text_color, pad=8)
-            fig.tight_layout()
-
-            img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format="png", dpi=150, transparent=True, bbox_inches="tight")
-            img_buffer.seek(0)
-            charts[str(column)] = base64.b64encode(img_buffer.read()).decode("utf-8")
-            plt.close(fig)
-            img_buffer.close()
-
-    return charts

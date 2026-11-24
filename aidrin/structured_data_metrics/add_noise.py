@@ -1,5 +1,5 @@
 import base64
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -35,7 +35,7 @@ def return_noisy_stats(
         raise Exception("No columns selected for noise addition")
 
     if isinstance(file_info, str):
-        df = pd.read_json(file_info)
+        df = pd.read_json(StringIO(file_info))
     else:
         df = file_info
     df_drop_na = df.dropna()

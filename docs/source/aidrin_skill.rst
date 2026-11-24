@@ -132,6 +132,10 @@ tools become available to Claude for that session.
    ``pip install -U aidrin``, re-run ``aidrin skill install`` to refresh the
    skill to the version that matches the package.
 
+   To skip the copying entirely, install the plugin instead
+   (:ref:`aidrin_skill_plugin`): it carries both components and needs no
+   per-project files.
+
 Step 3 — Verify the connection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -168,6 +172,46 @@ latest version from ``main`` — no release or manual copy needed:
 .. code-block:: bash
 
    npx skills update aidrin
+
+.. _aidrin_skill_plugin:
+
+Alternative — Install as a Claude Code plugin
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+AIDRIN is also packaged as a Claude Code plugin, which carries the skill and the MCP server
+together. Install it once and AIDRIN is available in every session, whatever directory you
+are in — no per-project files and no clone. Inside Claude Code:
+
+.. code-block:: text
+
+   /plugin install aidrin --marketplace idtlab/AIDRIN
+
+Or from a terminal:
+
+.. code-block:: bash
+
+   claude plugin marketplace add idtlab/AIDRIN
+   claude plugin install aidrin@idtlab
+
+The plugin declares the server as ``uvx --from 'aidrin[mcp]' aidrin-mcp``, so
+`uv <https://docs.astral.sh/uv/>`_ is the only prerequisite: it installs AIDRIN and its
+dependencies into an isolated environment on first use, leaving your active Python
+environment untouched. Steps 1 and 2 above are not needed. Because the server is resolved
+from PyPI rather than your checkout, it tracks the latest release; use the steps above
+instead if you need the working tree's code.
+
+Verify from any directory:
+
+.. code-block:: bash
+
+   claude mcp list   # plugin:aidrin:aidrin ... ✔ Connected
+
+The plugin's components are namespaced — its tools appear as
+``mcp__plugin_aidrin_aidrin__*`` and its skill fires as ``aidrin:aidrin``, against
+``mcp__aidrin__*`` and a bare ``aidrin`` for project-scoped copies. In a directory that also
+has its own ``.mcp.json`` or ``.claude/skills/aidrin/``, such as a clone of this repository,
+both are present and their names collide, so those prefixes are how you tell which one
+answered.
 
 ----
 
