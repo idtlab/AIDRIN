@@ -1,5 +1,24 @@
 /* inspector.css — Custom styles for the inspector layout */
 
+.grouped-field-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.grouped-field-label .info-icon {
+  position: static;
+}
+
+.grouped-field-label .info-text {
+  top: 100%;
+  left: 0;
+  margin-left: 0;
+  box-sizing: border-box;
+  max-width: 100%;
+  text-align: left;
+}
+
 /* Smooth panel transitions */
 .metric-panel {
   animation: fadeInPanel 0.2s ease-out;
