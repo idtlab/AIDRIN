@@ -75,28 +75,54 @@ async function loadWorkspaceOverview() {
   }
 }
 
+function syncMetricFileScopes(form, scope) {
+  const collectionLabels = {
+    active: "Active file · supports multiple files",
+    all: "All uploaded local files",
+    selected: "Selected files",
+  };
+  for (const input of form.querySelectorAll(
+    '#checkboxContainer_quality .material-checkbox > input[type="checkbox"]',
+  )) {
+    const label = input.parentElement;
+    let badge = label.querySelector(".metric-file-scope");
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "metric-file-scope";
+      label.append(badge);
+    }
+
+    const collectionLabel = input.hasAttribute("data-collection-metric")
+      ? collectionLabels[scope]
+      : undefined;
+    const text = collectionLabel || "Active file only";
+    if (badge.textContent !== text) badge.textContent = text;
+    badge.toggleAttribute(
+      "data-uses-file-collection",
+      Boolean(collectionLabel) && scope !== "active",
+    );
+  }
+}
+
 function syncCollectionSelection() {
+  const form = document.getElementById("form-data-quality");
+  if (!form) return;
   const selection = document.getElementById("collection-selection");
-  if (!selection) return;
-  const form = selection.form;
-  const checked = [
-    ...form.querySelectorAll(
-      '.material-checkbox input[type="checkbox"]:checked',
-    ),
-  ];
-  const eligible = checked.some((input) =>
-    input.hasAttribute("data-collection-metric"),
+  if (!selection) {
+    syncMetricFileScopes(form);
+    return;
+  }
+  const eligible = Boolean(
+    form.querySelector("[data-collection-metric]:checked"),
   );
   selection.hidden = !eligible;
   selection.disabled = !eligible;
   const scope = document.getElementById("collection-scope").value;
+  syncMetricFileScopes(form, eligible ? scope : "active");
   const mode = document.getElementById("collection-mode").value;
   const settings = document.getElementById("collection-settings");
   settings.hidden = scope === "active";
   document.getElementById("collection-mode").disabled = settings.hidden;
-  document.getElementById("collection-scope-note").hidden = !checked.some(
-    (input) => !input.hasAttribute("data-collection-metric"),
-  );
   document.getElementById("collection-file-actions").hidden =
     scope !== "selected";
   const fileList = document.getElementById("collection-file-list");
@@ -118,6 +144,7 @@ function syncCollectionSelection() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  syncCollectionSelection();
   const form = document.getElementById("form-data-quality");
   const selection = document.getElementById("collection-selection");
   if (!selection) return;
@@ -141,7 +168,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     selection.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  syncCollectionSelection();
 });
 
 function renderWorkspaceCollection(result) {

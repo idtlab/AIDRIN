@@ -32,8 +32,9 @@ Cross-file Data Quality
 
 In **Data Quality**, select column-level completeness, duplicity, or outliers.
 **Files to check** defaults to **Active file only**. Choose all uploaded local
-files or select a subset to check across files. Other checks on the same form
-use the active file.
+files or select a subset to check across files. Each metric shows its file
+scope next to its name. Checks labeled **Active file only** use the file
+shown in the top bar.
 
 * **Analyze each file independently** applies the selected checks to each file.
   An unreadable file is reported separately.
