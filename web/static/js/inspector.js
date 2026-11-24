@@ -5273,7 +5273,7 @@ function _wireFairEditTracking(container) {
     btn.disabled = changed.length === 0;
     if (status) {
       status.textContent = changed.length
-        ? `${changed.length} field${changed.length === 1 ? "" : "s"} edited — ready to download`
+        ? `${changed.length} field${changed.length === 1 ? "" : "s"} edited, ready to download`
         : "Edit a value above to enable download";
     }
   };
@@ -5442,7 +5442,7 @@ function downloadFairEnhancedMetadata(btn) {
   if (!container || !container._fairOriginalMetadata) return;
   const result = _fairBuildEditedMetadata(container);
   if (!result.changed) {
-    alert("No edits to download yet — change a value first.");
+    alert("No edits to download yet. Change a value first.");
     return;
   }
   if (result.invalid.length) {

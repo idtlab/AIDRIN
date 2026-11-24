@@ -299,3 +299,60 @@ def test_intent_panel_build_profile_button_precedes_update_recommendations(uploa
     assert 'id="intent-profile-editor"' not in html
     assert "intent-profile-save-message" not in html
     assert ">Profiles<" not in html
+
+
+# -------------------------------------------------
+# Croissant field guide and validation routes
+# -------------------------------------------------
+
+_MNIST_CROISSANT = ROOT / "tests/fixtures/fair_metadata/croissant_1.1_huggingface_mnist.json"
+
+
+def test_croissant_field_guide_route_returns_the_guide(client):
+    pytest.importorskip("mlcroissant")
+    response = client.get("/fair-assessment/croissant-field-guide")
+    assert response.status_code == 200
+    guide = response.get_json()
+    assert guide["publisher"]["template"] == [{"@type": "Organization"}]
+    assert guide["recordSet"]["addable"] is False
+
+
+def test_croissant_field_guide_route_is_empty_without_mlcroissant(client, monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "mlcroissant", None)
+    monkeypatch.setitem(sys.modules, "mlcroissant._src.core.context", None)
+    response = client.get("/fair-assessment/croissant-field-guide")
+    assert response.status_code == 200
+    assert response.get_json() == {}
+
+
+def test_validate_croissant_route_accepts_a_valid_document(client):
+    pytest.importorskip("mlcroissant")
+    import json
+
+    doc = json.loads(_MNIST_CROISSANT.read_text(encoding="utf-8"))
+    response = client.post("/fair-assessment/validate-croissant", json=doc)
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["available"] is True and body["valid"] is True
+
+
+def test_validate_croissant_route_reports_an_invalid_edit(client):
+    pytest.importorskip("mlcroissant")
+    import json
+
+    doc = json.loads(_MNIST_CROISSANT.read_text(encoding="utf-8"))
+    doc["datePublished"] = "last spring"
+    response = client.post("/fair-assessment/validate-croissant", json=doc)
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["valid"] is False
+    assert any(e.startswith("datePublished:") for e in body["errors"])
+
+
+@pytest.mark.parametrize("payload", ["[1, 2]", "not json", '"a string"'])
+def test_validate_croissant_route_rejects_a_non_object(client, payload):
+    response = client.post("/fair-assessment/validate-croissant", data=payload, content_type="application/json")
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Expected a JSON object"}
