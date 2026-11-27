@@ -12,6 +12,8 @@ from datetime import date
 from urllib.parse import urlparse
 import re
 
+from aidrin.structured_data_metrics.fair_metadata import _local_name
+
 # Node classes simple enough to offer a one-box "add" for (name/description/url/email,
 # nothing structural). FileObject, FileSet and RecordSet describe the dataset's own
 # layout -- there's no sensible one-line template for those, so fields typed with them
@@ -126,10 +128,26 @@ def _sub_fields(node_names, jsonld_fields_fn, ctx):
     return list(seen.values())
 
 
-def field_guide():
+def _context_for(version):
+    """An mlcroissant ``Context`` for a declared Croissant version ("1.0", "1.1", ...).
+
+    Some keys resolve through a version-dependent function (see ``_resolve_key``), so the
+    guide is built for the version the document declares. An undeclared or unknown version
+    falls back to 1.0, the oldest release mlcroissant still reads as current.
+    """
+    from mlcroissant._src.core.context import Context, CroissantVersion
+
+    try:
+        conforms_to = CroissantVersion(f"http://mlcommons.org/croissant/{version}")
+    except ValueError:
+        conforms_to = CroissantVersion.V_1_0
+    return Context(conforms_to=conforms_to)
+
+
+def field_guide(version=None):
     """``{json_key: {description, cardinality, kind, node_types, addable, template,
     format_hint, sub_fields}}`` for every top-level field mlcroissant's ``Metadata`` node
-    declares.
+    declares, for Croissant ``version`` (e.g. ``"1.1"``; ``None`` means 1.0).
 
     ``addable`` is False for fields whose shape isn't a reasonable one-box fill-in
     (recordSet, distribution, ...); the FAIR Assessment UI should fall back to a plain
@@ -138,15 +156,15 @@ def field_guide():
     not real content, just a ghost-text format cue. ``sub_fields`` (node-shaped fields
     only) lists the node type's own fillable fields, so "+ Add" on e.g. ``publisher``
     can tell the user what belongs inside the JSON object rather than leaving them
-    looking at a bare ``{"@type": "Organization"}``. Raises ``ImportError`` if the
-    optional ``mlcroissant`` dependency isn't installed -- callers should catch that the
-    same way croissant_validation.py does.
+    looking at a bare ``{"@type": "Organization"}``. This reads mlcroissant's private
+    ``_src`` modules, so it can raise ``ImportError`` (mlcroissant can't be imported) or
+    another exception (an mlcroissant release moved an internal); callers should catch
+    ``Exception`` and degrade rather than fail.
     """
-    from mlcroissant._src.core.context import Context, CroissantVersion
     from mlcroissant._src.core.dataclasses import jsonld_fields
     from mlcroissant._src.structure_graph.nodes.metadata import Metadata
 
-    ctx = Context(conforms_to=CroissantVersion.V_1_0)
+    ctx = _context_for(version)
     kind_by_type = _scalar_kind_by_type()
     guide = {}
     for f in jsonld_fields(Metadata):
@@ -180,8 +198,11 @@ def precheck_value(key, value, guide):
     while building this: an empty nested object (e.g. ``creator: {}``) raises a
     ``RecursionError`` inside the parser rather than a clean validation error; rejecting
     an empty object here means that input never reaches it.
+
+    ``key`` is the document's own spelling; a prefixed key (``sc:creator``) is looked up
+    by its local name, so Croissant files written with ``sc:`` prefixes are checked too.
     """
-    entry = guide.get(key)
+    entry = guide.get(key) or guide.get(_local_name(key))
     if entry is None:
         return []
     kind = entry["kind"]

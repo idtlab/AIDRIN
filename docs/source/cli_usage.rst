@@ -236,8 +236,9 @@ field guide and validation use MLCommons' ``mlcroissant`` library.
   is not valid Croissant.
 - ``enhance`` sets or adds top-level fields, records you as the contributor, validates the
   result, and writes it to a new file. ``--name`` is required and ``--affiliation`` is
-  optional; both are recorded in the file as given (``dateModified``, a ``contributor``
-  entry, and a ``wasGeneratedBy`` update by you using AIDRIN). The input file is never
+  optional; both are recorded in the file as given (a ``contributor`` entry and a
+  ``wasGeneratedBy`` update by you using AIDRIN), and ``dateModified`` is set to today unless
+  you set it yourself. The input file is never
   overwritten, and nothing is written if the result is not valid Croissant (exit code 1).
 
 .. code-block:: bash

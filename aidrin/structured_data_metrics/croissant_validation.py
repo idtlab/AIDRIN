@@ -46,9 +46,9 @@ def validate_croissant_jsonld(metadata):
     Returns
     -------
     dict
-        ``available`` is ``False`` when the optional ``mlcroissant`` dependency isn't
-        installed -- FAIR assessment still works, this one check is just skipped, so a
-        deployment missing it degrades rather than breaks. Otherwise ``valid`` is a bool
+        ``available`` is ``False`` when ``mlcroissant`` can't be imported (it is a
+        required dependency, but a broken install should degrade this one check rather
+        than break FAIR assessment). Otherwise ``valid`` is a bool
         and ``errors``/``warnings`` are lists of human-readable messages from the parser.
         An unexpected parser failure is reported the same way as a validation error,
         rather than propagating as a 500.
@@ -59,8 +59,14 @@ def validate_croissant_jsonld(metadata):
         return {"available": False, "valid": None, "errors": [], "warnings": []}
 
     from aidrin.structured_data_metrics.croissant_schema import field_guide, precheck_value
+    from aidrin.structured_data_metrics.fair_metadata import _croissant_version
 
-    guide = field_guide()
+    try:
+        guide = field_guide(_croissant_version(metadata))
+    except Exception:
+        # The guide reads mlcroissant internals; if a release moved one, skip the shape
+        # pre-checks and let the parser itself (guarded below) judge the document.
+        guide = {}
     precheck_errors = []
     for key, value in metadata.items():
         precheck_errors.extend(precheck_value(key, value, guide))

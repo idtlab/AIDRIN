@@ -317,6 +317,15 @@ def test_croissant_field_guide_route_returns_the_guide(client):
     assert guide["recordSet"]["addable"] is False
 
 
+def test_croissant_field_guide_route_takes_the_document_version(client):
+    pytest.importorskip("mlcroissant")
+    default = client.get("/fair-assessment/croissant-field-guide").get_json()
+    for version in ("1.1", "9.9"):
+        response = client.get(f"/fair-assessment/croissant-field-guide?version={version}")
+        assert response.status_code == 200
+        assert response.get_json().keys() == default.keys()
+
+
 def test_croissant_field_guide_route_is_empty_without_mlcroissant(client, monkeypatch):
     import sys
 

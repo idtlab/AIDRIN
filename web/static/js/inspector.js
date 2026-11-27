@@ -4726,20 +4726,31 @@ function _fairLabelCandidates(label) {
   return [...candidates];
 }
 
+/** The Croissant version a FAIR result declares ("1.1"), from its Standard name, or "". */
+function _fairCroissantVersion(data) {
+  const m = String((data && data.Standard && data.Standard.Name) || "").match(
+    /Croissant (\d+\.\d+)/,
+  );
+  return m ? m[1] : "";
+}
+
 // What each Croissant field means and expects, introspected server-side from
 // mlcroissant's own node classes (see aidrin/structured_data_metrics/croissant_schema.py)
-// rather than hand-authored here. Static given the installed mlcroissant version, so
-// it's fetched once per page load and cached.
-let _croissantFieldGuidePromise = null;
-function _getCroissantFieldGuide() {
-  if (!_croissantFieldGuidePromise) {
-    _croissantFieldGuidePromise = fetch(
-      "/fair-assessment/croissant-field-guide",
-    )
-      .then((r) => r.json())
-      .catch(() => ({}));
+// rather than hand-authored here. Built for the Croissant version the document declares
+// and static per version, so it's fetched once per version per page load and cached.
+const _croissantFieldGuidePromises = new Map();
+function _getCroissantFieldGuide(version) {
+  const key = version || "";
+  if (!_croissantFieldGuidePromises.has(key)) {
+    const query = key ? `?version=${encodeURIComponent(key)}` : "";
+    _croissantFieldGuidePromises.set(
+      key,
+      fetch(`/fair-assessment/croissant-field-guide${query}`)
+        .then((r) => r.json())
+        .catch(() => ({})),
+    );
   }
-  return _croissantFieldGuidePromise;
+  return _croissantFieldGuidePromises.get(key);
 }
 
 /** The field guide entry a check's label refers to, if it maps to an addable top-level
@@ -4782,9 +4793,19 @@ function _fairSubFieldsHint(subFields) {
   return `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Add any of these keys inside the object: ${items}.</p>`;
 }
 
+/** How an added field's text is stored: JSON for object/list templates, otherwise from
+ * the guide's kind, as coerce_value does for the CLI. A number field that also accepts
+ * text (version) stays a string, so "1.10" isn't turned into 1.1. */
+function _fairMissingFieldType(guide) {
+  if (typeof guide.template !== "string") return "json";
+  if (guide.kind === "boolean") return "boolean";
+  if (guide.kind === "number" && !guide.allows_free_text) return "number";
+  return "string";
+}
+
 function _renderFairMissingFieldHtml(label, guide) {
   const templateText = _fairValueBoxText(guide.template);
-  const fieldType = typeof guide.template === "string" ? "string" : "json";
+  const fieldType = _fairMissingFieldType(guide);
   const hint = [guide.description, `(${_fairGuideTypeLabel(guide)})`]
     .filter(Boolean)
     .join(" ");
@@ -5260,6 +5281,40 @@ function _renderFairDownloadSectionHtml() {
   </div>`;
 }
 
+/** Keep one editable box per metadata key. Two checks can point at the same key (both
+ * "contentUrl (distribution)" and "encodingFormat (distribution)" show the whole
+ * distribution value), and two boxes for one key would let the second silently overwrite
+ * the first's edit on download. The first box stays editable and says it holds the whole
+ * value; later ones become read-only and point back to it. */
+function _fairDedupeEditFields(container) {
+  const seen = new Set();
+  container.querySelectorAll("textarea.fair-edit-field").forEach((el) => {
+    const key = el.dataset.fairKey;
+    const note = (text) =>
+      el.insertAdjacentHTML(
+        "afterend",
+        `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${text}</p>`,
+      );
+    if (!seen.has(key)) {
+      seen.add(key);
+      const dupes = container.querySelectorAll(
+        `textarea.fair-edit-field[data-fair-key="${CSS.escape(key)}"]`,
+      );
+      if (dupes.length > 1)
+        note(
+          `This box edits the whole <code>${escapeHtml(key)}</code> value, which other checks below also read.`,
+        );
+      return;
+    }
+    el.readOnly = true;
+    el.classList.remove("fair-edit-field");
+    el.classList.add("opacity-75");
+    note(
+      `Same <code>${escapeHtml(key)}</code> value as above. Edit it in the first box.`,
+    );
+  });
+}
+
 /** Enable the download button (and update its status hint) once an editable field differs
  * from its original value; re-disable it if every edit is reverted back. */
 function _wireFairEditTracking(container) {
@@ -5277,27 +5332,44 @@ function _wireFairEditTracking(container) {
         : "Edit a value above to enable download";
     }
   };
-  container.addEventListener("input", (e) => {
-    if (e.target.classList && e.target.classList.contains("fair-edit-field"))
-      updateState();
-  });
   // Exposed so _cancelFairMissingField can re-check after removing a field's textarea
   // without going through an "input" event (innerHTML replacement doesn't fire one).
   container._fairUpdateDownloadState = updateState;
+  // The container outlives each render, so the listener is added once and always calls
+  // the newest render's updateState instead of piling up one listener per assessment.
+  if (!container._fairEditListenerWired) {
+    container._fairEditListenerWired = true;
+    container.addEventListener("input", (e) => {
+      if (e.target.classList && e.target.classList.contains("fair-edit-field"))
+        container._fairUpdateDownloadState?.();
+    });
+  }
   updateState();
+}
+
+/** The key `key` is stored under in `meta` ("sc:license" for "license"), else `key`
+ * (mirrors _existing_key in croissant_enhance.py), so an added field or the provenance
+ * stamp lands on the file's own spelling instead of creating a second property. */
+function _fairExistingKey(meta, key) {
+  if (key in meta) return key;
+  const local = _fairLocalName(key);
+  return Object.keys(meta).find((k) => _fairLocalName(k) === local) ?? key;
 }
 
 /** Re-derive the edited metadata from a rendered FAIR result's edit fields, without side
  * effects. {changed: false} if nothing differs from the original; otherwise {changed: true,
- * edited, invalid} — invalid lists keys whose JSON textarea doesn't parse. */
+ * edited, editedKeys, invalid} — editedKeys are the local names of the fields changed,
+ * invalid lists keys whose JSON textarea doesn't parse. */
 function _fairBuildEditedMetadata(container) {
   const fields = Array.from(container.querySelectorAll(".fair-edit-field"));
   const changed = fields.filter((el) => el.value !== el.dataset.fairOriginal);
   if (!changed.length) return { changed: false };
   const edited = JSON.parse(JSON.stringify(container._fairOriginalMetadata));
   const invalid = [];
+  const editedKeys = new Set();
   changed.forEach((el) => {
-    const key = el.dataset.fairKey;
+    const key = _fairExistingKey(edited, el.dataset.fairKey);
+    editedKeys.add(_fairLocalName(key));
     const type = el.dataset.fairType;
     const text = el.value;
     if (type === "json") {
@@ -5315,7 +5387,7 @@ function _fairBuildEditedMetadata(container) {
       edited[key] = text;
     }
   });
-  return { changed: true, edited, invalid };
+  return { changed: true, edited, editedKeys, invalid };
 }
 
 /** Stamp an edited Croissant document with who changed it and when, using schema.org's
@@ -5323,10 +5395,16 @@ function _fairBuildEditedMetadata(container) {
  * `contributor` Person (with an optional `affiliation` Organization) for who, and a
  * `wasGeneratedBy` UpdateAction tying the two together with the tool used — mirroring the
  * agent/instrument pattern AIDRIN already expects of RO-Crate provenance. This also means
- * the file's own "provenance (wasDerivedFrom or wasGeneratedBy)" FAIR check now passes. */
-function _fairApplyProvenance(edited, name, affiliation) {
+ * the file's own "provenance (wasDerivedFrom or wasGeneratedBy)" FAIR check now passes.
+ * A dateModified the user edited is kept; keys the file holds under a prefix
+ * (sc:dateModified, sc:contributor) are written back under it. */
+function _fairApplyProvenance(edited, name, affiliation, editedKeys) {
   const now = new Date();
-  edited.dateModified = now.toISOString().slice(0, 10);
+  if (!(editedKeys && editedKeys.has("dateModified"))) {
+    edited[_fairExistingKey(edited, "dateModified")] = now
+      .toISOString()
+      .slice(0, 10);
+  }
   const person = {
     "@type": "Person",
     name,
@@ -5334,13 +5412,15 @@ function _fairApplyProvenance(edited, name, affiliation) {
       ? { affiliation: { "@type": "Organization", name: affiliation } }
       : {}),
   };
+  const contributorKey = _fairExistingKey(edited, "contributor");
+  const existing = edited[contributorKey];
   const existingContributors =
-    edited.contributor === undefined
+    existing === undefined
       ? []
-      : Array.isArray(edited.contributor)
-        ? edited.contributor
-        : [edited.contributor];
-  edited.contributor = [...existingContributors, person];
+      : Array.isArray(existing)
+        ? existing
+        : [existing];
+  edited[contributorKey] = [...existingContributors, person];
   edited.wasGeneratedBy = {
     "@type": "UpdateAction",
     agent: person,
@@ -5450,7 +5530,12 @@ function downloadFairEnhancedMetadata(btn) {
     return;
   }
   _openFairProvenanceModal((name, affiliation) => {
-    const stamped = _fairApplyProvenance(result.edited, name, affiliation);
+    const stamped = _fairApplyProvenance(
+      result.edited,
+      name,
+      affiliation,
+      result.editedKeys,
+    );
     _validateThenDownloadCroissant(
       container,
       stamped,
@@ -5556,6 +5641,7 @@ function renderFairAssessmentResult(
   resultContainer.dataset.fairRoot = "1";
   resultContainer._fairOriginalMetadata = data["Original Metadata"];
   resultContainer._fairSourceFileName = fileName;
+  _fairDedupeEditFields(resultContainer);
   _wireFairEditTracking(resultContainer);
   return true;
 }
@@ -5575,6 +5661,7 @@ function renderReadinessFairResult(
   resultContainer.dataset.fairRoot = "1";
   resultContainer._fairOriginalMetadata = data["Original Metadata"];
   resultContainer._fairSourceFileName = fileName;
+  _fairDedupeEditFields(resultContainer);
   _wireFairEditTracking(resultContainer);
   const detailsEl = resultContainer.querySelector("[data-fair-details]");
   if (detailsEl) _wireFairComplianceDetails(detailsEl, data);
@@ -5612,7 +5699,7 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
       // needed for Croissant, and is small/cached after the first fetch, so this adds
       // negligible latency to the common case and none at all to every result after it.
       const guidePromise = _fairIsCroissant(resultData)
-        ? _getCroissantFieldGuide()
+        ? _getCroissantFieldGuide(_fairCroissantVersion(resultData))
         : Promise.resolve(undefined);
       return guidePromise.then((fieldGuide) => {
         if (superseded()) return;
@@ -5696,14 +5783,24 @@ function _restoreReadinessFairFromCache(fairPayload) {
   _readinessFairCompliance = { status: "ok", data };
   uploadEl?.classList.add("hidden");
   resultsEl.classList.remove("hidden");
-  renderReadinessFairResult(data, resultsEl);
+  const metadataFilename = fairPayload.metadata_filename;
+  renderReadinessFairResult(data, resultsEl, metadataFilename);
+  if (_fairIsCroissant(data)) {
+    // Render at once, then again with the field guide so failing checks get their
+    // "+ Add" boxes, as a fresh run does. Skipped if this result was replaced meanwhile
+    // or the user already started editing it.
+    _getCroissantFieldGuide(_fairCroissantVersion(data)).then((fieldGuide) => {
+      if (_readinessFairCompliance.data !== data) return;
+      if (_fairBuildEditedMetadata(resultsEl).changed) return;
+      renderReadinessFairResult(data, resultsEl, metadataFilename, fieldGuide);
+    });
+  }
 
   const metadataType = fairPayload.metadata_type;
   if (metadataType) {
     const select = document.getElementById("readiness-fair-metadata-type");
     if (select) select.value = metadataType;
   }
-  const metadataFilename = fairPayload.metadata_filename;
   if (metadataFilename) {
     const label = document.getElementById("readinessFairFileLabel");
     const icon = document.getElementById("readinessFairUploadIcon");

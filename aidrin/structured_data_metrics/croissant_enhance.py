@@ -31,19 +31,22 @@ def _existing_key(metadata, key):
 def croissant_field_status(metadata):
     """Which Croissant fields ``metadata`` has, which it lacks, and what each one expects.
 
-    Returns ``{"available": False}`` when the optional ``mlcroissant`` dependency isn't
-    installed. Otherwise ``missing`` and ``present`` list one entry per top-level field
+    Returns ``{"available": False}`` (with an ``error`` message) when the field guide
+    can't be built: ``mlcroissant`` can't be imported, or an mlcroissant release moved an
+    internal the guide reads. Otherwise ``missing`` and ``present`` list one entry per top-level field
     mlcroissant's ``Metadata`` node declares, with its key, description, kind,
     cardinality, whether it has a one-value template (``addable``), the template, an
     example value (``format_hint``) and, for Person/Organization-shaped fields, the
     fields that belong inside the object (``sub_fields``).
     """
+    from aidrin.structured_data_metrics.fair_metadata import _croissant_version
+
     try:
         from aidrin.structured_data_metrics.croissant_schema import field_guide
 
-        guide = field_guide()
-    except ImportError:
-        return {"available": False, "missing": [], "present": []}
+        guide = field_guide(_croissant_version(metadata))
+    except Exception as exc:
+        return {"available": False, "error": f"Croissant field guide unavailable: {exc}", "missing": [], "present": []}
 
     have = {_local_name(k) for k in metadata}
     missing, present = [], []
@@ -88,8 +91,9 @@ def apply_croissant_edits(metadata, edits, contributor_name, contributor_affilia
 
     ``edits`` maps a top-level key to its new value. A key the file already holds under
     a prefix (``sc:license``) is written back under that prefix. The stamp matches the
-    web UI: ``dateModified`` is today, the contributor is appended to ``contributor``,
-    and ``wasGeneratedBy`` records an ``UpdateAction`` by that person using AIDRIN.
+    web UI: ``dateModified`` is today unless ``edits`` sets it (an explicit date wins),
+    the contributor is appended to ``contributor``, and ``wasGeneratedBy`` records an
+    ``UpdateAction`` by that person using AIDRIN.
 
     Raises ``ValueError`` when there are no edits or the contributor name is blank.
     """
@@ -111,7 +115,8 @@ def apply_croissant_edits(metadata, edits, contributor_name, contributor_affilia
     if affiliation:
         person["affiliation"] = {"@type": "Organization", "name": affiliation}
 
-    edited[_existing_key(edited, "dateModified")] = now.date().isoformat()
+    if not any(_local_name(key) == "dateModified" for key in edits):
+        edited[_existing_key(edited, "dateModified")] = now.date().isoformat()
     contributor_key = _existing_key(edited, "contributor")
     existing = edited.get(contributor_key)
     contributors = [] if existing is None else (existing if isinstance(existing, list) else [existing])

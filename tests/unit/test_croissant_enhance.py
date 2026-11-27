@@ -136,3 +136,47 @@ def test_non_croissant_files_are_rejected(tmp_path):
         api.validate_croissant(_DATACITE)
     with pytest.raises(ValueError, match="not a Croissant file"):
         api.enhance_croissant(_DATACITE, {"version": "1"}, "Jane", str(tmp_path / "o.json"))
+
+
+@pytest.mark.parametrize("key", ["dateModified", "sc:dateModified"])
+def test_an_explicit_date_modified_is_not_overwritten_by_the_stamp(key):
+    edited = apply_croissant_edits({"sc:dateModified": "2019-01-01"}, {key: "2020-05-05"}, "Jane", now=_NOW)
+    assert edited["sc:dateModified"] == "2020-05-05"
+    assert "dateModified" not in edited
+
+
+def test_the_stamp_uses_the_files_prefixed_date_and_contributor_keys():
+    original = {"sc:dateModified": "2019-01-01", "sc:contributor": [{"@type": "Person", "name": "Old"}]}
+    edited = apply_croissant_edits(original, {"version": "2"}, "New", now=_NOW)
+    assert edited["sc:dateModified"] == "2026-03-04"
+    assert [c["name"] for c in edited["sc:contributor"]] == ["Old", "New"]
+    assert "dateModified" not in edited and "contributor" not in edited
+
+
+def test_field_status_degrades_if_the_guide_breaks(monkeypatch):
+    import aidrin.structured_data_metrics.croissant_schema as schema
+
+    def moved_internal(version=None):
+        raise AttributeError("'JsonldField' object has no attribute 'cardinality'")
+
+    monkeypatch.setattr(schema, "field_guide", moved_internal)
+    status = croissant_field_status(_mnist())
+    assert status["available"] is False and "cardinality" in status["error"]
+
+
+def test_enhance_scores_without_rendering_charts(tmp_path, monkeypatch):
+    pytest.importorskip("mlcroissant")
+    from aidrin.structured_data_metrics import fair_metadata
+
+    def no_charts(*args, **kwargs):
+        raise AssertionError("enhance_croissant should not render the FAIR chart")
+
+    monkeypatch.setattr(fair_metadata, "_chart", no_charts)
+    result = api.enhance_croissant(_MNIST, {"version": "1.0.0"}, "Jane", str(tmp_path / "o.json"))
+    assert result["written"] is True
+
+
+def test_check_summary_matches_the_full_assessment():
+    from aidrin.structured_data_metrics.fair_metadata import calculate_fair_compliance, croissant_check_summary
+
+    assert croissant_check_summary(_mnist()) == calculate_fair_compliance(_mnist(), "croissant")["FAIR Compliance Checks"]

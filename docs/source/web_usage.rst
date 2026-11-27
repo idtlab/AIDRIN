@@ -286,9 +286,9 @@ For a Croissant file, the values in the report are editable:
 3. Before downloading, AIDRIN checks the edited file with MLCommons' ``mlcroissant`` parser. If it
    is not valid Croissant, the errors are shown and nothing is downloaded.
 
-The downloaded file records the edit: ``dateModified`` is set to today, you are added to
-``contributor``, and ``wasGeneratedBy`` names you as having made the update using AIDRIN. The same
-flow is available from the command line as ``aidrin croissant`` (see :ref:`cli_croissant`) and
+The downloaded file records the edit: ``dateModified`` is set to today (unless you edited it),
+you are added to ``contributor``, and ``wasGeneratedBy`` names you as having made the update using
+AIDRIN. The same flow is available from the command line as ``aidrin croissant`` (see :ref:`cli_croissant`) and
 through the MCP server.
 
 FAIR Principles and Criteria: Croissant

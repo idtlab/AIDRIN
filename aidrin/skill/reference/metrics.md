@@ -644,7 +644,7 @@ Croissant-only, local-only (`aidrin remote croissant` is rejected). Uses MLCommo
   one-value fill-in. `format_hint` is an example, never real content.
 - **validate output:** `available`, `valid`, `errors`, `warnings`. CLI exit code 1 when invalid.
 - **enhance:** `--set` values starting with `{`, `[` or `"` are parsed as JSON; `--set` wins
-  over `--edits` on the same key. Stamps `dateModified`, appends the contributor to
+  over `--edits` on the same key. Stamps `dateModified` (unless the edits set it), appends the contributor to
   `contributor`, and sets `wasGeneratedBy` (an `UpdateAction` by that person with AIDRIN).
   Output keys: `written`, `output_path`, `edited_fields`, `validation`, `fair_before`,
   `fair_after`. Nothing is written (and the CLI exits 1) when `validation.valid` is false;

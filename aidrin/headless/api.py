@@ -494,7 +494,7 @@ def _load_croissant(metadata_path: str) -> Dict[str, Any]:
 def validate_croissant(metadata_path: str) -> Dict[str, Any]:
     """Check a Croissant file with MLCommons' ``mlcroissant`` parser.
 
-    Returns ``available`` (False when mlcroissant isn't installed), ``valid``, and the
+    Returns ``available`` (False when mlcroissant can't be imported), ``valid``, and the
     parser's ``errors`` and ``warnings``.
     """
     from aidrin.structured_data_metrics.croissant_validation import validate_croissant_jsonld
@@ -520,7 +520,7 @@ def enhance_croissant(
 
     ``edits`` maps top-level keys to their new values. The contributor's name (and
     optional affiliation) must come from the person making the edit. The enhanced file
-    is written to ``output_path`` only if mlcroissant accepts it (or isn't installed);
+    is written to ``output_path`` only if mlcroissant accepts it (or can't be imported);
     the input file is never overwritten. Returns ``written``, ``output_path``,
     ``edited_fields``, ``validation`` and the FAIR ``Total Checks`` before and after.
     """
@@ -528,7 +528,7 @@ def enhance_croissant(
 
     from aidrin.structured_data_metrics.croissant_enhance import apply_croissant_edits
     from aidrin.structured_data_metrics.croissant_validation import validate_croissant_jsonld
-    from aidrin.structured_data_metrics.fair_metadata import calculate_fair_compliance as _score
+    from aidrin.structured_data_metrics.fair_metadata import croissant_check_summary
 
     if not output_path:
         raise ValueError("An output path is required; the input file is never overwritten")
@@ -552,8 +552,8 @@ def enhance_croissant(
         "output_path": os.path.abspath(output_path) if written else None,
         "edited_fields": sorted(edits),
         "validation": validation,
-        "fair_before": _score(metadata, "croissant")["FAIR Compliance Checks"]["Total Checks"],
-        "fair_after": _score(enhanced, "croissant")["FAIR Compliance Checks"]["Total Checks"],
+        "fair_before": croissant_check_summary(metadata)["Total Checks"],
+        "fair_after": croissant_check_summary(enhanced)["Total Checks"],
     })
 
 

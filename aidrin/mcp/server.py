@@ -383,7 +383,7 @@ def croissant_fields(metadata_path: str) -> str:
     structural fields like recordSet or distribution, which are not a one-value
     fill-in), "template", "format_hint" (an example value, never real content)
     and, for Person/Organization-shaped fields, "sub_fields". "available" is
-    false when mlcroissant isn't installed.
+    false (with an "error") when mlcroissant can't be loaded.
 
     Use it to show the user what is missing and ask them for the values. Do not
     fill a field with a value the user has not given or confirmed.
@@ -403,7 +403,7 @@ def validate_croissant(metadata_path: str) -> str:
     Check a Croissant metadata file with MLCommons' official mlcroissant parser.
 
     Returns "valid", and the parser's "errors" and "warnings". "available" is
-    false (and "valid" null) when mlcroissant isn't installed. This checks the
+    false (and "valid" null) when mlcroissant can't be imported. This checks the
     file parses as Croissant; check_fair_compliance scores its FAIR content.
 
     Args:
@@ -430,7 +430,7 @@ def enhance_croissant(
     not valid Croissant.
 
     Provenance is stamped the same way as the AIDRIN web UI: "dateModified"
-    is set to today, the contributor is appended to "contributor", and
+    is set to today (unless "edits" sets it), the contributor is appended to "contributor", and
     "wasGeneratedBy" records the edit as made by that person using AIDRIN.
 
     ALWAYS ask the user for contributor_name and contributor_affiliation

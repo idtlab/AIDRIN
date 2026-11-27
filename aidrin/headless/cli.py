@@ -316,7 +316,7 @@ def _print_fair_summary(result: dict, metadata_path: str) -> None:
 def _print_croissant_fields(result: dict, metadata_path: str) -> None:
     """Print the Croissant fields a file is missing, with what each one expects."""
     if not result.get("available"):
-        print("mlcroissant is not installed, so the Croissant field guide is unavailable.")
+        print(result.get("error") or "The Croissant field guide is unavailable (mlcroissant could not be loaded).")
         return
     missing = result["missing"]
     print(f"{Path(metadata_path).name}: {len(missing)} Croissant fields missing, {len(result['present'])} present")
@@ -342,9 +342,13 @@ def _parse_croissant_edits(args) -> dict:
     if args.set_values:
         try:
             from aidrin.structured_data_metrics.croissant_schema import field_guide
+            from aidrin.structured_data_metrics.fair_metadata import _croissant_version
 
-            guide = field_guide()
-        except ImportError:
+            with open(args.metadata_path, encoding="utf-8") as f:
+                guide = field_guide(_croissant_version(json.load(f)))
+        except Exception:
+            # Without the guide every --set value stays text unless it looks like JSON;
+            # enhance_croissant reports a bad or unreadable input file on its own.
             guide = {}
     from aidrin.structured_data_metrics.croissant_enhance import coerce_value
 

@@ -131,3 +131,41 @@ def test_parser_errors_are_reported():
 def test_missing_mlcroissant_degrades_instead_of_failing(monkeypatch):
     monkeypatch.setitem(sys.modules, "mlcroissant", None)
     assert validate_croissant_jsonld({}) == {"available": False, "valid": None, "errors": [], "warnings": []}
+
+
+def test_prefixed_keys_get_the_same_shape_checks(guide):
+    assert precheck_value("sc:creator", {}, guide)[0].startswith("sc:creator: expected an object")
+    assert precheck_value("sc:datePublished", "soon", guide)[0].startswith("sc:datePublished: dates")
+
+
+def test_empty_prefixed_nested_object_is_caught_before_the_parser():
+    doc = _mnist()
+    del doc["creator"]
+    doc["sc:creator"] = {}
+    result = validate_croissant_jsonld(doc)
+    assert result["valid"] is False
+    assert result["errors"][0].startswith("sc:creator: expected an object")
+
+
+@pytest.mark.parametrize(
+    "version, cite_key",
+    [("1.0", "citeAs"), ("1.1", "citeAs"), ("0.8", "citation"), ("unknown version", "citeAs"), (None, "citeAs")],
+)
+def test_guide_is_built_for_the_declared_version(version, cite_key):
+    # citeAs resolves through a version-dependent function: Croissant 0.8 called it citation.
+    keys = field_guide(version).keys()
+    assert cite_key in keys
+    assert ({"citeAs", "citation"} - {cite_key}).isdisjoint(keys)
+
+
+def test_validation_still_runs_the_parser_if_the_guide_breaks(monkeypatch):
+    import aidrin.structured_data_metrics.croissant_schema as schema
+
+    def moved_internal(version=None):
+        raise AttributeError("'JsonldField' object has no attribute 'input_types'")
+
+    monkeypatch.setattr(schema, "field_guide", moved_internal)
+    assert validate_croissant_jsonld(_mnist())["valid"] is True
+    doc = _mnist()
+    doc["@type"] = "sc:Thing"
+    assert validate_croissant_jsonld(doc)["valid"] is False

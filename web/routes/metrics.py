@@ -1747,13 +1747,14 @@ def croissant_field_guide():
     """What each Croissant field means and expects, introspected from mlcroissant's own
     node classes (see croissant_schema.py) rather than hand-authored here. Powers the
     "+ Add" affordance the FAIR Assessment UI offers for a missing, addable field.
-    Static given the installed mlcroissant version, so the frontend fetches this once
-    and caches it. An empty object (not an error) means the optional dependency isn't
-    installed -- the UI just skips the add-missing affordance."""
+    ``?version=1.1`` builds it for the Croissant version the document declares (default
+    1.0). Static per version given the installed mlcroissant, so the frontend caches it
+    per version. An empty object (not an error) means the guide couldn't be built --
+    the UI just skips the add-missing affordance."""
     try:
         from aidrin.structured_data_metrics.croissant_schema import field_guide
 
-        return jsonify(field_guide())
+        return jsonify(field_guide(request.args.get("version") or None))
     except ImportError:
         return jsonify({})
     except Exception as e:
