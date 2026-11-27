@@ -169,3 +169,16 @@ def test_validation_still_runs_the_parser_if_the_guide_breaks(monkeypatch):
     doc = _mnist()
     doc["@type"] = "sc:Thing"
     assert validate_croissant_jsonld(doc)["valid"] is False
+
+
+def test_unexpected_parser_failures_do_not_leak_their_text(monkeypatch, caplog):
+    import mlcroissant
+
+    def crash(*args, **kwargs):
+        raise RuntimeError("/srv/internal/path/secret.py line 12")
+
+    monkeypatch.setattr(mlcroissant, "Dataset", crash)
+    result = validate_croissant_jsonld(_mnist())
+    assert result["valid"] is False
+    assert "secret" not in json.dumps(result)
+    assert "secret" in caplog.text

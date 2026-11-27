@@ -8,7 +8,10 @@ a value that no longer satisfies the format (e.g. ``@type`` no longer extending
 official parser as a last check before such an edit is handed to the user.
 """
 
+import logging
 import re
+
+_log = logging.getLogger(__name__)
 
 _ISSUE_SECTION = re.compile(r"Found the following \d+ (error|warning)\(s\) during the validation:")
 _ISSUE_BULLET = re.compile(r"^\s*-\s+(.*)$")
@@ -50,7 +53,8 @@ def validate_croissant_jsonld(metadata):
         required dependency, but a broken install should degrade this one check rather
         than break FAIR assessment). Otherwise ``valid`` is a bool
         and ``errors``/``warnings`` are lists of human-readable messages from the parser.
-        An unexpected parser failure is reported the same way as a validation error,
+        An unexpected parser failure is reported as a fixed validation error (its details
+        go to the log, not the result, so no internal error text reaches a web user)
         rather than propagating as a 500.
     """
     try:
@@ -80,9 +84,18 @@ def validate_croissant_jsonld(metadata):
         dataset = mlc.Dataset(jsonld=metadata)
     except mlc.ValidationError as exc:
         errors, warnings = _parse_validation_report(str(exc))
-        return {"available": True, "valid": False, "errors": errors or [str(exc)], "warnings": warnings}
-    except Exception as exc:
-        return {"available": True, "valid": False, "errors": [str(exc)], "warnings": []}
+        if not errors:
+            _log.warning("mlcroissant rejected a document without itemized errors", exc_info=True)
+            errors = ["mlcroissant rejected the document without listing specific errors"]
+        return {"available": True, "valid": False, "errors": errors, "warnings": warnings}
+    except Exception:
+        _log.warning("mlcroissant failed while parsing a document", exc_info=True)
+        return {
+            "available": True,
+            "valid": False,
+            "errors": ["mlcroissant could not parse the document; check for malformed or empty nested values"],
+            "warnings": [],
+        }
 
     issues = dataset.metadata.issues
     return {"available": True, "valid": True, "errors": [], "warnings": sorted(issues.warnings)}
