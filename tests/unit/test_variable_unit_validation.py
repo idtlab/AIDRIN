@@ -17,6 +17,7 @@ import aidrin.structured_data_metrics.variable_unit_validation as unit_validatio
 from aidrin.structured_data_metrics.variable_unit_validation import (
     _name_unit,
     _parse_unit,
+    _units_equivalent,
     calculate_variable_unit_validation,
     discover_variable_units,
     unit_suggestion_catalog,
@@ -133,6 +134,31 @@ def test_detected_non_pint_unit_is_invalid_and_round_trips(tmp_path):
     }
     assert first["variables"][0]["finding"]["status"] == "invalid"
     assert second == first
+
+
+def test_astropy_fallback_resolves_ivoa_units_pint_lacks():
+    """Units Rubin publishes in its SDM schema that Pint does not define."""
+    pytest.importorskip("astropy")
+    for unit in ("nJy", "mag", "nJy/d", "adu"):
+        parsed = _parse_unit(unit)
+        assert parsed["status"] == "valid", unit
+        assert "astropy" in parsed["message"], unit
+
+
+def test_astropy_fallback_only_consults_vounit_not_free_form_prose():
+    """astropy's generic parser reads 'Celsius degree' as deg*deg_C, so only VOUnit is tried."""
+    pytest.importorskip("astropy")
+    assert _parse_unit("Celsius degree")["status"] == "invalid"
+    assert _parse_unit("degrees Celsius")["status"] == "invalid"
+    assert _parse_unit("not_a_real_unit_zz")["status"] == "invalid"
+
+
+def test_astropy_fallback_keeps_distinct_units_inequivalent():
+    """A fallback result must still compare by unit, not collapse to a missing _parsed."""
+    pytest.importorskip("astropy")
+    assert _units_equivalent(_parse_unit("nJy"), _parse_unit("nJy"))
+    assert not _units_equivalent(_parse_unit("nJy"), _parse_unit("adu"))
+    assert not _units_equivalent(_parse_unit("nJy"), _parse_unit("deg"))
 
 
 @pytest.mark.parametrize(

@@ -49,6 +49,11 @@ globus = [
     "globus-compute-sdk>=2.3.0",
     "globus-sdk>=3.20.0",
 ]
+# IVOA VOUnit parsing for astronomical catalogs (nJy, mag, adu), which Pint does
+# not define. Optional: without it those units are reported invalid, as before.
+astronomy = [
+    "astropy>=6.0",
+]
 # Zarr 3.x needs Python >=3.11 (3.2+ needs >=3.12). Pin <3.2 so 3.11 stays resolvable.
 zarr = [
     "zarr>=3.0.8,<3.2; python_version >= '3.11'",

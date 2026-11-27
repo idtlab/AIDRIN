@@ -427,6 +427,50 @@ def _check_unit_cost(expression: str) -> None:
         return  # malformed input: let Pint report the real syntax error
 
 
+@lru_cache(maxsize=1)
+def _astropy_units() -> Optional[Any]:
+    """astropy.units when installed, else None. Optional extra: ``aidrin[astronomy]``."""
+    try:
+        from astropy import units as astropy_units
+    except ImportError:
+        return None
+    return astropy_units
+
+
+def _is_pint_unit(unit: Any) -> bool:
+    """Whether a parsed unit came from Pint, so Pint-only helpers can stay confined."""
+    return isinstance(unit, _UNIT_REGISTRY.Unit)
+
+
+def _parse_unit_vounit(unit: str) -> Optional[Dict[str, Any]]:
+    """Parse a unit Pint has no definition for using astropy's VOUnit vocabulary.
+
+    IVOA VOUnit is what astronomical schemas declare -- Rubin's ``ivoa:unit``, FITS --
+    and it carries units Pint does not define at all: jansky above all (``nJy`` is the
+    single most common unit in Rubin's DP1 schema), plus magnitudes and ADU.
+
+    Only the VOUnit parser is consulted, never astropy's free-form one: that one reads
+    "Celsius degree" as degree times degree_Celsius, so it would rescue prose as a
+    nonsense product rather than reject it.
+    """
+    units = _astropy_units()
+    if units is None:
+        return None
+    try:
+        parsed = units.Unit(unit, format="vounit")
+    except Exception:
+        return None
+    return {
+        "status": "valid",
+        "original_unit": unit,
+        "normalized_unit": parsed.to_string(),
+        "dimensionality": str(parsed.physical_type),
+        "message": "Unit is not defined by Pint but is recognized by astropy as VOUnit.",
+        "_canonical_unit": unit,
+        "_parsed": parsed,
+    }
+
+
 def _parse_unit(unit: str) -> Dict[str, Any]:
     original = unit
     stripped = unit.strip()
@@ -479,6 +523,12 @@ def _parse_unit(unit: str) -> Dict[str, Any]:
     try:
         parsed = _UNIT_REGISTRY.Unit(parse_value)
     except Exception as exc:
+        # Pint has no definition for domain units such as nJy, mag, or adu.
+        # This must stay below _check_unit_cost: "m**1000" is valid VOUnit, so a
+        # fallback hoisted above the cost guard would accept it and defeat the guard.
+        fallback = _parse_unit_vounit(parse_value)
+        if fallback is not None:
+            return fallback
         return {
             "status": "invalid",
             "original_unit": original,
@@ -509,7 +559,11 @@ def _units_equivalent(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
 
 def _display_unit(parsed: Dict[str, Any], fallback: str) -> str:
     unit = parsed.get("_parsed")
-    return format(unit, "~P") if unit is not None else fallback
+    if unit is None:
+        return fallback
+    if not _is_pint_unit(unit):
+        return parsed.get("normalized_unit") or fallback
+    return format(unit, "~P")
 
 
 def _has_affine_definition(unit: Any) -> bool:
@@ -518,6 +572,8 @@ def _has_affine_definition(unit: Any) -> bool:
     Inspect references too: a scale alias can depend on a logarithmic unit.
     Pint's definition map is private; keep that dependency confined here.
     """
+    if not _is_pint_unit(unit):
+        return False  # no conversion formula is derived across unit libraries
     pending = list(unit._units)
     seen = set()
     while pending:

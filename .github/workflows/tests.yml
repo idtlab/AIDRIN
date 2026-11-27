@@ -33,6 +33,12 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.12"
             extras: "[mcp]"
+          # astropy supplies the VOUnit vocabulary for astronomical units Pint
+          # does not define (nJy, mag, adu). Without this entry the fallback
+          # tests importorskip on every job and the code path is never run.
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extras: "[astronomy]"
           # Zarr needs Python >=3.11; without this the Zarr reader tests
           # importorskip on every other matrix entry and never run.
           - os: ubuntu-latest
