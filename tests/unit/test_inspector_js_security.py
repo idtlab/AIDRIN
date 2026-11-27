@@ -722,7 +722,7 @@ def test_workspace_init_releases_clear_file_lock_after_overview_load():
     drop the processing lock. Calling .finally on undefined throws, which left
     the top-bar clear button with pointer-events-none forever."""
     source = INSPECTOR_JS.read_text(encoding="utf-8")
-    assert "return fetch(\"/summary-statistics\")" in source
+    assert "return fetchWorkspaceDataset(\"/summary-statistics\")" in source
     assert "Promise.resolve(loadDataOverview()).finally(initTaskDone)" in source
 
 
@@ -994,3 +994,54 @@ def test_outlier_explanation_wraps_and_escapes_column_names(tmp_path):
     assert "whitespace-normal" in why_cell[1]
     assert "break-words" in why_cell[1]
     assert "whitespace-nowrap" not in why_cell[1]
+
+
+def test_column_role_requests_keep_the_workspace_revision():
+    if not shutil.which("node"):
+        pytest.skip("node unavailable")
+    source = INSPECTOR_JS.read_text(encoding="utf-8")
+
+    def function_text(name):
+        start = source.index(f"function {name}(")
+        return source[start:source.index("\n}", start) + 2]
+
+    helper = (REPO_ROOT / "web/static/js/workspace.js").read_text(encoding="utf-8").split("\nfunction filterWorkspaceFiles", 1)[0]
+    script = r"""
+const assert = require("node:assert/strict");
+const panel = {dataset:{workspaceFileId:"file-a",workspaceRevision:"revision-1"}};
+const button = {};
+const nodes = {"panels-container":panel, "apply-roles-btn":button};
+globalThis.document = {
+  getElementById:id => nodes[id],
+  querySelectorAll:() => [{getAttribute:() => "x", value:"identifier"}],
+};
+globalThis.location = {href:"http://localhost/inspector",origin:"http://localhost"};
+globalThis._beginServerProcessing = () => {};
+globalThis._endServerProcessing = () => {};
+let rendered = 0;
+let finish;
+const renderedPromise = new Promise(resolve => { finish = resolve; });
+globalThis.renderWorkspaceSummary = () => { rendered++; finish(); };
+const requests = [];
+globalThis.fetch = async (url, options) => {
+  requests.push({url,revision:options.headers.get("X-AIDRIN-Workspace-Revision"),
+    file:options.headers.get("X-AIDRIN-Workspace-File")});
+  return new Response(JSON.stringify({success:true}), {headers:{"X-AIDRIN-Workspace-Revision":"revision-2"}});
+};
+"""
+    script += helper + function_text("applyColumnRoles") + function_text("refreshWorkspaceSummary")
+    script += r"""
+(async () => {
+  applyColumnRoles();
+  await renderedPromise;
+  assert.deepEqual(requests, [
+    {url:"/column-roles",revision:"revision-1",file:"file-a"},
+    {url:"/summary-statistics",revision:"revision-2",file:"file-a"},
+  ]);
+  assert.equal(rendered,1);
+  globalThis.fetch = async () => new Response(JSON.stringify({message:"Reload the Inspector"}),
+    {status:409,headers:{"X-AIDRIN-Workspace-Stale":"1"}});
+  await assert.rejects(fetchWorkspaceDataset("/summary-statistics"), /Reload the Inspector/);
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+    subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)

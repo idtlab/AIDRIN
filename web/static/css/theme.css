@@ -446,6 +446,23 @@ html.dark .info-text {
   display: flex;
 }
 
+#checkboxContainer_quality .material-checkbox {
+  flex-wrap: wrap;
+}
+
+.metric-file-scope {
+  border-radius: 9999px;
+  padding: 2px 8px;
+  background-color: var(--backgroundColor);
+  color: var(--textColorSecondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.metric-file-scope[data-uses-file-collection] {
+  color: var(--darkAccent);
+}
+
 /* Target-picker options are flex rows; keep them from collapsing to the
    block layout above, which would drop the checkbox-to-name gap. */
 .checkboxContainerIndividual [data-target-picker-option] {

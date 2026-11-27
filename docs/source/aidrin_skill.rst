@@ -30,6 +30,11 @@ Two components plug into Claude Code:
 Claude Code reads ``.mcp.json`` from the project root to start the MCP server automatically.
 Both files ship with the AIDRIN repository — no extra configuration is required.
 
+For a multi-file assessment, tell the skill which files and metrics to use.
+Say whether to compare the files separately or combine their rows. The skill
+runs the collection through MCP or the CLI on a host that can read the files.
+See :ref:`file_collections` for supported metrics and modes.
+
 ----
 
 Prerequisites

@@ -332,6 +332,7 @@ def test_remote_env_probe_reports_versions():
     assert info["capability_schema_version"] == 1
     assert info["capabilities"] == [
         "file_reference_validation_v1",
+        "workspace_directory_v1",
         "variable_unit_metadata_v1",
     ]
 
@@ -341,7 +342,7 @@ def test_remote_env_probe_omits_unavailable_variable_unit_capability(monkeypatch
 
     info = remote_env_probe()
 
-    assert info["capabilities"] == ["file_reference_validation_v1"]
+    assert info["capabilities"] == ["file_reference_validation_v1", "workspace_directory_v1"]
 
 
 # -------------------------------------------------

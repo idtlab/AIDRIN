@@ -18,7 +18,6 @@ from flask import (
     session,
     url_for,
 )
-from werkzeug.utils import secure_filename
 from aidrin.file_handling.file_parser import (
     GLOBUS_FILE_TYPES,
     READER_MAP,
@@ -31,6 +30,7 @@ from aidrin.file_handling.readers.structured import dropped_columns
 from web.routes.utils import (
     build_file_info,
     categorical_bars,
+    dataset_cache_identity,
     clear_all_user_cache,
     confine_to_upload_folder,
     continuous_bars,
@@ -44,10 +44,53 @@ from web.routes.utils import (
     summary_histograms,
 )
 
+from aidrin.file_handling.workspace_summary import summarize_workspace_file
+from web.routes.workspace_files import (
+    activate_workspace_file,
+    add_custom_workspace_upload,
+    add_workspace_uploads,
+    advance_workspace_input_revision,
+    available_workspace_file,
+    clear_workspace_uploads,
+    init_workspace,
+    remove_workspace_file,
+    reset_workspace_selection,
+    save_workspace_upload,
+    workspace_files,
+)
+
 
 core_bp = Blueprint("core", __name__)
 
 file_upload_time_log = logging.getLogger("file_upload")
+
+
+@core_bp.before_app_request
+def check_inspector_file():
+    """Reject requests from a tab displaying an outdated workspace selection."""
+    file_id = request.headers.get("X-AIDRIN-Workspace-File")
+    if file_id is None:
+        return None
+    revision = request.headers.get("X-AIDRIN-Workspace-Revision")
+    if file_id == session.get("active_workspace_file_id") and (
+        revision is None or revision == session.get("workspace_input_revision")
+    ):
+        entry = next((item for item in workspace_files() if item["id"] == file_id), None)
+        if entry and available_workspace_file(entry):
+            return None
+    message = "The active file changed or expired. Reload the Inspector and try again."
+    return jsonify({"message": message}), 409, {"X-AIDRIN-Workspace-Stale": "1"}
+
+
+@core_bp.after_app_request
+def publish_workspace_revision(response):
+    if request.headers.get("X-AIDRIN-Workspace-File") == session.get("active_workspace_file_id") and (
+        "X-AIDRIN-Workspace-Stale" not in response.headers
+    ):
+        revision = session.get("workspace_input_revision")
+        if revision:
+            response.headers["X-AIDRIN-Workspace-Revision"] = revision
+    return response
 
 
 @core_bp.route("/")
@@ -57,113 +100,101 @@ def homepage():
 
 @core_bp.route("/inspector", methods=["GET", "POST"])
 def inspector():
+    init_workspace()
     if request.method == "POST":
-        file_upload_time_log.info("File upload initiated (workspace)")
-        file = request.files.get("file")
-        if (request.form.get("fileTypeSelector") or "").strip() == ".custom" and not current_app.config.get(
-            "ENABLE_WEB_CUSTOM_LOADERS"
-        ):
-            abort(403)
+        if "active_file_id" in request.form:
+            file_id = request.form["active_file_id"]
+            entry = next((entry for entry in workspace_files() if entry["id"] == file_id), None)
+            if not entry or not available_workspace_file(entry):
+                abort(404)
+            if entry["id"] != session.get("active_workspace_file_id"):
+                activate_workspace_file(entry)
+            return redirect(url_for("core.inspector"))
 
-        if file:
-            cleared_count = clear_all_user_cache()
-            file_upload_time_log.info(
-                "Cache cleared for new file upload: %d entries removed", cleared_count
+        file_upload_time_log.info("File upload initiated (workspace)")
+        session.pop("upload_error_tab", None)
+        uploads = [file for file in request.files.getlist("file") if file and file.filename]
+        selected_type = (request.form.get("fileTypeSelector") or "").strip()
+        if selected_type != ".custom" and uploads:
+            try:
+                activate_workspace_file(add_workspace_uploads(uploads, selected_type))
+            except (OSError, ValueError) as exc:
+                session["upload_error"] = str(exc) if isinstance(exc, ValueError) else "Unable to save the uploaded files."
+                file_upload_time_log.warning("Workspace upload failed", exc_info=True)
+                return redirect(url_for("core.inspector", upload=1))
+            return redirect(url_for("core.inspector"))
+        if selected_type == ".custom" and not current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS"):
+            abort(403)
+        if selected_type == ".custom":
+            session["upload_error_tab"] = "custom"
+        if selected_type == ".custom" and len(uploads) > 1:
+            session["upload_error"] = "Upload one file at a time with a custom loader."
+            return redirect(url_for("core.inspector", upload=1))
+
+        if uploads:
+            file = uploads[0]
+            clear_all_user_cache()
+            display_name = file.filename
+            upload_entry = save_workspace_upload(file, selected_type)
+            file_path = upload_entry["path"]
+            loader_code = (request.form.get("loader_code") or "").strip()
+            _, ext = os.path.splitext(display_name or "")
+            file_type = (ext or "").lower() or ".custom"
+            if not loader_code:
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+                session["upload_error"] = (
+                    "Custom loader code is required when using "
+                    "'Other / custom loader'. Define load(path, **kwargs) "
+                    "that returns a pandas DataFrame."
+                )
+                return redirect(url_for("core.inspector"))
+
+            from aidrin.file_handling.custom_loader import (
+                CustomLoaderError,
+                load_dataframe as load_via_custom_loader,
             )
 
-            display_name = file.filename
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            # Defense in depth: confirm the destination stays inside the upload
-            # folder before writing, so a bypass of secure_filename can never
-            # steer the write to an arbitrary location.
-            file_path = confine_to_upload_folder(file_path)
-            if not file_path:
-                file_upload_time_log.error("Rejected unsafe upload path: %s", filename)
-                return redirect(url_for("core.inspector"))
-            file.save(file_path)
-
-            selected_type = (request.form.get("fileTypeSelector") or "").strip()
-            loader_code = (request.form.get("loader_code") or "").strip()
-            # ".custom" means: any extension + required user loader on upload.
-            if selected_type == ".custom":
-                _, ext = os.path.splitext(display_name or "")
-                file_type = (ext or "").lower() or ".custom"
-                if not loader_code:
+            loaders_folder = current_app.config.get("CUSTOM_LOADERS_FOLDER")
+            if not loaders_folder:
+                loaders_folder = os.path.join(
+                    tempfile.gettempdir(), "aidrin_custom_loaders",
+                )
+            os.makedirs(loaders_folder, exist_ok=True)
+            # One script per upload: Celery tasks queued for an earlier
+            # dataset keep running the loader they were submitted with.
+            loader_path = os.path.join(
+                loaders_folder, f"custom_loader_{uuid.uuid4().hex}.py"
+            )
+            with open(loader_path, "w", encoding="utf-8") as handle:
+                handle.write(loader_code)
+            spec = f"{loader_path}:load"
+            try:
+                load_via_custom_loader(spec, file_path)
+                upload_entry["file_type"] = file_type
+                entry = add_custom_workspace_upload(upload_entry, spec)
+            except Exception as exc:
+                # Remove only this attempt's files; the previous dataset
+                # and its loader stay active.
+                for path in (file_path, loader_path):
                     try:
-                        os.remove(file_path)
+                        os.remove(path)
                     except OSError:
                         pass
+                if isinstance(exc, CustomLoaderError):
+                    session["upload_error"] = describe_loader_error(exc, file_path, display_name)
+                else:
                     session["upload_error"] = (
-                        "Custom loader code is required when using "
-                        "'Other / custom loader'. Define load(path, **kwargs) "
-                        "that returns a pandas DataFrame."
+                        f"Custom loader failed for '{display_name}': "
+                        f"{type(exc).__name__}: {exc}"
                     )
-                    return redirect(url_for("core.inspector"))
-
-                from aidrin.file_handling.custom_loader import (
-                    CustomLoaderError,
-                    load_dataframe as load_via_custom_loader,
+                file_upload_time_log.error(
+                    "Upload custom loader failed: %s", exc, exc_info=True
                 )
-
-                loaders_folder = current_app.config.get("CUSTOM_LOADERS_FOLDER")
-                if not loaders_folder:
-                    loaders_folder = os.path.join(
-                        tempfile.gettempdir(), "aidrin_custom_loaders",
-                    )
-                os.makedirs(loaders_folder, exist_ok=True)
-                # One script per upload: Celery tasks queued for an earlier
-                # dataset keep running the loader they were submitted with.
-                loader_path = os.path.join(
-                    loaders_folder, f"custom_loader_{uuid.uuid4().hex}.py"
-                )
-                with open(loader_path, "w", encoding="utf-8") as handle:
-                    handle.write(loader_code)
-                spec = f"{loader_path}:load"
-                try:
-                    load_via_custom_loader(spec, file_path)
-                except Exception as exc:
-                    # Remove only this attempt's files; the previous dataset
-                    # and its loader stay active.
-                    for path in (file_path, loader_path):
-                        try:
-                            os.remove(path)
-                        except OSError:
-                            pass
-                    if isinstance(exc, CustomLoaderError):
-                        session["upload_error"] = describe_loader_error(exc, file_path, display_name)
-                    else:
-                        session["upload_error"] = (
-                            f"Custom loader failed for '{display_name}': "
-                            f"{type(exc).__name__}: {exc}"
-                        )
-                    file_upload_time_log.error(
-                        "Upload custom loader failed: %s", exc, exc_info=True
-                    )
-                    return redirect(url_for("core.inspector"))
-                session["custom_loader_spec"] = spec
-            else:
-                file_type = selected_type
-                loader_path = None
-                session.pop("custom_loader_spec", None)
-
-            session["uploaded_file_name"] = display_name
-            session["uploaded_file_path"] = file_path
-            session["uploaded_file_type"] = file_type
-            session.pop("selected_keys", None)
-            # Column-role overrides are per-dataset; drop any from a prior file.
-            session.pop("column_roles", None)
-            session.pop("upload_error", None)
-            # This feature owns session["intent"], so a new dataset drops it.
-            session.pop("intent", None)
-
-            # Track files this session created so /clear removes only these,
-            # never files belonging to other concurrent sessions.
-            owned_files = session.get("owned_files", [])
-            for owned_path in (file_path, loader_path):
-                if owned_path and owned_path not in owned_files:
-                    owned_files.append(owned_path)
-            session["owned_files"] = owned_files
+                return redirect(url_for("core.inspector"))
+            activate_workspace_file(entry)
 
             return redirect(url_for("core.inspector"))
 
@@ -187,6 +218,27 @@ def inspector():
         uploaded_file_name = ""
         file_type = ""
 
+    try:
+        files = workspace_files()
+    except (OSError, ValueError):
+        file_upload_time_log.warning("Workspace inventory could not be loaded", exc_info=True)
+        files = []
+    active_id = session.get("active_workspace_file_id")
+    if active_id and not any(entry["id"] == active_id for entry in files):
+        reset_workspace_selection()
+        session["upload_error"] = "The file workspace expired. Upload or import your files again."
+        uploaded_file_path = uploaded_file_name = file_type = ""
+    if not uploaded_file_path and not session.get("globus_file_path"):
+        available = [entry for entry in files if available_workspace_file(entry)]
+        active_id = session.get("active_workspace_file_id")
+        entry = next((entry for entry in available if entry["id"] == active_id), available[0] if available else None)
+        if entry:
+            activate_workspace_file(entry)
+            uploaded_file_path = session.get("uploaded_file_path", "")
+            uploaded_file_name = session.get("uploaded_file_name", "")
+            file_type = session.get("uploaded_file_type", "")
+
+    show_upload = request.args.get("upload") == "1" or bool(session.get("upload_error"))
     file_preview = None
     current_checked_keys = None
 
@@ -236,21 +288,29 @@ def inspector():
     globus_mode = bool(globus_file_path and globus_authenticated)
 
     # If Globus mode, use globus file info for template (shows sidebar + panels)
-    effective_file_path = uploaded_file_path or globus_file_path
-    effective_file_name = uploaded_file_name or globus_file_name
-    effective_file_type = file_type or globus_file_type
+    effective_file_path = globus_file_path if globus_mode else uploaded_file_path
+    effective_file_name = globus_file_name if globus_mode else uploaded_file_name
+    effective_file_type = globus_file_type if globus_mode else file_type
 
     try:
         upload_error = session.pop("upload_error", None)
+        upload_error_tab = session.pop("upload_error_tab", None)
         return render_template(
             "inspector.html",
-            uploaded_file_path=effective_file_path or "",
+            uploaded_file_path="" if show_upload else effective_file_path or "",
+            show_upload=show_upload,
+            workspace_files=[{key: entry[key] for key in ("id", "name", "file_type", "source")} for entry in files],
+            local_workspace_files=[{"id": entry["id"], "name": entry["name"]} for entry in files
+                                   if entry["source"] == "local" and not entry.get("custom_loader_spec")],
+            active_file_id=session.get("active_workspace_file_id"),
+            workspace_input_revision=session.get("workspace_input_revision", ""),
             uploaded_file_name=effective_file_name or "",
             file_type=effective_file_type or "",
             supported_file_types=SUPPORTED_FILE_TYPES,
             upload_file_types=list(SUPPORTED_FILE_TYPES),
             custom_loaders_enabled=current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False),
             upload_error=upload_error,
+            upload_error_tab=upload_error_tab,
             globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],
             current_checked_keys=current_checked_keys
@@ -258,7 +318,7 @@ def inspector():
             else [],
             globus_available=globus_available,
             globus_authenticated=globus_authenticated,
-            globus_mode=globus_mode,
+            globus_mode=globus_mode and not show_upload,
             globus_endpoint_id=globus_endpoint_id,
             globus_capabilities=globus_capabilities,
             llm_available=llm_available,
@@ -311,6 +371,32 @@ def retrieve_uploaded_file():
 PRESERVED_ON_CLEAR = ("llm_config", "globus_tokens", "globus_authenticated")
 
 
+@core_bp.get("/workspace/summary")
+def workspace_summary():
+    from aidrin.file_handling.custom_loader import using_builtin_readers
+
+    files = []
+    with using_builtin_readers():
+        for entry in workspace_files():
+            row = {key: entry[key] for key in ("id", "name", "file_type", "source")}
+            if entry["source"] == "local":
+                row.update(summarize_workspace_file(entry["path"], entry["name"], entry["file_type"], loader=entry.get("custom_loader_spec")))
+            else:
+                row.update(entry["summary"])
+            files.append(row)
+    return jsonify({
+        "files": files,
+        "totals": {key: sum(file.get(key, 0) for file in files) for key in ("records", "size")},
+    })
+
+
+@core_bp.post("/workspace/files/<file_id>/remove")
+def remove_file(file_id):
+    if not remove_workspace_file(file_id):
+        abort(404)
+    return redirect(url_for("core.inspector", _anchor="batch-overview" if workspace_files() else None))
+
+
 @core_bp.route("/clear", methods=["GET", "POST"])
 def clear_file():
     file_upload_time_log.info("Clearing File")
@@ -331,6 +417,7 @@ def clear_file():
                 file_upload_time_log.warning("Failed to cancel Globus tasks on clear: %s", e)
 
     # Capture this session's own files before clearing the session.
+    clear_workspace_uploads()
     owned_files = session.get("owned_files", [])
 
     # State that belongs to the user rather than to the dataset being cleared,
@@ -411,6 +498,8 @@ def filter_file():
                 if error:
                     return jsonify({"success": False, "error": error}), 400
 
+        if session.get("selected_keys") != keys_list:
+            advance_workspace_input_revision()
         session["selected_keys"] = keys_list
         session["minimize_preview"] = True
         # Recommendations were computed for the previous column selection.
@@ -421,7 +510,7 @@ def filter_file():
         file_name = session.get("uploaded_file_name")
         if file_name:
             current_app.TEMP_RESULTS_CACHE.pop(
-                f"user:{get_current_user_id()}:file:{file_name}:intent", None
+                f"user:{get_current_user_id()}:{dataset_cache_identity(file_name)}:intent", None
             )
 
         return jsonify({"success": True, "message": "File filtered successfully"})
@@ -443,6 +532,8 @@ def clear_dataset_selection():
         if isinstance(previous, str):
             previous = [key.strip() for key in previous.split(",") if key.strip()]
         session.pop("selected_keys", None)
+        if previous:
+            advance_workspace_input_revision()
         session.pop("minimize_preview", None)
         session.pop("intent", None)
 
@@ -548,9 +639,15 @@ def cached_result(metric_name):
             return jsonify(ensure_json_serializable(cached_fair))
         return jsonify({"cached": False})
 
-    cache_key = f"user:{user_id}:file:{file_name}:{metric_name}"
+    cache_key = f"user:{user_id}:{dataset_cache_identity(file_name)}:{metric_name}"
     entry = current_app.TEMP_RESULTS_CACHE.get(cache_key)
     if entry and entry.get("data"):
+        selection = entry.get("collection_file_ids")
+        if selection is not None:
+            current = {file["id"] for file in workspace_files() if file["source"] == "local" and available_workspace_file(file)}
+            if not selection <= current or (entry.get("collection_scope") == "all" and selection != current):
+                current_app.TEMP_RESULTS_CACHE.pop(cache_key, None)
+                return jsonify({"cached": False})
         resp = {"cached": True, "data": entry["data"]}
         if entry.get("_llm_explanations"):
             resp["llm_explanations"] = entry["_llm_explanations"]
@@ -750,6 +847,8 @@ def set_column_roles():
             return jsonify({"success": False, "message": "Invalid payload"}), 200
         valid_roles = {"continuous", "categorical", "identifier"}
         cleaned = {str(c): r for c, r in overrides.items() if r in valid_roles}
+        if session.get("column_roles", {}) != cleaned:
+            advance_workspace_input_revision()
         session["column_roles"] = cleaned
         # Overrides change which columns each metric treats as numeric/categorical,
         # so any cached metric results are now stale.

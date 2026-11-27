@@ -11,6 +11,12 @@
     </a>
 
     <!-- Data Overview -->
+    {% if workspace_files %}
+    <button type="button" onclick="showPanel('batch-overview')"
+            class="sidebar-metric-item flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium">
+      Batch Overview
+    </button>
+    {% endif %}
     <button onclick="showPanel('data-overview')"
             class="sidebar-item flex items-center w-full p-2 mb-2 rounded-lg text-sm font-semibold transition-colors hover:bg-black/10 dark:hover:bg-white/10"
             style="color: var(--textColor);">
