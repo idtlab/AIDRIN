@@ -313,6 +313,84 @@ def _print_fair_summary(result: dict, metadata_path: str) -> None:
         print(f"  declared: {', '.join(declared) or 'none'}")
 
 
+def _print_croissant_fields(result: dict, metadata_path: str) -> None:
+    """Print the Croissant fields a file is missing, with what each one expects."""
+    if not result.get("available"):
+        print(result.get("error") or "The Croissant field guide is unavailable (mlcroissant could not be loaded).")
+        return
+    missing = result["missing"]
+    print(f"{Path(metadata_path).name}: {len(missing)} Croissant fields missing, {len(result['present'])} present")
+    for field in missing:
+        hint = f" e.g. {field['format_hint']}" if field.get("format_hint") else ""
+        inner = f" fields: {', '.join(s['key'] for s in field['sub_fields'])}" if field.get("sub_fields") else ""
+        addable = "" if field["addable"] else " (structural, not a one-value fill-in)"
+        print(f"\n  {field['key']} [{field['kind']}, {field['cardinality']}]{addable}{hint}{inner}")
+        if field["description"]:
+            print(f"    {field['description']}")
+
+
+def _parse_croissant_edits(args) -> dict:
+    """Merge ``--edits`` (a JSON file) and ``--set KEY=VALUE`` pairs; ``--set`` wins on a clash."""
+    edits = {}
+    if args.edits:
+        with open(args.edits, encoding="utf-8") as f:
+            loaded = json.load(f)
+        if not isinstance(loaded, dict):
+            raise ValueError(f"{args.edits} must hold a JSON object mapping field names to values")
+        edits.update(loaded)
+    guide = {}
+    if args.set_values:
+        try:
+            from aidrin.structured_data_metrics.croissant_schema import field_guide
+            from aidrin.structured_data_metrics.fair_metadata import _croissant_version
+
+            with open(args.metadata_path, encoding="utf-8") as f:
+                guide = field_guide(_croissant_version(json.load(f)))
+        except Exception:
+            # Without the guide every --set value stays text unless it looks like JSON;
+            # enhance_croissant reports a bad or unreadable input file on its own.
+            guide = {}
+    from aidrin.structured_data_metrics.croissant_enhance import coerce_value
+
+    for pair in args.set_values:
+        key, sep, text = pair.partition("=")
+        if not sep or not key.strip():
+            raise ValueError(f"--set expects KEY=VALUE, got {pair!r}")
+        edits[key.strip()] = coerce_value(key.strip(), text, guide)
+    return edits
+
+
+def _croissant_command(args) -> None:
+    if args.croissant_command == "fields":
+        result = _local_api.croissant_fields(args.metadata_path)
+        _write_output_file(result, args.output)
+        if args.human_readable:
+            _print_croissant_fields(result, args.metadata_path)
+        else:
+            _dump_result(result)
+        return
+    if args.croissant_command == "validate":
+        result = _local_api.validate_croissant(args.metadata_path)
+        _write_output_file(result, args.output)
+        _dump_result(result)
+        if result.get("available") and result.get("valid") is False:
+            sys.exit(1)
+        return
+    result = _local_api.enhance_croissant(
+        args.metadata_path,
+        _parse_croissant_edits(args),
+        args.name,
+        args.output,
+        contributor_affiliation=args.affiliation,
+    )
+    _dump_result(result)
+    if result["written"]:
+        sys.stderr.write(f"Enhanced Croissant written to: {result['output_path']}\n")
+    else:
+        sys.stderr.write("Not written: the edited file is not valid Croissant (see validation.errors).\n")
+        sys.exit(1)
+
+
 def _print_summary_table(result: dict, file_path: str) -> None:
     """Print a human-readable summary of summarize_dataset output."""
     import os
@@ -645,6 +723,7 @@ REMOTE_FORBIDDEN = {
     "skill",
     "inventory",
     "fair",
+    "croissant",
     "readiness-report",
 }
 
@@ -1124,6 +1203,38 @@ def main() -> None:
     fair_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print a per-principle table instead of JSON")
     fair_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
 
+    # Croissant metadata: list fields, validate with mlcroissant, enhance with provenance
+    croissant_parser = subparsers.add_parser(
+        "croissant",
+        help="Inspect, validate (with mlcroissant) or enhance a Croissant metadata file",
+    )
+    croissant_sub = croissant_parser.add_subparsers(dest="croissant_command", required=True)
+    fields_parser = croissant_sub.add_parser(
+        "fields", help="List the Croissant fields the file is missing and has, with what each one expects"
+    )
+    fields_parser.add_argument("metadata_path", help="Path to the Croissant JSON-LD file")
+    fields_parser.add_argument("--summary", dest="human_readable", action="store_true", help="Print the missing fields as a list instead of JSON")
+    fields_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+    validate_parser = croissant_sub.add_parser(
+        "validate", help="Check the file with MLCommons' mlcroissant parser (exit code 1 when invalid)"
+    )
+    validate_parser.add_argument("metadata_path", help="Path to the Croissant JSON-LD file")
+    validate_parser.add_argument("-o", "--output", default=None, help="Path to write JSON results")
+    enhance_parser = croissant_sub.add_parser(
+        "enhance",
+        help="Set or add top-level fields, record who made the edit, validate, and write a new file",
+    )
+    enhance_parser.add_argument("metadata_path", help="Path to the Croissant JSON-LD file (never overwritten)")
+    enhance_parser.add_argument(
+        "--set", dest="set_values", action="append", default=[], metavar="KEY=VALUE",
+        help="Field to set (repeatable). VALUE starting with { [ or \" is parsed as JSON, e.g. "
+             "--set 'publisher={\"@type\": \"Organization\", \"name\": \"ACME\"}'",
+    )
+    enhance_parser.add_argument("--edits", default=None, help="JSON file mapping field names to new values")
+    enhance_parser.add_argument("--name", required=True, help="Your name, recorded as the contributor who made the edit")
+    enhance_parser.add_argument("--affiliation", default=None, help="Your affiliation (optional), recorded with your name")
+    enhance_parser.add_argument("-o", "--output", required=True, help="Path to write the enhanced Croissant file")
+
     # AI Data Readiness Report (JSON + optional PDF). Local-only.
     rr_parser = subparsers.add_parser(
         "readiness-report",
@@ -1449,6 +1560,10 @@ def main() -> None:
                 _print_fair_summary(result, args.metadata_path)
             else:
                 _dump_result(result)
+            return
+
+        if args.command == "croissant":
+            _croissant_command(args)
             return
 
         if args.command == "readiness-report":

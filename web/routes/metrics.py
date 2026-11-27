@@ -59,6 +59,7 @@ from aidrin.structured_data_metrics.variable_unit_validation import (
     calculate_variable_unit_validation,
     unit_suggestion_catalog,
 )
+from aidrin.structured_data_metrics.croissant_validation import validate_croissant_jsonld
 from aidrin.structured_data_metrics.feature_relevance import (
     data_cleaning,
     pearson_correlation,
@@ -1724,6 +1725,41 @@ def fair_assessment():
     except Exception as e:
         metric_time_log.error("FAIR Assessment error: %s", e, exc_info=True)
         return jsonify({"error": "An internal error occurred"}), 400
+
+
+@metrics_bp.route("/fair-assessment/validate-croissant", methods=["POST"])
+def validate_croissant_metadata():
+    """Validate a (possibly user-edited) Croissant document with the official mlcroissant
+    parser. Called client-side just before an enhanced Croissant file is downloaded, so a
+    hand-edited field that breaks the format is caught before it ships."""
+    try:
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "Expected a JSON object"}), 400
+        return jsonify(validate_croissant_jsonld(payload))
+    except Exception as e:
+        metric_time_log.error("Croissant validation error: %s", e, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 400
+
+
+@metrics_bp.route("/fair-assessment/croissant-field-guide", methods=["GET"])
+def croissant_field_guide():
+    """What each Croissant field means and expects, introspected from mlcroissant's own
+    node classes (see croissant_schema.py) rather than hand-authored here. Powers the
+    "+ Add" affordance the FAIR Assessment UI offers for a missing, addable field.
+    ``?version=1.1`` builds it for the Croissant version the document declares (default
+    1.0). Static per version given the installed mlcroissant, so the frontend caches it
+    per version. An empty object (not an error) means the guide couldn't be built --
+    the UI just skips the add-missing affordance."""
+    try:
+        from aidrin.structured_data_metrics.croissant_schema import field_guide
+
+        return jsonify(field_guide(request.args.get("version") or None))
+    except ImportError:
+        return jsonify({})
+    except Exception as e:
+        metric_time_log.error("Croissant field guide error: %s", e, exc_info=True)
+        return jsonify({})
 
 
 # ---------------------------------------------------------------------------

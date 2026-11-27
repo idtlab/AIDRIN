@@ -37,6 +37,9 @@ dependencies = [
     "uproot>=5.0.0",
     "weasyprint>=62.0",
     "pint>=0.24.4,<0.26",
+    # croissant_schema.py reads field definitions from mlcroissant._src (private), so cap
+    # the minor version and re-check the field guide before raising it.
+    "mlcroissant>=1.1.1,<1.2",
 ]
 
 [project.urls]

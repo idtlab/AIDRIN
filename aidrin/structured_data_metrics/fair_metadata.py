@@ -730,6 +730,17 @@ def _assess_croissant(metadata):
     }
 
 
+def croissant_check_summary(metadata):
+    """The ``"FAIR Compliance Checks"`` summary of a Croissant document, without the chart.
+
+    Same counts as ``calculate_fair_compliance(metadata, "croissant")``, minus the
+    matplotlib render, for callers that only need the score.
+    """
+    if not isinstance(metadata, dict):
+        raise ValueError("Metadata must be a JSON object")
+    return _score(_top_level(metadata), CROISSANT)[1]
+
+
 def _assess_rocrate(metadata):
     crate = _Crate(metadata)
     if not crate.descriptor:

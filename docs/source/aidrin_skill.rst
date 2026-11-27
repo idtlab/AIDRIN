@@ -256,6 +256,14 @@ reachable.
      - Builds the FAISS vector index from the domain-literature PDFs in the agentic config
    * - ``agentic_run``
      - Runs the full agentic evaluation pipeline
+   * - ``check_fair_compliance``
+     - Scores a metadata file (Croissant, RO-Crate, DCAT-US 3.0 or 1.1, DataCite) against the FAIR principles
+   * - ``croissant_fields``
+     - Lists the Croissant fields a file is missing and has, with what each one expects
+   * - ``validate_croissant``
+     - Checks a Croissant file with MLCommons' ``mlcroissant`` parser
+   * - ``enhance_croissant``
+     - Sets or adds Croissant fields, records the contributor you name, validates, and writes a new file
 
 ``summarize_dataset``, ``run_data_quality_check``, and ``run_aidrin_metric`` accept an
 optional ``loader`` (``path/to/loader.py:function``) for formats AIDRIN cannot read

@@ -14,10 +14,13 @@ pytest.importorskip("mcp")
 
 from aidrin.mcp.server import (  # noqa: E402
     check_fair_compliance,
+    croissant_fields,
+    enhance_croissant,
     run_aidrin_metric,
     run_custom_metric,
     run_custom_outlier_check,
     run_custom_remedy,
+    validate_croissant,
     verify_file_references,
     verify_variable_units,
 )
@@ -68,6 +71,29 @@ def test_fair_compliance_tool_returns_errors_as_json(tmp_path):
     empty = tmp_path / "empty.json"
     empty.write_text("{}")
     assert "Unknown metadata type" in json.loads(check_fair_compliance(str(empty), "iso19115"))["error"]
+
+
+
+_MNIST_CROISSANT = Path(__file__).resolve().parents[1] / "fixtures" / "fair_metadata" / "croissant_1.1_huggingface_mnist.json"
+
+
+def test_croissant_tools_list_validate_and_enhance(tmp_path):
+    pytest.importorskip("mlcroissant")
+    fields = json.loads(croissant_fields(str(_MNIST_CROISSANT)))
+    assert "datePublished" in {f["key"] for f in fields["missing"]}
+    assert json.loads(validate_croissant(str(_MNIST_CROISSANT)))["valid"] is True
+    out = tmp_path / "mnist.json"
+    result = json.loads(enhance_croissant(str(_MNIST_CROISSANT), {"version": "1.0.0"}, "Jane", str(out), "ACME"))
+    assert result["written"] is True
+    assert json.loads(out.read_text())["contributor"][-1]["name"] == "Jane"
+
+
+def test_croissant_tools_return_errors_as_json(tmp_path):
+    assert "File not found" in json.loads(validate_croissant(str(tmp_path / "none.json")))["error"]
+    assert "contributor name" in json.loads(
+        enhance_croissant(str(_MNIST_CROISSANT), {"version": "1"}, " ", str(tmp_path / "o.json"))
+    )["error"]
+
 
 
 def test_dedicated_mcp_tool_accepts_rules_file():

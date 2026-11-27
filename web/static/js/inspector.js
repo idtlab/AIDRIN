@@ -4676,28 +4676,313 @@ function _fairCheckFailed(value) {
   return s === "Fail" || s === "No" || s.includes("CHECK FAILED");
 }
 
+/** "dct:title" and "http://purl.org/dc/terms/title" both become "title" (mirrors _local_name). */
+function _fairLocalName(key) {
+  if (typeof key !== "string" || key.startsWith("@")) return key;
+  const parts = key.split(/[:/#]/);
+  return parts[parts.length - 1] || key;
+}
+
+/** Top-level keys of the uploaded metadata file, by local name, for raw-value lookups.
+ * Each entry keeps the key's original spelling so edits can be written back to it. */
+function _fairOriginalMetadataIndex(data) {
+  const meta = data && data["Original Metadata"];
+  const index = {};
+  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+    for (const [k, v] of Object.entries(meta)) {
+      const local = _fairLocalName(k);
+      if (!(local in index)) index[local] = { key: k, value: v };
+    }
+  }
+  return index;
+}
+
+/** Whether a FAIR result is a Croissant assessment — editing is scoped to Croissant for now. */
+function _fairIsCroissant(data) {
+  return !!(
+    data &&
+    data.Standard &&
+    String(data.Standard.Name || "").startsWith("Croissant")
+  );
+}
+
+/** Candidate top-level key names a check label like "identifier or sameAs" or
+ * "provenance (wasDerivedFrom or wasGeneratedBy)" might refer to. */
+function _fairLabelCandidates(label) {
+  const candidates = new Set();
+  const addSplit = (s) =>
+    s
+      .split(/\s+or\s+/i)
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .forEach((c) => candidates.add(c));
+  const parenMatch = label.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (parenMatch) {
+    addSplit(parenMatch[2]);
+    addSplit(parenMatch[1]);
+  } else {
+    addSplit(label);
+  }
+  return [...candidates];
+}
+
+/** The Croissant version a FAIR result declares ("1.1"), from its Standard name, or "". */
+function _fairCroissantVersion(data) {
+  const m = String((data && data.Standard && data.Standard.Name) || "").match(
+    /Croissant (\d+\.\d+)/,
+  );
+  return m ? m[1] : "";
+}
+
+// What each Croissant field means and expects, introspected server-side from
+// mlcroissant's own node classes (see aidrin/structured_data_metrics/croissant_schema.py)
+// rather than hand-authored here. Built for the Croissant version the document declares
+// and static per version, so it's fetched once per version per page load and cached.
+const _croissantFieldGuidePromises = new Map();
+function _getCroissantFieldGuide(version) {
+  const key = version || "";
+  if (!_croissantFieldGuidePromises.has(key)) {
+    const query = key ? `?version=${encodeURIComponent(key)}` : "";
+    _croissantFieldGuidePromises.set(
+      key,
+      fetch(`/fair-assessment/croissant-field-guide${query}`)
+        .then((r) => r.json())
+        .catch(() => ({})),
+    );
+  }
+  return _croissantFieldGuidePromises.get(key);
+}
+
+/** The field guide entry a check's label refers to, if it maps to an addable top-level
+ * field (recordSet/distribution-shaped fields aren't -- see croissant_schema.py). */
+function _fairGuideEntryForLabel(fieldGuide, label) {
+  if (!fieldGuide) return undefined;
+  for (const candidate of _fairLabelCandidates(label)) {
+    const entry = fieldGuide[candidate];
+    if (entry && entry.addable) return { key: candidate, ...entry };
+  }
+  return undefined;
+}
+
+/** One line describing a field's expected shape, built from the guide's own structured
+ * data (kind/cardinality/node_types) -- not prose written for this UI. */
+function _fairGuideTypeLabel(guide) {
+  const parts = [guide.kind];
+  if (guide.node_types && guide.node_types.length)
+    parts.push(guide.node_types.join(" or "));
+  if (guide.allows_free_text && guide.kind !== "text")
+    parts.push("or plain text");
+  if (guide.cardinality === "MANY") parts.push("list");
+  return parts.join(", ");
+}
+
+/** A missing-but-addable field: a "+ Add" toggle with the field guide's own description,
+ * revealing an edit box pre-seeded with the guide's template once clicked. */
+/** "Add any of these keys inside the object: **name** (The name of the item.), ..." --
+ * built from the node type's own fields (mlcroissant's sub_fields, via field_guide()),
+ * so a bare {"@type": "Organization"} template doesn't leave the user guessing what
+ * belongs inside it. */
+function _fairSubFieldsHint(subFields) {
+  if (!subFields || !subFields.length) return "";
+  const items = subFields
+    .map(
+      (f) =>
+        `<strong>${escapeHtml(f.key)}</strong>${f.description ? ` (${escapeHtml(f.description)})` : ""}`,
+    )
+    .join(", ");
+  return `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Add any of these keys inside the object: ${items}.</p>`;
+}
+
+/** How an added field's text is stored: JSON for object/list templates, otherwise from
+ * the guide's kind, as coerce_value does for the CLI. A number field that also accepts
+ * text (version) stays a string, so "1.10" isn't turned into 1.1. */
+function _fairMissingFieldType(guide) {
+  if (typeof guide.template !== "string") return "json";
+  if (guide.kind === "boolean") return "boolean";
+  if (guide.kind === "number" && !guide.allows_free_text) return "number";
+  return "string";
+}
+
+function _renderFairMissingFieldHtml(label, guide) {
+  const templateText = _fairValueBoxText(guide.template);
+  const fieldType = _fairMissingFieldType(guide);
+  const hint = [guide.description, `(${_fairGuideTypeLabel(guide)})`]
+    .filter(Boolean)
+    .join(" ");
+  return `<div class="px-3 py-1.5" data-fair-missing-field="1">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="font-semibold text-gray-900 dark:text-white">${escapeHtml(label)}</span>
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Missing</span>
+      </div>
+      <button type="button" class="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+        data-fair-key="${escapeHtml(guide.key)}"
+        data-fair-field-type="${fieldType}"
+        data-fair-template="${escapeHtml(templateText)}"
+        data-fair-placeholder="${escapeHtml(guide.format_hint || "")}"
+        data-fair-sub-fields="${escapeHtml(JSON.stringify(guide.sub_fields || []))}"
+        onclick="_revealFairMissingField(this)">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+        Add
+      </button>
+    </div>
+    ${hint ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(hint)}</p>` : ""}
+  </div>`;
+}
+
+/** Swap a "+ Add" toggle for an editable textarea pre-seeded with the field's template,
+ * with a Cancel button to go back. data-fair-original is set to that same template text
+ * (not ""), so merely revealing the box isn't counted as an edit -- only actually
+ * changing its content is. The wrapper's original HTML is stashed as a JS property (not
+ * a DOM attribute, to avoid re-escaping it) so Cancel can restore it exactly. A scalar
+ * field (date/url) gets a format example as ghost placeholder text; a node-shaped field
+ * (creator, publisher, license-as-object) gets a line listing what keys it can hold. */
+function _revealFairMissingField(btn) {
+  const key = btn.dataset.fairKey;
+  const type = btn.dataset.fairFieldType;
+  const template = btn.dataset.fairTemplate;
+  const placeholder = btn.dataset.fairPlaceholder || "";
+  let subFields = [];
+  try {
+    subFields = JSON.parse(btn.dataset.fairSubFields || "[]");
+  } catch (e) {
+    subFields = [];
+  }
+  const wrapper = btn.closest('[data-fair-missing-field="1"]');
+  if (!wrapper) return;
+  wrapper._fairOriginalHtml = wrapper.innerHTML;
+  const rows = Math.min(Math.max(template.split("\n").length, 2), 24);
+  wrapper.innerHTML = `
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="font-semibold text-gray-900 dark:text-white">${escapeHtml(key)}</span>
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Adding</span>
+      </div>
+      <button type="button" class="shrink-0 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" onclick="_cancelFairMissingField(this)">Cancel</button>
+    </div>
+    <textarea class="fair-edit-field mt-1 p-2 w-full text-xs font-mono text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900/60 border border-gray-300 dark:border-gray-600 rounded overflow-auto focus:ring-1 focus:ring-blue-500 focus:border-blue-500" style="max-height: 480px;" rows="${rows}" data-fair-key="${escapeHtml(key)}" data-fair-type="${type}" data-fair-original="${escapeHtml(template)}" placeholder="${escapeHtml(placeholder)}" spellcheck="false">${escapeHtml(template)}</textarea>
+    ${_fairSubFieldsHint(subFields)}`;
+  wrapper.querySelector("textarea")?.focus();
+}
+
+/** Undo _revealFairMissingField: restore the original "+ Add" toggle, then re-check
+ * whether the download button should still be enabled -- removing the textarea this way
+ * doesn't fire an "input" event, so _wireFairEditTracking wouldn't otherwise notice this
+ * field (if it had been edited) just disappeared. */
+function _cancelFairMissingField(btn) {
+  const wrapper = btn.closest('[data-fair-missing-field="1"]');
+  if (!wrapper || wrapper._fairOriginalHtml === undefined) return;
+  // Captured before reassigning innerHTML below detaches btn (and wrapper's other
+  // children) from the document, which would otherwise make this lookup fail.
+  const root = btn.closest("[data-fair-root]");
+  wrapper.innerHTML = wrapper._fairOriginalHtml;
+  root?._fairUpdateDownloadState?.();
+}
+
+/** Per-field dataType, flattened out of Croissant's recordSet[].field[] (mirrors
+ * the backend's _croissant_field_types, which only reports a pass count). */
+function _fairCroissantFieldDataTypes(rawIndex) {
+  const recordSets = rawIndex && rawIndex.recordSet && rawIndex.recordSet.value;
+  if (!recordSets) return [];
+  const sets = Array.isArray(recordSets) ? recordSets : [recordSets];
+  const fields = [];
+  sets.forEach((rs) => {
+    if (!rs || typeof rs !== "object") return;
+    const fieldList = Array.isArray(rs.field)
+      ? rs.field
+      : rs.field
+        ? [rs.field]
+        : [];
+    fieldList.forEach((f) => {
+      if (!f || typeof f !== "object") return;
+      fields.push({
+        recordSet: rs.name || rs["@id"] || "(unnamed)",
+        field: f.name || f["@id"] || "(unnamed)",
+        dataType: f.dataType ?? null,
+      });
+    });
+  });
+  return fields;
+}
+
+/** The raw metadata entry a check's label refers to: {key, value} when it maps to an
+ * actual top-level key (editable — the key names where to write an edit back), or just
+ * {value} when it's reconstructed from one, as Croissant's derived recordSet-field check
+ * is (not editable — there's no single key an edit could be written back to). */
+function _fairRawEntryForLabel(rawIndex, label) {
+  if (!rawIndex) return undefined;
+  if (label === "dataType (recordSet fields)") {
+    const fields = _fairCroissantFieldDataTypes(rawIndex);
+    if (fields.length) return { value: fields };
+  }
+  for (const candidate of _fairLabelCandidates(label)) {
+    if (candidate in rawIndex) return rawIndex[candidate];
+  }
+  return undefined;
+}
+
+function _fairValueBoxText(raw) {
+  return typeof raw === "string"
+    ? raw
+    : typeof raw === "object" && raw !== null
+      ? JSON.stringify(raw, null, 2)
+      : String(raw);
+}
+
+/** A found check's value: a scrollable text box, editable (and tagged with the metadata
+ * key to write an edit back to) when editKey is given, otherwise read-only. Sized to the
+ * line count so short values stay compact and long JSON doesn't hide behind a tiny scrollbox. */
+function _renderFairValueBox(raw, editKey) {
+  const text = _fairValueBoxText(raw);
+  const rows = Math.min(Math.max(text.split("\n").length, 2), 24);
+  if (editKey) {
+    const type = typeof raw === "object" && raw !== null ? "json" : typeof raw;
+    const escaped = escapeHtml(text);
+    return `<textarea class="fair-edit-field mt-1 p-2 w-full text-xs font-mono text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900/60 border border-gray-300 dark:border-gray-600 rounded overflow-auto focus:ring-1 focus:ring-blue-500 focus:border-blue-500" style="max-height: 480px;" rows="${rows}" data-fair-key="${escapeHtml(editKey)}" data-fair-type="${type}" data-fair-original="${escaped}" spellcheck="false">${escaped}</textarea>`;
+  }
+  return `<pre class="mt-1 p-2 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded overflow-auto" style="max-height: 400px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(text)}</pre>`;
+}
+
 /** Flatten a FAIR principle detail object into table rows (mirrors PDF _fair_value_rows). */
-function _fairValueRows(obj) {
+function _fairValueRows(obj, rawIndex, editable, fieldGuide) {
   const rows = [];
   if (!obj || typeof obj !== "object") return rows;
   for (const [key, val] of Object.entries(obj)) {
     if (val && typeof val === "object") {
       rows.push({ label: key, isGroup: true });
-      rows.push(..._fairValueRows(val));
+      rows.push(..._fairValueRows(val, rawIndex, editable, fieldGuide));
     } else {
       const failed = _fairCheckFailed(val);
+      const entry = failed ? undefined : _fairRawEntryForLabel(rawIndex, key);
       rows.push({
         label: key,
         isGroup: false,
         found: !failed,
-        statusLabel: failed ? "Missing" : "Found",
+        value: entry && entry.value !== undefined ? entry.value : String(val),
+        editKey: editable && entry ? entry.key : undefined,
+        missingGuide:
+          failed && editable
+            ? _fairGuideEntryForLabel(fieldGuide, key)
+            : undefined,
       });
     }
   }
+  // Missing fields sink to the bottom of the group; found fields and group headers keep
+  // their original relative order (Array.prototype.sort is a stable sort).
+  rows.sort(
+    (a, b) => (a.isGroup || a.found ? 0 : 1) - (b.isGroup || b.found ? 0 : 1),
+  );
   return rows;
 }
 
-function _fairPrincipleStats(data, principle, checks) {
+function _fairPrincipleStats(
+  data,
+  principle,
+  checks,
+  rawIndex,
+  editable,
+  fieldGuide,
+) {
   const checkStr = checks[`${principle} Checks`] || "0/0";
   const m = checkStr.match(/(\d+)\/(\d+)/);
   const passed = m ? parseInt(m[1], 10) : 0;
@@ -4705,34 +4990,36 @@ function _fairPrincipleStats(data, principle, checks) {
   const pct = Math.round((passed / total) * 100);
   const detail = data[principle];
   const rows =
-    typeof detail === "object" && detail !== null ? _fairValueRows(detail) : [];
+    typeof detail === "object" && detail !== null
+      ? _fairValueRows(detail, rawIndex, editable, fieldGuide)
+      : [];
   return { name: principle, checkStr, passed, total, pct, rows };
 }
 
-function _renderFairCheckBadge(found) {
-  if (found) {
-    return '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Found</span>';
-  }
-  return '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Missing</span>';
-}
-
 function _renderFairPrincipleCardHtml(principle) {
-  let tableHtml = "";
+  let bodyHtml = "";
   if (principle.rows.length) {
-    tableHtml = '<table class="w-full text-xs"><tbody>';
+    bodyHtml = '<div class="divide-y divide-gray-100 dark:divide-gray-700">';
     principle.rows.forEach((row) => {
       if (row.isGroup) {
-        tableHtml += `<tr><td colspan="2" class="px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/40 border-b border-gray-100 dark:border-gray-700">${escapeHtml(row.label)}</td></tr>`;
+        bodyHtml += `<div class="px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/40">${escapeHtml(row.label)}</div>`;
+      } else if (row.found) {
+        bodyHtml += `<div class="px-3 py-1.5">
+          <div class="font-semibold text-gray-900 dark:text-white">${escapeHtml(row.label)}</div>
+          ${_renderFairValueBox(row.value, row.editKey)}
+        </div>`;
+      } else if (row.missingGuide) {
+        bodyHtml += _renderFairMissingFieldHtml(row.label, row.missingGuide);
       } else {
-        tableHtml += `<tr class="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-          <td class="px-3 py-1.5 text-gray-600 dark:text-gray-400">${escapeHtml(row.label)}</td>
-          <td class="px-3 py-1.5 text-right">${_renderFairCheckBadge(row.found)}</td>
-        </tr>`;
+        bodyHtml += `<div class="flex items-center justify-between px-3 py-1.5">
+          <span class="font-semibold text-gray-900 dark:text-white">${escapeHtml(row.label)}</span>
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Missing</span>
+        </div>`;
       }
     });
-    tableHtml += "</tbody></table>";
+    bodyHtml += "</div>";
   } else {
-    tableHtml =
+    bodyHtml =
       '<p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">No detail available.</p>';
   }
 
@@ -4741,14 +5028,18 @@ function _renderFairPrincipleCardHtml(principle) {
       <span class="text-sm font-semibold text-gray-900 dark:text-white">${escapeHtml(principle.name)}</span>
       <span class="text-xs text-gray-400 dark:text-gray-500">${escapeHtml(principle.checkStr)}</span>
     </div>
-    ${tableHtml}
+    ${bodyHtml}
   </div>`;
 }
 
-function _renderFairPrincipleCardsGridHtml(data) {
+function _renderFairPrincipleCardsGridHtml(data, fieldGuide) {
   const checks = data["FAIR Compliance Checks"] || {};
+  const rawIndex = _fairOriginalMetadataIndex(data);
+  const editable = _fairIsCroissant(data);
   const cards = _FAIR_PRINCIPLE_KEYS.map((name) =>
-    _renderFairPrincipleCardHtml(_fairPrincipleStats(data, name, checks)),
+    _renderFairPrincipleCardHtml(
+      _fairPrincipleStats(data, name, checks, rawIndex, editable, fieldGuide),
+    ),
   );
   return `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${cards.join("")}</div>`;
 }
@@ -4820,13 +5111,18 @@ function _renderFairComplianceSummaryHtml(data) {
   return html;
 }
 
-/** Render a FAIR value object as readable HTML with pass/fail badges */
-function renderFairValue(obj) {
+/** Render a FAIR value object as readable HTML, with found values in a scrollable text box.
+ * Missing fields sink to the bottom of the group; found entries and nested groups keep
+ * their original relative order (entries is sorted with a stable sort). */
+function renderFairValue(obj, rawIndex, editable, fieldGuide) {
   if (typeof obj !== "object" || obj === null) return String(obj ?? "—");
-  let html = "";
+  const entries = [];
   for (const [k, v] of Object.entries(obj)) {
     if (typeof v === "object" && v !== null) {
-      html += `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${escapeHtml(k)}</span>${renderFairValue(v)}</div>`;
+      entries.push({
+        missing: false,
+        html: `<div class="mt-1.5"><span class="text-xs font-medium text-gray-700 dark:text-gray-300">${escapeHtml(k)}</span>${renderFairValue(v, rawIndex, editable, fieldGuide)}</div>`,
+      });
     } else {
       const strVal = String(v);
       const isFail =
@@ -4834,22 +5130,41 @@ function renderFairValue(obj) {
         v === false ||
         v === "Fail" ||
         v === "No";
-      let badge = "";
-      if (isFail) {
-        badge =
-          '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">&#10007; Missing</span>';
+      const missingGuide =
+        isFail && editable ? _fairGuideEntryForLabel(fieldGuide, k) : undefined;
+      if (missingGuide) {
+        entries.push({
+          missing: true,
+          html: `<div class="border-b border-gray-100 dark:border-gray-700 last:border-b-0">${_renderFairMissingFieldHtml(k, missingGuide)}</div>`,
+        });
+      } else if (isFail) {
+        entries.push({
+          missing: true,
+          html: `<div class="flex items-center justify-between py-1.5 text-xs border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+            <span class="font-semibold text-gray-900 dark:text-white mr-2">${escapeHtml(k)}</span>
+            <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">&#10007; Missing</span>
+          </div>`,
+        });
       } else {
-        badge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" title="${escapeHtml(strVal)}">&#10003; Found</span>`;
+        const entry = _fairRawEntryForLabel(rawIndex, k);
+        const display = entry && entry.value !== undefined ? entry.value : v;
+        const editKey = editable && entry ? entry.key : undefined;
+        entries.push({
+          missing: false,
+          html: `<div class="py-1.5 text-xs border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+            <span class="font-semibold text-gray-900 dark:text-white">${escapeHtml(k)}</span>
+            ${_renderFairValueBox(display, editKey)}
+          </div>`,
+        });
       }
-      html += `<div class="flex items-center justify-between py-1.5 text-xs border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-        <span class="text-gray-600 dark:text-gray-400 mr-2">${escapeHtml(k)}</span>${badge}</div>`;
     }
   }
-  return html;
+  entries.sort((a, b) => (a.missing ? 1 : 0) - (b.missing ? 1 : 0));
+  return entries.map((e) => e.html).join("");
 }
 
 /** Build FAIR assessment result HTML for Understandability / FAIR Assessment. */
-function buildFairAssessmentResultHtml(data) {
+function buildFairAssessmentResultHtml(data, fieldGuide) {
   const checks = data["FAIR Compliance Checks"] || {};
   const totalCheck = checks["Total Checks"] || "";
   const totalMatch = totalCheck.match(/(\d+)\/(\d+)/);
@@ -4883,12 +5198,15 @@ function buildFairAssessmentResultHtml(data) {
   });
   html += "</div></div>";
 
+  const rawIndex = _fairOriginalMetadataIndex(data);
+  const editable = _fairIsCroissant(data);
+  if (editable) html += _renderFairEditableNoticeHtml();
   html += '<div class="space-y-2 mb-4">';
   _FAIR_PRINCIPLE_KEYS.forEach((k) => {
     let val = "—";
     const checkStr = checks[`${k} Checks`] || "";
     if (data[k] !== undefined && typeof data[k] === "object") {
-      val = renderFairValue(data[k]);
+      val = renderFairValue(data[k], rawIndex, editable, fieldGuide);
     } else if (data[k] !== undefined) {
       val = `<div class="py-2 text-sm text-gray-700 dark:text-gray-300">${data[k]}</div>`;
     }
@@ -4901,6 +5219,7 @@ function buildFairAssessmentResultHtml(data) {
     </details>`;
   });
   html += "</div>";
+  if (editable) html += _renderFairDownloadSectionHtml();
 
   const extraKeys = Object.keys(data).filter(
     (k) => !_FAIR_PRINCIPLE_KEYS.includes(k) && k !== "Pie chart",
@@ -4935,10 +5254,354 @@ function buildFairAssessmentResultHtml(data) {
   return html;
 }
 
+/** Notice at the top of a Croissant result telling the user the found values below can be edited. */
+function _renderFairEditableNoticeHtml() {
+  return `<div class="flex items-start gap-2 mb-4 p-3 text-sm bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+    <svg class="w-4 h-4 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    <span class="text-blue-800 dark:text-blue-300"><strong class="font-semibold">The values below are editable.</strong> Correct or fill in a field directly in its box, then download your changes once you're done.</span>
+  </div>`;
+}
+
+/** Download action placed after the editable FAIR checks. Starts disabled with a status
+ * hint; _wireFairEditTracking enables it (and updates the hint) once a field is edited. */
+function _renderFairDownloadSectionHtml() {
+  return `<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-700/40 border border-gray-200 dark:border-gray-700 rounded-lg">
+    <div>
+      <div class="text-sm font-semibold text-gray-900 dark:text-white">Download your edits</div>
+      <div class="fair-download-status text-xs text-gray-500 dark:text-gray-400 mt-0.5">Edit a value above to enable download</div>
+    </div>
+    <button type="button" disabled onclick="downloadFairEnhancedMetadata(this)" class="fair-download-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-700 dark:disabled:hover:bg-blue-600">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+      </svg>
+      Download enhanced JSON
+    </button>
+  </div>`;
+}
+
+/** Keep one editable box per metadata key. Two checks can point at the same key (both
+ * "contentUrl (distribution)" and "encodingFormat (distribution)" show the whole
+ * distribution value), and two boxes for one key would let the second silently overwrite
+ * the first's edit on download. The first box stays editable and says it holds the whole
+ * value; later ones become read-only and point back to it. */
+function _fairDedupeEditFields(container) {
+  const seen = new Set();
+  container.querySelectorAll("textarea.fair-edit-field").forEach((el) => {
+    const key = el.dataset.fairKey;
+    const note = (text) =>
+      el.insertAdjacentHTML(
+        "afterend",
+        `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${text}</p>`,
+      );
+    if (!seen.has(key)) {
+      seen.add(key);
+      const dupes = container.querySelectorAll(
+        `textarea.fair-edit-field[data-fair-key="${CSS.escape(key)}"]`,
+      );
+      if (dupes.length > 1)
+        note(
+          `This box edits the whole <code>${escapeHtml(key)}</code> value, which other checks below also read.`,
+        );
+      return;
+    }
+    el.readOnly = true;
+    el.classList.remove("fair-edit-field");
+    el.classList.add("opacity-75");
+    note(
+      `Same <code>${escapeHtml(key)}</code> value as above. Edit it in the first box.`,
+    );
+  });
+}
+
+/** Enable the download button (and update its status hint) once an editable field differs
+ * from its original value; re-disable it if every edit is reverted back. */
+function _wireFairEditTracking(container) {
+  const btn = container && container.querySelector(".fair-download-btn");
+  if (!btn) return;
+  const status = container.querySelector(".fair-download-status");
+  const updateState = () => {
+    const changed = Array.from(
+      container.querySelectorAll(".fair-edit-field"),
+    ).filter((el) => el.value !== el.dataset.fairOriginal);
+    btn.disabled = changed.length === 0;
+    if (status) {
+      status.textContent = changed.length
+        ? `${changed.length} field${changed.length === 1 ? "" : "s"} edited, ready to download`
+        : "Edit a value above to enable download";
+    }
+  };
+  // Exposed so _cancelFairMissingField can re-check after removing a field's textarea
+  // without going through an "input" event (innerHTML replacement doesn't fire one).
+  container._fairUpdateDownloadState = updateState;
+  // The container outlives each render, so the listener is added once and always calls
+  // the newest render's updateState instead of piling up one listener per assessment.
+  if (!container._fairEditListenerWired) {
+    container._fairEditListenerWired = true;
+    container.addEventListener("input", (e) => {
+      if (e.target.classList && e.target.classList.contains("fair-edit-field"))
+        container._fairUpdateDownloadState?.();
+    });
+  }
+  updateState();
+}
+
+/** The key `key` is stored under in `meta` ("sc:license" for "license"), else `key`
+ * (mirrors _existing_key in croissant_enhance.py), so an added field or the provenance
+ * stamp lands on the file's own spelling instead of creating a second property. */
+function _fairExistingKey(meta, key) {
+  if (key in meta) return key;
+  const local = _fairLocalName(key);
+  return Object.keys(meta).find((k) => _fairLocalName(k) === local) ?? key;
+}
+
+/** Re-derive the edited metadata from a rendered FAIR result's edit fields, without side
+ * effects. {changed: false} if nothing differs from the original; otherwise {changed: true,
+ * edited, editedKeys, invalid} — editedKeys are the local names of the fields changed,
+ * invalid lists keys whose JSON textarea doesn't parse. */
+function _fairBuildEditedMetadata(container) {
+  const fields = Array.from(container.querySelectorAll(".fair-edit-field"));
+  const changed = fields.filter((el) => el.value !== el.dataset.fairOriginal);
+  if (!changed.length) return { changed: false };
+  const edited = JSON.parse(JSON.stringify(container._fairOriginalMetadata));
+  const invalid = [];
+  const editedKeys = new Set();
+  changed.forEach((el) => {
+    const key = _fairExistingKey(edited, el.dataset.fairKey);
+    editedKeys.add(_fairLocalName(key));
+    const type = el.dataset.fairType;
+    const text = el.value;
+    if (type === "json") {
+      try {
+        edited[key] = JSON.parse(text);
+      } catch (e) {
+        invalid.push(key);
+      }
+    } else if (type === "number") {
+      const n = Number(text);
+      edited[key] = Number.isNaN(n) ? text : n;
+    } else if (type === "boolean") {
+      edited[key] = text.trim().toLowerCase() === "true";
+    } else {
+      edited[key] = text;
+    }
+  });
+  return { changed: true, edited, editedKeys, invalid };
+}
+
+/** Stamp an edited Croissant document with who changed it and when, using schema.org's
+ * own vocabulary (the same one Croissant is built on): `dateModified` for when, a
+ * `contributor` Person (with an optional `affiliation` Organization) for who, and a
+ * `wasGeneratedBy` UpdateAction tying the two together with the tool used — mirroring the
+ * agent/instrument pattern AIDRIN already expects of RO-Crate provenance. This also means
+ * the file's own "provenance (wasDerivedFrom or wasGeneratedBy)" FAIR check now passes.
+ * A dateModified the user edited is kept; keys the file holds under a prefix
+ * (sc:dateModified, sc:contributor) are written back under it. */
+function _fairApplyProvenance(edited, name, affiliation, editedKeys) {
+  const now = new Date();
+  if (!(editedKeys && editedKeys.has("dateModified"))) {
+    edited[_fairExistingKey(edited, "dateModified")] = now
+      .toISOString()
+      .slice(0, 10);
+  }
+  const person = {
+    "@type": "Person",
+    name,
+    ...(affiliation
+      ? { affiliation: { "@type": "Organization", name: affiliation } }
+      : {}),
+  };
+  const contributorKey = _fairExistingKey(edited, "contributor");
+  const existing = edited[contributorKey];
+  const existingContributors =
+    existing === undefined
+      ? []
+      : Array.isArray(existing)
+        ? existing
+        : [existing];
+  edited[contributorKey] = [...existingContributors, person];
+  edited.wasGeneratedBy = {
+    "@type": "UpdateAction",
+    agent: person,
+    startTime: now.toISOString(),
+    instrument: { "@type": "SoftwareApplication", name: "AIDRIN" },
+  };
+  return edited;
+}
+
+function _fairDownloadJson(obj, fileName) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Modal asking who's making this edit, for the provenance stamp. No user text is ever
+ * interpolated into HTML — inputs are read back via .value, not re-rendered. */
+function _fairProvenanceModalHtml() {
+  return `<div id="fair-provenance-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div class="w-full max-w-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-5">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Who's making this edit?</h3>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Recorded as a contributor on the downloaded file, so the edit stays traceable.</p>
+      <div class="mb-3">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1" for="fair-provenance-name">Name <span class="text-red-500">*</span></label>
+        <input id="fair-provenance-name" type="text" required class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900/60 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="Jane Doe" />
+      </div>
+      <div class="mb-1">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1" for="fair-provenance-affiliation">Affiliation <span class="text-gray-400">(optional)</span></label>
+        <input id="fair-provenance-affiliation" type="text" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900/60 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="University, lab, or organization" />
+      </div>
+      <p id="fair-provenance-error" class="hidden text-xs text-red-600 dark:text-red-400 mt-2">Name is required.</p>
+      <div class="flex items-center justify-end gap-2 mt-4">
+        <button type="button" id="fair-provenance-cancel" class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
+        <button type="button" id="fair-provenance-confirm" class="px-4 py-1.5 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 rounded-lg transition-colors">Continue</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _openFairProvenanceModal(onConfirm) {
+  document.getElementById("fair-provenance-modal")?.remove();
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = _fairProvenanceModalHtml();
+  const modal = wrapper.firstElementChild;
+  document.body.appendChild(modal);
+
+  const nameInput = modal.querySelector("#fair-provenance-name");
+  const affiliationInput = modal.querySelector("#fair-provenance-affiliation");
+  const errorEl = modal.querySelector("#fair-provenance-error");
+  const close = () => modal.remove();
+  const confirm = () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      errorEl.classList.remove("hidden");
+      nameInput.focus();
+      return;
+    }
+    const affiliation = affiliationInput.value.trim();
+    close();
+    onConfirm(name, affiliation);
+  };
+
+  modal
+    .querySelector("#fair-provenance-cancel")
+    .addEventListener("click", close);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) close();
+  });
+  modal
+    .querySelector("#fair-provenance-confirm")
+    .addEventListener("click", confirm);
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") confirm();
+  });
+  nameInput.focus();
+}
+
+/** "iris.json" -> "iris-enhanced.json"; falls back to a generic name if the source is unknown. */
+function _fairEnhancedFileName(sourceFileName) {
+  if (!sourceFileName) return "croissant-enhanced.json";
+  const dot = sourceFileName.lastIndexOf(".");
+  const base = dot > 0 ? sourceFileName.slice(0, dot) : sourceFileName;
+  return `${base}-enhanced.json`;
+}
+
+/** Collect edited values from a rendered FAIR result, ask who's editing, stamp provenance,
+ * and download the result as Croissant JSON. No-ops (the button is normally disabled until
+ * then) if nothing was actually changed. */
+function downloadFairEnhancedMetadata(btn) {
+  const container = btn.closest("[data-fair-root]");
+  if (!container || !container._fairOriginalMetadata) return;
+  const result = _fairBuildEditedMetadata(container);
+  if (!result.changed) {
+    alert("No edits to download yet. Change a value first.");
+    return;
+  }
+  if (result.invalid.length) {
+    alert(`Fix invalid JSON before downloading: ${result.invalid.join(", ")}`);
+    return;
+  }
+  _openFairProvenanceModal((name, affiliation) => {
+    const stamped = _fairApplyProvenance(
+      result.edited,
+      name,
+      affiliation,
+      result.editedKeys,
+    );
+    _validateThenDownloadCroissant(
+      container,
+      stamped,
+      _fairEnhancedFileName(container._fairSourceFileName),
+    );
+  });
+}
+
+/** Run the stamped document through the backend's official Croissant parser
+ * (/fair-assessment/validate-croissant) before downloading it, so a hand-edited field
+ * that breaks the format (not just a FAIR check) is caught before it ships. Degrades to
+ * downloading unchecked if the validator isn't installed server-side or isn't reachable --
+ * this is a safety net on top of the FAIR checks, not their replacement. */
+function _validateThenDownloadCroissant(container, stamped, fileName) {
+  const btn = container.querySelector(".fair-download-btn");
+  const status = container.querySelector(".fair-download-status");
+  const previousStatus = status ? status.textContent : "";
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = "Checking against the Croissant format…";
+
+  const restore = () => {
+    if (btn) btn.disabled = false;
+    if (status) status.textContent = previousStatus;
+  };
+
+  fetch("/fair-assessment/validate-croissant", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(stamped),
+  })
+    .then((r) => r.json())
+    .then((result) => {
+      if (result.available !== false && result.valid === false) {
+        const errors =
+          (result.errors || []).map((e) => `• ${e}`).join("\n") ||
+          "Unknown error.";
+        alert(
+          `This edit doesn't parse as valid Croissant:\n\n${errors}\n\nFix the field(s) above and try again.`,
+        );
+        restore();
+        return;
+      }
+      if (result.warnings && result.warnings.length) {
+        console.warn("Croissant validation warnings:", result.warnings);
+      }
+      _fairDownloadJson(stamped, fileName);
+      restore();
+    })
+    .catch((err) => {
+      console.warn(
+        "Could not reach Croissant validation; downloading without it.",
+        err,
+      );
+      _fairDownloadJson(stamped, fileName);
+      restore();
+    });
+}
+
 /** Build readiness-report FAIR result HTML (PDF-style cards + on-demand extras). */
-function buildReadinessFairResultHtml(data) {
+function buildReadinessFairResultHtml(data, fieldGuide) {
+  const editable = _fairIsCroissant(data);
   let html = _renderFairComplianceSummaryHtml(data);
-  html += `<div class="mt-4">${_renderFairPrincipleCardsGridHtml(data)}</div>`;
+  if (editable) html += _renderFairEditableNoticeHtml();
+  html += `<div class="mt-4">${_renderFairPrincipleCardsGridHtml(data, fieldGuide)}</div>`;
+  if (editable)
+    html += `<div class="mt-4">${_renderFairDownloadSectionHtml()}</div>`;
   if (_fairSupplementaryDetailKeys(data).length) {
     html += `
     <details class="group border-t border-gray-200 dark:border-gray-700 pt-3 mt-4" data-fair-details="1">
@@ -4963,23 +5626,43 @@ function _wireFairComplianceDetails(detailsEl, data) {
   });
 }
 
-function renderFairAssessmentResult(data, resultContainer) {
+function renderFairAssessmentResult(
+  data,
+  resultContainer,
+  fileName,
+  fieldGuide,
+) {
   if (!resultContainer) return false;
   if (data.error) {
     resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
     return false;
   }
-  resultContainer.innerHTML = buildFairAssessmentResultHtml(data);
+  resultContainer.innerHTML = buildFairAssessmentResultHtml(data, fieldGuide);
+  resultContainer.dataset.fairRoot = "1";
+  resultContainer._fairOriginalMetadata = data["Original Metadata"];
+  resultContainer._fairSourceFileName = fileName;
+  _fairDedupeEditFields(resultContainer);
+  _wireFairEditTracking(resultContainer);
   return true;
 }
 
-function renderReadinessFairResult(data, resultContainer) {
+function renderReadinessFairResult(
+  data,
+  resultContainer,
+  fileName,
+  fieldGuide,
+) {
   if (!resultContainer) return false;
   if (data.error) {
     resultContainer.innerHTML = `<div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 dark:text-red-400" role="alert">${escapeHtml(data.error)}</div>`;
     return false;
   }
-  resultContainer.innerHTML = buildReadinessFairResultHtml(data);
+  resultContainer.innerHTML = buildReadinessFairResultHtml(data, fieldGuide);
+  resultContainer.dataset.fairRoot = "1";
+  resultContainer._fairOriginalMetadata = data["Original Metadata"];
+  resultContainer._fairSourceFileName = fileName;
+  _fairDedupeEditFields(resultContainer);
+  _wireFairEditTracking(resultContainer);
   const detailsEl = resultContainer.querySelector("[data-fair-details]");
   if (detailsEl) _wireFairComplianceDetails(detailsEl, data);
   return true;
@@ -4997,6 +5680,8 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
   const superseded = () => _fairGenerations.get(form) !== generation;
 
   const formData = new FormData(form);
+  const uploadedFile = formData.get("metadata");
+  const fileName = uploadedFile && uploadedFile.name ? uploadedFile.name : null;
   if (resultContainer) {
     resultContainer.classList.remove("hidden");
     resultContainer.innerHTML =
@@ -5010,13 +5695,22 @@ function submitFairAssessmentForm(form, resultContainer, callbacks) {
       const resultData = { ...data };
       delete resultData.cached;
       delete resultData.build_time_seconds;
-      const render = callbacks?.render || renderFairAssessmentResult;
-      const ok = render(resultData, resultContainer);
-      if (ok) {
-        callbacks?.onSuccess?.(resultData, data);
-      } else {
-        callbacks?.onError?.(data);
-      }
+      // The field guide (powers the "+ Add" affordance for missing fields) is only
+      // needed for Croissant, and is small/cached after the first fetch, so this adds
+      // negligible latency to the common case and none at all to every result after it.
+      const guidePromise = _fairIsCroissant(resultData)
+        ? _getCroissantFieldGuide(_fairCroissantVersion(resultData))
+        : Promise.resolve(undefined);
+      return guidePromise.then((fieldGuide) => {
+        if (superseded()) return;
+        const render = callbacks?.render || renderFairAssessmentResult;
+        const ok = render(resultData, resultContainer, fileName, fieldGuide);
+        if (ok) {
+          callbacks?.onSuccess?.(resultData, data);
+        } else {
+          callbacks?.onError?.(data);
+        }
+      });
     })
     .catch((error) => {
       console.error("Error:", error);
@@ -5089,14 +5783,24 @@ function _restoreReadinessFairFromCache(fairPayload) {
   _readinessFairCompliance = { status: "ok", data };
   uploadEl?.classList.add("hidden");
   resultsEl.classList.remove("hidden");
-  renderReadinessFairResult(data, resultsEl);
+  const metadataFilename = fairPayload.metadata_filename;
+  renderReadinessFairResult(data, resultsEl, metadataFilename);
+  if (_fairIsCroissant(data)) {
+    // Render at once, then again with the field guide so failing checks get their
+    // "+ Add" boxes, as a fresh run does. Skipped if this result was replaced meanwhile
+    // or the user already started editing it.
+    _getCroissantFieldGuide(_fairCroissantVersion(data)).then((fieldGuide) => {
+      if (_readinessFairCompliance.data !== data) return;
+      if (_fairBuildEditedMetadata(resultsEl).changed) return;
+      renderReadinessFairResult(data, resultsEl, metadataFilename, fieldGuide);
+    });
+  }
 
   const metadataType = fairPayload.metadata_type;
   if (metadataType) {
     const select = document.getElementById("readiness-fair-metadata-type");
     if (select) select.value = metadataType;
   }
-  const metadataFilename = fairPayload.metadata_filename;
   if (metadataFilename) {
     const label = document.getElementById("readinessFairFileLabel");
     const icon = document.getElementById("readinessFairUploadIcon");

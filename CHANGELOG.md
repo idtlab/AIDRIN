@@ -3,6 +3,19 @@
 All notable changes to AIDRIN are documented here. This project loosely follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [Unreleased]
+
+### Added
+
+- **Croissant enhancement outside the web UI.** `aidrin croissant fields` lists the
+  Croissant fields a file is missing, with MLCommons' own description and expected
+  shape for each; `aidrin croissant validate` checks a file with `mlcroissant`;
+  `aidrin croissant enhance` sets or adds fields, records the contributor's name and
+  affiliation as provenance (same stamp as the web UI), validates, and writes a new
+  file. MCP tools `croissant_fields`, `validate_croissant` and `enhance_croissant`,
+  and a Croissant enhancement workflow in the skill, which asks the user for every
+  value and for their name and affiliation.
+
 ## [2026.11.1] - 2026-11-13
 
 ### Added
