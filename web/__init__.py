@@ -36,6 +36,7 @@ def create_app():
     _configure_matplotlib()
     setup_logging()
     app = Flask(__name__)
+    app.config["REGISTERED_LOADERS_FILE"] = os.environ.get("AIDRIN_REGISTERED_LOADERS_FILE")
     # Preserve insertion order in JSON responses so result cards render in the
     # order the routes build them (matching the panel), not alphabetically.
     app.json.sort_keys = False
@@ -85,6 +86,13 @@ def create_app():
         "result_expires": 600,
     }
     app.config.from_prefixed_env()
+    # The explicit security switch takes precedence over generic Flask settings.
+    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = os.environ.get(
+        "AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", "0"
+    ).strip().lower() in ("1", "true", "yes")
+    from aidrin.file_handling.registered_loaders import read_registered_loaders
+    # Validate the effective registry after all environment configuration is loaded.
+    read_registered_loaders(app.config["REGISTERED_LOADERS_FILE"])
     # Local UI demos without Redis: set AIDRIN_CELERY_EAGER=1 (after env merge)
     if os.environ.get("AIDRIN_CELERY_EAGER", "").strip().lower() in {"1", "true", "yes"}:
         app.config["CELERY"]["task_always_eager"] = True
@@ -190,12 +198,6 @@ def create_app():
     )
     os.makedirs(custom_loaders_folder, exist_ok=True)
     app.config["CUSTOM_LOADERS_FOLDER"] = custom_loaders_folder
-    # Pasted loader code runs inside this process, so the web Custom Loader is
-    # opt-in: set AIDRIN_ENABLE_WEB_CUSTOM_LOADERS=1 for trusted deployments only.
-    app.config["ENABLE_WEB_CUSTOM_LOADERS"] = os.environ.get(
-        "AIDRIN_ENABLE_WEB_CUSTOM_LOADERS", ""
-    ).strip().lower() in {"1", "true", "yes"}
-
     # The log viewer exposes the process-wide log, which mixes every user's
     # activity, so it is opt-in: set AIDRIN_ENABLE_LOG_VIEWER=1 for trusted
     # deployments only.

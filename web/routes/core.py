@@ -28,6 +28,7 @@ from aidrin.file_handling.hashable_utils import hashable_series, safe_nunique
 from aidrin.file_handling.readers.hdf5_reader import hdf5Reader
 from aidrin.file_handling.readers.root_reader import rootReader
 from aidrin.file_handling.readers.structured import dropped_columns
+from aidrin.file_handling.registered_loaders import read_registered_loaders, resolve_registered_loader
 from web.routes.utils import (
     build_file_info,
     categorical_bars,
@@ -57,13 +58,12 @@ def homepage():
 
 @core_bp.route("/inspector", methods=["GET", "POST"])
 def inspector():
+    registered_formats = read_registered_loaders(current_app.config.get("REGISTERED_LOADERS_FILE"))
     if request.method == "POST":
+        if request.form.get("fileTypeSelector", "").strip() == ".custom" and not current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS"):
+            abort(403, description="Web custom loaders are disabled by the administrator. Select a supported or registered format.")
         file_upload_time_log.info("File upload initiated (workspace)")
         file = request.files.get("file")
-        if (request.form.get("fileTypeSelector") or "").strip() == ".custom" and not current_app.config.get(
-            "ENABLE_WEB_CUSTOM_LOADERS"
-        ):
-            abort(403)
 
         if file:
             cleared_count = clear_all_user_cache()
@@ -85,8 +85,31 @@ def inspector():
 
             selected_type = (request.form.get("fileTypeSelector") or "").strip()
             loader_code = (request.form.get("loader_code") or "").strip()
+            loader_path = None
             # ".custom" means: any extension + required user loader on upload.
-            if selected_type == ".custom":
+            if selected_type.startswith("registered:"):
+                from aidrin.file_handling.custom_loader import load_dataframe as load_registered
+
+                converted_path = file_path + ".parquet"
+                try:
+                    spec = resolve_registered_loader(selected_type, file_path, current_app.config.get("REGISTERED_LOADERS_FILE") or "")
+                    frame = load_registered(spec, file_path)
+                    frame.to_parquet(converted_path, index=False)
+                except Exception:
+                    file_upload_time_log.exception("Registered format upload failed")
+                    for failed_path in (file_path, converted_path):
+                        if os.path.isfile(failed_path):
+                            os.remove(failed_path)
+                    session["upload_error"] = (
+                        "Could not load the registered format. Check the file and ask the administrator "
+                        "to verify the loader and its dependencies."
+                    )
+                    return redirect(url_for("core.inspector"))
+                os.remove(file_path)
+                file_path = converted_path
+                file_type = ".parquet"
+                session.pop("custom_loader_spec", None)
+            elif selected_type == ".custom":
                 _, ext = os.path.splitext(display_name or "")
                 file_type = (ext or "").lower() or ".custom"
                 if not loader_code:
@@ -144,7 +167,6 @@ def inspector():
                 session["custom_loader_spec"] = spec
             else:
                 file_type = selected_type
-                loader_path = None
                 session.pop("custom_loader_spec", None)
 
             session["uploaded_file_name"] = display_name
@@ -250,6 +272,7 @@ def inspector():
             supported_file_types=SUPPORTED_FILE_TYPES,
             upload_file_types=list(SUPPORTED_FILE_TYPES),
             custom_loaders_enabled=current_app.config.get("ENABLE_WEB_CUSTOM_LOADERS", False),
+            registered_formats=registered_formats,
             upload_error=upload_error,
             globus_file_types=GLOBUS_FILE_TYPES,
             file_preview=file_preview if file_preview is not None else [],

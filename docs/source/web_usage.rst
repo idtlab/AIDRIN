@@ -962,3 +962,70 @@ Data and Code Storage Rules
 - Your custom metric code is stored temporarily for **1 hour**.
 - The (optional) remedied dataset is also stored for **1 hour**.
 - After expiration, all artifacts are safely removed.
+
+Reusable custom upload formats
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Deployment administrators can register trusted loaders for all users by setting
+``AIDRIN_REGISTERED_LOADERS_FILE`` to the path of a JSON registry before starting
+Flask. Formats appear in the regular **Upload File** dropdown, including their
+names and accepted extensions. Users select a named format on each upload; the
+extension alone does not select a loader because multiple formats may use
+``.txt`` or ``.dat``.
+
+For example, save the following registry beside a ``loader.py`` script:
+
+.. code-block:: json
+
+   [
+     {
+       "id": "household",
+       "name": "Household power",
+       "extensions": [".txt"],
+       "loader": "loader.py:load"
+     }
+   ]
+
+The script can read semicolon-separated text:
+
+.. code-block:: python
+
+   import pandas as pd
+
+   def load(path, **kwargs):
+       return pd.read_csv(path, sep=";")
+
+IDs must be unique lowercase identifiers starting with a letter; extensions
+must be lowercase and start with a dot. Script paths resolve relative to the
+registry file; absolute paths and importable ``module:function`` loaders also
+work. Install any loader dependencies in the Flask server environment.
+
+The registry and scripts are persistent administrator-managed files, separate
+from temporary session loaders. Only trusted administrators should have write
+access: loaders execute Python on the server. No browser endpoint can modify
+this registry. Edit an entry to update a format or remove it from the list to
+unregister it. Save registry edits atomically; changes are read on the next
+inspector request. Invalid configuration raises an error, including at startup.
+
+The **Custom Loader** tab for pasted Python is disabled by default. To enable
+it on a trusted deployment, set ``AIDRIN_ENABLE_WEB_CUSTOM_LOADERS=1`` before
+starting Flask. This permits users to execute Python on the server. The
+``AIDRIN_ENABLE_WEB_CUSTOM_LOADERS`` switch takes precedence over generic
+``FLASK_ENABLE_WEB_CUSTOM_LOADERS`` settings. When the
+switch is off, the tab is hidden, direct custom-loader uploads are rejected,
+and existing session loaders cannot be read or dispatched to workers. Clear
+and re-upload such datasets using a supported or registered format.
+Administrator-registered formats remain available independently of this switch.
+
+The same JSON registry is available to the CLI and Python library through
+``AIDRIN_REGISTERED_LOADERS_FILE``. Select a named format explicitly using
+``--loader registered:household`` in the CLI or ``loader="registered:household"``
+in the library. Ordinary ``path.py:function`` loaders continue to work.
+
+Registered uploads execute the loader once and convert its nonempty DataFrame
+to Parquet. Later metrics and Celery workers use the converted file, so they do
+not need loader dependencies. The DataFrame must support Parquet serialization;
+conversion errors reject the upload and remove partial files. The original
+filename remains visible, while **download uploaded file** returns the converted
+Parquet contents. Clearing a dataset removes its converted upload, but leaves
+registered formats available across sessions and server restarts.

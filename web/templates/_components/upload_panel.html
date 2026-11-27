@@ -62,6 +62,9 @@
             {% for ext, label in upload_file_types %}
               <option value="{{ ext }}" data-accept="{{ file_type_accept.get(ext, ext) }}" {% if file_type == ext %}selected{% endif %}>{{ label }} ({{ ext }})</option>
             {% endfor %}
+            {% for identifier, format in registered_formats.items() %}
+              <option value="registered:{{ identifier }}" data-accept="{{ format.extensions | join(',') }}">{{ format.name }} ({{ format.extensions | join(', ') }})</option>
+            {% endfor %}
           </select>
 
           <!-- Dropzone -->
